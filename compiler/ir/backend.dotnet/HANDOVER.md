@@ -1311,7 +1311,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   constrain modern codegen to Framework capabilities and is explicitly rejected. The failed
   alternate-writer attempt also exposed that ILAsm may leave a partial PE on nonzero exit;
   `runIlasm` now deletes that PE and its runtimeconfig before reporting failure.
-- The generated semantic box matrix now runs the same 116 cases for `net48` and `net10.0` in both
+- The generated semantic box matrix now runs the same 117 cases for `net48` and `net10.0` in both
   PSI and LightTree pipelines. Net48 artifacts use Framework ILAsm and execute on real CLR 4 via
   the signed Windows PowerShell host, which loads and invokes the exact managed entry point; the
   existing net10 lane remains dll plus signed `dotnet exec`. Both share output checking,
@@ -1891,10 +1891,29 @@ session state, process, and a curated task menu. Keep both files updated as you 
   produced changing missing-PE/empty-host failures that all passed in isolation. New PSI/LightTree ×
   `net48`/`net10.0` boxes cover `StrictEquals`, inlinable lambda array constructors, and private/
   mutable interface companion properties. The six-step impact audit is
-  `docs/review/upstream-sync-2026-07-28.md`. It records Kotlin-owned static-initializer failure
-  classification as foundational deferred work before ABI stability. KGP API validation, 10
+  `docs/review/upstream-sync-2026-07-28.md`. It originally recorded Kotlin-owned
+  static-initializer failure classification as foundational deferred work before ABI stability.
+  KGP API validation, 10
   targeted KGP tests, and 2 DLL-only KGP integration tests pass. The fresh strict gate is
   862/0/0/0 across 16 XML suites.
+- The current static-initialization continuation resolves that deferred Common contract without
+  delegating Kotlin semantics to CLR `TypeInitializationException`. A generalized graph lowering
+  records `<EnsureInitialized>` for companions, ordinary objects, inherited class events, and
+  generic/interface events; graph-only generic/interface owners use a distinct non-generic
+  `<StaticInitialization>` holder rather than the companion-storage holder. The failure lowering
+  catches the original `System.Exception` inside Kotlin-generated class/file `.cctor` methods,
+  stores private runtime-owned state, and inserts logical barriers at constructors, static and
+  top-level functions/accessors, singleton loads, generated static machinery, and external
+  singleton reads. The runtime atomically exposes the original reason to exactly one observer and
+  `null` thereafter; the existing Common `staticInitializationFailure` contract then preserves the
+  first Kotlin `Error` object or creates `ExceptionInInitializerError(cause)`, and creates
+  `NoClassDefFoundError` for later observers.
+  Foreign CLR initializers are untouched. Physical ABI schema 15 and runtime surface level 8
+  reject older unshipped artifacts. `staticfailure_s1` assembled and ran the catch/state protocol
+  on Framework CLR 4 and CoreCLR 10 with first/later classes and exact `Error` identity.
+  Cross-parser/profile boxes and a portable producer consumed separately on net48/net10 pass;
+  the fresh strict gate is 867/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
+  50 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1910,7 +1929,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
    `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
     `geninheritprobe`, `abstractprobe`, `dimprobe`, `ifaceredeclareprobe`, `delegationprobe`,
     `nestedprobe`, `nestedifaceprobe`, `nestedownerprobe`, `innerprobe`, `localprobe`, `whenprobe`,
-    `arrprobe`, `arraycopyprobe`, `arrayinternprobe` are taken). Keep
+    `arrprobe`, `arraycopyprobe`, `arrayinternprobe`, `staticfailure` are taken). Keep
    probe files OUT of the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the class metadata subtree, the companion's immediate owner
@@ -1947,7 +1966,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 862 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 867 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.

@@ -46,16 +46,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field assembly static initonly class 'demo.propertyExportsKt$transform$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'demo.propertyExportsKt$transform$1'::.ctor()
-    stsfld class 'demo.propertyExportsKt$transform$1' 'demo.propertyExportsKt$transform$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'demo.propertyExportsKt$transform$1'::.ctor()
+      stsfld class 'demo.propertyExportsKt$transform$1' 'demo.propertyExportsKt$transform$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'demo.propertyExportsKt$transform$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'demo.propertyExportsKt$transform$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'demo.propertyExportsKt$transform$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "demo.lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt$transform$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -93,16 +127,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function1'
 {
   .field assembly static initonly class 'demo.propertyExportsKt$consume$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'demo.propertyExportsKt$consume$1'::.ctor()
-    stsfld class 'demo.propertyExportsKt$consume$1' 'demo.propertyExportsKt$consume$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'demo.propertyExportsKt$consume$1'::.ctor()
+      stsfld class 'demo.propertyExportsKt$consume$1' 'demo.propertyExportsKt$consume$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'demo.propertyExportsKt$consume$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'demo.propertyExportsKt$consume$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'demo.propertyExportsKt$consume$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "demo.lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt$consume$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -120,6 +188,7 @@
 .class public abstract sealed auto ansi 'demo.propertyExportsKt'
        extends [mscorlib]System.Object
 {
+  .field private static object '<static-initialization-failure>'
   .field private static int32 'count'
   .field private static string 'maybeText'
   .field private static class [Kotlin.Runtime]'Kotlin.Function1' 'transform'
@@ -128,27 +197,45 @@
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    ldc.i4 1
-    stsfld int32 'demo.propertyExportsKt'::'count'
-    ldnull
-    stsfld string 'demo.propertyExportsKt'::'maybeText'
-    ldsfld class 'demo.propertyExportsKt$transform$1' 'demo.propertyExportsKt$transform$1'::'INSTANCE'
-    stsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'transform'
-    ldsfld class 'demo.propertyExportsKt$consume$1' 'demo.propertyExportsKt$consume$1'::'INSTANCE'
-    stsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'consume'
-    ldc.i4 7
-    stsfld int32 'demo.propertyExportsKt'::'restricted'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      ldc.i4 1
+      stsfld int32 'demo.propertyExportsKt'::'count'
+      ldnull
+      stsfld string 'demo.propertyExportsKt'::'maybeText'
+      call void 'demo.propertyExportsKt$transform$1'::'<EnsureInitialized>'()
+      ldsfld class 'demo.propertyExportsKt$transform$1' 'demo.propertyExportsKt$transform$1'::'INSTANCE'
+      stsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'transform'
+      call void 'demo.propertyExportsKt$consume$1'::'<EnsureInitialized>'()
+      ldsfld class 'demo.propertyExportsKt$consume$1' 'demo.propertyExportsKt$consume$1'::'INSTANCE'
+      stsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'consume'
+      ldc.i4 7
+      stsfld int32 'demo.propertyExportsKt'::'restricted'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'demo.propertyExportsKt'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
   .method public hidebysig specialname static int32 'get_count'() cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldsfld int32 'demo.propertyExportsKt'::'count'
     ret
   }
   .method public hidebysig specialname static void 'set_count'(int32 '<set-?>') cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     stsfld int32 'demo.propertyExportsKt'::'count'
     ret
@@ -169,12 +256,14 @@
   .method public hidebysig specialname static string 'get_maybeText'() cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldsfld string 'demo.propertyExportsKt'::'maybeText'
     ret
   }
   .method public hidebysig specialname static void 'set_maybeText'(string '<set-?>') cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     stsfld string 'demo.propertyExportsKt'::'maybeText'
     ret
@@ -199,12 +288,14 @@
   .method public hidebysig specialname static class [Kotlin.Runtime]'Kotlin.Function1' 'get_transform'() cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'transform'
     ret
   }
   .method public hidebysig specialname static void 'set_transform'(class [Kotlin.Runtime]'Kotlin.Function1' '<set-?>') cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     stsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'transform'
     ret
@@ -231,12 +322,14 @@
   .method public hidebysig specialname static class [Kotlin.Runtime]'Kotlin.Function1' 'get_consume'() cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'consume'
     ret
   }
   .method public hidebysig specialname static void 'set_consume'(class [Kotlin.Runtime]'Kotlin.Function1' '<set-?>') cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     stsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'consume'
     ret
@@ -266,6 +359,7 @@
     .locals init (
       [0] string 'tmp0_elvis_lhs'
     )
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     call string 'demo.propertyExportsKt'::'get_maybeText'()
     stloc.0
     ldloc.0
@@ -290,12 +384,14 @@ IL_whenEnd_0:
   .method public hidebysig specialname static int32 'get_restricted'() cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldsfld int32 'demo.propertyExportsKt'::'restricted'
     ret
   }
   .method assembly hidebysig specialname static void 'set_restricted'(int32 '<set-?>') cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     stsfld int32 'demo.propertyExportsKt'::'restricted'
     ret
@@ -309,8 +405,27 @@ IL_whenEnd_0:
   .method public hidebysig static void 'updateRestricted'(int32 'value') cil managed
   {
     .maxstack 1
+    call void 'demo.propertyExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     call void 'demo.propertyExportsKt'::'set_restricted'(int32)
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'demo.propertyExportsKt'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'demo.propertyExportsKt'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldnull
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .property int32 'count'()

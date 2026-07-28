@@ -78,7 +78,7 @@
     ret
   }
 }
-.class public auto ansi sealed 'GenericCompanionHost`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'GenericCompanionHost`1'<'T'>
        extends [mscorlib]System.Object
 {
   .class nested public abstract sealed auto ansi '<CompanionStatics>'
@@ -87,19 +87,47 @@
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .field public static initonly class 'GenericCompanionHost`1'/'Companion' 'Companion'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      ldnull
-      newobj instance void 'GenericCompanionHost`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-      stsfld class 'GenericCompanionHost`1'/'Companion' 'GenericCompanionHost`1'/'<CompanionStatics>'::'Companion'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        ldnull
+        newobj instance void 'GenericCompanionHost`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'GenericCompanionHost`1'/'Companion' 'GenericCompanionHost`1'/'<CompanionStatics>'::'Companion'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'GenericCompanionHost`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
       ret
     }
-    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 1
+      .maxstack 2
+      ldsfld object 'GenericCompanionHost`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'GenericCompanionHost`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "GenericCompanionHost"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
   }
@@ -121,15 +149,10 @@
       ret
     }
   }
-  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
-  {
-    .maxstack 1
-    call void 'GenericCompanionHost`1'/'<CompanionStatics>'::'<EnsureCompanionInitialized>'()
-    ret
-  }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'GenericCompanionHost`1'/'<CompanionStatics>'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -138,7 +161,7 @@
 .class public auto ansi sealed beforefieldinit 'GenericNestedCompanionHost'
        extends [mscorlib]System.Object
 {
-  .class nested public auto ansi sealed 'Nested`1'<'T'>
+  .class nested public auto ansi sealed beforefieldinit 'Nested`1'<'T'>
          extends [mscorlib]System.Object
   {
     .class nested public abstract sealed auto ansi '<CompanionStatics>'
@@ -147,19 +170,47 @@
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .field public static initonly class 'GenericNestedCompanionHost'/'Nested`1'/'Companion' 'Companion'
+      .field private static object '<static-initialization-failure>'
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
       {
         .maxstack 1
-        ldnull
-        newobj instance void 'GenericNestedCompanionHost'/'Nested`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-        stsfld class 'GenericNestedCompanionHost'/'Nested`1'/'Companion' 'GenericNestedCompanionHost'/'Nested`1'/'<CompanionStatics>'::'Companion'
+        .locals init (
+          [0] class [mscorlib]System.Exception 'reason'
+        )
+        .try {
+          ldnull
+          newobj instance void 'GenericNestedCompanionHost'/'Nested`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+          stsfld class 'GenericNestedCompanionHost'/'Nested`1'/'Companion' 'GenericNestedCompanionHost'/'Nested`1'/'<CompanionStatics>'::'Companion'
+          leave IL_tryEnd_0
+        }
+        catch [mscorlib]System.Exception {
+          stloc.0
+          ldloc.0
+          call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+          stsfld object 'GenericNestedCompanionHost'/'Nested`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+          leave IL_tryEnd_0
+        }
+    IL_tryEnd_0:
         ret
       }
-      .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+      .method public hidebysig static void '<EnsureInitialized>'() cil managed
       {
         .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
         .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-        .maxstack 1
+        .maxstack 2
+        ldsfld object 'GenericNestedCompanionHost'/'Nested`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+        ldnull
+        ceq
+        ldc.i4.0
+        ceq
+        brfalse IL_whenNext_1
+        ldsfld object 'GenericNestedCompanionHost'/'Nested`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+        call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+        ldstr "GenericNestedCompanionHost.Nested"
+        call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+        newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+        throw
+    IL_whenNext_1:
         ret
       }
     }
@@ -181,15 +232,10 @@
         ret
       }
     }
-    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
-    {
-      .maxstack 1
-      call void 'GenericNestedCompanionHost'/'Nested`1'/'<CompanionStatics>'::'<EnsureCompanionInitialized>'()
-      ret
-    }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
+      call void 'GenericNestedCompanionHost'/'Nested`1'/'<CompanionStatics>'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret

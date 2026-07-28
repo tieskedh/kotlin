@@ -85,6 +85,7 @@
 .class public abstract sealed auto ansi 'test.arrays.primitiveArraysKt'
        extends [mscorlib]System.Object
 {
+  .field private static object '<static-initialization-failure>'
   .field private static int32 'sequence'
   .field private static class [Kotlin.Runtime]'Kotlin.IntArray' 'seeded'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -92,41 +93,55 @@
     .maxstack 3
     .locals init (
       [0] int32[] '<arrayOfStorage>',
-      [1] int32 '<arrayElement>'
+      [1] int32 '<arrayElement>',
+      [2] class [mscorlib]System.Exception 'reason'
     )
-    ldc.i4 0
-    stsfld int32 'test.arrays.primitiveArraysKt'::'sequence'
-    ldc.i4 2
-    newarr int32
-    stloc.0
-    ldc.i4 1
-    call int32 'test.arrays.primitiveArraysKt'::'marked'(int32)
-    stloc.1
-    ldloc.0
-    ldc.i4 0
-    ldloc.1
-    stelem int32
-    ldc.i4 2
-    call int32 'test.arrays.primitiveArraysKt'::'marked'(int32)
-    stloc.1
-    ldloc.0
-    ldc.i4 1
-    ldloc.1
-    stelem int32
-    ldloc.0
-    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
-    stsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'test.arrays.primitiveArraysKt'::'seeded'
+    .try {
+      ldc.i4 0
+      stsfld int32 'test.arrays.primitiveArraysKt'::'sequence'
+      ldc.i4 2
+      newarr int32
+      stloc.0
+      ldc.i4 1
+      call int32 'test.arrays.primitiveArraysKt'::'marked'(int32)
+      stloc.1
+      ldloc.0
+      ldc.i4 0
+      ldloc.1
+      stelem int32
+      ldc.i4 2
+      call int32 'test.arrays.primitiveArraysKt'::'marked'(int32)
+      stloc.1
+      ldloc.0
+      ldc.i4 1
+      ldloc.1
+      stelem int32
+      ldloc.0
+      newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
+      stsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'test.arrays.primitiveArraysKt'::'seeded'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.2
+      ldloc.2
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'test.arrays.primitiveArraysKt'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
   .method assembly hidebysig specialname static int32 'get_sequence'() cil managed
   {
     .maxstack 1
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldsfld int32 'test.arrays.primitiveArraysKt'::'sequence'
     ret
   }
   .method assembly hidebysig specialname static void 'set_sequence'(int32 '<set-?>') cil managed
   {
     .maxstack 1
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     stsfld int32 'test.arrays.primitiveArraysKt'::'sequence'
     ret
@@ -134,6 +149,7 @@
   .method assembly hidebysig static int32 'marked'(int32 'value') cil managed
   {
     .maxstack 2
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     call int32 'test.arrays.primitiveArraysKt'::'get_sequence'()
     ldc.i4 10
     mul
@@ -146,12 +162,14 @@
   .method public hidebysig specialname static class [Kotlin.Runtime]'Kotlin.IntArray' 'get_seeded'() cil managed
   {
     .maxstack 1
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'test.arrays.primitiveArraysKt'::'seeded'
     ret
   }
   .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'allocate'(int32 'size') cil managed
   {
     .maxstack 3
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     dup
     ldc.i4.0
@@ -172,6 +190,7 @@ IL_arraySizeNonNegative_0:
       [0] int32[] '<arrayOfStorage>',
       [1] int32 '<arrayElement>'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldc.i4 3
     newarr int32
     stloc.0
@@ -203,6 +222,7 @@ IL_arraySizeNonNegative_0:
     .locals init (
       [0] int32[] '<arrayOfStorage>'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldc.i4 0
     newarr int32
     stloc.0
@@ -217,6 +237,7 @@ IL_arraySizeNonNegative_0:
       [0] int64[] '<arrayOfStorage>',
       [1] int64 '<arrayElement>'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldc.i4 2
     newarr int64
     stloc.0
@@ -244,6 +265,7 @@ IL_arraySizeNonNegative_0:
       [0] float64[] '<arrayOfStorage>',
       [1] float64 '<arrayElement>'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldc.i4 2
     newarr float64
     stloc.0
@@ -271,6 +293,7 @@ IL_arraySizeNonNegative_0:
       [0] bool[] '<arrayOfStorage>',
       [1] bool '<arrayElement>'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldc.i4 2
     newarr bool
     stloc.0
@@ -297,6 +320,7 @@ IL_arraySizeNonNegative_0:
       [0] char[] '<arrayOfStorage>',
       [1] char '<arrayElement>'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldc.i4 2
     newarr char
     stloc.0
@@ -326,6 +350,7 @@ IL_arraySizeNonNegative_0:
       [3] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [4] int32 '<arrayIndex>@4'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     stloc.0
     ldarg.1
@@ -355,6 +380,7 @@ IL_arraySizeNonNegative_0:
       [3] class [Kotlin.Runtime]'Kotlin.LongArray' '<arrayGet>',
       [4] int32 '<arrayIndex>@4'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     stloc.0
     ldarg.1
@@ -384,6 +410,7 @@ IL_arraySizeNonNegative_0:
       [3] class [Kotlin.Runtime]'Kotlin.DoubleArray' '<arrayGet>',
       [4] int32 '<arrayIndex>@4'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     stloc.0
     ldarg.1
@@ -413,6 +440,7 @@ IL_arraySizeNonNegative_0:
       [3] class [Kotlin.Runtime]'Kotlin.BooleanArray' '<arrayGet>',
       [4] int32 '<arrayIndex>@4'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     stloc.0
     ldarg.1
@@ -442,6 +470,7 @@ IL_arraySizeNonNegative_0:
       [3] class [Kotlin.Runtime]'Kotlin.CharArray' '<arrayGet>',
       [4] int32 '<arrayIndex>@4'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     stloc.0
     ldarg.1
@@ -464,6 +493,7 @@ IL_arraySizeNonNegative_0:
   .method public hidebysig static int32 'totalSize'(class [Kotlin.Runtime]'Kotlin.IntArray' 'ints', class [Kotlin.Runtime]'Kotlin.LongArray' 'longs', class [Kotlin.Runtime]'Kotlin.DoubleArray' 'doubles', class [Kotlin.Runtime]'Kotlin.BooleanArray' 'booleans', class [Kotlin.Runtime]'Kotlin.CharArray' 'chars') cil managed
   {
     .maxstack 2
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     ldarg.1
@@ -492,6 +522,7 @@ IL_arraySizeNonNegative_0:
       [5] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [6] int32 '<arrayIndex>'
     )
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldc.i4 0
     stloc.0
     ldarg.0
@@ -542,6 +573,7 @@ IL_whileEnd_1:
   .method public hidebysig static bool 'isNull'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 2
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     ldnull
     ceq
@@ -550,6 +582,7 @@ IL_whileEnd_1:
   .method public hidebysig static bool 'sameArray'(class [Kotlin.Runtime]'Kotlin.IntArray' 'left', class [Kotlin.Runtime]'Kotlin.IntArray' 'right') cil managed
   {
     .maxstack 2
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     ldarg.1
     ceq
@@ -558,6 +591,7 @@ IL_whileEnd_1:
   .method public hidebysig static class 'test.arrays.Crate`1'<class [Kotlin.Runtime]'Kotlin.IntArray'> 'wrap'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 1
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
     ldarg.0
     newobj instance void class 'test.arrays.Crate`1'<class [Kotlin.Runtime]'Kotlin.IntArray'>::.ctor(!0)
     ret
@@ -566,6 +600,25 @@ IL_whileEnd_1:
   {
     .entrypoint
     .maxstack 1
+    call void 'test.arrays.primitiveArraysKt'::'<EnsureInitialized>'()
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'test.arrays.primitiveArraysKt'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'test.arrays.primitiveArraysKt'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldnull
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .property int32 'sequence'()

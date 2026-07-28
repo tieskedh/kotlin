@@ -9,7 +9,7 @@ import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
-import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredCompanionInitialization
+import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredStaticInitialization
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -34,8 +34,8 @@ import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.name.Name
 
-internal val DOTNET_COMPANION_INITIALIZATION_ENTRY: IrDeclarationOrigin =
-    IrDeclarationOriginImpl("DOTNET_COMPANION_INITIALIZATION_ENTRY")
+internal val DOTNET_STATIC_INITIALIZATION_ENTRY: IrDeclarationOrigin =
+    IrDeclarationOriginImpl("DOTNET_STATIC_INITIALIZATION_ENTRY")
 
 /**
  * Materializes Kotlin's classifier-initialization graph on CLR type initializers.
@@ -44,17 +44,18 @@ internal val DOTNET_COMPANION_INITIALIZATION_ENTRY: IrDeclarationOrigin =
  * initialized CLR type enters that type's `.cctor` under the CLR's once-only synchronization.
  * The `.cctor` first calls producer-recorded entries for the superclass and for direct
  * superinterfaces which declare a non-abstract instance member, then executes the classifier's
- * own initializers in their existing source order. This is the common CompanionBlocks rule; an
- * abstract-only implemented interface is deliberately not initialized as a side effect.
+ * own initializers in their existing source order. This follows the common static-initialization
+ * graph; an abstract-only implemented interface is deliberately not initialized as a side effect.
  *
- * Generic classifiers and interface companion blocks place the event on the non-generic
- * companion-static holder. A non-generic interface companion object keeps its already unified
- * singleton state and entry on the interface itself. A generic class's own `.cctor` calls the
- * holder entry so constructing different closed CLR instantiations cannot create different
- * Kotlin companion state. External edges are represented by synthetic IR calls whose physical
- * owner and method are taken exclusively from the producer's KLIB physical index.
+ * Existing companion state keeps using its non-generic companion-static holder. A generic
+ * classifier or interface which only needs an initialization event instead receives a dedicated
+ * non-generic static-initialization holder; it does not acquire a misleading companion ABI.
+ * Active uses of a generic class call the holder entry so different closed CLR instantiations
+ * cannot create distinct Kotlin initialization state. External edges are represented by synthetic
+ * IR calls whose physical owner and method come exclusively from the producer's KLIB physical
+ * index.
  */
-internal class DotNetCompanionInitializationLowering(
+internal class DotNetStaticInitializationGraphLowering(
     private val context: DotNetBackendContext,
 ) : ModuleLoweringPass {
     private val externalDeclarations = DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
@@ -88,14 +89,14 @@ internal class DotNetCompanionInitializationLowering(
     }
 
     private fun createLocalEntry(irClass: IrClass): IrSimpleFunction? {
-        if (irClass.isCompanion || irClass.origin == DOTNET_COMPANION_STATIC_HOLDER) return null
+        if (irClass.isCompanion || irClass.origin == DOTNET_STATIC_HOLDER) return null
 
         val companionObject = irClass.declarations.filterIsInstance<IrClass>().firstOrNull(IrClass::isCompanion)
         val staticOwner = context.companionStaticOwners[irClass]
 
         val dependencies = dependencyClasses(irClass).mapNotNull(::entryFor)
-        val hasOwnInitializer = staticOwner?.staticInitializerOrNull() != null ||
-                companionObject != null && irClass.staticInitializerOrNull() != null
+        val hasOwnInitializer =
+            staticOwner?.staticInitializerOrNull() != null || irClass.staticInitializerOrNull() != null
         if (!hasOwnInitializer && dependencies.isEmpty()) return null
 
         val physicalOwner = when {
@@ -113,31 +114,24 @@ internal class DotNetCompanionInitializationLowering(
         val entry = createEntry(irClass, physicalOwner)
         physicalOwner.ensureInitializationEntryIsAccessible(entry)
         physicalOwner.declarations.add(0, entry)
-        context.companionInitializations[irClass] =
-            DotNetLoweredCompanionInitialization(physicalOwner, entry)
-
-        if (physicalOwner !== irClass && !irClass.isInterface) {
-            val ownerInitializer = irClass.staticInitializerOrNull()
-                ?: buildDotNetStaticInitializer(context, irClass, emptyList()).also {
-                    irClass.declarations += it
-                }
-            prependCalls(ownerInitializer, listOf(entry))
-        }
+        context.staticInitializations[irClass] =
+            DotNetLoweredStaticInitialization(physicalOwner, entry)
         return entry
     }
 
     private fun externalEntryFor(irClass: IrClass): IrSimpleFunction? {
         if (externalEntries.containsKey(irClass)) return externalEntries[irClass]
-        val binding = externalDeclarations.companionInitializationOrNull(irClass)
+        val binding = externalDeclarations.staticInitializationOrNull(irClass)
         val entry = binding?.let {
             context.irFactory.buildFun {
-                name = Name.special("<EnsureCompanionInitialized>")
+                name = Name.special("<EnsureInitialized>")
                 returnType = context.irBuiltIns.unitType
                 visibility = DescriptorVisibilities.PUBLIC
-                origin = DOTNET_COMPANION_INITIALIZATION_ENTRY
+                origin = DOTNET_STATIC_INITIALIZATION_ENTRY
             }.apply {
                 parent = irClass
-                context.externalCompanionInitializations[this] = binding
+                context.externalStaticInitializations[this] = binding
+                context.externalStaticInitializationEntries[irClass] = this
             }
         }
         externalEntries[irClass] = entry
@@ -175,8 +169,8 @@ internal class DotNetCompanionInitializationLowering(
     }
 
     private fun createInitializationHolder(owner: IrClass): IrClass = context.irFactory.buildClass {
-        origin = DOTNET_COMPANION_STATIC_HOLDER
-        name = Name.special("<CompanionStatics>")
+        origin = DOTNET_STATIC_HOLDER
+        name = Name.special("<StaticInitialization>")
         kind = ClassKind.CLASS
         modality = Modality.FINAL
         visibility = when {
@@ -191,12 +185,11 @@ internal class DotNetCompanionInitializationLowering(
         superTypes = listOf(context.irBuiltIns.anyType)
         createThisReceiverParameter()
         owner.declarations.add(0, this)
-        context.companionStaticOwners[owner] = this
     }
 
     private fun createEntry(logicalOwner: IrClass, physicalOwner: IrClass): IrSimpleFunction =
         context.irFactory.buildFun {
-            name = Name.special("<EnsureCompanionInitialized>")
+            name = Name.special("<EnsureInitialized>")
             returnType = context.irBuiltIns.unitType
             visibility = when {
                 logicalOwner.visibility == DescriptorVisibilities.PUBLIC ||
@@ -204,14 +197,14 @@ internal class DotNetCompanionInitializationLowering(
                     DescriptorVisibilities.PUBLIC
                 else -> DescriptorVisibilities.INTERNAL
             }
-            origin = DOTNET_COMPANION_INITIALIZATION_ENTRY
+            origin = DOTNET_STATIC_INITIALIZATION_ENTRY
         }.apply {
             parent = physicalOwner
             body = context.createIrBuilder(symbol).irBlockBody { }
         }
 
     private fun IrClass.ensureInitializationEntryIsAccessible(entry: IrSimpleFunction) {
-        if (origin != DOTNET_COMPANION_STATIC_HOLDER) return
+        if (origin != DOTNET_STATIC_HOLDER) return
         visibility = when {
             entry.visibility == DescriptorVisibilities.PUBLIC -> DescriptorVisibilities.PUBLIC
             visibility == DescriptorVisibilities.PRIVATE || visibility == DescriptorVisibilities.PROTECTED ->

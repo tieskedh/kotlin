@@ -24,8 +24,8 @@ import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.name.Name
 
-internal val DOTNET_COMPANION_STATIC_HOLDER: IrDeclarationOrigin =
-    IrDeclarationOriginImpl("DOTNET_COMPANION_STATIC_HOLDER")
+internal val DOTNET_STATIC_HOLDER: IrDeclarationOrigin =
+    IrDeclarationOriginImpl("DOTNET_STATIC_HOLDER")
 
 /**
  * Assigns companion-block declarations their CLR storage owner before any synthetic declarations
@@ -85,7 +85,7 @@ internal class DotNetCompanionStaticsLowering(
         context.irFactory.buildClass {
             startOffset = declarations.first().startOffset
             endOffset = declarations.last().endOffset
-            origin = DOTNET_COMPANION_STATIC_HOLDER
+            origin = DOTNET_STATIC_HOLDER
             name = Name.special("<CompanionStatics>")
             kind = ClassKind.CLASS
             modality = Modality.FINAL

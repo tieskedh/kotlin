@@ -95,28 +95,43 @@ IL_whenEnd_0:
 .class public abstract sealed auto ansi 'nullablePrimitivesKt'
        extends [mscorlib]System.Object
 {
+  .field private static object '<static-initialization-failure>'
   .field private static valuetype [mscorlib]System.Nullable`1<int32> 'lastSeen'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
     .locals init (
-      [0] valuetype [mscorlib]System.Nullable`1<int32> '<null>'
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<null>',
+      [1] class [mscorlib]System.Exception 'reason'
     )
-    ldloca 0
-    initobj valuetype [mscorlib]System.Nullable`1<int32>
-    ldloc.0
-    stsfld valuetype [mscorlib]System.Nullable`1<int32> 'nullablePrimitivesKt'::'lastSeen'
+    .try {
+      ldloca 0
+      initobj valuetype [mscorlib]System.Nullable`1<int32>
+      ldloc.0
+      stsfld valuetype [mscorlib]System.Nullable`1<int32> 'nullablePrimitivesKt'::'lastSeen'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.1
+      ldloc.1
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'nullablePrimitivesKt'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
   .method public hidebysig specialname static valuetype [mscorlib]System.Nullable`1<int32> 'get_lastSeen'() cil managed
   {
     .maxstack 1
+    call void 'nullablePrimitivesKt'::'<EnsureInitialized>'()
     ldsfld valuetype [mscorlib]System.Nullable`1<int32> 'nullablePrimitivesKt'::'lastSeen'
     ret
   }
   .method public hidebysig specialname static void 'set_lastSeen'(valuetype [mscorlib]System.Nullable`1<int32> '<set-?>') cil managed
   {
     .maxstack 1
+    call void 'nullablePrimitivesKt'::'<EnsureInitialized>'()
     ldarg.0
     stsfld valuetype [mscorlib]System.Nullable`1<int32> 'nullablePrimitivesKt'::'lastSeen'
     ret
@@ -132,6 +147,7 @@ IL_whenEnd_0:
       [4] valuetype [mscorlib]System.Nullable`1<float64> '<eq>@4',
       [5] valuetype [mscorlib]System.Nullable`1<float64> '<notNull>@5'
     )
+    call void 'nullablePrimitivesKt'::'<EnsureInitialized>'()
     ldarg.0
     stloc.0
     ldloc.0
@@ -194,6 +210,7 @@ IL_whenEnd_0:
       [1] valuetype [mscorlib]System.Nullable`1<char> '<eq>',
       [2] valuetype [mscorlib]System.Nullable`1<char> '<notNull>'
     )
+    call void 'nullablePrimitivesKt'::'<EnsureInitialized>'()
     ldarg.0
     stloc.0
     ldloc.0
@@ -226,6 +243,7 @@ IL_whenEnd_0:
       [0] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
       [1] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>'
     )
+    call void 'nullablePrimitivesKt'::'<EnsureInitialized>'()
     ldarg.0
     stloc.0
     ldloca 0
@@ -258,6 +276,7 @@ IL_whenNext_1:
     .locals init (
       [0] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>'
     )
+    call void 'nullablePrimitivesKt'::'<EnsureInitialized>'()
     ldarg.0
     stloc.0
     ldloca 0
@@ -273,6 +292,7 @@ IL_notNull_0:
   .method public hidebysig static string 'forceRef'(string 's') cil managed
   {
     .maxstack 2
+    call void 'nullablePrimitivesKt'::'<EnsureInitialized>'()
     ldarg.0
     dup
     brtrue IL_notNull_0
@@ -303,6 +323,7 @@ IL_notNull_0:
       [13] valuetype [mscorlib]System.Nullable`1<int64> '<null>@13',
       [14] valuetype [mscorlib]System.Nullable`1<char> '<null>@14'
     )
+    call void 'nullablePrimitivesKt'::'<EnsureInitialized>'()
     ldc.i4 5
     newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
     call void 'nullablePrimitivesKt'::'set_lastSeen'(valuetype [mscorlib]System.Nullable`1<int32>)
@@ -460,6 +481,24 @@ IL_whenEnd_9:
     ldstr "r"
     call string 'nullablePrimitivesKt'::'forceRef'(string)
     call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'nullablePrimitivesKt'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'nullablePrimitivesKt'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldnull
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .property valuetype [mscorlib]System.Nullable`1<int32> 'lastSeen'()

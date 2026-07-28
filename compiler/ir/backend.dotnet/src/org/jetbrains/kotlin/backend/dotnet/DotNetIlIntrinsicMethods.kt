@@ -48,6 +48,7 @@ internal class DotNetIlIntrinsicMethods(
     private val iterableFqn = FqName("kotlin.collections.Iterable")
     private val listFqn = FqName("kotlin.collections.List")
     private val stringFqn = StandardNames.FqNames.string.toSafe()
+    private val throwableFqn = StandardNames.FqNames.throwable
     private val intFqn = StandardNames.FqNames._int.toSafe()
     private val longFqn = StandardNames.FqNames._long.toSafe()
     private val doubleFqn = StandardNames.FqNames._double.toSafe()
@@ -135,6 +136,12 @@ internal class DotNetIlIntrinsicMethods(
         irBuiltIns.noWhenBranchMatchedExceptionSymbol.toKey()!! to DotNetIlNoWhenBranchMatchedIntrinsic,
         Key(kotlinInternalFqn, null, "throwKotlinNothingValueException", emptyList())
                 to DotNetIlThrowKotlinNothingValueExceptionIntrinsic,
+        Key(kotlinInternalFqn, null, "captureStaticInitializationFailure", listOf(throwableFqn))
+                to DotNetIlCaptureStaticInitializationFailureIntrinsic,
+        Key(kotlinInternalFqn, null, "observeStaticInitializationFailure", listOf(anyFqn))
+                to DotNetIlObserveStaticInitializationFailureIntrinsic,
+        Key(kotlinInternalFqn, null, "staticInitializationFailure", listOf(throwableFqn, stringFqn))
+                to DotNetIlStaticInitializationFailureIntrinsic,
         Key(kotlinIoFqn, null, "println", emptyList()) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(stringFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(intFqn)) to DotNetIlPrintlnIntrinsic,
@@ -1710,6 +1717,79 @@ private object DotNetIlThrowKotlinNothingValueExceptionIntrinsic : DotNetIlIntri
         if (call.arguments.isNotEmpty()) {
             dotNetUnsupported("throwKotlinNothingValueException has an unsupported argument shape")
         }
+    }
+}
+
+/** Records an original initializer exception in one runtime-owned, atomically observed state. */
+private object DotNetIlCaptureStaticInitializationFailureIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Object || call.arguments.size != 1) return false
+        val reason = call.arguments.single()
+            ?: dotNetUnsupported("captureStaticInitializationFailure has no reason")
+        val exceptionCarrier = DotNetIlValueType.MappedClass(
+            DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)
+        )
+        codegen.emitExpression(reason, exceptionCarrier)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.captureStaticInitializationFailureCallInstruction(
+                codegen.coreLibraryReference
+            ),
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Atomically returns the original failure to one observer and null to every later observer. */
+private object DotNetIlObserveStaticInitializationFailureIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val exceptionCarrier = DotNetIlValueType.MappedClass(
+            DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)
+        )
+        if (expectedType != exceptionCarrier || call.arguments.size != 1) return false
+        val state = call.arguments.single()
+            ?: dotNetUnsupported("observeStaticInitializationFailure has no failure state")
+        codegen.emitExpression(state, DotNetIlValueType.Object)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.observeStaticInitializationFailureCallInstruction(
+                codegen.coreLibraryReference
+            ),
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Emits the existing Common non-JVM `staticInitializationFailure(reason, className)` contract. */
+private object DotNetIlStaticInitializationFailureIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsStatement(call: IrCall, codegen: DotNetIlExpressionCodegen): Boolean {
+        if (call.arguments.size != 2) return false
+        val reason = call.arguments[0]
+            ?: dotNetUnsupported("staticInitializationFailure has no reason")
+        val className = call.arguments[1]
+            ?: dotNetUnsupported("staticInitializationFailure has no class name")
+        val exceptionCarrier = DotNetIlValueType.MappedClass(
+            DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)
+        )
+        codegen.emitExpression(reason, exceptionCarrier)
+        codegen.emitExpression(className, DotNetIlValueType.String)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.throwStaticInitializationFailureCallInstruction(
+                codegen.coreLibraryReference
+            ),
+            pops = 2,
+        )
+        return true
     }
 }
 

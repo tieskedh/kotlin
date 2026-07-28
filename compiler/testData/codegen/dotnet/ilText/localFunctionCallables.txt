@@ -28,16 +28,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field assembly static initonly class 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::.ctor()
-    stsfld class 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1' 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::.ctor()
+      stsfld class 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1' 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -62,16 +96,50 @@
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field assembly static initonly class 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::.ctor()
-    stsfld class 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1' 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::.ctor()
+      stsfld class 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1' 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "functionReference"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 6
+    call void 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:localFunctionCallables.kt:573:593:#functionReferenceMixtureSupported(){}#local#static(){}"
     ldc.i4 0
@@ -136,6 +204,7 @@
       [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
       [3] int32 '<callableResult>'
     )
+    call void 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::'<EnsureInitialized>'()
     ldsfld class 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1' 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::'INSTANCE'
     stloc.0
     call int32 'localFunctionCallablesKt'::'lambdaMixtureSupported$local$0'()
@@ -169,6 +238,7 @@ IL_callableExactEnd_1:
       [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
       [3] int32 '<callableResult>'
     )
+    call void 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'<EnsureInitialized>'()
     ldsfld class 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1' 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'INSTANCE'
     stloc.0
     ldloc.0

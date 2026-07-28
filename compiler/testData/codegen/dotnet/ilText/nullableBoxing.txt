@@ -44,29 +44,47 @@
 .class public abstract sealed auto ansi 'nullableBoxingKt'
        extends [mscorlib]System.Object
 {
+  .field private static object '<static-initialization-failure>'
   .field private static object 'emptySlot'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    ldnull
-    stsfld object 'nullableBoxingKt'::'emptySlot'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      ldnull
+      stsfld object 'nullableBoxingKt'::'emptySlot'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'nullableBoxingKt'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
   .method public hidebysig specialname static object 'get_emptySlot'() cil managed
   {
     .maxstack 1
+    call void 'nullableBoxingKt'::'<EnsureInitialized>'()
     ldsfld object 'nullableBoxingKt'::'emptySlot'
     ret
   }
   .method public hidebysig static object 'stash'(object 'value') cil managed
   {
     .maxstack 1
+    call void 'nullableBoxingKt'::'<EnsureInitialized>'()
     ldarg.0
     ret
   }
   .method public hidebysig static object 'wrapNullable'(valuetype [mscorlib]System.Nullable`1<int32> 'x') cil managed
   {
     .maxstack 1
+    call void 'nullableBoxingKt'::'<EnsureInitialized>'()
     ldarg.0
     box valuetype [mscorlib]System.Nullable`1<int32>
     ret
@@ -74,6 +92,7 @@
   .method public hidebysig static object 'wrapPlain'(int32 'x') cil managed
   {
     .maxstack 1
+    call void 'nullableBoxingKt'::'<EnsureInitialized>'()
     ldarg.0
     box [mscorlib]System.Int32
     ret
@@ -81,6 +100,7 @@
   .method public hidebysig static bool 'same'(object 'a', object 'b') cil managed
   {
     .maxstack 2
+    call void 'nullableBoxingKt'::'<EnsureInitialized>'()
     ldarg.0
     ldarg.1
     ceq
@@ -89,6 +109,7 @@
   .method public hidebysig static bool 'isNull'(object 'a') cil managed
   {
     .maxstack 2
+    call void 'nullableBoxingKt'::'<EnsureInitialized>'()
     ldarg.0
     ldnull
     ceq
@@ -101,6 +122,7 @@
       [0] valuetype [mscorlib]System.Nullable`1<int32> '<str>',
       [1] valuetype [mscorlib]System.Nullable`1<float64> '<str>@1'
     )
+    call void 'nullableBoxingKt'::'<EnsureInitialized>'()
     ldstr "x="
     ldarg.0
     stloc.0
@@ -146,6 +168,7 @@ IL_strValueEnd_3:
       [3] valuetype [mscorlib]System.Nullable`1<float64> '<null>@3',
       [4] valuetype [mscorlib]System.Nullable`1<int32> '<null>@4'
     )
+    call void 'nullableBoxingKt'::'<EnsureInitialized>'()
     call object 'nullableBoxingKt'::'get_emptySlot'()
     call bool 'nullableBoxingKt'::'isNull'(object)
     brtrue IL_boolStrTrue_0
@@ -252,6 +275,24 @@ IL_boolStrEnd_15:
     newobj instance void valuetype [mscorlib]System.Nullable`1<float64>::.ctor(!0)
     call string 'nullableBoxingKt'::'template'(valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<float64>)
     call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'nullableBoxingKt'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'nullableBoxingKt'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldnull
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .property object 'emptySlot'()

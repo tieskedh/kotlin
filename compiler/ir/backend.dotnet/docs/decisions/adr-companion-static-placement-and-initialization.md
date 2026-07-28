@@ -1,9 +1,9 @@
-# ADR: Companion static placement and initialization
+# ADR: Companion static placement and Kotlin static initialization
 
 - Status: **Accepted**
 - Date: 2026-07-21
-- Scope: Kotlin companion blocks and companion extensions on `net48`, `netstandard2.0`, and
-  `net10.0`
+- Scope: Kotlin companion blocks, companion extensions, and the classifier initialization graph
+  on `net48`, `netstandard2.0`, and `net10.0`
 
 This is a repository-local pre-ABI decision for the experimental .NET backend. No Kotlin/.NET
 binary has shipped, so the implementation must replace conflicting prototype shapes instead of
@@ -89,17 +89,22 @@ companion object remains on the interface TypeDef when it is the only static sta
 interface mixes a companion object with companion blocks, all of that state instead shares the
 holder and one ordered `.cctor`; it is never split across CLR type events.
 
-ABI schema 10 records the exact owner and field name of every Kotlin object instance, including
+ABI schema 15 records the exact owner and field name of every Kotlin object instance, including
 ordinary objects and companions. Cross-module object reads bind that record rather than deriving
 `INSTANCE`, a companion name, or `<CompanionStatics>`.
 
-### 5. One initialization entry point represents the Kotlin graph
+### 5. One static-initialization entry point represents the Kotlin graph
 
-Each classifier participating in companion initialization has one stable compiler-owned
-`<EnsureCompanionInitialized>` entry point associated with its physical owner. Invoking the entry
-point triggers that owner's `.cctor` exactly once under CLR type-initialization synchronization.
-The `.cctor` explicitly ensures Kotlin-required parents and selected superinterfaces before
-executing the classifier's own companion initializers in source order.
+Each participating classifier has one stable compiler-owned `<EnsureInitialized>` entry point
+associated with its physical owner. Invoking the entry triggers that owner's `.cctor` exactly once
+under CLR type-initialization synchronization. The `.cctor` explicitly ensures Kotlin-required
+parents and selected superinterfaces before executing the classifier's own static initializers in
+source order.
+
+An existing companion-state holder owns the entry when one is already required. A generic
+classifier or interface which needs only a logical initialization event instead uses a distinct
+non-generic `<StaticInitialization>` holder. It must not acquire the misleading
+`<CompanionStatics>` identity merely because CLR generic or interface storage is unsuitable.
 
 The entry point is assembly-internal for private and ordinary internal logical owners. It is
 metadata-public and marked as compiler ABI for public, protected, and `@PublishedApi` owners, whose
@@ -108,31 +113,14 @@ an internal entry through the producer's `InternalsVisibleTo`; visibility is not
 because a friend exists. The producer records every entry's exact owner and name in the physical
 declaration index, and consumers never derive either one.
 
-Construction, companion-block calls, companion-block property access, and companion-object
-access trigger the same semantic owner. Companion-extension calls do not.
+Construction, Kotlin static calls and accessors, and companion/object access trigger the same
+semantic owner. Companion-extension calls do not initialize the classifier they extend.
 
-CLR `TypeInitializationException` wrapping and failure caching are accepted only as physical
-runtime mechanisms. They do not define the observable behavior of a Kotlin-owned initializer.
-The common Kotlin contract now requires:
-
-- an original Kotlin `Error` to be rethrown as the same object on the first failed access;
-- another first failure to become Kotlin `ExceptionInInitializerError` with the original cause;
-- a later access to the failed logical class or file to throw Kotlin
-  `NoClassDefFoundError`; and
-- inherited and cross-module initialization edges to preserve the same logical failure state.
-
-A foreign CLR type initializer remains a foreign exception boundary and preserves its original
-CLR exception object under the accepted exception-classification design. The target must implement
-the Kotlin-owned distinction above the physical `.cctor` mechanism—most likely by catching and
-recording failure inside the initializer and classifying it in the compiler-owned ensure entry.
-Completing the physical `.cctor` after recording a failure also removes the CLR's automatic
-active-use barrier. The backend must therefore prove that every Kotlin-owned active-use path
-re-enters the logical barrier before user code runs: constructors, static methods and accessors,
-direct singleton loads, generated adapters, and cross-module calls. Merely checking the existing
-dependency-graph calls to `<EnsureCompanionInitialized>` would allow construction or static method
-execution after a swallowed initializer failure and is architecturally insufficient. The
-state/synchronization protocol, active-use coverage, and both-profile tests are required before
-ABI freeze.
+The accepted
+[`adr-kotlin-static-initialization-failures.md`](adr-kotlin-static-initialization-failures.md)
+owns failed-initialization behavior. Compiler-generated `.cctor` methods catch and record the
+original physical throwable, while every Kotlin-owned active-use path re-enters the logical
+barrier before user code runs. Raw CLR `TypeInitializationException` is not Kotlin behavior.
 
 ### 6. Initialization order is explicit
 
@@ -140,14 +128,15 @@ The lowering computes the Kotlin initialization graph from logical inheritance a
 selection. It must not rely on CLR base-type initialization or DIM ambiguity behavior. A valid
 Kotlin hierarchy observes:
 
-1. required superclass companion initialization;
+1. required superclass static initialization;
 2. selected superinterface initialization in Kotlin-defined order; and
-3. the classifier's own companion-block and companion-object initializers in program order.
+3. the classifier's own companion-block, companion-object, and other Kotlin-generated static
+   initializers in program order.
 
 Cross-module graph edges are resolved exclusively through producer metadata. Missing or
 incompatible initialization records are link errors, not fallback name guesses.
 
-**Implementation status (2026-07-21):** ABI schema 10 records the exact physical initialization
+**Implementation status (2026-07-28):** ABI schema 15 records the exact physical initialization
 owner and entry method as well as every object-instance field. The lowering materializes
 superclass-first edges, followed by direct
 superinterfaces in source order which declare a non-abstract Kotlin instance member, followed by
@@ -158,6 +147,9 @@ ordering, and abstract-only interface independence. A `netstandard2.0` producer 
 consumer execute producer-recorded graph and object-field edges without reconstructing their
 physical identities. Mixed block/object initializers retain source order in one `.cctor`, and a
 generic companion object remains one instance across different closed owner constructions.
+Failure coverage additionally executes companions, inherited generic and non-generic events,
+ordinary objects, top-level files, original `Error` identity, later failed uses, and one portable
+producer from both runtime profiles.
 
 ### 7. Unsupported shapes fail before emission
 
@@ -174,7 +166,7 @@ static methods and fields where its model is sound. C# sees strongly typed class
 ordinary non-generic companion blocks, but companion extensions and compiler holders remain
 separate from deliberate export design.
 
-The costs are a compiler-owned holder/init ABI, physical-name records in KLIB, explicit access
+The costs are compiler-owned holder/init ABIs, physical-name records in KLIB, explicit access
 bridges, and additional `.cctor` calls. These costs are preferable to generic static duplication
 or an initialization ABI that cannot be repaired after publication.
 
