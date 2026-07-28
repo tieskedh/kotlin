@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, and scalar custom-attribute values are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, and primitive/array/tagged-object custom-attribute values are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -373,6 +373,34 @@ booleans, characters, signed zero, and NaN. Hostile cases pin cross-assembly tok
 truncation, invalid boolean and UTF-8 data, non-canonical string lengths, trailing bytes, and the
 explicit named/tagged-object deferrals.
 
+The eleventh slice generalizes that constructor-driven decoder to one-dimensional arrays and
+tagged `object` values. JVM annotation readers likewise retain typed arrays and element values;
+the CLR-specific difference is that an `object` payload carries a serialization type code and an
+`object[]` can therefore contain differently typed elements. A null object emitted by Roslyn is a
+tagged nullable string value, while a null array is the distinguished signed length `-1`. The
+decoder preserves those actual CLR value shapes and does not manufacture Kotlin `Any` or
+`Array<T>` semantics.
+
+One recursive value-type algebra now drives primitives, tagged values, and SZARRAY values.
+Constructor signatures remain authoritative for fixed arguments; only a tagged object reads its
+actual type from the value blob. Nested SZARRAY element types are rejected because custom
+attribute arrays are one-dimensional and non-jagged. Arrays retain their declared element type
+even when null or empty. This matches `System.Reflection.Metadata` decoding and ordinary CLR
+reflection instead of introducing a target-specific value convention.
+
+The reader bounds arrays to one million decoded elements and tagged recursion to 32 levels. These
+are untrusted-input resource guards, not ABI limits: exceeding them returns a located structured
+failure and never changes a valid value into another value. Impossible negative lengths, unknown
+serialization codes, truncated payloads, and nested array type codes also fail structurally.
+The policy is identical on all three profiles because ECMA-335 value encoding is identical;
+profile-specific API availability remains an input to later type resolution.
+
+The Roslyn .NET 10 fixture covers non-empty, empty, and null arrays, a scalar boxed integer, and a
+heterogeneous object array containing string, integer, and null values. Framework hostile blobs
+cover invalid and oversized lengths, pre-allocation truncation detection, unknown and unresolved
+tagged types, jagged arrays, and excessive boxing depth. `System.Type`, enums, and named
+field/property arguments remain the next semantic type-resolution layer.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -441,7 +469,9 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct temporary implementation, but not a final design**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:
   **Correct direction**.
-- Structured deferral of array, tagged-object, type, enum, and named values:
+- Typed array and tagged-object decoding with bounded untrusted-input recursion:
+  **Correct direction**.
+- Structured deferral of type, enum, and named values:
   **Correct temporary implementation, but not a final design**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
