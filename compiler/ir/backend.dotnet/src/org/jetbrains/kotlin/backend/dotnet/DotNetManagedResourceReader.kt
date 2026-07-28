@@ -138,6 +138,11 @@ private object DotNetPeMetadataReader {
             val metadata = readMetadataImage()
             val typeReferences = readTypeReferences(metadata.tables, metadata.strings)
             val typeDefinitions = readTypeDefinitions(metadata.tables, metadata.strings)
+            val fieldDefinitions = readFieldDefinitions(
+                metadata.tables,
+                metadata.strings,
+                metadata.blobs,
+            )
             val methodDefinitions = readMethodDefinitions(
                 metadata.tables,
                 metadata.strings,
@@ -159,6 +164,7 @@ private object DotNetPeMetadataReader {
                 typeReferences = typeReferences,
                 typeDefinitions = typeDefinitions,
                 typeSpecifications = readTypeSpecifications(metadata.tables, metadata.blobs),
+                fieldDefinitions = fieldDefinitions,
                 methodDefinitions = methodDefinitions,
                 memberReferences = readMemberReferences(
                     metadata.tables,
@@ -560,7 +566,12 @@ private object DotNetPeMetadataReader {
             blobs: MetadataStream?,
         ): List<DotNetClrMethodDefinition> {
             val table = locateMetadataTable(tables, METHOD_DEF_TABLE) ?: return emptyList()
-            val owners = readMethodOwners(tables, table.rowCount)
+            val owners = readTypeDefinitionMemberOwners(
+                tables = tables,
+                memberTable = METHOD_DEF_TABLE,
+                memberCount = table.rowCount,
+                memberDescription = "MethodDef",
+            )
             return List(table.rowCount.toIntChecked("MethodDef row count")) { rowIndex ->
                 var position = table.offset + rowIndex.toLong() * table.rowSize
                 val relativeVirtualAddress = readU4(position)
@@ -610,6 +621,75 @@ private object DotNetPeMetadataReader {
                     implementationAttributes = implementationAttributes,
                     attributes = attributes,
                     signature = signature,
+                    rawSignature = rawSignature.map { byte -> byte.toInt() and 0xff },
+                )
+            }
+        }
+
+        private fun readFieldDefinitions(
+            tables: MetadataStream,
+            strings: MetadataStream,
+            blobs: MetadataStream?,
+        ): List<DotNetClrFieldDefinition> {
+            val table = locateMetadataTable(tables, FIELD_TABLE) ?: return emptyList()
+            val owners = readTypeDefinitionMemberOwners(
+                tables = tables,
+                memberTable = FIELD_TABLE,
+                memberCount = table.rowCount,
+                memberDescription = "Field",
+            )
+            return List(table.rowCount.toIntChecked("Field row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val attributes = readU2(position)
+                position += UINT16_SIZE
+                if (attributes and FIELD_ATTRIBUTE_MASK.inv() != 0 ||
+                    attributes and FIELD_ACCESS_MASK == FIELD_ACCESS_MASK
+                ) {
+                    malformed("Field row ${rowIndex + 1} has invalid attribute flags")
+                }
+                if (attributes and FIELD_INIT_ONLY_ATTRIBUTE != 0 &&
+                    attributes and FIELD_LITERAL_ATTRIBUTE != 0
+                ) {
+                    malformed("Field row ${rowIndex + 1} is both init-only and literal")
+                }
+                if (attributes and FIELD_LITERAL_ATTRIBUTE != 0 &&
+                    attributes and FIELD_STATIC_ATTRIBUTE == 0
+                ) {
+                    malformed("Field row ${rowIndex + 1} is literal but not static")
+                }
+                if (attributes and FIELD_RUNTIME_SPECIAL_NAME_ATTRIBUTE != 0 &&
+                    attributes and FIELD_SPECIAL_NAME_ATTRIBUTE == 0
+                ) {
+                    malformed("Field row ${rowIndex + 1} has runtime-special-name without special-name")
+                }
+                val nameIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val signatureIndex = readIndex(position, table.indexSizes.blobIndexSize)
+                val name = readStringHeap(strings, nameIndex)
+                if (name.isEmpty()) malformed("Field row ${rowIndex + 1} has an empty name")
+                val rawSignature = readBlobHeap(blobs, signatureIndex)
+                if (rawSignature.isEmpty()) {
+                    malformed("Field row ${rowIndex + 1} has an empty signature")
+                }
+                if (rawSignature.size > MAX_SIGNATURE_BLOB_SIZE) {
+                    malformed("Field row ${rowIndex + 1} has an oversized signature")
+                }
+                val handle = metadataHandle(
+                    FIELD_TABLE,
+                    rowIndex.toLong() + 1,
+                    tables,
+                    "Field",
+                )
+                DotNetClrFieldDefinition(
+                    handle = handle,
+                    declaringType = owners[rowIndex],
+                    name = name,
+                    attributes = attributes,
+                    signature = SignatureBlobReader(
+                        bytes = rawSignature,
+                        metadataTables = tables,
+                        description = "Field token 0x${handle.token.toUInt().toString(16)}",
+                    ).readFieldSignature(),
                     rawSignature = rawSignature.map { byte -> byte.toInt() and 0xff },
                 )
             }
@@ -670,47 +750,60 @@ private object DotNetPeMetadataReader {
             }
         }
 
-        private fun readMethodOwners(
+        private fun readTypeDefinitionMemberOwners(
             tables: MetadataStream,
-            methodCount: Long,
+            memberTable: Int,
+            memberCount: Long,
+            memberDescription: String,
         ): List<DotNetClrMetadataHandle> {
+            val listDescription = when (memberTable) {
+                FIELD_TABLE -> "FieldList"
+                METHOD_DEF_TABLE -> "MethodList"
+                else -> error("Unsupported TypeDef member table $memberTable")
+            }
             val typeTable = locateMetadataTable(tables, TYPE_DEF_TABLE)
-                ?: malformed("MethodDef rows exist without a TypeDef table")
+                ?: malformed("$memberDescription rows exist without a TypeDef table")
             val typeCount = typeTable.rowCount.toIntChecked("TypeDef row count")
-            val methodStarts = List(typeCount) { typeIndex ->
+            val memberStarts = List(typeCount) { typeIndex ->
                 var position = typeTable.offset + typeIndex.toLong() * typeTable.rowSize
                 position += UINT32_SIZE
                 position += typeTable.indexSizes.stringIndexSize * 2L
                 position += typeTable.indexSizes.typeDefOrRefIndexSize
-                position += typeTable.indexSizes.tableIndexSize(FIELD_TABLE)
-                readIndex(position, typeTable.indexSizes.tableIndexSize(METHOD_DEF_TABLE))
+                if (memberTable == METHOD_DEF_TABLE) {
+                    position += typeTable.indexSizes.tableIndexSize(FIELD_TABLE)
+                }
+                readIndex(position, typeTable.indexSizes.tableIndexSize(memberTable))
             }
             var previousStart = 1L
-            for ([typeIndex, start] in methodStarts.withIndex()) {
-                if (start !in 1..methodCount + 1) {
-                    malformed("TypeDef row ${typeIndex + 1} has invalid MethodList index $start")
+            for ([typeIndex, start] in memberStarts.withIndex()) {
+                if (start !in 1..memberCount + 1) {
+                    malformed(
+                        "TypeDef row ${typeIndex + 1} has invalid $listDescription index $start"
+                    )
                 }
                 if (start < previousStart) {
-                    malformed("TypeDef MethodList indices are not ordered")
+                    malformed("TypeDef $listDescription indices are not ordered")
                 }
                 previousStart = start
             }
-            val owners = arrayOfNulls<DotNetClrMetadataHandle>(methodCount.toIntChecked("MethodDef row count"))
-            for (typeIndex in methodStarts.indices) {
-                val start = methodStarts[typeIndex]
-                val end = methodStarts.getOrNull(typeIndex + 1) ?: (methodCount + 1)
+            val owners = arrayOfNulls<DotNetClrMetadataHandle>(
+                memberCount.toIntChecked("$memberDescription row count")
+            )
+            for (typeIndex in memberStarts.indices) {
+                val start = memberStarts[typeIndex]
+                val end = memberStarts.getOrNull(typeIndex + 1) ?: (memberCount + 1)
                 val owner = metadataHandle(
                     TYPE_DEF_TABLE,
                     typeIndex.toLong() + 1,
                     tables,
-                    "MethodDef owner",
+                    "$memberDescription owner",
                 )
-                for (methodRow in start until end) {
-                    owners[(methodRow - 1).toInt()] = owner
+                for (memberRow in start until end) {
+                    owners[(memberRow - 1).toInt()] = owner
                 }
             }
             if (owners.any { owner -> owner == null }) {
-                malformed("one or more MethodDef rows have no declaring TypeDef")
+                malformed("one or more $memberDescription rows have no declaring TypeDef")
             }
             return owners.map { owner -> checkNotNull(owner) }
         }
@@ -1138,16 +1231,8 @@ private object DotNetPeMetadataReader {
 
             fun readMemberReferenceSignature(): DotNetClrMemberReferenceSignature {
                 val signature = if (peekByte() == SIGNATURE_FIELD) {
-                    readByte()
                     DotNetClrMemberReferenceSignature.Field(
-                        signature = DotNetClrFieldSignature(
-                            fieldType = readType(
-                                depth = 0,
-                                allowVoid = false,
-                                allowByReference = true,
-                                allowTypedReference = true,
-                            )
-                        )
+                        signature = readFieldSignature()
                     )
                 } else {
                     val method = readMethodSignature(depth = 0, allowSentinel = true)
@@ -1162,6 +1247,22 @@ private object DotNetPeMetadataReader {
                     malformed("$description has ${bytes.size - position} trailing signature bytes")
                 }
                 return signature
+            }
+
+            fun readFieldSignature(): DotNetClrFieldSignature {
+                if (readByte() != SIGNATURE_FIELD) {
+                    malformed("$description has an invalid field signature header")
+                }
+                val fieldType = readType(
+                    depth = 0,
+                    allowVoid = false,
+                    allowByReference = true,
+                    allowTypedReference = true,
+                )
+                if (position != bytes.size) {
+                    malformed("$description has ${bytes.size - position} trailing signature bytes")
+                }
+                return DotNetClrFieldSignature(fieldType)
             }
 
             fun readPropertySignature(): DotNetClrPropertySignature {
@@ -2013,6 +2114,13 @@ private object DotNetPeMetadataReader {
     private const val ASSEMBLY_PUBLIC_KEY_FLAG = 0x1L
     private const val METHOD_ACCESS_MASK = 0x7
     private const val METHOD_STATIC_ATTRIBUTE = 0x10
+    private const val FIELD_ACCESS_MASK = 0x0007
+    private const val FIELD_STATIC_ATTRIBUTE = 0x0010
+    private const val FIELD_INIT_ONLY_ATTRIBUTE = 0x0020
+    private const val FIELD_LITERAL_ATTRIBUTE = 0x0040
+    private const val FIELD_SPECIAL_NAME_ATTRIBUTE = 0x0200
+    private const val FIELD_RUNTIME_SPECIAL_NAME_ATTRIBUTE = 0x0400
+    private const val FIELD_ATTRIBUTE_MASK = 0xb7f7
     private const val PROPERTY_ATTRIBUTE_MASK = 0x1600
     private const val METHOD_SEMANTICS_SETTER = 0x0001
     private const val METHOD_SEMANTICS_GETTER = 0x0002

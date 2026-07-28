@@ -324,8 +324,11 @@ landed shape as a compatibility constraint.
    method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely
    allow call-site vararg sentinels; FieldRef signatures use the reusable FieldSig model and
    retain modern by-reference and typed-reference forms. Never substitute a constructed TypeSpec
-   owner or resolve a same-named definition in this physical layer. Profile and byref-like
-   legality stay in the selected-graph import policy. It does not load target code,
+   owner or resolve a same-named definition in this physical layer. FieldDef rows reuse that
+   FieldSig and preserve TypeDef FieldList ownership, exact names, flags, and raw blobs.
+   `value__` supplies physical enum storage only after resolved `System.Enum` ancestry confirms
+   the owner; its spelling alone is not enum identity. Profile and byref-like legality stay in the
+   selected-graph import policy. It does not load target code,
    apply C# display rules, or manufacture FIR declarations. Future mapping is layered physical
    model -> CLR-to-Kotlin import policy -> lazy
    target FIR symbol provider -> IR retaining the original physical owner/member linkage.

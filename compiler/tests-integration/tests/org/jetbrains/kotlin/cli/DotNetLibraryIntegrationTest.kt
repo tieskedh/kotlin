@@ -25,7 +25,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetBadImageFormatException
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldSignature
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterConstraint
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterKind
@@ -152,9 +154,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   {
                   }
 
+                  .class public auto ansi sealed 'TinyKind'
+                         extends [mscorlib]System.Enum
+                  {
+                    .field public specialname rtspecialname int16 'value__'
+                    .field public static literal valuetype Fixture.TinyKind 'Zero' = int16(0)
+                  }
+
                   .class public auto ansi beforefieldinit 'GenericOwner`1'<T>
                          extends [mscorlib]System.Object
                   {
+                    .field public !0 'Value'
+                    .field private static initonly native int 'NativeValue'
+
                     .method public hidebysig static !0 'Echo'(!0 'value') cil managed
                     {
                       .maxstack 1
@@ -289,6 +301,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val marker = fixtureTypes.getValue("IMarker")
             val box = fixtureTypes.getValue("IBox`1")
             val variant = fixtureTypes.getValue("IVariant`2")
+            val tinyKind = fixtureTypes.getValue("TinyKind")
             val genericOwner = fixtureTypes.getValue("GenericOwner`1")
             val signatureHost = fixtureTypes.getValue("SignatureHost`1")
             val propertyHost = fixtureTypes.getValue("PropertyHost")
@@ -539,6 +552,61 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
             assertEquals(listOf(echoSignature.returnType), echoSignature.parameterTypes)
 
+            val genericValueField = metadata.fieldDefinitions.single { field ->
+                field.declaringType == genericOwner.handle && field.name == "Value"
+            }
+            assertEquals(DotNetClrFieldVisibility.PUBLIC, genericValueField.visibility)
+            assertFalse(genericValueField.isStatic)
+            assertFalse(genericValueField.isInitOnly)
+            assertFalse(genericValueField.isLiteral)
+            assertEquals(
+                DotNetClrFieldSignature(
+                    DotNetClrTypeSignature.GenericParameter(
+                        DotNetClrGenericParameterKind.TYPE,
+                        0,
+                    )
+                ),
+                genericValueField.signature,
+            )
+
+            val nativeValueField = metadata.fieldDefinitions.single { field ->
+                field.declaringType == genericOwner.handle && field.name == "NativeValue"
+            }
+            assertEquals(DotNetClrFieldVisibility.PRIVATE, nativeValueField.visibility)
+            assertTrue(nativeValueField.isStatic)
+            assertTrue(nativeValueField.isInitOnly)
+            assertFalse(nativeValueField.isLiteral)
+            assertEquals(
+                DotNetClrFieldSignature(
+                    DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.NATIVE_INT)
+                ),
+                nativeValueField.signature,
+            )
+
+            val enumFields = metadata.fieldDefinitions
+                .filter { field -> field.declaringType == tinyKind.handle }
+                .associateBy(DotNetClrFieldDefinition::name)
+            val enumValueField = enumFields.getValue("value__")
+            assertFalse(enumValueField.isStatic)
+            assertFalse(enumValueField.isLiteral)
+            assertTrue(enumValueField.isSpecialName)
+            assertTrue(enumValueField.isRuntimeSpecialName)
+            assertEquals(
+                DotNetClrFieldSignature(
+                    DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT16)
+                ),
+                enumValueField.signature,
+            )
+            val enumLiteralField = enumFields.getValue("Zero")
+            assertTrue(enumLiteralField.isStatic)
+            assertTrue(enumLiteralField.isLiteral)
+            assertEquals(
+                DotNetClrFieldSignature(
+                    DotNetClrTypeSignature.Named(tinyKind.handle, isValueType = true)
+                ),
+                enumLiteralField.signature,
+            )
+
             val malformedAssembly = File(
                 assembly.parentFile,
                 "ImporterFixture-malformed-signature.dll",
@@ -615,6 +683,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         checkNotNull(malformedMemberReference.message)
             ) {
                 malformedMemberReference.message
+            }
+
+            val malformedFieldAssembly = File(
+                assembly.parentFile,
+                "ImporterFixture-malformed-field-signature.dll",
+            )
+            val malformedFieldImage = assembly.readBytes()
+            val rawNativeFieldSignature = ByteArray(nativeValueField.rawSignature.size) { index ->
+                nativeValueField.rawSignature[index].toByte()
+            }
+            val nativeFieldSignatureOffset =
+                malformedFieldImage.uniqueSequenceOffset(rawNativeFieldSignature)
+            malformedFieldImage[nativeFieldSignatureOffset] = 0x07
+            malformedFieldAssembly.writeBytes(malformedFieldImage)
+            val malformedField = assertThrows(DotNetBadImageFormatException::class.java) {
+                DotNetClrMetadataReader.read(malformedFieldAssembly)
+            }
+            assertTrue(
+                "invalid field signature header" in checkNotNull(malformedField.message)
+            ) {
+                malformedField.message
             }
         }
 
@@ -740,6 +829,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             refFieldProducerAssembly,
         )
         assertEquals(0, refFieldProducerCompile.exitCode, refFieldProducerCompile.output)
+        val refFieldProducerMetadata = DotNetClrMetadataReader.read(refFieldProducerAssembly)
+        val refFieldOwnerDefinition = refFieldProducerMetadata.typeDefinitions.single { definition ->
+            definition.namespaceName == "ModernFields" && definition.metadataName == "RefFieldOwner"
+        }
+        val refFieldDefinition = refFieldProducerMetadata.fieldDefinitions.single { field ->
+            field.declaringType == refFieldOwnerDefinition.handle && field.name == "Value"
+        }
+        assertEquals(
+            DotNetClrFieldSignature(
+                DotNetClrTypeSignature.ByReference(
+                    DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                )
+            ),
+            refFieldDefinition.signature,
+        )
         val refFieldConsumerSource = File(tmpdir, "clr-metadata/RefFieldConsumer.cs").apply {
             writeText(
                 """
@@ -790,6 +894,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val coreMetadata = DotNetClrMetadataReader.read(coreAssembly)
             assertEquals(entry.second, coreMetadata.identity.name)
             assertTrue(coreMetadata.typeDefinitions.size > 100)
+            assertTrue(coreMetadata.fieldDefinitions.size > 100)
             assertTrue(coreMetadata.methodDefinitions.size > 100)
             assertTrue(coreMetadata.memberReferences.isNotEmpty())
             assertTrue(coreMetadata.propertyDefinitions.isNotEmpty())
