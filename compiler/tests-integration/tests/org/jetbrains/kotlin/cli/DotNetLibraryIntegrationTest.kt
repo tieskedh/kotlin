@@ -23,6 +23,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameter
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataReader
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
@@ -70,6 +72,94 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
+    @Test
+    fun testReadsPhysicalClrAssemblyAndTypeMetadata() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ilasm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ilasm is not available",
+        )
+        val ilFile = File(tmpdir, "clr-metadata/ImporterFixture.il").apply {
+            parentFile.mkdirs()
+            writeText(
+                """
+                .assembly extern mscorlib
+                {
+                }
+                .assembly 'ImporterFixture'
+                {
+                  .ver 2:3:4:5
+                }
+                .module 'ImporterFixture.dll'
+
+                .namespace Fixture
+                {
+                  .class public auto ansi beforefieldinit 'Base'
+                         extends [mscorlib]System.Object
+                  {
+                  }
+
+                  .class public auto ansi beforefieldinit 'Outer'
+                         extends Fixture.Base
+                  {
+                    .class nested assembly auto ansi beforefieldinit 'Nested'
+                           extends [mscorlib]System.Object
+                    {
+                    }
+                  }
+
+                  .class interface public abstract auto ansi 'IMarker'
+                  {
+                  }
+                }
+                """.trimIndent()
+            )
+        }
+        for (target in listOf(DotNetTarget.NET48, DotNetTarget.NET10_0)) {
+            val assembly = File(tmpdir, "clr-metadata/${target.flagValue}/ImporterFixture.dll")
+            assertTrue(
+                DotNetIlAssembler.assembleLibrary(
+                    ilFile,
+                    assembly,
+                    target,
+                    MessageCollector.NONE,
+                )
+            )
+
+            val metadata = DotNetClrMetadataReader.read(assembly)
+            assertEquals("ImporterFixture", metadata.identity.name)
+            assertEquals("2.3.4.5", metadata.identity.version)
+            assertEquals("neutral", metadata.identity.culture)
+            assertFalse(metadata.identity.hasPublicKey)
+
+            val coreLibrary = metadata.assemblyReferences.single { it.name == "mscorlib" }
+            assertEquals("neutral", coreLibrary.culture)
+            val systemObject = metadata.typeReferences.single {
+                it.namespaceName == "System" && it.metadataName == "Object"
+            }
+            assertEquals(coreLibrary.handle, systemObject.resolutionScope)
+
+            val fixtureTypes = metadata.typeDefinitions
+                .filter { it.namespaceName == "Fixture" || it.declaringType != null }
+                .associateBy { it.metadataName }
+            val base = fixtureTypes.getValue("Base")
+            val outer = fixtureTypes.getValue("Outer")
+            val nested = fixtureTypes.getValue("Nested")
+            val marker = fixtureTypes.getValue("IMarker")
+            assertEquals(DotNetClrTypeVisibility.PUBLIC, base.visibility)
+            assertEquals(systemObject.handle, base.baseType)
+            assertEquals(base.handle, outer.baseType)
+            assertEquals(outer.handle, nested.declaringType)
+            assertEquals(DotNetClrTypeVisibility.NESTED_ASSEMBLY, nested.visibility)
+            assertTrue(marker.isInterface)
+            assertTrue(marker.isAbstract)
+            assertFalse(marker.isSealed)
+        }
+    }
+
     @Test
     fun testGenericInterfacePhysicalViewsRoundTrip() {
         val declarations = mapOf(

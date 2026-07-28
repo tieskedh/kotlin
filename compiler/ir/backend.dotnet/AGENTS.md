@@ -15,7 +15,7 @@ The commit gate is
 toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 51
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 868 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 869 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -291,6 +291,22 @@ landed shape as a compatibility constraint.
   common sources plus narrow .NET actuals once the backend can compile the required generated
   collection surface; the standalone producer already emits both metadata carriers from one
   source compilation and one physical declaration index.
+ - CLR importer boundary (argumentation:
+   `docs/decisions/draft-adr-clr-importer-boundary.md`; follows the JVM split between physical
+   Java classfile models and Kotlin-facing FIR enhancement, while retaining a CLR-specific
+   metadata graph): ordinary foreign DLLs are not Kotlin libraries and must not be assigned KLIB
+   declaration identities. A single bounded, JVM-hosted PE/ECMA-335 reader feeds both managed
+   resource loading and an immutable physical CLR model. The first slice exposes Assembly,
+   AssemblyRef, TypeRef, TypeDef, TypeDefOrRef base handles, NestedClass ownership, and raw flags;
+   it does not load target code, resolve TypeSpec, apply C# display rules, or manufacture FIR
+   declarations. Future mapping is layered physical model -> CLR-to-Kotlin import policy -> lazy
+   target FIR symbol provider -> IR retaining the original physical owner/member linkage.
+   Kotlin-produced DLLs remain KLIB-authoritative. CLR Property rows remain first-class input and
+   their MethodDef accessors retain physical identity. Ordinary custom attributes compare by
+   decoded semantic content and multiplicity, not raw blob bytes. Profile resolution uses the
+   selected `net48`, `netstandard2.0`, or `net10.0` reference graph; the reader itself is
+   profile-neutral. Never map raw CLR rows directly to Kotlin IR or infer a foreign member again
+   from a Kotlin/C# display name.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased
