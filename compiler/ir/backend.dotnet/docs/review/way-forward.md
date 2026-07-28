@@ -886,6 +886,24 @@ Framework and modern ILAsm proves assembly scope, inheritance, nesting, and flag
 signatures, methods, properties, generic constraints, semantic attributes, import policy, and the
 lazy FIR provider remain subsequent slices. See `../decisions/draft-adr-clr-importer-boundary.md`.
 
+**CLR-signature progress (2026-07-28):** the physical model now owns a lossless ECMA-335 signature
+algebra instead of reusing the backend's output-oriented IL types or recording C# display strings.
+TypeSpec and MethodDef rows retain structural class/value kind, physical handles, generic
+positions/instantiations, legal pointer and by-reference forms, SZARRAY versus ranked arrays with
+sizes and signed lower bounds, custom modifiers, function-pointer convention, `this` flags,
+generic arity, and raw bytes for diagnostics. Method ownership is recovered from the TypeDef
+MethodList partition. The decoder applies ECMA-335 plus the official .NET augmentations: it accepts
+custom modifiers in the extra CLR-supported positions and retains modifier TypeSpec handles
+without resolving them, while restricting named/generic constructors to TypeDef/TypeRef and
+requiring the later resolver to detect cycles. It rejects illegal by-ref/typed-ref nesting,
+call-site sentinels in MethodDef signatures, non-canonical compressed integers, excessive
+nesting/counts, truncation, and trailing bytes. Framework and modern ILAsm independently produce
+the tested fixture; a corrupted copy is rejected. The scale lane also walks real Framework
+mscorlib and net10 System.Runtime metadata, including a modern modified-TypeSpec root. This
+remains profile-neutral physical input and creates no Kotlin type or FIR symbol. Property grouping,
+generic constraints, semantic attributes/nullability, and import policy are the next boundary
+layers.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:

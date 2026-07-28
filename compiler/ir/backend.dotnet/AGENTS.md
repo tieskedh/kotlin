@@ -296,10 +296,19 @@ landed shape as a compatibility constraint.
    Java classfile models and Kotlin-facing FIR enhancement, while retaining a CLR-specific
    metadata graph): ordinary foreign DLLs are not Kotlin libraries and must not be assigned KLIB
    declaration identities. A single bounded, JVM-hosted PE/ECMA-335 reader feeds both managed
-   resource loading and an immutable physical CLR model. The first slice exposes Assembly,
-   AssemblyRef, TypeRef, TypeDef, TypeDefOrRef base handles, NestedClass ownership, and raw flags;
-   it does not load target code, resolve TypeSpec, apply C# display rules, or manufacture FIR
-   declarations. Future mapping is layered physical model -> CLR-to-Kotlin import policy -> lazy
+   resource loading and an immutable physical CLR model. It exposes Assembly, AssemblyRef,
+   TypeRef, TypeDef, TypeDefOrRef base handles, NestedClass ownership, and raw flags. The lossless
+   signature layer additionally decodes TypeSpec and MethodDef signatures into structural CLR
+   types, preserving class/value kind, handle identity, generic positions/instantiations,
+   by-reference forms, arrays and signed bounds, legal custom-modifier placement, function-pointer
+   calling convention, and original diagnostic bytes. Method ownership comes from the TypeDef
+   MethodList partition. The decoder enforces ECMA-335 plus the official .NET augmentations and
+   canonical compressed integers: custom modifiers are legal at the extra CLR-supported type
+   positions and may retain an unresolved TypeSpec handle, while named/generic type constructors
+   remain TypeDef/TypeRef and a later resolver must reject modifier cycles. MethodDef signatures
+   never admit a call-site vararg sentinel. It does not load target code,
+   apply C# display rules, or manufacture FIR declarations. Future mapping is layered physical
+   model -> CLR-to-Kotlin import policy -> lazy
    target FIR symbol provider -> IR retaining the original physical owner/member linkage.
    Kotlin-produced DLLs remain KLIB-authoritative. CLR Property rows remain first-class input and
    their MethodDef accessors retain physical identity. Ordinary custom attributes compare by
