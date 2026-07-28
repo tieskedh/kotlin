@@ -2054,6 +2054,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   semantic fixed/named argument decoding remain the next layer. The fresh strict gate is
   870/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 53 library integration
   tests).
+- The custom-attribute-constructor continuation resolves local MethodDef and external MemberRef
+  constructor edges before interpreting values. It requires the exact non-generic instance
+  `.ctor`/`void` shape, a concrete owner, and resolved ancestry from the caller-supplied selected
+  core-library `System.Attribute` identity. The shared physical hierarchy walk is bounded and
+  cycle-safe; missing graph edges and malformed cycles remain structured failures. Framework
+  coverage resolves duplicate external `ObsoleteAttribute` constructors and rejects a FieldRef
+  and `System.Object` constructor; Roslyn .NET 10 coverage resolves duplicate local custom
+  attribute constructors with an `Int32` parameter; a synthetic inheritance cycle terminates
+  explicitly. TypeSpec-owned MemberRef constructors fail with a tested structured result until
+  the general constructed-member substitution model exists; never approximate them as an open
+  generic owner. This layer is profile-neutral and creates no Kotlin annotation. Next decode
+  fixed and named argument values semantically, using exact enum storage and preserving
+  multiplicity. The fresh strict gate is 870/0/0/0 across 16 XML suites (796 FIR/IL/box, 21
+  generated CLI, and 53 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

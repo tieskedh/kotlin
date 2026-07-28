@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata and bounded type-identity resolution are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, and custom-attribute constructor resolution are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -316,6 +316,33 @@ later semantic attribute type keys. Real signed `mscorlib` and `System.Runtime` 
 non-empty keys and eight-byte tokens; a Roslyn .NET 10 AssemblyRef independently matches the
 computed destination token.
 
+The ninth slice resolves the constructor edge before reading the custom-attribute value blob. This
+follows the JVM importer rule that a foreign annotation class and constructor are resolved before
+annotation arguments are interpreted. The CLR-specific difference is that the constructor token
+is either a local MethodDef or a MemberRef whose owner is a TypeDef or TypeRef. The resolver
+requires the exact `.ctor` instance shape, non-generic default calling convention, `void` return,
+and a concrete attribute class derived from the caller-supplied selected core-library
+`System.Attribute` TypeDef. It never infers attribute identity from a type suffix or constructor
+name alone.
+
+The base-type walk reuses the bounded physical type resolver and returns structured unresolved,
+cycle, and limit results. This keeps the algorithm profile-neutral: `net48` supplies the
+`System.Attribute` identity selected from its Framework graph, while `netstandard2.0` and
+`net10.0` supply the identity selected from their own reference graph. The same Kotlin Common
+rule applies on every profile, and this layer still creates neither a Kotlin annotation nor a C#
+declaration.
+
+The Framework fixture resolves two external MemberRef constructors on
+`System.ObsoleteAttribute`, rejects a field MemberRef and a constructor whose owner is
+`System.Object`, and retains both attribute occurrences. A Roslyn .NET 10 fixture resolves two
+local MethodDef constructors on a custom attribute with an `Int32` parameter. A synthetic cyclic
+inheritance graph proves that malformed metadata terminates with a structured cycle result.
+MemberRefs owned by a constructed TypeSpec fail with a dedicated unsupported-parent result. That
+is a correct temporary boundary, not a final generic-attribute design: resolving such owners
+requires a constructed declaring-type identity and substitution model that must be shared with
+the general CLR member resolver. Semantic fixed and named argument decoding remains the next
+layer.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -378,10 +405,14 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Physical FieldDef preservation on the reusable FieldSig model: **Correct direction**.
 - Physical Property/PropertyMap/MethodSemantics preservation: **Correct direction**.
 - Physical GenericParam/GenericParamConstraint preservation: **Correct direction**.
+- Exact custom-attribute constructor and `System.Attribute` hierarchy resolution:
+  **Correct direction**.
+- Rejecting TypeSpec-owned attribute constructors until constructed-member substitution exists:
+  **Correct temporary implementation, but not a final design**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
 - Mapping raw CLR rows directly to Kotlin IR: **Architecturally wrong and should be changed**.
-- Remaining semantic custom attributes, type forwarding, Kotlin-facing
+- Remaining semantic custom-attribute values, Kotlin-facing
   property synthesis, events, resolved constraint semantics, nullability enhancement, FIR symbols,
   and backend calls:
   **Deferred problems that must be recorded before the importer surface becomes stable**.
