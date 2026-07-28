@@ -44,6 +44,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueDecoding
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueUnsupported
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolutionFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldDefinition
@@ -72,6 +75,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyProperty
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyVersion
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedProcessorArchitecture
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomAttributeNamedMember
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericConstraintType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureSubstitutionFailure
@@ -732,6 +736,41 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     DotNetClrTypeSignature.Named(marker.handle, isValueType = false),
                 ),
                 hostConstraints,
+            )
+            val localTypeResolver = DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { _, _ -> null }
+            )
+            val resolvedSignatureHost = (
+                    localTypeResolver.resolveTypeDefinition(metadata, signatureHost.handle) as
+                            DotNetClrTypeResolution.Resolved
+                    ).type
+            val resolvedBase = (
+                    localTypeResolver.resolveTypeDefinition(metadata, base.handle) as
+                            DotNetClrTypeResolution.Resolved
+                    ).type
+            val resolvedHostConstraints = (
+                    DotNetClrConstructedTypeConstraintResolver(localTypeResolver).resolve(
+                        DotNetClrResolvedTypeView(
+                            resolvedSignatureHost,
+                            listOf(
+                                DotNetClrResolvedTypeSignature.Named(
+                                    resolvedBase,
+                                    isValueType = false,
+                                )
+                            ),
+                        )
+                    ) as DotNetClrConstructedTypeConstraintResolution.Resolved
+                    ).constraints
+            assertEquals(
+                setOf("Base", "IMarker"),
+                resolvedHostConstraints.parameters.single().constraints.mapTo(
+                    mutableSetOf()
+                ) { constraint ->
+                    val type =
+                        constraint.type as DotNetClrResolvedGenericConstraintType.Specification
+                    (type.type as DotNetClrResolvedTypeSignature.Named)
+                        .type.definition.metadataName
+                },
             )
 
             val transformParameter = metadata.genericParameterDefinitions.single { parameter ->
@@ -1958,12 +1997,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         }
                     }
 
+                    public interface IProbeConstraint<T>
+                    {
+                    }
+
+                    public struct ProbeConstraintValue :
+                        IProbeConstraint<ProbeConstraintValue>
+                    {
+                    }
+
+                    [AttributeUsage(AttributeTargets.Class)]
+                    public sealed class ConstrainedProbeAttribute<T> : Attribute
+                        where T : struct, IProbeConstraint<T>
+                    {
+                        public ConstrainedProbeAttribute(int id)
+                        {
+                        }
+                    }
+
                     [GenericProbe<int>(17, Value = 18, Note = "int")]
                     [GenericProbe<ExternalKind>(
                         ExternalKind.Seven,
                         Value = ExternalKind.Seven,
                         Note = "enum")]
                     public sealed class GenericAttributeTarget
+                    {
+                    }
+
+                    [ConstrainedProbe<ProbeConstraintValue>(23)]
+                    public sealed class ConstrainedAttributeTarget
                     {
                     }
 
@@ -2134,6 +2196,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "Type",
                 ) as DotNetClrTypeResolution.Resolved
                 ).type
+        val systemValueType = (
+                resolver.resolveTopLevelType(
+                    systemRuntimeMetadata,
+                    "System",
+                    "ValueType",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
         val outerDefinition = destinationMetadata.typeDefinitions.single { definition ->
             definition.namespaceName == "Forwarded" && definition.metadataName == "Outer"
         }
@@ -2150,6 +2219,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             attribute.parent == genericAttributeTarget.handle
         }
         assertEquals(2, genericAttributes.size)
+        val constrainedAttributeTarget =
+            destinationMetadata.typeDefinitions.single { definition ->
+                definition.namespaceName == "Forwarded" &&
+                        definition.metadataName == "ConstrainedAttributeTarget"
+            }
+        val constrainedAttribute =
+            destinationMetadata.customAttributes.single { attribute ->
+                attribute.parent == constrainedAttributeTarget.handle
+            }
         val genericAttributeConstructorReferences = genericAttributes.map { attribute ->
             destinationMetadata.memberReferences.single { reference ->
                 reference.handle == attribute.constructor
@@ -2283,6 +2361,74 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ).value
             },
         )
+        val constrainedAttributeConstructor = (
+                modernAttributeDecoder.resolveConstructor(
+                    destinationMetadata,
+                    constrainedAttribute,
+                ) as DotNetClrCustomAttributeConstructorResolution.Resolved
+                ).constructor
+        val constrainedAttributeParameter =
+            constrainedAttributeConstructor.attributeTypeConstraints.parameters.single()
+        assertTrue(constrainedAttributeParameter.parameter.hasNotNullableValueTypeConstraint)
+        assertTrue(constrainedAttributeParameter.parameter.hasDefaultConstructorConstraint)
+        assertFalse(constrainedAttributeParameter.parameter.hasReferenceTypeConstraint)
+        val resolvedProbeConstraintValue = (
+                resolver.resolveTopLevelType(
+                    destinationMetadata,
+                    "Forwarded",
+                    "ProbeConstraintValue",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        assertEquals(
+            DotNetClrResolvedTypeSignature.Named(
+                resolvedProbeConstraintValue,
+                isValueType = true,
+            ),
+            constrainedAttributeParameter.argument,
+        )
+        val nominalConstraintBinding =
+            constrainedAttributeParameter.constraints.single { constraint ->
+                constraint.type is DotNetClrResolvedGenericConstraintType.Nominal
+            }
+        val nominalConstraint =
+            nominalConstraintBinding.type as DotNetClrResolvedGenericConstraintType.Nominal
+        assertTrue(nominalConstraint.type.hasSameIdentityAs(systemValueType))
+        val constructedConstraintBinding =
+            constrainedAttributeParameter.constraints.single { constraint ->
+                constraint.type is DotNetClrResolvedGenericConstraintType.Specification
+            }
+        val constructedConstraint =
+            constructedConstraintBinding.type as
+                    DotNetClrResolvedGenericConstraintType.Specification
+        val constructedConstraintType =
+            constructedConstraint.type as DotNetClrResolvedTypeSignature.GenericInstance
+        assertEquals(
+            "IProbeConstraint`1",
+            constructedConstraintType.genericType.type.definition.metadataName,
+        )
+        assertEquals(
+            listOf(
+                DotNetClrResolvedTypeSignature.Named(
+                    resolvedProbeConstraintValue,
+                    isValueType = true,
+                )
+            ),
+            constructedConstraintType.arguments,
+        )
+        val decodedConstrainedAttribute = (
+                modernAttributeDecoder.decodeValue(
+                    destinationMetadata,
+                    constrainedAttribute,
+                    constrainedAttributeConstructor,
+                ) as DotNetClrCustomAttributeValueDecoding.Decoded
+                ).attribute
+        assertEquals(
+            DotNetClrCustomAttributeValue.IntegralValue(
+                DotNetClrPrimitiveType.INT32,
+                23uL,
+            ),
+            decodedConstrainedAttribute.fixedArguments.single(),
+        )
         fun decoderForSelectedMetadata(
             selectedMetadata: DotNetClrAssemblyMetadata,
         ): DotNetClrCustomAttributeDecoder {
@@ -2321,6 +2467,137 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
             )
         }
+
+        val constructedConstraintSpecification =
+            destinationMetadata.typeSpecifications.single { specification ->
+                specification.handle == constructedConstraintBinding.row.constraint
+            }
+        val constructedConstraintSignature =
+            constructedConstraintSpecification.signature as
+                    DotNetClrTypeSignature.GenericInstance
+        fun metadataWithConstructedConstraintSignature(
+            signature: DotNetClrTypeSignature,
+        ): DotNetClrAssemblyMetadata =
+            destinationMetadata.copy(
+                typeSpecifications = destinationMetadata.typeSpecifications.map { specification ->
+                    if (specification.handle == constructedConstraintSpecification.handle) {
+                        specification.copy(signature = signature)
+                    } else {
+                        specification
+                    }
+                }
+            )
+
+        val invalidConstraintArityMetadata =
+            metadataWithConstructedConstraintSignature(
+                constructedConstraintSignature.copy(arguments = emptyList())
+            )
+        val invalidConstraintArity =
+            decoderForSelectedMetadata(invalidConstraintArityMetadata).resolveConstructor(
+                invalidConstraintArityMetadata,
+                constrainedAttribute,
+            ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeConstructorFailure
+                .ATTRIBUTE_TYPE_CONSTRAINT_RESOLUTION_FAILED,
+            invalidConstraintArity.failure,
+        )
+        assertEquals(
+            DotNetClrConstructedTypeConstraintResolutionFailure
+                .INVALID_CONSTRAINT_SIGNATURE,
+            invalidConstraintArity.constraintResolution?.failure,
+        )
+        assertEquals(0, invalidConstraintArity.constraintResolution?.parameterIndex)
+        assertEquals(
+            constructedConstraintBinding.row.handle,
+            invalidConstraintArity.constraintResolution?.constraint?.handle,
+        )
+        assertEquals(
+            DotNetClrResolvedSignatureFailure.GENERIC_ARITY_MISMATCH,
+            invalidConstraintArity.constraintResolution?.signatureResolution?.failure,
+        )
+
+        val invalidConstraintSubstitutionMetadata =
+            metadataWithConstructedConstraintSignature(
+                constructedConstraintSignature.copy(
+                    arguments = listOf(
+                        DotNetClrTypeSignature.GenericParameter(
+                            DotNetClrGenericParameterKind.TYPE,
+                            1,
+                        )
+                    )
+                )
+            )
+        val invalidConstraintSubstitution =
+            decoderForSelectedMetadata(invalidConstraintSubstitutionMetadata)
+                .resolveConstructor(
+                    invalidConstraintSubstitutionMetadata,
+                    constrainedAttribute,
+                ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+        assertEquals(
+            DotNetClrConstructedTypeConstraintResolutionFailure
+                .CONSTRAINT_SUBSTITUTION_FAILED,
+            invalidConstraintSubstitution.constraintResolution?.failure,
+        )
+        assertEquals(
+            DotNetClrResolvedSignatureSubstitutionFailure.TYPE_ARGUMENT_OUT_OF_RANGE,
+            invalidConstraintSubstitution
+                .constraintResolution?.signatureSubstitution?.failure,
+        )
+
+        val unresolvedNominalConstraintMetadata =
+            destinationMetadata.copy(
+                genericParameterConstraints =
+                    destinationMetadata.genericParameterConstraints.map { constraint ->
+                        if (constraint.handle == nominalConstraintBinding.row.handle) {
+                            constraint.copy(
+                                constraint = DotNetClrMetadataHandle(1, 0x00ff_ffff)
+                            )
+                        } else {
+                            constraint
+                        }
+                    }
+            )
+        val unresolvedNominalConstraint =
+            decoderForSelectedMetadata(unresolvedNominalConstraintMetadata)
+                .resolveConstructor(
+                    unresolvedNominalConstraintMetadata,
+                    constrainedAttribute,
+                ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+        assertEquals(
+            DotNetClrConstructedTypeConstraintResolutionFailure
+                .CONSTRAINT_TYPE_RESOLUTION_FAILED,
+            unresolvedNominalConstraint.constraintResolution?.failure,
+        )
+        assertEquals(
+            DotNetClrTypeResolutionFailure.INVALID_HANDLE,
+            unresolvedNominalConstraint.constraintResolution?.typeResolution?.failure,
+        )
+
+        val invalidConstraintNumberingMetadata =
+            destinationMetadata.copy(
+                genericParameterDefinitions =
+                    destinationMetadata.genericParameterDefinitions.map { parameter ->
+                        if (parameter.owner ==
+                            constrainedAttributeConstructor.attributeType.type.definition.handle
+                        ) {
+                            parameter.copy(number = 1)
+                        } else {
+                            parameter
+                        }
+                    }
+            )
+        val invalidConstraintNumbering =
+            decoderForSelectedMetadata(invalidConstraintNumberingMetadata)
+                .resolveConstructor(
+                    invalidConstraintNumberingMetadata,
+                    constrainedAttribute,
+                ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+        assertEquals(
+            DotNetClrConstructedTypeConstraintResolutionFailure
+                .INVALID_GENERIC_PARAMETER_NUMBERING,
+            invalidConstraintNumbering.constraintResolution?.failure,
+        )
 
         val firstGenericConstructorReference = genericAttributeConstructorReferences.first()
         val firstGenericOwnerSpecification =

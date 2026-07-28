@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint resolution, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -701,10 +701,50 @@ Doctored metadata covers missing owner arity, an open owner argument, a non-nomi
 out-of-range owner parameter, a residual method parameter, and an unresolved constructor type.
 
 Satisfaction of CLR generic constraints is deliberately not implemented as attribute-local logic.
-It is a deferred selected-graph constructed-type validator shared by foreign base types,
+The twenty-first slice below resolves and substitutes their complete physical contract. A later
+selected-graph satisfaction/assignability validator remains shared by foreign base types,
 interfaces, member owners, and generic attributes. It must be completed before a generic foreign
-attribute is projected as a stable Kotlin annotation; until then this slice proves and preserves
-physical closed identity and signature substitution, not all runtime-instantiation legality.
+attribute is projected as a stable Kotlin annotation; until then these slices prove and preserve
+closed identity, signatures, and constraints, not all runtime-instantiation legality.
+
+The twenty-first slice resolves every constraint of one constructed type view.
+
+1. JVM import starts from a Java type parameter plus its class/interface bounds, while KLIB-backed
+   targets retain Kotlin type parameters and upper bounds by declaration identity. Substitution
+   happens in the type checker; neither importer turns a bound into an unrelated display-name key.
+   The .NET importer follows that declaration-plus-substituted-bound structure.
+2. CLR metadata differs physically. Special constraints are GenericParam flags, while each
+   GenericParamConstraint target is a TypeDef, TypeRef, or TypeSpec. A direct token carries no
+   class/value discriminator; a TypeSpec carries a complete structural signature and may refer to
+   owner `VAR` parameters. The importer must not invent the missing discriminator or discard the
+   TypeSpec.
+3. Kotlin Common is unchanged. Reference/value/default-constructor and `AllowByRefLike` flags
+   remain foreign CLR constraints; they do not become Kotlin nullability, `Any`, or a Kotlin
+   constructor bound. Resolution creates no FIR type parameter and does not yet claim that an
+   argument satisfies a bound.
+4. Row resolution and owner substitution are legal and identical on `net48`,
+   `netstandard2.0`, and `net10.0` selected graphs. The modern `AllowByRefLike` bit is retained
+   losslessly but its satisfaction is profile/runtime policy. An older profile is not taught the
+   modern rule merely because the physical reader recognizes bit `0x20`.
+5. The implementation mirrors mature importer layering: a general
+   `DotNetClrConstructedTypeConstraintResolver` consumes a closed resolved type view, validates
+   parameter numbering and arity, resolves direct nominal targets, resolves TypeSpec targets
+   through the common signature resolver, and substitutes owner arguments through the common
+   substitution algebra. The custom-attribute constructor merely stores that result.
+6. The core-team choice is to keep direct nominal and structural TypeSpec constraints as distinct
+   resolved variants. Constraint resolution failures prevent downstream value decoding, but
+   satisfaction is a separate assignability operation. Folding both stages together would either
+   duplicate a partial CLR type checker in the attribute decoder or prematurely map foreign
+   constraints to Kotlin semantics.
+
+The dual-ILAsm fixture resolves the same `SignatureHost<T>` constraints under Framework and modern
+assemblers. Real Roslyn .NET 10 metadata resolves `where T : struct, IProbeConstraint<T>` for
+`ProbeConstraintValue`: `System.ValueType` remains a direct nominal constraint, while
+`IProbeConstraint<T>` becomes the exact constructed
+`IProbeConstraint<ProbeConstraintValue>` TypeSpec. Hostile metadata covers bad TypeSpec arity,
+owner substitution outside the argument range, an unresolved nominal token, and invalid parameter
+numbering. The [official GenericParameterAttributes contract](https://learn.microsoft.com/en-us/dotnet/api/system.reflection.genericparameterattributes?view=net-10.0)
+is the source of truth for the retained special flags.
 
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
@@ -772,6 +812,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Closed TypeSpec-owned generic attribute identity and constructor substitution:
   **Correct direction**.
+- Assembly-context-bearing constructed-type constraint resolution and owner substitution:
+  **Correct direction**.
+- Keeping direct nominal constraints distinct from TypeSpec signatures:
+  **Correct direction**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:
@@ -798,7 +842,8 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   FieldDef/Property: **Correct direction**.
 - Applying the documented ordinary CLR attribute contract instead of CoreCLR malformed-metadata
   quirks: **Reasonable platform-specific divergence**.
-- Shared CLR generic-constraint satisfaction before stable foreign generic-attribute projection:
+- Shared CLR generic-constraint satisfaction/assignability before stable foreign constructed-type
+  and generic-attribute projection:
   **Deferred problem that must be recorded before the importer surface becomes stable**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.

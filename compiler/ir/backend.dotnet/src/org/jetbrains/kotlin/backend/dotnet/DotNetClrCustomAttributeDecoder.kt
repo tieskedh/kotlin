@@ -15,6 +15,7 @@ enum class DotNetClrCustomAttributeConstructorFailure {
     CONSTRUCTOR_SIGNATURE_RESOLUTION_FAILED,
     CONSTRUCTOR_SIGNATURE_SUBSTITUTION_FAILED,
     CONSTRUCTOR_SIGNATURE_IS_OPEN_GENERIC,
+    ATTRIBUTE_TYPE_CONSTRAINT_RESOLUTION_FAILED,
     ATTRIBUTE_TYPE_IS_INTERFACE,
     ATTRIBUTE_TYPE_IS_ABSTRACT,
     ATTRIBUTE_TYPE_DOES_NOT_DERIVE_FROM_SYSTEM_ATTRIBUTE,
@@ -26,6 +27,7 @@ enum class DotNetClrCustomAttributeConstructorFailure {
 data class DotNetClrResolvedCustomAttributeConstructor(
     val sourceAssembly: DotNetClrAssemblyMetadata,
     val attributeType: DotNetClrResolvedTypeView,
+    val attributeTypeConstraints: DotNetClrResolvedConstructedTypeConstraints,
     val signature: DotNetClrResolvedMethodSignature,
     val constructor: DotNetClrMetadataHandle,
 )
@@ -46,6 +48,7 @@ sealed interface DotNetClrCustomAttributeConstructorResolution {
         val typeResolution: DotNetClrTypeResolution.Unresolved? = null,
         val signatureResolution: DotNetClrResolvedSignatureResolution.Invalid? = null,
         val signatureSubstitution: DotNetClrResolvedSignatureSubstitution.Invalid? = null,
+        val constraintResolution: DotNetClrConstructedTypeConstraintResolution.Invalid? = null,
     ) : DotNetClrCustomAttributeConstructorResolution
 }
 
@@ -223,6 +226,7 @@ class DotNetClrCustomAttributeDecoder(
     private val coreTypes: DotNetClrCustomAttributeCoreTypes,
 ) {
     private val signatureResolver = DotNetClrSignatureResolver(typeResolver)
+    private val constraintResolver = DotNetClrConstructedTypeConstraintResolver(typeResolver)
 
     fun resolveConstructor(
         assembly: DotNetClrAssemblyMetadata,
@@ -345,6 +349,19 @@ class DotNetClrCustomAttributeDecoder(
                     signatureSubstitution = substitution.resolution,
                 )
         }
+        val attributeTypeConstraints = when (
+            val resolution = constraintResolver.resolve(attributeType)
+        ) {
+            is DotNetClrConstructedTypeConstraintResolution.Resolved ->
+                resolution.constraints
+
+            is DotNetClrConstructedTypeConstraintResolution.Invalid ->
+                return invalid(
+                    DotNetClrCustomAttributeConstructorFailure
+                        .ATTRIBUTE_TYPE_CONSTRAINT_RESOLUTION_FAILED,
+                    constraintResolution = resolution,
+                )
+        }
         if (effectiveSignature.parameterTypes.any(
                 DotNetClrResolvedTypeSignature::containsGenericParameter
             )
@@ -392,6 +409,7 @@ class DotNetClrCustomAttributeDecoder(
             DotNetClrResolvedCustomAttributeConstructor(
                 sourceAssembly = assembly,
                 attributeType = attributeType,
+                attributeTypeConstraints = attributeTypeConstraints,
                 signature = effectiveSignature,
                 constructor = attribute.constructor,
             )
@@ -1123,12 +1141,14 @@ class DotNetClrCustomAttributeDecoder(
         typeResolution: DotNetClrTypeResolution.Unresolved? = null,
         signatureResolution: DotNetClrResolvedSignatureResolution.Invalid? = null,
         signatureSubstitution: DotNetClrResolvedSignatureSubstitution.Invalid? = null,
+        constraintResolution: DotNetClrConstructedTypeConstraintResolution.Invalid? = null,
     ): DotNetClrCustomAttributeConstructorResolution.Invalid =
         DotNetClrCustomAttributeConstructorResolution.Invalid(
             failure,
             typeResolution,
             signatureResolution,
             signatureSubstitution,
+            constraintResolution,
         )
 
     private companion object {

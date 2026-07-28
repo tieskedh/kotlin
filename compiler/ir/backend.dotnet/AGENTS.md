@@ -355,9 +355,17 @@ landed shape as a compatibility constraint.
    substitution, or residual method type parameter before reading its value blob. Preserve this
    physical metadata on every profile, but do not project or emit a generic attribute as a
    portable/net48 Kotlin feature until runtime capability is proven; current supported semantic
-   projection is `net10.0`. CLR generic-constraint satisfaction belongs in one shared selected-
-   graph constructed-type validator, not an attribute-local approximation, and remains required
-   before stable generic-attribute projection. Scalar fixed arguments are decoded from the
+   projection is `net10.0`. Resolve every constructed owner's GenericParam contract before
+   consuming it: retain special-constraint flags on the parameter binding, keep direct
+   TypeDef/TypeRef targets as nominal identities, resolve TypeSpec targets structurally, and
+   substitute owner arguments through the general resolved-signature algebra. Invalid numbering,
+   arity, type resolution, signature structure, or substitution is a structured failure and must
+   stop custom-attribute value decoding. CLR generic-constraint satisfaction and assignability
+   still belong in one shared selected-graph constructed-type validator, not an attribute-local
+   approximation, and remain required before stable generic-attribute projection. In particular,
+   do not reinterpret special constraints or `AllowByRefLike` as Kotlin nullability or constructor
+   bounds, and do not make a modern-profile satisfaction rule a portable-profile promise. Scalar
+   fixed arguments are decoded from the
    resolved constructor signature into typed values, never inferred from blob width. Preserve
    exact integral and
    IEEE-754 bits, strict nullable UTF-8 SerString semantics, and the assembly qualification of the

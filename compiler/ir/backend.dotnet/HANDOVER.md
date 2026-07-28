@@ -2221,6 +2221,22 @@ session state, process, and a curated task menu. Keep both files updated as you 
   a recorded shared selected-graph constructed-type validator before stable generic-attribute
   projection; do not implement it in this decoder. The fresh strict gate is 871/0/0/0 across 16
   XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The constructed-type-constraint continuation now resolves the complete physical GenericParam
+  contract for a closed CLR type view. Each binding retains its parameter flags, exact constructed
+  argument, and ordered GenericParamConstraint rows. Direct TypeDef/TypeRef targets remain nominal
+  resolved identities because their token does not encode a class/value discriminator; TypeSpec
+  targets retain the complete resolved signature and receive owner-argument substitution through
+  the shared signature algebra. The closed-generic-attribute constructor path stores this general
+  result and rejects malformed numbering, arity, type resolution, signature structure, or
+  substitution before reading the value blob. Dual-ILAsm coverage proves profile-neutral
+  resolution on `net48` and `net10.0`; real Roslyn .NET 10 metadata proves
+  `where T : struct, IProbeConstraint<T>` closes to
+  `IProbeConstraint<ProbeConstraintValue>`, with hostile metadata covering each failure class.
+  This slice resolves and preserves constraints only. It deliberately does not yet decide CLR
+  assignability, special-constraint satisfaction, `AllowByRefLike`, or profile legality; those
+  remain one shared selected-graph validator for every foreign constructed type, not logic owned
+  by custom attributes. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box,
+  21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
