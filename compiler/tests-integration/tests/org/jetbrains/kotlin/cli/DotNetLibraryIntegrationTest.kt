@@ -74,9 +74,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedProcessorArchitect
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomAttributeNamedMember
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureSubstitutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeSignature
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeView
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeModifier
@@ -966,6 +967,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             "Type",
                         ) as DotNetClrTypeResolution.Resolved
                         ).type
+                val resolvedSystemObject = (
+                        resolver.resolveTypeDefinition(metadata, systemObject.handle) as
+                                DotNetClrTypeResolution.Resolved
+                        ).type
                 val serializedTypeResolver = DotNetClrSerializedTypeResolver(
                     resolver,
                     DotNetClrSerializedAssemblyBinder {
@@ -998,9 +1003,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
                 assertTrue(
                     resolvedAttributes.all { constructor ->
-                        constructor.attributeType.assembly === frameworkCoreMetadata &&
-                                constructor.attributeType.definition.metadataName ==
+                        constructor.attributeType.type.assembly === frameworkCoreMetadata &&
+                                constructor.attributeType.type.definition.metadataName ==
                                 "ObsoleteAttribute" &&
+                                constructor.attributeType.arguments.isEmpty() &&
                                 constructor.signature.parameterTypes.isEmpty()
                     }
                 )
@@ -1025,8 +1031,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     resolvedAttributes.first().copy(
                         signature = resolvedAttributes.first().signature.copy(
                             parameterTypes = listOf(
-                                DotNetClrTypeSignature.Named(
-                                    tinyKind.handle,
+                                DotNetClrResolvedTypeSignature.Named(
+                                    resolvedTinyKind,
                                     isValueType = true,
                                 )
                             )
@@ -1061,8 +1067,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     resolvedAttributes.first().copy(
                         signature = resolvedAttributes.first().signature.copy(
                             parameterTypes = listOf(
-                                DotNetClrTypeSignature.Named(
-                                    tinyKind.handle,
+                                DotNetClrResolvedTypeSignature.Named(
+                                    resolvedTinyKind,
                                     isValueType = false,
                                 )
                             )
@@ -1074,32 +1080,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     invalidEnumSignature.failure,
                 )
                 assertEquals(0, invalidEnumSignature.fixedArgumentIndex)
-                val unresolvedFixedType = attributeDecoder.decodeValue(
-                    metadata,
-                    baseAttributes.first().copy(
-                        rawValue = DotNetClrBlob.copyOf(
-                            byteArrayOf(1, 0, 0, 0, 0, 0)
-                        )
-                    ),
-                    resolvedAttributes.first().copy(
-                        signature = resolvedAttributes.first().signature.copy(
-                            parameterTypes = listOf(
-                                DotNetClrTypeSignature.Named(
-                                    DotNetClrMetadataHandle(1, 0x00ff_ffff),
-                                    isValueType = true,
-                                )
-                            )
-                        )
-                    ),
-                ) as DotNetClrCustomAttributeValueDecoding.Invalid
-                assertEquals(
-                    DotNetClrCustomAttributeValueFailure.TYPE_RESOLUTION_FAILED,
-                    unresolvedFixedType.failure,
-                )
-                assertEquals(
-                    DotNetClrTypeResolutionFailure.INVALID_HANDLE,
-                    unresolvedFixedType.typeResolution?.failure,
-                )
                 val crossAssemblyConstructor = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first(),
@@ -1134,7 +1114,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ) as DotNetClrCustomAttributeConstructorResolution.Invalid
                 assertEquals(
                     DotNetClrCustomAttributeConstructorFailure
-                        .UNSUPPORTED_MEMBER_REFERENCE_PARENT,
+                        .NOT_INSTANCE_CONSTRUCTOR,
                     constructedOwnerConstructor.failure,
                 )
                 val missingValue = attributeDecoder.decodeValue(
@@ -1143,7 +1123,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     resolvedAttributes.first().copy(
                         signature = resolvedAttributes.first().signature.copy(
                             parameterTypes = listOf(
-                                DotNetClrTypeSignature.Primitive(
+                                DotNetClrResolvedTypeSignature.Primitive(
                                     DotNetClrPrimitiveType.INT32
                                 )
                             )
@@ -1164,7 +1144,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     resolvedAttributes.first().copy(
                         signature = resolvedAttributes.first().signature.copy(
                             parameterTypes = listOf(
-                                DotNetClrTypeSignature.Primitive(
+                                DotNetClrResolvedTypeSignature.Primitive(
                                     DotNetClrPrimitiveType.BOOLEAN
                                 )
                             )
@@ -1186,7 +1166,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     resolvedAttributes.first().copy(
                         signature = resolvedAttributes.first().signature.copy(
                             parameterTypes = listOf(
-                                DotNetClrTypeSignature.Primitive(
+                                DotNetClrResolvedTypeSignature.Primitive(
                                     DotNetClrPrimitiveType.STRING
                                 )
                             )
@@ -1204,8 +1184,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     resolvedAttributes.first().copy(
                         signature = resolvedAttributes.first().signature.copy(
                             parameterTypes = listOf(
-                                DotNetClrTypeSignature.Named(
-                                    systemObject.handle,
+                                DotNetClrResolvedTypeSignature.Named(
+                                    resolvedSystemObject,
                                     isValueType = false,
                                 )
                             )
@@ -1225,7 +1205,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     resolvedAttributes.first().copy(
                         signature = resolvedAttributes.first().signature.copy(
                             parameterTypes = listOf(
-                                DotNetClrTypeSignature.Primitive(
+                                DotNetClrResolvedTypeSignature.Primitive(
                                     DotNetClrPrimitiveType.INT32
                                 )
                             )
@@ -1247,7 +1227,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     resolvedAttributes.first().copy(
                         signature = resolvedAttributes.first().signature.copy(
                             parameterTypes = listOf(
-                                DotNetClrTypeSignature.Primitive(
+                                DotNetClrResolvedTypeSignature.Primitive(
                                     DotNetClrPrimitiveType.STRING
                                 )
                             )
@@ -1285,8 +1265,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 val intArrayConstructor = resolvedAttributes.first().copy(
                     signature = resolvedAttributes.first().signature.copy(
                         parameterTypes = listOf(
-                            DotNetClrTypeSignature.SzArray(
-                                DotNetClrTypeSignature.Primitive(
+                            DotNetClrResolvedTypeSignature.SzArray(
+                                DotNetClrResolvedTypeSignature.Primitive(
                                     DotNetClrPrimitiveType.INT32
                                 )
                             )
@@ -1335,7 +1315,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 val objectConstructor = resolvedAttributes.first().copy(
                     signature = resolvedAttributes.first().signature.copy(
                         parameterTypes = listOf(
-                            DotNetClrTypeSignature.Primitive(
+                            DotNetClrResolvedTypeSignature.Primitive(
                                 DotNetClrPrimitiveType.OBJECT
                             )
                         )
@@ -1967,6 +1947,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         }
                     }
 
+                    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+                    public sealed class GenericProbeAttribute<T> : Attribute
+                    {
+                        public T Value;
+                        public string Note { get; set; }
+
+                        public GenericProbeAttribute(T value)
+                        {
+                        }
+                    }
+
+                    [GenericProbe<int>(17, Value = 18, Note = "int")]
+                    [GenericProbe<ExternalKind>(
+                        ExternalKind.Seven,
+                        Value = ExternalKind.Seven,
+                        Note = "enum")]
+                    public sealed class GenericAttributeTarget
+                    {
+                    }
+
                     [SemanticProbe(
                         7, "portable", true, '\u03bb', 4294967295u,
                         -1, 255, -2, 65535, -3L, 18446744073709551615UL, -0.0f, -0.0,
@@ -2141,9 +2141,47 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             attribute.parent == outerDefinition.handle
         }
         assertEquals(2, outerAttributes.size)
-        val systemTypeReference = destinationMetadata.typeReferences.single { reference ->
-            reference.namespaceName == "System" && reference.metadataName == "Type"
+        val genericAttributeTarget =
+            destinationMetadata.typeDefinitions.single { definition ->
+                definition.namespaceName == "Forwarded" &&
+                        definition.metadataName == "GenericAttributeTarget"
+            }
+        val genericAttributes = destinationMetadata.customAttributes.filter { attribute ->
+            attribute.parent == genericAttributeTarget.handle
         }
+        assertEquals(2, genericAttributes.size)
+        val genericAttributeConstructorReferences = genericAttributes.map { attribute ->
+            destinationMetadata.memberReferences.single { reference ->
+                reference.handle == attribute.constructor
+            }
+        }
+        assertTrue(
+            genericAttributeConstructorReferences.all { reference ->
+                val signature =
+                    (reference.signature as DotNetClrMemberReferenceSignature.Method).signature
+                reference.name == ".ctor" &&
+                        reference.parent.table == 27 &&
+                        signature.parameterTypes ==
+                        listOf(
+                            DotNetClrTypeSignature.GenericParameter(
+                                DotNetClrGenericParameterKind.TYPE,
+                                0,
+                            )
+                        )
+            }
+        )
+        val genericAttributeOwnerSignatures =
+            genericAttributeConstructorReferences.map { reference ->
+                destinationMetadata.typeSpecifications.single { specification ->
+                    specification.handle == reference.parent
+                }.signature as DotNetClrTypeSignature.GenericInstance
+            }
+        assertTrue(
+            genericAttributeOwnerSignatures.all { signature ->
+                signature.genericType.type.table == 2 &&
+                        signature.arguments.size == 1
+            }
+        )
         val genericNestedKindDefinition = destinationMetadata.typeDefinitions.single { definition ->
             definition.metadataName == "NestedKind"
         }
@@ -2171,6 +2209,282 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 systemType,
             ),
         )
+        val genericAttributeConstructors = genericAttributes.map { attribute ->
+            (
+                    modernAttributeDecoder.resolveConstructor(
+                        destinationMetadata,
+                        attribute,
+                    ) as DotNetClrCustomAttributeConstructorResolution.Resolved
+                    ).constructor
+        }
+        assertEquals(
+            listOf(
+                listOf(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                ),
+                listOf(
+                    DotNetClrResolvedTypeSignature.Named(
+                        forwardedEnum,
+                        isValueType = true,
+                    )
+                ),
+            ),
+            genericAttributeConstructors.map { constructor ->
+                assertEquals(
+                    "GenericProbeAttribute`1",
+                    constructor.attributeType.type.definition.metadataName,
+                )
+                assertEquals(
+                    constructor.attributeType.arguments,
+                    constructor.signature.parameterTypes,
+                )
+                constructor.attributeType.arguments
+            },
+        )
+        val decodedGenericAttributeValues =
+            genericAttributes.zip(genericAttributeConstructors).map { [attribute, constructor] ->
+                (
+                        modernAttributeDecoder.decodeValue(
+                            destinationMetadata,
+                            attribute,
+                            constructor,
+                        ) as DotNetClrCustomAttributeValueDecoding.Decoded
+                        ).attribute
+            }
+        assertEquals(
+            DotNetClrCustomAttributeValue.IntegralValue(
+                DotNetClrPrimitiveType.INT32,
+                17uL,
+            ),
+            decodedGenericAttributeValues[0].fixedArguments.single(),
+        )
+        assertEquals(
+            DotNetClrCustomAttributeValue.EnumValue(
+                DotNetClrCustomAttributeValueType.EnumType(
+                    DotNetClrResolvedSerializedType.Named(forwardedEnum),
+                    DotNetClrPrimitiveType.INT16,
+                ),
+                DotNetClrCustomAttributeValue.IntegralValue(
+                    DotNetClrPrimitiveType.INT16,
+                    7uL,
+                ),
+            ),
+            decodedGenericAttributeValues[1].fixedArguments.single(),
+        )
+        assertEquals(
+            listOf("int", "enum"),
+            decodedGenericAttributeValues.map { decoded ->
+                (
+                        decoded.namedArguments.single { argument ->
+                            argument.name == "Note"
+                        }.value as DotNetClrCustomAttributeValue.StringValue
+                        ).value
+            },
+        )
+        fun decoderForSelectedMetadata(
+            selectedMetadata: DotNetClrAssemblyMetadata,
+        ): DotNetClrCustomAttributeDecoder {
+            val selectedResolver = DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+                    if (sourceAssembly === selectedMetadata &&
+                        reference.name == systemRuntimeMetadata.identity.name
+                    ) {
+                        systemRuntimeMetadata
+                    } else {
+                        null
+                    }
+                }
+            )
+            return DotNetClrCustomAttributeDecoder(
+                selectedResolver,
+                DotNetClrSerializedTypeResolver(
+                    selectedResolver,
+                    DotNetClrSerializedAssemblyBinder {
+                            _,
+                            unqualifiedContextAssembly,
+                            assemblyName,
+                        ->
+                        when (assemblyName?.name) {
+                            null -> unqualifiedContextAssembly
+                            selectedMetadata.identity.name -> selectedMetadata
+                            systemRuntimeMetadata.identity.name -> systemRuntimeMetadata
+                            else -> null
+                        }
+                    },
+                ),
+                DotNetClrCustomAttributeCoreTypes(
+                    systemAttribute,
+                    systemEnum,
+                    systemType,
+                ),
+            )
+        }
+
+        val firstGenericConstructorReference = genericAttributeConstructorReferences.first()
+        val firstGenericOwnerSpecification =
+            destinationMetadata.typeSpecifications.single { specification ->
+                specification.handle == firstGenericConstructorReference.parent
+            }
+        val firstGenericOwnerSignature =
+            firstGenericOwnerSpecification.signature as DotNetClrTypeSignature.GenericInstance
+        fun metadataWithGenericOwnerSignature(
+            signature: DotNetClrTypeSignature,
+        ): DotNetClrAssemblyMetadata =
+            destinationMetadata.copy(
+                typeSpecifications = destinationMetadata.typeSpecifications.map { specification ->
+                    if (specification.handle == firstGenericOwnerSpecification.handle) {
+                        specification.copy(signature = signature)
+                    } else {
+                        specification
+                    }
+                }
+            )
+
+        val invalidGenericOwnerArityMetadata =
+            metadataWithGenericOwnerSignature(
+                firstGenericOwnerSignature.copy(arguments = emptyList())
+            )
+        val invalidGenericOwnerArity =
+            decoderForSelectedMetadata(invalidGenericOwnerArityMetadata)
+                .resolveConstructor(
+                    invalidGenericOwnerArityMetadata,
+                    genericAttributes.first(),
+                ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeConstructorFailure.INVALID_ATTRIBUTE_TYPE_SIGNATURE,
+            invalidGenericOwnerArity.failure,
+        )
+        assertEquals(
+            DotNetClrResolvedSignatureFailure.GENERIC_ARITY_MISMATCH,
+            invalidGenericOwnerArity.signatureResolution?.failure,
+        )
+        assertEquals(1, invalidGenericOwnerArity.signatureResolution?.expectedGenericArity)
+        assertEquals(0, invalidGenericOwnerArity.signatureResolution?.actualGenericArity)
+
+        val openGenericOwnerMetadata =
+            metadataWithGenericOwnerSignature(
+                firstGenericOwnerSignature.copy(
+                    arguments = listOf(
+                        DotNetClrTypeSignature.GenericParameter(
+                            DotNetClrGenericParameterKind.TYPE,
+                            0,
+                        )
+                    )
+                )
+            )
+        val openGenericOwner =
+            decoderForSelectedMetadata(openGenericOwnerMetadata).resolveConstructor(
+                openGenericOwnerMetadata,
+                genericAttributes.first(),
+            ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeConstructorFailure.ATTRIBUTE_TYPE_IS_OPEN_GENERIC,
+            openGenericOwner.failure,
+        )
+
+        val invalidGenericOwnerShapeMetadata =
+            metadataWithGenericOwnerSignature(
+                DotNetClrTypeSignature.SzArray(
+                    DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                )
+            )
+        val invalidGenericOwnerShape =
+            decoderForSelectedMetadata(invalidGenericOwnerShapeMetadata).resolveConstructor(
+                invalidGenericOwnerShapeMetadata,
+                genericAttributes.first(),
+            ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeConstructorFailure.INVALID_ATTRIBUTE_TYPE_SIGNATURE,
+            invalidGenericOwnerShape.failure,
+        )
+
+        fun metadataWithGenericConstructorParameter(
+            parameterType: DotNetClrTypeSignature,
+        ): DotNetClrAssemblyMetadata =
+            destinationMetadata.copy(
+                memberReferences = destinationMetadata.memberReferences.map { reference ->
+                    if (reference.handle == firstGenericConstructorReference.handle) {
+                        val method =
+                            reference.signature as DotNetClrMemberReferenceSignature.Method
+                        reference.copy(
+                            signature = DotNetClrMemberReferenceSignature.Method(
+                                method.signature.copy(parameterTypes = listOf(parameterType))
+                            )
+                        )
+                    } else {
+                        reference
+                    }
+                }
+            )
+
+        val invalidConstructorSubstitutionMetadata =
+            metadataWithGenericConstructorParameter(
+                DotNetClrTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    1,
+                )
+            )
+        val invalidConstructorSubstitution =
+            decoderForSelectedMetadata(invalidConstructorSubstitutionMetadata)
+                .resolveConstructor(
+                    invalidConstructorSubstitutionMetadata,
+                    genericAttributes.first(),
+                ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeConstructorFailure
+                .CONSTRUCTOR_SIGNATURE_SUBSTITUTION_FAILED,
+            invalidConstructorSubstitution.failure,
+        )
+        assertEquals(
+            DotNetClrResolvedSignatureSubstitutionFailure.TYPE_ARGUMENT_OUT_OF_RANGE,
+            invalidConstructorSubstitution.signatureSubstitution?.failure,
+        )
+        assertEquals(1, invalidConstructorSubstitution.signatureSubstitution?.parameterIndex)
+        assertEquals(1, invalidConstructorSubstitution.signatureSubstitution?.argumentCount)
+
+        val openConstructorSignatureMetadata =
+            metadataWithGenericConstructorParameter(
+                DotNetClrTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.METHOD,
+                    0,
+                )
+            )
+        val openConstructorSignature =
+            decoderForSelectedMetadata(openConstructorSignatureMetadata)
+                .resolveConstructor(
+                    openConstructorSignatureMetadata,
+                    genericAttributes.first(),
+                ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeConstructorFailure
+                .CONSTRUCTOR_SIGNATURE_IS_OPEN_GENERIC,
+            openConstructorSignature.failure,
+        )
+
+        val unresolvedConstructorSignatureMetadata =
+            metadataWithGenericConstructorParameter(
+                DotNetClrTypeSignature.Named(
+                    DotNetClrMetadataHandle(1, 0x00ff_ffff),
+                    isValueType = false,
+                )
+            )
+        val unresolvedConstructorSignature =
+            decoderForSelectedMetadata(unresolvedConstructorSignatureMetadata)
+                .resolveConstructor(
+                    unresolvedConstructorSignatureMetadata,
+                    genericAttributes.first(),
+                ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeConstructorFailure
+                .CONSTRUCTOR_SIGNATURE_RESOLUTION_FAILED,
+            unresolvedConstructorSignature.failure,
+        )
+        assertEquals(
+            DotNetClrTypeResolutionFailure.INVALID_HANDLE,
+            unresolvedConstructorSignature.typeResolution?.failure,
+        )
         val modernConstructors = outerAttributes.map { attribute ->
             (
                     modernAttributeDecoder.resolveConstructor(destinationMetadata, attribute) as
@@ -2180,61 +2494,77 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             modernConstructors.all { constructor ->
                 constructor.constructor.table == 6 &&
-                        constructor.attributeType.assembly === destinationMetadata &&
-                        constructor.attributeType.definition.metadataName ==
+                        constructor.attributeType.type.assembly === destinationMetadata &&
+                        constructor.attributeType.type.definition.metadataName ==
                         "SemanticProbeAttribute" &&
+                        constructor.attributeType.arguments.isEmpty() &&
                         constructor.signature.parameterTypes ==
                         listOf(
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.STRING),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.CHAR),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.UINT32),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT8),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.UINT8),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT16),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.UINT16),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT64),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.UINT64),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.FLOAT32),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.FLOAT64),
-                            DotNetClrTypeSignature.SzArray(
-                                DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.STRING),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.CHAR),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.UINT32),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT8),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.UINT8),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT16),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.UINT16),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT64),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.UINT64),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.FLOAT32),
+                            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.FLOAT64),
+                            DotNetClrResolvedTypeSignature.SzArray(
+                                DotNetClrResolvedTypeSignature.Primitive(
+                                    DotNetClrPrimitiveType.INT32
+                                )
                             ),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
-                            DotNetClrTypeSignature.SzArray(
-                                DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+                            DotNetClrResolvedTypeSignature.Primitive(
+                                DotNetClrPrimitiveType.OBJECT
                             ),
-                            DotNetClrTypeSignature.Named(
-                                forwardedEnum.definition.handle,
+                            DotNetClrResolvedTypeSignature.SzArray(
+                                DotNetClrResolvedTypeSignature.Primitive(
+                                    DotNetClrPrimitiveType.OBJECT
+                                )
+                            ),
+                            DotNetClrResolvedTypeSignature.Named(
+                                forwardedEnum,
                                 isValueType = true,
                             ),
-                            DotNetClrTypeSignature.SzArray(
-                                DotNetClrTypeSignature.Named(
-                                    forwardedEnum.definition.handle,
+                            DotNetClrResolvedTypeSignature.SzArray(
+                                DotNetClrResolvedTypeSignature.Named(
+                                    forwardedEnum,
                                     isValueType = true,
                                 )
                             ),
-                            DotNetClrTypeSignature.Named(
-                                systemTypeReference.handle,
+                            DotNetClrResolvedTypeSignature.Named(
+                                systemType,
                                 isValueType = false,
                             ),
-                            DotNetClrTypeSignature.SzArray(
-                                DotNetClrTypeSignature.Named(
-                                    systemTypeReference.handle,
+                            DotNetClrResolvedTypeSignature.SzArray(
+                                DotNetClrResolvedTypeSignature.Named(
+                                    systemType,
                                     isValueType = false,
                                 )
                             ),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
-                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
-                            DotNetClrTypeSignature.GenericInstance(
-                                DotNetClrTypeSignature.Named(
-                                    genericNestedKindDefinition.handle,
+                            DotNetClrResolvedTypeSignature.Primitive(
+                                DotNetClrPrimitiveType.OBJECT
+                            ),
+                            DotNetClrResolvedTypeSignature.Primitive(
+                                DotNetClrPrimitiveType.OBJECT
+                            ),
+                            DotNetClrResolvedTypeSignature.Primitive(
+                                DotNetClrPrimitiveType.OBJECT
+                            ),
+                            DotNetClrResolvedTypeSignature.GenericInstance(
+                                DotNetClrResolvedTypeSignature.Named(
+                                    DotNetClrResolvedTypeDefinition(
+                                        destinationMetadata,
+                                        genericNestedKindDefinition,
+                                    ),
                                     isValueType = true,
                                 ),
                                 listOf(
-                                    DotNetClrTypeSignature.Primitive(
+                                    DotNetClrResolvedTypeSignature.Primitive(
                                         DotNetClrPrimitiveType.INT32
                                     )
                                 ),
@@ -2628,42 +2958,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             decodedModernAttributes[1][23],
         )
-        val constructedEnumParameter =
-            modernConstructors.first().signature.parameterTypes.last() as
-                    DotNetClrTypeSignature.GenericInstance
-        val invalidConstructedEnumSignature = (
-                modernAttributeDecoder.decodeValue(
-                    destinationMetadata,
-                    outerAttributes.first(),
-                    modernConstructors.first().copy(
-                        signature = modernConstructors.first().signature.copy(
-                            parameterTypes =
-                                modernConstructors.first().signature.parameterTypes
-                                    .dropLast(1) +
-                                        constructedEnumParameter.copy(arguments = emptyList())
-                        )
-                    ),
-                ) as DotNetClrCustomAttributeValueDecoding.Invalid
-                )
-        assertEquals(
-            DotNetClrCustomAttributeValueFailure.INVALID_FIXED_ARGUMENT_SIGNATURE,
-            invalidConstructedEnumSignature.failure,
-        )
-        assertEquals(23, invalidConstructedEnumSignature.fixedArgumentIndex)
-        val invalidSignatureResolution =
-            invalidConstructedEnumSignature.signatureResolution as
-                    DotNetClrResolvedSignatureResolution.Invalid
-        assertEquals(
-            DotNetClrResolvedSignatureFailure.GENERIC_ARITY_MISMATCH,
-            invalidSignatureResolution.failure,
-        )
-        assertSame(destinationMetadata, invalidSignatureResolution.type.assembly)
-        assertEquals(
-            genericNestedKindDefinition.handle,
-            invalidSignatureResolution.type.definition.handle,
-        )
-        assertEquals(1, invalidSignatureResolution.expectedGenericArity)
-        assertEquals(0, invalidSignatureResolution.actualGenericArity)
         assertEquals(
             listOf(
                 DotNetClrCustomAttributeNamedArgument(
@@ -2920,6 +3214,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             namedArgumentValidator.validate(decodedAttribute) as
                     DotNetClrCustomAttributeNamedArgumentValidation.Valid
         }
+        val validatedGenericNamedArguments =
+            decodedGenericAttributeValues.map { decodedAttribute ->
+                namedArgumentValidator.validate(decodedAttribute) as
+                        DotNetClrCustomAttributeNamedArgumentValidation.Valid
+            }
+        assertEquals(
+            listOf(
+                DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+                DotNetClrResolvedTypeSignature.Named(forwardedEnum, isValueType = true),
+            ),
+            validatedGenericNamedArguments.map { validation ->
+                validation.namedArguments.single { argument ->
+                    argument.argument.name == "Value"
+                }.member.effectiveType
+            },
+        )
         assertEquals(
             decodedModernAttributeValues.map { attribute -> attribute.namedArguments },
             validatedNamedArguments.map { validation ->
@@ -3083,13 +3393,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 selectedMetadata.typeDefinitions.single { definition ->
                     definition.handle ==
                             decodedModernAttributeValues.first()
-                                .constructor.attributeType.definition.handle
+                                .constructor.attributeType.type.definition.handle
                 },
             )
             val selectedAttribute = decodedModernAttributeValues.first().copy(
                 constructor = decodedModernAttributeValues.first().constructor.copy(
                     sourceAssembly = selectedMetadata,
-                    attributeType = selectedAttributeType,
+                    attributeType = DotNetClrResolvedTypeView(
+                        selectedAttributeType,
+                        emptyList(),
+                    ),
                 ),
                 namedArguments = namedArguments,
             )
@@ -3109,7 +3422,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 argument.name == "InheritedField"
             }
         val semanticProbeType =
-            decodedModernAttributeValues.first().constructor.attributeType.definition
+            decodedModernAttributeValues.first().constructor.attributeType.type.definition
         val semanticProbeBaseSpecification =
             destinationMetadata.typeSpecifications.single { specification ->
                 specification.handle == semanticProbeType.baseType
