@@ -50,7 +50,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   KLIB/CLR DLL binding (`df4ab474b`), one-compilation KLIB/DLL production (`21eb60d4e`), and
   producer reproducibility (`59c0b1d33`), followed by the later DLL-only library, C# authoring,
   Gradle integration, direct metadata loader, and installed platform-pair work described below.
-  The stack is based directly on `origin/master` (`0349ed5cd`, rebased 2026-07-21).
+  The stack is based directly on `origin/master` (`6fb64e0c0`, rebased 2026-07-28).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
 - Last full DotNet suite at `f2ca42e73`: **498 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
@@ -1882,6 +1882,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   compatibility. Exact and portable producer/consumer pins, missing/mismatched runtime negatives,
   real repository production, and installation all pass. The fresh strict gate is 850/0/0/0
   across 16 XML suites.
+- The upstream-sync continuation rebased all 246 target commits from `0349ed5cd` onto
+  `6fb64e0c0`. Range-diff found 245 identical patches and one deliberate KGP API-baseline
+  adaptation; no target patch was lost. The backend adopted upstream's local-class visibility
+  parameter, FIR2IR special-annotation provider factory, and direct protobuf-byte KLIB serializer
+  API while preserving deterministic embedded-resource ordering. The inherited JUnit 5 resource
+  lock now serializes only the external Framework ILAsm/PowerShell lane after unbounded fan-out
+  produced changing missing-PE/empty-host failures that all passed in isolation. New PSI/LightTree ×
+  `net48`/`net10.0` boxes cover `StrictEquals`, inlinable lambda array constructors, and private/
+  mutable interface companion properties. The six-step impact audit is
+  `docs/review/upstream-sync-2026-07-28.md`. It records Kotlin-owned static-initializer failure
+  classification as foundational deferred work before ABI stability. KGP API validation, 10
+  targeted KGP tests, and 2 DLL-only KGP integration tests pass. The fresh strict gate is
+  862/0/0/0 across 16 XML suites.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1918,7 +1931,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
    unrelated broken modules — stay scoped). Runners generate into `build/tests-gen` (not committed).
 6. **Never** bypass or dodge Smart App Control (no hash perturbation, no content restructuring to
    dodge the classifier). A SAC-blocked box test SKIPs; that is the designed behavior.
-7. **Git:** never push; never touch other branches; per-feature commits directly on `dotnet` with
+7. **Git:** never push unless the repository owner explicitly requests it; the current owner has
+   requested feature-by-feature commits and a push. Never touch unrelated branches. Commit
+   directly on `dotnet` with
    a detailed what/why/how message (look at `git log` for the house style) ending with your own
    `Co-Authored-By:` trailer. HANDOVER/AGENTS changes describing the feature belong in the same
    functional commit; unrelated non-functional changes stay separate. No worktrees — work directly
@@ -1932,7 +1947,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 850 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 862 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -1978,11 +1993,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 - `x != null` on `Int?` emits a redundant double negation — semantically correct, cosmetic only.
 - `emitTypeOperatorCall`'s outer-coercion tail is mostly dead code (interception happens earlier).
-- The upstream sync recipe (shallow clone!) is in the commit `ea4c43a26` message and boils down
-  to: `git fetch origin`, dry-run with
-  `git merge-tree --write-tree --merge-base=<current-base> dotnet origin/master`, then
-  `git rebase --onto origin/master <current-base> dotnet` where current-base = `995cf26a0`.
-  Not urgent; skip unless asked.
+- The upstream sync recipe is: `git fetch origin`; record
+  `git merge-base dotnet origin/master`; inspect the upstream commit/file overlap; dry-run with
+  `git merge-tree --write-tree --merge-base=<current-base> dotnet origin/master`; create an exact
+  safety ref; then `git rebase --onto origin/master <current-base> dotnet`. Re-run range-diff,
+  compiler/KGP API builds, target semantic gates, and generated-API validation before a
+  force-with-lease push. The current base is `6fb64e0c0`.
 
 ## When handing back
 

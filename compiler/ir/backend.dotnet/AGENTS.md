@@ -2021,7 +2021,13 @@ landed shape as a compatibility constraint.
   failure to the declaration that actually failed: a
   companion failure surfaces out of the enclosing type's render (the companion renders only
   recursively inside it), so the render fixpoint re-tags it with the companion
-  (`DotNetIlUnsupportedClassException`) before evicting. `box/nestedSingletons.kt` and
+  (`DotNetIlUnsupportedClassException`) before evicting. This raw CLR failure behavior is a
+  physical probe result, not the final semantics of a Kotlin-owned initializer. Since the
+  2026-07-28 upstream sync, the required Common contract is explicit: first Kotlin `Error`
+  preserves its object, another first failure becomes `ExceptionInInitializerError(cause)`, and
+  later logical access becomes `NoClassDefFoundError`. Implement that classification above
+  `.cctor` while preserving foreign CLR initializer exceptions as their original objects.
+  `box/nestedSingletons.kt` and
   `box/propertyReferences.kt` execute the two singleton-field cases on CoreCLR; their IL goldens
   pin the private field plus assembly bridge. A separate invalid declaration nested
   below an otherwise valid companion is not companion state and is therefore omitted as its own
@@ -2432,6 +2438,11 @@ landed shape as a compatibility constraint.
   `AbstractDotNetIlTextTest.kt`: `net10.0` emits a dll plus its runtime config and uses signed
   `dotnet exec`; `net48` emits an exe, which the signed Windows PowerShell CLR 4 host loads before
   invoking its exact managed entry point. Neither lane directly activates an unsigned executable.
+- The inherited JUnit 5 resource lock `kotlin-dotnet-framework-toolchain` covers both net48 box
+  bases and both IL-text bases. Framework ILAsm and the Windows PowerShell CLR 4 host become
+  nondeterministic under unbounded process fan-out (observed as changing tests with an absent PE
+  or an empty non-zero host exit), while each affected test passes alone. Keep this one physical
+  external-toolchain lane exclusive; do not serialize net10 or ordinary compiler work.
 - A signed host only avoids SAC for direct `.exe` *execution*; it does NOT stop SAC from blocking
   the CLR from *loading* the freshly assembled unsigned assembly. On a machine with Smart App
   Control ON, SAC makes a per-file cloud-reputation call the first time each unsigned file is loaded
