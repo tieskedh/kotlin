@@ -344,6 +344,11 @@ landed shape as a compatibility constraint.
    empty blobs are different physical states. Never group attributes, infer attachment, validate
    constructor shape by name alone, or use raw bytes as ordinary semantic equality. Constructor
    resolution and semantic fixed/named argument decoding belong immediately above this row layer.
+   Assembly definitions retain their full public key and computed eight-byte public-key token;
+   `hasPublicKey` is derived, not the resolved identity. An AssemblyRef may legitimately omit a
+   key/token, so this still does not authorize exact-match binding inside the physical resolver.
+   The selected build graph owns binding/unification; the resolved producer identity owns later
+   diagnostics and semantic type keys.
    It does not load target code,
    apply C# display rules, or manufacture FIR declarations. Future mapping is layered physical
    model -> CLR-to-Kotlin import policy -> lazy
