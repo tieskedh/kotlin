@@ -363,6 +363,11 @@ landed shape as a compatibility constraint.
    reject a false `class` signature. System.Type, boxed or named enums, and named arguments
    currently fail as structured unsupported values because their types require a parsed CLR
    serialized name; do not erase, stringify, or partially skip them.
+   Serialized CLR type names are parsed structurally before binding: retain escaped top-level and
+   nested metadata names, per-component arity, recursive generic arguments, normalized
+   pointer/byref/array modifiers, and the AssemblyName display-name tail. Do not call host
+   `Type.GetType`, probe, or bind by simple name. AssemblyName property parsing and resolution
+   against the build frontend's selected graph are the next layer.
    Assembly definitions retain their full public key and computed eight-byte public-key token;
    `hasPublicKey` is derived, not the resolved identity. An AssemblyRef may legitimately omit a
    key/token, so this still does not authorize exact-match binding inside the physical resolver.

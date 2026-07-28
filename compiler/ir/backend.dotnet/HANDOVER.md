@@ -2108,6 +2108,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   serialized-type-name parser resolves their textual type identities. The fresh strict gate is
   870/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 53 library integration
   tests).
+- The serialized-type-name continuation adds a bounded JVM-hosted parser for CLR reflection names.
+  It retains escaped namespace/top-level/nested metadata names, per-component generic arity,
+  recursively bracketed assembly-qualified arguments, pointer/byref/SZARRAY/multidimensional
+  modifiers, and the optional AssemblyName display-name tail. Equivalent `[,]`/`[*,*]` forms
+  normalize; an open generic followed by `[,]` remains an array of the open type. Invalid escapes,
+  arities, generic counts, byref shapes, and excessive nesting fail at exact offsets;
+  Reflection.Emit bounded arrays are structured unsupported. This layer does not bind an assembly
+  or call host Type.GetType. Next parse AssemblyName properties and resolve the resulting named
+  type/constructed shape only through the selected build graph, then feed real Roslyn System.Type
+  and serialized enum values into the attribute decoder. The fresh strict gate is 871/0/0/0
+  across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
