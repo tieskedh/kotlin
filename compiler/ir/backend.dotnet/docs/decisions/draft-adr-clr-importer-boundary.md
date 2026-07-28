@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical type, method, MemberRef, property, and generic metadata is implemented**
+- Status: **Draft candidate; physical type, field, method, MemberRef, property, and generic metadata is implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -214,13 +214,43 @@ semantic custom-attribute decoding because ordinary CustomAttribute constructors
 identified through MemberRef; decoding their blobs without the constructor's physical parameter
 signature would be guessing.
 
+The sixth slice preserves Field rows. Each definition keeps its row token, declaring TypeDef from
+the TypeDef FieldList partition, exact metadata name, raw FieldAttributes, reusable structural
+FieldSig, and original blob. Field and method ownership share one bounded partition decoder; field
+definitions and field references share one signature decoder. Visibility, static, init-only,
+literal, special-name, and runtime-special-name facts remain CLR facts rather than Kotlin property
+decisions.
+
+This follows the JVM importer's field/member split: the physical owner, name, descriptor, and flags
+exist before FIR decides whether or how a foreign field is exposed. The CLR difference is that an
+enum's underlying storage is an instance field conventionally named `value__`, literal enum values
+are separate static fields, and modern byref-like types may own by-reference fields. The reader
+preserves those rows without assuming that every field is a Kotlin property or that `value__`
+spelling alone proves an enum. Enum classification still requires its direct `System.Enum` base
+and resolved core-library identity.
+
+The reader rejects invalid FieldAttributes combinations, missing ownership, empty or malformed
+FieldSig blobs, literal fields that are not static, init-only literal fields, and
+runtime-special-name without special-name. It does not enforce optional CLS field naming and does
+not decide whether a by-reference field is legal for the selected profile; those checks need the
+resolved declaring type and reference graph.
+
+The dual-ILAsm fixture covers generic-parameter fields, private static init-only fields, enum
+`value__` storage, and enum literals. A corrupted FieldSig header fails closed. The Roslyn .NET 10
+fixture exposes the same by-reference type through both its FieldDef and a consumer FieldRef,
+proving that the shared signature model does not diverge. Real Framework `mscorlib` and .NET 10
+`System.Runtime` provide scale coverage. FieldDef is a necessary input for semantically decoding
+enum-valued custom attributes, but cross-assembly enum resolution still belongs to the importer
+graph above the physical reader.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
 physical foundation, and no FIR declaration is created yet. In this sentence,
 “Property projection” means Kotlin-facing property synthesis; physical Property rows and
 associations are already implemented, as are unresolved physical GenericParam constraints and
-MemberRef signatures. Physical FieldDef rows are not implemented yet.
+MemberRef/FieldDef signatures. “Field projection” likewise means Kotlin-facing import, not the
+already implemented physical rows.
 
 ## Kotlin Common invariant
 
@@ -272,12 +302,13 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - CLR-specific immutable metadata model: **Reasonable platform-specific divergence**.
 - Lossless TypeSpec and MethodDef signature model: **Correct direction**.
 - Lossless MemberRef and reusable FieldSig model: **Correct direction**.
+- Physical FieldDef preservation on the reusable FieldSig model: **Correct direction**.
 - Physical Property/PropertyMap/MethodSemantics preservation: **Correct direction**.
 - Physical GenericParam/GenericParamConstraint preservation: **Correct direction**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
 - Mapping raw CLR rows directly to Kotlin IR: **Architecturally wrong and should be changed**.
-- Remaining FieldDef rows, semantic custom attributes, type forwarding, Kotlin-facing
+- Remaining semantic custom attributes, type forwarding, Kotlin-facing
   property synthesis, events, resolved constraint semantics, nullability enhancement, FIR symbols,
   and backend calls:
   **Deferred problems that must be recorded before the importer surface becomes stable**.
