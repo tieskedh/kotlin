@@ -2142,6 +2142,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
   this resolver into System.Type and serialized enum custom-attribute value decoding. The fresh
   strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
   integration tests).
+- The System.Type/serialized-enum custom-attribute continuation reuses that selected-graph resolver
+  for fixed, array, and tagged values. Type values retain the complete resolved structural type or
+  explicit null; serialized enums must resolve to a nominal named or constructed type and pass the
+  exact selected `System.Enum` plus `value__` storage proof before their bits are consumed. The
+  value retains its complete constructed identity because enums nested in generic C# classes are
+  generic CLR types. Boxed and constructor-typed enums otherwise share one semantic value model.
+  Real Roslyn .NET 10 metadata covers constructed nested types, arrays, nulls, boxed types,
+  ordinary boxed `Int16` enums, and two closed views of a generic nested enum; the Framework
+  fixture covers qualified values, an unbound assembly, and a false enum identity. No host
+  loading, probing, simple-name fallback, or Kotlin/C# projection occurs. A constructed nested enum
+  used directly as a constructor parameter remains structured unsupported until the general
+  TypeSig-to-resolved-structural-type substitution model exists; do not build a decoder-local
+  substitute. Next resolve named field/property arguments and decode them into the same semantic
+  value algebra. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21
+  generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2194,7 +2209,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 870 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 871 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
