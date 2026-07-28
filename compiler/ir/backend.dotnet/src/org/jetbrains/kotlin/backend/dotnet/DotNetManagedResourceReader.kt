@@ -34,92 +34,6 @@ data class DotNetManagedAssemblyIdentity(
     val hasPublicKey: Boolean,
 )
 
-/**
- * Raw ECMA-335 metadata handle. It identifies one physical row and deliberately carries no
- * Kotlin or C# source meaning.
- */
-data class DotNetClrMetadataHandle(
-    val table: Int,
-    val row: Int,
-) {
-    init {
-        require(table in 0 until 64) { "CLR metadata table must be in 0..63: $table" }
-        require(row in 1..0x00ff_ffff) { "CLR metadata row must be in 1..0x00ffffff: $row" }
-    }
-
-    val token: Int
-        get() = table shl 24 or row
-}
-
-enum class DotNetClrTypeVisibility {
-    NOT_PUBLIC,
-    PUBLIC,
-    NESTED_PUBLIC,
-    NESTED_PRIVATE,
-    NESTED_FAMILY,
-    NESTED_ASSEMBLY,
-    NESTED_FAMILY_AND_ASSEMBLY,
-    NESTED_FAMILY_OR_ASSEMBLY,
-}
-
-data class DotNetClrAssemblyReference(
-    val handle: DotNetClrMetadataHandle,
-    val name: String,
-    val version: String,
-    val culture: String,
-    val flags: Long,
-    val publicKeyOrToken: List<Int>,
-    val hashValue: List<Int>,
-)
-
-data class DotNetClrTypeReference(
-    val handle: DotNetClrMetadataHandle,
-    val namespaceName: String,
-    val metadataName: String,
-    val resolutionScope: DotNetClrMetadataHandle?,
-)
-
-data class DotNetClrTypeDefinition(
-    val handle: DotNetClrMetadataHandle,
-    val namespaceName: String,
-    val metadataName: String,
-    val attributes: Long,
-    val baseType: DotNetClrMetadataHandle?,
-    val declaringType: DotNetClrMetadataHandle?,
-) {
-    val visibility: DotNetClrTypeVisibility
-        get() = DotNetClrTypeVisibility.entries[(attributes and TYPE_VISIBILITY_MASK).toInt()]
-
-    val isInterface: Boolean
-        get() = attributes and INTERFACE_ATTRIBUTE != 0L
-
-    val isAbstract: Boolean
-        get() = attributes and ABSTRACT_ATTRIBUTE != 0L
-
-    val isSealed: Boolean
-        get() = attributes and SEALED_ATTRIBUTE != 0L
-
-    private companion object {
-        const val TYPE_VISIBILITY_MASK = 0x7L
-        const val INTERFACE_ATTRIBUTE = 0x20L
-        const val ABSTRACT_ATTRIBUTE = 0x80L
-        const val SEALED_ATTRIBUTE = 0x100L
-    }
-}
-
-/**
- * Physical CLR assembly metadata before any Kotlin import policy is applied.
- *
- * The importer layer may later interpret these rows as Kotlin declarations. This model itself
- * retains CLR names, tokens, flags, nesting, and references without inventing Kotlin identities.
- */
-data class DotNetClrAssemblyMetadata(
-    val identity: DotNetManagedAssemblyIdentity,
-    val assemblyReferences: List<DotNetClrAssemblyReference>,
-    val typeReferences: List<DotNetClrTypeReference>,
-    val typeDefinitions: List<DotNetClrTypeDefinition>,
-)
-
 object DotNetClrMetadataReader {
     fun read(file: File): DotNetClrAssemblyMetadata =
         DotNetPeMetadataReader.readClrMetadata(file)
@@ -227,6 +141,12 @@ private object DotNetPeMetadataReader {
                 assemblyReferences = readAssemblyReferences(metadata.tables, metadata.strings, metadata.blobs),
                 typeReferences = readTypeReferences(metadata.tables, metadata.strings),
                 typeDefinitions = readTypeDefinitions(metadata.tables, metadata.strings),
+                typeSpecifications = readTypeSpecifications(metadata.tables, metadata.blobs),
+                methodDefinitions = readMethodDefinitions(
+                    metadata.tables,
+                    metadata.strings,
+                    metadata.blobs,
+                ),
             )
         }
 
@@ -570,6 +490,147 @@ private object DotNetPeMetadataReader {
             }
         }
 
+        private fun readTypeSpecifications(
+            tables: MetadataStream,
+            blobs: MetadataStream?,
+        ): List<DotNetClrTypeSpecification> {
+            val table = locateMetadataTable(tables, TYPE_SPEC_TABLE) ?: return emptyList()
+            return List(table.rowCount.toIntChecked("TypeSpec row count")) { rowIndex ->
+                val signatureIndex = readIndex(
+                    table.offset + rowIndex.toLong() * table.rowSize,
+                    table.indexSizes.blobIndexSize,
+                )
+                val rawSignature = readBlobHeap(blobs, signatureIndex)
+                if (rawSignature.isEmpty()) {
+                    malformed("TypeSpec row ${rowIndex + 1} has an empty signature")
+                }
+                if (rawSignature.size > MAX_SIGNATURE_BLOB_SIZE) {
+                    malformed("TypeSpec row ${rowIndex + 1} has an oversized signature")
+                }
+                val handle = metadataHandle(
+                    TYPE_SPEC_TABLE,
+                    rowIndex.toLong() + 1,
+                    tables,
+                    "TypeSpec",
+                )
+                DotNetClrTypeSpecification(
+                    handle = handle,
+                    signature = SignatureBlobReader(
+                        bytes = rawSignature,
+                        metadataTables = tables,
+                        description = "TypeSpec token 0x${handle.token.toUInt().toString(16)}",
+                    ).readTypeSpecification(),
+                    rawSignature = rawSignature.map { byte -> byte.toInt() and 0xff },
+                )
+            }
+        }
+
+        private fun readMethodDefinitions(
+            tables: MetadataStream,
+            strings: MetadataStream,
+            blobs: MetadataStream?,
+        ): List<DotNetClrMethodDefinition> {
+            val table = locateMetadataTable(tables, METHOD_DEF_TABLE) ?: return emptyList()
+            val owners = readMethodOwners(tables, table.rowCount)
+            return List(table.rowCount.toIntChecked("MethodDef row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val relativeVirtualAddress = readU4(position)
+                position += UINT32_SIZE
+                val implementationAttributes = readU2(position)
+                position += UINT16_SIZE
+                val attributes = readU2(position)
+                position += UINT16_SIZE
+                if (attributes and METHOD_ACCESS_MASK == METHOD_ACCESS_MASK) {
+                    malformed("MethodDef row ${rowIndex + 1} has invalid accessibility flags")
+                }
+                val nameIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val signatureIndex = readIndex(position, table.indexSizes.blobIndexSize)
+                val name = readStringHeap(strings, nameIndex)
+                if (name.isEmpty()) malformed("MethodDef row ${rowIndex + 1} has an empty name")
+                val rawSignature = readBlobHeap(blobs, signatureIndex)
+                if (rawSignature.isEmpty()) {
+                    malformed("MethodDef row ${rowIndex + 1} has an empty signature")
+                }
+                if (rawSignature.size > MAX_SIGNATURE_BLOB_SIZE) {
+                    malformed("MethodDef row ${rowIndex + 1} has an oversized signature")
+                }
+                val handle = metadataHandle(
+                    METHOD_DEF_TABLE,
+                    rowIndex.toLong() + 1,
+                    tables,
+                    "MethodDef",
+                )
+                val signature = SignatureBlobReader(
+                    bytes = rawSignature,
+                    metadataTables = tables,
+                    description = "MethodDef token 0x${handle.token.toUInt().toString(16)}",
+                ).readMethodDefinitionSignature()
+                val isStatic = attributes and METHOD_STATIC_ATTRIBUTE != 0
+                if (isStatic == signature.hasThis) {
+                    malformed(
+                        "MethodDef token 0x${handle.token.toUInt().toString(16)} has inconsistent " +
+                                "static and has-this flags"
+                    )
+                }
+                DotNetClrMethodDefinition(
+                    handle = handle,
+                    declaringType = owners[rowIndex],
+                    name = name,
+                    relativeVirtualAddress = relativeVirtualAddress,
+                    implementationAttributes = implementationAttributes,
+                    attributes = attributes,
+                    signature = signature,
+                    rawSignature = rawSignature.map { byte -> byte.toInt() and 0xff },
+                )
+            }
+        }
+
+        private fun readMethodOwners(
+            tables: MetadataStream,
+            methodCount: Long,
+        ): List<DotNetClrMetadataHandle> {
+            val typeTable = locateMetadataTable(tables, TYPE_DEF_TABLE)
+                ?: malformed("MethodDef rows exist without a TypeDef table")
+            val typeCount = typeTable.rowCount.toIntChecked("TypeDef row count")
+            val methodStarts = List(typeCount) { typeIndex ->
+                var position = typeTable.offset + typeIndex.toLong() * typeTable.rowSize
+                position += UINT32_SIZE
+                position += typeTable.indexSizes.stringIndexSize * 2L
+                position += typeTable.indexSizes.typeDefOrRefIndexSize
+                position += typeTable.indexSizes.tableIndexSize(FIELD_TABLE)
+                readIndex(position, typeTable.indexSizes.tableIndexSize(METHOD_DEF_TABLE))
+            }
+            var previousStart = 1L
+            for ([typeIndex, start] in methodStarts.withIndex()) {
+                if (start !in 1..methodCount + 1) {
+                    malformed("TypeDef row ${typeIndex + 1} has invalid MethodList index $start")
+                }
+                if (start < previousStart) {
+                    malformed("TypeDef MethodList indices are not ordered")
+                }
+                previousStart = start
+            }
+            val owners = arrayOfNulls<DotNetClrMetadataHandle>(methodCount.toIntChecked("MethodDef row count"))
+            for (typeIndex in methodStarts.indices) {
+                val start = methodStarts[typeIndex]
+                val end = methodStarts.getOrNull(typeIndex + 1) ?: (methodCount + 1)
+                val owner = metadataHandle(
+                    TYPE_DEF_TABLE,
+                    typeIndex.toLong() + 1,
+                    tables,
+                    "MethodDef owner",
+                )
+                for (methodRow in start until end) {
+                    owners[(methodRow - 1).toInt()] = owner
+                }
+            }
+            if (owners.any { owner -> owner == null }) {
+                malformed("one or more MethodDef rows have no declaring TypeDef")
+            }
+            return owners.map { owner -> checkNotNull(owner) }
+        }
+
         private fun readNestedTypeOwners(
             tables: MetadataStream,
         ): Map<DotNetClrMetadataHandle, DotNetClrMetadataHandle> {
@@ -587,6 +648,383 @@ private object DotNetPeMetadataReader {
                 }
             }
             return result
+        }
+
+        private inner class SignatureBlobReader(
+            private val bytes: ByteArray,
+            private val metadataTables: MetadataStream,
+            private val description: String,
+        ) {
+            private var position = 0
+
+            fun readTypeSpecification(): DotNetClrTypeSignature {
+                val signature = readType(
+                    depth = 0,
+                    allowVoid = false,
+                    allowByReference = false,
+                    allowTypedReference = false,
+                )
+                if (position != bytes.size) {
+                    malformed("$description has ${bytes.size - position} trailing signature bytes")
+                }
+                return signature
+            }
+
+            fun readMethodDefinitionSignature(): DotNetClrMethodSignature {
+                val signature = readMethodSignature(depth = 0, allowSentinel = false)
+                if (signature.callingConvention != DotNetClrSignatureCallingConvention.DEFAULT &&
+                    signature.callingConvention != DotNetClrSignatureCallingConvention.VARARG
+                ) {
+                    malformed("$description has a non-managed calling convention")
+                }
+                if (position != bytes.size) {
+                    malformed("$description has ${bytes.size - position} trailing signature bytes")
+                }
+                return signature
+            }
+
+            private fun readType(
+                depth: Int,
+                allowVoid: Boolean,
+                allowByReference: Boolean,
+                allowTypedReference: Boolean,
+            ): DotNetClrTypeSignature {
+                if (depth > MAX_SIGNATURE_DEPTH) {
+                    malformed("$description exceeds the maximum signature nesting depth")
+                }
+                val modifiers = mutableListOf<DotNetClrCustomModifier>()
+                while (peekByte() == ELEMENT_TYPE_CMOD_REQD || peekByte() == ELEMENT_TYPE_CMOD_OPT) {
+                    val kind = readByte()
+                    modifiers += DotNetClrCustomModifier(
+                        isRequired = kind == ELEMENT_TYPE_CMOD_REQD,
+                        modifierType = readTypeDefOrRefHandle(
+                            part = "custom modifier",
+                            allowTypeSpecification = true,
+                        ),
+                    )
+                }
+                val unmodified = when (val elementType = readByte()) {
+                    ELEMENT_TYPE_VOID -> {
+                        if (!allowVoid) malformed("$description contains void where a type is required")
+                        DotNetClrTypeSignature.Void
+                    }
+                    ELEMENT_TYPE_BOOLEAN -> primitive(DotNetClrPrimitiveType.BOOLEAN)
+                    ELEMENT_TYPE_CHAR -> primitive(DotNetClrPrimitiveType.CHAR)
+                    ELEMENT_TYPE_I1 -> primitive(DotNetClrPrimitiveType.INT8)
+                    ELEMENT_TYPE_U1 -> primitive(DotNetClrPrimitiveType.UINT8)
+                    ELEMENT_TYPE_I2 -> primitive(DotNetClrPrimitiveType.INT16)
+                    ELEMENT_TYPE_U2 -> primitive(DotNetClrPrimitiveType.UINT16)
+                    ELEMENT_TYPE_I4 -> primitive(DotNetClrPrimitiveType.INT32)
+                    ELEMENT_TYPE_U4 -> primitive(DotNetClrPrimitiveType.UINT32)
+                    ELEMENT_TYPE_I8 -> primitive(DotNetClrPrimitiveType.INT64)
+                    ELEMENT_TYPE_U8 -> primitive(DotNetClrPrimitiveType.UINT64)
+                    ELEMENT_TYPE_R4 -> primitive(DotNetClrPrimitiveType.FLOAT32)
+                    ELEMENT_TYPE_R8 -> primitive(DotNetClrPrimitiveType.FLOAT64)
+                    ELEMENT_TYPE_STRING -> primitive(DotNetClrPrimitiveType.STRING)
+                    ELEMENT_TYPE_I -> primitive(DotNetClrPrimitiveType.NATIVE_INT)
+                    ELEMENT_TYPE_U -> primitive(DotNetClrPrimitiveType.NATIVE_UINT)
+                    ELEMENT_TYPE_OBJECT -> primitive(DotNetClrPrimitiveType.OBJECT)
+                    ELEMENT_TYPE_TYPEDBYREF -> {
+                        if (!allowTypedReference) {
+                            malformed("$description contains typed-reference where a type is required")
+                        }
+                        DotNetClrTypeSignature.TypedReference
+                    }
+                    ELEMENT_TYPE_CLASS, ELEMENT_TYPE_VALUETYPE -> DotNetClrTypeSignature.Named(
+                        type = readTypeDefOrRefHandle(
+                            part = "named type",
+                            allowTypeSpecification = false,
+                        ),
+                        isValueType = elementType == ELEMENT_TYPE_VALUETYPE,
+                    )
+                    ELEMENT_TYPE_VAR, ELEMENT_TYPE_MVAR -> DotNetClrTypeSignature.GenericParameter(
+                        kind = if (elementType == ELEMENT_TYPE_VAR) {
+                            DotNetClrGenericParameterKind.TYPE
+                        } else {
+                            DotNetClrGenericParameterKind.METHOD
+                        },
+                        index = readCompressedUnsigned("generic-parameter index"),
+                    )
+                    ELEMENT_TYPE_PTR -> DotNetClrTypeSignature.Pointer(
+                        readType(
+                            depth = depth + 1,
+                            allowVoid = true,
+                            allowByReference = false,
+                            allowTypedReference = false,
+                        )
+                    )
+                    ELEMENT_TYPE_BYREF -> {
+                        if (!allowByReference) {
+                            malformed("$description contains a nested by-reference type")
+                        }
+                        DotNetClrTypeSignature.ByReference(
+                            readType(
+                                depth = depth + 1,
+                                allowVoid = false,
+                                allowByReference = false,
+                                allowTypedReference = false,
+                            )
+                        )
+                    }
+                    ELEMENT_TYPE_SZARRAY -> DotNetClrTypeSignature.SzArray(
+                        readType(
+                            depth = depth + 1,
+                            allowVoid = false,
+                            allowByReference = false,
+                            allowTypedReference = false,
+                        )
+                    )
+                    ELEMENT_TYPE_ARRAY -> readArray(depth)
+                    ELEMENT_TYPE_GENERICINST -> readGenericInstance(depth)
+                    ELEMENT_TYPE_FNPTR -> DotNetClrTypeSignature.FunctionPointer(
+                        readMethodSignature(depth + 1, allowSentinel = true)
+                    )
+                    else -> malformed(
+                        "$description contains unsupported element type 0x${elementType.toString(16)}"
+                    )
+                }
+                return if (modifiers.isEmpty()) {
+                    unmodified
+                } else {
+                    DotNetClrTypeSignature.Modified(modifiers, unmodified)
+                }
+            }
+
+            private fun readArray(depth: Int): DotNetClrTypeSignature.Array {
+                val elementType = readType(
+                    depth = depth + 1,
+                    allowVoid = false,
+                    allowByReference = false,
+                    allowTypedReference = false,
+                )
+                val rank = readCompressedUnsigned("array rank")
+                if (rank == 0) malformed("$description contains an array with rank zero")
+                val sizeCount = readCompressedUnsigned("array size count")
+                if (sizeCount > rank) {
+                    malformed("$description contains $sizeCount array sizes for rank $rank")
+                }
+                ensureCollectionFits(sizeCount, "array sizes")
+                val sizes = List(sizeCount) { readCompressedUnsigned("array size") }
+                val lowerBoundCount = readCompressedUnsigned("array lower-bound count")
+                if (lowerBoundCount > rank) {
+                    malformed("$description contains $lowerBoundCount array lower bounds for rank $rank")
+                }
+                ensureCollectionFits(lowerBoundCount, "array lower bounds")
+                val lowerBounds = List(lowerBoundCount) { readCompressedSigned("array lower bound") }
+                return DotNetClrTypeSignature.Array(
+                    elementType = elementType,
+                    shape = DotNetClrArrayShape(rank, sizes, lowerBounds),
+                )
+            }
+
+            private fun readGenericInstance(depth: Int): DotNetClrTypeSignature.GenericInstance {
+                val namedKind = readByte()
+                if (namedKind != ELEMENT_TYPE_CLASS && namedKind != ELEMENT_TYPE_VALUETYPE) {
+                    malformed(
+                        "$description generic instance has invalid type kind 0x${namedKind.toString(16)}"
+                    )
+                }
+                val genericType = DotNetClrTypeSignature.Named(
+                    type = readTypeDefOrRefHandle(
+                        part = "generic type",
+                        allowTypeSpecification = false,
+                    ),
+                    isValueType = namedKind == ELEMENT_TYPE_VALUETYPE,
+                )
+                val argumentCount = readCompressedUnsigned("generic argument count")
+                ensureCollectionFits(argumentCount, "generic arguments")
+                return DotNetClrTypeSignature.GenericInstance(
+                    genericType = genericType,
+                    arguments = List(argumentCount) {
+                        readType(
+                            depth = depth + 1,
+                            allowVoid = false,
+                            allowByReference = false,
+                            allowTypedReference = false,
+                        )
+                    },
+                )
+            }
+
+            private fun readMethodSignature(
+                depth: Int,
+                allowSentinel: Boolean,
+            ): DotNetClrMethodSignature {
+                if (depth > MAX_SIGNATURE_DEPTH) {
+                    malformed("$description exceeds the maximum signature nesting depth")
+                }
+                val header = readByte()
+                if (header and SIGNATURE_RESERVED_MASK != 0) {
+                    malformed("$description has reserved signature-header bits")
+                }
+                val callingConvention = when (header and SIGNATURE_CALLING_CONVENTION_MASK) {
+                    SIGNATURE_DEFAULT -> DotNetClrSignatureCallingConvention.DEFAULT
+                    SIGNATURE_C -> DotNetClrSignatureCallingConvention.C
+                    SIGNATURE_STDCALL -> DotNetClrSignatureCallingConvention.STDCALL
+                    SIGNATURE_THISCALL -> DotNetClrSignatureCallingConvention.THISCALL
+                    SIGNATURE_FASTCALL -> DotNetClrSignatureCallingConvention.FASTCALL
+                    SIGNATURE_VARARG -> DotNetClrSignatureCallingConvention.VARARG
+                    SIGNATURE_UNMANAGED -> DotNetClrSignatureCallingConvention.UNMANAGED
+                    SIGNATURE_NATIVE_VARARG -> DotNetClrSignatureCallingConvention.NATIVE_VARARG
+                    else -> malformed(
+                        "$description has unsupported signature calling convention " +
+                                "0x${(header and SIGNATURE_CALLING_CONVENTION_MASK).toString(16)}"
+                    )
+                }
+                val hasThis = header and SIGNATURE_HAS_THIS != 0
+                val hasExplicitThis = header and SIGNATURE_EXPLICIT_THIS != 0
+                if (hasExplicitThis && !hasThis) {
+                    malformed("$description has explicit-this without has-this")
+                }
+                val genericParameterCount = if (header and SIGNATURE_GENERIC != 0) {
+                    readCompressedUnsigned("method generic-parameter count").also { count ->
+                        if (count == 0) {
+                            malformed("$description marks a method generic with zero parameters")
+                        }
+                    }
+                } else {
+                    0
+                }
+                val parameterCount = readCompressedUnsigned("method parameter count")
+                ensureCollectionFits(parameterCount, "method parameters")
+                val returnType = readType(
+                    depth = depth + 1,
+                    allowVoid = true,
+                    allowByReference = true,
+                    allowTypedReference = true,
+                )
+                val parameterTypes = ArrayList<DotNetClrTypeSignature>(parameterCount)
+                var varargParameterStart: Int? = null
+                while (parameterTypes.size < parameterCount) {
+                    if (peekByte() == ELEMENT_TYPE_SENTINEL) {
+                        if (!allowSentinel) {
+                            malformed("$description has a vararg sentinel in a definition signature")
+                        }
+                        if (callingConvention != DotNetClrSignatureCallingConvention.VARARG &&
+                            callingConvention != DotNetClrSignatureCallingConvention.C &&
+                            callingConvention != DotNetClrSignatureCallingConvention.NATIVE_VARARG
+                        ) {
+                            malformed("$description has a sentinel on a non-vararg signature")
+                        }
+                        if (varargParameterStart != null) {
+                            malformed("$description has multiple vararg sentinels")
+                        }
+                        readByte()
+                        varargParameterStart = parameterTypes.size
+                    }
+                    parameterTypes += readType(
+                        depth = depth + 1,
+                        allowVoid = false,
+                        allowByReference = true,
+                        allowTypedReference = true,
+                    )
+                }
+                if (varargParameterStart == parameterTypes.size) {
+                    malformed("$description has a trailing vararg sentinel")
+                }
+                return DotNetClrMethodSignature(
+                    callingConvention = callingConvention,
+                    hasThis = hasThis,
+                    hasExplicitThis = hasExplicitThis,
+                    genericParameterCount = genericParameterCount,
+                    returnType = returnType,
+                    parameterTypes = parameterTypes,
+                    varargParameterStart = varargParameterStart,
+                )
+            }
+
+            private fun readTypeDefOrRefHandle(
+                part: String,
+                allowTypeSpecification: Boolean,
+            ): DotNetClrMetadataHandle {
+                val encoded = readCompressedUnsigned("$part handle").toLong()
+                val handle = decodeCodedHandle(
+                    value = encoded,
+                    tagBits = 2,
+                    tablesByTag = intArrayOf(TYPE_DEF_TABLE, TYPE_REF_TABLE, TYPE_SPEC_TABLE),
+                    metadataTables = metadataTables,
+                    description = "$description $part",
+                ) ?: malformed("$description $part has a nil handle")
+                if (!allowTypeSpecification && handle.table == TYPE_SPEC_TABLE) {
+                    malformed("$description $part refers to a TypeSpec")
+                }
+                return handle
+            }
+
+            private fun readCompressedUnsigned(part: String): Int =
+                readCompressedUnsignedWithWidth(part, enforceUnsignedCanonicalForm = true).value
+
+            private fun readCompressedUnsignedWithWidth(
+                part: String,
+                enforceUnsignedCanonicalForm: Boolean,
+            ): CompressedUnsigned {
+                val first = readByte()
+                return when {
+                    first and 0x80 == 0 -> CompressedUnsigned(first, 1)
+                    first and 0xc0 == 0x80 -> {
+                        val second = readByte()
+                        val value = (first and 0x3f) shl 8 or second
+                        if (enforceUnsignedCanonicalForm && value < 0x80) {
+                            malformed("$description has a non-canonical compressed integer for $part")
+                        }
+                        CompressedUnsigned(value, 2)
+                    }
+                    first and 0xe0 == 0xc0 -> {
+                        val second = readByte()
+                        val third = readByte()
+                        val fourth = readByte()
+                        val value =
+                            (first and 0x1f) shl 24 or
+                                    (second shl 16) or
+                                    (third shl 8) or
+                                    fourth
+                        if (enforceUnsignedCanonicalForm && value < 0x4000) {
+                            malformed("$description has a non-canonical compressed integer for $part")
+                        }
+                        CompressedUnsigned(value, 4)
+                    }
+                    else -> malformed("$description has an invalid compressed integer for $part")
+                }
+            }
+
+            private fun readCompressedSigned(part: String): Int {
+                val encoded = readCompressedUnsignedWithWidth(
+                    part,
+                    enforceUnsignedCanonicalForm = false,
+                )
+                val shifted = encoded.value ushr 1
+                if (encoded.value and 1 == 0) return shifted
+                val signBits = when (encoded.width) {
+                    1 -> -0x40
+                    2 -> -0x2000
+                    4 -> -0x1000_0000
+                    else -> error("Unexpected compressed integer width ${encoded.width}")
+                }
+                val value = shifted or signBits
+                if (encoded.width == 2 && value in -0x40 until 0x40 ||
+                    encoded.width == 4 && value in -0x2000 until 0x2000
+                ) {
+                    malformed("$description has a non-canonical compressed signed integer for $part")
+                }
+                return value
+            }
+
+            private fun ensureCollectionFits(count: Int, part: String) {
+                if (count > bytes.size - position) {
+                    malformed("$description declares too many $part ($count)")
+                }
+            }
+
+            private fun primitive(type: DotNetClrPrimitiveType): DotNetClrTypeSignature =
+                DotNetClrTypeSignature.Primitive(type)
+
+            private fun peekByte(): Int =
+                if (position < bytes.size) bytes[position].toInt() and 0xff else -1
+
+            private fun readByte(): Int {
+                if (position >= bytes.size) malformed("$description signature is truncated")
+                return bytes[position++].toInt() and 0xff
+            }
         }
 
         private fun decodeCodedHandle(
@@ -975,6 +1413,8 @@ private object DotNetPeMetadataReader {
 
     private data class BlobHeapEntry(val offset: Long, val size: Long)
 
+    private data class CompressedUnsigned(val value: Int, val width: Int)
+
     private data class ManifestResourceRow(
         val offset: Long,
         val attributes: Int,
@@ -1027,6 +1467,8 @@ private object DotNetPeMetadataReader {
     private const val MODULE_TABLE = 0
     private const val TYPE_REF_TABLE = 1
     private const val TYPE_DEF_TABLE = 2
+    private const val FIELD_TABLE = 4
+    private const val METHOD_DEF_TABLE = 6
     private const val MODULE_REF_TABLE = 26
     private const val TYPE_SPEC_TABLE = 27
     private const val MANIFEST_RESOURCE_TABLE = 40
@@ -1039,6 +1481,54 @@ private object DotNetPeMetadataReader {
     private const val GUID_HEAP_LARGE = 0x2
     private const val BLOB_HEAP_LARGE = 0x4
     private const val ASSEMBLY_PUBLIC_KEY_FLAG = 0x1L
+    private const val METHOD_ACCESS_MASK = 0x7
+    private const val METHOD_STATIC_ATTRIBUTE = 0x10
+    private const val MAX_SIGNATURE_DEPTH = 128
+    private const val MAX_SIGNATURE_BLOB_SIZE = 1024 * 1024
+    private const val ELEMENT_TYPE_VOID = 0x01
+    private const val ELEMENT_TYPE_BOOLEAN = 0x02
+    private const val ELEMENT_TYPE_CHAR = 0x03
+    private const val ELEMENT_TYPE_I1 = 0x04
+    private const val ELEMENT_TYPE_U1 = 0x05
+    private const val ELEMENT_TYPE_I2 = 0x06
+    private const val ELEMENT_TYPE_U2 = 0x07
+    private const val ELEMENT_TYPE_I4 = 0x08
+    private const val ELEMENT_TYPE_U4 = 0x09
+    private const val ELEMENT_TYPE_I8 = 0x0a
+    private const val ELEMENT_TYPE_U8 = 0x0b
+    private const val ELEMENT_TYPE_R4 = 0x0c
+    private const val ELEMENT_TYPE_R8 = 0x0d
+    private const val ELEMENT_TYPE_STRING = 0x0e
+    private const val ELEMENT_TYPE_PTR = 0x0f
+    private const val ELEMENT_TYPE_BYREF = 0x10
+    private const val ELEMENT_TYPE_VALUETYPE = 0x11
+    private const val ELEMENT_TYPE_CLASS = 0x12
+    private const val ELEMENT_TYPE_VAR = 0x13
+    private const val ELEMENT_TYPE_ARRAY = 0x14
+    private const val ELEMENT_TYPE_GENERICINST = 0x15
+    private const val ELEMENT_TYPE_TYPEDBYREF = 0x16
+    private const val ELEMENT_TYPE_I = 0x18
+    private const val ELEMENT_TYPE_U = 0x19
+    private const val ELEMENT_TYPE_FNPTR = 0x1b
+    private const val ELEMENT_TYPE_OBJECT = 0x1c
+    private const val ELEMENT_TYPE_SZARRAY = 0x1d
+    private const val ELEMENT_TYPE_MVAR = 0x1e
+    private const val ELEMENT_TYPE_CMOD_REQD = 0x1f
+    private const val ELEMENT_TYPE_CMOD_OPT = 0x20
+    private const val ELEMENT_TYPE_SENTINEL = 0x41
+    private const val SIGNATURE_CALLING_CONVENTION_MASK = 0x0f
+    private const val SIGNATURE_DEFAULT = 0x00
+    private const val SIGNATURE_C = 0x01
+    private const val SIGNATURE_STDCALL = 0x02
+    private const val SIGNATURE_THISCALL = 0x03
+    private const val SIGNATURE_FASTCALL = 0x04
+    private const val SIGNATURE_VARARG = 0x05
+    private const val SIGNATURE_UNMANAGED = 0x09
+    private const val SIGNATURE_NATIVE_VARARG = 0x0b
+    private const val SIGNATURE_GENERIC = 0x10
+    private const val SIGNATURE_HAS_THIS = 0x20
+    private const val SIGNATURE_EXPLICIT_THIS = 0x40
+    private const val SIGNATURE_RESERVED_MASK = 0x80
     private const val UINT16_INDEX_LIMIT = 1L shl 16
     private const val UINT16_SIZE = 2L
     private const val UINT32_SIZE = 4L

@@ -1941,6 +1941,26 @@ session state, process, and a curated task menu. Keep both files updated as you 
   properties, generic constraints, and semantically decoded attributes before introducing the
   Kotlin import policy or lazy FIR provider. The fresh strict gate is 869/0/0/0 across 16 XML
   suites (796 FIR/IL/box, 21 generated CLI, and 52 library integration tests).
+- The signature continuation moves the CLR importer one layer upward without crossing into Kotlin
+  import policy. The physical model now lives in its own source file and losslessly represents
+  TypeSpec and MethodDef signatures: primitive and class/value kinds, raw handles, type/method
+  generic positions and instantiations, pointer/by-reference/typed-reference forms in their legal
+  contexts, SZARRAY versus ranked arrays with sizes and signed lower bounds, custom modifiers,
+  function pointers, calling conventions, and raw diagnostic bytes. Method owners are derived
+  from the TypeDef MethodList partition. The decoder enforces ECMA-335 plus the official .NET
+  augmentations, canonical compressed integers, bounded recursion/collections, and the rule that
+  MethodDef signatures have no call-site vararg sentinel. Custom modifiers may occur in the extra
+  CLR-supported positions and retain TypeSpec handles without recursive resolution; named/generic
+  type constructors remain TypeDef/TypeRef and the later resolver must detect modifier cycles.
+  The same fixture assembled by Framework and modern ILAsm covers
+  generic TypeSpec, a generic instance method, by-ref, SZARRAY, and two-/four-byte negative array
+  bounds; copied assemblies with corrupted signature headers fail as bad images. The scale lane
+  also walks the real Framework mscorlib and net10 System.Runtime reference metadata, whose
+  modified TypeSpec root exposed the required .NET augmentation. This does not map a CLR type to
+  Kotlin, infer nullability, or create FIR. Next add Property/MethodSemantics,
+  GenericParam/constraints, and decoded ordinary attributes on the same physical foundation. The
+  fresh strict gate remains 869/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
+  52 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2024,13 +2044,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
    supported surface grows; do not add a permanent target-specific copy of Common algorithms.
    Keep the current same-run fallback only until all bootstrap tests select a complete installed
    pair.
-2. **Continue the CLR importer above its physical type foundation.** Add lossless signature,
-   TypeSpec, MethodDef, Property, generic-parameter/constraint, and semantic custom-attribute
-   records before introducing the CLR-to-Kotlin policy and lazy FIR provider. Preserve Kotlin
-   declaration identity and Common semantics; decode nullability, variance, properties, and
-   exceptions at the importer boundary instead of teaching the Kotlin-owned backend surface to
-   infer C# conventions. Keep structured metadata-table auditing; do not substitute IL substring
-   checks.
+2. **Continue the CLR importer above its physical signature foundation.** Add Property and
+   MethodSemantics associations, GenericParam/constraints, and semantic custom-attribute records
+   before introducing the CLR-to-Kotlin policy and lazy FIR provider; add Field/MemberRef
+   signatures when their first consumer requires them. Preserve Kotlin declaration identity and
+   Common semantics; decode nullability, variance, properties, and exceptions at the importer
+   boundary instead of teaching the Kotlin-owned backend surface to infer C# conventions. Keep
+   structured metadata-table auditing; do not substitute IL substring checks.
 3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
