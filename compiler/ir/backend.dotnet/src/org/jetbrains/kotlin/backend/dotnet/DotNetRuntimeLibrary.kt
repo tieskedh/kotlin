@@ -46,6 +46,12 @@ internal object DotNetRuntimeLibrary {
     val errorTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.Error".toIlIdentifier()}"
 
+    val exceptionInInitializerErrorTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.ExceptionInInitializerError".toIlIdentifier()}"
+
+    val noClassDefFoundErrorTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.NoClassDefFoundError".toIlIdentifier()}"
+
     val kotlinNothingValueExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.KotlinNothingValueException".toIlIdentifier()}"
 
@@ -204,6 +210,10 @@ internal object DotNetRuntimeLibrary {
                 coreLibraryReference,
                 coreLibrary.editorBrowsableReference,
             ).prependIndent("        ")
+        val compilerAbiUseAttributesIl = listOf(
+            DotNetCompilerAbi.markerAttributeIl(runtimeAssemblyReference = ""),
+            DotNetCompilerAbi.editorBrowsableNeverAttributeIl(coreLibrary.editorBrowsableReference),
+        ).joinToString("\n            ")
         val primitiveArrayTypesIl = DotNetPrimitiveArrays.runtimeTypesIl(
             coreLibraryReference,
             coreLibrary.editorBrowsableReference,
@@ -569,6 +579,44 @@ $primitiveArrayTypesIl
             .property instance string Message()
             {
               .get instance string Kotlin.Error::'get_Message'()
+            }
+          }
+
+          // Internal Kotlin initialization errors need exact runtime identities: generated
+          // catch filters and the static-initialization runtime service refer to these public
+          // metadata types across assemblies, while Kotlin source keeps both declarations
+          // internal. They are compiler ABI, not C# user API.
+          .class public auto ansi beforefieldinit ExceptionInInitializerError
+                 extends Kotlin.Error
+          {
+            $compilerAbiUseAttributesIl
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(
+                class ${coreLibraryReference}System.Exception 'cause') cil managed
+            {
+              .maxstack 3
+              ldarg.0
+              ldnull
+              ldarg.1
+              call instance void Kotlin.Error::.ctor(
+                  string, class ${coreLibraryReference}System.Exception)
+              ret
+            }
+          }
+
+          .class public auto ansi beforefieldinit NoClassDefFoundError
+                 extends Kotlin.Error
+          {
+            $compilerAbiUseAttributesIl
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(
+                string 'message') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              call instance void Kotlin.Error::.ctor(string)
+              ret
             }
           }
 
