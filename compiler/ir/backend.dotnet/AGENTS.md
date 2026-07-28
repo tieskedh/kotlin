@@ -382,9 +382,10 @@ landed shape as a compatibility constraint.
    edges, cycles, and traversal limits are structured invalid results. Generic base TypeSpecs are
    substituted through the general resolved signature model. Closed TypeSpec-owned generic
    attribute constructors remain structured unsupported until constructor resolution retains the
-   constructed owner view; do not approximate one as its open TypeDef. A constructed nested enum
-   in a constructor signature remains a structured unsupported fixed type until that constructor
-   path consumes the same general model; do not add a decoder-local substitute.
+   constructed owner view; do not approximate one as its open TypeDef. Constructor-typed fixed
+   enums may be closed generic instances: resolve their complete signature through that same
+   general model, retain exact constructed identity and storage, and report invalid arity as
+   malformed metadata. Do not erase them to the open TypeDef or add decoder-local substitution.
    Serialized CLR type names are parsed structurally before binding: retain escaped top-level and
    nested metadata names, per-component arity, recursive generic arguments, normalized
    pointer/byref/array modifiers, and the AssemblyName display-name tail. Do not call host
