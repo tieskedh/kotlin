@@ -168,6 +168,7 @@ private object DotNetPeMetadataReader {
                 assemblyReferences = readAssemblyReferences(metadata.tables, metadata.strings, metadata.blobs),
                 typeReferences = typeReferences,
                 typeDefinitions = typeDefinitions,
+                interfaceImplementations = readInterfaceImplementations(metadata.tables),
                 exportedTypes = readExportedTypes(metadata.tables, metadata.strings),
                 typeSpecifications = readTypeSpecifications(metadata.tables, metadata.blobs),
                 fieldDefinitions = fieldDefinitions,
@@ -537,6 +538,53 @@ private object DotNetPeMetadataReader {
                         description = "TypeDef base type",
                     ),
                     declaringType = declaringTypes[handle],
+                )
+            }
+        }
+
+        private fun readInterfaceImplementations(
+            tables: MetadataStream,
+        ): List<DotNetClrInterfaceImplementation> {
+            val table = locateMetadataTable(tables, INTERFACE_IMPLEMENTATION_TABLE)
+                ?: return emptyList()
+            val seenImplementations =
+                mutableSetOf<Pair<DotNetClrMetadataHandle, DotNetClrMetadataHandle>>()
+            return List(table.rowCount.toIntChecked("InterfaceImpl row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val implementingTypeIndex = readIndex(
+                    position,
+                    table.indexSizes.tableIndexSize(TYPE_DEF_TABLE),
+                )
+                position += table.indexSizes.tableIndexSize(TYPE_DEF_TABLE)
+                val interfaceTypeIndex = readIndex(
+                    position,
+                    table.indexSizes.typeDefOrRefIndexSize,
+                )
+                val implementingType = metadataHandle(
+                    TYPE_DEF_TABLE,
+                    implementingTypeIndex,
+                    tables,
+                    "InterfaceImpl implementing type",
+                )
+                val interfaceType = decodeCodedHandle(
+                    value = interfaceTypeIndex,
+                    tagBits = 2,
+                    tablesByTag = intArrayOf(TYPE_DEF_TABLE, TYPE_REF_TABLE, TYPE_SPEC_TABLE),
+                    metadataTables = tables,
+                    description = "InterfaceImpl interface type",
+                ) ?: malformed("InterfaceImpl row ${rowIndex + 1} has a nil interface type")
+                if (!seenImplementations.add(implementingType to interfaceType)) {
+                    malformed("InterfaceImpl row ${rowIndex + 1} duplicates an implementation")
+                }
+                DotNetClrInterfaceImplementation(
+                    handle = metadataHandle(
+                        INTERFACE_IMPLEMENTATION_TABLE,
+                        rowIndex.toLong() + 1,
+                        tables,
+                        "InterfaceImpl",
+                    ),
+                    implementingType = implementingType,
+                    interfaceType = interfaceType,
                 )
             }
         }
