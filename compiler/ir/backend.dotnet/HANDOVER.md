@@ -2130,6 +2130,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   resolve top-level/nested/generic/modifier type structure without host loading or probing. The
   subsequent fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
   CLI, and 54 library integration tests).
+- The serialized-type-resolution continuation adds a build-frontend-owned binder whose input is
+  the original attribute assembly, current unqualified-name context assembly, and parsed optional
+  AssemblyName. It returns only an already selected profile assembly. The resolver then reuses
+  TypeDef/TypeRef/forwarder/nested resolution, verifies encoded versus physical GenericParam
+  arity, recursively resolves constructed arguments, and preserves pointer/byref/SZARRAY/
+  multidimensional modifiers. Failures distinguish type syntax, unsupported syntax, AssemblyName,
+  unbound edges, unresolved types, and arity mismatch; generic failures carry index paths. A real
+  .NET 10 nested generic with arguments from System.Runtime and the destination assembly plus
+  modifiers is covered, as are unqualified context and invalid/unbound nested edges. Next wire
+  this resolver into System.Type and serialized enum custom-attribute value decoding. The fresh
+  strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
+  integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
