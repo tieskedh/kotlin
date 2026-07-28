@@ -99,6 +99,20 @@ sealed interface DotNetClrResolvedSignatureResolution {
     ) : DotNetClrResolvedSignatureResolution
 }
 
+sealed interface DotNetClrResolvedMethodSignatureResolution {
+    data class Resolved(
+        val signature: DotNetClrResolvedMethodSignature,
+    ) : DotNetClrResolvedMethodSignatureResolution
+
+    data class UnresolvedType(
+        val resolution: DotNetClrTypeResolution.Unresolved,
+    ) : DotNetClrResolvedMethodSignatureResolution
+
+    data class Invalid(
+        val resolution: DotNetClrResolvedSignatureResolution.Invalid,
+    ) : DotNetClrResolvedMethodSignatureResolution
+}
+
 /**
  * Resolves physical signature identity without applying Kotlin or C# type policy.
  *
@@ -125,6 +139,27 @@ class DotNetClrSignatureResolver(
                 failure.type,
                 failure.expected,
                 failure.actual,
+            )
+        }
+
+    fun resolve(
+        assembly: DotNetClrAssemblyMetadata,
+        signature: DotNetClrMethodSignature,
+    ): DotNetClrResolvedMethodSignatureResolution =
+        try {
+            DotNetClrResolvedMethodSignatureResolution.Resolved(
+                resolveMethod(assembly, signature)
+            )
+        } catch (failure: UnresolvedSignatureType) {
+            DotNetClrResolvedMethodSignatureResolution.UnresolvedType(failure.resolution)
+        } catch (failure: InvalidGenericArity) {
+            DotNetClrResolvedMethodSignatureResolution.Invalid(
+                DotNetClrResolvedSignatureResolution.Invalid(
+                    DotNetClrResolvedSignatureFailure.GENERIC_ARITY_MISMATCH,
+                    failure.type,
+                    failure.expected,
+                    failure.actual,
+                )
             )
         }
 
@@ -275,6 +310,16 @@ sealed interface DotNetClrResolvedSignatureSubstitution {
     ) : DotNetClrResolvedSignatureSubstitution
 }
 
+sealed interface DotNetClrResolvedMethodSignatureSubstitution {
+    data class Substituted(
+        val signature: DotNetClrResolvedMethodSignature,
+    ) : DotNetClrResolvedMethodSignatureSubstitution
+
+    data class Invalid(
+        val resolution: DotNetClrResolvedSignatureSubstitution.Invalid,
+    ) : DotNetClrResolvedMethodSignatureSubstitution
+}
+
 /**
  * Substitutes an owner TypeSpec's reified arguments through a resolved physical signature.
  *
@@ -293,6 +338,28 @@ fun DotNetClrResolvedTypeSignature.substituteClrTypeArguments(
             DotNetClrResolvedSignatureSubstitutionFailure.TYPE_ARGUMENT_OUT_OF_RANGE,
             failure.index,
             typeArguments.size,
+        )
+    }
+
+fun DotNetClrResolvedMethodSignature.substituteClrTypeArguments(
+    typeArguments: List<DotNetClrResolvedTypeSignature>,
+): DotNetClrResolvedMethodSignatureSubstitution =
+    try {
+        DotNetClrResolvedMethodSignatureSubstitution.Substituted(
+            copy(
+                returnType = returnType.substituteClrTypeArgumentsUnchecked(typeArguments),
+                parameterTypes = parameterTypes.map { parameter ->
+                    parameter.substituteClrTypeArgumentsUnchecked(typeArguments)
+                },
+            )
+        )
+    } catch (failure: MissingClrTypeArgument) {
+        DotNetClrResolvedMethodSignatureSubstitution.Invalid(
+            DotNetClrResolvedSignatureSubstitution.Invalid(
+                DotNetClrResolvedSignatureSubstitutionFailure.TYPE_ARGUMENT_OUT_OF_RANGE,
+                failure.index,
+                typeArguments.size,
+            )
         )
     }
 

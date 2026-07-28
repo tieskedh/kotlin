@@ -8,8 +8,13 @@ enum class DotNetClrCustomAttributeConstructorFailure {
     INVALID_CONSTRUCTOR_HANDLE,
     INVALID_MEMBER_REFERENCE_KIND,
     UNSUPPORTED_MEMBER_REFERENCE_PARENT,
+    INVALID_ATTRIBUTE_TYPE_SIGNATURE,
+    ATTRIBUTE_TYPE_IS_OPEN_GENERIC,
     NOT_INSTANCE_CONSTRUCTOR,
     INVALID_CONSTRUCTOR_SIGNATURE,
+    CONSTRUCTOR_SIGNATURE_RESOLUTION_FAILED,
+    CONSTRUCTOR_SIGNATURE_SUBSTITUTION_FAILED,
+    CONSTRUCTOR_SIGNATURE_IS_OPEN_GENERIC,
     ATTRIBUTE_TYPE_IS_INTERFACE,
     ATTRIBUTE_TYPE_IS_ABSTRACT,
     ATTRIBUTE_TYPE_DOES_NOT_DERIVE_FROM_SYSTEM_ATTRIBUTE,
@@ -20,8 +25,8 @@ enum class DotNetClrCustomAttributeConstructorFailure {
 
 data class DotNetClrResolvedCustomAttributeConstructor(
     val sourceAssembly: DotNetClrAssemblyMetadata,
-    val attributeType: DotNetClrResolvedTypeDefinition,
-    val signature: DotNetClrMethodSignature,
+    val attributeType: DotNetClrResolvedTypeView,
+    val signature: DotNetClrResolvedMethodSignature,
     val constructor: DotNetClrMetadataHandle,
 )
 
@@ -39,6 +44,8 @@ sealed interface DotNetClrCustomAttributeConstructorResolution {
     data class Invalid(
         val failure: DotNetClrCustomAttributeConstructorFailure,
         val typeResolution: DotNetClrTypeResolution.Unresolved? = null,
+        val signatureResolution: DotNetClrResolvedSignatureResolution.Invalid? = null,
+        val signatureSubstitution: DotNetClrResolvedSignatureSubstitution.Invalid? = null,
     ) : DotNetClrCustomAttributeConstructorResolution
 }
 
@@ -166,7 +173,6 @@ enum class DotNetClrCustomAttributeValueFailure {
     CONSTRUCTOR_MISMATCH,
     MISSING_VALUE_BLOB,
     INVALID_PROLOG,
-    INVALID_FIXED_ARGUMENT_SIGNATURE,
     TRUNCATED_VALUE,
     INVALID_BOOLEAN,
     INVALID_SERIALIZED_STRING,
@@ -197,7 +203,6 @@ sealed interface DotNetClrCustomAttributeValueDecoding {
         val typeResolution: DotNetClrTypeResolution.Unresolved? = null,
         val serializedTypeResolution: DotNetClrSerializedTypeResolution? = null,
         val enumStorageFailure: DotNetClrEnumStorageFailure? = null,
-        val signatureResolution: DotNetClrResolvedSignatureResolution.Invalid? = null,
     ) : DotNetClrCustomAttributeValueDecoding
 
     data class Unsupported(
@@ -224,8 +229,8 @@ class DotNetClrCustomAttributeDecoder(
         attribute: DotNetClrCustomAttribute,
     ): DotNetClrCustomAttributeConstructorResolution {
         val constructorName: String
-        val signature: DotNetClrMethodSignature
-        val attributeType: DotNetClrResolvedTypeDefinition
+        val rawSignature: DotNetClrMethodSignature
+        val attributeType: DotNetClrResolvedTypeView
         when (attribute.constructor.table) {
             METHOD_DEF_TABLE -> {
                 val method = assembly.methodDefinitions.singleOrNull { candidate ->
@@ -234,7 +239,7 @@ class DotNetClrCustomAttributeDecoder(
                     DotNetClrCustomAttributeConstructorFailure.INVALID_CONSTRUCTOR_HANDLE
                 )
                 constructorName = method.name
-                signature = method.signature
+                rawSignature = method.signature
                 if (method.isStatic ||
                     !method.isSpecialName ||
                     !method.isRuntimeSpecialName
@@ -243,7 +248,7 @@ class DotNetClrCustomAttributeDecoder(
                         DotNetClrCustomAttributeConstructorFailure.NOT_INSTANCE_CONSTRUCTOR
                     )
                 }
-                attributeType = when (
+                val resolvedAttributeType = when (
                     val resolution =
                         typeResolver.resolveTypeDefinition(assembly, method.declaringType)
                 ) {
@@ -252,6 +257,16 @@ class DotNetClrCustomAttributeDecoder(
                         return invalid(
                             DotNetClrCustomAttributeConstructorFailure.ATTRIBUTE_TYPE_RESOLUTION_FAILED,
                             resolution,
+                        )
+                }
+                attributeType = when (
+                    val view = attributeTypeView(resolvedAttributeType, emptyList())
+                ) {
+                    is CustomAttributeTypeViewResolution.Resolved -> view.view
+                    is CustomAttributeTypeViewResolution.Invalid ->
+                        return invalid(
+                            view.failure,
+                            signatureResolution = view.signatureResolution,
                         )
                 }
             }
@@ -263,29 +278,22 @@ class DotNetClrCustomAttributeDecoder(
                     DotNetClrCustomAttributeConstructorFailure.INVALID_CONSTRUCTOR_HANDLE
                 )
                 constructorName = memberReference.name
-                signature = when (val memberSignature = memberReference.signature) {
+                rawSignature = when (val memberSignature = memberReference.signature) {
                     is DotNetClrMemberReferenceSignature.Method -> memberSignature.signature
                     is DotNetClrMemberReferenceSignature.Field ->
                         return invalid(
                             DotNetClrCustomAttributeConstructorFailure.INVALID_MEMBER_REFERENCE_KIND
                         )
                 }
-                if (memberReference.parent.table != TYPE_DEF_TABLE &&
-                    memberReference.parent.table != TYPE_REF_TABLE
-                ) {
-                    return invalid(
-                        DotNetClrCustomAttributeConstructorFailure.UNSUPPORTED_MEMBER_REFERENCE_PARENT
-                    )
-                }
                 attributeType = when (
-                    val resolution =
-                        typeResolver.resolveTypeDefinition(assembly, memberReference.parent)
+                    val view = resolveAttributeTypeView(assembly, memberReference.parent)
                 ) {
-                    is DotNetClrTypeResolution.Resolved -> resolution.type
-                    is DotNetClrTypeResolution.Unresolved ->
+                    is CustomAttributeTypeViewResolution.Resolved -> view.view
+                    is CustomAttributeTypeViewResolution.Invalid ->
                         return invalid(
-                            DotNetClrCustomAttributeConstructorFailure.ATTRIBUTE_TYPE_RESOLUTION_FAILED,
-                            resolution,
+                            view.failure,
+                            typeResolution = view.typeResolution,
+                            signatureResolution = view.signatureResolution,
                         )
                 }
             }
@@ -294,26 +302,67 @@ class DotNetClrCustomAttributeDecoder(
                 DotNetClrCustomAttributeConstructorFailure.INVALID_CONSTRUCTOR_HANDLE
             )
         }
-        if (constructorName != ".ctor" || !signature.hasThis) {
+        if (constructorName != ".ctor" || !rawSignature.hasThis) {
             return invalid(DotNetClrCustomAttributeConstructorFailure.NOT_INSTANCE_CONSTRUCTOR)
         }
-        if (signature.callingConvention != DotNetClrSignatureCallingConvention.DEFAULT ||
-            signature.hasExplicitThis ||
-            signature.genericParameterCount != 0 ||
-            signature.returnType != DotNetClrTypeSignature.Void ||
-            signature.varargParameterStart != null
+        if (rawSignature.callingConvention != DotNetClrSignatureCallingConvention.DEFAULT ||
+            rawSignature.hasExplicitThis ||
+            rawSignature.genericParameterCount != 0 ||
+            rawSignature.returnType != DotNetClrTypeSignature.Void ||
+            rawSignature.varargParameterStart != null
         ) {
             return invalid(DotNetClrCustomAttributeConstructorFailure.INVALID_CONSTRUCTOR_SIGNATURE)
         }
-        if (attributeType.definition.isInterface) {
+        val resolvedSignature = when (
+            val resolution = signatureResolver.resolve(assembly, rawSignature)
+        ) {
+            is DotNetClrResolvedMethodSignatureResolution.Resolved -> resolution.signature
+            is DotNetClrResolvedMethodSignatureResolution.UnresolvedType ->
+                return invalid(
+                    DotNetClrCustomAttributeConstructorFailure
+                        .CONSTRUCTOR_SIGNATURE_RESOLUTION_FAILED,
+                    typeResolution = resolution.resolution,
+                )
+
+            is DotNetClrResolvedMethodSignatureResolution.Invalid ->
+                return invalid(
+                    DotNetClrCustomAttributeConstructorFailure
+                        .CONSTRUCTOR_SIGNATURE_RESOLUTION_FAILED,
+                    signatureResolution = resolution.resolution,
+                )
+        }
+        val effectiveSignature = when (
+            val substitution =
+                resolvedSignature.substituteClrTypeArguments(attributeType.arguments)
+        ) {
+            is DotNetClrResolvedMethodSignatureSubstitution.Substituted ->
+                substitution.signature
+
+            is DotNetClrResolvedMethodSignatureSubstitution.Invalid ->
+                return invalid(
+                    DotNetClrCustomAttributeConstructorFailure
+                        .CONSTRUCTOR_SIGNATURE_SUBSTITUTION_FAILED,
+                    signatureSubstitution = substitution.resolution,
+                )
+        }
+        if (effectiveSignature.parameterTypes.any(
+                DotNetClrResolvedTypeSignature::containsGenericParameter
+            )
+        ) {
+            return invalid(
+                DotNetClrCustomAttributeConstructorFailure
+                    .CONSTRUCTOR_SIGNATURE_IS_OPEN_GENERIC
+            )
+        }
+        if (attributeType.type.definition.isInterface) {
             return invalid(DotNetClrCustomAttributeConstructorFailure.ATTRIBUTE_TYPE_IS_INTERFACE)
         }
-        if (attributeType.definition.isAbstract) {
+        if (attributeType.type.definition.isAbstract) {
             return invalid(DotNetClrCustomAttributeConstructorFailure.ATTRIBUTE_TYPE_IS_ABSTRACT)
         }
         when (
             val hierarchy =
-                typeResolver.isSameOrDerivedFrom(attributeType, coreTypes.systemAttribute)
+                typeResolver.isSameOrDerivedFrom(attributeType.type, coreTypes.systemAttribute)
         ) {
             DotNetClrTypeHierarchyResolution.Matches -> Unit
             DotNetClrTypeHierarchyResolution.DoesNotMatch ->
@@ -343,7 +392,7 @@ class DotNetClrCustomAttributeDecoder(
             DotNetClrResolvedCustomAttributeConstructor(
                 sourceAssembly = assembly,
                 attributeType = attributeType,
-                signature = signature,
+                signature = effectiveSignature,
                 constructor = attribute.constructor,
             )
         )
@@ -380,7 +429,7 @@ class DotNetClrCustomAttributeDecoder(
                 ArrayList<DotNetClrCustomAttributeValue>(constructor.signature.parameterTypes.size)
             constructor.signature.parameterTypes.forEachIndexed { index, parameterType ->
                 val value = try {
-                    val valueType = fixedArgumentType(assembly, parameterType)
+                    val valueType = fixedArgumentType(parameterType)
                         ?: return unsupportedValue(
                             DotNetClrCustomAttributeValueUnsupported.FIXED_ARGUMENT_TYPE,
                             index,
@@ -410,13 +459,6 @@ class DotNetClrCustomAttributeDecoder(
                         DotNetClrCustomAttributeValueFailure.INVALID_ENUM_TYPE,
                         fixedArgumentIndex = index,
                         enumStorageFailure = failure.failure,
-                    )
-                } catch (failure: CustomAttributeResolvedSignatureFailure) {
-                    return invalidValue(
-                        DotNetClrCustomAttributeValueFailure
-                            .INVALID_FIXED_ARGUMENT_SIGNATURE,
-                        fixedArgumentIndex = index,
-                        signatureResolution = failure.resolution,
                     )
                 }
                 fixedArguments += value
@@ -463,24 +505,8 @@ class DotNetClrCustomAttributeDecoder(
     }
 
     private fun fixedArgumentType(
-        assembly: DotNetClrAssemblyMetadata,
-        type: DotNetClrTypeSignature,
-        isArrayElement: Boolean = false,
-    ): DotNetClrCustomAttributeValueType? {
-        val resolved = when (val resolution = signatureResolver.resolve(assembly, type)) {
-            is DotNetClrResolvedSignatureResolution.Resolved -> resolution.signature
-            is DotNetClrResolvedSignatureResolution.UnresolvedType ->
-                throw CustomAttributeTypeResolutionFailure(resolution.resolution)
-
-            is DotNetClrResolvedSignatureResolution.Invalid ->
-                throw CustomAttributeResolvedSignatureFailure(resolution)
-        }
-        return fixedArgumentType(resolved, isArrayElement)
-    }
-
-    private fun fixedArgumentType(
         type: DotNetClrResolvedTypeSignature,
-        isArrayElement: Boolean,
+        isArrayElement: Boolean = false,
     ): DotNetClrCustomAttributeValueType? =
         when (type) {
             is DotNetClrResolvedTypeSignature.Primitive -> {
@@ -965,7 +991,6 @@ class DotNetClrCustomAttributeDecoder(
         typeResolution: DotNetClrTypeResolution.Unresolved? = null,
         serializedTypeResolution: DotNetClrSerializedTypeResolution? = null,
         enumStorageFailure: DotNetClrEnumStorageFailure? = null,
-        signatureResolution: DotNetClrResolvedSignatureResolution.Invalid? = null,
     ): DotNetClrCustomAttributeValueDecoding.Invalid =
         DotNetClrCustomAttributeValueDecoding.Invalid(
             failure,
@@ -974,7 +999,6 @@ class DotNetClrCustomAttributeDecoder(
             typeResolution,
             serializedTypeResolution,
             enumStorageFailure,
-            signatureResolution,
         )
 
     private fun unsupportedValue(
@@ -983,17 +1007,136 @@ class DotNetClrCustomAttributeDecoder(
     ): DotNetClrCustomAttributeValueDecoding.Unsupported =
         DotNetClrCustomAttributeValueDecoding.Unsupported(unsupported, fixedArgumentIndex)
 
+    private fun resolveAttributeTypeView(
+        assembly: DotNetClrAssemblyMetadata,
+        handle: DotNetClrMetadataHandle,
+    ): CustomAttributeTypeViewResolution =
+        when (handle.table) {
+            TYPE_DEF_TABLE,
+            TYPE_REF_TABLE,
+            -> {
+                when (
+                    val resolution = typeResolver.resolveTypeDefinition(assembly, handle)
+                ) {
+                    is DotNetClrTypeResolution.Resolved ->
+                        attributeTypeView(resolution.type, emptyList())
+
+                    is DotNetClrTypeResolution.Unresolved ->
+                        CustomAttributeTypeViewResolution.Invalid(
+                            DotNetClrCustomAttributeConstructorFailure
+                                .ATTRIBUTE_TYPE_RESOLUTION_FAILED,
+                            typeResolution = resolution,
+                        )
+                }
+            }
+
+            TYPE_SPEC_TABLE -> {
+                val specification = assembly.typeSpecifications.singleOrNull { candidate ->
+                    candidate.handle == handle
+                }
+                if (specification == null) {
+                    when (
+                        val resolution = typeResolver.resolveTypeDefinition(assembly, handle)
+                    ) {
+                        is DotNetClrTypeResolution.Resolved ->
+                            CustomAttributeTypeViewResolution.Invalid(
+                                DotNetClrCustomAttributeConstructorFailure
+                                    .INVALID_ATTRIBUTE_TYPE_SIGNATURE
+                            )
+
+                        is DotNetClrTypeResolution.Unresolved ->
+                            CustomAttributeTypeViewResolution.Invalid(
+                                DotNetClrCustomAttributeConstructorFailure
+                                    .ATTRIBUTE_TYPE_RESOLUTION_FAILED,
+                                typeResolution = resolution,
+                            )
+                    }
+                } else {
+                    when (
+                        val resolution = signatureResolver.resolve(
+                            assembly,
+                            specification.signature,
+                        )
+                    ) {
+                        is DotNetClrResolvedSignatureResolution.Resolved -> {
+                            val signature = resolution.signature
+                            if (signature !is DotNetClrResolvedTypeSignature.GenericInstance ||
+                                signature.genericType.isValueType
+                            ) {
+                                CustomAttributeTypeViewResolution.Invalid(
+                                    DotNetClrCustomAttributeConstructorFailure
+                                        .INVALID_ATTRIBUTE_TYPE_SIGNATURE
+                                )
+                            } else {
+                                attributeTypeView(
+                                    signature.genericType.type,
+                                    signature.arguments,
+                                )
+                            }
+                        }
+
+                        is DotNetClrResolvedSignatureResolution.UnresolvedType ->
+                            CustomAttributeTypeViewResolution.Invalid(
+                                DotNetClrCustomAttributeConstructorFailure
+                                    .ATTRIBUTE_TYPE_RESOLUTION_FAILED,
+                                typeResolution = resolution.resolution,
+                            )
+
+                        is DotNetClrResolvedSignatureResolution.Invalid ->
+                            CustomAttributeTypeViewResolution.Invalid(
+                                DotNetClrCustomAttributeConstructorFailure
+                                    .INVALID_ATTRIBUTE_TYPE_SIGNATURE,
+                                signatureResolution = resolution,
+                            )
+                    }
+                }
+            }
+
+            else ->
+                CustomAttributeTypeViewResolution.Invalid(
+                    DotNetClrCustomAttributeConstructorFailure
+                        .UNSUPPORTED_MEMBER_REFERENCE_PARENT
+                )
+        }
+
+    private fun attributeTypeView(
+        type: DotNetClrResolvedTypeDefinition,
+        arguments: List<DotNetClrResolvedTypeSignature>,
+    ): CustomAttributeTypeViewResolution {
+        val genericArity = type.assembly.genericParameterDefinitions.count { parameter ->
+            parameter.owner == type.definition.handle
+        }
+        if (arguments.size != genericArity ||
+            arguments.any(DotNetClrResolvedTypeSignature::containsGenericParameter)
+        ) {
+            return CustomAttributeTypeViewResolution.Invalid(
+                DotNetClrCustomAttributeConstructorFailure.ATTRIBUTE_TYPE_IS_OPEN_GENERIC
+            )
+        }
+        return CustomAttributeTypeViewResolution.Resolved(
+            DotNetClrResolvedTypeView(type, arguments.toList())
+        )
+    }
+
     private fun invalid(
         failure: DotNetClrCustomAttributeConstructorFailure,
         typeResolution: DotNetClrTypeResolution.Unresolved? = null,
+        signatureResolution: DotNetClrResolvedSignatureResolution.Invalid? = null,
+        signatureSubstitution: DotNetClrResolvedSignatureSubstitution.Invalid? = null,
     ): DotNetClrCustomAttributeConstructorResolution.Invalid =
-        DotNetClrCustomAttributeConstructorResolution.Invalid(failure, typeResolution)
+        DotNetClrCustomAttributeConstructorResolution.Invalid(
+            failure,
+            typeResolution,
+            signatureResolution,
+            signatureSubstitution,
+        )
 
     private companion object {
         const val TYPE_REF_TABLE = 1
         const val TYPE_DEF_TABLE = 2
         const val METHOD_DEF_TABLE = 6
         const val MEMBER_REF_TABLE = 10
+        const val TYPE_SPEC_TABLE = 27
         const val CUSTOM_ATTRIBUTE_PROLOG = 1
         const val SERIALIZATION_TYPE_SZARRAY = 0x1d
         const val SERIALIZATION_TYPE_SYSTEM_TYPE = 0x50
@@ -1021,6 +1164,44 @@ class DotNetClrCustomAttributeDecoder(
         )
     }
 }
+
+private sealed interface CustomAttributeTypeViewResolution {
+    data class Resolved(
+        val view: DotNetClrResolvedTypeView,
+    ) : CustomAttributeTypeViewResolution
+
+    data class Invalid(
+        val failure: DotNetClrCustomAttributeConstructorFailure,
+        val typeResolution: DotNetClrTypeResolution.Unresolved? = null,
+        val signatureResolution: DotNetClrResolvedSignatureResolution.Invalid? = null,
+    ) : CustomAttributeTypeViewResolution
+}
+
+private fun DotNetClrResolvedTypeSignature.containsGenericParameter(): Boolean =
+    when (this) {
+        is DotNetClrResolvedTypeSignature.GenericParameter -> true
+        is DotNetClrResolvedTypeSignature.Pointer -> elementType.containsGenericParameter()
+        is DotNetClrResolvedTypeSignature.ByReference -> elementType.containsGenericParameter()
+        is DotNetClrResolvedTypeSignature.SzArray -> elementType.containsGenericParameter()
+        is DotNetClrResolvedTypeSignature.Array -> elementType.containsGenericParameter()
+        is DotNetClrResolvedTypeSignature.GenericInstance ->
+            arguments.any(DotNetClrResolvedTypeSignature::containsGenericParameter)
+
+        is DotNetClrResolvedTypeSignature.FunctionPointer ->
+            signature.returnType.containsGenericParameter() ||
+                    signature.parameterTypes.any(
+                        DotNetClrResolvedTypeSignature::containsGenericParameter
+                    )
+
+        is DotNetClrResolvedTypeSignature.Modified ->
+            unmodifiedType.containsGenericParameter()
+
+        DotNetClrResolvedTypeSignature.Void,
+        DotNetClrResolvedTypeSignature.TypedReference,
+        is DotNetClrResolvedTypeSignature.Primitive,
+        is DotNetClrResolvedTypeSignature.Named,
+        -> false
+    }
 
 private class CustomAttributeBlobReader(
     private val bytes: ByteArray,
@@ -1118,10 +1299,6 @@ private class CustomAttributeBlobFailure(
 
 private class CustomAttributeTypeResolutionFailure(
     val resolution: DotNetClrTypeResolution.Unresolved,
-) : Exception()
-
-private class CustomAttributeResolvedSignatureFailure(
-    val resolution: DotNetClrResolvedSignatureResolution.Invalid,
 ) : Exception()
 
 private class CustomAttributeSerializedTypeResolutionFailure(
