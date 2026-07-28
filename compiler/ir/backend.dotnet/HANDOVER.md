@@ -2190,23 +2190,37 @@ session state, process, and a curated task menu. Keep both files updated as you 
   ordinary and init properties, an exactly typed enum property nested in a closed generic owner,
   plus hostile field/property shapes. Synthetic selected metadata covers invalid arity,
   inheritance cycle/limit, duplicate accessors, wrong kind, type mismatch, and duplicate
-  assignment. Closed TypeSpec-owned generic attribute constructors remain the next structured
-  temporary boundary; constructor resolution must retain the constructed owner view and reuse
-  this signature foundation. The fresh strict gate is 871/0/0/0 across 16 XML suites (796
-  FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+  assignment. At this intermediate slice, closed TypeSpec-owned generic attribute constructors
+  remained the next structured temporary boundary; the later generic-attribute continuation
+  retains the constructed owner view and reuses this signature foundation. The fresh strict gate
+  was 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
+  tests).
 - The constructed-enum fixed-argument continuation now consumes the general resolved-signature
   model instead of maintaining the former decoder boundary. A constructor parameter such as
   `Generic<int>.NestedKind` retains its complete selected-graph constructed identity and exact
   `Int16` storage bits; primitive signature arguments resolve to the selected core assembly's
   `System.Int32`, so strongly typed and boxed serialized paths agree without host reflection.
-  Roslyn .NET 10 coverage exercises both representations in one attribute. A doctored missing type
-  argument returns `INVALID_FIXED_ARGUMENT_SIGNATURE` at fixed argument 23 with the expected and
-  actual generic arity instead of erasing to the open enum definition. The implementation reuses
-  the assembly-context-bearing resolver and performs no custom-attribute-local substitution.
-  Closed TypeSpec-owned generic attribute constructors remain the next structured temporary
-  boundary because constructor resolution must retain and substitute the constructed owner view.
-  The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
-  54 library integration tests).
+  Roslyn .NET 10 coverage exercises both representations in one attribute. The implementation
+  reuses the assembly-context-bearing resolver and performs no custom-attribute-local
+  substitution. The following generic-attribute continuation moves malformed constructor
+  signatures into constructor resolution, before fixed-argument decoding, and retains expected
+  versus actual arity there. The fresh strict gate at this slice was 871/0/0/0 across 16 XML
+  suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The closed-generic-attribute continuation removes the TypeSpec-owned constructor boundary.
+  Resolved custom-attribute constructors now carry a complete `DotNetClrResolvedTypeView` plus an
+  assembly-context-bearing method signature after owner-argument substitution; raw
+  assembly-relative handles never escape into value decoding or named-member validation. A real
+  Roslyn .NET 10 `GenericProbeAttribute<T>(T)` is applied as `<int>` and `<ExternalKind>`; its
+  fixed constructor argument and named `T Value` field both resolve through the same exact view,
+  including enum identity and `Int16` storage. Synthetic selected metadata separately rejects
+  wrong owner arity, an open owner argument, an array TypeSpec owner, out-of-range owner
+  substitution, a residual method generic parameter, and an unresolved constructor type.
+  Physical retention remains profile-neutral, but Kotlin-facing projection/emission of generic
+  attributes is gated to a profile with proven runtime support (`net10.0`), not claimed for
+  `net48` or the `netstandard2.0` portability floor. Full generic-constraint satisfaction remains
+  a recorded shared selected-graph constructed-type validator before stable generic-attribute
+  projection; do not implement it in this decoder. The fresh strict gate is 871/0/0/0 across 16
+  XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

@@ -348,11 +348,18 @@ landed shape as a compatibility constraint.
    and prove ancestry against the selected profile graph's exact `System.Attribute` TypeDef with
    the bounded cycle-safe type resolver. Never infer attribute identity from a suffix, a display
    name, or a host-runtime type. Semantic fixed/named argument decoding is the next layer and must
-   not create Kotlin annotations before import policy. A MemberRef constructor owned by TypeSpec
-   currently fails with a structured unsupported-parent result; do not approximate it as its open
-   generic TypeDef. Replace that boundary only with the general constructed-member substitution
-   model needed by the importer. Scalar fixed arguments are decoded from the resolved constructor
-   signature into typed values, never inferred from blob width. Preserve exact integral and
+   not create Kotlin annotations before import policy. A closed generic attribute constructor is
+   represented by its resolved TypeSpec owner view plus a resolved method signature after owner-
+   argument substitution; never approximate it as its open generic TypeDef. Reject an open,
+   wrong-arity, non-generic-instance, or value-type owner, unresolved signature, failed
+   substitution, or residual method type parameter before reading its value blob. Preserve this
+   physical metadata on every profile, but do not project or emit a generic attribute as a
+   portable/net48 Kotlin feature until runtime capability is proven; current supported semantic
+   projection is `net10.0`. CLR generic-constraint satisfaction belongs in one shared selected-
+   graph constructed-type validator, not an attribute-local approximation, and remains required
+   before stable generic-attribute projection. Scalar fixed arguments are decoded from the
+   resolved constructor signature into typed values, never inferred from blob width. Preserve
+   exact integral and
    IEEE-754 bits, strict nullable UTF-8 SerString semantics, and the assembly qualification of the
    constructor token. Nil is valid only for a no-argument constructor. One-dimensional arrays and
    tagged object values use the same typed decoder; arrays retain their element type when null or
@@ -379,13 +386,12 @@ landed shape as a compatibility constraint.
    get and set/init accessors. Preserve custom modifiers in the resolved signature; ignore them
    only for accessor shape equality, including the net10 init-only setter marker. Repeated
    assignment to the same resolved member, ambiguous rows/accessors, invalid arity, unresolved
-   edges, cycles, and traversal limits are structured invalid results. Generic base TypeSpecs are
-   substituted through the general resolved signature model. Closed TypeSpec-owned generic
-   attribute constructors remain structured unsupported until constructor resolution retains the
-   constructed owner view; do not approximate one as its open TypeDef. Constructor-typed fixed
-   enums may be closed generic instances: resolve their complete signature through that same
-   general model, retain exact constructed identity and storage, and report invalid arity as
-   malformed metadata. Do not erase them to the open TypeDef or add decoder-local substitution.
+   edges, cycles, and traversal limits are structured invalid results. Generic base TypeSpecs and
+   closed generic attribute owners are substituted through the same general resolved signature
+   model. Named-member lookup starts from the constructor's closed attribute view, so a field or
+   property of owner type `T` must match the exact substituted encoded value type. Constructor-
+   typed fixed enums may also be closed generic instances: retain complete constructed identity
+   and storage. Do not erase either path to the open TypeDef or add decoder-local substitution.
    Serialized CLR type names are parsed structurally before binding: retain escaped top-level and
    nested metadata names, per-component arity, recursive generic arguments, normalized
    pointer/byref/array modifiers, and the AssemblyName display-name tail. Do not call host

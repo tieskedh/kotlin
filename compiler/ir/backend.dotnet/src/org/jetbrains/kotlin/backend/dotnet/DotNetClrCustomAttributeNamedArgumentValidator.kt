@@ -94,15 +94,13 @@ class DotNetClrCustomAttributeNamedArgumentValidator(
             )
         }
         val attributeType = attribute.constructor.attributeType
-        val attributeParameters = genericParameters(attributeType)
+        val attributeParameters = genericParameters(attributeType.type)
             ?: return invalid(
                 DotNetClrCustomAttributeNamedArgumentValidationFailure
                     .INVALID_GENERIC_PARAMETER_NUMBERING,
                 0,
             )
-        if (attributeParameters.isNotEmpty()) {
-            // Constructor resolution does not yet admit a TypeSpec parent, so it cannot carry the
-            // closed arguments required to validate a generic attribute declaration.
+        if (attributeParameters.size != attributeType.arguments.size) {
             return invalid(
                 DotNetClrCustomAttributeNamedArgumentValidationFailure
                     .OPEN_GENERIC_ATTRIBUTE_TYPE,
@@ -110,14 +108,13 @@ class DotNetClrCustomAttributeNamedArgumentValidator(
             )
         }
 
-        val initialView = DotNetClrResolvedTypeView(attributeType, emptyList())
         val validated = ArrayList<DotNetClrValidatedCustomAttributeNamedArgument>(
             attribute.namedArguments.size
         )
         val seenMembers = mutableSetOf<ResolvedMemberKey>()
         attribute.namedArguments.forEachIndexed { index, argument ->
             val member = try {
-                resolveMember(initialView, argument)
+                resolveMember(attributeType, argument)
             } catch (failure: NamedArgumentValidationException) {
                 return invalid(
                     failure.failure,
