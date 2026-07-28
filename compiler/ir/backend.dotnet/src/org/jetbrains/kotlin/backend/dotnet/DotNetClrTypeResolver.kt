@@ -21,6 +21,12 @@ class DotNetClrResolvedTypeDefinition(
 ) {
     fun hasSameIdentityAs(other: DotNetClrResolvedTypeDefinition): Boolean =
         assembly === other.assembly && definition.handle == other.definition.handle
+
+    override fun equals(other: Any?): Boolean =
+        other is DotNetClrResolvedTypeDefinition && hasSameIdentityAs(other)
+
+    override fun hashCode(): Int =
+        31 * System.identityHashCode(assembly) + definition.handle.hashCode()
 }
 
 enum class DotNetClrTypeResolutionFailure {
