@@ -190,21 +190,27 @@ landed shape as a compatibility constraint.
   reference. The POC-only `-Xdotnet-produce-stdlib -d <directory>` route now follows JS/Wasm's
   explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: with no user source
   inputs, one resolved frontend/IR run serializes the compiler-owned declarations and emits the
-  self-describing profile-specific DLL. It is never an executable-build
+  self-describing profile-specific `Kotlin.Stdlib.dll` together with its
+  `Kotlin.Runtime.dll`. It is never an executable-build
   side effect. The artifact boundary follows JVM's single native library product while the
   embedded payload reuses the common KLIB serialization used by JS/Wasm/Native. Every assembled
-  executable still receives both platform dlls;
+  executable still receives both platform DLLs;
   same-run stdlib production remains bootstrap compatibility machinery. Repeated standalone builds
   must produce byte-identical embedded Kotlin metadata payloads, compiler-owned IL, and
   deterministic PE for each profile; variants are not required to be byte-identical to one
   another. Once a distribution-owned default pair is populated in Kotlin home, same-run production
   must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
-  Ordinary compilation prefers the selected-profile DLL, then
-  `<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.dll` for either executable profile;
-  absence still falls back to injected sources. Repository production is deliberately
+  Ordinary compilation prefers the selected-profile runtime/stdlib pair, then the pair under
+  `<kotlin-home>/lib/dotnet/netstandard2.0` for either executable profile. A discovered stdlib
+  without its sibling runtime is an invalid partial installation, not a fallback trigger. The
+  compiler authenticates the runtime's physical Assembly row and public profile manifest without
+  loading it as code, then executable packaging copies both selected DLLs byte-for-byte. Absence
+  of every installed pair still falls back to injected stdlib sources and a same-run runtime.
+  Repository production is deliberately
   opt-in: `:kotlin-compiler:produceDotNetStdlib` runs the compiler from the assembled distribution
-  and writes all three bound variants plus diagnostic IL under `prepare/compiler/build/dotnet-stdlib/<profile>`, while
-  `:kotlin-compiler:installDotNetStdlib` installs each DLL into its Kotlin-home profile
+  and writes all three bound pairs plus diagnostic stdlib IL under
+  `prepare/compiler/build/dotnet-stdlib/<profile>`, while
+  `:kotlin-compiler:installDotNetStdlib` installs each DLL pair into its Kotlin-home profile
   directory. Neither task is a dependency of ordinary `dist`/`distKotlinc`, so a normal build does
   not acquire either ILAsm requirement. Because `distKotlinc` is a whole-home `Sync`, a later
   standalone invocation intentionally removes the optional variants; run the install task afterward
@@ -2083,8 +2089,11 @@ landed shape as a compatibility constraint.
   list is unpopulated, so runtime identity recognition uses the stable FqName and validates arity
   on the actual `IrSimpleType` use site. The target stdlib is accepted as executable only when its
   manifest binds the assembly name, version, neutral culture, null public-key token, file, and
-  runtime target to the reserved artifact; the compiler then packages the sibling DLL for an
-  executable consumer. This is not yet general physical-member metadata for arbitrary libraries.
+  runtime target to the reserved artifact. An installed selection additionally requires the
+  same-profile sibling `Kotlin.Runtime.dll`; its physical Assembly row and public
+  `Kotlin.CSharpImplementationManifest` profile contract are validated before both selected DLLs
+  are packaged unchanged for an executable consumer. This is not yet general physical-member
+  metadata for arbitrary libraries.
 - Classified CLR exception model (decision:
   `docs/decisions/draft-adr-classified-clr-exception-model.md`; the hybrid ADR is superseded):
   every catchable value remains its original `System.Exception` object. The mapping registry owns

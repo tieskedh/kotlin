@@ -148,6 +148,7 @@ internal object DotNetRuntimeLibrary {
         val outputDirectory = outputAnchor.parentFile ?: File(".")
         outputDirectory.mkdirs()
         val output = outputDirectory.resolve(ASSEMBLY_FILE_NAME)
+        output.delete()
         val ilFile = File.createTempFile("Kotlin.Runtime-", ".il", outputDirectory)
         val managedResources = cSharpImplementationManifest?.let { manifest ->
             require(manifest.assemblyName == ASSEMBLY_NAME) {

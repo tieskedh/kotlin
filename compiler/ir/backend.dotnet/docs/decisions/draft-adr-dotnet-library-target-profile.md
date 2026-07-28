@@ -59,9 +59,11 @@ Kotlin-owned platform artifacts are multi-targeted:
 ```
 
 The variants share Kotlin logical identities and source contracts but may have different physical
-implementation and interface-body placement. Each self-describing DLL records its exact profile
-in embedded Kotlin metadata; resolution rejects incompatible variants. Packaging may later use a
-variant map, but it must preserve this selection and binding rule.
+implementation and interface-body placement. `Kotlin.Stdlib.dll` records its exact profile in
+embedded Kotlin metadata. `Kotlin.Runtime.dll`, which owns no Kotlin KLIB declarations, records
+the same profile in its public versioned C# implementation contract and binds that contract to its
+physical Assembly row. Resolution rejects incompatible or partial pairs without loading target
+code. Packaging may later use a variant map, but it must preserve this selection and binding rule.
 
 An application deploys exactly one `Kotlin.Runtime` and one `Kotlin.Stdlib` variant. The `net48`
 and `net10.0` variants must each be a binary superset of the `netstandard2.0` platform surface so a
@@ -176,10 +178,11 @@ protocol whose ADR names that representation. The C# authoring contract currentl
 `InternalsVisibleTo`, `KotlinCompilerAbiAttribute`, and `EditorBrowsable(Never)` blobs. That
 bounded protocol rule does not turn every ordinary attribute blob into compiler ABI.
 
-The repository's opt-in stdlib producer and installer create all three profile variants under
-their corresponding `lib/dotnet/<profile>` directories. A focused integration lane proves that a
-single `netstandard2.0` stdlib DLL is discovered as fallback, compiled against, assembled, and
-executed by both `net48` and `net10.0` applications.
+The repository's opt-in platform producer and installer create all three runtime/stdlib profile
+pairs under their corresponding `lib/dotnet/<profile>` directories. A focused integration lane
+proves that one `netstandard2.0` pair is discovered as fallback, compiled against, copied
+byte-for-byte, assembled, and executed by both `net48` and `net10.0` applications. Missing or
+wrong-profile runtime siblings are rejected rather than silently regenerated.
 
 The surface comparison runs as isolated test tooling under CoreCLR, loading each profile pair in
 its own assembly-load context. It consumes assembled PEs rather than rendered-IL substrings and

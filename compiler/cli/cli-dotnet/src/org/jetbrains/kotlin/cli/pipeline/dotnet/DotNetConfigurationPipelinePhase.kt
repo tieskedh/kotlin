@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetFriendAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
+import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
@@ -295,6 +296,15 @@ private fun CompilerConfiguration.addInstalledDotNetStdlib(): Boolean {
         val directory = DotNetStdlibArtifact.distributionDirectory(kotlinLibDirectory, targetFramework)
         val implementationFile = directory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
         if (!implementationFile.isFile) continue
+        val runtimeFile = directory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+        if (!runtimeFile.isFile) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Installed Kotlin/.NET platform profile '$targetFramework' is incomplete: " +
+                        "'${implementationFile.path}' has no sibling '${DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME}'.",
+            )
+            return true
+        }
         add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(implementationFile))
         return true
     }
