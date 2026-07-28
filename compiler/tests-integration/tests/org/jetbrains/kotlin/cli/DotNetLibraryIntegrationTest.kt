@@ -58,6 +58,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeModifier
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameParser
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameParsing
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameUnsupported
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeHierarchyResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeReference
@@ -115,6 +120,164 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
+    @Test
+    fun testParsesClrSerializedTypeNames() {
+        val assemblyQualified = (
+                DotNetClrSerializedTypeNameParser.parse(
+                    "Forwarded.ExternalKind, ForwardDestination, Version=1.0.0.0, " +
+                            "Culture=neutral, PublicKeyToken=null"
+                ) as DotNetClrSerializedTypeNameParsing.Parsed
+                ).type
+        assertEquals("Forwarded", assemblyQualified.namedType.namespaceName)
+        assertEquals(
+            "ExternalKind",
+            assemblyQualified.namedType.topLevelType.metadataName,
+        )
+        assertEquals(
+            "ForwardDestination, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+            assemblyQualified.assemblyDisplayName,
+        )
+
+        val escapedNested = (
+                DotNetClrSerializedTypeNameParser.parse(
+                    "Ozzy.Out\\+Back.Kangaroo+Wallaby\\+Leaf"
+                ) as DotNetClrSerializedTypeNameParsing.Parsed
+                ).type
+        assertEquals("Ozzy.Out+Back", escapedNested.namedType.namespaceName)
+        assertEquals("Kangaroo", escapedNested.namedType.topLevelType.metadataName)
+        assertEquals(
+            listOf("Wallaby+Leaf"),
+            escapedNested.namedType.nestedTypes.map { part -> part.metadataName },
+        )
+
+        val constructed = (
+                DotNetClrSerializedTypeNameParser.parse(
+                    "System.Collections.Generic.Dictionary`2" +
+                            "[[System.String, System.Private.CoreLib]," +
+                            "[Forwarded.Outer+Inner, ForwardDestination]][,][]*&"
+                ) as DotNetClrSerializedTypeNameParsing.Parsed
+                ).type
+        assertEquals(2, constructed.namedType.totalGenericArity)
+        assertEquals(2, constructed.genericArguments.size)
+        assertEquals(
+            "System.Private.CoreLib",
+            constructed.genericArguments[0].assemblyDisplayName,
+        )
+        assertEquals(
+            listOf("Inner"),
+            constructed.genericArguments[1].namedType.nestedTypes
+                .map { part -> part.metadataName },
+        )
+        assertEquals(
+            listOf(
+                DotNetClrSerializedTypeModifier.MdArray(2),
+                DotNetClrSerializedTypeModifier.SzArray,
+                DotNetClrSerializedTypeModifier.Pointer,
+                DotNetClrSerializedTypeModifier.ByReference,
+            ),
+            constructed.modifiers,
+        )
+
+        val starDimensions = (
+                DotNetClrSerializedTypeNameParser.parse(
+                    "System.Int32[*,*]"
+                ) as DotNetClrSerializedTypeNameParsing.Parsed
+                ).type
+        val commaDimensions = (
+                DotNetClrSerializedTypeNameParser.parse(
+                    "System.Int32[,]"
+                ) as DotNetClrSerializedTypeNameParsing.Parsed
+                ).type
+        assertEquals(starDimensions, commaDimensions)
+
+        val openGeneric = (
+                DotNetClrSerializedTypeNameParser.parse(
+                    "System.Collections.Generic.List`1, System.Private.CoreLib"
+                ) as DotNetClrSerializedTypeNameParsing.Parsed
+                ).type
+        assertEquals(1, openGeneric.namedType.totalGenericArity)
+        assertTrue(openGeneric.genericArguments.isEmpty())
+        val digitLeadingArgument = (
+                DotNetClrSerializedTypeNameParser.parse(
+                    "Example.Box`1[123Type]"
+                ) as DotNetClrSerializedTypeNameParsing.Parsed
+                ).type
+        assertEquals(
+            "123Type",
+            digitLeadingArgument.genericArguments.single()
+                .namedType.topLevelType.metadataName,
+        )
+        val quotedAssemblyArgument = (
+                DotNetClrSerializedTypeNameParser.parse(
+                    "Example.Box`1[[System.String, \"Odd]Assembly\"]]"
+                ) as DotNetClrSerializedTypeNameParsing.Parsed
+                ).type
+        assertEquals(
+            "\"Odd]Assembly\"",
+            quotedAssemblyArgument.genericArguments.single().assemblyDisplayName,
+        )
+        val openGenericArray = (
+                DotNetClrSerializedTypeNameParser.parse(
+                    "Example.Pair`2[,]"
+                ) as DotNetClrSerializedTypeNameParsing.Parsed
+                ).type
+        assertTrue(openGenericArray.genericArguments.isEmpty())
+        assertEquals(
+            listOf(DotNetClrSerializedTypeModifier.MdArray(2)),
+            openGenericArray.modifiers,
+        )
+
+        val invalidEscape =
+            DotNetClrSerializedTypeNameParser.parse("Broken\\qName") as
+                    DotNetClrSerializedTypeNameParsing.Invalid
+        assertEquals(
+            DotNetClrSerializedTypeNameFailure.INVALID_ESCAPE,
+            invalidEscape.failure,
+        )
+        val wrongArity =
+            DotNetClrSerializedTypeNameParser.parse(
+                "Example.Pair`2[System.String]"
+            ) as DotNetClrSerializedTypeNameParsing.Invalid
+        assertEquals(
+            DotNetClrSerializedTypeNameFailure.GENERIC_ARGUMENT_COUNT_MISMATCH,
+            wrongArity.failure,
+        )
+        val emptyArgument =
+            DotNetClrSerializedTypeNameParser.parse(
+                "Example.Pair`2[System.String,]"
+            ) as DotNetClrSerializedTypeNameParsing.Invalid
+        assertEquals(
+            DotNetClrSerializedTypeNameFailure.EMPTY_GENERIC_ARGUMENT,
+            emptyArgument.failure,
+        )
+        val invalidByReference =
+            DotNetClrSerializedTypeNameParser.parse("System.Int32&&") as
+                    DotNetClrSerializedTypeNameParsing.Invalid
+        assertEquals(
+            DotNetClrSerializedTypeNameFailure.INVALID_BY_REFERENCE_SHAPE,
+            invalidByReference.failure,
+        )
+        val reflectionEmitBound =
+            DotNetClrSerializedTypeNameParser.parse("System.Int32[0..5]") as
+                    DotNetClrSerializedTypeNameParsing.Unsupported
+        assertEquals(
+            DotNetClrSerializedTypeNameUnsupported.REFLECTION_EMIT_ARRAY_BOUND,
+            reflectionEmitBound.unsupported,
+        )
+        val excessiveNestingName = buildString {
+            repeat(65) { append("Example.Box`1[") }
+            append("System.Int32")
+            repeat(65) { append(']') }
+        }
+        val excessiveNesting =
+            DotNetClrSerializedTypeNameParser.parse(excessiveNestingName) as
+                    DotNetClrSerializedTypeNameParsing.Invalid
+        assertEquals(
+            DotNetClrSerializedTypeNameFailure.NESTING_LIMIT_EXCEEDED,
+            excessiveNesting.failure,
+        )
+    }
+
     @Test
     fun testReadsPhysicalClrMetadataAndSignatures() {
         val frameworkIlasm = DotNetIlAssembler.findFrameworkIlasm()
