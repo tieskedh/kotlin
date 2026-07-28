@@ -303,6 +303,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals("2.3.4.5", metadata.identity.version)
             assertEquals("neutral", metadata.identity.culture)
             assertFalse(metadata.identity.hasPublicKey)
+            assertTrue(metadata.identity.publicKey.isEmpty())
+            assertTrue(metadata.identity.publicKeyToken.isEmpty())
 
             val coreLibrary = metadata.assemblyReferences.single { it.name == "mscorlib" }
             assertEquals("neutral", coreLibrary.culture)
@@ -648,6 +650,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 val frameworkCoreMetadata = DotNetClrMetadataReader.read(
                     checkNotNull(frameworkIlasm).parentFile.resolve("mscorlib.dll")
                 )
+                assertTrue(coreLibrary.publicKeyOrToken.isEmpty())
+                assertEquals(8, frameworkCoreMetadata.identity.publicKeyToken.size)
                 val resolver = DotNetClrTypeResolver(
                     DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
                         if (sourceAssembly === metadata && reference.name == "mscorlib") {
@@ -961,6 +965,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(coreAssembly.isFile) { "Missing profile core assembly '${coreAssembly.path}'" }
             val coreMetadata = DotNetClrMetadataReader.read(coreAssembly)
             assertEquals(entry.second, coreMetadata.identity.name)
+            assertTrue(coreMetadata.identity.hasPublicKey)
+            assertTrue(coreMetadata.identity.publicKey.isNotEmpty())
+            assertEquals(8, coreMetadata.identity.publicKeyToken.size)
             assertTrue(coreMetadata.typeDefinitions.size > 100)
             assertTrue(coreMetadata.fieldDefinitions.size > 100)
             assertTrue(coreMetadata.methodDefinitions.size > 100)
@@ -1068,6 +1075,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             toolchain.referenceDirectory.resolve("System.Runtime.dll")
         assertTrue(systemRuntimeAssembly.isFile)
         val systemRuntimeMetadata = DotNetClrMetadataReader.read(systemRuntimeAssembly)
+        val systemRuntimeReference = destinationMetadata.assemblyReferences.single { reference ->
+            reference.name == systemRuntimeMetadata.identity.name
+        }
+        assertEquals(
+            systemRuntimeMetadata.identity.publicKeyToken,
+            systemRuntimeReference.publicKeyOrToken,
+        )
         var facadeConsumerMetadata: DotNetClrAssemblyMetadata? = null
         val binder = DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
             when {
@@ -1154,7 +1168,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     name = name,
                     version = "1.0.0.0",
                     culture = "neutral",
-                    hasPublicKey = false,
+                    publicKey = emptyList(),
+                    publicKeyToken = emptyList(),
                 ),
                 assemblyReferences = assemblyReferences,
                 typeReferences = emptyList(),

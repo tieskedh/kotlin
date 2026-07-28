@@ -1927,6 +1927,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   cross-module index. All three real repository profile tasks pass. The fresh strict gate is
   868/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 51 library integration
   tests).
+- The strong-assembly-identity continuation replaces the physical reader's public-key boolean with
+  the Assembly definition's full key plus computed eight-byte token (`hasPublicKey` remains a
+  derived convenience). Real signed mscorlib/System.Runtime definitions and a Roslyn System.Runtime
+  edge pin the token. The minimal Framework ILAsm AssemblyRef deliberately has no token, proving
+  that identity retention is not an invented exact-match binder; build/profile resolution still
+  selects the edge. This is required before decoded attribute types can carry stable producer
+  identity. The fresh strict gate is 870/0/0/0 across 16 XML suites (796 FIR/IL/box,
+  21 generated CLI, and 53 library integration tests).
 - The CLR-importer continuation begins the next P1 foundation at the physical metadata boundary.
   A shared bounded PE/ECMA-335 engine now serves both the existing embedded-resource loader and a
   read-only CLR model; it exposes assembly identity, AssemblyRef, TypeRef, TypeDef,

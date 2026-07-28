@@ -6,6 +6,7 @@ import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
+import java.security.MessageDigest
 import kotlin.math.max
 
 data class DotNetManagedResource(
@@ -31,8 +32,12 @@ data class DotNetManagedAssemblyIdentity(
     val name: String,
     val version: String,
     val culture: String,
-    val hasPublicKey: Boolean,
-)
+    val publicKey: List<Int>,
+    val publicKeyToken: List<Int>,
+) {
+    val hasPublicKey: Boolean
+        get() = publicKey.isNotEmpty()
+}
 
 object DotNetClrMetadataReader {
     fun read(file: File): DotNetClrAssemblyMetadata =
@@ -392,9 +397,9 @@ private object DotNetPeMetadataReader {
             val nameIndex = readIndex(position, table.indexSizes.stringIndexSize)
             position += table.indexSizes.stringIndexSize
             val cultureIndex = readIndex(position, table.indexSizes.stringIndexSize)
-            val publicKeySize = readBlobHeapSize(blobs, publicKeyIndex)
+            val publicKey = readBlobHeap(blobs, publicKeyIndex)
             val hasPublicKeyFlag = flags and ASSEMBLY_PUBLIC_KEY_FLAG != 0L
-            if (hasPublicKeyFlag != (publicKeySize != 0L)) {
+            if (hasPublicKeyFlag != publicKey.isNotEmpty()) {
                 malformed("Assembly public-key flag and blob do not agree")
             }
             val name = readStringHeap(strings, nameIndex)
@@ -403,7 +408,8 @@ private object DotNetPeMetadataReader {
                 name = name,
                 version = "$major.$minor.$build.$revision",
                 culture = readStringHeap(strings, cultureIndex).ifEmpty { "neutral" },
-                hasPublicKey = hasPublicKeyFlag,
+                publicKey = publicKey.map { byte -> byte.toInt() and 0xff },
+                publicKeyToken = computePublicKeyToken(publicKey),
             )
         }
 
@@ -451,6 +457,14 @@ private object DotNetPeMetadataReader {
                         .map { byte -> byte.toInt() and 0xff },
                 )
             }
+        }
+
+        private fun computePublicKeyToken(publicKey: ByteArray): List<Int> {
+            if (publicKey.isEmpty()) return emptyList()
+            val digest = MessageDigest.getInstance("SHA-1").digest(publicKey)
+            return digest.takeLast(PUBLIC_KEY_TOKEN_SIZE)
+                .asReversed()
+                .map { byte -> byte.toInt() and 0xff }
         }
 
         private fun readTypeReferences(
@@ -2326,6 +2340,7 @@ private object DotNetPeMetadataReader {
     private const val MAX_SIGNATURE_DEPTH = 128
     private const val MAX_SIGNATURE_BLOB_SIZE = 1024 * 1024
     private const val MAX_CUSTOM_ATTRIBUTE_BLOB_SIZE = 64 * 1024 * 1024
+    private const val PUBLIC_KEY_TOKEN_SIZE = 8
     private const val ELEMENT_TYPE_VOID = 0x01
     private const val ELEMENT_TYPE_BOOLEAN = 0x02
     private const val ELEMENT_TYPE_CHAR = 0x03

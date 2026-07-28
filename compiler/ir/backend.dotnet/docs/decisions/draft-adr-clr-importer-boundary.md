@@ -302,6 +302,20 @@ This row layer remains profile-neutral and does not turn a CLR attribute into a 
 The next slice resolves constructors and decodes fixed and named arguments into semantic values;
 only that decoded form participates in ordinary attribute comparison.
 
+The assembly-identity continuation retains the Assembly definition's full public key and computes
+its standard eight-byte public-key token. The earlier `hasPublicKey` boolean was insufficient for
+resolved foreign type identity: same name/version/culture is not a complete strong name. JVM and
+KLIB dependency layers likewise retain the producer identity chosen by the dependency graph;
+the CLR-specific addition is its strong-name key/token.
+
+This does not turn the physical resolver into an assembly binder. An AssemblyRef is allowed to
+omit its key/token, as the deliberately minimal Framework ILAsm fixture does, and .NET binding can
+apply profile-owned version/unification policy. The build frontend still selects the edge. The
+resolved destination nevertheless retains its complete producer identity for diagnostics and
+later semantic attribute type keys. Real signed `mscorlib` and `System.Runtime` definitions pin
+non-empty keys and eight-byte tokens; a Roslyn .NET 10 AssemblyRef independently matches the
+computed destination token.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
