@@ -319,7 +319,17 @@ landed shape as a compatibility constraint.
    unique, and constraint rows remain contiguous by owner. Do not reinterpret
    ReferenceTypeConstraint as Kotlin non-nullability, DefaultConstructorConstraint as Kotlin
    syntax, or AllowByRefLike as ordinary Kotlin generics. TypeSpec constraints remain unresolved
-   until the cycle-safe, profile-aware import resolver. MemberRef rows preserve their exact
+   until the cycle-safe, profile-aware import resolver. InterfaceImpl rows separately preserve
+   their own token, exact
+   implementing TypeDef, and TypeDef/TypeRef/TypeSpec interface token; never infer them from
+   members or erase a TypeSpec interface to its open TypeDef. Resolve an immediate imported
+   hierarchy only as assembly-context-bearing type views: substitute the current owner's
+   arguments through base/interface TypeSpecs, retain each InterfaceImpl row beside its resolved
+   view, and reject arity, resolution, non-nominal shape, method-parameter scope, and
+   class/interface mismatches structurally. This physical hierarchy operation is profile-neutral;
+   DIM body placement does not alter nominal interface identity. Transitive assignability and CLR
+   variance are a later shared selected-graph operation, not reuse of the module-local
+   `DotNetIlClassInfo` codegen graph and not FIR projection. MemberRef rows preserve their exact
    TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and closed
    method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely
    allow call-site vararg sentinels; FieldRef signatures use the reusable FieldSig model and

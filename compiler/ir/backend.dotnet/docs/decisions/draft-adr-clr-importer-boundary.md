@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint resolution, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy-edge resolution, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -746,6 +746,50 @@ owner substitution outside the argument range, an unresolved nominal token, and 
 numbering. The [official GenericParameterAttributes contract](https://learn.microsoft.com/en-us/dotnet/api/system.reflection.genericparameterattributes?view=net-10.0)
 is the source of truth for the retained special flags.
 
+The twenty-second slice retains InterfaceImpl rows and resolves immediate hierarchy edges as exact
+constructed views.
+
+1. JVM import retains generic superclass and interface signatures, while KLIB-backed targets
+   retain Kotlin supertypes by declaration identity. Their type systems substitute the current
+   owner's arguments through those edges before subtype checking. They do not infer implemented
+   interfaces from member names. The .NET importer follows that same declared-edge model.
+2. CLR metadata differs physically: the single superclass edge is TypeDef.Extends, while every
+   directly implemented or inherited interface is a separate InterfaceImpl row. Its interface
+   column is a TypeDefOrRef coded token and may therefore be a TypeSpec containing the complete
+   reified generic instantiation. InterfaceImpl itself has a metadata token and may own custom
+   attributes. Erasing the row to its target TypeDef would lose both the exact interface view and
+   its attachment identity. The
+   [official System.Reflection.Metadata contract](https://learn.microsoft.com/en-us/dotnet/api/system.reflection.metadata.interfaceimplementation?view=net-10.0)
+   confirms the TypeDefinition, TypeReference, or TypeSpecification target forms.
+3. Kotlin Common is unchanged. These are foreign physical supertype edges, not Kotlin synthetic
+   supertypes, override decisions, or a new subtyping rule. A later FIR policy may project a valid
+   edge; malformed CLR hierarchy metadata never becomes a Kotlin declaration.
+4. InterfaceImpl, TypeDef.Extends, TypeSpec, and owner substitution have the same metadata meaning
+   on `net48`, `netstandard2.0`, and `net10.0`. DIM availability can change where an interface
+   default body lives, but it does not change which nominal interface instantiation a type
+   implements. Profile-specific API selection remains the build frontend's responsibility.
+5. The implementation follows the existing importer layering. The PE reader retains an immutable
+   `DotNetClrInterfaceImplementation` row. `DotNetClrTypeViewResolver` resolves a TypeDef/TypeRef
+   or structural TypeSpec in its owning assembly and substitutes the declaring view's arguments.
+   `DotNetClrTypeHierarchyViewResolver` then resolves the immediate base and ordered interfaces,
+   with structured failures for arity, resolution, non-nominal TypeSpecs, illegal method
+   parameters, and class/interface shape. Neither layer performs FIR projection or transitive
+   assignability.
+6. The core-team choice is to preserve the exact row and exact constructed view, and to reject
+   malformed hierarchy shape before subtype reasoning. A display-name graph or reuse of the
+   module-local IL emitter's `DotNetIlClassInfo` would mix imported selected-assembly identity with
+   current-module code-generation state. Variance-aware transitive assignability remains the next
+   shared operation on this resolved graph.
+
+The dual-ILAsm fixture proves profile-neutral retention and resolution of
+`IntArrayBox : IBox<int[]>` and owner substitution for
+`GenericBox<T> : GenericBase<T[]>, IBox<T[]>`. Real Roslyn .NET 10 metadata proves that
+`ProbeConstraintValue` physically implements
+`IProbeConstraint<ProbeConstraintValue>`, matching the separately resolved constraint. Hostile
+selected metadata covers owner and interface arity, out-of-range owner substitution, illegal
+method parameters, non-nominal TypeSpecs, a class in an InterfaceImpl row, an interface as a class
+base, and an interface with a TypeDef.Extends edge.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -808,6 +852,8 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Physical FieldDef preservation on the reusable FieldSig model: **Correct direction**.
 - Physical Property/PropertyMap/MethodSemantics preservation: **Correct direction**.
 - Physical GenericParam/GenericParamConstraint preservation: **Correct direction**.
+- Physical InterfaceImpl preservation with its own attachment token:
+  **Correct direction**.
 - Exact custom-attribute constructor and `System.Attribute` hierarchy resolution:
   **Correct direction**.
 - Closed TypeSpec-owned generic attribute identity and constructor substitution:
@@ -815,6 +861,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Assembly-context-bearing constructed-type constraint resolution and owner substitution:
   **Correct direction**.
 - Keeping direct nominal constraints distinct from TypeSpec signatures:
+  **Correct direction**.
+- Assembly-context-bearing immediate hierarchy views with owner substitution:
+  **Correct direction**.
+- Keeping imported hierarchy resolution separate from module-local IL codegen assignability:
   **Correct direction**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.

@@ -74,6 +74,18 @@ data class DotNetClrTypeDefinition(
 }
 
 /**
+ * One physical InterfaceImpl row.
+ *
+ * [interfaceType] remains its exact TypeDefOrRef handle. In particular, a TypeSpec handle retains
+ * the implemented generic instantiation instead of erasing it to the interface TypeDef.
+ */
+data class DotNetClrInterfaceImplementation(
+    val handle: DotNetClrMetadataHandle,
+    val implementingType: DotNetClrMetadataHandle,
+    val interfaceType: DotNetClrMetadataHandle,
+)
+
+/**
  * Physical ExportedType row. [typeDefinitionId] is only the ECMA-335 hint into another module's
  * TypeDef table; it is not a metadata token in this PE image.
  */
@@ -469,6 +481,7 @@ data class DotNetClrAssemblyMetadata(
     val assemblyReferences: List<DotNetClrAssemblyReference>,
     val typeReferences: List<DotNetClrTypeReference>,
     val typeDefinitions: List<DotNetClrTypeDefinition>,
+    val interfaceImplementations: List<DotNetClrInterfaceImplementation>,
     val exportedTypes: List<DotNetClrExportedType>,
     val typeSpecifications: List<DotNetClrTypeSpecification>,
     val fieldDefinitions: List<DotNetClrFieldDefinition>,

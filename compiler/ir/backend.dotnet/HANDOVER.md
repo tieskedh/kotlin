@@ -2237,6 +2237,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   remain one shared selected-graph validator for every foreign constructed type, not logic owned
   by custom attributes. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box,
   21 generated CLI, and 54 library integration tests).
+- The imported-hierarchy-edge continuation retains physical InterfaceImpl rows with their own
+  attachment token, implementing TypeDef, and exact TypeDef/TypeRef/TypeSpec interface target.
+  The general type-view resolver resolves each edge in its owning assembly and substitutes the
+  current owner's arguments without erasing a constructed interface. The immediate hierarchy
+  resolver preserves the base view plus ordered InterfaceImpl/view pairs and returns structured
+  failures for owner/target arity, unresolved or non-nominal TypeSpecs, illegal method parameters,
+  and class/interface shape. Dual-ILAsm coverage proves `IntArrayBox : IBox<int[]>` and
+  `GenericBox<T> : GenericBase<T[]>, IBox<T[]>` on `net48` and `net10.0`; real Roslyn metadata proves
+  `ProbeConstraintValue : IProbeConstraint<ProbeConstraintValue>` matches the independently
+  resolved constraint, with hostile selected metadata for every failure boundary. This is
+  profile-neutral physical hierarchy resolution only. Transitive CLR assignability, variance,
+  special-constraint satisfaction, and FIR supertype projection remain deliberately separate.
+  The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
+  54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
