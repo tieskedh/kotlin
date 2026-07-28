@@ -24,6 +24,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetBadImageFormatException
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeClassification
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeClassificationFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeClassifier
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyMetadata
@@ -2629,6 +2633,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public ref struct ProbeRefValue
+                    {
+                    }
+
+                    [AttributeUsage(AttributeTargets.Struct)]
+                    public sealed class IsByRefLikeAttribute : Attribute
+                    {
+                    }
+
+                    [IsByRefLike]
+                    public struct FakeMarkedValue
+                    {
+                    }
+
                     [AttributeUsage(AttributeTargets.Class)]
                     public sealed class ConstrainedProbeAttribute<T> : Attribute
                         where T : struct, IProbeConstraint<T>
@@ -2840,6 +2858,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "Nullable`1",
                 ) as DotNetClrTypeResolution.Resolved
                 ).type
+        val isByRefLikeAttributeType = (
+                resolver.resolveTopLevelType(
+                    systemRuntimeMetadata,
+                    "System.Runtime.CompilerServices",
+                    "IsByRefLikeAttribute",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
         val outerDefinition = destinationMetadata.typeDefinitions.single { definition ->
             definition.namespaceName == "Forwarded" && definition.metadataName == "Outer"
         }
@@ -3014,6 +3039,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     destinationMetadata,
                     "Forwarded",
                     "ProbeConstraintValue",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        val resolvedProbeRefValue = (
+                resolver.resolveTopLevelType(
+                    destinationMetadata,
+                    "Forwarded",
+                    "ProbeRefValue",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        val resolvedFakeMarkedValue = (
+                resolver.resolveTopLevelType(
+                    destinationMetadata,
+                    "Forwarded",
+                    "FakeMarkedValue",
                 ) as DotNetClrTypeResolution.Resolved
                 ).type
         assertEquals(
@@ -3287,6 +3326,70 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 resolvedProbeConstraintInterface.arguments,
             ),
         )
+        val byRefLikeClassifier = DotNetClrByRefLikeClassifier(
+            physicalTypeClassifier,
+            modernAttributeDecoder,
+            isByRefLikeAttributeType,
+        )
+        fun assertByRefLikeStatus(
+            expectedStatus: DotNetClrByRefLikeStatus,
+            type: DotNetClrResolvedTypeSignature,
+        ) {
+            val classified =
+                byRefLikeClassifier.classify(type) as
+                        DotNetClrByRefLikeClassification.Classified
+            assertEquals(expectedStatus, classified.status)
+        }
+        assertByRefLikeStatus(
+            DotNetClrByRefLikeStatus.BY_REF_LIKE,
+            DotNetClrResolvedTypeSignature.Named(
+                resolvedProbeRefValue,
+                isValueType = true,
+            ),
+        )
+        assertByRefLikeStatus(
+            DotNetClrByRefLikeStatus.NOT_BY_REF_LIKE,
+            DotNetClrResolvedTypeSignature.Named(
+                resolvedProbeConstraintValue,
+                isValueType = true,
+            ),
+        )
+        assertByRefLikeStatus(
+            DotNetClrByRefLikeStatus.NOT_BY_REF_LIKE,
+            DotNetClrResolvedTypeSignature.Named(
+                resolvedFakeMarkedValue,
+                isValueType = true,
+            ),
+        )
+        assertByRefLikeStatus(
+            DotNetClrByRefLikeStatus.NOT_BY_REF_LIKE,
+            DotNetClrResolvedTypeSignature.Named(
+                resolvedOuter,
+                isValueType = false,
+            ),
+        )
+        assertByRefLikeStatus(
+            DotNetClrByRefLikeStatus.NOT_BY_REF_LIKE,
+            DotNetClrResolvedTypeSignature.Primitive(
+                DotNetClrPrimitiveType.INT32
+            ),
+        )
+        val unavailableByRefLikeMarker = (
+                DotNetClrByRefLikeClassifier(
+                    physicalTypeClassifier,
+                    modernAttributeDecoder,
+                    isByRefLikeAttribute = null,
+                ).classify(
+                    DotNetClrResolvedTypeSignature.Named(
+                        resolvedProbeRefValue,
+                        isValueType = true,
+                    )
+                ) as DotNetClrByRefLikeClassification.Classified
+                ).status
+        assertEquals(
+            DotNetClrByRefLikeStatus.MARKER_UNAVAILABLE,
+            unavailableByRefLikeMarker,
+        )
 
         val falseClassEncoding =
             physicalTypeClassifier.classify(
@@ -3445,6 +3548,139 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
             )
         }
+
+        val probeRefMarkerAttribute =
+            destinationMetadata.customAttributes
+                .filter { attribute ->
+                    attribute.parent == resolvedProbeRefValue.definition.handle
+                }
+                .single { attribute ->
+                    val resolution =
+                        modernAttributeDecoder.resolveConstructor(
+                            destinationMetadata,
+                            attribute,
+                        )
+                    resolution is DotNetClrCustomAttributeConstructorResolution.Resolved &&
+                            resolution.constructor.attributeType.type
+                                .hasSameIdentityAs(isByRefLikeAttributeType)
+                }
+        fun classifySelectedByRefLike(
+            selectedMetadata: DotNetClrAssemblyMetadata,
+            namespaceName: String,
+            metadataName: String,
+            isValueType: Boolean,
+        ): DotNetClrByRefLikeClassification {
+            val selectedResolver = DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+                    if (sourceAssembly === selectedMetadata &&
+                        reference.name == systemRuntimeMetadata.identity.name
+                    ) {
+                        systemRuntimeMetadata
+                    } else {
+                        null
+                    }
+                }
+            )
+            val selectedType = (
+                    selectedResolver.resolveTopLevelType(
+                        selectedMetadata,
+                        namespaceName,
+                        metadataName,
+                    ) as DotNetClrTypeResolution.Resolved
+                    ).type
+            return DotNetClrByRefLikeClassifier(
+                DotNetClrPhysicalTypeClassifier(
+                    selectedResolver,
+                    DotNetClrPhysicalTypeCoreTypes(
+                        systemValueType,
+                        systemEnum,
+                        systemNullableType,
+                    ),
+                ),
+                decoderForSelectedMetadata(selectedMetadata),
+                isByRefLikeAttributeType,
+            ).classify(
+                DotNetClrResolvedTypeSignature.Named(
+                    selectedType,
+                    isValueType,
+                )
+            )
+        }
+
+        val nextCustomAttributeRow =
+            destinationMetadata.customAttributes.maxOf { attribute ->
+                attribute.handle.row
+            } + 1
+        val duplicateMarkerMetadata = destinationMetadata.copy(
+            customAttributes = destinationMetadata.customAttributes +
+                    probeRefMarkerAttribute.copy(
+                        handle = DotNetClrMetadataHandle(
+                            12,
+                            nextCustomAttributeRow,
+                        )
+                    )
+        )
+        val duplicateMarker = classifySelectedByRefLike(
+            duplicateMarkerMetadata,
+            "Forwarded",
+            "ProbeRefValue",
+            isValueType = true,
+        ) as DotNetClrByRefLikeClassification.Invalid
+        assertEquals(
+            DotNetClrByRefLikeClassificationFailure.DUPLICATE_MARKER,
+            duplicateMarker.failure,
+        )
+        assertEquals(2, duplicateMarker.attributes.size)
+
+        val invalidMarkerValueMetadata = destinationMetadata.copy(
+            customAttributes = destinationMetadata.customAttributes.map { attribute ->
+                if (attribute.handle == probeRefMarkerAttribute.handle) {
+                    attribute.copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 1, 0)
+                        )
+                    )
+                } else {
+                    attribute
+                }
+            }
+        )
+        val invalidMarkerValue = classifySelectedByRefLike(
+            invalidMarkerValueMetadata,
+            "Forwarded",
+            "ProbeRefValue",
+            isValueType = true,
+        ) as DotNetClrByRefLikeClassification.InvalidMarkerValue
+        assertEquals(
+            probeRefMarkerAttribute.handle,
+            invalidMarkerValue.attribute.handle,
+        )
+        assertTrue(
+            invalidMarkerValue.decoding is
+                    DotNetClrCustomAttributeValueDecoding.Invalid
+        )
+
+        val markerOnReferenceMetadata = destinationMetadata.copy(
+            customAttributes = destinationMetadata.customAttributes +
+                    probeRefMarkerAttribute.copy(
+                        handle = DotNetClrMetadataHandle(
+                            12,
+                            nextCustomAttributeRow,
+                        ),
+                        parent = outerDefinition.handle,
+                    )
+        )
+        val markerOnReference = classifySelectedByRefLike(
+            markerOnReferenceMetadata,
+            "Forwarded",
+            "Outer",
+            isValueType = false,
+        ) as DotNetClrByRefLikeClassification.Invalid
+        assertEquals(
+            DotNetClrByRefLikeClassificationFailure.INVALID_MARKER_TARGET,
+            markerOnReference.failure,
+        )
+        assertEquals(DotNetClrPhysicalTypeKind.REFERENCE, markerOnReference.physicalKind)
 
         val constructedConstraintSpecification =
             destinationMetadata.typeSpecifications.single { specification ->
