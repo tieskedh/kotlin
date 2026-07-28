@@ -582,6 +582,18 @@ container-specific metadata model in dependency loading. Common unit coverage pi
 validation and component behavior; DLL integration coverage pins malformed-resource diagnostics
 and real cross-module use.
 
+Installed Kotlin/.NET platform libraries now follow the distribution lifecycle used by the
+mature targets instead of treating runtime support as an application build product. One explicit
+producer invocation emits a profile-bound `Kotlin.Runtime.dll`/`Kotlin.Stdlib.dll` pair for each
+of `net48`, `netstandard2.0`, and `net10.0`; installation keeps each pair in one profile
+directory. The stdlib authenticates itself through its embedded KLIB. The runtime has no Kotlin
+declaration KLIB, so the compiler binds its physical Assembly row to the target profile in the
+already-required public C# authoring manifest, without loading target code. Exact profiles may
+select themselves or the portable pair according to the established compatibility graph. A
+partial or profile-mixed pair is diagnosed, and executable packaging copies both selected DLLs
+byte-for-byte. Regenerating a runtime remains only as bootstrap compatibility for a manually
+supplied standalone stdlib DLL and is not the supported installed path.
+
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
 property accessor bodies, helper-owned default-argument decoding followed by virtual override

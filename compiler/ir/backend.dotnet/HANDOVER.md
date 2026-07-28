@@ -1,6 +1,6 @@
 # Handover — Kotlin/.NET backend, interim development
 
-Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
+Written 2026-07-14 and updated 2026-07-28 for the next agent working on the `dotnet` branch
 (array content operations complete; explicit CLR function/property boundaries, nullability,
 defaults, overload-aware function selection, immutable callable-provenance invocation, and the
 bounded typed-argument callable capability implemented; bounded Kotlin property-reference values,
@@ -10,8 +10,9 @@ invariant array iterators, bodyless iterator subinterfaces, and Kotlin-owned Ite
 identity/bridges and the first physical target-stdlib assembly/ordinary Kotlin array iterator are
 committed; bound stdlib metadata consumption, the explicit paired stdlib producer, and its
 reproducibility boundary and default Kotlin-home discovery are committed, and the stronger
-`netstandard2.0` platform-library profile is committed; ordinary user-library KLIB/DLL production
-and bounded Kotlin cross-module consumption are implemented in the current feature slice).
+`netstandard2.0` platform-library profile is committed; self-describing DLL-only library
+publication, direct embedded-metadata loading, and installed profile-paired runtime/stdlib
+consumption are implemented).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -47,9 +48,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   continuation (`ba7260521`) and the first top-level generated-common stdlib operations,
   `Iterable<T>.first()` and `last()` (`311b79bd7`), followed by separate-consumer stdlib metadata
   KLIB/CLR DLL binding (`df4ab474b`), one-compilation KLIB/DLL production (`21eb60d4e`), and
-  producer reproducibility (`59c0b1d33`), with installed-pair discovery in the current feature
-  slice.
-  The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
+  producer reproducibility (`59c0b1d33`), followed by the later DLL-only library, C# authoring,
+  Gradle integration, direct metadata loader, and installed platform-pair work described below.
+  The stack is based directly on `origin/master` (`0349ed5cd`, rebased 2026-07-21).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
 - Last full DotNet suite at `f2ca42e73`: **498 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
@@ -1871,6 +1872,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   entries, traversal, missing components, and a truncated central directory; the DLL diagnostic
   lane also rejects a malformed carrier. The fresh strict gate is 850/0/0/0 across 16 XML suites
   (780 FIR/IL/box, 21 generated CLI, and 49 library integration tests).
+- The installed-platform continuation makes the normal Kotlin-home product a coherent,
+  profile-bound `Kotlin.Runtime.dll`/`Kotlin.Stdlib.dll` pair. Explicit stdlib production emits
+  both assemblies from one target invocation, installation copies both and no sidecars, and
+  installed discovery rejects a missing runtime instead of rebuilding one. The frontend binds the
+  runtime's physical Assembly row to its public C# implementation-manifest profile without loading
+  target code. Executable packaging copies both selected DLLs byte-for-byte; a separately supplied
+  self-describing stdlib without a runtime retains the same-run runtime builder only as bootstrap
+  compatibility. Exact and portable producer/consumer pins, missing/mismatched runtime negatives,
+  real repository production, and installation all pass. The fresh strict gate is 850/0/0/0
+  across 16 XML suites.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1945,19 +1956,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete the C# interface-authoring contract.** Inherited mutable-property obligations and
-   friend-accessible internal interfaces are covered. Schema 7 supplies normalized guidance for
-   analyzer diagnostics about deliberately erased owner-relative constraints without
-   reconstructing illegal CLR signatures. Consume it in the Roslyn partial-type
-   generator/analyzer, then move the payload to a true managed
-   resource before freezing the schema or package. Continue the foreign provider/implementor
-   collision matrix in parallel with that contract. Keep raw metadata-table auditing with the
-   structured metadata work; do not substitute IL substring checks.
-2. **Retire same-run stdlib bootstrapping in favor of the installed profile DLL.** The opt-in,
-   host-capability-aware producer/install tasks already exist and must remain outside unconditional
-   cross-platform `distKotlinc`. Make distribution/test flows consume those installed assets, then
-   compile generated common stdlib sources plus narrow .NET actuals through the ordinary library
-   producer instead of expanding the handwritten bootstrap corpus.
+1. **Move Kotlin-authorable runtime and stdlib code into ordinary source products.** The installed
+   profile pair is now produced, authenticated, selected, and packaged as a distribution product.
+   Compile generated common stdlib sources plus narrow .NET actuals through the ordinary library
+   producer instead of expanding handwritten compiler strings. Keep the current same-run builder
+   only until all bootstrap tests can select a complete pair.
+2. **Prototype the CLR importer and structured foreign boundary.** Preserve Kotlin declaration
+   identity and common semantics; decode ordinary CLR metadata, nullability, variance,
+   constraints, properties, and exceptions at the importer boundary instead of teaching the
+   Kotlin-owned backend surface to infer C# conventions. Keep structured metadata-table auditing;
+   do not substitute IL substring checks.
 3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part

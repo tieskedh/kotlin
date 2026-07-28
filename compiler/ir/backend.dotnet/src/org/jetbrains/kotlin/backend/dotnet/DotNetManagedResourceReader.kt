@@ -14,10 +14,15 @@ data class DotNetManagedResource(
     val attributes: Int,
     val content: ByteArray,
 ) {
+    val isPublic: Boolean
+        get() = attributes and VISIBILITY_MASK == PUBLIC_ATTRIBUTE
+
     val isPrivate: Boolean
-        get() = attributes == PRIVATE_ATTRIBUTE
+        get() = attributes and VISIBILITY_MASK == PRIVATE_ATTRIBUTE
 
     private companion object {
+        const val VISIBILITY_MASK = 0x7
+        const val PUBLIC_ATTRIBUTE = 0x1
         const val PRIVATE_ATTRIBUTE = 0x2
     }
 }

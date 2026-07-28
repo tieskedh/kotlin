@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.KtPsiSourceFile
 import org.jetbrains.kotlin.KtSourceFile
 import org.jetbrains.kotlin.backend.common.loadMetadataKlibs
 import org.jetbrains.kotlin.backend.dotnet.DotNetBadImageFormatException
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifestCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetManagedAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalStdlib
@@ -13,6 +14,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
 import org.jetbrains.kotlin.backend.dotnet.DotNetPlatformAssemblyIdentity
+import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
@@ -291,10 +293,84 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
         )
         return
     }
+    val runtimeFile = (library.assemblyFile.parentFile ?: File("."))
+        .resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val runtimeAssemblyFile = runtimeFile.takeIf(File::isFile)?.let { candidate ->
+        validateDotNetRuntime(candidate, artifact.targetFramework) ?: return
+    }
     dotNetExternalStdlib = DotNetExternalStdlib(
-        library.assemblyFile,
-        artifact.targetFramework,
+        assemblyFile = library.assemblyFile,
+        targetFramework = artifact.targetFramework,
+        runtimeAssemblyFile = runtimeAssemblyFile,
     )
+}
+
+/**
+ * Authenticates the runtime half of a selected platform pair without loading target code.
+ *
+ * The stdlib KLIB owns Kotlin declaration metadata. The runtime instead publishes the same
+ * built-in-derived C# contract used by Roslyn tooling, whose envelope records the producing
+ * profile and is bound here to the physical CLR Assembly row.
+ */
+private fun org.jetbrains.kotlin.config.CompilerConfiguration.validateDotNetRuntime(
+    runtimeFile: File,
+    targetFramework: String,
+): File? {
+    val resource = try {
+        DotNetManagedResourceReader.read(
+            runtimeFile,
+            DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME,
+        )
+    } catch (exception: DotNetBadImageFormatException) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Kotlin/.NET runtime assembly '${runtimeFile.path}' is invalid: ${exception.message}",
+        )
+        return null
+    }
+    if (resource == null) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Kotlin/.NET runtime assembly '${runtimeFile.path}' has no public " +
+                    "'${DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME}' profile contract.",
+        )
+        return null
+    }
+    if (!resource.isPublic) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Kotlin/.NET runtime assembly '${runtimeFile.path}' has a non-public " +
+                    "'${DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME}' profile contract.",
+        )
+        return null
+    }
+    val manifest = try {
+        DotNetCSharpImplementationManifestCodec.decodeManagedResource(resource.content)
+    } catch (exception: IllegalArgumentException) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Kotlin/.NET runtime assembly '${runtimeFile.path}' has invalid profile metadata: " +
+                    exception.message,
+        )
+        return null
+    }
+    val identity = resource.assemblyIdentity
+    if (
+        identity.name != DotNetRuntimeArtifact.ASSEMBLY_NAME ||
+        identity.version != DotNetRuntimeArtifact.ASSEMBLY_VERSION ||
+        identity.culture != DotNetRuntimeArtifact.ASSEMBLY_CULTURE ||
+        identity.hasPublicKey ||
+        manifest.assemblyName != identity.name ||
+        manifest.targetProfile != targetFramework
+    ) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Kotlin/.NET runtime assembly '${runtimeFile.path}' does not declare the supported " +
+                    "'${DotNetRuntimeArtifact.ASSEMBLY_NAME}' identity for profile '$targetFramework'.",
+        )
+        return null
+    }
+    return runtimeFile.canonicalFile
 }
 
 /**

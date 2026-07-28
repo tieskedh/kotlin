@@ -35,6 +35,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetModernCSharpToolchain
 import org.jetbrains.kotlin.backend.dotnet.DotNetObjectInstance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetPortablePhysicalAbiDifference
+import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.cli.common.CLICompiler
 import org.jetbrains.kotlin.cli.common.ExitCode
@@ -13269,6 +13270,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             secondDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
             "Deterministic ILAsm output must be reproducible for target $target",
         )
+        assertArrayEquals(
+            firstDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME).readBytes(),
+            secondDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME).readBytes(),
+            "Distribution-owned runtime output must be reproducible for target $target",
+        )
         consumeSelfDescribingStdlib(firstDirectory, target)
         consumeInstalledStdlib(firstDirectory, target)
     }
@@ -13284,6 +13290,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         val implementationLibrary = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
         assertTrue(implementationLibrary.isFile) { "Expected self-describing CLR library at $implementationLibrary" }
+        val runtimeLibrary = stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+        assertTrue(runtimeLibrary.isFile) {
+            "Expected the profile-paired CLR runtime at $runtimeLibrary"
+        }
+        val runtimeManifest = readCSharpImplementationManifestEnvelope(runtimeLibrary)
+        assertEquals(DotNetRuntimeArtifact.ASSEMBLY_NAME, runtimeManifest.assemblyName)
+        assertEquals(target, runtimeManifest.targetProfile)
         assertFalse(stdlibDirectory.resolve("Kotlin.Stdlib.klib").exists()) {
             "The stdlib producer must not write a sibling KLIB"
         }
@@ -13436,6 +13449,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val kotlinHome = File(tmpdir, "kotlin-home-$target-$installedProfile")
         val installedDirectory = kotlinHome.resolve("lib/dotnet/$installedProfile").apply { mkdirs() }
         stdlibDirectory.resolve("Kotlin.Stdlib.dll").copyTo(installedDirectory.resolve("Kotlin.Stdlib.dll"))
+        stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+            .copyTo(installedDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME))
         assertFalse(installedDirectory.resolve("Kotlin.Stdlib.klib").exists()) {
             "Installed stdlib discovery must be proven from the self-describing DLL alone"
         }
@@ -13457,6 +13472,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun installedEmptyInts(): List<Int> = emptyList()
 
                 public fun installedRandomAccess(values: List<Int>): Boolean = values is RandomAccess
+
+                fun main() {
+                    val values = Array<String>(2) { index -> if (index == 0) "O" else "K" }
+                    println(values.asIterable().first() + values.asIterable().last())
+                }
                 """.trimIndent()
             )
         }
@@ -13477,6 +13497,92 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>" in il)
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
         assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'" !in il)
+
+        val executableDirectory =
+            File(tmpdir, "installed-executable-$target-$installedProfile").apply { mkdirs() }
+        val executable = executableDirectory.resolve(
+            if (target == "net48") "InstalledConsumer.exe" else "InstalledConsumer.dll"
+        )
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::kotlinHome.cliArgument, kotlinHome.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "InstalledConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, executable.path,
+        )
+        assertTrue(executable.isFile)
+        assertArrayEquals(
+            installedDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME).readBytes(),
+            executableDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME).readBytes(),
+            "Executable packaging must copy the selected installed runtime without regenerating it",
+        )
+        assertArrayEquals(
+            installedDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
+            executableDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
+            "Executable packaging must copy the selected installed stdlib without regenerating it",
+        )
+
+        if (target == "net10.0" && installedProfile == target) {
+            val incompleteHome = File(tmpdir, "incomplete-kotlin-home-$target")
+            val incompleteDirectory =
+                incompleteHome.resolve("lib/dotnet/$installedProfile").apply { mkdirs() }
+            stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+                .copyTo(incompleteDirectory.resolve("Kotlin.Stdlib.dll"))
+            val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    consumerSource.path,
+                    K2DotNetCompilerArguments::kotlinHome.cliArgument, incompleteHome.path,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "incomplete-installed-consumer.il").path,
+                )
+            )
+            assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+            assertTrue(
+                "installed kotlin/.net platform profile '$target' is incomplete" in diagnostics.lowercase()
+            ) {
+                diagnostics
+            }
+            assertTrue(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME in diagnostics) { diagnostics }
+
+            val mismatchedHome = File(tmpdir, "mismatched-kotlin-home-$target")
+            val mismatchedDirectory =
+                mismatchedHome.resolve("lib/dotnet/$installedProfile").apply { mkdirs() }
+            stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+                .copyTo(mismatchedDirectory.resolve("Kotlin.Stdlib.dll"))
+            val portableRuntime = DotNetIlAssembler.assembleRuntimeWithManifestForTests(
+                File(tmpdir, "mismatched-portable-runtime"),
+                DotNetTarget.NETSTANDARD_2_0,
+                readCSharpImplementationManifestEnvelope(
+                    stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+                ).copy(targetProfile = DotNetTarget.NETSTANDARD_2_0.flagValue),
+                MessageCollector.NONE,
+            )
+            assertTrue(portableRuntime?.isFile == true)
+            checkNotNull(portableRuntime).copyTo(
+                mismatchedDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+            )
+            val [mismatchedDiagnostics, mismatchedExitCode] =
+                AbstractCliTest.executeCompilerGrabOutput(
+                    K2DotNetCompiler(),
+                    listOf(
+                        consumerSource.path,
+                        K2DotNetCompilerArguments::kotlinHome.cliArgument, mismatchedHome.path,
+                        K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                        K2DotNetCompilerArguments::destination.cliArgument,
+                        File(tmpdir, "mismatched-installed-consumer.il").path,
+                    )
+                )
+            assertEquals(ExitCode.COMPILATION_ERROR, mismatchedExitCode, mismatchedDiagnostics)
+            assertTrue(
+                "does not declare the supported '${DotNetRuntimeArtifact.ASSEMBLY_NAME}' " +
+                        "identity for profile '$target'" in mismatchedDiagnostics
+            ) {
+                mismatchedDiagnostics
+            }
+        }
 
         val forbiddenKotlinPackageSource = File(tmpdir, "installed-forbidden-kotlin-package-$target.kt").apply {
             writeText(

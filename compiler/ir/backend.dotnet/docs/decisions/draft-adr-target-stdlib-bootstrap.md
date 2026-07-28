@@ -184,12 +184,13 @@ at:
 
 ```text
 <kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.dll
+<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Runtime.dll
 ```
 
 The embedded manifest binds each DLL to its declared TFM. The loader accepts only the explicit
 compatibility matrix: an executable profile accepts itself or `netstandard2.0`; the portable
 profile accepts only itself. A standalone or legacy Kotlin/.NET KLIB is not a candidate. Focused
-tests install only the DLL. `-no-stdlib`
+tests install only the two DLLs, with no metadata or resource sidecar. `-no-stdlib`
 remains the opt-out and, together with an explicit classpath, the bootstrap override.
 
 The CLI classpath, friend, installed-stdlib, and Gradle dependency resolvers now read
@@ -198,6 +199,53 @@ only profile-selected DLL assets. Absence of the DLL still selects the injected-
 compatibility path. Installed-DLL use no
 longer enables `kotlin.*` packages in user sources; that temporary permission is limited to
 compiler-owned injected sources.
+
+### Profile-paired runtime distribution
+
+The mature targets consume distribution-owned platform libraries while compiling user code.
+JVM does not regenerate `kotlin-stdlib` or its runtime support beside every application; JS/Wasm
+and Native likewise build their platform libraries as separate products and resolve those products
+through the target distribution. The logical Kotlin declarations remain compiler/metadata-owned,
+while deployment copies the target's already built physical artifacts.
+
+The CLR-specific difference is that the present platform boundary is a pair of assemblies.
+`Kotlin.Stdlib.dll` contains ordinary Kotlin implementations and has an AssemblyRef to the
+compiler/runtime identities in `Kotlin.Runtime.dll`. A selected installed stdlib is therefore not
+a complete product unless the same profile directory also contains its runtime. The pair may have
+profile-specific metadata and implementation:
+
+- `net48` consumes the `net48` pair or the portable `netstandard2.0` pair;
+- `net10.0` consumes the `net10.0` pair or the portable `netstandard2.0` pair; and
+- `netstandard2.0` consumes only the `netstandard2.0` pair.
+
+This does not alter Kotlin Common semantics. Every pair exposes the same supported Kotlin logical
+runtime and stdlib identities. Profile selection changes only the legal CLR API references,
+default-interface representation, and other physical implementation capabilities. In particular,
+an exact-profile stdlib must not be combined with another profile's runtime merely because their
+current unsigned AssemblyVersion happens to match.
+
+The selected bootstrap migration is:
+
+1. the explicit stdlib producer emits `Kotlin.Runtime.dll` and the self-describing
+   `Kotlin.Stdlib.dll` together from one target/profile compiler invocation;
+2. installation copies both DLLs into the same `lib/dotnet/<profile>` directory;
+3. installed discovery treats a stdlib without its sibling runtime as an incomplete distribution
+   and diagnoses it instead of silently rebuilding another runtime;
+4. the compiler validates the runtime's physical Assembly row and public
+   `Kotlin.CSharpImplementationManifest` profile without loading target code; and
+5. executable packaging copies the selected runtime and stdlib bytes unchanged.
+
+The existing same-run runtime builder remains a temporary fallback only when a self-describing
+stdlib is supplied manually without an installed platform pair. This keeps bootstrap and focused
+test inputs usable while making the normal installed path distribution-owned. Removing that
+fallback is a later mechanical step once every test and distribution flow supplies a complete
+pair.
+
+This follows the other targets' product lifecycle and is a **Correct direction**. Using a public
+managed resource to authenticate the runtime profile is a **Reasonable platform-specific
+divergence**: unlike the stdlib, the runtime has no Kotlin declaration KLIB, but Roslyn tooling and
+the compiler already require its C# implementation contract. The resource remains an exported
+view of Kotlin logical identities, not a second declaration namespace.
 
 Repository production and installation are explicit opt-in tasks:
 
@@ -210,9 +258,9 @@ The aggregate producer depends on the assembled compiler distribution and runs t
 complete compiler classpath. Its three constituent tasks are `produceDotNetStdlibNet48`,
 `produceDotNetStdlibNetStandard20`, and `produceDotNetStdlibNet100`. Framework ILAsm writes
 `net48`; modern ILAsm writes `netstandard2.0` and `net10.0`. The producer writes
-`Kotlin.Stdlib.dll` plus diagnostic `Kotlin.Stdlib.il` under each
-`prepare/compiler/build/dotnet-stdlib/<profile>` directory. The install task copies only each DLL
-into its corresponding Kotlin-home profile directory; IL remains a build diagnostic. Neither aggregate task
+`Kotlin.Runtime.dll`, `Kotlin.Stdlib.dll`, and diagnostic `Kotlin.Stdlib.il` under each
+`prepare/compiler/build/dotnet-stdlib/<profile>` directory. The install task copies both DLLs into
+their corresponding Kotlin-home profile directory; IL remains a build diagnostic. Neither aggregate task
 participates in ordinary `dist` or `distKotlinc`, so ordinary builds do not acquire those host-tool
 requirements. `distKotlinc` is a whole-home `Sync` and therefore removes an earlier optional
 installation; invoking `installDotNetStdlib` afterward restores all three variants.
@@ -236,11 +284,12 @@ Every assembled executable is supplied `Kotlin.Runtime.dll` and `Kotlin.Stdlib.d
 is retained beside the executable for deterministic inspection, like the program IL. Raw IL-only
 compilation does not yet constitute a distributable multi-assembly library build.
 
-This split emitter is temporary bootstrap compatibility, not the library build. The consumer half
-no longer depends on it: with `-no-stdlib` and the produced DLL on its classpath, a user module
-resolves and calls the prebuilt assembly without injected implementations. Same-run production
-remains only until ordinary compilation can discover a distribution-owned target assembly by
-default.
+This split emitter is temporary bootstrap compatibility, not the library build. The normal
+consumer path no longer depends on it: ordinary compilation discovers the installed
+profile-compatible runtime/stdlib pair and calls the prebuilt stdlib without injected
+implementations. Explicit `-no-stdlib` plus a self-describing DLL remains available for bootstrap
+tests. Same-run production now survives only as a temporary fallback for a manually supplied
+stdlib with no installed runtime sibling.
 
 ## Rejected alternatives
 
@@ -303,17 +352,19 @@ without a generated consumer-side CollectionsKt. A manual Framework executable e
 path against a real generated DLL and user-defined Iterable. Focused integration pins produce the
 `net48`, `netstandard2.0`, and `net10.0` variants, check each embedded packed-KLIB manifest and DLL, then
 consume `first()`, `last()`, `emptyList()`, and RandomAccess from each compatible profile in a
-separate compilation. The portable pin also installs the DLL only under `netstandard2.0`, proves
-fallback discovery, assembles applications, and executes the same stdlib implementation on both
-Framework 4.8 and .NET 10. The embedded stdlib KLIB participates in the same physical-declaration
+separate compilation. The portable pin also installs only the paired DLLs under `netstandard2.0`,
+proves fallback discovery, copies both artifacts byte-for-byte into assembled applications, and
+executes the same runtime/stdlib implementation on both Framework 4.8 and .NET 10. Missing and
+wrong-profile runtime siblings are rejected instead of triggering an implicit rebuild. The
+embedded stdlib KLIB participates in the same physical-declaration
 binder as any other Kotlin/.NET library; the separate stdlib record controls installation and
 packaging only. Each producer is also run twice; the packed KLIB and compiler-owned IL are
 byte-identical. Finally, each produced DLL is installed into a temporary portable-profile Kotlin
 home and consumed by an ordinary compilation with neither `-no-stdlib` nor a manual metadata
-classpath; the consumer does not regenerate the stdlib facade. The repository producer and install
-tasks are also exercised as products: the producer emits the expected DLL/IL set, while
-installation copies exactly the byte-matching DLL into the distribution and does not install the
-diagnostic IL or a standalone KLIB.
+classpath; the consumer does not regenerate the stdlib facade or runtime. The repository producer
+and install tasks are also exercised as products: the producer emits the expected DLL pair and
+diagnostic IL, while installation copies exactly the byte-matching DLLs into the distribution and
+does not install the diagnostic IL or a standalone KLIB.
 
 ## Deferred work
 

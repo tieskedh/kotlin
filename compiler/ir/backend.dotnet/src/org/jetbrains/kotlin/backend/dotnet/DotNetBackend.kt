@@ -189,20 +189,32 @@ object DotNetBackend {
             if (!validateMetadataLinkage(stdlibEmission.declarations)) {
                 return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
             }
-            return result(
-                DotNetStdlibLibrary.assembleIn(
-                    output,
-                    stdlibIlText,
-                    target,
-                    messageCollector,
-                    stdlibEmission.managedResources.withKotlinMetadata(
-                        stdlibEmission.declarations,
-                        kotlinMetadataResourceFactory,
-                    ),
-                )
-                    ?: output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME),
-                stdlibEmission.declarations,
+            val stdlibOutput = output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
+            val runtimeOutput = output.resolve(DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME)
+            runtimeOutput.delete()
+            val assembledStdlib = DotNetStdlibLibrary.assembleIn(
+                output,
+                stdlibIlText,
+                target,
+                messageCollector,
+                stdlibEmission.managedResources.withKotlinMetadata(
+                    stdlibEmission.declarations,
+                    kotlinMetadataResourceFactory,
+                ),
             )
+            if (assembledStdlib == null) return result(stdlibOutput)
+            if (
+                DotNetRuntimeLibrary.assembleNextTo(
+                    assembledStdlib,
+                    target,
+                    runtimeCSharpImplementationManifest,
+                    messageCollector,
+                ) == null
+            ) {
+                assembledStdlib.delete()
+                return result(stdlibOutput)
+            }
+            return result(assembledStdlib, stdlibEmission.declarations)
         }
 
         val emitter = DotNetIlEmitter(
@@ -327,15 +339,31 @@ object DotNetBackend {
         }
 
         if (emitsExecutable) {
-            if (
-                DotNetRuntimeLibrary.assembleNextTo(
-                    binaryOutput,
-                    target,
-                    runtimeCSharpImplementationManifest,
-                    messageCollector,
-                ) == null
-            ) {
-                return result(binaryOutput)
+            val externalRuntime = configuration.dotNetExternalStdlib?.runtimeAssemblyFile
+            if (externalRuntime == null) {
+                if (
+                    DotNetRuntimeLibrary.assembleNextTo(
+                        binaryOutput,
+                        target,
+                        runtimeCSharpImplementationManifest,
+                        messageCollector,
+                    ) == null
+                ) {
+                    return result(binaryOutput)
+                }
+            } else {
+                if (!externalRuntime.isFile) {
+                    messageCollector.report(
+                        CompilerMessageSeverity.ERROR,
+                        "The Kotlin/.NET runtime assembly '${externalRuntime.path}' is missing.",
+                    )
+                    return result(binaryOutput)
+                }
+                val packagedRuntime = (binaryOutput.parentFile ?: File("."))
+                    .resolve(DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME)
+                if (externalRuntime.canonicalFile != packagedRuntime.canonicalFile) {
+                    externalRuntime.copyTo(packagedRuntime, overwrite = true)
+                }
             }
             if (stdlibIlText != null &&
                 DotNetStdlibLibrary.assembleNextTo(

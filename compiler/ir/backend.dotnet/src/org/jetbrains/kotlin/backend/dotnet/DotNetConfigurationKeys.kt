@@ -57,6 +57,14 @@ object DotNetStdlibArtifact {
         kotlinLibDirectory.resolve(DISTRIBUTION_DIRECTORY_NAME).resolve(targetFramework)
 }
 
+/** Stable pre-publication identity of the runtime half of an installed platform pair. */
+object DotNetRuntimeArtifact {
+    const val ASSEMBLY_NAME = DotNetPlatformAssemblyIdentity.RUNTIME_ASSEMBLY_NAME
+    const val ASSEMBLY_FILE_NAME = "$ASSEMBLY_NAME.dll"
+    const val ASSEMBLY_VERSION = "1.0.0.0"
+    const val ASSEMBLY_CULTURE = "neutral"
+}
+
 /** The CLR identity of one self-describing Kotlin/.NET library. */
 data class DotNetLibraryArtifact(
     val assemblyName: String,
@@ -86,6 +94,7 @@ data class DotNetLibraryArtifact(
 data class DotNetExternalStdlib(
     val assemblyFile: File,
     val targetFramework: String,
+    val runtimeAssemblyFile: File? = null,
 )
 
 /**
