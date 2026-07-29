@@ -2791,6 +2791,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public sealed class NonGenericEnumerableVariantConstraintProbe<T>
+                        where T : IVariantConstraint<System.Collections.IEnumerable>
+                    {
+                    }
+
+                    public sealed class GenericListVariantConstraintProbe<T>
+                        where T : IVariantConstraint<
+                            System.Collections.Generic.IList<object>>
+                    {
+                    }
+
                     public sealed class ObjectComparable : IComparable<object>
                     {
                         public int CompareTo(object other) => 0;
@@ -3074,6 +3085,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "Object",
                 ) as DotNetClrTypeResolution.Resolved
                 ).type
+        val systemArrayType = (
+                resolver.resolveTopLevelType(
+                    systemRuntimeMetadata,
+                    "System",
+                    "Array",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
         val systemStringType = (
                 resolver.resolveTopLevelType(
                     systemRuntimeMetadata,
@@ -3124,6 +3142,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 resolver,
                 physicalTypeClassifier,
                 primitiveTypeCatalog,
+                systemArrayType,
             )
         assertSame(
             DotNetClrTypeAssignability.Assignable,
@@ -3432,6 +3451,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 resolver,
                 primitiveTypeCatalog,
                 physicalTypeClassifier,
+                systemArrayType,
             )
         val satisfiedNominalConstraints =
             nominalConstraintValidator.validate(
@@ -3593,6 +3613,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 resolver,
                 primitiveTypeCatalog,
                 physicalTypeClassifier,
+                systemArrayType,
                 resolutionLimit = 1,
             ).validate(limitedConstraintContract)
                 .parameters.single().constraints.single().satisfaction as
@@ -3845,7 +3866,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(2, violatedAllConstraints.nominal.size)
         assertEquals(1, violatedAllConstraints.special.size)
 
-        val arrayAllConstraints =
+        val arrayConstraintValidation =
             validateAllConstraints(
                 constraintsWithArgument(
                     DotNetClrResolvedTypeSignature.SzArray(
@@ -3854,17 +3875,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         )
                     )
                 )
-            ).status as DotNetClrConstructedTypeConstraintStatus.Unsupported
-        assertEquals(2, arrayAllConstraints.nominal.size)
-        assertTrue(
-            arrayAllConstraints.nominal.all { issue ->
+            )
+        val arrayAllConstraints =
+            arrayConstraintValidation.status as
+                    DotNetClrConstructedTypeConstraintStatus.Unsupported
+        assertEquals(1, arrayAllConstraints.nominal.size)
+        assertEquals(
+            1,
+            arrayConstraintValidation.nominal.parameters
+                .single().constraints.count { validation ->
+                    validation.satisfaction ==
+                        DotNetClrNominalConstraintSatisfaction.Violated
+                },
+        )
+        assertEquals(
+            listOf(
+                DotNetClrNominalConstraintUnsupported
+                    .VECTOR_INTERFACE_CONVERSION_REQUIRED
+            ),
+            arrayAllConstraints.nominal.map { issue ->
                 (
                         issue.validation.satisfaction as
                                 DotNetClrNominalConstraintSatisfaction.Unsupported
-                        ).reason ==
-                        DotNetClrNominalConstraintUnsupported
-                            .ARRAY_NOMINAL_CONVERSION_REQUIRED
-            }
+                        ).reason
+            },
         )
 
         val dependentAllConstraints =
@@ -3965,6 +3999,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertSame(
             DotNetClrConstructedTypeConstraintStatus.Satisfied,
             variantConstraintStatus(
+                "VariantConstraintProbe`1",
+                "VariantArrayConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
                 "ArrayVariantConstraintProbe`1",
                 "VariantArrayConstraint",
             ),
@@ -4015,19 +4056,53 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "VariantCharArrayConstraint",
             ) is DotNetClrConstructedTypeConstraintStatus.Violated
         )
-        val arrayNominalStatus =
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
             variantConstraintStatus(
                 "ArrayBaseVariantConstraintProbe`1",
+                "VariantArrayConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "ArrayBaseVariantConstraintProbe`1",
+                "VariantStringMatrixConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "NonGenericEnumerableVariantConstraintProbe`1",
+                "VariantArrayConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "NonGenericEnumerableVariantConstraintProbe`1",
+                "VariantStringMatrixConstraint",
+            ),
+        )
+        val vectorInterfaceStatus =
+            variantConstraintStatus(
+                "GenericListVariantConstraintProbe`1",
                 "VariantArrayConstraint",
             ) as DotNetClrConstructedTypeConstraintStatus.Unsupported
         assertEquals(
             DotNetClrNominalConstraintUnsupported
-                .ARRAY_NOMINAL_CONVERSION_REQUIRED,
+                .VECTOR_INTERFACE_CONVERSION_REQUIRED,
             (
-                    arrayNominalStatus.nominal.single()
+                    vectorInterfaceStatus.nominal.single()
                         .validation.satisfaction as
                             DotNetClrNominalConstraintSatisfaction.Unsupported
                     ).reason,
+        )
+        assertTrue(
+            variantConstraintStatus(
+                "GenericListVariantConstraintProbe`1",
+                "VariantStringMatrixConstraint",
+            ) is DotNetClrConstructedTypeConstraintStatus.Violated
         )
 
         val invalidAllConstraints =

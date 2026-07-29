@@ -352,14 +352,16 @@ landed shape as a compatibility constraint.
    against vector or general array against the same rank. Recurse for reference elements; for value
    elements accept identity or the CLR reduced signed/unsigned integer kind, including validated
    enum storage, but never `bool`/`byte` or `char`/`ushort`. This is foreign physical
-   assignability, not Kotlin `Array` covariance. Array-to-`System.Array`, vector-to-generic
-   interface, open-parameter, custom-modified, and delegate candidates remain structured
-   unsupported boundaries until their separate physical rules are implemented. Signature
-   assignability never inserts boxing; use the distinct nominal-view relation when generic
-   constraints intentionally compare selected type definitions.
-   Array-to-nominal/interface relations and dependent parameter constraints still require their
-   remaining shared assignability policy; dependent arguments are explicitly unsupported in both
-   nominal and special validation. Special flags and by-ref-like eligibility use
+   assignability, not Kotlin `Array` covariance. Resolve every array through the selected
+   `System.Array` identity and its ordinary hierarchy; never recognize that base by name. A general
+   array outside that hierarchy is not assignable. A vector against a unary generic interface,
+   plus open-parameter, custom-modified, and delegate candidates, remains a structured unsupported
+   boundary until the separate physical rule is implemented. Signature assignability never
+   inserts boxing; use the distinct nominal-view relation when generic constraints intentionally
+   compare selected type definitions.
+   Vector-interface relations and dependent parameter constraints still require their remaining
+   shared assignability policy; dependent arguments are explicitly unsupported in both nominal
+   and special validation. Special flags and by-ref-like eligibility use
    the physical classification and selected-profile policy below. Resolve compact CLR primitive
    signatures through one complete selected-core catalog (`mscorlib`, the selected portable
    facade graph, or `System.Runtime`/CoreLib), then use that TypeDef's boxed hierarchy view for
