@@ -5,6 +5,11 @@ sealed interface DotNetClrTypeAssignability {
 
     data object NotAssignable : DotNetClrTypeAssignability
 
+    data class VariantConversionRequired(
+        val actual: DotNetClrResolvedTypeView,
+        val expected: DotNetClrResolvedTypeView,
+    ) : DotNetClrTypeAssignability
+
     data class InvalidHierarchy(
         val type: DotNetClrResolvedTypeView,
         val resolution: DotNetClrTypeHierarchyViewResolution.Invalid,
@@ -23,10 +28,10 @@ sealed interface DotNetClrTypeAssignability {
 /**
  * Checks exact nominal assignability through the imported CLR base/interface graph.
  *
- * This slice intentionally does not apply CLR generic variance, array conversions, boxing, or
- * generic-parameter constraints. Those operations need additional physical type classification;
- * treating them as exact nominal edges until then is conservative and cannot manufacture a false
- * positive.
+ * This operation does not apply CLR generic variance, array conversions, boxing, or
+ * generic-parameter constraints. It retains a reachable same-definition variant view as
+ * [DotNetClrTypeAssignability.VariantConversionRequired] instead of manufacturing either a false
+ * positive or a false violation.
  */
 class DotNetClrTypeAssignabilityResolver(
     typeResolver: DotNetClrTypeResolver,
@@ -53,6 +58,10 @@ class DotNetClrTypeAssignabilityResolver(
             linkedMapOf<DotNetClrResolvedTypeView, List<DotNetClrResolvedTypeView>>()
         var resolvedCount = 0
         var firstInvalidHierarchy: DotNetClrTypeAssignability.InvalidHierarchy? = null
+        var firstVariantCandidate =
+            actual.takeIf { candidate ->
+                candidate.isPotentialVariantMatch(expected)
+            }
 
         while (queue.isNotEmpty()) {
             val type = queue.removeFirst()
@@ -93,6 +102,11 @@ class DotNetClrTypeAssignabilityResolver(
             adjacency[type] = supertypes
             for (supertype in supertypes) {
                 if (supertype == expected) return DotNetClrTypeAssignability.Assignable
+                if (firstVariantCandidate == null &&
+                    supertype.isPotentialVariantMatch(expected)
+                ) {
+                    firstVariantCandidate = supertype
+                }
                 if (!visited.add(supertype)) continue
                 queue.addLast(supertype)
             }
@@ -101,7 +115,32 @@ class DotNetClrTypeAssignabilityResolver(
         findCycle(adjacency)?.let { cycle ->
             return DotNetClrTypeAssignability.InheritanceCycle(cycle)
         }
+        firstVariantCandidate?.let { candidate ->
+            return DotNetClrTypeAssignability.VariantConversionRequired(
+                candidate,
+                expected,
+            )
+        }
         return DotNetClrTypeAssignability.NotAssignable
+    }
+
+    private fun DotNetClrResolvedTypeView.isPotentialVariantMatch(
+        expected: DotNetClrResolvedTypeView,
+    ): Boolean {
+        if (!type.hasSameIdentityAs(expected.type) ||
+            arguments == expected.arguments ||
+            arguments.size != expected.arguments.size
+        ) {
+            return false
+        }
+        val parameters = type.assembly.genericParameterDefinitions
+            .filter { parameter -> parameter.owner == type.definition.handle }
+            .sortedBy(DotNetClrGenericParameterDefinition::number)
+        return parameters.size == arguments.size &&
+                parameters.any { parameter ->
+                    parameter.variance !=
+                            DotNetClrGenericParameterVariance.INVARIANT
+                }
     }
 
     private fun findCycle(

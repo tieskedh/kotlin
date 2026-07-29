@@ -18,6 +18,7 @@ enum class DotNetClrSpecialConstraintViolation {
 
 enum class DotNetClrSpecialConstraintUnsupported {
     BY_REF_LIKE_MARKER_UNAVAILABLE,
+    DEPENDENT_GENERIC_PARAMETER,
 }
 
 sealed interface DotNetClrSpecialConstraintSatisfaction {
@@ -105,6 +106,9 @@ class DotNetClrSpecialConstraintValidator(
         binding: DotNetClrResolvedGenericParameterBinding,
         classification: DotNetClrByRefLikeClassification,
     ): DotNetClrSpecialConstraintSatisfaction {
+        classification.dependentGenericParameterUnsupportedOrNull()?.let {
+            return it
+        }
         val classified = classification as? DotNetClrByRefLikeClassification.Classified
             ?: return DotNetClrSpecialConstraintSatisfaction.InvalidClassification(
                 classification
@@ -213,6 +217,28 @@ class DotNetClrSpecialConstraintValidator(
         reason: DotNetClrSpecialConstraintViolation,
     ): DotNetClrSpecialConstraintSatisfaction.Violated =
         DotNetClrSpecialConstraintSatisfaction.Violated(reason)
+
+    private fun DotNetClrByRefLikeClassification
+            .dependentGenericParameterUnsupportedOrNull():
+            DotNetClrSpecialConstraintSatisfaction.Unsupported? {
+        val physicalFailure =
+            this as? DotNetClrByRefLikeClassification.PhysicalTypeFailure
+                ?: return null
+        val unsupported =
+            physicalFailure.classification as?
+                    DotNetClrPhysicalTypeClassification.Unsupported
+                ?: return null
+        return if (
+            unsupported.reason ==
+            DotNetClrPhysicalTypeClassificationUnsupported.GENERIC_PARAMETER
+        ) {
+            DotNetClrSpecialConstraintSatisfaction.Unsupported(
+                DotNetClrSpecialConstraintUnsupported.DEPENDENT_GENERIC_PARAMETER
+            )
+        } else {
+            null
+        }
+    }
 
     private fun DotNetClrResolvedTypeSignature.referenceTypeDefinitionOrNull():
             DotNetClrResolvedTypeDefinition? =

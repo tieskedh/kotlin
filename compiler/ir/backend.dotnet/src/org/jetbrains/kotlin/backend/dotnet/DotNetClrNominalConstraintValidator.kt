@@ -3,6 +3,8 @@ package org.jetbrains.kotlin.backend.dotnet
 enum class DotNetClrNominalConstraintUnsupported {
     NON_NOMINAL_ARGUMENT,
     NON_NOMINAL_CONSTRAINT,
+    DEPENDENT_GENERIC_PARAMETER,
+    VARIANT_CONVERSION_REQUIRED,
 }
 
 sealed interface DotNetClrNominalConstraintSatisfaction {
@@ -72,6 +74,12 @@ class DotNetClrNominalConstraintValidator(
         argument: DotNetClrResolvedTypeSignature,
         constraint: DotNetClrResolvedGenericConstraintType,
     ): DotNetClrNominalConstraintSatisfaction {
+        if (argument is DotNetClrResolvedTypeSignature.GenericParameter) {
+            return DotNetClrNominalConstraintSatisfaction.Unsupported(
+                DotNetClrNominalConstraintUnsupported.DEPENDENT_GENERIC_PARAMETER,
+                argument,
+            )
+        }
         val actualView = argument.toNominalView()
             ?: return DotNetClrNominalConstraintSatisfaction.Unsupported(
                 DotNetClrNominalConstraintUnsupported.NON_NOMINAL_ARGUMENT,
@@ -92,6 +100,13 @@ class DotNetClrNominalConstraintValidator(
 
             DotNetClrTypeAssignability.NotAssignable ->
                 DotNetClrNominalConstraintSatisfaction.Violated
+
+            is DotNetClrTypeAssignability.VariantConversionRequired ->
+                DotNetClrNominalConstraintSatisfaction.Unsupported(
+                    DotNetClrNominalConstraintUnsupported
+                        .VARIANT_CONVERSION_REQUIRED,
+                    constraintSignature,
+                )
 
             is DotNetClrTypeAssignability.InvalidHierarchy,
             is DotNetClrTypeAssignability.InheritanceCycle,

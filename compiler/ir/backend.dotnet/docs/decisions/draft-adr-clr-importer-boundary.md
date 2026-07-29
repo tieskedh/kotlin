@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware exact nominal assignability, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware exact nominal assignability and a conservative variance boundary, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -1047,6 +1047,40 @@ and .NET 10 `System.Runtime`, plus a missing-catalog type failure. A Roslyn gene
 boxed interface views while `Object` does not. The earlier mixed contract now correctly records
 `Int32 -> System.ValueType` as satisfied and its unrelated project interface as violated.
 
+The thirtieth slice adds a truthful aggregate constraint status without claiming unsupported CLR
+conversions.
+
+1. Kotlin's mature backends ask their target type checker for bound satisfaction and preserve
+   diagnostics/unsupported states until the relevant target conversion is modeled. They do not
+   turn a partial exact-symbol walk into a universal validity Boolean.
+2. CLR variance is declared on interface/delegate GenericParam rows and can make two constructed
+   views assignable even when their arguments differ. Arrays and open generic parameters add
+   further non-nominal rules. An exact hierarchy miss is therefore not always proof of a
+   constraint violation.
+3. Kotlin Common remains unchanged. CLR covariance/contravariance and an importer validation
+   status do not alter Kotlin declaration-site variance, subtyping, or common generic bounds.
+4. The rule is metadata/profile-neutral: every selected profile supplies the variance rows and
+   hierarchy being checked. Profile selection can change available types, not the meaning or
+   precedence of `Invalid`, `Unsupported`, `Violated`, and `Satisfied`.
+5. The exact hierarchy walker now records `VariantConversionRequired` only if it actually reaches
+   the same variant definition with different arguments; an unrelated type remains
+   `NotAssignable`. Dependent generic parameters receive explicit unsupported results in nominal
+   and special validation. `DotNetClrConstructedTypeConstraintValidator` combines all retained
+   per-row results with the precedence invalid metadata > unsupported semantics > proven
+   violation > supported satisfaction. Its result retains both complete sub-validations and issue
+   coordinates.
+6. The core-team choice is a sealed status over preserved evidence, not a Boolean and not an
+   eager partial implementation of CLR variance. This safely gates later importer projection:
+   only a wholly supported `Satisfied` shape may proceed, while variant, array, and dependent
+   cases remain actionable implementation work rather than false diagnostics.
+
+Roslyn coverage uses a real covariant interface where the exact graph reaches
+`IVariantConstraint<String>` for an `IVariantConstraint<Object>` constraint and records
+unsupported variance. `Object` against `IComparable<Object>` remains a proven violation because
+its hierarchy contains no matching interface definition. Aggregate tests cover full success,
+simultaneous nominal/special violations, two preserved array issues, dependent parameters, the
+variant candidate, and an invalid class/value signature.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1154,6 +1188,12 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Keeping the physical primitive catalog separate from Kotlin built-in identity:
   **Correct direction**.
+- Preserving a reachable variant-conversion candidate instead of reporting false exact
+  non-assignability: **Correct temporary implementation, but not a final design**.
+- Sealed aggregate generic-constraint status with invalid/unsupported/violated/satisfied
+  precedence and retained per-row evidence: **Correct direction**.
+- Deferring actual CLR variance, array, and dependent-parameter assignability behind explicit
+  unsupported results: **Correct temporary implementation, but not a final design**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:
