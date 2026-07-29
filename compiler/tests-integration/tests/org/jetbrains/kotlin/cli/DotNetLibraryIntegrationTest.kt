@@ -29,6 +29,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeClassificationFailu
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeClassifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayRuntimeTypesResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayRuntimeTypesResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReferenceBinder
@@ -129,6 +131,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeAssignability
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeAssignabilityResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeViewResolutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrVectorGenericInterface
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
@@ -2802,6 +2805,40 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public sealed class GenericEnumerableVariantConstraintProbe<T>
+                        where T : IVariantConstraint<
+                            System.Collections.Generic.IEnumerable<object>>
+                    {
+                    }
+
+                    public sealed class ReadOnlyListVariantConstraintProbe<T>
+                        where T : IVariantConstraint<
+                            System.Collections.Generic.IReadOnlyList<object>>
+                    {
+                    }
+
+                    public sealed class UIntGenericListVariantConstraintProbe<T>
+                        where T : IVariantConstraint<
+                            System.Collections.Generic.IList<uint>>
+                    {
+                    }
+
+                    public sealed class UShortGenericListVariantConstraintProbe<T>
+                        where T : IVariantConstraint<
+                            System.Collections.Generic.IList<ushort>>
+                    {
+                    }
+
+                    public interface IUnrelatedVectorInterface<T>
+                    {
+                    }
+
+                    public sealed class UnrelatedVectorInterfaceConstraintProbe<T>
+                        where T : IVariantConstraint<
+                            IUnrelatedVectorInterface<object>>
+                    {
+                    }
+
                     public sealed class ObjectComparable : IComparable<object>
                     {
                         public int CompareTo(object other) => 0;
@@ -3137,12 +3174,63 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 systemNullableType,
             ),
         )
+        val arrayRuntimeTypes = (
+                DotNetClrArrayRuntimeTypesResolver(resolver).resolve(
+                    systemRuntimeMetadata
+                ) as DotNetClrArrayRuntimeTypesResolution.Resolved
+                ).types
+        assertEquals(systemArrayType, arrayRuntimeTypes.systemArray)
+        for (kind in DotNetClrVectorGenericInterface.entries) {
+            val interfaceType = (
+                    resolver.resolveTopLevelType(
+                        systemRuntimeMetadata,
+                        kind.namespaceName,
+                        kind.metadataName,
+                    ) as DotNetClrTypeResolution.Resolved
+                    ).type
+            assertSame(kind, arrayRuntimeTypes.vectorInterface(interfaceType))
+        }
+        val frameworkCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(
+            frameworkCompiler != null,
+            ".NET Framework C# compiler is not available",
+        )
+        val frameworkCoreAssembly =
+            checkNotNull(frameworkCompiler).parentFile.resolve("mscorlib.dll")
+        requireOrAssumeToolchain(
+            frameworkCoreAssembly.isFile,
+            ".NET Framework mscorlib is not available",
+        )
+        val frameworkCoreMetadata =
+            DotNetClrMetadataReader.read(frameworkCoreAssembly)
+        val frameworkTypeResolver =
+            DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { _, _ -> null }
+            )
+        val frameworkArrayRuntimeTypes = (
+                DotNetClrArrayRuntimeTypesResolver(frameworkTypeResolver)
+                    .resolve(frameworkCoreMetadata) as
+                        DotNetClrArrayRuntimeTypesResolution.Resolved
+                ).types
+        for (kind in DotNetClrVectorGenericInterface.entries) {
+            val interfaceType = (
+                    frameworkTypeResolver.resolveTopLevelType(
+                        frameworkCoreMetadata,
+                        kind.namespaceName,
+                        kind.metadataName,
+                    ) as DotNetClrTypeResolution.Resolved
+                    ).type
+            assertSame(
+                kind,
+                frameworkArrayRuntimeTypes.vectorInterface(interfaceType),
+            )
+        }
         val signatureAssignability =
             DotNetClrSignatureTypeAssignabilityResolver(
                 resolver,
                 physicalTypeClassifier,
                 primitiveTypeCatalog,
-                systemArrayType,
+                arrayRuntimeTypes,
             )
         assertSame(
             DotNetClrTypeAssignability.Assignable,
@@ -3451,7 +3539,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 resolver,
                 primitiveTypeCatalog,
                 physicalTypeClassifier,
-                systemArrayType,
+                arrayRuntimeTypes,
             )
         val satisfiedNominalConstraints =
             nominalConstraintValidator.validate(
@@ -3613,7 +3701,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 resolver,
                 primitiveTypeCatalog,
                 physicalTypeClassifier,
-                systemArrayType,
+                arrayRuntimeTypes,
                 resolutionLimit = 1,
             ).validate(limitedConstraintContract)
                 .parameters.single().constraints.single().satisfaction as
@@ -3878,27 +3966,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
         val arrayAllConstraints =
             arrayConstraintValidation.status as
-                    DotNetClrConstructedTypeConstraintStatus.Unsupported
-        assertEquals(1, arrayAllConstraints.nominal.size)
+                    DotNetClrConstructedTypeConstraintStatus.Violated
+        assertEquals(2, arrayAllConstraints.nominal.size)
         assertEquals(
-            1,
+            2,
             arrayConstraintValidation.nominal.parameters
                 .single().constraints.count { validation ->
                     validation.satisfaction ==
                         DotNetClrNominalConstraintSatisfaction.Violated
                 },
-        )
-        assertEquals(
-            listOf(
-                DotNetClrNominalConstraintUnsupported
-                    .VECTOR_INTERFACE_CONVERSION_REQUIRED
-            ),
-            arrayAllConstraints.nominal.map { issue ->
-                (
-                        issue.validation.satisfaction as
-                                DotNetClrNominalConstraintSatisfaction.Unsupported
-                        ).reason
-            },
         )
 
         val dependentAllConstraints =
@@ -4084,24 +4160,57 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "VariantStringMatrixConstraint",
             ),
         )
-        val vectorInterfaceStatus =
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
             variantConstraintStatus(
                 "GenericListVariantConstraintProbe`1",
                 "VariantArrayConstraint",
-            ) as DotNetClrConstructedTypeConstraintStatus.Unsupported
-        assertEquals(
-            DotNetClrNominalConstraintUnsupported
-                .VECTOR_INTERFACE_CONVERSION_REQUIRED,
-            (
-                    vectorInterfaceStatus.nominal.single()
-                        .validation.satisfaction as
-                            DotNetClrNominalConstraintSatisfaction.Unsupported
-                    ).reason,
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "GenericEnumerableVariantConstraintProbe`1",
+                "VariantArrayConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "ReadOnlyListVariantConstraintProbe`1",
+                "VariantArrayConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "UIntGenericListVariantConstraintProbe`1",
+                "VariantIntArrayConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "UIntGenericListVariantConstraintProbe`1",
+                "VariantSignedArrayEnumConstraint",
+            ),
         )
         assertTrue(
             variantConstraintStatus(
                 "GenericListVariantConstraintProbe`1",
                 "VariantStringMatrixConstraint",
+            ) is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        assertTrue(
+            variantConstraintStatus(
+                "UShortGenericListVariantConstraintProbe`1",
+                "VariantCharArrayConstraint",
+            ) is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        assertTrue(
+            variantConstraintStatus(
+                "UnrelatedVectorInterfaceConstraintProbe`1",
+                "VariantArrayConstraint",
             ) is DotNetClrConstructedTypeConstraintStatus.Violated
         )
 

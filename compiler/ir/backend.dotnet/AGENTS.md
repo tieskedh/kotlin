@@ -354,14 +354,17 @@ landed shape as a compatibility constraint.
    enum storage, but never `bool`/`byte` or `char`/`ushort`. This is foreign physical
    assignability, not Kotlin `Array` covariance. Resolve every array through the selected
    `System.Array` identity and its ordinary hierarchy; never recognize that base by name. A general
-   array outside that hierarchy is not assignable. A vector against a unary generic interface,
-   plus open-parameter, custom-modified, and delegate candidates, remains a structured unsupported
-   boundary until the separate physical rule is implemented. Signature assignability never
-   inserts boxing; use the distinct nominal-view relation when generic constraints intentionally
-   compare selected type definitions.
-   Vector-interface relations and dependent parameter constraints still require their remaining
-   shared assignability policy; dependent arguments are explicitly unsupported in both nominal
-   and special validation. Special flags and by-ref-like eligibility use
+   array outside that hierarchy is not assignable. Resolve `IList<T>`, `ICollection<T>`,
+   `IEnumerable<T>`, `IReadOnlyList<T>`, and `IReadOnlyCollection<T>` as one complete selected
+   identity catalog. Only vectors implement that catalog, and they use array-element compatibility
+   rather than ordinary generic variance; this includes reduced integer/enum storage. An unrelated
+   unary interface is not assignable. Open-parameter, custom-modified, and delegate candidates
+   remain structured unsupported boundaries. Signature assignability never inserts boxing; use
+   the distinct nominal-view relation when generic constraints intentionally compare selected type
+   definitions.
+   Dependent parameter constraints still require their remaining shared assignability policy;
+   dependent arguments are explicitly unsupported in both nominal and special validation. Special
+   flags and by-ref-like eligibility use
    the physical classification and selected-profile policy below. Resolve compact CLR primitive
    signatures through one complete selected-core catalog (`mscorlib`, the selected portable
    facade graph, or `System.Runtime`/CoreLib), then use that TypeDef's boxed hierarchy view for

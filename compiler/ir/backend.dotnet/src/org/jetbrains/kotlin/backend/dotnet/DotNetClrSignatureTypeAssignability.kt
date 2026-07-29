@@ -5,17 +5,16 @@ package org.jetbrains.kotlin.backend.dotnet
  *
  * Kotlin source subtyping is not inferred here. This is the physical foreign-signature relation
  * used by importer validation. Generic-interface variance and array-to-array conversions are
- * supported; dependent parameters, delegate variance, and vector-to-generic-interface
- * conversions remain explicit boundaries. The signature entry point never inserts boxing. The
- * nominal-view entry point is separate so generic-constraint validation can compare selected type
- * definitions without pretending that an unboxed value is assignment-compatible with a reference
- * location.
+ * supported; dependent parameters and delegate variance remain explicit boundaries. The
+ * signature entry point never inserts boxing. The nominal-view entry point is separate so
+ * generic-constraint validation can compare selected type definitions without pretending that an
+ * unboxed value is assignment-compatible with a reference location.
  */
 class DotNetClrSignatureTypeAssignabilityResolver(
     private val typeResolver: DotNetClrTypeResolver,
     private val physicalTypeClassifier: DotNetClrPhysicalTypeClassifier,
     private val primitiveTypes: DotNetClrPrimitiveTypeCatalog,
-    private val systemArray: DotNetClrResolvedTypeDefinition,
+    private val arrayRuntimeTypes: DotNetClrArrayRuntimeTypes,
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
 ) {
     private val exactResolver =
@@ -226,7 +225,10 @@ class DotNetClrSignatureTypeAssignabilityResolver(
         when (
             val baseResult =
                 isAssignable(
-                    DotNetClrResolvedTypeView(systemArray, emptyList()),
+                    DotNetClrResolvedTypeView(
+                        arrayRuntimeTypes.systemArray,
+                        emptyList(),
+                    ),
                     expectedView,
                     active,
                     counter,
@@ -236,16 +238,21 @@ class DotNetClrSignatureTypeAssignabilityResolver(
             DotNetClrTypeAssignability.NotAssignable -> Unit
             else -> return baseResult
         }
-        if (actual is DotNetClrResolvedTypeSignature.Array ||
-            !expectedView.type.definition.isInterface ||
+        val vector = actual as? DotNetClrResolvedTypeSignature.SzArray
+            ?: return DotNetClrTypeAssignability.NotAssignable
+        if (!expectedView.type.definition.isInterface ||
             expectedView.arguments.size != 1
         ) {
             return DotNetClrTypeAssignability.NotAssignable
         }
-        return DotNetClrTypeAssignability.UnsupportedSignatureConversion(
-            DotNetClrSignatureConversionUnsupported.VECTOR_TO_GENERIC_INTERFACE,
-            actual,
-            expected,
+        if (arrayRuntimeTypes.vectorInterface(expectedView.type) == null) {
+            return DotNetClrTypeAssignability.NotAssignable
+        }
+        return evaluateArrayElements(
+            vector.elementType,
+            expectedView.arguments.single(),
+            active,
+            counter,
         )
     }
 

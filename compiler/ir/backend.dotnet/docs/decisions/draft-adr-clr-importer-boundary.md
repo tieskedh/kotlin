@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface variance, array-to-array, and array-base assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface variance, complete CLR vector-interface, and array assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -1190,6 +1190,43 @@ Roslyn metadata now proves vector and rectangular-array conversion to `System.Ar
 coverage proves that a supported violation is retained in the complete validation even when an
 unsupported row determines the sealed aggregate status.
 
+The thirty-fourth slice resolves the selected CLR generic vector-interface surface.
+
+1. Kotlin/JVM projects Java arrays through the Java type system and the JVM's physical array
+   interfaces without adding those interfaces to Kotlin Common `Array`. Native, JS, and Wasm
+   likewise keep target carriers and adapters below logical Kotlin array identity. The .NET
+   importer therefore extends only foreign CLR signature assignability.
+2. The VES/BCL gives zero-based rank-one vectors the generic interfaces `IList<T>`,
+   `ICollection<T>`, `IEnumerable<T>`, `IReadOnlyList<T>`, and `IReadOnlyCollection<T>`.
+   Multidimensional arrays do not receive them. Compatibility uses the CLR
+   array-element-compatible relation, not the declared variance of the generic interface; this is
+   why `int[]` can satisfy an `IList<uint>` or `IReadOnlyCollection<uint>` location even though
+   value arguments cannot participate in ordinary generic variance.
+3. Kotlin Common is unchanged. No Kotlin `Array<String>` subtype of a Kotlin collection is
+   invented, no specialized primitive-array wrapper becomes a CLR vector, and reduced signedness
+   never becomes a Kotlin subtype rule.
+4. .NET Framework 4.8 and .NET 10 runtime probes confirm the five-interface surface, reference
+   element covariance, reduced `int`/`uint` compatibility, and rejection for rectangular arrays.
+   .NET Standard 2.0 contains the same five contract identities; a portable binary relies on the
+   consuming CLR implementation, as with its other VES behavior. The owning TypeDefs are resolved
+   separately through each selected profile graph.
+5. `DotNetClrArrayRuntimeTypesResolver` resolves and validates `System.Array` plus all five unary
+   interface TypeDefs. The resulting immutable catalog is complete or returns structured
+   unresolved/invalid evidence. Signature assignability compares the expected definition with
+   those identities and reuses the same recursive array-element compatibility used for
+   array-to-array conversion. An unrelated unary generic interface is now proven not assignable;
+   no name is inspected in the checking path.
+6. The core-team choice is a complete selected identity catalog, not a target-profile enum switch,
+   a namespace/name predicate, or synthesis through `IList<T>`'s ordinary hierarchy. The last
+   alternative would lose the CLR reduced-storage rule when reaching `IEnumerable<uint>` from an
+   `int[]`.
+
+Roslyn coverage proves `IList<object>`, `IEnumerable<object>`, `IReadOnlyList<object>`,
+`IList<uint>` from both `int[]` and an `int`-backed enum array, rejection of
+`char[]`/`IList<ushort>`, rejection for a rectangular array, and rejection of an unrelated unary
+generic interface. The catalog itself is resolved from both the selected modern core graph and the
+installed .NET Framework 4.8 `mscorlib`.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1301,15 +1338,13 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   non-assignability: **Correct direction**.
 - Sealed aggregate generic-constraint status with invalid/unsupported/violated/satisfied
   precedence and retained per-row evidence: **Correct direction**.
-- Deferring remaining vector-to-generic-interface, delegate, and dependent-parameter assignability
-  behind explicit
+- Deferring remaining delegate and dependent-parameter assignability behind explicit
   unsupported results: **Correct temporary implementation, but not a final design**.
 - Bounded recursive reference-only CLR generic-interface variance in shared assignability:
   **Correct direction**.
 - Keeping value arguments invariant in CLR variance rather than applying boxing:
   **Correct direction**.
-- Keeping vector-to-generic-interface and delegate variance conversions as explicit unsupported
-  boundaries:
+- Keeping delegate variance conversions as an explicit unsupported boundary:
   **Correct temporary implementation, but not a final design**.
 - Generalizing interface variance into bounded physical signature assignability:
   **Correct direction**.
@@ -1321,6 +1356,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Treating general arrays as proven outside the vector-only generic interface surface:
   **Correct direction**.
+- Resolving the five VES/BCL vector interfaces as a complete selected-identity catalog:
+  **Correct direction**.
+- Reusing array-element compatibility rather than ordinary generic variance for vector interfaces:
+  **Reasonable platform-specific divergence**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:
