@@ -321,6 +321,45 @@ object DotNetBackend {
                 }
             }
         }
+        for (foreignAssembly in emission.referencedForeignAssemblies) {
+            val identity = foreignAssembly.metadata.identity
+            if (identity.name.equals(assemblyName, ignoreCase = true)) {
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "Output assembly '$assemblyName' collides with referenced foreign CLR assembly " +
+                            "'${foreignAssembly.assemblyFile.path}'."
+                )
+                ilTarget.delete()
+                return result(if (emitsExecutable) binaryOutput else ilTarget)
+            }
+            if (!foreignAssembly.assemblyFile.isFile) {
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "The referenced foreign CLR assembly '${foreignAssembly.assemblyFile.path}' is missing."
+                )
+                ilTarget.delete()
+                return result(if (emitsExecutable) binaryOutput else ilTarget)
+            }
+            if (emitsExecutable) {
+                val dependencyFileName = "${identity.name}.dll"
+                if (
+                    identity.name.isEmpty() ||
+                    File(dependencyFileName).name != dependencyFileName ||
+                    dependencyFileName.any { character -> character in "<>:\"/\\|?*" }
+                ) {
+                    messageCollector.report(
+                        CompilerMessageSeverity.ERROR,
+                        "Foreign CLR assembly name '${identity.name}' cannot be packaged as a safe dependency file."
+                    )
+                    ilTarget.delete()
+                    return result(binaryOutput)
+                }
+                val packagedAssembly = (binaryOutput.parentFile ?: File(".")).resolve(dependencyFileName)
+                if (foreignAssembly.assemblyFile.canonicalFile != packagedAssembly.canonicalFile) {
+                    foreignAssembly.assemblyFile.copyTo(packagedAssembly, overwrite = true)
+                }
+            }
+        }
         // ilasm decodes a BOM-less file as ANSI, mangling every multi-byte UTF-8 sequence (e.g. in
         // string literals), so the .il file must be written as UTF-8 *with* a BOM.
         ilTarget.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))

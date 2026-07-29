@@ -2671,17 +2671,29 @@ session state, process, and a curated task menu. Keep both files updated as you 
   wrong targets, mixed valid/invalid evidence, and malformed values. The focused test is
   1/0/0/0. The fresh strict gate is 879/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
   CLI, and 62 library integration tests).
+- Exact backend-call binding for the closed foreign-interface slice is implemented. Every
+  imported FIR function retains its already-selected foreign assembly, TypeDef, MethodDef, and
+  physical signature in a target-owned `DeserializedContainerSource`; FIR2IR preserves that
+  carrier on the lazy external IR declaration. The backend maps the class owner and callable
+  directly from those carriers and never searches by ClassId or display name. Logical enhanced
+  Kotlin types still own resolution/contracts/control flow, while the retained MethodDef owns the
+  emitted MemberRef. The focused adversarial C# fixture executes exact `int32`/`string` overloads,
+  reference and void returns, and dishonest value/void `DoesNotReturn` implementations on both
+  CLR 4.8 and CoreCLR 10. The value-returning violation is called as `int32`, popped, and reaches
+  the common `KotlinNothingValueException` guard; the void violation reaches the same guard
+  without a phantom result. Emission records the exact selected assembly version/public-key
+  token, rejects non-neutral culture and ambiguous same-simple-name producers in this first
+  slice, and copies only a producer referenced by surviving executable code. The annotation-only
+  core dependency is not deployed. The focused test is 1/0/0/0. The fresh strict gate is
+  880/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 63 library integration
+  tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
   a separate metadata/ABI decision involving KLIB-only tools, stripped attributes, and physical
   bridge/dispatcher/split-interface ownership.
-- Backend-call binding for the closed interface slice remains required before successful foreign
-  calls may become executable. A `DoesNotReturn` physical call must use the retained CLR return
-  shape, discard an impossible value if necessary, and then reach the ordinary common
-  `KotlinNothingValueException` guard if foreign code violates its contract. Do not batch
-  state-weakening member or by-reference `Try*` contracts into the completed top-level return
-  qualifier slice.
+- Do not batch state-weakening member or by-reference `Try*` contracts into the completed
+  top-level return qualifier/call-binding slice.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2769,8 +2781,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
    The attribute-carrier review is now recorded in
    `docs/review/clr-annotation-interoperability.md`. Standard CLR/Roslyn metadata is the shared
    vocabulary; KLIB is the exact Kotlin remainder. The closed nullable-aware abstract-interface
-   FIR slice has landed. Continue with the exact CodeAnalysis/Kotlin-contract overlap and
-   backend-call binding before broadening the declaration grammar. `NotNullWhen` and
+   FIR slice and its exact retained backend-call binding have landed. Continue only after
+   preserving that logical/physical split when broadening the declaration grammar. `NotNullWhen` and
    parameter-target `NotNull`, return-target `NotNullIfNotNull`, and parameter-target
    `DoesNotReturnIf` have landed as common FIR effects; method-target `DoesNotReturn` now maps to a
    logical `Nothing` view while retaining the physical signature. Return-target
