@@ -170,6 +170,7 @@ class DotNetClrPhysicalTypeClassifier(
             ) {
                 DotNetClrTypeAssignability.Assignable -> true
                 DotNetClrTypeAssignability.NotAssignable -> false
+                is DotNetClrTypeAssignability.VariantConversionRequired,
                 is DotNetClrTypeAssignability.InvalidHierarchy,
                 is DotNetClrTypeAssignability.InheritanceCycle,
                 is DotNetClrTypeAssignability.ResolutionLimitExceeded,

@@ -341,8 +341,12 @@ landed shape as a compatibility constraint.
    each resolved row through the shared assignability resolver and preserve satisfied, violated,
    unsupported non-nominal, and invalid-assignability outcomes distinctly. Retain the parameter
    binding and its special flags, but never turn “all nominal rows satisfied” into a complete
-   constraint-satisfaction boolean. Array arguments and dependent parameter constraints still
-   require their own shared assignability policy; special flags and by-ref-like eligibility use
+   constraint-satisfaction boolean. If the exact hierarchy reaches the same variant interface or
+   delegate definition with different arguments, retain `VariantConversionRequired`; do not call
+   every use of a variant expected definition unsupported, and do not report a false violation.
+   Array arguments and dependent parameter constraints still require their own shared
+   assignability policy; dependent arguments are explicitly unsupported in both nominal and
+   special validation. Special flags and by-ref-like eligibility use
    the physical classification and selected-profile policy below. Resolve compact CLR primitive
    signatures through one complete selected-core catalog (`mscorlib`, the selected portable
    facade graph, or `System.Runtime`/CoreLib), then use that TypeDef's boxed hierarchy view for
@@ -377,6 +381,11 @@ landed shape as a compatibility constraint.
    is not evidence. Resolve primitive `System.Object`/`System.String` through the selected core
    catalog. This rule is uniform across `net48`, `netstandard2.0`, and `net10.0`; by-ref-like
    eligibility remains orthogonal.
+   Combine nominal and special validations only through the sealed constructed-type status.
+   Precedence is invalid selected metadata, then unsupported semantics, then proven violations,
+   then wholly supported satisfaction. Preserve issue coordinates and both complete
+   sub-validations. Never expose a Boolean or let a later importer/FIR/codegen consumer proceed on
+   `Unsupported`; only `Satisfied` is a supported constraint proof.
    MemberRef rows preserve their exact
    TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and closed
    method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely
