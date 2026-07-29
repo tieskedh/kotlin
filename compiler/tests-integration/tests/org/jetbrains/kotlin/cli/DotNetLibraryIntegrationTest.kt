@@ -22211,7 +22211,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testForeignClrObsoleteMethodsUseCommonDeprecationDiagnostics() {
+    fun testForeignClrObsoleteDeclarationsUseCommonDeprecationDiagnostics() {
         val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
         requireOrAssumeToolchain(
             modernCSharp != null,
@@ -22323,6 +22323,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             [Obsolete("base-only message")]
                             void BaseOnly();
                         }
+
+                        [Obsolete("warning interface message")]
+                        public interface WarningTypeApi
+                        {
+                            void Current();
+                        }
+
+                        [Obsolete("error interface message", true)]
+                        public interface ErrorTypeApi
+                        {
+                            void Current();
+                        }
                     }
                     """.trimIndent()
                 )
@@ -22337,13 +22349,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 package consumer
 
                 import ForeignObsoleteContracts.DeprecatedApi
+                import ForeignObsoleteContracts.WarningTypeApi
 
-                public fun use(api: DeprecatedApi) {
+                public fun use(api: DeprecatedApi, type: WarningTypeApi) {
                     api.NoMessage()
                     api.NullMessage()
                     api.Warning()
                     ${profile.modernDiagnosticCall}
                     api.Current()
+                    type.Current()
                 }
                 """.trimIndent(),
                 listOf(fixtureAssembly, profile.systemReference),
@@ -22352,6 +22366,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(ExitCode.OK, warningExitCode, warningDiagnostics)
             assertTrue("Deprecated in .NET" in warningDiagnostics) { warningDiagnostics }
             assertTrue("warning message" in warningDiagnostics) { warningDiagnostics }
+            assertTrue("warning interface message" in warningDiagnostics) {
+                warningDiagnostics
+            }
             if (profile.modernDiagnosticCall.isNotEmpty()) {
                 assertTrue("diagnostic message" in warningDiagnostics) { warningDiagnostics }
             }
@@ -22366,9 +22383,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 package consumer
 
                 import ForeignObsoleteContracts.DeprecatedApi
+                import ForeignObsoleteContracts.ErrorTypeApi
 
-                public fun rejected(api: DeprecatedApi) {
+                public fun rejected(api: DeprecatedApi, type: ErrorTypeApi) {
                     api.Error()
+                    type.Current()
                 }
                 """.trimIndent(),
                 listOf(fixtureAssembly, profile.systemReference),
@@ -22376,6 +22395,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
             assertEquals(ExitCode.COMPILATION_ERROR, errorExitCode, errorDiagnostics)
             assertTrue("error message" in errorDiagnostics) { errorDiagnostics }
+            assertTrue("error interface message" in errorDiagnostics) { errorDiagnostics }
 
             val [overrideDiagnostics, overrideExitCode] = compileConsumer(
                 "foreign-obsolete-override-$profileSuffix.kt",
@@ -22383,13 +22403,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 package consumer
 
                 import ForeignObsoleteContracts.OverrideApi
+                import ForeignObsoleteContracts.WarningTypeApi
 
                 public class CurrentOverride : OverrideApi {
                     override fun BaseOnly() {}
                 }
 
-                public fun accepted(api: CurrentOverride) {
+                @Suppress("DEPRECATION")
+                public class CurrentImplementation : WarningTypeApi {
+                    override fun Current() {}
+                }
+
+                public fun accepted(
+                    api: CurrentOverride,
+                    implementation: CurrentImplementation,
+                ) {
                     api.BaseOnly()
+                    implementation.Current()
                 }
                 """.trimIndent(),
                 listOf(fixtureAssembly, profile.systemReference),
@@ -22397,6 +22427,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
             assertEquals(ExitCode.OK, overrideExitCode, overrideDiagnostics)
             assertFalse("base-only message" in overrideDiagnostics) {
+                overrideDiagnostics
+            }
+            assertFalse("warning interface message" in overrideDiagnostics) {
                 overrideDiagnostics
             }
         }
@@ -22408,7 +22441,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 namespace System
                 {
-                    [AttributeUsage(AttributeTargets.Method)]
+                    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Interface)]
                     public sealed class ObsoleteAttribute : Attribute
                     {
                         public ObsoleteAttribute(string message) {}
@@ -22420,6 +22453,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public interface LookalikeApi
                     {
                         [System.Obsolete("look-alike must not deprecate")]
+                        void Current();
+                    }
+
+                    [System.Obsolete("look-alike type must not deprecate")]
+                    public interface LookalikeTypeApi
+                    {
                         void Current();
                     }
                 }
@@ -22440,9 +22479,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             package consumer
 
             import HostileObsoleteContracts.LookalikeApi
+            import HostileObsoleteContracts.LookalikeTypeApi
 
-            public fun accepted(api: LookalikeApi) {
+            public fun accepted(api: LookalikeApi, type: LookalikeTypeApi) {
                 api.Current()
+                type.Current()
             }
             """.trimIndent(),
             listOf(hostileAssembly, modernSystemRuntime),
@@ -22450,6 +22491,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertEquals(ExitCode.OK, hostileExitCode, hostileDiagnostics)
         assertFalse("look-alike must not deprecate" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("look-alike type must not deprecate" in hostileDiagnostics) {
             hostileDiagnostics
         }
 
@@ -22464,6 +22508,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         [Obsolete("malformed must not deprecate", true)]
                         void Malformed();
+                    }
+
+                    [Obsolete("malformed type must not deprecate", true)]
+                    public interface MalformedTypeApi
+                    {
+                        void Current();
                     }
                 }
                 """.trimIndent()
@@ -22485,30 +22535,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             method.declaringType == malformedApi.handle &&
                     method.name == "Malformed"
         }
-        val malformedAttribute = malformedMetadata.customAttributes.single { attribute ->
-            if (attribute.parent != malformedMethod.handle) return@single false
+        val malformedTypeApi = malformedMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "MalformedObsoleteContracts" &&
+                    type.metadataName == "MalformedTypeApi"
+        }
+        val malformedParents = setOf(malformedMethod.handle, malformedTypeApi.handle)
+        val malformedAttributes = malformedMetadata.customAttributes.filter { attribute ->
+            if (attribute.parent !in malformedParents) return@filter false
             val constructor = malformedMetadata.memberReferences.singleOrNull { member ->
                 member.handle == attribute.constructor
-            } ?: return@single false
+            } ?: return@filter false
             malformedMetadata.typeReferences.any { type ->
                 type.handle == constructor.parent &&
                         type.namespaceName == "System" &&
                         type.metadataName == "ObsoleteAttribute"
             }
         }
+        assertEquals(2, malformedAttributes.size)
         val malformedImage = pristineMalformedAssembly.readBytes()
         val malformedTables = locateClrMetadataTables(malformedImage)
-        val malformedValueIndex = readLittleEndianIndex(
-            malformedImage,
-            malformedTables.rowOffset(12, malformedAttribute.handle.row) +
-                    malformedTables.hasCustomAttributeIndexSize +
-                    malformedTables.customAttributeTypeIndexSize,
-            malformedTables.blobIndexSize,
-        )
-        val malformedValueOffset =
-            malformedTables.blobContentOffset(malformedImage, malformedValueIndex)
-        assertEquals(1, malformedImage[malformedValueOffset].toInt() and 0xff)
-        malformedImage[malformedValueOffset] = 0
+        for (malformedAttribute in malformedAttributes) {
+            val malformedValueIndex = readLittleEndianIndex(
+                malformedImage,
+                malformedTables.rowOffset(12, malformedAttribute.handle.row) +
+                        malformedTables.hasCustomAttributeIndexSize +
+                        malformedTables.customAttributeTypeIndexSize,
+                malformedTables.blobIndexSize,
+            )
+            val malformedValueOffset =
+                malformedTables.blobContentOffset(malformedImage, malformedValueIndex)
+            assertEquals(1, malformedImage[malformedValueOffset].toInt() and 0xff)
+            malformedImage[malformedValueOffset] = 0
+        }
         val malformedAssembly = File(tmpdir, "Foreign.Obsolete.Malformed.dll").apply {
             writeBytes(malformedImage)
         }
@@ -22518,9 +22576,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             package consumer
 
             import MalformedObsoleteContracts.MalformedApi
+            import MalformedObsoleteContracts.MalformedTypeApi
 
-            public fun accepted(api: MalformedApi) {
+            public fun accepted(api: MalformedApi, type: MalformedTypeApi) {
                 api.Malformed()
+                type.Current()
             }
             """.trimIndent(),
             listOf(malformedAssembly, modernSystemRuntime),
@@ -22528,6 +22588,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertEquals(ExitCode.OK, malformedExitCode, malformedDiagnostics)
         assertFalse("malformed must not deprecate" in malformedDiagnostics) {
+            malformedDiagnostics
+        }
+        assertFalse("malformed type must not deprecate" in malformedDiagnostics) {
             malformedDiagnostics
         }
     }
