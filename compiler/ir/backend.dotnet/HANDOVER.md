@@ -2403,6 +2403,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   implication remain next layers; only `Satisfied` may gate later importer projection. The fresh
   strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
   integration tests).
+- The open-generic-constraint continuation replaces the old blanket dependent-parameter boundary
+  with an explicit `DotNetClrResolvedGenericParameterContext`. It preserves the CLR's distinct
+  TypeDef `!n` and MethodDef `!!n` spaces, validates the selected declaration owner, numbering,
+  arity, and all constraint references, and exposes TypeDef bindings only for the complete
+  identity view. A substituted base/member view therefore cannot relabel an outer open parameter
+  by coincidental index. Nominal validation follows declared bounds under a cycle guard only in
+  constructed generic-argument validation; global signature assignability remains unchanged.
+  Special validation proves only source-carried `class`, concrete-class, `struct`, `new()`, and
+  profile-aware `AllowByRefLike` implications. No context remains structured unsupported, and no
+  Kotlin or public CLR constraint is inferred. Real Roslyn type/method parameters, dependent
+  bounds, owner/scope failures, hostile cycles, all three profile policies, and direct
+  Framework/CoreCLR compilation/execution are covered. The fresh strict gate is 871/0/0/0 across
+  16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

@@ -63,6 +63,9 @@ class DotNetClrPhysicalTypeClassifier(
     private val coreTypes: DotNetClrPhysicalTypeCoreTypes,
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
 ) {
+    internal val systemValueType: DotNetClrResolvedTypeDefinition
+        get() = coreTypes.systemValueType
+
     internal val systemEnum: DotNetClrResolvedTypeDefinition
         get() = coreTypes.systemEnum
 

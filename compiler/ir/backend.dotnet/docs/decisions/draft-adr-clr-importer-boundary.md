@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface/delegate variance, complete CLR vector-interface, and array assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface/delegate variance, complete CLR vector-interface, and array assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, scope-qualified open-parameter implication, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -1259,6 +1259,50 @@ unchanged value arguments, and changed value arguments. The selected delegate ro
 from the .NET 10, .NET Framework 4.8, and .NET Standard 2.0 facade graphs; malformed variance on a
 generic class remains invalid instead of becoming delegate-compatible.
 
+The thirty-sixth slice proves constraints for scope-qualified open generic arguments.
+
+1. JVM imports Java type-parameter bounds into the foreign type model and lets the common Kotlin
+   type checker compare substituted bounds. JS, Native, and Wasm likewise retain the logical
+   declaration owner of an open type parameter; none treats a bare parameter number as a global
+   type or rewrites every use to an arbitrary upper bound.
+2. CLR signatures have two owner-relative parameter spaces: `!n` belongs to the declaring
+   TypeDef and `!!n` belongs to the declaring MethodDef. GenericParamConstraint permits recursive
+   TypeSpecs and naked parameters from those scopes. For generic-argument validity, the VES tests
+   a parameter's boxed value against every nominal constraint and separately requires every
+   special constraint. Consequently a declared bound is evidence at a constructed-use site, but
+   the same numeric index from another owner is not.
+3. Kotlin Common is unchanged. A Kotlin `T : Any` is not reinterpreted as CLR `class`, and a CLR
+   `new()` or `allows ref struct` rule does not become an inferred Kotlin bound. The later FIR
+   importer may expose only meanings for which it has an explicit Kotlin mapping; this physical
+   layer merely proves whether an already selected CLR construction is valid for every future
+   instantiation of its open argument.
+4. Ordinary class/interface/value/default-constructor validity is the same on `net48`,
+   `netstandard2.0`, and `net10.0`. The selected profile still owns all nominal identities.
+   `AllowByRefLike` remains the deliberate modern exception: an open source parameter which may
+   be ref-like can flow only to a target parameter which also permits it, and only on `net10.0`.
+5. The resolver therefore constructs an explicit generic-parameter context from one resolved
+   declaring type view and, optionally, one MethodDef. It validates owner, arity, numbering, and
+   every `!n`/`!!n` reference before exposing bindings. A TypeDef's own `!n` bindings are visible
+   only through its complete identity view (`Owner<!0, !1, ...>`); a substituted base/member view
+   cannot relabel an outer parameter as one owned by that TypeDef. Nominal validation follows
+   declared bounds transitively under a bounded cycle guard and keeps ordinary CLR assignability
+   authoritative for concrete bounds. Special validation uses only proven implications: an own
+   `class` flag or non-`Object` class bound proves reference shape, `struct` proves non-nullable
+   value shape, `new()` or `struct` proves construction, and by-ref-like permission is checked
+   contravariantly. Without the selected context, an open parameter remains explicitly
+   unsupported.
+6. The core-team choice is a scope-qualified evidence object passed to constraint validation, not
+   a process-global `(kind, index)` map, eager upper-bound erasure, inferred public constraints,
+   or a change to generic signature assignability. In particular, the global signature relation
+   keeps the VES rule that an unboxed open parameter is assignable only to itself; boxed
+   constraint evidence exists only in this generic-argument validation layer.
+
+Roslyn metadata covers type- and method-owned parameters, self-referential constructed bounds,
+naked dependent bounds, class/reference/value/default-constructor implications, weaker-source
+rejection, owner mismatch, and the distinct `!0`/`!!0` spaces. Direct Framework and CoreCLR
+compilation/execution probes keep the ordinary rules profile-uniform, while synthetic selected
+metadata pins modern by-ref-like permission and malformed/cyclic contexts.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1371,7 +1415,13 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Sealed aggregate generic-constraint status with invalid/unsupported/violated/satisfied
   precedence and retained per-row evidence: **Correct direction**.
 - Deferring remaining dependent-parameter assignability behind explicit unsupported results:
-  **Correct temporary implementation, but not a final design**.
+  **Correct temporary implementation only when no declaring context is selected**.
+- Scope-qualified type/method generic-parameter contexts with bounded constraint implication:
+  **Correct direction**.
+- Treating `(TYPE|METHOD, index)` as a declaration-independent identity:
+  **Architecturally wrong and should be changed**.
+- Inferring stronger public CLR constraints from a Kotlin use site:
+  **Architecturally wrong and should be changed**.
 - Bounded recursive reference-only CLR generic-interface variance in shared assignability:
   **Correct direction**.
 - Keeping value arguments invariant in CLR variance rather than applying boxing:

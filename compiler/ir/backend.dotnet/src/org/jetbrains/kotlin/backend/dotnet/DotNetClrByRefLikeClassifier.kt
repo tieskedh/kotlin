@@ -51,6 +51,12 @@ class DotNetClrByRefLikeClassifier(
     private val attributeDecoder: DotNetClrCustomAttributeDecoder,
     private val isByRefLikeAttribute: DotNetClrResolvedTypeDefinition?,
 ) {
+    internal val systemValueType: DotNetClrResolvedTypeDefinition
+        get() = physicalTypeClassifier.systemValueType
+
+    internal val systemEnum: DotNetClrResolvedTypeDefinition
+        get() = physicalTypeClassifier.systemEnum
+
     fun classify(
         type: DotNetClrResolvedTypeSignature,
     ): DotNetClrByRefLikeClassification {
