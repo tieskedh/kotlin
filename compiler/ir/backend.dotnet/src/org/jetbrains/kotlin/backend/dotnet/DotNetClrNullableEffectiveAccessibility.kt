@@ -118,20 +118,41 @@ class DotNetClrNullableEffectiveAccessibilityResolver(
         if (assembly.genericParameterDefinitions.none { definition -> definition == parameter }) {
             return notFound(parameter.handle)
         }
+        return resolveGenericParameterOwner(assembly, parameter.handle, parameter)
+    }
+
+    fun resolve(
+        assembly: DotNetClrAssemblyMetadata,
+        constraint: DotNetClrGenericParameterConstraint,
+    ): DotNetClrEffectiveAccessibilityResolution {
+        if (assembly.genericParameterConstraints.none { row -> row == constraint }) {
+            return notFound(constraint.handle)
+        }
+        val parameter = assembly.genericParameterDefinitions.singleOrNull { definition ->
+            definition.handle == constraint.owner
+        } ?: return invalidOwner(constraint.handle, constraint.owner)
+        return resolveGenericParameterOwner(assembly, constraint.handle, parameter)
+    }
+
+    private fun resolveGenericParameterOwner(
+        assembly: DotNetClrAssemblyMetadata,
+        declaration: DotNetClrMetadataHandle,
+        parameter: DotNetClrGenericParameterDefinition,
+    ): DotNetClrEffectiveAccessibilityResolution {
         return when (parameter.owner.table) {
             TYPE_DEFINITION_TABLE -> {
                 val type = assembly.typeDefinitions.singleOrNull { definition ->
                     definition.handle == parameter.owner
-                } ?: return invalidOwner(parameter.handle, parameter.owner)
+                } ?: return invalidOwner(declaration, parameter.owner)
                 resolve(assembly, type)
             }
             METHOD_DEFINITION_TABLE -> {
                 val method = assembly.methodDefinitions.singleOrNull { definition ->
                     definition.handle == parameter.owner
-                } ?: return invalidOwner(parameter.handle, parameter.owner)
+                } ?: return invalidOwner(declaration, parameter.owner)
                 resolve(assembly, method)
             }
-            else -> invalidOwner(parameter.handle, parameter.owner)
+            else -> invalidOwner(declaration, parameter.owner)
         }
     }
 

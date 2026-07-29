@@ -26,6 +26,10 @@ sealed interface DotNetClrNullableDeclarationTarget {
     data class GenericParameter(
         val parameter: DotNetClrGenericParameterDefinition,
     ) : DotNetClrNullableDeclarationTarget
+
+    data class GenericParameterConstraint(
+        val constraint: DotNetClrGenericParameterConstraint,
+    ) : DotNetClrNullableDeclarationTarget
 }
 
 enum class DotNetClrNullablePublicPolicy {
@@ -264,6 +268,9 @@ class DotNetClrNullableDeclarationResolver(
 
             is DotNetClrNullableDeclarationTarget.GenericParameter ->
                 resolveGenericParameterSite(assembly, target.parameter)
+
+            is DotNetClrNullableDeclarationTarget.GenericParameterConstraint ->
+                resolveGenericParameterConstraintSite(assembly, target.constraint)
         }
 
     private fun resolveMethodSite(
@@ -325,26 +332,67 @@ class DotNetClrNullableDeclarationResolver(
                 parameter.handle,
             )
         }
+        return resolveGenericParameterOwnerSite(
+            assembly,
+            parameter,
+            declaration = parameter.handle,
+            annotationParent = parameter.handle,
+            accessibility = accessibilityResolver.resolve(assembly, parameter),
+        )
+    }
+
+    private fun resolveGenericParameterConstraintSite(
+        assembly: DotNetClrAssemblyMetadata,
+        constraint: DotNetClrGenericParameterConstraint,
+    ): SiteResolution {
+        if (assembly.genericParameterConstraints.none { row -> row == constraint }) {
+            return invalid(
+                DotNetClrNullableDeclarationFailure.DECLARATION_NOT_FOUND,
+                constraint.handle,
+            )
+        }
+        val parameter = assembly.genericParameterDefinitions.singleOrNull { definition ->
+            definition.handle == constraint.owner
+        } ?: return invalid(
+            DotNetClrNullableDeclarationFailure.INVALID_OWNER,
+            constraint.handle,
+            constraint.owner,
+        )
+        return resolveGenericParameterOwnerSite(
+            assembly,
+            parameter,
+            declaration = constraint.handle,
+            annotationParent = constraint.handle,
+            accessibility = accessibilityResolver.resolve(assembly, constraint),
+        )
+    }
+
+    private fun resolveGenericParameterOwnerSite(
+        assembly: DotNetClrAssemblyMetadata,
+        parameter: DotNetClrGenericParameterDefinition,
+        declaration: DotNetClrMetadataHandle,
+        annotationParent: DotNetClrMetadataHandle,
+        accessibility: DotNetClrEffectiveAccessibilityResolution,
+    ): SiteResolution {
         return when (parameter.owner.table) {
             TYPE_DEFINITION_TABLE -> {
                 val type = assembly.typeDefinitions.singleOrNull { definition ->
                     definition.handle == parameter.owner
                 } ?: return invalid(
                     DotNetClrNullableDeclarationFailure.INVALID_OWNER,
-                    parameter.handle,
+                    declaration,
                     parameter.owner,
                 )
                 resolveTypeContexts(
                     assembly,
-                    parameter.handle,
+                    declaration,
                     type.handle,
                 ) { contexts ->
                     Site(
-                        declaration = parameter.handle,
-                        annotationParent = parameter.handle,
+                        declaration = declaration,
+                        annotationParent = annotationParent,
                         contextOwners = contexts,
-                        accessibility =
-                            accessibilityResolver.resolve(assembly, parameter),
+                        accessibility = accessibility,
                     )
                 }
             }
@@ -353,26 +401,25 @@ class DotNetClrNullableDeclarationResolver(
                     definition.handle == parameter.owner
                 } ?: return invalid(
                     DotNetClrNullableDeclarationFailure.INVALID_OWNER,
-                    parameter.handle,
+                    declaration,
                     parameter.owner,
                 )
                 resolveTypeContexts(
                     assembly,
-                    parameter.handle,
+                    declaration,
                     method.declaringType,
                 ) { contexts ->
                     Site(
-                        declaration = parameter.handle,
-                        annotationParent = parameter.handle,
+                        declaration = declaration,
+                        annotationParent = annotationParent,
                         contextOwners = listOf(method.handle) + contexts,
-                        accessibility =
-                            accessibilityResolver.resolve(assembly, parameter),
+                        accessibility = accessibility,
                     )
                 }
             }
             else -> invalid(
                 DotNetClrNullableDeclarationFailure.INVALID_OWNER,
-                parameter.handle,
+                declaration,
                 parameter.owner,
             )
         }
