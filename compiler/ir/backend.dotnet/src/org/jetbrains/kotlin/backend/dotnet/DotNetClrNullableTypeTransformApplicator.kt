@@ -5,13 +5,20 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+enum class DotNetClrNullableTypeComponentKind {
+    NULLABILITY,
+    GENERIC_VALUE_TYPE_PADDING,
+}
+
 data class DotNetClrNullableTypeComponent(
     val type: DotNetClrResolvedTypeSignature,
     val annotation: DotNetClrNullableAnnotation,
+    val kind: DotNetClrNullableTypeComponentKind,
 )
 
 enum class DotNetClrNullableTypeApplicationFailure {
     FLAG_COUNT_MISMATCH,
+    GENERIC_VALUE_TYPE_PADDING_NOT_OBLIVIOUS,
     INVALID_PHYSICAL_TYPE,
 }
 
@@ -27,6 +34,8 @@ sealed interface DotNetClrNullableTypeApplication {
         val expectedFlagCount: Int? = null,
         val actualFlagCount: Int? = null,
         val physicalClassification: DotNetClrPhysicalTypeClassification? = null,
+        val invalidComponentIndex: Int? = null,
+        val invalidAnnotation: DotNetClrNullableAnnotation? = null,
     ) : DotNetClrNullableTypeApplication
 }
 
@@ -35,7 +44,9 @@ sealed interface DotNetClrNullableTypeApplication {
  *
  * The result deliberately remains physical evidence. In particular, NOT_ANNOTATED is not yet a
  * Kotlin definitely-non-null type, and this class neither selects an enclosing nullable context
- * nor applies NullablePublicOnly accessibility policy.
+ * nor applies NullablePublicOnly accessibility policy. Roslyn's mandatory leading oblivious flag
+ * for a generic non-nullable value type is retained as structural padding and rejected if a
+ * producer assigns it another value.
  */
 class DotNetClrNullableTypeTransformApplicator(
     private val physicalTypeClassifier: DotNetClrPhysicalTypeClassifier,
@@ -44,7 +55,7 @@ class DotNetClrNullableTypeTransformApplicator(
         type: DotNetClrResolvedTypeSignature,
         transform: DotNetClrNullableTransform,
     ): DotNetClrNullableTypeApplication {
-        val components = ArrayList<DotNetClrResolvedTypeSignature>()
+        val components = ArrayList<PhysicalComponent>()
         val invalidClassification = collectComponents(type, components)
         if (invalidClassification != null) {
             return DotNetClrNullableTypeApplication.Invalid(
@@ -70,20 +81,42 @@ class DotNetClrNullableTypeTransformApplicator(
                 transform.annotations
             }
         }
-        return DotNetClrNullableTypeApplication.Applied(
-            type = type,
-            components = components.zip(annotations) { component, annotation ->
-                DotNetClrNullableTypeComponent(component, annotation)
-            },
+        val appliedComponents = ArrayList<DotNetClrNullableTypeComponent>(
+            components.size
         )
+        for (index in components.indices) {
+            val component = components[index]
+            val annotation = annotations[index]
+            if (
+                component.kind ==
+                    DotNetClrNullableTypeComponentKind.GENERIC_VALUE_TYPE_PADDING &&
+                annotation != DotNetClrNullableAnnotation.OBLIVIOUS
+            ) {
+                return DotNetClrNullableTypeApplication.Invalid(
+                    failure = DotNetClrNullableTypeApplicationFailure
+                        .GENERIC_VALUE_TYPE_PADDING_NOT_OBLIVIOUS,
+                    type = type,
+                    invalidComponentIndex = index,
+                    invalidAnnotation = annotation,
+                )
+            }
+            appliedComponents += DotNetClrNullableTypeComponent(
+                component.type,
+                annotation,
+                component.kind,
+            )
+        }
+        return DotNetClrNullableTypeApplication.Applied(type, appliedComponents)
     }
 
     private fun collectComponents(
         type: DotNetClrResolvedTypeSignature,
-        components: MutableList<DotNetClrResolvedTypeSignature>,
+        components: MutableList<PhysicalComponent>,
     ): DotNetClrPhysicalTypeClassification? {
         when (val consumption = consumesTransformFlag(type)) {
-            FlagConsumption.Consumes -> components += type
+            is FlagConsumption.Consumes ->
+                components += PhysicalComponent(type, consumption.kind)
+
             FlagConsumption.Skips -> Unit
             is FlagConsumption.Invalid -> return consumption.classification
         }
@@ -124,7 +157,7 @@ class DotNetClrNullableTypeTransformApplicator(
 
     private fun collectChildren(
         children: List<DotNetClrResolvedTypeSignature>,
-        components: MutableList<DotNetClrResolvedTypeSignature>,
+        components: MutableList<PhysicalComponent>,
     ): DotNetClrPhysicalTypeClassification? {
         for (child in children) {
             val invalidClassification = collectComponents(child, components)
@@ -145,7 +178,9 @@ class DotNetClrNullableTypeTransformApplicator(
                 if (type.type.isSystemValueType) {
                     FlagConsumption.Skips
                 } else {
-                    FlagConsumption.Consumes
+                    FlagConsumption.Consumes(
+                        DotNetClrNullableTypeComponentKind.NULLABILITY
+                    )
                 }
 
             is DotNetClrResolvedTypeSignature.Named ->
@@ -159,7 +194,9 @@ class DotNetClrNullableTypeTransformApplicator(
             is DotNetClrResolvedTypeSignature.SzArray,
             is DotNetClrResolvedTypeSignature.Array,
             is DotNetClrResolvedTypeSignature.FunctionPointer,
-            -> FlagConsumption.Consumes
+            -> FlagConsumption.Consumes(
+                DotNetClrNullableTypeComponentKind.NULLABILITY
+            )
 
             is DotNetClrResolvedTypeSignature.ByReference,
             is DotNetClrResolvedTypeSignature.Modified,
@@ -174,11 +211,16 @@ class DotNetClrNullableTypeTransformApplicator(
             is DotNetClrPhysicalTypeClassification.Classified ->
                 when (classification.kind) {
                     DotNetClrPhysicalTypeKind.REFERENCE ->
-                        FlagConsumption.Consumes
+                        FlagConsumption.Consumes(
+                            DotNetClrNullableTypeComponentKind.NULLABILITY
+                        )
 
                     DotNetClrPhysicalTypeKind.NON_NULLABLE_VALUE ->
                         if (isGenericInstance) {
-                            FlagConsumption.Consumes
+                            FlagConsumption.Consumes(
+                                DotNetClrNullableTypeComponentKind
+                                    .GENERIC_VALUE_TYPE_PADDING
+                            )
                         } else {
                             FlagConsumption.Skips
                         }
@@ -194,7 +236,9 @@ class DotNetClrNullableTypeTransformApplicator(
         }
 
     private sealed interface FlagConsumption {
-        data object Consumes : FlagConsumption
+        data class Consumes(
+            val kind: DotNetClrNullableTypeComponentKind,
+        ) : FlagConsumption
 
         data object Skips : FlagConsumption
 
@@ -202,4 +246,9 @@ class DotNetClrNullableTypeTransformApplicator(
             val classification: DotNetClrPhysicalTypeClassification,
         ) : FlagConsumption
     }
+
+    private data class PhysicalComponent(
+        val type: DotNetClrResolvedTypeSignature,
+        val kind: DotNetClrNullableTypeComponentKind,
+    )
 }

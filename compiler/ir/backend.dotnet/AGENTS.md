@@ -369,7 +369,18 @@ landed shape as a compatibility constraint.
    declaration-qualified generic-parameter context for constraint alignment; applying a
    parameter marker to every constraint or aligning against an already-substituted constraint
    tree is forbidden. Kotlin bound propagation and definitely-non-null decisions remain FIR
-   policy after every bound has been enhanced.
+   policy after every bound has been enhanced. Project valid aligned components through Kotlin's
+   established foreign-type qualifier vocabulary: nullable flags 0, 1, and 2 become
+   `FORCE_FLEXIBILITY`, `NOT_NULL`, and `NULLABLE` respectively. Do not weaken explicit C#
+   nonnullable evidence to a platform type or invent a C#-specific Kotlin nullability category.
+   The mandatory leading 0 on a generic non-nullable value type is structural preorder padding,
+   not Kotlin nullability: tag and require it as oblivious physical evidence, omit it from the
+   Kotlin qualifier list, and continue projecting its semantic type arguments.
+   The projector retains the exact evidence application, and oblivious, public-only-suppressed,
+   invalid-declaration, and invalid-alignment outcomes remain distinct unchanged-type projections.
+   Valid Roslyn compiler evidence has no warning-only migration mode. This policy still constructs
+   no FIR type and does not choose malformed-metadata diagnostic severity; those require the
+   later declaration provider and reporting boundary.
    Property, PropertyMap, and MethodSemantics rows now
    retain the physical property token, declaring TypeDef, metadata name/flags, structural
    property/index signature, raw blob, and accessor MethodDef handles. Association comes only from
