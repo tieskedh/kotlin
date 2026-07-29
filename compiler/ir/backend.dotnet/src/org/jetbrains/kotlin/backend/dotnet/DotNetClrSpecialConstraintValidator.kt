@@ -3,12 +3,15 @@ package org.jetbrains.kotlin.backend.dotnet
 enum class DotNetClrSpecialConstraintKind {
     REFERENCE_TYPE,
     NON_NULLABLE_VALUE_TYPE,
+    DEFAULT_CONSTRUCTOR,
     BY_REF_LIKE_ELIGIBILITY,
 }
 
 enum class DotNetClrSpecialConstraintViolation {
     REQUIRES_REFERENCE_TYPE,
     REQUIRES_NON_NULLABLE_VALUE_TYPE,
+    REQUIRES_CONCRETE_REFERENCE_TYPE,
+    REQUIRES_PUBLIC_PARAMETERLESS_CONSTRUCTOR,
     BY_REF_LIKE_NOT_ALLOWED_BY_PARAMETER,
     BY_REF_LIKE_NOT_SUPPORTED_BY_TARGET,
 }
@@ -49,17 +52,22 @@ data class DotNetClrConstructedTypeSpecialConstraintValidation(
     val parameters: List<DotNetClrSpecialGenericParameterValidation>,
 )
 
+data class DotNetClrDefaultConstructorCoreTypes(
+    val systemObject: DotNetClrResolvedTypeDefinition,
+    val systemString: DotNetClrResolvedTypeDefinition,
+)
+
 /**
- * Validates the reference/value special constraints and implicit by-ref-like eligibility of each
- * argument in one resolved constructed CLR type.
+ * Validates the reference/value/default-constructor special constraints and implicit by-ref-like
+ * eligibility of each argument in one resolved constructed CLR type.
  *
- * Nominal GenericParamConstraint rows and the default-constructor special constraint remain
- * separate validators. In particular, callers must not interpret this result as complete CLR
- * generic-constraint satisfaction.
+ * Nominal GenericParamConstraint rows remain a separate validator. In particular, callers must
+ * not interpret this result as complete CLR generic-constraint satisfaction.
  */
 class DotNetClrSpecialConstraintValidator(
     private val target: DotNetTarget,
     private val byRefLikeClassifier: DotNetClrByRefLikeClassifier,
+    private val defaultConstructorCoreTypes: DotNetClrDefaultConstructorCoreTypes,
 ) {
     fun validate(
         constraints: DotNetClrResolvedConstructedTypeConstraints,
@@ -79,6 +87,9 @@ class DotNetClrSpecialConstraintValidator(
             }
             if (binding.parameter.hasNotNullableValueTypeConstraint) {
                 add(DotNetClrSpecialConstraintKind.NON_NULLABLE_VALUE_TYPE)
+            }
+            if (binding.parameter.hasDefaultConstructorConstraint) {
+                add(DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR)
             }
             add(DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY)
         }
@@ -126,8 +137,48 @@ class DotNetClrSpecialConstraintValidator(
                     )
                 }
 
+            DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR ->
+                validateDefaultConstructor(binding.argument, classified.physicalKind)
+
             DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY ->
                 validateByRefLikeEligibility(binding, classified.status)
+        }
+    }
+
+    private fun validateDefaultConstructor(
+        argument: DotNetClrResolvedTypeSignature,
+        physicalKind: DotNetClrPhysicalTypeKind,
+    ): DotNetClrSpecialConstraintSatisfaction {
+        return when (physicalKind) {
+            DotNetClrPhysicalTypeKind.NON_NULLABLE_VALUE,
+            DotNetClrPhysicalTypeKind.NULLABLE_VALUE,
+            -> DotNetClrSpecialConstraintSatisfaction.Satisfied
+
+            DotNetClrPhysicalTypeKind.REFERENCE -> {
+                val definition = argument.referenceTypeDefinitionOrNull()
+                    ?: return violated(
+                        DotNetClrSpecialConstraintViolation
+                            .REQUIRES_PUBLIC_PARAMETERLESS_CONSTRUCTOR
+                    )
+                if (definition.definition.isAbstract) {
+                    return violated(
+                        DotNetClrSpecialConstraintViolation
+                            .REQUIRES_CONCRETE_REFERENCE_TYPE
+                    )
+                }
+                if (
+                    definition.assembly.methodDefinitions.none { method ->
+                        method.declaringType == definition.definition.handle &&
+                                method.isPublicParameterlessInstanceConstructor()
+                    }
+                ) {
+                    return violated(
+                        DotNetClrSpecialConstraintViolation
+                            .REQUIRES_PUBLIC_PARAMETERLESS_CONSTRUCTOR
+                    )
+                }
+                DotNetClrSpecialConstraintSatisfaction.Satisfied
+            }
         }
     }
 
@@ -167,4 +218,40 @@ class DotNetClrSpecialConstraintValidator(
         reason: DotNetClrSpecialConstraintViolation,
     ): DotNetClrSpecialConstraintSatisfaction.Violated =
         DotNetClrSpecialConstraintSatisfaction.Violated(reason)
+
+    private fun DotNetClrResolvedTypeSignature.referenceTypeDefinitionOrNull():
+            DotNetClrResolvedTypeDefinition? =
+        when (this) {
+            is DotNetClrResolvedTypeSignature.Primitive ->
+                when (type) {
+                    DotNetClrPrimitiveType.OBJECT ->
+                        defaultConstructorCoreTypes.systemObject
+
+                    DotNetClrPrimitiveType.STRING ->
+                        defaultConstructorCoreTypes.systemString
+
+                    else -> null
+                }
+
+            is DotNetClrResolvedTypeSignature.Named -> type
+            is DotNetClrResolvedTypeSignature.GenericInstance -> genericType.type
+            is DotNetClrResolvedTypeSignature.Modified ->
+                unmodifiedType.referenceTypeDefinitionOrNull()
+
+            else -> null
+        }
 }
+
+private fun DotNetClrMethodDefinition.isPublicParameterlessInstanceConstructor(): Boolean =
+    name == ".ctor" &&
+            visibility == DotNetClrMethodVisibility.PUBLIC &&
+            !isStatic &&
+            isSpecialName &&
+            isRuntimeSpecialName &&
+            signature.callingConvention == DotNetClrSignatureCallingConvention.DEFAULT &&
+            signature.hasThis &&
+            !signature.hasExplicitThis &&
+            signature.genericParameterCount == 0 &&
+            signature.returnType == DotNetClrTypeSignature.Void &&
+            signature.parameterTypes.isEmpty() &&
+            signature.varargParameterStart == null

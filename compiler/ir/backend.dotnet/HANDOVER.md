@@ -2308,10 +2308,24 @@ session state, process, and a curated task menu. Keep both files updated as you 
   instantiation. Marker absence and invalid classification remain structured non-boolean results.
   Real Roslyn declarations plus constructed views cover class/value/Nullable/ref-like arguments,
   the anti-constraint on ordinary values, both portable targets, missing marker identity, and a
-  false class/value signature. The default-constructor rule, dependent parameters, and Kotlin
-  ref-safety/FIR use remain separate; do not report complete generic-constraint satisfaction yet.
+  false class/value signature. At that slice the default-constructor rule, dependent parameters,
+  and Kotlin ref-safety/FIR use remained separate; do not report complete generic-constraint
+  satisfaction yet.
   The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
   54 library integration tests).
+- The default-constructor-constraint continuation extends that same validator with the exact CLI
+  `.ctor` rule. Every physical value type, including standalone-constraint `Nullable<T>`, satisfies
+  it. A reference type must be concrete and own an exact public parameterless instance constructor;
+  constructors are not inherited. Primitive object/string identities come from an explicit
+  selected-core catalog, and matching MethodDefs require `.ctor`, public instance visibility,
+  `SpecialName`/`RTSpecialName`, default instance calling convention, no generic/value parameters,
+  and `void` return. Roslyn coverage spans implicit public, private, parameterized, abstract-public,
+  and derived-without-own-default constructors plus object/string/array/value/Nullable/ref-like
+  arguments on all profiles. Hostile selected metadata removes `RTSpecialName` from an otherwise
+  matching constructor. Nominal/dependent-parameter aggregation and Kotlin ref-safety/FIR use
+  remain separate; do not report complete generic-constraint satisfaction yet. The fresh strict
+  gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
+  integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
