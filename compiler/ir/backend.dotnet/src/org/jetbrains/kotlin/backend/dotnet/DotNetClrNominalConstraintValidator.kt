@@ -50,6 +50,7 @@ class DotNetClrNominalConstraintValidator(
     private val primitiveTypes: DotNetClrPrimitiveTypeCatalog,
     physicalTypeClassifier: DotNetClrPhysicalTypeClassifier,
     arrayRuntimeTypes: DotNetClrArrayRuntimeTypes,
+    delegateRuntimeTypes: DotNetClrDelegateRuntimeTypes,
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
 ) {
     private val assignabilityResolver =
@@ -58,6 +59,7 @@ class DotNetClrNominalConstraintValidator(
             physicalTypeClassifier,
             primitiveTypes,
             arrayRuntimeTypes,
+            delegateRuntimeTypes,
             resolutionLimit,
         )
 
