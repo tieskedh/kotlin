@@ -1997,10 +1997,51 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
 - Mapping raw CLR rows directly to Kotlin IR: **Architecturally wrong and should be changed**.
-- Kotlin-facing custom-attribute/annotation projection, property synthesis, events, resolved
-  constraint semantics, nullability enhancement, FIR symbols, and backend calls:
+- Kotlin-facing general custom-attribute projection, property synthesis, events, resolved
+  constraint semantics, broader FIR symbols, and backend calls:
   **Deferred problems that must be recorded before the importer surface becomes stable**.
+- Nullable enhancement and a closed complete-interface FIR symbol slice:
+  **Implemented direction; broaden only through separately reviewed contracts**.
+- Treating standard CLR/Roslyn attributes as a bidirectional foreign-language contract:
+  **Correct direction**.
+- Applying valid Roslyn nullable metadata to foreign FIR types while leaving absent or invalid
+  evidence flexible: **Correct direction**.
+- Re-reading Roslyn nullable attributes as authority when an embedded KLIB already supplies the
+  original Kotlin type: **Architecturally wrong and should be changed**.
+- Flattening conditional flow attributes such as `NotNullWhen` into declaration nullability:
+  **Architecturally wrong and should be changed**.
+- Withholding a foreign classifier when the provider cannot represent its complete public
+  contract: **Correct temporary implementation for a closed first slice**.
+- Inventing public Kotlin/.NET export-annotation names inside an importer implementation:
+  **Architecturally wrong and should be changed**.
 
 The cost is a substantial target-owned metadata and import layer. The alternative is greater:
 spreading partial CLR decoding and C# assumptions across resolution, IR lowering, codegen, and
 tooling would create untestable semantic drift and ABI debt.
+
+## Annotation interoperability refinement (2026-07-29)
+
+The importer treats standard CLR tables and established .NET/Roslyn attributes as the preferred
+shared foreign-language vocabulary. A valid foreign `NullableAttribute`/`NullableContextAttribute`
+contract changes the enhanced Kotlin type, following JVM Java-type enhancement; it is not merely a
+warning payload. Missing, suppressed, malformed, contradictory, or unbound evidence cannot
+strengthen a reference type and therefore projects to flexibility.
+
+This does not make Roslyn metadata authoritative for Kotlin-produced declarations. A private
+Kotlin metadata resource selects the embedded-KLIB path before foreign declaration construction.
+KLIB supplies the original Kotlin type; nullable attributes remain a derived C# view and should be
+validated against that source. Conditional CodeAnalysis attributes remain flow contracts and must
+not be flattened into declaration nullability. They can, however, map bidirectionally to the exact
+overlap with Kotlin contracts, such as `returns(true) implies (x != null)` and non-returning
+functions. `callsInPlace`, arbitrary type predicates, and general multi-value implications have no
+standard CLR encoding and remain KLIB metadata.
+
+The first FIR provider is a closed vertical slice over complete public, top-level, non-generic
+abstract-interface contracts using primitive, `string`, and `object` signatures. If any public
+declared method is outside the slice, the classifier is withheld rather than partially projected.
+Classifier construction is lazy, duplicate class identities are withheld, and selected-graph
+binding accepts only exact unique classpath assemblies. Backend calls are a later slice; this one
+proves that physical foreign metadata and its nullable attributes affect Kotlin source analysis.
+
+The detailed mature-target comparison, carrier matrix, attacks, and deferred public-annotation
+decision are recorded in `docs/review/clr-annotation-interoperability.md`.

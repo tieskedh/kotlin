@@ -197,6 +197,7 @@ fun <F> prepareMetadataSessions(
     isCommonSource: (F) -> Boolean,
     fileBelongsToModule: (F, String) -> Boolean,
     incrementalCompilationContext: IncrementalCompilationContext?,
+    additionalProviders: AdditionalProvidersSupplier? = null,
 ): List<SessionWithSources<F>> {
     val packagePartProvider = projectEnvironment.getPackagePartProvider(librariesScope) as PackageAndMetadataPartProvider
     val languageVersionSettings = configuration.languageVersionSettings
@@ -238,6 +239,7 @@ fun <F> prepareMetadataSessions(
                 resolvedLibraries,
                 languageVersionSettings,
                 context,
+                additionalProviders,
             )
         },
         createSourceSession = { moduleData, kmpModuleKind, sessionConfigurator ->
