@@ -63,7 +63,7 @@ Primary Kotlin references:
 | Normal-return reachability | `DoesNotReturn` and parameter-target `DoesNotReturnIf` | `DoesNotReturnIf` decodes to the exact opposite-Boolean normal-return implication; method-target `DoesNotReturn` supplies a logical `Nothing` view while retaining the physical CLR return signature | Feed exact facts into common control-flow and keep logical reachability separate from physical invocation |
 | Kotlin contracts | No general CLR contract format; CodeAnalysis attributes exactly cover a null-state subset such as `returns(true) implies (x != null)` and non-returning functions | Kotlin-produced declarations keep complete KLIB contracts; the exact implemented foreign CodeAnalysis subset normalizes to common FIR | Bidirectionally map only the exact subset. Keep `callsInPlace`, arbitrary type predicates, and general multi-value implications in KLIB |
 | Extension call view | `ExtensionAttribute` plus the physical static signature; newer C# extension declarations require a Roslyn metadata probe | Raw custom attributes only | Consume only after receiver, generic ownership, accessibility, and collision rules are proven. Do not infer from the first parameter alone |
-| Variable argument call view | Param-array/collection attributes plus the physical array/collection parameter | Raw custom attributes only | Consume as a Kotlin call-site view only where element and spread semantics are representable. Do not confuse it with Kotlin declaration identity |
+| Variable argument call view | Param-array/collection attributes plus the physical array/collection parameter | Exact reference-array `ParamArrayAttribute` continuation specified below | Consume as a Kotlin call-site view only where element and spread semantics are representable. Do not confuse it with Kotlin declaration identity |
 | Optional/default values | Param flags and Constant rows | Physical values retained; Kotlin export uses `$default` dispatchers | A CLR constant is authoritative for a foreign CLR optional parameter, but it is not a Kotlin default declaration. Kotlin defaults keep KLIB/dispatcher semantics |
 | Indexers/default member | Property signatures and `DefaultMemberAttribute` | Property rows retained | Prefer the property row; use the attribute only for the default/indexer call view after collision rules are specified |
 | Compiler-generated declarations | `CompilerGeneratedAttribute` and physical flags/names | Kotlin compiler ABI marker plus `EditorBrowsable(Never)` on selected internals; no general marker | May guide tooling, but never infer a Kotlin logical role or hide ABI solely from this marker |
@@ -910,10 +910,57 @@ blobs, and duplicate Property-row evidence add no diagnostic. The focused test i
 fresh strict gate is 881/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 64
 library integration tests).
 
+### Reference parameter-array continuation
+
+Kotlin Common `vararg` is the authoritative logical call view, and JVM imports Java varargs into
+that same view while retaining the physical array parameter. The exact CLR analogue is a final
+single-dimensional array Param carrying the selected core-library
+`System.ParamArrayAttribute()`. The first .NET continuation therefore maps only one exact final
+`string[]` or `object[]` parameter to Common `vararg`, retains the MethodDef's physical vector
+signature, and reuses ordinary Common expanded/omitted/spread call resolution.
+
+The restriction is deliberately physical rather than language-shaped. C# requires a parameter
+array to be final and traditionally one-dimensional; current C# additionally supports non-array
+params collections through `ParamCollectionAttribute`, which have separate construction and
+element semantics and are excluded. Kotlin permits a non-final vararg, but importing malformed or
+non-final CLR evidence would manufacture a call view no conforming CLR parameter-array producer
+defines. Duplicate attributes, a non-empty constructor/value, named payloads, a look-alike
+attribute, a non-final parameter, and an ordinary unannotated array withhold the complete
+classifier instead of falling back to an ordinary array view.
+
+Reference arrays are the closed first slice because their logical and physical representations
+already coincide: Kotlin `Array<E>` is a CLR vector after the existing concrete-vararg lowering.
+Kotlin primitive arrays intentionally use runtime wrapper identity, while C# `int[]` and similar
+params arrays are raw CLR vectors. Adapting between those representations is real .NET backend
+work and remains a separate continuation; this slice must not pretend the wrapper is the foreign
+signature. Nested nullable evidence still owns the array and element qualifiers exactly as it
+does for JVM foreign arrays.
+
+Implementation evidence: real Framework and modern C# fixtures expose exact final `params
+string[]` and `params object[]` declarations. Kotlin executes expanded, omitted, and spread calls
+on CLR 4.8 and CoreCLR 10; a nullable modern `object?[]` additionally proves that element
+nullability is not flattened into the vector qualifier. Exact IL inspection pins the retained
+`string[]` and `object[]` MemberRefs. Ordinary unannotated `string[]` and `params int[]` methods
+remain unresolved.
+
+The adversarial metadata fixture keeps one valid neighboring method while independently testing
+a malformed selected-core blob, duplicate selected-core attributes, non-final placement, scalar
+placement, multidimensional-array placement, and a same-name look-alike. Roslyn interns identical
+empty custom-attribute blobs, so corrupting the shared blob would also damage the valid control;
+the test instead redirects the one hostile row to a uniquely encoded look-alike blob and audits
+the resulting Param parents structurally. Every dishonest shape is withheld and the valid
+neighbor still imports. The focused cross-runtime/adversarial pair is 2/0/0/0.
+The fresh strict gate is 882/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
+65 library integration tests).
+
 References:
 
 - <https://learn.microsoft.com/en-us/dotnet/api/system.obsoleteattribute>
 - <https://learn.microsoft.com/en-us/dotnet/fundamentals/syslib-diagnostics/obsoletions-overview>
+- <https://learn.microsoft.com/en-us/dotnet/api/system.paramarrayattribute>
+- <https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-messages/params-arrays>
+- <https://kotlinlang.org/docs/java-interop.html#java-varargs>
+- <https://kotlinlang.org/docs/functions.html#variable-number-of-arguments-varargs>
 - <https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-deprecated/>
 - <https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-deprecation-level/>
 

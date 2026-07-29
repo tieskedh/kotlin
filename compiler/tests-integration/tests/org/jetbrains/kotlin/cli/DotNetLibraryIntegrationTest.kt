@@ -22908,6 +22908,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val fixturePreamble: String,
             val nullableDirective: String,
             val nullableStringType: String,
+            val nullableObjectArrayType: String,
             val compileFixture: (File, File) -> CSharpCompilerResult,
             val systemReference: File,
             val compileVerifier: (File, File, File) -> CSharpCompilerResult,
@@ -22934,6 +22935,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     """.trimIndent(),
                 nullableDirective = "",
                 nullableStringType = "string",
+                nullableObjectArrayType = "object[]",
                 compileFixture = { source, output ->
                     runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
                 },
@@ -22957,6 +22959,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 fixturePreamble = "",
                 nullableDirective = "#nullable enable",
                 nullableStringType = "string?",
+                nullableObjectArrayType = "object?[]",
                 compileFixture = { source, output ->
                     runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
                 },
@@ -22998,6 +23001,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             int Compute(int value);
                             int Compute(string value);
                             string Echo(string value);
+                            string Join(string prefix, params string[] values);
+                            string Describe(params ${profile.nullableObjectArrayType} values);
                             void Touch();
                             int Count { get; }
                             string Name { get; set; }
@@ -23018,6 +23023,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             public int Compute(int value) { return value + 1; }
                             public int Compute(string value) { return value.Length + 10; }
                             public string Echo(string value) { return value + "!"; }
+                            public string Join(string prefix, params string[] values)
+                            {
+                                return prefix + ":" + values.Length + ":" +
+                                    (values.Length == 0 ? "" : values[0]);
+                            }
+                            public string Describe(params ${profile.nullableObjectArrayType} values)
+                            {
+                                return values.Length + ":" +
+                                    (values.Length == 0
+                                        ? ""
+                                        : values[0] == null ? "null" : values[0].ToString());
+                            }
                             public void Touch() {}
                             public int Count { get { return 17; } }
                             public string Name
@@ -23038,6 +23055,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         {
                             [AllowNull]
                             string SplitName { get; set; }
+                        }
+
+                        public interface OrdinaryArrayApi
+                        {
+                            string Join(string[] values);
+                        }
+
+                        public interface PrimitiveParamArrayApi
+                        {
+                            int Sum(params int[] values);
                         }
                     }
                     """.trimIndent()
@@ -23064,6 +23091,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public fun verifyEcho(api: Api): String =
                         api.Echo("ok")
+
+                    public fun verifyExpandedParams(api: Api): String =
+                        api.Join("expanded", "a", "b")
+
+                    public fun verifyOmittedParams(api: Api): String =
+                        api.Join("omitted")
+
+                    public fun verifySpreadParams(api: Api, values: Array<String>): String =
+                        api.Join("spread", *values)
+
+                    public fun verifyNullableObjectParams(api: Api): String =
+                        api.Describe(null, "value")
 
                     public fun verifyTouch(api: Api) {
                         api.Touch()
@@ -23132,6 +23171,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "callvirt instance int32 [Foreign.CallContracts]'ForeignCallContracts.Api'::'ReturnsValue'()" in il
             ) { il }
             assertTrue(
+                "callvirt instance string [Foreign.CallContracts]'ForeignCallContracts.Api'::'Join'(string, string[])" in il
+            ) { il }
+            assertTrue(
+                "callvirt instance string [Foreign.CallContracts]'ForeignCallContracts.Api'::'Describe'(object[])" in il
+            ) { il }
+            assertTrue(
                 "callvirt instance void [Foreign.CallContracts]'ForeignCallContracts.Api'::'ReturnsVoid'()" in il
             ) { il }
             assertTrue(
@@ -23198,6 +23243,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require((string)Method(facade, "verifyEcho").Invoke(
                                 null, new object[] { api }) == "ok!",
                                 "foreign reference return binding failed");
+                            Require((string)Method(facade, "verifyExpandedParams").Invoke(
+                                null, new object[] { api }) == "expanded:2:a",
+                                "foreign expanded params binding failed");
+                            Require((string)Method(facade, "verifyOmittedParams").Invoke(
+                                null, new object[] { api }) == "omitted:0:",
+                                "foreign omitted params binding failed");
+                            Require((string)Method(facade, "verifySpreadParams").Invoke(
+                                null, new object[] { api, new string[] { "s", "t" } }) ==
+                                    "spread:2:s",
+                                "foreign spread params binding failed");
+                            Require((string)Method(facade, "verifyNullableObjectParams").Invoke(
+                                null, new object[] { api }) == "2:null",
+                                "foreign nullable object params binding failed");
                             Method(facade, "verifyTouch").Invoke(
                                 null, new object[] { api });
                             Require((int)Method(facade, "verifyCount").Invoke(
@@ -23268,6 +23326,334 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
             assertEquals(ExitCode.COMPILATION_ERROR, splitExitCode, splitDiagnostics)
             assertTrue("SplitApi" in splitDiagnostics) { splitDiagnostics }
+
+            val arrayConsumer = applicationDirectory.resolve("rejectedParameterArrays.kt").apply {
+                writeText(
+                    """
+                    package rejected
+
+                    import ForeignCallContracts.OrdinaryArrayApi
+                    import ForeignCallContracts.PrimitiveParamArrayApi
+
+                    public fun ordinary(api: OrdinaryArrayApi, values: Array<String>): String =
+                        api.Join(values)
+
+                    public fun primitive(api: PrimitiveParamArrayApi): Int =
+                        api.Sum(1, 2, 3)
+                    """.trimIndent()
+                )
+            }
+            val [arrayDiagnostics, arrayExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    arrayConsumer.path,
+                    K2DotNetCompilerArguments::noStdlib.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    listOf(fixtureAssembly, profile.systemReference)
+                        .joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, "RejectedParameterArrays",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    applicationDirectory.resolve("RejectedParameterArrays.il").path,
+                )
+            )
+            assertEquals(ExitCode.COMPILATION_ERROR, arrayExitCode, arrayDiagnostics)
+            assertTrue("OrdinaryArrayApi" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("PrimitiveParamArrayApi" in arrayDiagnostics) { arrayDiagnostics }
+        }
+    }
+
+    @Test
+    fun testForeignClrReferenceParamArraysRejectDishonestMetadata() {
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val systemRuntime =
+            checkNotNull(modernCSharp).referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(systemRuntime.isFile) {
+            "Modern reference pack has no System.Runtime reference: $systemRuntime"
+        }
+
+        val fixtureSource = File(tmpdir, "foreign-param-array-adversarial.cs").apply {
+            writeText(
+                """
+                using System;
+
+                namespace Hostile
+                {
+                    [AttributeUsage(AttributeTargets.Parameter)]
+                    public sealed class ParamArrayAttribute : Attribute {}
+
+                    [AttributeUsage(AttributeTargets.Interface)]
+                    public sealed class CorruptSeedAttribute : Attribute
+                    {
+                        public CorruptSeedAttribute(string value) {}
+                    }
+                }
+
+                namespace ForeignParamArrayContracts
+                {
+                    [Hostile.CorruptSeed("malformed")]
+                    public interface BlobSeed {}
+
+                    public interface ValidApi
+                    {
+                        string Join(params string[] values);
+                    }
+
+                    public interface MalformedApi
+                    {
+                        string Join(params string[] values);
+                    }
+
+                    public interface DuplicateApi
+                    {
+                        string Join(params string[] values);
+                    }
+
+                    public interface DuplicateSeedApi
+                    {
+                        string Join(params string[] values);
+                    }
+
+                    public interface NonFinalApi
+                    {
+                        string Join(string[] values, string tail);
+                    }
+
+                    public interface NonFinalSeedApi
+                    {
+                        string Join(params string[] values);
+                    }
+
+                    public interface ScalarApi
+                    {
+                        string Join(string value);
+                    }
+
+                    public interface ScalarSeedApi
+                    {
+                        string Join(params string[] values);
+                    }
+
+                    public interface MultiDimensionalApi
+                    {
+                        string Join(string[,] values);
+                    }
+
+                    public interface MultiDimensionalSeedApi
+                    {
+                        string Join(params string[] values);
+                    }
+
+                    public interface LookalikeApi
+                    {
+                        string Join([Hostile.ParamArray] string[] values);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val pristineAssembly = File(tmpdir, "Foreign.ParamArray.Adversarial.Primitive.dll")
+        val fixtureResult = runModernCSharpCompiler(
+            modernCSharp,
+            fixtureSource,
+            pristineAssembly,
+        )
+        assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+
+        val metadata = DotNetClrMetadataReader.read(pristineAssembly)
+        fun parameter(interfaceName: String, index: Int): DotNetClrParameterDefinition {
+            val type = metadata.typeDefinitions.single { candidate ->
+                candidate.namespaceName == "ForeignParamArrayContracts" &&
+                        candidate.metadataName == interfaceName
+            }
+            val method = metadata.methodDefinitions.single { candidate ->
+                candidate.declaringType == type.handle && candidate.name == "Join"
+            }
+            return metadata.parameterDefinitions.single { candidate ->
+                candidate.declaringMethod == method.handle &&
+                        !candidate.isReturn &&
+                        candidate.parameterIndex == index
+            }
+        }
+
+        fun coreParamArrayAttribute(
+            parent: DotNetClrMetadataHandle,
+        ): DotNetClrCustomAttribute =
+            metadata.customAttributes.single { attribute ->
+                if (attribute.parent != parent) return@single false
+                val constructor = metadata.memberReferences.singleOrNull { member ->
+                    member.handle == attribute.constructor
+                } ?: return@single false
+                metadata.typeReferences.any { type ->
+                    type.handle == constructor.parent &&
+                            type.namespaceName == "System" &&
+                            type.metadataName == "ParamArrayAttribute"
+                }
+            }
+
+        val malformedParameter = parameter("MalformedApi", 0)
+        val malformedAttribute = coreParamArrayAttribute(malformedParameter.handle)
+        val blobSeedType = metadata.typeDefinitions.single { candidate ->
+            candidate.namespaceName == "ForeignParamArrayContracts" &&
+                    candidate.metadataName == "BlobSeed"
+        }
+        val blobSeedAttribute = metadata.customAttributes.single { attribute ->
+            attribute.parent == blobSeedType.handle
+        }
+        val duplicateParameter = parameter("DuplicateApi", 0)
+        val duplicateSeedAttribute =
+            coreParamArrayAttribute(parameter("DuplicateSeedApi", 0).handle)
+        val nonFinalParameter = parameter("NonFinalApi", 0)
+        val nonFinalSeedAttribute =
+            coreParamArrayAttribute(parameter("NonFinalSeedApi", 0).handle)
+        val scalarParameter = parameter("ScalarApi", 0)
+        val scalarSeedAttribute =
+            coreParamArrayAttribute(parameter("ScalarSeedApi", 0).handle)
+        val multiDimensionalParameter = parameter("MultiDimensionalApi", 0)
+        val multiDimensionalSeedAttribute =
+            coreParamArrayAttribute(parameter("MultiDimensionalSeedApi", 0).handle)
+
+        val patchedImage = pristineAssembly.readBytes()
+        val tables = locateClrMetadataTables(patchedImage)
+        val malformedValueIndex = readLittleEndianIndex(
+            patchedImage,
+            tables.rowOffset(12, malformedAttribute.handle.row) +
+                    tables.hasCustomAttributeIndexSize +
+                    tables.customAttributeTypeIndexSize,
+            tables.blobIndexSize,
+        )
+        val blobSeedValueIndex = readLittleEndianIndex(
+            patchedImage,
+            tables.rowOffset(12, blobSeedAttribute.handle.row) +
+                    tables.hasCustomAttributeIndexSize +
+                    tables.customAttributeTypeIndexSize,
+            tables.blobIndexSize,
+        )
+        assertTrue(malformedValueIndex != blobSeedValueIndex)
+        writeLittleEndian(
+            patchedImage,
+            tables.rowOffset(12, malformedAttribute.handle.row) +
+                    tables.hasCustomAttributeIndexSize +
+                    tables.customAttributeTypeIndexSize,
+            tables.blobIndexSize,
+            blobSeedValueIndex,
+        )
+
+        fun reparentToParameter(
+            attribute: DotNetClrCustomAttribute,
+            parameter: DotNetClrParameterDefinition,
+        ) {
+            // HasCustomAttribute uses five tag bits; Param is tag 4.
+            writeLittleEndian(
+                patchedImage,
+                tables.rowOffset(12, attribute.handle.row),
+                tables.hasCustomAttributeIndexSize,
+                (parameter.handle.row shl 5) or 4,
+            )
+        }
+        reparentToParameter(duplicateSeedAttribute, duplicateParameter)
+        reparentToParameter(nonFinalSeedAttribute, nonFinalParameter)
+        reparentToParameter(scalarSeedAttribute, scalarParameter)
+        reparentToParameter(multiDimensionalSeedAttribute, multiDimensionalParameter)
+
+        val patchedAssembly = File(tmpdir, "Foreign.ParamArray.Adversarial.dll").apply {
+            writeBytes(patchedImage)
+        }
+        val patchedMetadata = DotNetClrMetadataReader.read(patchedAssembly)
+        assertEquals(
+            2,
+            patchedMetadata.customAttributes.count { attribute ->
+                attribute.parent == duplicateParameter.handle
+            },
+        )
+        assertEquals(
+            1,
+            patchedMetadata.customAttributes.count { attribute ->
+                attribute.parent == nonFinalParameter.handle
+            },
+        )
+        assertEquals(
+            1,
+            patchedMetadata.customAttributes.count { attribute ->
+                attribute.parent == scalarParameter.handle
+            },
+        )
+        assertEquals(
+            1,
+            patchedMetadata.customAttributes.count { attribute ->
+                attribute.parent == multiDimensionalParameter.handle
+            },
+        )
+
+        fun compileConsumer(
+            sourceName: String,
+            sourceText: String,
+        ): Pair<String, ExitCode> {
+            val source = File(tmpdir, sourceName).apply { writeText(sourceText) }
+            return AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    listOf(patchedAssembly, systemRuntime)
+                        .joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+                    K2DotNetCompilerArguments::moduleName.cliArgument, "ForeignParamArrayConsumer",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "$sourceName.il").path,
+                )
+            )
+        }
+
+        val [validDiagnostics, validExitCode] = compileConsumer(
+            "foreign-param-array-valid.kt",
+            """
+            package consumer
+
+            import ForeignParamArrayContracts.ValidApi
+
+            public fun accepted(api: ValidApi): String =
+                api.Join("a", "b")
+            """.trimIndent(),
+        )
+        assertEquals(ExitCode.OK, validExitCode, validDiagnostics)
+
+        val [rejectedDiagnostics, rejectedExitCode] = compileConsumer(
+            "foreign-param-array-rejected.kt",
+            """
+            package consumer
+
+            import ForeignParamArrayContracts.DuplicateApi
+            import ForeignParamArrayContracts.LookalikeApi
+            import ForeignParamArrayContracts.MalformedApi
+            import ForeignParamArrayContracts.MultiDimensionalApi
+            import ForeignParamArrayContracts.NonFinalApi
+            import ForeignParamArrayContracts.ScalarApi
+
+            public fun duplicate(api: DuplicateApi): String = api.Join()
+            public fun lookalike(api: LookalikeApi): String = api.Join()
+            public fun malformed(api: MalformedApi): String = api.Join()
+            public fun multiDimensional(api: MultiDimensionalApi): String = api.Join()
+            public fun nonFinal(api: NonFinalApi): String = api.Join()
+            public fun scalar(api: ScalarApi): String = api.Join()
+            """.trimIndent(),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, rejectedExitCode, rejectedDiagnostics)
+        for (
+            rejectedType in listOf(
+                "DuplicateApi",
+                "LookalikeApi",
+                "MalformedApi",
+                "MultiDimensionalApi",
+                "NonFinalApi",
+                "ScalarApi",
+            )
+        ) {
+            assertTrue(rejectedType in rejectedDiagnostics) { rejectedDiagnostics }
         }
     }
 

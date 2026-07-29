@@ -2719,6 +2719,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   physically corrupted method/TypeDef/Property/accessor evidence adds no deprecation. The focused
   test is 1/0/0/0. The fresh strict gate is 881/0/0/0 across 16 XML suites (796 FIR/IL/box,
   21 generated CLI, and 64 library integration tests).
+- Exact selected-core CLR reference parameter arrays are implemented as a foreign Common call
+  view. One final `string[]` or `object[]` parameter carrying
+  `System.ParamArrayAttribute()` becomes logical `vararg`; the retained MethodDef continues to
+  own the raw vector signature. Expanded, omitted, and spread calls execute through exact
+  MemberRefs on CLR 4.8 and CoreCLR 10, including nullable `object` elements. The importer applies
+  nested Roslyn nullability independently to the array and its element. An ordinary unannotated
+  array and `params int[]` are withheld. A structured hostile image proves that malformed,
+  duplicate, non-final, scalar, multidimensional, and same-name look-alike evidence cannot create
+  a partial classifier while a valid neighboring method still imports. The focused pair is
+  2/0/0/0. Primitive parameter arrays remain deferred because Kotlin/.NET primitive arrays have
+  wrapper identity rather than the foreign raw-vector ABI; current
+  `ParamCollectionAttribute` collections remain a separate design. The fresh strict gate is
+  882/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 65 library integration
+  tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
@@ -2778,7 +2792,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 881 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 882 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2826,8 +2840,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
    Exact selected-core method, imported-interface TypeDef, Property, and accessor
    `ObsoleteAttribute` now map to the corresponding Common warning/error deprecation channel;
    other attribute targets and semantic markers remain separately reviewed slices.
+   Exact final selected-core `ParamArrayAttribute` on `string[]` and `object[]` now maps to a
+   foreign Common `vararg` view while retaining the raw CLR vector signature. Primitive parameter
+   arrays and `ParamCollectionAttribute` collections remain separately reviewed representation
+   decisions.
    Member attributes must preserve Kotlin smart-cast stability rather than adopt Roslyn's milder
-   member-state rules. Extensions, param arrays, indexers, events, and semantic markers
+   member-state rules. Extensions, primitive/collection parameter arrays, indexers, events, and
+   semantic markers
    each require their own documented contract. Preserve Kotlin declaration identity and Common
    semantics; do not teach the Kotlin-owned backend surface to infer C# conventions. Keep
    structured metadata-table auditing; do not substitute IL substring checks.

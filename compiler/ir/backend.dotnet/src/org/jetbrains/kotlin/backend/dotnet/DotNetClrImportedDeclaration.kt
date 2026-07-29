@@ -263,5 +263,14 @@ private fun DotNetClrTypeSignature.toSupportedImportedIlTypeOrNull(): DotNetIlVa
             DotNetClrPrimitiveType.NATIVE_UINT,
                 -> null
         }
+        is DotNetClrTypeSignature.SzArray -> {
+            val elementType = elementType as? DotNetClrTypeSignature.Primitive
+                ?: return null
+            when (elementType.type) {
+                DotNetClrPrimitiveType.STRING -> DotNetIlValueType.GenericArray(DotNetIlValueType.String)
+                DotNetClrPrimitiveType.OBJECT -> DotNetIlValueType.GenericArray(DotNetIlValueType.Object)
+                else -> null
+            }
+        }
         else -> null
     }
