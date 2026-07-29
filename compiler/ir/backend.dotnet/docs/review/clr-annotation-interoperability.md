@@ -4,7 +4,8 @@ Date: 2026-07-29
 
 Status: first foreign nullable-aware FIR slice plus exact `NotNullWhen`, parameter `NotNull`,
 return-target `NotNullIfNotNull`, and parameter-target `DoesNotReturnIf` flow contracts
-implemented; public Kotlin/.NET source-annotation names remain undecided.
+implemented; method-target `DoesNotReturn` also supplies a logical Kotlin `Nothing` view. Public
+Kotlin/.NET source-annotation names remain undecided.
 
 ## Governing rule
 
@@ -56,7 +57,7 @@ Primary Kotlin references:
 | Signatures and generic constraints | Signature blobs, GenericParam, GenericParamConstraint | Lossless physical and selected-graph models exist | CLR is authoritative for the physical foreign signature. Apply a separate Kotlin usability policy |
 | Declaration nullability | Roslyn `NullableAttribute`, `NullableContextAttribute`, and `NullablePublicOnlyAttribute` | Fully decoded, selected, aligned, and projected to Kotlin qualifier vocabulary below FIR | Trust valid evidence for foreign enhanced types; use flexible types when absent, suppressed, contradictory, or malformed |
 | Conditional/flow nullability | `AllowNull`, `DisallowNull`, `MaybeNull`, `NotNull`, `MaybeNullWhen`, `NotNullWhen`, `NotNullIfNotNull`, `MemberNotNull`, and `MemberNotNullWhen` | `NotNullWhen`, parameter `NotNull`, and return-target `NotNullIfNotNull` decode to exact common FIR effects; the other positions/attributes remain raw/deferred | Integrate per target and exact contract; do not flatten conditional facts into declaration nullability or bypass Kotlin value stability |
-| Normal-return reachability | `DoesNotReturn` and parameter-target `DoesNotReturnIf` | `DoesNotReturnIf` decodes to the exact opposite-Boolean normal-return implication; unconditional `DoesNotReturn` remains deferred | Feed exact facts into common control-flow while retaining the physical CLR return signature |
+| Normal-return reachability | `DoesNotReturn` and parameter-target `DoesNotReturnIf` | `DoesNotReturnIf` decodes to the exact opposite-Boolean normal-return implication; method-target `DoesNotReturn` supplies a logical `Nothing` view while retaining the physical CLR return signature | Feed exact facts into common control-flow and keep logical reachability separate from physical invocation |
 | Kotlin contracts | No general CLR contract format; CodeAnalysis attributes exactly cover a null-state subset such as `returns(true) implies (x != null)` and non-returning functions | Kotlin-produced declarations keep complete KLIB contracts; the exact implemented foreign CodeAnalysis subset normalizes to common FIR | Bidirectionally map only the exact subset. Keep `callsInPlace`, arbitrary type predicates, and general multi-value implications in KLIB |
 | Extension call view | `ExtensionAttribute` plus the physical static signature; newer C# extension declarations require a Roslyn metadata probe | Raw custom attributes only | Consume only after receiver, generic ownership, accessibility, and collision rules are proven. Do not infer from the first parameter alone |
 | Variable argument call view | Param-array/collection attributes plus the physical array/collection parameter | Raw custom attributes only | Consume as a Kotlin call-site view only where element and spread semantics are representable. Do not confuse it with Kotlin declaration identity |
@@ -177,7 +178,7 @@ therefore per attribute *and per target*, not per attribute name:
 | `NotNullWhen(Boolean)` on a reference parameter | `returns(value) implies (parameter != null)` | Exact positive common FIR effect; implemented for Boolean-returning methods |
 | `NotNull` / `MaybeNull` on a return | Enhanced call-result type/null-state | Adopt in a separate return-target slice after precedence with Roslyn declaration nullability is pinned |
 | `NotNullIfNotNull(parameterName)` on a return | `(parameter != null) implies returnsNotNull()` | Exact reverse common FIR effect; implemented with exact Param-name binding, meaningful multiplicity, all-or-nothing invalid evidence, and an older-language-level consumer |
-| `DoesNotReturn` | Unreachable normal continuation / Kotlin `Nothing` call view | Semantically exact, but the physical CLR return signature must remain distinct from the Kotlin control-flow view |
+| `DoesNotReturn` | Kotlin `Nothing` call view | Implemented: expose the trusted non-return promise as logical `Nothing`, retain the original CLR return signature, and reject invalid evidence without strengthening |
 | `DoesNotReturnIf(Boolean)` on a Boolean parameter | Normal return implies that the argument had the opposite value | Exact common FIR effect; implemented without rewriting the physical signature or adding target-specific data-flow |
 | `AllowNull` / `DisallowNull` | Input/precondition type distinct from output/read type | Ordinary by-value parameters and property setters need separate policies; a property annotation cannot be flattened into one Kotlin property type |
 | `MaybeNull` / `MaybeNullWhen` on a parameter | Weaken or invalidate the caller's post-call null-state | Not a positive Kotlin contract. It becomes material for `ref`/`out`, which are outside the closed signature slice and require explicit state invalidation |
@@ -431,6 +432,81 @@ XML suites (796 FIR/IL/box, 21 generated CLI, and 59 library integration tests).
 Microsoft reference:
 
 - <https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.codeanalysis.doesnotreturnifattribute>
+
+## Exact unconditional non-return slice: `DoesNotReturn`
+
+CLR
+
+```csharp
+[DoesNotReturn]
+int Fail()
+```
+
+states that the apparent `int` result is never produced. Kotlin Common represents an expression
+that never completes normally with the bottom type:
+
+```kotlin
+fun Fail(): Nothing
+```
+
+This is a logical import view, not a rewrite of the MethodDef signature. The retained physical
+method still returns `int32` (or `void`, `string`, and so on), and future backend-call binding must
+invoke that exact signature. If dishonest or malformed foreign code returns, the existing common
+`KotlinNothingValueExceptionLowering` guard remains the Kotlin behavior; a value-returning
+physical call must discard its impossible result before that guard.
+
+An unconditional contract effect is not a better common representation today.
+`returns() implies false` can be represented syntactically in the effect algebra, but common FIR
+data-flow deliberately has no completed unreachable-continuation path for an always-false
+condition. Kotlin's language, CFG, and all mature backends instead use `Nothing` for this fact.
+Adding a target-local reachability rule would violate the Common-authority rule, while changing
+common contract semantics solely for this importer would be a larger language/compiler feature.
+
+The logical return change has deliberate consequences:
+
+- Kotlin control-flow after a call is unreachable, including in a null branch or Elvis operand;
+- a callable reference has a `Nothing` result;
+- a Kotlin implementation of an annotated foreign abstract member must honor the imported
+  non-return contract;
+- overload, override, and callable identity use the logical Kotlin view, while the retained CLR
+  MethodDef owns physical invocation and implementation binding.
+
+This is stronger than preserving the C# spelling of the declared return type, but not stronger
+than the authored attribute. As with JVM nullability enhancement, an implementation is not proved;
+the foreign binary contract is trusted. The result type is unobservable on a conforming call.
+
+The implemented slice:
+
+- recognize only an exact selected-graph, top-level, non-generic
+  `System.Diagnostics.CodeAnalysis.DoesNotReturnAttribute` deriving from `System.Attribute`
+  with its parameterless instance constructor;
+- read it only from a physical MethodDef, require exactly one recognized attribute, and require
+  no fixed or named arguments;
+- expose `Nothing` for any otherwise-supported physical return shape, including `void` and value
+  returns, while retaining the original metadata signature;
+- treat absence, duplicates, malformed blobs, wrong constructors, named payloads, and attributes
+  on other metadata targets as contributing no non-return view;
+- leave property/accessor import deferred with the rest of the closed provider's property work.
+
+The adversarial evidence covers `void` and value-returning methods, null-branch and Elvis
+reachability, callable-reference typing, an unannotated control, duplicates, wrong constructors,
+named payloads, a corrupted blob, and a return-target look-alike. Kotlin export should eventually
+emit `DoesNotReturn` from a `Nothing`-returning declaration as a derived C# view; complete KLIB
+metadata remains authoritative on Kotlin re-import.
+
+The real Roslyn fixture proves null-branch and Elvis reachability for both `void` and `int`
+methods. Both callable references are accepted as `() -> Nothing`, and the `int` method's call is
+accepted where a `String` result is expected because bottom-type subtyping makes the impossible
+result type irrelevant. An unannotated method remains `Unit` and does not refine a nullable value
+or satisfy a `() -> Nothing` reference. A hostile same-name polyfill and physically corrupted
+blob prove duplicates, wrong constructors, named payloads, wrong targets, and malformed values
+add no non-return view. The focused test is 1/0/0/0. The fresh strict gate is 877/0/0/0 across 16
+XML suites (796 FIR/IL/box, 21 generated CLI, and 60 library integration tests).
+
+Microsoft and Kotlin references:
+
+- <https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.codeanalysis.doesnotreturnattribute>
+- <https://kotlinlang.org/docs/exceptions.html#the-nothing-type>
 
 ## Deferred big decision
 
