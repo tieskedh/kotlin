@@ -957,9 +957,39 @@ missing rows. It rejects invalid list bounds, reserved flags, and sequences outs
 while retaining ECMA warning-only gaps, duplicate/decreasing sequences, and non-null empty names
 for later located importer diagnostics. This changes no Kotlin Common contract and is uniform
 across all three profiles. Dual-profile ILAsm, Roslyn semantic shapes, real net10
-`System.Runtime`, and hostile byte-level fixtures cover the rule. NullableAttribute context/flag
-decoding is now the next semantic layer; Constant and FieldMarshal payload decoding remains an
-explicit physical prerequisite when defaults or interop marshaling are imported.
+`System.Runtime`, and hostile byte-level fixtures cover the rule. Subsequent completed layers now
+decode nullable evidence and preserve physical Constant and FieldMarshal rows; FIR projection
+remains separate.
+
+**CLR FieldMarshal-table progress (2026-07-29):** the physical importer now keeps table 13 as
+exact interop evidence without interpreting it as Kotlin semantics. Every row retains its token,
+exact Field/Param parent, and present raw NativeType blob. The reader rejects
+nil/unread or duplicate parents, nil blob indices, oversized descriptors, and
+HasFieldMarshal-without-row, while retaining the ECMA-permitted converse row-without-flag shape.
+Descriptor syntax stays opaque because .NET's low-level metadata API exposes a `BlobHandle` and
+the platform's `UnmanagedType` surface extends ECMA's narrow MarshalSpec grammar. Present-empty
+and unknown descriptors remain distinguishable for a later selected-profile interop decoder and
+located diagnostic. This mirrors mature-target layering: JVM has no unmanaged descriptor, and
+Kotlin/Native adds explicit Native-only C interop annotations after Common semantics are fixed.
+The row therefore cannot manufacture a Kotlin annotation, type, modifier, parameter mode,
+default, or storage rule, and Kotlin-produced DLLs remain KLIB-authoritative. Real Roslyn
+Field/Param rows pin exact `LPUTF8Str`/`LPWStr` bytes (`0x30`/`0x15`). Hostile mutations cover nil/out-of-range
+and duplicate parents, nil blobs, both flag directions, unknown descriptors, and present-empty
+blobs. The focused integration test is 1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML
+suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+
+**CLR annotation-interoperability priority (2026-07-29):** runtime Kotlin reflection is not a
+prerequisite for JVM-style foreign type enhancement. The next importer review must inventory
+standard CLR/Roslyn attributes and physical metadata against both current import and export
+behavior before inventing a public Kotlin/.NET annotation family. Prioritize the foreign-to-Kotlin
+vertical path: a lazy FIR provider consuming the already-decoded nullable/custom-attribute
+evidence, followed by established .NET contracts such as flow-nullability, extension, params,
+property/event/indexer, and semantic runtime markers where Kotlin has an honest projection.
+Kotlin-produced DLLs remain KLIB-authoritative. Standard CLR attributes may replace proven
+interop duplication, but cannot replace Kotlin logical identity or the split-interface manifest's
+canonical/declared/exact roles, wrong-shape policy, intersections, and logical override keys.
+Review JVM's qualifier/export annotations, Native's generated-stub and ObjC/Swift controls, and
+JS/Wasm's explicit external/import/export annotations before defining any target API.
 
 **CLR nullable-metadata progress (2026-07-29):** the importer now decodes Roslyn's three
 nullable-reference metadata conventions without projecting a Kotlin type. This follows JVM

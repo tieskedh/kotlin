@@ -263,6 +263,9 @@ data class DotNetClrFieldDefinition(
     val hasDefault: Boolean
         get() = attributes and HAS_DEFAULT_ATTRIBUTE != 0
 
+    val hasFieldMarshal: Boolean
+        get() = attributes and HAS_FIELD_MARSHAL_ATTRIBUTE != 0
+
     private companion object {
         const val FIELD_ACCESS_MASK = 0x0007
         const val STATIC_ATTRIBUTE = 0x0010
@@ -270,6 +273,7 @@ data class DotNetClrFieldDefinition(
         const val LITERAL_ATTRIBUTE = 0x0040
         const val SPECIAL_NAME_ATTRIBUTE = 0x0200
         const val RUNTIME_SPECIAL_NAME_ATTRIBUTE = 0x0400
+        const val HAS_FIELD_MARSHAL_ATTRIBUTE = 0x1000
         const val HAS_DEFAULT_ATTRIBUTE = 0x8000
     }
 }
@@ -492,6 +496,18 @@ data class DotNetClrConstantDefinition(
     val rawValue: DotNetClrBlob,
 )
 
+/**
+ * One physical FieldMarshal-table row.
+ *
+ * [nativeType] is intentionally opaque here. CLR runtimes support marshal descriptors beyond
+ * ECMA-335's narrow grammar, so selected-profile interop policy owns semantic decoding.
+ */
+data class DotNetClrFieldMarshalDefinition(
+    val handle: DotNetClrMetadataHandle,
+    val parent: DotNetClrMetadataHandle,
+    val nativeType: DotNetClrBlob,
+)
+
 data class DotNetClrPropertySignature(
     val hasThis: Boolean,
     val propertyType: DotNetClrTypeSignature,
@@ -608,6 +624,7 @@ data class DotNetClrAssemblyMetadata(
     val methodDefinitions: List<DotNetClrMethodDefinition>,
     val parameterDefinitions: List<DotNetClrParameterDefinition>,
     val constantDefinitions: List<DotNetClrConstantDefinition>,
+    val fieldMarshalDefinitions: List<DotNetClrFieldMarshalDefinition>,
     val memberReferences: List<DotNetClrMemberReference>,
     val customAttributes: List<DotNetClrCustomAttribute>,
     val propertyDefinitions: List<DotNetClrPropertyDefinition>,

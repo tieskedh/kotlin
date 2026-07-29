@@ -1707,6 +1707,52 @@ truncation/non-zero nullref, and the exact Field/Param/Property flag asymmetry. 
 gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
 integration tests).
 
+The forty-sixth slice preserves physical FieldMarshal rows without yet interpreting CLR interop
+semantics.
+
+1. Kotlin Common has no unmanaged-marshalling declaration contract. JVM binary import has no
+   equivalent marshal descriptor, while Kotlin/Native C interop emits explicit Native-only
+   `CCall.CString`/`CCall.WCString` and related stub annotations after the Common declaration
+   meaning is fixed. The .NET importer must likewise retain target evidence below a later
+   platform policy rather than changing a Kotlin type, modifier, parameter mode, default, or
+   storage rule in the physical reader.
+2. ECMA-335 table 13 owns a HasFieldMarshal parent, restricted to Field or Param, and a non-null
+   NativeType blob. A parent may occur at most once. A Field or Param whose HasFieldMarshal flag
+   is set must own exactly one row; ECMA does not specify the reverse implication, so a row
+   without the flag remains readable.
+3. The descriptor bytes are deliberately opaque in this slice. The official
+   `System.Reflection.Metadata` FieldDefinition and Parameter APIs return a raw `BlobHandle`
+   rather than a typed marshal model, and .NET's `UnmanagedType` enumeration contains platform
+   forms outside the narrow ECMA II.23.4 grammar. Eagerly accepting only that grammar would reject
+   the target platform's own metadata; eagerly inventing support for every runtime extension
+   would duplicate selected-profile interop policy inside the physical reader.
+4. Every row therefore retains its FieldMarshal token, exact parent handle, and copied raw blob.
+   A nil/unread parent, duplicate parent, nil blob index, or oversized descriptor is invalid
+   physical metadata. A present zero-length or unknown descriptor remains distinct evidence:
+   its semantic validity belongs to a later selected-profile decoder that can issue a located,
+   structured interop diagnostic. Nil and present-empty must not collapse.
+5. The core-team choice is lossless layering. Parsing enough bytes merely to reject an empty or
+   unknown descriptor here looks stricter, but creates split semantic validation and prevents
+   future runtime/profile extensions from reaching the owning declaration. Conversely, treating
+   the raw row as a Kotlin `MarshalAs` annotation would expose a C#/.NET implementation detail as
+   Common source semantics. Both alternatives are rejected.
+6. Kotlin-produced DLLs continue to select their authoritative KLIB and never import these
+   physical rows beside it. Ordinary foreign CLR assemblies retain them in row order for the
+   future lazy FIR provider and interop policy.
+
+The implementation gate requires real Roslyn metadata for both Field and Param owners plus
+byte-level hostile images for nil/unread/duplicate parents, nil blob indices, flag-without-row,
+row-without-flag, empty/unknown payload retention, exact raw bytes, and defensive size handling.
+No test may claim marshal-spec interpretation or Kotlin annotation/type projection at this slice.
+
+The completed Roslyn fixture emits `LPUTF8Str` on a Field and `LPWStr` on a Param and pins their
+exact `0x30` and `0x15` descriptor bytes, table-13 tokens, owners, and flags. Hostile images cover a
+nil or out-of-range parent, duplicate parent, nil NativeType index, Field/Param
+flag-without-row, the accepted row-without-flag converse, and lossless unknown/present-empty
+blobs. The same reader also traverses real Framework `mscorlib` and net10 `System.Runtime`
+metadata. The focused integration test is 1/0/0/0. The fresh strict gate is 871/0/0/0 across
+16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1830,8 +1876,12 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   source policy: **Correct temporary deferral, but not a final design**.
 - Lossless physical Constant rows with platform-compatible scalar decoding and later
   Field/Param/Property semantic projection: **Correct direction**.
-- Deferring FieldMarshal payloads while retaining their Param/Field flags:
-  **Correct temporary implementation, but not a final design**.
+- Lossless opaque physical FieldMarshal rows with later selected-profile descriptor decoding:
+  **Correct direction**.
+- Restricting physical FieldMarshal blobs to ECMA's narrower MarshalSpec grammar despite .NET
+  platform extensions: **Architecturally wrong and should be changed**.
+- Projecting FieldMarshal rows directly as Kotlin types, modifiers, annotations, defaults, or
+  storage rules: **Architecturally wrong and should be changed**.
 - Lossless MemberRef and reusable FieldSig model: **Correct direction**.
 - Physical FieldDef preservation on the reusable FieldSig model: **Correct direction**.
 - Physical Property/PropertyMap/MethodSemantics preservation: **Correct direction**.

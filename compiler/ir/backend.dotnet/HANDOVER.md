@@ -2545,6 +2545,25 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Framework 4.8 ILAsm and its Framework executable returned zero. The focused dual-ILAsm
   physical/adversarial test is 1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML suites
   (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- Physical FieldMarshal preservation is implemented. Each row keeps its table-13 token, exact
+  Field/Param parent, and present NativeType blob without interpreting MarshalSpec or projecting
+  Kotlin semantics. This is required because official
+  `System.Reflection.Metadata` exposes raw descriptor handles and the .NET platform extends
+  ECMA's narrow descriptor grammar. Structural rejection covers nil/unread/duplicate parents,
+  nil blob indices, oversize, and HasFieldMarshal-without-row; row-without-flag and present
+  empty/unknown blobs remain evidence for a later selected-profile decoder and located
+  diagnostic. Real Roslyn Field/Param rows pin exact `LPUTF8Str`/`LPWStr` bytes; hostile
+  mutations cover nil/out-of-range/duplicate parents, nil blobs, both flag directions, unknown
+  descriptors, and present-empty blobs. The focused integration test is 1/0/0/0. The fresh
+  strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
+  integration tests).
+- The next priority is an annotation-interoperability audit, not full runtime reflection. Build a
+  written import/export matrix for standard CLR/Roslyn metadata versus Kotlin-only facts before
+  adding a public target annotation API. The first implementation target should be a narrow lazy
+  FIR foreign-declaration path that consumes the existing nullable/custom-attribute evidence.
+  Then evaluate established .NET flow-nullability, extension, params, property/event/indexer, and
+  semantic runtime markers. Do not replace authoritative KLIB identity or the split-interface
+  C# implementation manifest's Kotlin-only contracts with inferred CLR annotations.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

@@ -68,6 +68,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedConstructedTypeConst
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldDefinition
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldMarshalDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterConstraint
@@ -3091,6 +3092,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public static class ParameterProbe
                     {
+                        [System.Runtime.InteropServices.MarshalAs(
+                            System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)]
+                        public static string MarshalledField;
+
+                        public static string OrdinaryField;
+
                         [return: ParamMarker]
                         public static string Rows(
                             [ParamMarker, System.Runtime.InteropServices.In] string input,
@@ -3883,6 +3890,197 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         val marshalledParameter =
             parameterRows.single { parameter -> parameter.name == "marshalled" }
+        val marshalledField = destinationMetadata.fieldDefinitions.single { field ->
+            field.declaringType == parameterProbe.handle && field.name == "MarshalledField"
+        }
+        val ordinaryField = destinationMetadata.fieldDefinitions.single { field ->
+            field.declaringType == parameterProbe.handle && field.name == "OrdinaryField"
+        }
+        assertTrue(marshalledField.hasFieldMarshal)
+        assertFalse(ordinaryField.hasFieldMarshal)
+        val fieldMarshalsByParent = destinationMetadata.fieldMarshalDefinitions
+            .associateBy { fieldMarshal -> fieldMarshal.parent }
+        assertEquals(2, destinationMetadata.fieldMarshalDefinitions.size)
+        assertEquals(destinationMetadata.fieldMarshalDefinitions.size, fieldMarshalsByParent.size)
+        val marshalledFieldMarshal = fieldMarshalsByParent.getValue(marshalledField.handle)
+        val marshalledParameterMarshal =
+            fieldMarshalsByParent.getValue(marshalledParameter.handle)
+        assertEquals(13, marshalledFieldMarshal.handle.table)
+        assertEquals(13, marshalledParameterMarshal.handle.table)
+        assertEquals(listOf(0x30), marshalledFieldMarshal.nativeType.toUnsignedIntList())
+        assertEquals(listOf(0x15), marshalledParameterMarshal.nativeType.toUnsignedIntList())
+
+        fun fieldMarshalNativeTypeIndex(
+            image: ByteArray,
+            tables: ClrMetadataTablesLayout,
+            definition: DotNetClrFieldMarshalDefinition,
+        ): Int = readLittleEndianIndex(
+            image,
+            tables.rowOffset(13, definition.handle.row) + tables.hasFieldMarshalIndexSize,
+            tables.blobIndexSize,
+        )
+
+        fun mutatedFieldMarshalMetadata(
+            suffix: String,
+            patch: (ByteArray, ClrMetadataTablesLayout) -> Unit,
+        ): DotNetClrAssemblyMetadata {
+            val image = destinationAssembly.readBytes()
+            val tables = locateClrMetadataTables(image)
+            patch(image, tables)
+            val mutated = directory.resolve("ForwardDestination-$suffix.dll")
+            mutated.writeBytes(image)
+            return DotNetClrMetadataReader.read(mutated)
+        }
+
+        fun assertRejectedFieldMarshalMetadata(
+            suffix: String,
+            expectedDiagnostic: String,
+            patch: (ByteArray, ClrMetadataTablesLayout) -> Unit,
+        ) {
+            val exception = assertThrows(DotNetBadImageFormatException::class.java) {
+                mutatedFieldMarshalMetadata(suffix, patch)
+            }
+            assertTrue(
+                exception.message.orEmpty().contains(expectedDiagnostic),
+                exception.message,
+            )
+        }
+
+        assertRejectedFieldMarshalMetadata(
+            suffix = "field-marshal-nil-parent",
+            expectedDiagnostic = "has a nil parent",
+        ) { image, tables ->
+            writeLittleEndian(
+                image,
+                tables.rowOffset(13, marshalledFieldMarshal.handle.row),
+                tables.hasFieldMarshalIndexSize,
+                0,
+            )
+        }
+        assertRejectedFieldMarshalMetadata(
+            suffix = "field-marshal-invalid-parent",
+            expectedDiagnostic = "refers to invalid row",
+        ) { image, tables ->
+            writeLittleEndian(
+                image,
+                tables.rowOffset(13, marshalledFieldMarshal.handle.row),
+                tables.hasFieldMarshalIndexSize,
+                0x7fff shl 1,
+            )
+        }
+        assertRejectedFieldMarshalMetadata(
+            suffix = "field-marshal-duplicate-parent",
+            expectedDiagnostic = "duplicates parent token",
+        ) { image, tables ->
+            val fieldParent = readLittleEndianIndex(
+                image,
+                tables.rowOffset(13, marshalledFieldMarshal.handle.row),
+                tables.hasFieldMarshalIndexSize,
+            )
+            writeLittleEndian(
+                image,
+                tables.rowOffset(13, marshalledParameterMarshal.handle.row),
+                tables.hasFieldMarshalIndexSize,
+                fieldParent,
+            )
+        }
+        assertRejectedFieldMarshalMetadata(
+            suffix = "field-marshal-nil-native-type",
+            expectedDiagnostic = "has a nil NativeType blob",
+        ) { image, tables ->
+            writeLittleEndian(
+                image,
+                tables.rowOffset(13, marshalledParameterMarshal.handle.row) +
+                        tables.hasFieldMarshalIndexSize,
+                tables.blobIndexSize,
+                0,
+            )
+        }
+        assertRejectedFieldMarshalMetadata(
+            suffix = "field-marshal-field-flag-without-row",
+            expectedDiagnostic = "HasFieldMarshal without a FieldMarshal row",
+        ) { image, tables ->
+            writeLittleEndian(
+                image,
+                tables.rowOffset(13, marshalledFieldMarshal.handle.row),
+                tables.hasFieldMarshalIndexSize,
+                ordinaryField.handle.row shl 1,
+            )
+        }
+        assertRejectedFieldMarshalMetadata(
+            suffix = "field-marshal-param-flag-without-row",
+            expectedDiagnostic = "HasFieldMarshal without a FieldMarshal row",
+        ) { image, tables ->
+            writeLittleEndian(
+                image,
+                tables.rowOffset(13, marshalledParameterMarshal.handle.row),
+                tables.hasFieldMarshalIndexSize,
+                (inputParameter.handle.row shl 1) or 1,
+            )
+        }
+
+        val rowWithoutFlags = mutatedFieldMarshalMetadata(
+            suffix = "field-marshal-rows-without-flags",
+        ) { image, tables ->
+            writeLittleEndian(
+                image,
+                tables.rowOffset(4, marshalledField.handle.row),
+                2,
+                marshalledField.attributes and 0x1000.inv(),
+            )
+            writeLittleEndian(
+                image,
+                tables.rowOffset(8, marshalledParameter.handle.row),
+                2,
+                marshalledParameter.attributes and 0x2000.inv(),
+            )
+        }
+        assertFalse(
+            rowWithoutFlags.fieldDefinitions.single { field ->
+                field.handle == marshalledField.handle
+            }.hasFieldMarshal
+        )
+        assertFalse(
+            rowWithoutFlags.parameterDefinitions.single { parameter ->
+                parameter.handle == marshalledParameter.handle
+            }.hasFieldMarshal
+        )
+        assertEquals(
+            setOf(marshalledField.handle, marshalledParameter.handle),
+            rowWithoutFlags.fieldMarshalDefinitions
+                .mapTo(mutableSetOf(), DotNetClrFieldMarshalDefinition::parent),
+        )
+
+        val unknownDescriptor = mutatedFieldMarshalMetadata(
+            suffix = "field-marshal-unknown-descriptor",
+        ) { image, tables ->
+            val nativeTypeIndex = fieldMarshalNativeTypeIndex(
+                image,
+                tables,
+                marshalledFieldMarshal,
+            )
+            image[tables.blobContentOffset(image, nativeTypeIndex)] = 0xfe.toByte()
+        }.fieldMarshalDefinitions.single { definition ->
+            definition.handle == marshalledFieldMarshal.handle
+        }
+        assertEquals(listOf(0xfe), unknownDescriptor.nativeType.toUnsignedIntList())
+
+        val emptyDescriptor = mutatedFieldMarshalMetadata(
+            suffix = "field-marshal-empty-descriptor",
+        ) { image, tables ->
+            val nativeTypeIndex = fieldMarshalNativeTypeIndex(
+                image,
+                tables,
+                marshalledParameterMarshal,
+            )
+            val blobEntryOffset = tables.blobEntryOffset(nativeTypeIndex)
+            assertEquals(1, image[blobEntryOffset].toInt() and 0xff)
+            image[blobEntryOffset] = 0
+        }.fieldMarshalDefinitions.single { definition ->
+            definition.handle == marshalledParameterMarshal.handle
+        }
+        assertEquals(0, emptyDescriptor.nativeType.size)
+
         assertRejectedParameterMetadata(
             suffix = "invalid-param-sequence",
             expectedDiagnostic = "has sequence 5 outside MethodDef",
@@ -9825,6 +10023,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 methodDefinitions = emptyList(),
                 parameterDefinitions = emptyList(),
                 constantDefinitions = emptyList(),
+                fieldMarshalDefinitions = emptyList(),
                 memberReferences = emptyList(),
                 customAttributes = emptyList(),
                 propertyDefinitions = emptyList(),
@@ -25331,8 +25530,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val hasConstantIndexSize: Int
             get() = codedIndexSize(2, 4, 8, 23)
 
+        val hasFieldMarshalIndexSize: Int
+            get() = codedIndexSize(1, 4, 8)
+
         val memberRefParentIndexSize: Int
             get() = codedIndexSize(3, 2, 1, 26, 6, 27)
+
+        fun blobEntryOffset(index: Int): Int {
+            require(index > 0)
+            return blobHeapOffset + index
+        }
 
         fun blobContentOffset(image: ByteArray, index: Int): Int {
             require(index > 0)
