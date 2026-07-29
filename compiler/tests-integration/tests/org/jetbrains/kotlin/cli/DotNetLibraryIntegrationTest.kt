@@ -19738,7 +19738,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public interface UnsupportedApi
                     {
                         string? Maybe();
-                        string Value { get; }
+                        string this[int index] { get; }
                     }
                 }
                 """.trimIndent()
@@ -22242,6 +22242,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val target: String,
             val applicationFileName: String,
             val fixturePreamble: String,
+            val nullableDirective: String,
+            val nullableStringType: String,
             val compileFixture: (File, File) -> CSharpCompilerResult,
             val systemReference: File,
             val compileVerifier: (File, File, File) -> CSharpCompilerResult,
@@ -22258,8 +22260,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         [System.AttributeUsage(System.AttributeTargets.Method)]
                         public sealed class DoesNotReturnAttribute : System.Attribute {}
+
+                        [System.AttributeUsage(
+                            System.AttributeTargets.Property |
+                            System.AttributeTargets.Field |
+                            System.AttributeTargets.Parameter)]
+                        public sealed class AllowNullAttribute : System.Attribute {}
                     }
                     """.trimIndent(),
+                nullableDirective = "",
+                nullableStringType = "string",
                 compileFixture = { source, output ->
                     runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
                 },
@@ -22281,6 +22291,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 target = "net10.0",
                 applicationFileName = "ForeignCallConsumer.dll",
                 fixturePreamble = "",
+                nullableDirective = "#nullable enable",
+                nullableStringType = "string?",
                 compileFixture = { source, output ->
                     runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
                 },
@@ -22311,6 +22323,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     using System.Reflection;
                     [assembly: AssemblyVersion("3.4.5.6")]
 
+                    ${profile.nullableDirective}
+
                     ${profile.fixturePreamble}
 
                     namespace ForeignCallContracts
@@ -22321,6 +22335,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             int Compute(string value);
                             string Echo(string value);
                             void Touch();
+                            int Count { get; }
+                            string Name { get; set; }
+                            ${profile.nullableStringType} Optional { get; set; }
 
                             [DoesNotReturn]
                             int ReturnsValue();
@@ -22331,12 +22348,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                         public sealed class ApiImpl : Api
                         {
+                            private string name = "initial";
+                            private ${profile.nullableStringType} optional;
+
                             public int Compute(int value) { return value + 1; }
                             public int Compute(string value) { return value.Length + 10; }
                             public string Echo(string value) { return value + "!"; }
                             public void Touch() {}
+                            public int Count { get { return 17; } }
+                            public string Name
+                            {
+                                get { return name; }
+                                set { name = value; }
+                            }
+                            public ${profile.nullableStringType} Optional
+                            {
+                                get { return optional; }
+                                set { optional = value; }
+                            }
                             public int ReturnsValue() { return 999; }
                             public void ReturnsVoid() {}
+                        }
+
+                        public interface SplitApi
+                        {
+                            [AllowNull]
+                            string SplitName { get; set; }
                         }
                     }
                     """.trimIndent()
@@ -22366,6 +22403,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public fun verifyTouch(api: Api) {
                         api.Touch()
+                    }
+
+                    public fun verifyCount(api: Api): Int =
+                        api.Count
+
+                    public fun verifyName(api: Api): String =
+                        api.Name
+
+                    public fun setName(api: Api, value: String) {
+                        api.Name = value
+                    }
+
+                    public fun verifyOptional(api: Api): String? =
+                        api.Optional
+
+                    public fun clearOptional(api: Api) {
+                        api.Optional = null
                     }
 
                     public fun dishonestValue(api: Api): String =
@@ -22415,6 +22469,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ) { il }
             assertTrue(
                 "callvirt instance void [Foreign.CallContracts]'ForeignCallContracts.Api'::'ReturnsVoid'()" in il
+            ) { il }
+            assertTrue(
+                "callvirt instance int32 [Foreign.CallContracts]'ForeignCallContracts.Api'::'get_Count'()" in il
+            ) { il }
+            assertTrue(
+                "callvirt instance string [Foreign.CallContracts]'ForeignCallContracts.Api'::'get_Name'()" in il
+            ) { il }
+            assertTrue(
+                "callvirt instance void [Foreign.CallContracts]'ForeignCallContracts.Api'::'set_Name'(string)" in il
             ) { il }
 
             val verifierSource = applicationDirectory.resolve("ForeignCallVerifier.cs").apply {
@@ -22473,6 +22536,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 "foreign reference return binding failed");
                             Method(facade, "verifyTouch").Invoke(
                                 null, new object[] { api });
+                            Require((int)Method(facade, "verifyCount").Invoke(
+                                null, new object[] { api }) == 17,
+                                "foreign read-only property getter failed");
+                            Require((string)Method(facade, "verifyName").Invoke(
+                                null, new object[] { api }) == "initial",
+                                "foreign mutable property getter failed");
+                            Method(facade, "setName").Invoke(
+                                null, new object[] { api, "changed" });
+                            Require(api.Name == "changed",
+                                "foreign mutable property setter failed");
+                            Method(facade, "clearOptional").Invoke(
+                                null, new object[] { api });
+                            Require(Method(facade, "verifyOptional").Invoke(
+                                null, new object[] { api }) == null,
+                                "foreign nullable property round trip failed");
                             RequireNothingGuard(Method(facade, "dishonestValue"), api);
                             RequireNothingGuard(Method(facade, "dishonestVoid"), api);
                             Console.WriteLine("OK");
@@ -22496,6 +22574,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 applicationDirectory,
                 "${profile.target} foreign CLR interface calls",
             )
+
+            val splitConsumer = applicationDirectory.resolve("splitProperty.kt").apply {
+                writeText(
+                    """
+                    package rejected
+
+                    import ForeignCallContracts.SplitApi
+
+                    public fun rejected(api: SplitApi) {
+                        api.SplitName = null
+                    }
+                    """.trimIndent()
+                )
+            }
+            val [splitDiagnostics, splitExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    splitConsumer.path,
+                    K2DotNetCompilerArguments::noStdlib.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    listOf(fixtureAssembly, profile.systemReference)
+                        .joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, "RejectedSplitProperty",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    applicationDirectory.resolve("RejectedSplitProperty.il").path,
+                )
+            )
+            assertEquals(ExitCode.COMPILATION_ERROR, splitExitCode, splitDiagnostics)
+            assertTrue("SplitApi" in splitDiagnostics) { splitDiagnostics }
         }
     }
 
