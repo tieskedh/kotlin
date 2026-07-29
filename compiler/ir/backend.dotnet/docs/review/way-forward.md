@@ -976,6 +976,20 @@ public-only output plus hostile selected-metadata variants cover the decoder. Ko
 unchanged: effective context lookup, accessibility filtering, physical type-tree application,
 generic interaction, diagnostics, and FIR enhancement remain the next importer slice.
 
+**CLR nullable-type-shape progress (2026-07-29):** the decoded evidence can now be aligned with an
+exact resolved CLR signature before any Kotlin type is created. This mirrors JVM's indexed foreign
+type qualifiers and Roslyn's preorder transform traversal. The CLR-specific rule is structural:
+ordinary reference/generic/array/pointer/function-pointer nodes consume before their children;
+non-generic value types and `System.Nullable<T>` do not; another generic struct consumes an
+oblivious position; `ref` and custom modifiers are transparent; function pointers visit return
+then parameters. The selected profile's physical classifier validates nominal class/value shape.
+Uniform context evidence repeats across consuming nodes, while an array transform must match the
+count exactly. Mismatches and invalid physical types are structured failures rather than partial
+enhancement. Real Roslyn generic, array, `ref`, generic-struct, primitive-skip, and nullable-value
+shapes plus synthetic function-pointer and hostile inputs cover the rule. Enclosing context,
+effective accessibility/`NullablePublicOnly`, diagnostic fallback, generic constraint
+interaction, and FIR projection remain separate next layers.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:

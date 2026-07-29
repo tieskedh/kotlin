@@ -331,7 +331,18 @@ landed shape as a compatibility constraint.
    are explicit invalid metadata, never first-wins input. This decoder must not create FIR/Kotlin
    types. A later layer must apply local transforms, enclosing contexts, public-only
    accessibility, physical type-tree shape, generic constraints, and Kotlin enhancement policy
-   together.
+   together. Align a selected local/context transform only against the resolved physical
+   signature tree and the selected-profile physical classifier. The flat component order follows
+   Roslyn preorder. Reference primitives, nominal references, generic parameters, pointers,
+   arrays, generic instances other than `System.Nullable<T>`, and function pointers consume one
+   flag before their children. Non-generic value types, `void`, typed references, and
+   `System.Nullable<T>` itself consume none; generic non-nullable value types consume an
+   oblivious position before their arguments. By-reference and custom-modifier wrappers consume
+   none and delegate to their element. Function-pointer children are return then parameters.
+   A sequence must cover the consuming component count exactly; never partially apply or shift
+   excess flags. Retain a uniform transform as repeated evidence and report count mismatch or
+   invalid nominal physical classification structurally. The resulting NOT_ANNOTATED evidence is
+   still not a Kotlin definitely-non-null type.
    Property, PropertyMap, and MethodSemantics rows now
    retain the physical property token, declaring TypeDef, metadata name/flags, structural
    property/index signature, raw blob, and accessor MethodDef handles. Association comes only from

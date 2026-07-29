@@ -85,6 +85,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTransform
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeApplication
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeApplicationFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeTransformApplicator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassification
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationUnsupported
@@ -115,12 +118,15 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomAttributeNamed
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomModifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericConstraintType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericParameterContext
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedMethodSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureSubstitutionFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedMethodSignatureResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeView
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeModifier
@@ -2616,12 +2622,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
 
                     #nullable enable
+                    public struct NullableGenericValue<TFirst, TSecond>
+                    {
+                    }
+
                     public sealed class NullableProbe<T> where T : class?
                     {
                         public Dictionary<string, T?>? Transform(
                             List<string?> input,
                             T value,
                             object?[] items) => null;
+
+                        public NullableGenericValue<int, string?> ValueShape() => default;
+
+                        public NullableGenericValue<int, string?>? NullableValueShape() => null;
+
+                        public void ByReference(ref string? value)
+                        {
+                        }
                     }
                     #nullable disable
 
@@ -3330,6 +3348,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             toolchain.referenceDirectory.resolve("System.Runtime.dll")
         assertTrue(systemRuntimeAssembly.isFile)
         val systemRuntimeMetadata = DotNetClrMetadataReader.read(systemRuntimeAssembly)
+        val systemCollectionsAssembly =
+            toolchain.referenceDirectory.resolve("System.Collections.dll")
+        assertTrue(systemCollectionsAssembly.isFile)
+        val systemCollectionsMetadata =
+            DotNetClrMetadataReader.read(systemCollectionsAssembly)
         val systemRuntimeMethods =
             systemRuntimeMetadata.methodDefinitions.associateBy(DotNetClrMethodDefinition::handle)
         assertTrue(systemRuntimeMetadata.parameterDefinitions.isNotEmpty())
@@ -3356,6 +3379,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     destinationMetadata
 
                 sourceAssembly === destinationMetadata &&
+                        reference.name == systemRuntimeMetadata.identity.name ->
+                    systemRuntimeMetadata
+
+                sourceAssembly === destinationMetadata &&
+                        reference.name == systemCollectionsMetadata.identity.name ->
+                    systemCollectionsMetadata
+
+                sourceAssembly === systemCollectionsMetadata &&
                         reference.name == systemRuntimeMetadata.identity.name ->
                     systemRuntimeMetadata
 
@@ -3942,15 +3973,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             destinationMetadata.genericParameterDefinitions.single { parameter ->
                 parameter.owner == nullableProbe.handle
             }
-        assertEquals(
-            DotNetClrNullableTransform.Uniform(DotNetClrNullableAnnotation.ANNOTATED),
-            (
-                    nullableMetadataDecoder.decodeTransform(
-                        destinationMetadata,
-                        nullableTypeParameter.handle,
-                    ) as DotNetClrNullableMetadataResolution.Decoded
-                    ).value,
+        assertSame(
+            DotNetClrNullableMetadataResolution.Absent,
+            nullableMetadataDecoder.decodeTransform(
+                destinationMetadata,
+                nullableTypeParameter.handle,
+            ),
         )
+        val nullableClassContext = (
+                nullableMetadataDecoder.decodeContext(
+                    destinationMetadata,
+                    nullableProbe.handle,
+                ) as DotNetClrNullableMetadataResolution.Decoded
+                ).value
+        assertEquals(DotNetClrNullableAnnotation.ANNOTATED, nullableClassContext)
         val obliviousProbe = destinationMetadata.typeDefinitions.single { definition ->
             definition.namespaceName == "Forwarded" &&
                     definition.metadataName == "ObliviousProbe"
@@ -3969,6 +4005,255 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     nullableMetadataDecoder.decodeTransform(destinationMetadata, parameter.handle) ===
                             DotNetClrNullableMetadataResolution.Absent
                 }
+        )
+        val nullableSignatureResolver = DotNetClrSignatureResolver(resolver)
+        fun resolvedNullableSignature(
+            method: DotNetClrMethodDefinition,
+        ): DotNetClrResolvedMethodSignature =
+            (
+                    nullableSignatureResolver.resolve(
+                        destinationMetadata,
+                        method.signature,
+                    ) as DotNetClrResolvedMethodSignatureResolution.Resolved
+                    ).signature
+        fun decodedNullableTransform(
+            parent: DotNetClrMetadataHandle,
+        ): DotNetClrNullableTransform =
+            (
+                    nullableMetadataDecoder.decodeTransform(
+                        destinationMetadata,
+                        parent,
+                    ) as DotNetClrNullableMetadataResolution.Decoded
+                    ).value
+
+        val nullableTypeApplicator =
+            DotNetClrNullableTypeTransformApplicator(physicalTypeClassifier)
+        val resolvedNullableTransform = resolvedNullableSignature(nullableTransform)
+        val resolvedNullableReturn =
+            resolvedNullableTransform.returnType as DotNetClrResolvedTypeSignature.GenericInstance
+        val appliedNullableReturn = nullableTypeApplicator.apply(
+            resolvedNullableReturn,
+            decodedNullableTransform(
+                nullableTransformParameters.single { parameter -> parameter.isReturn }.handle
+            ),
+        ) as DotNetClrNullableTypeApplication.Applied
+        assertEquals(
+            listOf(
+                resolvedNullableReturn,
+                resolvedNullableReturn.arguments[0],
+                resolvedNullableReturn.arguments[1],
+            ),
+            appliedNullableReturn.components.map { component -> component.type },
+        )
+        assertEquals(
+            listOf(
+                DotNetClrNullableAnnotation.ANNOTATED,
+                DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                DotNetClrNullableAnnotation.ANNOTATED,
+            ),
+            appliedNullableReturn.components.map { component -> component.annotation },
+        )
+
+        val resolvedInput =
+            resolvedNullableTransform.parameterTypes[0] as
+                    DotNetClrResolvedTypeSignature.GenericInstance
+        val appliedInput = nullableTypeApplicator.apply(
+            resolvedInput,
+            decodedNullableTransform(
+                nullableTransformParameters.single { parameter -> parameter.name == "input" }.handle
+            ),
+        ) as DotNetClrNullableTypeApplication.Applied
+        assertEquals(
+            listOf(resolvedInput, resolvedInput.arguments.single()),
+            appliedInput.components.map { component -> component.type },
+        )
+        assertEquals(
+            listOf(
+                DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                DotNetClrNullableAnnotation.ANNOTATED,
+            ),
+            appliedInput.components.map { component -> component.annotation },
+        )
+
+        val nullableMethodContext = (
+                nullableMetadataDecoder.decodeContext(
+                    destinationMetadata,
+                    nullableTransform.handle,
+                ) as DotNetClrNullableMetadataResolution.Decoded
+                ).value
+        val appliedContextParameter = nullableTypeApplicator.apply(
+            resolvedNullableTransform.parameterTypes[1],
+            DotNetClrNullableTransform.Uniform(nullableMethodContext),
+        ) as DotNetClrNullableTypeApplication.Applied
+        assertEquals(
+            listOf(DotNetClrNullableAnnotation.NOT_ANNOTATED),
+            appliedContextParameter.components.map { component -> component.annotation },
+        )
+
+        val resolvedItems =
+            resolvedNullableTransform.parameterTypes[2] as
+                    DotNetClrResolvedTypeSignature.SzArray
+        val appliedItems = nullableTypeApplicator.apply(
+            resolvedItems,
+            decodedNullableTransform(
+                nullableTransformParameters.single { parameter -> parameter.name == "items" }.handle
+            ),
+        ) as DotNetClrNullableTypeApplication.Applied
+        assertEquals(
+            listOf(resolvedItems, resolvedItems.elementType),
+            appliedItems.components.map { component -> component.type },
+        )
+
+        val valueShape = destinationMetadata.methodDefinitions.single { method ->
+            method.declaringType == nullableProbe.handle && method.name == "ValueShape"
+        }
+        val resolvedValueShape =
+            resolvedNullableSignature(valueShape).returnType as
+                    DotNetClrResolvedTypeSignature.GenericInstance
+        val appliedValueShape = nullableTypeApplicator.apply(
+            resolvedValueShape,
+            decodedNullableTransform(
+                destinationMetadata.parameterDefinitions.single { parameter ->
+                    parameter.declaringMethod == valueShape.handle && parameter.isReturn
+                }.handle
+            ),
+        ) as DotNetClrNullableTypeApplication.Applied
+        assertEquals(
+            listOf(resolvedValueShape, resolvedValueShape.arguments[1]),
+            appliedValueShape.components.map { component -> component.type },
+        )
+        assertEquals(
+            listOf(
+                DotNetClrNullableAnnotation.OBLIVIOUS,
+                DotNetClrNullableAnnotation.ANNOTATED,
+            ),
+            appliedValueShape.components.map { component -> component.annotation },
+        )
+
+        val nullableValueShape = destinationMetadata.methodDefinitions.single { method ->
+            method.declaringType == nullableProbe.handle && method.name == "NullableValueShape"
+        }
+        val resolvedNullableValueShape =
+            resolvedNullableSignature(nullableValueShape).returnType as
+                    DotNetClrResolvedTypeSignature.GenericInstance
+        val nestedValueShape =
+            resolvedNullableValueShape.arguments.single() as
+                    DotNetClrResolvedTypeSignature.GenericInstance
+        val appliedNullableValueShape = nullableTypeApplicator.apply(
+            resolvedNullableValueShape,
+            decodedNullableTransform(
+                destinationMetadata.parameterDefinitions.single { parameter ->
+                    parameter.declaringMethod == nullableValueShape.handle &&
+                            parameter.isReturn
+                }.handle
+            ),
+        ) as DotNetClrNullableTypeApplication.Applied
+        assertEquals(
+            listOf(nestedValueShape, nestedValueShape.arguments[1]),
+            appliedNullableValueShape.components.map { component -> component.type },
+        )
+        assertEquals(
+            listOf(
+                DotNetClrNullableAnnotation.OBLIVIOUS,
+                DotNetClrNullableAnnotation.ANNOTATED,
+            ),
+            appliedNullableValueShape.components.map { component -> component.annotation },
+        )
+
+        val byReference = destinationMetadata.methodDefinitions.single { method ->
+            method.declaringType == nullableProbe.handle && method.name == "ByReference"
+        }
+        val byReferenceParameter = destinationMetadata.parameterDefinitions.single { parameter ->
+            parameter.declaringMethod == byReference.handle && parameter.name == "value"
+        }
+        val resolvedByReference =
+            resolvedNullableSignature(byReference).parameterTypes.single() as
+                    DotNetClrResolvedTypeSignature.ByReference
+        assertSame(
+            DotNetClrNullableMetadataResolution.Absent,
+            nullableMetadataDecoder.decodeTransform(
+                destinationMetadata,
+                byReferenceParameter.handle,
+            ),
+        )
+        val appliedByReference = nullableTypeApplicator.apply(
+            resolvedByReference,
+            DotNetClrNullableTransform.Uniform(nullableClassContext),
+        ) as DotNetClrNullableTypeApplication.Applied
+        assertEquals(
+            listOf(resolvedByReference.elementType),
+            appliedByReference.components.map { component -> component.type },
+        )
+        assertEquals(
+            listOf(DotNetClrNullableAnnotation.ANNOTATED),
+            appliedByReference.components.map { component -> component.annotation },
+        )
+
+        val flagCountMismatch = nullableTypeApplicator.apply(
+            resolvedNullableReturn,
+            DotNetClrNullableTransform.Sequence(
+                listOf(DotNetClrNullableAnnotation.ANNOTATED)
+            ),
+        ) as DotNetClrNullableTypeApplication.Invalid
+        assertEquals(
+            DotNetClrNullableTypeApplicationFailure.FLAG_COUNT_MISMATCH,
+            flagCountMismatch.failure,
+        )
+        assertEquals(3, flagCountMismatch.expectedFlagCount)
+        assertEquals(1, flagCountMismatch.actualFlagCount)
+
+        val invalidValueEncoding = resolvedNullableReturn.copy(
+            genericType = resolvedNullableReturn.genericType.copy(isValueType = true)
+        )
+        val invalidNullableType = nullableTypeApplicator.apply(
+            invalidValueEncoding,
+            DotNetClrNullableTransform.Uniform(
+                DotNetClrNullableAnnotation.NOT_ANNOTATED
+            ),
+        ) as DotNetClrNullableTypeApplication.Invalid
+        assertEquals(
+            DotNetClrNullableTypeApplicationFailure.INVALID_PHYSICAL_TYPE,
+            invalidNullableType.failure,
+        )
+        assertTrue(
+            invalidNullableType.physicalClassification is
+                    DotNetClrPhysicalTypeClassification.Invalid
+        )
+
+        val functionPointerType = DotNetClrResolvedTypeSignature.FunctionPointer(
+            DotNetClrResolvedMethodSignature(
+                callingConvention = DotNetClrSignatureCallingConvention.DEFAULT,
+                hasThis = false,
+                hasExplicitThis = false,
+                genericParameterCount = 0,
+                returnType = DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.OBJECT
+                ),
+                parameterTypes = listOf(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.STRING
+                    )
+                ),
+                varargParameterStart = null,
+            )
+        )
+        val appliedFunctionPointer = nullableTypeApplicator.apply(
+            functionPointerType,
+            DotNetClrNullableTransform.Sequence(
+                listOf(
+                    DotNetClrNullableAnnotation.OBLIVIOUS,
+                    DotNetClrNullableAnnotation.ANNOTATED,
+                    DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                )
+            ),
+        ) as DotNetClrNullableTypeApplication.Applied
+        assertEquals(
+            listOf(
+                functionPointerType,
+                functionPointerType.signature.returnType,
+                functionPointerType.signature.parameterTypes.single(),
+            ),
+            appliedFunctionPointer.components.map { component -> component.type },
         )
         val genericAttributeConstructors = genericAttributes.map { attribute ->
             (
