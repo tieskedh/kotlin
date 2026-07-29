@@ -1046,6 +1046,24 @@ remain separate next layers. The focused adversarial integration test is 1/0/0/0
 strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
 integration tests).
 
+**CLR DLL-classpath classification progress (2026-07-29):** the provider prerequisite now has a
+disjoint input boundary. JVM distinguishes Kotlin-metadata-bearing class files from ordinary Java
+class files, and Native does not require platform libraries to masquerade as KLIBs. Likewise, a
+private `Kotlin.Metadata` resource selects the existing self-describing Kotlin/.NET path and its
+authoritative embedded KLIB; resource absence selects ordered physical CLR metadata. A valid
+resource-free DLL must no longer fail merely because it is not Kotlin-produced. Selection is
+one-way: a present non-private or malformed reserved resource remains an invalid Kotlin dependency
+and never falls back to exposing compiler-owned CLR rows as foreign API. Canonical foreign files
+and exact decoded assemblies are retained in classpath order for a future lazy FIR provider, but
+this slice creates no FIR declaration, Kotlin identity, runtime dependency, or deployment copy.
+The classifier uses one bounded reader session and one parsed metadata image, so selection and
+retained rows cannot come from separate opens of the input file.
+Malformed nullable-metadata severity remains deferred because the current .NET metadata session
+has no foreign symbol provider or foreign source location; JVM reports analogous incompatible
+binary evidence at the deserialized declaration/usage boundary. The focused adversarial test is
+1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI,
+and 54 library integration tests).
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:
