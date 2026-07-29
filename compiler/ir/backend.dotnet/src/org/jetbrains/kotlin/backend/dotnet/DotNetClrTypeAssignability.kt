@@ -6,8 +6,18 @@ sealed interface DotNetClrTypeAssignability {
     data object NotAssignable : DotNetClrTypeAssignability
 
     data class VariantConversionRequired(
+        val actualCandidates: List<DotNetClrResolvedTypeView>,
+        val expected: DotNetClrResolvedTypeView,
+    ) : DotNetClrTypeAssignability
+
+    data class InvalidVariance(
         val actual: DotNetClrResolvedTypeView,
         val expected: DotNetClrResolvedTypeView,
+    ) : DotNetClrTypeAssignability
+
+    data class InvalidTypeClassification(
+        val type: DotNetClrResolvedTypeSignature,
+        val classification: DotNetClrPhysicalTypeClassification,
     ) : DotNetClrTypeAssignability
 
     data class InvalidHierarchy(
@@ -58,10 +68,10 @@ class DotNetClrTypeAssignabilityResolver(
             linkedMapOf<DotNetClrResolvedTypeView, List<DotNetClrResolvedTypeView>>()
         var resolvedCount = 0
         var firstInvalidHierarchy: DotNetClrTypeAssignability.InvalidHierarchy? = null
-        var firstVariantCandidate =
-            actual.takeIf { candidate ->
-                candidate.isPotentialVariantMatch(expected)
-            }
+        val variantCandidates = linkedSetOf<DotNetClrResolvedTypeView>()
+        if (actual.isPotentialVariantMatch(expected)) {
+            variantCandidates += actual
+        }
 
         while (queue.isNotEmpty()) {
             val type = queue.removeFirst()
@@ -102,10 +112,8 @@ class DotNetClrTypeAssignabilityResolver(
             adjacency[type] = supertypes
             for (supertype in supertypes) {
                 if (supertype == expected) return DotNetClrTypeAssignability.Assignable
-                if (firstVariantCandidate == null &&
-                    supertype.isPotentialVariantMatch(expected)
-                ) {
-                    firstVariantCandidate = supertype
+                if (supertype.isPotentialVariantMatch(expected)) {
+                    variantCandidates += supertype
                 }
                 if (!visited.add(supertype)) continue
                 queue.addLast(supertype)
@@ -115,9 +123,9 @@ class DotNetClrTypeAssignabilityResolver(
         findCycle(adjacency)?.let { cycle ->
             return DotNetClrTypeAssignability.InheritanceCycle(cycle)
         }
-        firstVariantCandidate?.let { candidate ->
+        if (variantCandidates.isNotEmpty()) {
             return DotNetClrTypeAssignability.VariantConversionRequired(
-                candidate,
+                variantCandidates.toList(),
                 expected,
             )
         }

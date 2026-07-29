@@ -2698,8 +2698,63 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public sealed class VariantIntConstraint :
+                        IVariantConstraint<int>
+                    {
+                    }
+
+                    public sealed class MixedVariantConstraint :
+                        IVariantConstraint<int>,
+                        IVariantConstraint<string>
+                    {
+                    }
+
+                    public sealed class NestedVariantConstraint :
+                        IVariantConstraint<IVariantConstraint<string>>
+                    {
+                    }
+
+                    public sealed class VariantArrayConstraint :
+                        IVariantConstraint<string[]>
+                    {
+                    }
+
                     public sealed class VariantConstraintProbe<T>
                         where T : IVariantConstraint<object>
+                    {
+                    }
+
+                    public sealed class NestedVariantConstraintProbe<T>
+                        where T : IVariantConstraint<IVariantConstraint<object>>
+                    {
+                    }
+
+                    public sealed class ArrayVariantConstraintProbe<T>
+                        where T : IVariantConstraint<object[]>
+                    {
+                    }
+
+                    public sealed class ObjectComparable : IComparable<object>
+                    {
+                        public int CompareTo(object other) => 0;
+                    }
+
+                    public sealed class ContravariantConstraintProbe<T>
+                        where T : IComparable<string>
+                    {
+                    }
+
+                    public interface IInvariantConstraint<T>
+                    {
+                    }
+
+                    public sealed class InvariantStringConstraint :
+                        IInvariantConstraint<string>
+                    {
+                    }
+
+                    public sealed class InvariantConstraintProbe<T>
+                        where T : IInvariantConstraint<object>
                     {
                     }
 
@@ -2999,6 +3054,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetClrTypeResolutionFailure.TYPE_NOT_FOUND,
             unresolvedPrimitiveCatalog.resolution.failure,
         )
+        val physicalTypeClassifier = DotNetClrPhysicalTypeClassifier(
+            resolver,
+            DotNetClrPhysicalTypeCoreTypes(
+                systemValueType,
+                systemEnum,
+                systemNullableType,
+            ),
+        )
         val isByRefLikeAttributeType = (
                 resolver.resolveTopLevelType(
                     systemRuntimeMetadata,
@@ -3253,6 +3316,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetClrNominalConstraintValidator(
                 resolver,
                 primitiveTypeCatalog,
+                physicalTypeClassifier,
             )
         val satisfiedNominalConstraints =
             nominalConstraintValidator.validate(
@@ -3413,6 +3477,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetClrNominalConstraintValidator(
                 resolver,
                 primitiveTypeCatalog,
+                physicalTypeClassifier,
                 resolutionLimit = 1,
             ).validate(limitedConstraintContract)
                 .parameters.single().constraints.single().satisfaction as
@@ -3425,14 +3490,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ).limit,
         )
 
-        val physicalTypeClassifier = DotNetClrPhysicalTypeClassifier(
-            resolver,
-            DotNetClrPhysicalTypeCoreTypes(
-                systemValueType,
-                systemEnum,
-                systemNullableType,
-            ),
-        )
         fun assertPhysicalTypeKind(
             expectedKind: DotNetClrPhysicalTypeKind,
             type: DotNetClrResolvedTypeSignature,
@@ -3724,29 +3781,81 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         )
 
-        val variantConstraintArgument =
+        fun forwardedReferenceArgument(
+            metadataName: String,
+        ): DotNetClrResolvedTypeSignature.Named =
             DotNetClrResolvedTypeSignature.Named(
                 (
                         resolver.resolveTopLevelType(
                             destinationMetadata,
                             "Forwarded",
-                            "VariantStringConstraint",
+                            metadataName,
                         ) as DotNetClrTypeResolution.Resolved
                         ).type,
                 isValueType = false,
             )
-        val variantAllConstraints =
+
+        fun variantConstraintStatus(
+            probeName: String,
+            argumentName: String,
+        ): DotNetClrConstructedTypeConstraintStatus =
             validateAllConstraints(
                 resolvedConstructedConstraints(
-                    "VariantConstraintProbe`1",
-                    variantConstraintArgument,
+                    probeName,
+                    forwardedReferenceArgument(argumentName),
                 )
-            ).status as DotNetClrConstructedTypeConstraintStatus.Unsupported
+            ).status
+
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "VariantConstraintProbe`1",
+                "VariantStringConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "VariantConstraintProbe`1",
+                "MixedVariantConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "ContravariantConstraintProbe`1",
+                "ObjectComparable",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "NestedVariantConstraintProbe`1",
+                "NestedVariantConstraint",
+            ),
+        )
+        assertTrue(
+            variantConstraintStatus(
+                "InvariantConstraintProbe`1",
+                "InvariantStringConstraint",
+            ) is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        assertTrue(
+            variantConstraintStatus(
+                "VariantConstraintProbe`1",
+                "VariantIntConstraint",
+            ) is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        val arrayVariantStatus =
+            variantConstraintStatus(
+                "ArrayVariantConstraintProbe`1",
+                "VariantArrayConstraint",
+            ) as DotNetClrConstructedTypeConstraintStatus.Unsupported
         assertEquals(
             DotNetClrNominalConstraintUnsupported
                 .VARIANT_CONVERSION_REQUIRED,
             (
-                    variantAllConstraints.nominal.single()
+                    arrayVariantStatus.nominal.single()
                         .validation.satisfaction as
                             DotNetClrNominalConstraintSatisfaction.Unsupported
                     ).reason,

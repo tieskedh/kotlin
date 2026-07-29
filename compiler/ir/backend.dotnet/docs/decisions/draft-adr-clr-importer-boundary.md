@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware exact nominal assignability and a conservative variance boundary, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal and reference-only generic-interface variance assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -1070,9 +1070,10 @@ conversions.
    violation > supported satisfaction. Its result retains both complete sub-validations and issue
    coordinates.
 6. The core-team choice is a sealed status over preserved evidence, not a Boolean and not an
-   eager partial implementation of CLR variance. This safely gates later importer projection:
-   only a wholly supported `Satisfied` shape may proceed, while variant, array, and dependent
-   cases remain actionable implementation work rather than false diagnostics.
+   eager partial implementation of CLR variance. At this slice only a wholly supported
+   `Satisfied` shape could proceed, while variant, array, and dependent cases remained actionable
+   implementation work rather than false diagnostics. The following slice implements the bounded
+   generic-interface variance subset.
 
 Roslyn coverage uses a real covariant interface where the exact graph reaches
 `IVariantConstraint<String>` for an `IVariantConstraint<Object>` constraint and records
@@ -1080,6 +1081,40 @@ unsupported variance. `Object` against `IComparable<Object>` remains a proven vi
 its hierarchy contains no matching interface definition. Aggregate tests cover full success,
 simultaneous nominal/special violations, two preserved array issues, dependent parameters, the
 variant candidate, and an invalid class/value signature.
+
+The thirty-first slice evaluates CLR generic-interface variance.
+
+1. Kotlin/JVM, JS, Native, and Wasm perform variance through their target type-checking contexts,
+   preserving Kotlin declaration-site/use-site rules while mapping foreign target variance at the
+   importer boundary. The .NET resolver similarly extends assignability rather than teaching
+   custom-attribute decoding or IL emission about variance.
+2. CLR GenericParam rows permit covariance and contravariance on interfaces and delegates.
+   Variant conversion applies only to reference-type arguments: covariance checks actual argument
+   to expected argument, contravariance reverses that direction, and invariant parameters require
+   identity. Boxing a value argument does not make variance legal.
+3. Kotlin Common remains unchanged. CLR declaration variance on a foreign interface does not
+   rewrite Kotlin-owned variance or make a Kotlin generic conversion valid.
+4. The interface variance rule is identical on `net48`, `netstandard2.0`, and `net10.0`; only the
+   selected definitions and available hierarchies differ. Arrays and delegate variance retain
+   explicit unsupported boundaries because their physical conversion rules are not supplied by
+   the nominal interface graph.
+5. `DotNetClrVariantTypeAssignabilityResolver` composes the bounded exact walker, physical type
+   classifier, and primitive catalog. It retains every reachable same-definition interface
+   candidate under the existing bound, validates contiguous GenericParam variance metadata,
+   requires reference categories, reverses contravariant argument checks, and recursively applies
+   nominal/primitive/interface assignability with its own active-pair and resolution bounds. One
+   successful candidate proves the conversion; invalid/unsupported evidence otherwise remains
+   structured.
+6. The core-team choice is a dedicated assignability layer shared by every consumer, not
+   C#-specific import sugar or constraint-only logic. Unsupported arrays, open parameters, and
+   delegates keep returning `VariantConversionRequired`; they are not guessed from C# conversions
+   or made invariant. Value arguments with different identities are proven not assignable.
+
+Real Roslyn definitions cover covariance, multiple same-definition candidates, contravariance
+through `IComparable<in T>`, invariance, nested covariance, a value argument, and an array
+argument. The supported reference-only
+variant conversions now produce aggregate `Satisfied`; invariant/value cases produce `Violated`;
+the array-dependent conversion remains `Unsupported`.
 
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
@@ -1189,11 +1224,17 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Keeping the physical primitive catalog separate from Kotlin built-in identity:
   **Correct direction**.
 - Preserving a reachable variant-conversion candidate instead of reporting false exact
-  non-assignability: **Correct temporary implementation, but not a final design**.
+  non-assignability: **Correct direction**.
 - Sealed aggregate generic-constraint status with invalid/unsupported/violated/satisfied
   precedence and retained per-row evidence: **Correct direction**.
-- Deferring actual CLR variance, array, and dependent-parameter assignability behind explicit
+- Deferring remaining array, delegate, and dependent-parameter assignability behind explicit
   unsupported results: **Correct temporary implementation, but not a final design**.
+- Bounded recursive reference-only CLR generic-interface variance in shared assignability:
+  **Correct direction**.
+- Keeping value arguments invariant in CLR variance rather than applying boxing:
+  **Correct direction**.
+- Keeping array and delegate variance conversions explicit unsupported boundaries:
+  **Correct temporary implementation, but not a final design**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:

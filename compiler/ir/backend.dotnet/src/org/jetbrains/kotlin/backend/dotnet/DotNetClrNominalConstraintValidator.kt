@@ -47,10 +47,16 @@ data class DotNetClrConstructedTypeNominalConstraintValidation(
 class DotNetClrNominalConstraintValidator(
     typeResolver: DotNetClrTypeResolver,
     private val primitiveTypes: DotNetClrPrimitiveTypeCatalog,
+    physicalTypeClassifier: DotNetClrPhysicalTypeClassifier,
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
 ) {
     private val assignabilityResolver =
-        DotNetClrTypeAssignabilityResolver(typeResolver, resolutionLimit)
+        DotNetClrVariantTypeAssignabilityResolver(
+            typeResolver,
+            physicalTypeClassifier,
+            primitiveTypes,
+            resolutionLimit,
+        )
 
     fun validate(
         constraints: DotNetClrResolvedConstructedTypeConstraints,
@@ -108,6 +114,8 @@ class DotNetClrNominalConstraintValidator(
                     constraintSignature,
                 )
 
+            is DotNetClrTypeAssignability.InvalidVariance,
+            is DotNetClrTypeAssignability.InvalidTypeClassification,
             is DotNetClrTypeAssignability.InvalidHierarchy,
             is DotNetClrTypeAssignability.InheritanceCycle,
             is DotNetClrTypeAssignability.ResolutionLimitExceeded,

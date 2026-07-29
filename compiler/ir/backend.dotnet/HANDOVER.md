@@ -2142,6 +2142,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   this resolver into System.Type and serialized enum custom-attribute value decoding. The fresh
   strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
   integration tests).
+- The generic-interface-variance continuation composes exact hierarchy traversal, physical
+  reference/value classification, and the selected primitive catalog in one bounded recursive
+  assignability resolver. Reachable same-definition interfaces use their exact GenericParam rows:
+  covariance checks actual-to-expected, contravariance reverses the check, and invariance requires
+  identity. Different value arguments remain not assignable; boxing is not variance. Roslyn
+  coverage proves covariance (including multiple same-definition views where a later candidate
+  succeeds), `IComparable<in T>` contravariance, nested covariance, invariant and value failures,
+  and an array boundary. Supported reference conversions now aggregate as `Satisfied`; arrays,
+  open parameters, and delegate candidates remain
+  `VariantConversionRequired`. The fresh strict gate is 871/0/0/0 across 16 XML suites
+  (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - The System.Type/serialized-enum custom-attribute continuation reuses that selected-graph resolver
   for fixed, array, and tagged values. Type values retain the complete resolved structural type or
   explicit null; serialized enums must resolve to a nominal named or constructed type and pass the

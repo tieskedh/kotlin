@@ -341,9 +341,16 @@ landed shape as a compatibility constraint.
    each resolved row through the shared assignability resolver and preserve satisfied, violated,
    unsupported non-nominal, and invalid-assignability outcomes distinctly. Retain the parameter
    binding and its special flags, but never turn “all nominal rows satisfied” into a complete
-   constraint-satisfaction boolean. If the exact hierarchy reaches the same variant interface or
-   delegate definition with different arguments, retain `VariantConversionRequired`; do not call
-   every use of a variant expected definition unsupported, and do not report a false violation.
+   constraint-satisfaction boolean. If the exact hierarchy reaches the same variant definition
+   with different arguments, pass the candidate to shared variant assignability; do not call every
+   use of a variant expected definition unsupported, and do not report a false violation. For a
+   generic interface, require complete contiguous variance rows and reference-type arguments.
+   Covariance checks actual-to-expected, contravariance expected-to-actual, invariance identity;
+   recurse through the same nominal/primitive/interface resolver under explicit bounds. Never use
+   boxing to make a value argument variant. Retain every reachable same-definition candidate, not
+   merely the first; any successful candidate proves assignability. Arrays, open parameters, and
+   delegate candidates retain `VariantConversionRequired` until their separate physical rules are
+   implemented.
    Array arguments and dependent parameter constraints still require their own shared
    assignability policy; dependent arguments are explicitly unsupported in both nominal and
    special validation. Special flags and by-ref-like eligibility use
