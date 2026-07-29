@@ -19696,6 +19696,157 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testForeignClrNullableMetadataEnhancesFirTypes() {
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val toolchain = checkNotNull(csharpToolchain)
+        val systemRuntime = toolchain.referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(systemRuntime.isFile) { "Missing net10 System.Runtime reference assembly" }
+
+        val fixtureSource = File(tmpdir, "foreign-nullability.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                namespace ForeignContracts
+                {
+                    public interface NullableApi
+                    {
+                        string? Maybe();
+                        string Sure();
+                        string Echo(string value);
+                        string? EchoNullable(string? value);
+
+                #nullable disable
+                        string Legacy();
+                        string LegacyEcho(string value);
+                #nullable restore
+                    }
+
+                    public interface UnsupportedApi
+                    {
+                        string? Maybe();
+                        string Value { get; }
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val fixtureAssembly = File(tmpdir, "Foreign.Nullable.dll")
+        val fixtureResult = runModernCSharpCompiler(
+            toolchain,
+            fixtureSource,
+            fixtureAssembly,
+        )
+        assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+        assertTrue(fixtureAssembly.isFile)
+
+        fun compileForeignConsumer(
+            sourceName: String,
+            sourceText: String,
+            classpath: List<File> = listOf(fixtureAssembly, systemRuntime),
+        ): Pair<String, ExitCode> {
+            val source = File(tmpdir, sourceName).apply { writeText(sourceText) }
+            return AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    K2DotNetCompilerArguments::noStdlib.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    classpath.joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::moduleName.cliArgument, "ForeignNullableConsumer",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "$sourceName.il").path,
+                )
+            )
+        }
+
+        val [nullableDiagnostics, nullableExitCode] = compileForeignConsumer(
+            "foreign-nullability.kt",
+            """
+            package consumer
+
+            import ForeignContracts.NullableApi
+
+            public fun sure(api: NullableApi): String = api.Sure()
+            public fun legacy(api: NullableApi): String = api.Legacy()
+            public fun acceptsNullable(api: NullableApi, value: String?): String? =
+                api.EchoNullable(value)
+            public fun acceptsLegacy(api: NullableApi, value: String?): String =
+                api.LegacyEcho(value)
+            public fun rejected(api: NullableApi): String = api.Maybe()
+            public fun rejectedParameter(api: NullableApi, value: String?): String =
+                api.Echo(value)
+            """.trimIndent(),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, nullableExitCode, nullableDiagnostics)
+        assertTrue("String?" in nullableDiagnostics) { nullableDiagnostics }
+        assertTrue("api.Maybe()" in nullableDiagnostics) { nullableDiagnostics }
+        assertTrue("api.Echo(value)" in nullableDiagnostics) { nullableDiagnostics }
+        assertFalse("api.Sure()" in nullableDiagnostics) { nullableDiagnostics }
+        assertFalse("api.Legacy()" in nullableDiagnostics) { nullableDiagnostics }
+        assertFalse("api.EchoNullable(value)" in nullableDiagnostics) { nullableDiagnostics }
+        assertFalse("api.LegacyEcho(value)" in nullableDiagnostics) { nullableDiagnostics }
+        assertFalse("unresolved reference 'NullableApi'" in nullableDiagnostics) { nullableDiagnostics }
+        assertFalse("unresolved reference 'Sure'" in nullableDiagnostics) { nullableDiagnostics }
+        assertFalse("unresolved reference 'Legacy'" in nullableDiagnostics) { nullableDiagnostics }
+
+        val [unsupportedDiagnostics, unsupportedExitCode] = compileForeignConsumer(
+            "foreign-unsupported.kt",
+            """
+            package consumer
+
+            import ForeignContracts.UnsupportedApi
+
+            public fun rejected(api: UnsupportedApi): String = api.Maybe()
+            """.trimIndent(),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, unsupportedExitCode, unsupportedDiagnostics)
+        assertTrue("unresolved reference 'UnsupportedApi'" in unsupportedDiagnostics) {
+            unsupportedDiagnostics
+        }
+
+        val duplicateSource = File(tmpdir, "foreign-nullability-duplicate.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                namespace ForeignContracts
+                {
+                    public interface NullableApi
+                    {
+                        string? Duplicate();
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val duplicateAssembly = File(tmpdir, "Foreign.Nullable.Duplicate.dll")
+        val duplicateResult = runModernCSharpCompiler(
+            toolchain,
+            duplicateSource,
+            duplicateAssembly,
+        )
+        assertEquals(0, duplicateResult.exitCode, duplicateResult.output)
+        val [duplicateDiagnostics, duplicateExitCode] = compileForeignConsumer(
+            "foreign-duplicate.kt",
+            """
+            package consumer
+
+            import ForeignContracts.NullableApi
+
+            public fun rejected(api: NullableApi): String = api.Sure()
+            """.trimIndent(),
+            listOf(fixtureAssembly, duplicateAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, duplicateExitCode, duplicateDiagnostics)
+        assertTrue("unresolved reference 'NullableApi'" in duplicateDiagnostics) {
+            duplicateDiagnostics
+        }
+    }
+
+    @Test
     fun testMetadataCompilerRecognizesDotNetAsItsOwnPlatform() {
         val unknownPlatforms = mutableListOf<String>()
         val targetPlatform = MetadataConfigurationUpdater.computeTargetPlatformOrNull(
