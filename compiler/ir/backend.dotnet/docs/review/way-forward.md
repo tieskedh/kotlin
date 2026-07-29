@@ -1147,6 +1147,25 @@ non-Boolean returns add no effect. The focused smart-cast test is 1/0/0/0. The f
 is 873/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 56 library integration
 tests).
 
+**Foreign parameter `NotNull` contract enhancement (2026-07-29):** the unconditional
+CodeAnalysis postcondition now maps to common FIR's exact
+`returns() implies (parameter != null)` effect for `string`/`object` parameters. It does not
+change the declared parameter type, so callers may still pass `null`; it only refines a stable
+argument after normal return. The real Roslyn fixture proves both `void` and value-returning
+calls. A mutable Kotlin member deliberately remains unsmartcastable, demonstrating that CLR
+attributes do not bypass Kotlin Common stability. Duplicate, wrong-constructor, named-payload,
+malformed, and non-reference shapes add no effect. The focused test is 1/0/0/0. The fresh strict
+gate is 874/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 57 library
+integration tests).
+
+The broader CodeAnalysis family is now classified per target in
+`docs/review/clr-annotation-interoperability.md`. `MemberNotNull`/`MemberNotNullWhen` remains
+retained metadata but cannot make mutable, getter-backed, public/open, or cross-module member
+access stable merely because Roslyn updates its null-state. `MaybeNull`/`MaybeNullWhen` is
+state-weakening; `AllowNull`/`DisallowNull` requires a split input/setter view; return-target
+postconditions require result enhancement. `NotNullIfNotNull` is the next exact common-effect
+candidate.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:

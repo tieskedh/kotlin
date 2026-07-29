@@ -2,8 +2,8 @@
 
 Date: 2026-07-29
 
-Status: first foreign nullable-aware FIR slice and exact `NotNullWhen` flow contract implemented;
-public Kotlin/.NET source-annotation names remain undecided.
+Status: first foreign nullable-aware FIR slice plus exact `NotNullWhen` and parameter `NotNull`
+flow contracts implemented; public Kotlin/.NET source-annotation names remain undecided.
 
 ## Governing rule
 
@@ -54,7 +54,7 @@ Primary Kotlin references:
 | Nominal types and members | TypeDef, MethodDef, Field, Property, Event, MethodSemantics | Physical rows retained; no foreign FIR provider | CLR is authoritative for a foreign library. Prefer real Property/Event rows over inferred naming |
 | Signatures and generic constraints | Signature blobs, GenericParam, GenericParamConstraint | Lossless physical and selected-graph models exist | CLR is authoritative for the physical foreign signature. Apply a separate Kotlin usability policy |
 | Declaration nullability | Roslyn `NullableAttribute`, `NullableContextAttribute`, and `NullablePublicOnlyAttribute` | Fully decoded, selected, aligned, and projected to Kotlin qualifier vocabulary below FIR | Trust valid evidence for foreign enhanced types; use flexible types when absent, suppressed, contradictory, or malformed |
-| Conditional/flow nullability | `AllowNull`, `DisallowNull`, `MaybeNull`, `NotNull`, `MaybeNullWhen`, `NotNullWhen`, `NotNullIfNotNull`, `MemberNotNull`, and `MemberNotNullWhen` | `NotNullWhen` is decoded to an exact common FIR effect; the other attributes remain raw/deferred | Integrate only per exact contract; do not flatten conditional facts into declaration nullability |
+| Conditional/flow nullability | `AllowNull`, `DisallowNull`, `MaybeNull`, `NotNull`, `MaybeNullWhen`, `NotNullWhen`, `NotNullIfNotNull`, `MemberNotNull`, and `MemberNotNullWhen` | `NotNullWhen` and parameter `NotNull` decode to exact common FIR effects; the other positions/attributes remain raw/deferred | Integrate per target and exact contract; do not flatten conditional facts into declaration nullability or bypass Kotlin value stability |
 | Kotlin contracts | No general CLR contract format; CodeAnalysis attributes exactly cover a null-state subset such as `returns(true) implies (x != null)` and non-returning functions | KLIB contract metadata only | Bidirectionally map only the exact subset. Keep `callsInPlace`, arbitrary type predicates, and general multi-value implications in KLIB |
 | Extension call view | `ExtensionAttribute` plus the physical static signature; newer C# extension declarations require a Roslyn metadata probe | Raw custom attributes only | Consume only after receiver, generic ownership, accessibility, and collision rules are proven. Do not infer from the first parameter alone |
 | Variable argument call view | Param-array/collection attributes plus the physical array/collection parameter | Raw custom attributes only | Consume as a Kotlin call-site view only where element and spread semantics are representable. Do not confuse it with Kotlin declaration identity |
@@ -148,6 +148,45 @@ The implementation and fixture must attack these ideas:
 - Kotlin-produced DLLs remain on the embedded-KLIB path and are never re-imported as foreign CLR
   declarations.
 
+## CodeAnalysis adoption matrix and Kotlin stability
+
+Roslyn's null-state vocabulary is broader than Kotlin's current contract algebra. Adoption is
+therefore per attribute *and per target*, not per attribute name:
+
+| CLR fact | Closest Kotlin-facing representation | Decision |
+|---|---|---|
+| `NotNull` on a by-value reference parameter | `returns() implies (parameter != null)` | Exact positive common FIR effect; implemented for the closed `string`/`object` slice |
+| `NotNullWhen(Boolean)` on a reference parameter | `returns(value) implies (parameter != null)` | Exact positive common FIR effect; implemented for Boolean-returning methods |
+| `NotNull` / `MaybeNull` on a return | Enhanced call-result type/null-state | Adopt in a separate return-target slice after precedence with Roslyn declaration nullability is pinned |
+| `NotNullIfNotNull(parameterName)` on a return | `(parameter != null) implies returnsNotNull()` | Exact reverse common FIR effect; next eligible slice, but name binding, duplicate attributes, and language-version behavior need adversarial coverage |
+| `DoesNotReturn` | Unreachable normal continuation / Kotlin `Nothing` call view | Semantically exact, but the physical CLR return signature must remain distinct from the Kotlin control-flow view |
+| `DoesNotReturnIf(Boolean)` on a Boolean parameter | Normal return implies that the argument had the opposite value | Exact subset candidate; keep ordinary Kotlin argument stability and do not rewrite the physical signature |
+| `AllowNull` / `DisallowNull` | Input/precondition type distinct from output/read type | Ordinary by-value parameters and property setters need separate policies; a property annotation cannot be flattened into one Kotlin property type |
+| `MaybeNull` / `MaybeNullWhen` on a parameter | Weaken or invalidate the caller's post-call null-state | Not a positive Kotlin contract. It becomes material for `ref`/`out`, which are outside the closed signature slice and require explicit state invalidation |
+| `MemberNotNull` / `MemberNotNullWhen` | Flow fact about a named field/property on the receiver | Preserve as CLR metadata, but do not grant a Kotlin smart cast merely because Roslyn does. Common contracts cannot name arbitrary members, and Kotlin stability remains authoritative |
+
+The member case is a real semantic boundary, not missing decoding. Roslyn says that the named
+field or property has non-null state after normal return, optionally on one Boolean result.
+Kotlin asks an additional question before using any flow fact: will the same expression read the
+same value again? FIR deliberately classifies mutable properties, delegated properties,
+properties with custom getters, public/open properties, and public properties from another module
+as unstable in the relevant circumstances. A foreign getter-only property is therefore not
+automatically safe: it may be virtual or return a fresh/different value, and separate compilation
+also matters.
+
+Consequences:
+
+- never translate `MemberNotNullWhen` to a declaration-wide non-null type;
+- never use it to bypass common `SmartcastStability`;
+- do not approximate its string member names as value-parameter contract references;
+- when property/field import lands, retain and resolve the metadata so tooling and future
+  target-specific analysis can inspect it;
+- only a future design that produces the same common stability result as Kotlin-owned code may
+  consume the fact for a smart cast. An importer-local “C# allows it” exception is rejected.
+
+This is stricter than Roslyn by design. It follows Kotlin Common rather than treating the foreign
+compiler's flow engine as Kotlin semantics.
+
 ## Exact conditional-contract slice: `NotNullWhen`
 
 Kotlin Common's resolved contract
@@ -192,8 +231,8 @@ The first conditional slice is closed:
   `Returns(TRUE|FALSE)` implying the referenced value parameter `!= null`;
 - an absent, duplicate, malformed, wrong-constructor, wrong-target, non-reference-parameter, or
   non-Boolean-return shape contributes no effect. It never strengthens declaration nullability;
-- keep `MaybeNullWhen`, `NotNullIfNotNull`, `NotNull`, `DoesNotReturn`, member effects, and
-  by-reference `Try*` contracts for separately reviewed slices.
+- keep `MaybeNullWhen`, `NotNullIfNotNull`, return-target `NotNull`, `DoesNotReturn`, member
+  effects, and by-reference `Try*` contracts for separately reviewed slices.
 
 Adversarial coverage must prove both positive branches (`true` and `false`) and both invalid
 inverses, plus absence, duplicate attributes, a wrong constructor signature, named payloads,
@@ -218,6 +257,51 @@ blob cover duplicates, a wrong constructor, named payloads, invalid prologs, non
 parameters, and a non-Boolean return. The focused smart-cast test is 1/0/0/0. The fresh strict
 gate is 873/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 56 library
 integration tests).
+
+## Exact unconditional parameter-contract slice: `NotNull`
+
+For a by-value reference parameter, CLR
+
+```csharp
+void Ensure([NotNull] string? value)
+```
+
+and Kotlin Common
+
+```kotlin
+returns() implies (value != null)
+```
+
+have the same caller-side meaning: if the call returns normally, the argument value was non-null.
+The declaration remains nullable because callers may pass `null`; the contract says that such a
+call cannot complete normally unless the foreign implementation establishes its promise. As with
+an authored Kotlin contract or Java nullability annotation, this is trusted metadata rather than
+runtime verification.
+
+The implemented slice:
+
+- recognizes only an exact selected-graph, top-level, non-generic
+  `System.Diagnostics.CodeAnalysis.NotNullAttribute` deriving from `System.Attribute` with its
+  parameterless instance constructor;
+- requires exactly one recognized attribute on a physical Param row, no fixed or named arguments,
+  and a `string` or `object` parameter in the current FIR grammar;
+- attaches common FIR `returns() implies (parameter != null)` without changing the declared
+  parameter type;
+- applies only through common data-flow. A mutable property passed as the argument remains
+  unsmartcastable after the call because Kotlin reports that property access as unstable;
+- treats absence, duplicates, malformed blobs, wrong constructors, named payloads, and
+  non-reference parameters as contributing no effect.
+
+Return-value, field, and property targets of the same CLR attribute are deliberately not folded
+into this slice: they need type/accessor enhancement and stability rules, not the parameter
+postcondition mapping.
+
+The real Roslyn fixture proves both `void` and value-returning normal continuations. Negative
+coverage proves an unannotated parameter and a mutable Kotlin member remain nullable. A hostile
+same-name polyfill plus a physically corrupted blob prove duplicates, a wrong constructor, named
+payloads, malformed prologs, and value parameters add no effect. The focused test is 1/0/0/0.
+The fresh strict gate is 874/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
+57 library integration tests).
 
 ## Deferred big decision
 

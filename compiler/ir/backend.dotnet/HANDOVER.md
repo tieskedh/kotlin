@@ -2583,11 +2583,31 @@ session state, process, and a curated task menu. Keep both files updated as you 
   parameter, and a non-Boolean return. The focused smart-cast test is 1/0/0/0. The fresh strict
   gate is 873/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 56 library
   integration tests).
+- The exact unconditional parameter postcondition is implemented.
+  `DotNetClrNotNullMetadataDecoder` recognizes only an exact selected-graph top-level
+  `System.Diagnostics.CodeAnalysis.NotNullAttribute` with a parameterless constructor and
+  preserves absent/decoded/structured-invalid outcomes. The provider maps it to common FIR
+  `returns() implies (parameter != null)` for `string`/`object` parameters without changing the
+  declared nullable type. Common stability remains authoritative: the focused fixture proves
+  local argument smart casts after both `void` and value-returning calls while a mutable Kotlin
+  member remains unsafe. The hostile polyfill/corrupted-blob cases cover duplicates, a wrong
+  constructor, named payloads, malformed prologs, and a non-reference parameter. The focused test
+  is 1/0/0/0. The fresh strict gate is 874/0/0/0 across 16 XML suites (796 FIR/IL/box, 21
+  generated CLI, and 57 library integration tests).
+- The full CodeAnalysis null-state family is classified in
+  `docs/review/clr-annotation-interoperability.md`. Adopt per target and exact Kotlin
+  representation, not per attribute name. In particular, `MemberNotNull` and
+  `MemberNotNullWhen` remain useful retained CLR metadata but cannot grant a Kotlin smart cast
+  around mutable, getter-backed, public/open, or cross-module property instability.
+  `MaybeNull`/`MaybeNullWhen` weakens state rather than proving a positive contract;
+  `AllowNull`/`DisallowNull` needs separate input/setter views; return-target
+  `NotNull`/`MaybeNull` needs call-result enhancement. `NotNullIfNotNull` is the next exact common
+  reverse-effect candidate.
 - Backend-call binding for the closed interface slice remains required before successful foreign
-  calls may become executable. If conditional annotations continue first, review `[NotNull]` as
-  the next exact common `returns() implies (parameter != null)` subset; do not batch
-  `MaybeNullWhen`, `NotNullIfNotNull`, member effects, by-reference `Try*` contracts, or
-  non-returning attributes into it.
+  calls may become executable. If conditional annotations continue first, review
+  `[return: NotNullIfNotNull("parameter")]` as the next exact common
+  `(parameter != null) implies returnsNotNull()` subset. Do not batch state-weakening member or
+  by-reference `Try*` contracts into it.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2640,7 +2660,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 873 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 874 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2676,12 +2696,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
    `docs/review/clr-annotation-interoperability.md`. Standard CLR/Roslyn metadata is the shared
    vocabulary; KLIB is the exact Kotlin remainder. The closed nullable-aware abstract-interface
    FIR slice has landed. Continue with the exact CodeAnalysis/Kotlin-contract overlap and
-   backend-call binding before broadening the declaration grammar. `NotNullWhen` has landed as a
-   common FIR conditional effect; review `[NotNull]` separately if annotation work continues.
-   Extensions, param arrays, properties/indexers, events, and semantic markers each require their
-   own documented contract. Preserve Kotlin declaration identity and Common semantics; do not
-   teach the Kotlin-owned backend surface to infer C# conventions. Keep structured metadata-table
-   auditing; do not substitute IL substring checks.
+   backend-call binding before broadening the declaration grammar. `NotNullWhen` and
+   parameter-target `NotNull` have landed as common FIR effects; `NotNullIfNotNull` is the next
+   exact candidate. Member attributes must preserve Kotlin smart-cast stability rather than adopt
+   Roslyn's milder member-state rules. Extensions, param arrays, properties/indexers, events, and
+   semantic markers each require their own documented contract. Preserve Kotlin declaration
+   identity and Common semantics; do not teach the Kotlin-owned backend surface to infer C#
+   conventions. Keep structured metadata-table auditing; do not substitute IL substring checks.
 3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part

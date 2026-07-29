@@ -20156,6 +20156,279 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testForeignClrNotNullEnhancesFirDataFlow() {
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val toolchain = checkNotNull(csharpToolchain)
+        val systemRuntime = toolchain.referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(systemRuntime.isFile) { "Missing net10 System.Runtime reference assembly" }
+
+        val fixtureSource = File(tmpdir, "foreign-unconditional-nullability.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace ForeignUnconditionalContracts
+                {
+                    public interface PostconditionApi
+                    {
+                        void Ensure([NotNull] string? value);
+                        int EnsureWithValue([NotNull] string? value);
+                        void Unknown(string? value);
+                        void Value([NotNull] int value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val fixtureAssembly = File(tmpdir, "Foreign.UnconditionalNullability.dll")
+        val fixtureResult = runModernCSharpCompiler(
+            toolchain,
+            fixtureSource,
+            fixtureAssembly,
+        )
+        assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+
+        val hostileSource = File(tmpdir, "foreign-unconditional-nullability-hostile.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System;
+
+                namespace System.Diagnostics.CodeAnalysis
+                {
+                    [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = true)]
+                    public sealed class NotNullAttribute : Attribute
+                    {
+                        public NotNullAttribute() {}
+                        public NotNullAttribute(int wrongValue) {}
+                        public bool Unexpected;
+                    }
+                }
+
+                namespace HostileUnconditionalContracts
+                {
+                    using System.Diagnostics.CodeAnalysis;
+
+                    public interface HostilePostconditionApi
+                    {
+                        void Duplicate([NotNull, NotNull] string? value);
+                        void WrongConstructor([NotNull(1)] string? value);
+                        void Named([NotNull(Unexpected = true)] string? value);
+                        void WrongType([NotNull] int value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val hostileAssembly =
+            File(tmpdir, "Foreign.UnconditionalNullability.Hostile.dll")
+        val hostileResult = runModernCSharpCompiler(
+            toolchain,
+            hostileSource,
+            hostileAssembly,
+            additionalArguments = listOf("/nowarn:0436"),
+        )
+        assertEquals(0, hostileResult.exitCode, hostileResult.output)
+
+        val malformedSource = File(tmpdir, "foreign-unconditional-nullability-malformed.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace MalformedUnconditionalContracts
+                {
+                    public interface MalformedPostconditionApi
+                    {
+                        void Malformed([NotNull] string? value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val pristineMalformedAssembly =
+            File(tmpdir, "Foreign.UnconditionalNullability.Malformed.Primitive.dll")
+        val malformedResult = runModernCSharpCompiler(
+            toolchain,
+            malformedSource,
+            pristineMalformedAssembly,
+        )
+        assertEquals(0, malformedResult.exitCode, malformedResult.output)
+        val malformedMetadata = DotNetClrMetadataReader.read(pristineMalformedAssembly)
+        val malformedApi = malformedMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "MalformedUnconditionalContracts" &&
+                    type.metadataName == "MalformedPostconditionApi"
+        }
+        val malformedMethod = malformedMetadata.methodDefinitions.single { method ->
+            method.declaringType == malformedApi.handle &&
+                    method.name == "Malformed"
+        }
+        val malformedParameter = malformedMetadata.parameterDefinitions.single { parameter ->
+            parameter.declaringMethod == malformedMethod.handle &&
+                    parameter.parameterIndex == 0
+        }
+        val malformedAttribute = malformedMetadata.customAttributes.single { attribute ->
+            if (attribute.parent != malformedParameter.handle) return@single false
+            val constructor = malformedMetadata.memberReferences.singleOrNull { member ->
+                member.handle == attribute.constructor
+            } ?: return@single false
+            malformedMetadata.typeReferences.any { type ->
+                type.handle == constructor.parent &&
+                        type.namespaceName == "System.Diagnostics.CodeAnalysis" &&
+                        type.metadataName == "NotNullAttribute"
+            }
+        }
+        val malformedImage = pristineMalformedAssembly.readBytes()
+        val malformedTables = locateClrMetadataTables(malformedImage)
+        val malformedValueIndex = readLittleEndianIndex(
+            malformedImage,
+            malformedTables.rowOffset(12, malformedAttribute.handle.row) +
+                    malformedTables.hasCustomAttributeIndexSize +
+                    malformedTables.customAttributeTypeIndexSize,
+            malformedTables.blobIndexSize,
+        )
+        val malformedValueOffset =
+            malformedTables.blobContentOffset(malformedImage, malformedValueIndex)
+        assertEquals(1, malformedImage[malformedValueOffset].toInt() and 0xff)
+        malformedImage[malformedValueOffset] = 0
+        val malformedAssembly =
+            File(tmpdir, "Foreign.UnconditionalNullability.Malformed.dll").apply {
+                writeBytes(malformedImage)
+            }
+
+        fun compileForeignConsumer(
+            sourceName: String,
+            sourceText: String,
+            classpath: List<File>,
+        ): Pair<String, ExitCode> {
+            val source = File(tmpdir, sourceName).apply { writeText(sourceText) }
+            return AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    K2DotNetCompilerArguments::noStdlib.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    classpath.joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::moduleName.cliArgument,
+                    "ForeignUnconditionalNullabilityConsumer",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "$sourceName.il").path,
+                )
+            )
+        }
+
+        val [postconditionDiagnostics, postconditionExitCode] = compileForeignConsumer(
+            "foreign-unconditional-nullability.kt",
+            """
+            package consumer
+
+            import ForeignUnconditionalContracts.PostconditionApi
+
+            public class Cell(public var value: String?)
+
+            public fun acceptedUnit(api: PostconditionApi, value: String?): Int {
+                api.Ensure(value)
+                return value.length + 1
+            }
+
+            public fun acceptedValue(api: PostconditionApi, value: String?): Int {
+                api.EnsureWithValue(value)
+                return value.length + 2
+            }
+
+            public fun rejectedAbsent(api: PostconditionApi, value: String?): Int {
+                api.Unknown(value)
+                return value.length + 3
+            }
+
+            public fun rejectedMutable(api: PostconditionApi, cell: Cell): Int {
+                api.Ensure(cell.value)
+                return cell.value.length
+            }
+            """.trimIndent(),
+            listOf(fixtureAssembly, systemRuntime),
+        )
+        assertEquals(
+            ExitCode.COMPILATION_ERROR,
+            postconditionExitCode,
+            postconditionDiagnostics,
+        )
+        assertFalse("return value.length + 1" in postconditionDiagnostics) {
+            postconditionDiagnostics
+        }
+        assertFalse("return value.length + 2" in postconditionDiagnostics) {
+            postconditionDiagnostics
+        }
+        assertTrue("return value.length + 3" in postconditionDiagnostics) {
+            postconditionDiagnostics
+        }
+        assertTrue("return cell.value.length" in postconditionDiagnostics) {
+            postconditionDiagnostics
+        }
+
+        val [hostileDiagnostics, hostileExitCode] = compileForeignConsumer(
+            "foreign-unconditional-nullability-hostile.kt",
+            """
+            package consumer
+
+            import HostileUnconditionalContracts.HostilePostconditionApi
+            import MalformedUnconditionalContracts.MalformedPostconditionApi
+
+            public fun duplicate(
+                api: HostilePostconditionApi,
+                value: String?,
+            ): Int {
+                api.Duplicate(value)
+                return value.length + 11
+            }
+
+            public fun wrongConstructor(
+                api: HostilePostconditionApi,
+                value: String?,
+            ): Int {
+                api.WrongConstructor(value)
+                return value.length + 12
+            }
+
+            public fun named(
+                api: HostilePostconditionApi,
+                value: String?,
+            ): Int {
+                api.Named(value)
+                return value.length + 13
+            }
+
+            public fun malformed(
+                api: MalformedPostconditionApi,
+                value: String?,
+            ): Int {
+                api.Malformed(value)
+                return value.length + 14
+            }
+            """.trimIndent(),
+            listOf(hostileAssembly, malformedAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, hostileExitCode, hostileDiagnostics)
+        assertTrue("return value.length + 11" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("return value.length + 12" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("return value.length + 13" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("return value.length + 14" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+    }
+
+    @Test
     fun testMetadataCompilerRecognizesDotNetAsItsOwnPlatform() {
         val unknownPlatforms = mutableListOf<String>()
         val targetPlatform = MetadataConfigurationUpdater.computeTargetPlatformOrNull(

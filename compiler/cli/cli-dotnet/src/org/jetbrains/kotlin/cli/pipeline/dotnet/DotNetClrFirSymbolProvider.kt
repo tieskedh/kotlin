@@ -21,6 +21,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationTarget
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplicator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeTransformApplicator
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataDecoder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullWhenMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullWhenMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
@@ -43,6 +45,7 @@ import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.Visibilities
 import org.jetbrains.kotlin.fir.FirModuleData
 import org.jetbrains.kotlin.fir.FirSession
+import org.jetbrains.kotlin.fir.contracts.FirEffectDeclaration
 import org.jetbrains.kotlin.fir.contracts.FirResolvedContractDescription
 import org.jetbrains.kotlin.fir.contracts.builder.buildResolvedContractDescription
 import org.jetbrains.kotlin.fir.contracts.description.ConeConditionalEffectDeclaration
@@ -408,6 +411,7 @@ internal class DotNetClrFirSymbolProvider(
         private val signatureResolver: DotNetClrSignatureResolver,
         private val evidenceApplicator: DotNetClrNullableEvidenceApplicator?,
         private val projector: DotNetClrKotlinNullabilityProjector,
+        private val notNullDecoder: DotNetClrNotNullMetadataDecoder?,
         private val notNullWhenDecoder: DotNetClrNotNullWhenMetadataDecoder?,
     ) {
         fun qualifier(
@@ -458,45 +462,57 @@ internal class DotNetClrFirSymbolProvider(
             method: DotNetClrMethodDefinition,
             valueParameters: List<FirValueParameter>,
         ): FirResolvedContractDescription? {
-            if (
-                method.signature.returnType !=
-                DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN)
-            ) {
-                return null
-            }
-            val decoder = notNullWhenDecoder ?: return null
             val resolvedEffects = method.signature.parameterTypes.mapIndexedNotNull { index, parameterType ->
                 if (!parameterType.isReferencePrimitive()) return@mapIndexedNotNull null
                 val parameterRow = assembly.parameterDefinitions.singleOrNull { parameter ->
                     parameter.declaringMethod == method.handle &&
                             parameter.parameterIndex == index
                 } ?: return@mapIndexedNotNull null
-                val returnValue = when (
-                    val resolution = decoder.decode(assembly, parameterRow.handle)
-                ) {
-                    is DotNetClrNotNullWhenMetadataResolution.Decoded ->
-                        resolution.returnValue
-                    is DotNetClrNotNullWhenMetadataResolution.Absent,
-                    is DotNetClrNotNullWhenMetadataResolution.Invalid,
-                    -> return@mapIndexedNotNull null
-                }
                 val parameter = valueParameters.getOrNull(index)
                     ?: return@mapIndexedNotNull null
                 val reference = ConeValueParameterReference(
                     index,
                     parameter.name.asString(),
                 )
-                ConeConditionalEffectDeclaration(
-                    ConeReturnsEffectDeclaration(
-                        if (returnValue) {
-                            ConeContractConstantValues.TRUE
-                        } else {
-                            ConeContractConstantValues.FALSE
+                buildList<FirEffectDeclaration> {
+                    val notNull = notNullDecoder?.decode(assembly, parameterRow.handle)
+                    if (notNull is DotNetClrNotNullMetadataResolution.Decoded) {
+                        add(
+                            ConeConditionalEffectDeclaration(
+                                ConeReturnsEffectDeclaration(
+                                    ConeContractConstantValues.WILDCARD
+                                ),
+                                ConeIsNullPredicate(reference, isNegated = true),
+                            ).toFirElement()
+                        )
+                    }
+                    if (
+                        method.signature.returnType ==
+                        DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN)
+                    ) {
+                        val notNullWhen =
+                            notNullWhenDecoder?.decode(assembly, parameterRow.handle)
+                        if (
+                            notNullWhen is
+                            DotNetClrNotNullWhenMetadataResolution.Decoded
+                        ) {
+                            add(
+                                ConeConditionalEffectDeclaration(
+                                    ConeReturnsEffectDeclaration(
+                                        if (notNullWhen.returnValue) {
+                                            ConeContractConstantValues.TRUE
+                                        } else {
+                                            ConeContractConstantValues.FALSE
+                                        }
+                                    ),
+                                    ConeIsNullPredicate(reference, isNegated = true),
+                                ).toFirElement()
+                            )
                         }
-                    ),
-                    ConeIsNullPredicate(reference, isNegated = true),
-                ).toFirElement()
+                    }
+                }
             }
+                .flatten()
             if (resolvedEffects.isEmpty()) return null
             return buildResolvedContractDescription {
                 effects += resolvedEffects
@@ -523,6 +539,7 @@ internal class DotNetClrFirSymbolProvider(
                         signatureResolver = signatureResolver,
                         evidenceApplicator = null,
                         projector = DotNetClrKotlinNullabilityProjector(),
+                        notNullDecoder = null,
                         notNullWhenDecoder = null,
                     )
                 }
@@ -545,14 +562,24 @@ internal class DotNetClrFirSymbolProvider(
                     serializedTypeResolver,
                     coreTypes,
                 )
+                val notNullDecoder =
+                    DotNetClrNotNullMetadataDecoder(customAttributeDecoder)
                 val notNullWhenDecoder =
                     DotNetClrNotNullWhenMetadataDecoder(customAttributeDecoder)
                 val systemValueType =
                     resolveSystemType(assemblies, typeResolver, "ValueType")
-                        ?: return unavailable(signatureResolver, notNullWhenDecoder)
+                        ?: return unavailable(
+                            signatureResolver,
+                            notNullDecoder,
+                            notNullWhenDecoder,
+                        )
                 val systemNullable =
                     resolveSystemType(assemblies, typeResolver, "Nullable`1")
-                        ?: return unavailable(signatureResolver, notNullWhenDecoder)
+                        ?: return unavailable(
+                            signatureResolver,
+                            notNullDecoder,
+                            notNullWhenDecoder,
+                        )
                 val declarationResolver = DotNetClrNullableDeclarationResolver(
                     DotNetClrNullableMetadataDecoder(customAttributeDecoder)
                 )
@@ -572,12 +599,14 @@ internal class DotNetClrFirSymbolProvider(
                         )
                     ),
                     DotNetClrKotlinNullabilityProjector(),
+                    notNullDecoder,
                     notNullWhenDecoder,
                 )
             }
 
             private fun unavailable(
                 signatureResolver: DotNetClrSignatureResolver,
+                notNullDecoder: DotNetClrNotNullMetadataDecoder,
                 notNullWhenDecoder: DotNetClrNotNullWhenMetadataDecoder,
             ): ForeignAnnotationServices =
                 ForeignAnnotationServices(
@@ -585,6 +614,7 @@ internal class DotNetClrFirSymbolProvider(
                     signatureResolver = signatureResolver,
                     evidenceApplicator = null,
                     projector = DotNetClrKotlinNullabilityProjector(),
+                    notNullDecoder = notNullDecoder,
                     notNullWhenDecoder = notNullWhenDecoder,
                 )
 

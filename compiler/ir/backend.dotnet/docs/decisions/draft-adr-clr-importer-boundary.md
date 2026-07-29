@@ -2010,6 +2010,15 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   original Kotlin type: **Architecturally wrong and should be changed**.
 - Flattening conditional flow attributes such as `NotNullWhen` into declaration nullability:
   **Architecturally wrong and should be changed**.
+- Mapping parameter-target `NotNull` to common
+  `returns() implies (parameter != null)` without changing the declaration type:
+  **Correct direction**.
+- Treating `MaybeNull`/`MaybeNullWhen` state weakening as though it were a positive Kotlin
+  contract:
+  **Architecturally wrong and should be changed**.
+- Granting a smart cast to a CLR member named by `MemberNotNull`/`MemberNotNullWhen` without the
+  ordinary Kotlin `SmartcastStability` result:
+  **Architecturally wrong and should be changed**.
 - Withholding a foreign classifier when the provider cannot represent its complete public
   contract: **Correct temporary implementation for a closed first slice**.
 - Inventing public Kotlin/.NET export-annotation names inside an importer implementation:
@@ -2058,3 +2067,22 @@ standard platform binary contract consumed by Roslyn and matches Kotlin's effect
 The focused real/hostile-metadata smart-cast test is 1/0/0/0. The fresh strict gate is
 873/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 56 library integration
 tests).
+
+The unconditional parameter postcondition, `NotNullAttribute`, is also implemented for the
+closed reference-primitive slice. An exact selected-graph parameterless attribute maps to common
+FIR's `returns() implies (parameter != null)` effect. It leaves the declaration type nullable so
+callers may still supply `null`, and common data-flow stability remains decisive: passing a
+mutable property does not make a later read smart-castable. Duplicate, malformed,
+wrong-constructor, named-payload, and non-reference shapes contribute no effect.
+
+The wider CodeAnalysis family is classified per target rather than per name. Return-target
+`NotNull`/`MaybeNull` needs call-result enhancement; `AllowNull`/`DisallowNull` needs a distinct
+input/setter view; `MaybeNull`/`MaybeNullWhen` weakens state and cannot be encoded as a positive
+contract; `NotNullIfNotNull` and `DoesNotReturnIf` have exact common-effect candidates; and member
+attributes cannot bypass Kotlin stability. Common contracts name receivers and parameters, not
+arbitrary string-selected fields/properties. Kotlin also treats mutable, getter-backed,
+public/open, and cross-module public property reads as unstable in relevant circumstances, so the
+fact that Roslyn updates a member's null-state is insufficient for a Kotlin smart cast.
+
+The focused `NotNull` test is 1/0/0/0. The fresh strict gate is 874/0/0/0 across 16 XML suites
+(796 FIR/IL/box, 21 generated CLI, and 57 library integration tests).
