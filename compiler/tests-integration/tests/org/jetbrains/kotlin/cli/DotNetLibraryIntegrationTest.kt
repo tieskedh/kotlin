@@ -84,6 +84,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityQualifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataReader
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataHandle
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMemberReferenceSignature
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemantics
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemanticsKind
@@ -91,6 +93,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintSatisfaction
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintUnsupported
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintValidator
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableAnnotation
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationEvidence
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationFailure
@@ -154,6 +158,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedMethodSignatureResol
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeView
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrReturnNullabilityEnhancer
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolver
@@ -20426,6 +20431,429 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("return value.length + 14" in hostileDiagnostics) {
             hostileDiagnostics
         }
+    }
+
+    @Test
+    fun testForeignClrReturnFlowAttributesEnhanceFirTypes() {
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val toolchain = checkNotNull(csharpToolchain)
+        val systemRuntime = toolchain.referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(systemRuntime.isFile) { "Missing net10 System.Runtime reference assembly" }
+
+        val returnNullabilityEnhancer = DotNetClrReturnNullabilityEnhancer()
+        val attributeHandle = DotNetClrMetadataHandle(table = 12, row = 1)
+        val decodedNotNull =
+            DotNetClrNotNullMetadataResolution.Decoded(attributeHandle)
+        val decodedMaybeNull =
+            DotNetClrMaybeNullMetadataResolution.Decoded(attributeHandle)
+        val invalidNotNull = DotNetClrNotNullMetadataResolution.Invalid(
+            DotNetClrNotNullMetadataFailure.DUPLICATE_ATTRIBUTE,
+            listOf(attributeHandle),
+        )
+        val invalidMaybeNull = DotNetClrMaybeNullMetadataResolution.Invalid(
+            DotNetClrMaybeNullMetadataFailure.DUPLICATE_ATTRIBUTE,
+            listOf(attributeHandle),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+            returnNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.NULLABLE,
+                decodedNotNull,
+                DotNetClrMaybeNullMetadataResolution.Absent,
+            ),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.NULLABLE,
+            returnNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+                DotNetClrNotNullMetadataResolution.Absent,
+                decodedMaybeNull,
+            ),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+            returnNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY,
+                decodedNotNull,
+                decodedMaybeNull,
+            ),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.NULLABLE,
+            returnNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.NULLABLE,
+                invalidNotNull,
+                DotNetClrMaybeNullMetadataResolution.Absent,
+            ),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.NULLABLE,
+            returnNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+                invalidNotNull,
+                decodedMaybeNull,
+            ),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY,
+            returnNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+                decodedNotNull,
+                invalidMaybeNull,
+            ),
+        )
+
+        val fixtureSource = File(tmpdir, "foreign-return-flow-nullability.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace ForeignReturnFlowContracts
+                {
+                    public interface ReturnFlowApi
+                    {
+                        [return: NotNull]
+                        string? Strengthen();
+
+                        [return: MaybeNull]
+                        string Weaken();
+
+                        string Plain();
+                        string? PlainNullable();
+
+                        [return: NotNull]
+                        [return: MaybeNull]
+                        string? Conflict();
+
+                        [return: MaybeNull]
+                        [return: NotNullIfNotNull(nameof(value))]
+                        string Dependent(string? value);
+
+                        [DoesNotReturn]
+                        [return: MaybeNull]
+                        string Fail();
+
+                #nullable disable
+                        [return: NotNull]
+                        string LegacyStrengthen();
+
+                        [return: MaybeNull]
+                        string LegacyWeaken();
+                #nullable restore
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val fixtureAssembly = File(tmpdir, "Foreign.ReturnFlowNullability.dll")
+        val fixtureResult = runModernCSharpCompiler(
+            toolchain,
+            fixtureSource,
+            fixtureAssembly,
+        )
+        assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+
+        val hostileSource = File(tmpdir, "foreign-return-flow-nullability-hostile.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System;
+
+                namespace System.Diagnostics.CodeAnalysis
+                {
+                    [AttributeUsage(
+                        AttributeTargets.Method | AttributeTargets.ReturnValue,
+                        AllowMultiple = true)]
+                    public sealed class NotNullAttribute : Attribute
+                    {
+                        public NotNullAttribute() {}
+                        public NotNullAttribute(int wrongValue) {}
+                        public bool Unexpected;
+                    }
+
+                    [AttributeUsage(
+                        AttributeTargets.Method | AttributeTargets.ReturnValue,
+                        AllowMultiple = true)]
+                    public sealed class MaybeNullAttribute : Attribute
+                    {
+                        public MaybeNullAttribute() {}
+                        public MaybeNullAttribute(int wrongValue) {}
+                        public bool Unexpected;
+                    }
+                }
+
+                namespace HostileReturnFlowContracts
+                {
+                    using System.Diagnostics.CodeAnalysis;
+
+                    public interface HostileReturnFlowApi
+                    {
+                        [return: NotNull, NotNull]
+                        string? DuplicateNotNull();
+
+                        [return: NotNull(1)]
+                        string? WrongNotNullConstructor();
+
+                        [return: NotNull(Unexpected = true)]
+                        string? NamedNotNull();
+
+                        [return: MaybeNull, MaybeNull]
+                        string DuplicateMaybeNull();
+
+                        [return: MaybeNull(1)]
+                        string WrongMaybeNullConstructor();
+
+                        [return: MaybeNull(Unexpected = true)]
+                        string NamedMaybeNull();
+
+                        [return: MaybeNull, NotNull, NotNull]
+                        string ValidMaybeNullWithInvalidNotNull();
+
+                        [return: NotNull, MaybeNull, MaybeNull]
+                        string? ValidNotNullWithInvalidMaybeNull();
+
+                        [NotNull]
+                        string? WrongTargetNotNull();
+
+                        [MaybeNull]
+                        string WrongTargetMaybeNull();
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val hostileAssembly = File(tmpdir, "Foreign.ReturnFlowNullability.Hostile.dll")
+        val hostileResult = runModernCSharpCompiler(
+            toolchain,
+            hostileSource,
+            hostileAssembly,
+            additionalArguments = listOf("/nowarn:0436"),
+        )
+        assertEquals(0, hostileResult.exitCode, hostileResult.output)
+
+        val malformedSource = File(tmpdir, "foreign-return-flow-nullability-malformed.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace MalformedReturnFlowContracts
+                {
+                    public interface MalformedReturnFlowApi
+                    {
+                        [return: NotNull]
+                        string? MalformedNotNull();
+
+                        [return: MaybeNull]
+                        string MalformedMaybeNull();
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val pristineMalformedAssembly =
+            File(tmpdir, "Foreign.ReturnFlowNullability.Malformed.Primitive.dll")
+        val malformedResult = runModernCSharpCompiler(
+            toolchain,
+            malformedSource,
+            pristineMalformedAssembly,
+        )
+        assertEquals(0, malformedResult.exitCode, malformedResult.output)
+        val malformedMetadata = DotNetClrMetadataReader.read(pristineMalformedAssembly)
+        val malformedApi = malformedMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "MalformedReturnFlowContracts" &&
+                    type.metadataName == "MalformedReturnFlowApi"
+        }
+        val malformedMethods = malformedMetadata.methodDefinitions.filter { method ->
+            method.declaringType == malformedApi.handle
+        }
+        assertEquals(
+            setOf("MalformedNotNull", "MalformedMaybeNull"),
+            malformedMethods.mapTo(linkedSetOf()) { method -> method.name },
+        )
+        val malformedReturnRows = malformedMetadata.parameterDefinitions.filter { parameter ->
+            parameter.isReturn &&
+                    malformedMethods.any { method ->
+                        method.handle == parameter.declaringMethod
+                    }
+        }
+        assertEquals(2, malformedReturnRows.size)
+        val malformedAttributes = malformedMetadata.customAttributes.filter { attribute ->
+            attribute.parent in malformedReturnRows.map { parameter -> parameter.handle }
+        }
+        assertEquals(2, malformedAttributes.size)
+        val malformedImage = pristineMalformedAssembly.readBytes()
+        val malformedTables = locateClrMetadataTables(malformedImage)
+        val malformedValueOffsets = malformedAttributes.map { attribute ->
+            val malformedValueIndex = readLittleEndianIndex(
+                malformedImage,
+                malformedTables.rowOffset(12, attribute.handle.row) +
+                        malformedTables.hasCustomAttributeIndexSize +
+                        malformedTables.customAttributeTypeIndexSize,
+                malformedTables.blobIndexSize,
+            )
+            malformedTables.blobContentOffset(malformedImage, malformedValueIndex)
+        }.distinct()
+        assertTrue(malformedValueOffsets.isNotEmpty())
+        for (malformedValueOffset in malformedValueOffsets) {
+            assertEquals(1, malformedImage[malformedValueOffset].toInt() and 0xff)
+            malformedImage[malformedValueOffset] = 0
+        }
+        val malformedAssembly =
+            File(tmpdir, "Foreign.ReturnFlowNullability.Malformed.dll").apply {
+                writeBytes(malformedImage)
+            }
+
+        fun compileForeignConsumer(
+            sourceName: String,
+            sourceText: String,
+            classpath: List<File>,
+        ): Pair<String, ExitCode> {
+            val source = File(tmpdir, sourceName).apply { writeText(sourceText) }
+            return AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    K2DotNetCompilerArguments::noStdlib.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    classpath.joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::moduleName.cliArgument,
+                    "ForeignReturnFlowNullabilityConsumer",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "$sourceName.il").path,
+                )
+            )
+        }
+
+        val [consumerDiagnostics, consumerExitCode] = compileForeignConsumer(
+            "foreign-return-flow-nullability.kt",
+            """
+            package consumer
+
+            import ForeignReturnFlowContracts.ReturnFlowApi
+
+            public fun acceptedStrengthened(api: ReturnFlowApi): String =
+                api.Strengthen()
+
+            public fun acceptedPlain(api: ReturnFlowApi): String =
+                api.Plain()
+
+            public fun acceptedConflict(api: ReturnFlowApi): String =
+                api.Conflict()
+
+            public fun acceptedLegacyStrengthened(api: ReturnFlowApi): String =
+                api.LegacyStrengthen()
+
+            public fun acceptedDependent(api: ReturnFlowApi): String =
+                api.Dependent("value")
+
+            public fun acceptedDoesNotReturn(api: ReturnFlowApi): () -> Nothing =
+                api::Fail
+
+            public fun rejectedWeakened(api: ReturnFlowApi): String =
+                api.Weaken()
+
+            public fun rejectedPlainNullable(api: ReturnFlowApi): String =
+                api.PlainNullable()
+
+            public fun rejectedLegacyWeakened(api: ReturnFlowApi): String =
+                api.LegacyWeaken()
+
+            public fun rejectedDependent(
+                api: ReturnFlowApi,
+                value: String?,
+            ): String = api.Dependent(value)
+            """.trimIndent(),
+            listOf(fixtureAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, consumerExitCode, consumerDiagnostics)
+        assertFalse("api.Strengthen()" in consumerDiagnostics) { consumerDiagnostics }
+        assertFalse("api.Plain()" in consumerDiagnostics) { consumerDiagnostics }
+        assertFalse("api.Conflict()" in consumerDiagnostics) { consumerDiagnostics }
+        assertFalse("api.LegacyStrengthen()" in consumerDiagnostics) { consumerDiagnostics }
+        assertFalse("api.Dependent(\"value\")" in consumerDiagnostics) { consumerDiagnostics }
+        assertFalse("api::Fail" in consumerDiagnostics) { consumerDiagnostics }
+        assertTrue("api.Weaken()" in consumerDiagnostics) { consumerDiagnostics }
+        assertTrue("api.PlainNullable()" in consumerDiagnostics) { consumerDiagnostics }
+        assertTrue("api.LegacyWeaken()" in consumerDiagnostics) { consumerDiagnostics }
+        assertTrue("api.Dependent(value)" in consumerDiagnostics) { consumerDiagnostics }
+
+        val [hostileDiagnostics, hostileExitCode] = compileForeignConsumer(
+            "foreign-return-flow-nullability-hostile.kt",
+            """
+            package consumer
+
+            import HostileReturnFlowContracts.HostileReturnFlowApi
+            import MalformedReturnFlowContracts.MalformedReturnFlowApi
+
+            public fun rejectedDuplicateNotNull(api: HostileReturnFlowApi): String =
+                api.DuplicateNotNull()
+
+            public fun rejectedWrongNotNullConstructor(
+                api: HostileReturnFlowApi,
+            ): String = api.WrongNotNullConstructor()
+
+            public fun rejectedNamedNotNull(api: HostileReturnFlowApi): String =
+                api.NamedNotNull()
+
+            public fun acceptedDuplicateMaybeNull(api: HostileReturnFlowApi): String =
+                api.DuplicateMaybeNull()
+
+            public fun acceptedWrongMaybeNullConstructor(
+                api: HostileReturnFlowApi,
+            ): String = api.WrongMaybeNullConstructor()
+
+            public fun acceptedNamedMaybeNull(api: HostileReturnFlowApi): String =
+                api.NamedMaybeNull()
+
+            public fun rejectedValidMaybeNullWithInvalidNotNull(
+                api: HostileReturnFlowApi,
+            ): String = api.ValidMaybeNullWithInvalidNotNull()
+
+            public fun acceptedValidNotNullWithInvalidMaybeNull(
+                api: HostileReturnFlowApi,
+            ): String = api.ValidNotNullWithInvalidMaybeNull()
+
+            public fun rejectedWrongTargetNotNull(api: HostileReturnFlowApi): String =
+                api.WrongTargetNotNull()
+
+            public fun acceptedWrongTargetMaybeNull(api: HostileReturnFlowApi): String =
+                api.WrongTargetMaybeNull()
+
+            public fun rejectedMalformedNotNull(api: MalformedReturnFlowApi): String =
+                api.MalformedNotNull()
+
+            public fun acceptedMalformedMaybeNull(api: MalformedReturnFlowApi): String =
+                api.MalformedMaybeNull()
+            """.trimIndent(),
+            listOf(hostileAssembly, malformedAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, hostileExitCode, hostileDiagnostics)
+        assertTrue("api.DuplicateNotNull()" in hostileDiagnostics) { hostileDiagnostics }
+        assertTrue("api.WrongNotNullConstructor()" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("api.NamedNotNull()" in hostileDiagnostics) { hostileDiagnostics }
+        assertFalse("api.DuplicateMaybeNull()" in hostileDiagnostics) { hostileDiagnostics }
+        assertFalse("api.WrongMaybeNullConstructor()" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("api.NamedMaybeNull()" in hostileDiagnostics) { hostileDiagnostics }
+        assertTrue("api.ValidMaybeNullWithInvalidNotNull()" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("api.ValidNotNullWithInvalidMaybeNull()" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("api.WrongTargetNotNull()" in hostileDiagnostics) { hostileDiagnostics }
+        assertFalse("api.WrongTargetMaybeNull()" in hostileDiagnostics) { hostileDiagnostics }
+        assertTrue("api.MalformedNotNull()" in hostileDiagnostics) { hostileDiagnostics }
+        assertFalse("api.MalformedMaybeNull()" in hostileDiagnostics) { hostileDiagnostics }
     }
 
     @Test

@@ -66,6 +66,52 @@ sealed interface DotNetClrNotNullMetadataResolution {
     ) : DotNetClrNotNullMetadataResolution
 }
 
+enum class DotNetClrMaybeNullMetadataFailure {
+    DUPLICATE_ATTRIBUTE,
+    VALUE_DECODING_FAILED,
+    INVALID_VALUE_SHAPE,
+}
+
+sealed interface DotNetClrMaybeNullMetadataResolution {
+    data object Absent : DotNetClrMaybeNullMetadataResolution
+
+    data class Decoded(
+        val attribute: DotNetClrMetadataHandle,
+    ) : DotNetClrMaybeNullMetadataResolution
+
+    data class Invalid(
+        val failure: DotNetClrMaybeNullMetadataFailure,
+        val attributes: List<DotNetClrMetadataHandle>,
+        val valueDecoding: DotNetClrCustomAttributeValueDecoding? = null,
+    ) : DotNetClrMaybeNullMetadataResolution
+}
+
+/**
+ * Applies Roslyn's unconditional call-result precedence to a Kotlin-facing return qualifier.
+ *
+ * Invalid weakening evidence is deliberately different from absent evidence: retaining a rigid
+ * non-null declaration qualifier would be unsafe. Invalid strengthening evidence cannot change
+ * the declaration qualifier.
+ */
+class DotNetClrReturnNullabilityEnhancer {
+    fun enhance(
+        declarationQualifier: DotNetClrKotlinNullabilityQualifier,
+        notNull: DotNetClrNotNullMetadataResolution?,
+        maybeNull: DotNetClrMaybeNullMetadataResolution?,
+    ): DotNetClrKotlinNullabilityQualifier {
+        if (maybeNull is DotNetClrMaybeNullMetadataResolution.Invalid) {
+            return DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY
+        }
+        if (notNull is DotNetClrNotNullMetadataResolution.Decoded) {
+            return DotNetClrKotlinNullabilityQualifier.NOT_NULL
+        }
+        if (maybeNull is DotNetClrMaybeNullMetadataResolution.Decoded) {
+            return DotNetClrKotlinNullabilityQualifier.NULLABLE
+        }
+        return declarationQualifier
+    }
+}
+
 enum class DotNetClrNotNullIfNotNullMetadataFailure {
     VALUE_DECODING_FAILED,
     INVALID_VALUE_SHAPE,
@@ -306,7 +352,8 @@ class DotNetClrDoesNotReturnIfMetadataDecoder(
 }
 
 /**
- * Decodes Roslyn's unconditional parameter postcondition without projecting a Kotlin contract.
+ * Decodes Roslyn's unconditional output postcondition without projecting a Kotlin contract or
+ * result qualifier.
  *
  * The resolved attribute must be the exact top-level standard name, derive from
  * [System.Attribute], and use its parameterless instance constructor. See the conditional decoder
@@ -317,11 +364,11 @@ class DotNetClrNotNullMetadataDecoder(
 ) {
     fun decode(
         assembly: DotNetClrAssemblyMetadata,
-        parameter: DotNetClrMetadataHandle,
+        output: DotNetClrMetadataHandle,
     ): DotNetClrNotNullMetadataResolution {
         val candidates = assembly.customAttributes
             .asSequence()
-            .filter { attribute -> attribute.parent == parameter }
+            .filter { attribute -> attribute.parent == output }
             .mapNotNull { attribute ->
                 val constructor = when (
                     val resolution =
@@ -395,6 +442,99 @@ class DotNetClrNotNullMetadataDecoder(
     private companion object {
         const val ATTRIBUTE_NAMESPACE = "System.Diagnostics.CodeAnalysis"
         const val ATTRIBUTE_NAME = "NotNullAttribute"
+    }
+}
+
+/**
+ * Decodes Roslyn's unconditional maybe-null output postcondition without projecting a result
+ * qualifier.
+ *
+ * This deliberately mirrors [DotNetClrNotNullMetadataDecoder]. The declaration layer applies
+ * their CLR call-result precedence and chooses a safe fallback for invalid weakening evidence.
+ */
+class DotNetClrMaybeNullMetadataDecoder(
+    private val customAttributeDecoder: DotNetClrCustomAttributeDecoder,
+) {
+    fun decode(
+        assembly: DotNetClrAssemblyMetadata,
+        output: DotNetClrMetadataHandle,
+    ): DotNetClrMaybeNullMetadataResolution {
+        val candidates = assembly.customAttributes
+            .asSequence()
+            .filter { attribute -> attribute.parent == output }
+            .mapNotNull { attribute ->
+                val constructor = when (
+                    val resolution =
+                        customAttributeDecoder.resolveConstructor(assembly, attribute)
+                ) {
+                    is DotNetClrCustomAttributeConstructorResolution.Resolved ->
+                        resolution.constructor
+                    is DotNetClrCustomAttributeConstructorResolution.Invalid ->
+                        return@mapNotNull null
+                }
+                val definition = constructor.attributeType.type.definition
+                if (
+                    definition.declaringType != null ||
+                    definition.namespaceName != ATTRIBUTE_NAMESPACE ||
+                    definition.metadataName != ATTRIBUTE_NAME ||
+                    constructor.attributeType.arguments.isNotEmpty() ||
+                    constructor.signature.parameterTypes.isNotEmpty()
+                ) {
+                    return@mapNotNull null
+                }
+                RecognizedAttribute(attribute, constructor)
+            }
+            .toList()
+        if (candidates.isEmpty()) return DotNetClrMaybeNullMetadataResolution.Absent
+        if (candidates.size != 1) {
+            return DotNetClrMaybeNullMetadataResolution.Invalid(
+                failure = DotNetClrMaybeNullMetadataFailure.DUPLICATE_ATTRIBUTE,
+                attributes = candidates.map { candidate -> candidate.attribute.handle },
+            )
+        }
+
+        val candidate = candidates.single()
+        val decoded = when (
+            val valueDecoding = customAttributeDecoder.decodeValue(
+                assembly,
+                candidate.attribute,
+                candidate.constructor,
+            )
+        ) {
+            is DotNetClrCustomAttributeValueDecoding.Decoded -> valueDecoding.attribute
+            is DotNetClrCustomAttributeValueDecoding.Invalid ->
+                return DotNetClrMaybeNullMetadataResolution.Invalid(
+                    failure = DotNetClrMaybeNullMetadataFailure.VALUE_DECODING_FAILED,
+                    attributes = listOf(candidate.attribute.handle),
+                    valueDecoding = valueDecoding,
+                )
+            is DotNetClrCustomAttributeValueDecoding.Unsupported ->
+                return DotNetClrMaybeNullMetadataResolution.Invalid(
+                    failure = DotNetClrMaybeNullMetadataFailure.VALUE_DECODING_FAILED,
+                    attributes = listOf(candidate.attribute.handle),
+                    valueDecoding = valueDecoding,
+                )
+        }
+        if (
+            decoded.fixedArguments.isNotEmpty() ||
+            decoded.namedArguments.isNotEmpty()
+        ) {
+            return DotNetClrMaybeNullMetadataResolution.Invalid(
+                failure = DotNetClrMaybeNullMetadataFailure.INVALID_VALUE_SHAPE,
+                attributes = listOf(candidate.attribute.handle),
+            )
+        }
+        return DotNetClrMaybeNullMetadataResolution.Decoded(candidate.attribute.handle)
+    }
+
+    private data class RecognizedAttribute(
+        val attribute: DotNetClrCustomAttribute,
+        val constructor: DotNetClrResolvedCustomAttributeConstructor,
+    )
+
+    private companion object {
+        const val ATTRIBUTE_NAMESPACE = "System.Diagnostics.CodeAnalysis"
+        const val ATTRIBUTE_NAME = "MaybeNullAttribute"
     }
 }
 

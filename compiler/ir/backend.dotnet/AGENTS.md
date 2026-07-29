@@ -667,10 +667,16 @@ landed shape as a compatibility constraint.
    `MemberNotNull`/`MemberNotNullWhen` must never bypass ordinary Kotlin `SmartcastStability`:
    mutable, delegated, getter-backed, public/open, and cross-module public property reads remain
    unstable where Common says so, even when Roslyn would update their null-state. `MaybeNull` and
-   `MaybeNullWhen` are state weakening, not positive Kotlin contracts. Absent, duplicate,
-   malformed, wrong-signature, named-payload, wrong-target, and inapplicable shapes contribute no
-   effect. Kotlin-produced DLLs still take the embedded-KLIB path, so their nullable attributes
-   are a derived C# view rather than a second Kotlin authority. The first FIR provider slice may
+   `MaybeNullWhen` are state weakening, not positive Kotlin contracts. On one physical return
+   Param, apply exact `NotNull`/`MaybeNull` after ordinary declaration nullability to form the
+   logical call-result type. Exact `NotNull` wins exact `MaybeNull`, matching Roslyn's result-state
+   order; invalid `NotNull` cannot strengthen, while invalid `MaybeNull` forces flexibility so
+   broken weakening evidence cannot leave a rigid non-null result. `DoesNotReturn` still selects
+   `Nothing` before result nullability, and `NotNullIfNotNull` remains a separate conditional
+   effect. Elsewhere, absent, duplicate, malformed, wrong-signature, named-payload, wrong-target,
+   and inapplicable shapes contribute no effect. Kotlin-produced DLLs still take the embedded-KLIB
+   path, so their nullable attributes are a derived C# view rather than a second Kotlin authority.
+   The first FIR provider slice may
    expose only complete public top-level non-generic abstract-interface contracts over the
    documented primitive/string/object grammar; if any public declared method is outside that
    grammar, withhold the classifier instead of silently dropping members. Exact details and the

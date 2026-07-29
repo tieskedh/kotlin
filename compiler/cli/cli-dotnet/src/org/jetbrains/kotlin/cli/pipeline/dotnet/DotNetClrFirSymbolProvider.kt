@@ -20,6 +20,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjector
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityQualifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationTarget
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplicator
@@ -35,6 +36,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedMethodSignatureResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeSignature
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrReturnNullabilityEnhancer
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyBinder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolver
@@ -427,10 +429,13 @@ internal class DotNetClrFirSymbolProvider(
         private val projector: DotNetClrKotlinNullabilityProjector,
         private val doesNotReturnDecoder: DotNetClrDoesNotReturnMetadataDecoder?,
         private val doesNotReturnIfDecoder: DotNetClrDoesNotReturnIfMetadataDecoder?,
+        private val maybeNullDecoder: DotNetClrMaybeNullMetadataDecoder?,
         private val notNullDecoder: DotNetClrNotNullMetadataDecoder?,
         private val notNullIfNotNullDecoder: DotNetClrNotNullIfNotNullMetadataDecoder?,
         private val notNullWhenDecoder: DotNetClrNotNullWhenMetadataDecoder?,
     ) {
+        private val returnNullabilityEnhancer = DotNetClrReturnNullabilityEnhancer()
+
         fun returnsNothing(
             assembly: DotNetClrAssemblyMetadata,
             method: DotNetClrMethodDefinition,
@@ -471,7 +476,7 @@ internal class DotNetClrFirSymbolProvider(
             val projection = projector.project(
                 applicator.apply(type, resolver.resolve(assembly, target))
             )
-            return when (projection) {
+            val declarationQualifier = when (projection) {
                 is DotNetClrKotlinNullabilityProjection.Projected ->
                     projection.components.singleOrNull()?.qualifier
                         ?: DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY
@@ -480,6 +485,28 @@ internal class DotNetClrFirSymbolProvider(
                 is DotNetClrKotlinNullabilityProjection.DiagnosticFallback,
                 -> DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY
             }
+            return if (target is DotNetClrNullableDeclarationTarget.MethodReturn) {
+                returnQualifier(assembly, method, declarationQualifier)
+            } else {
+                declarationQualifier
+            }
+        }
+
+        private fun returnQualifier(
+            assembly: DotNetClrAssemblyMetadata,
+            method: DotNetClrMethodDefinition,
+            declarationQualifier: DotNetClrKotlinNullabilityQualifier,
+        ): DotNetClrKotlinNullabilityQualifier {
+            val returnRow = assembly.parameterDefinitions.singleOrNull { parameter ->
+                parameter.declaringMethod == method.handle && parameter.isReturn
+            } ?: return declarationQualifier
+            val notNull = notNullDecoder?.decode(assembly, returnRow.handle)
+            val maybeNull = maybeNullDecoder?.decode(assembly, returnRow.handle)
+            return returnNullabilityEnhancer.enhance(
+                declarationQualifier,
+                notNull,
+                maybeNull,
+            )
         }
 
         fun contractDescription(
@@ -642,6 +669,7 @@ internal class DotNetClrFirSymbolProvider(
                         projector = DotNetClrKotlinNullabilityProjector(),
                         doesNotReturnDecoder = null,
                         doesNotReturnIfDecoder = null,
+                        maybeNullDecoder = null,
                         notNullDecoder = null,
                         notNullIfNotNullDecoder = null,
                         notNullWhenDecoder = null,
@@ -670,6 +698,8 @@ internal class DotNetClrFirSymbolProvider(
                     DotNetClrDoesNotReturnMetadataDecoder(customAttributeDecoder)
                 val doesNotReturnIfDecoder =
                     DotNetClrDoesNotReturnIfMetadataDecoder(customAttributeDecoder)
+                val maybeNullDecoder =
+                    DotNetClrMaybeNullMetadataDecoder(customAttributeDecoder)
                 val notNullDecoder =
                     DotNetClrNotNullMetadataDecoder(customAttributeDecoder)
                 val notNullIfNotNullDecoder =
@@ -682,6 +712,7 @@ internal class DotNetClrFirSymbolProvider(
                             signatureResolver,
                             doesNotReturnDecoder,
                             doesNotReturnIfDecoder,
+                            maybeNullDecoder,
                             notNullDecoder,
                             notNullIfNotNullDecoder,
                             notNullWhenDecoder,
@@ -692,6 +723,7 @@ internal class DotNetClrFirSymbolProvider(
                             signatureResolver,
                             doesNotReturnDecoder,
                             doesNotReturnIfDecoder,
+                            maybeNullDecoder,
                             notNullDecoder,
                             notNullIfNotNullDecoder,
                             notNullWhenDecoder,
@@ -717,6 +749,7 @@ internal class DotNetClrFirSymbolProvider(
                     DotNetClrKotlinNullabilityProjector(),
                     doesNotReturnDecoder,
                     doesNotReturnIfDecoder,
+                    maybeNullDecoder,
                     notNullDecoder,
                     notNullIfNotNullDecoder,
                     notNullWhenDecoder,
@@ -727,6 +760,7 @@ internal class DotNetClrFirSymbolProvider(
                 signatureResolver: DotNetClrSignatureResolver,
                 doesNotReturnDecoder: DotNetClrDoesNotReturnMetadataDecoder,
                 doesNotReturnIfDecoder: DotNetClrDoesNotReturnIfMetadataDecoder,
+                maybeNullDecoder: DotNetClrMaybeNullMetadataDecoder,
                 notNullDecoder: DotNetClrNotNullMetadataDecoder,
                 notNullIfNotNullDecoder: DotNetClrNotNullIfNotNullMetadataDecoder,
                 notNullWhenDecoder: DotNetClrNotNullWhenMetadataDecoder,
@@ -738,6 +772,7 @@ internal class DotNetClrFirSymbolProvider(
                     projector = DotNetClrKotlinNullabilityProjector(),
                     doesNotReturnDecoder = doesNotReturnDecoder,
                     doesNotReturnIfDecoder = doesNotReturnIfDecoder,
+                    maybeNullDecoder = maybeNullDecoder,
                     notNullDecoder = notNullDecoder,
                     notNullIfNotNullDecoder = notNullIfNotNullDecoder,
                     notNullWhenDecoder = notNullWhenDecoder,
