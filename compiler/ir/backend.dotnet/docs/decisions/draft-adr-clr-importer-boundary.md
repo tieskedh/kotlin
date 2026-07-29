@@ -1429,6 +1429,55 @@ Real Roslyn output pins a nullable reference generic return, generic parameter c
 `Nullable<GenericStruct<...>>` rule. Synthetic input pins function-pointer return/parameter order,
 exact count mismatch, and invalid nominal class/value encoding.
 
+The fortieth slice selects nullable evidence for one physical declaration before applying it to
+that declaration's resolved type.
+
+1. JVM enhancement first resolves annotation ownership, declaration applicability, and default
+   qualifiers, then aligns the selected qualifiers with the foreign type tree. It does not let a
+   missing declaration-site annotation manufacture a definitely-non-null Kotlin type. The .NET
+   importer follows that same selection-before-enhancement boundary.
+2. The CLR-specific difference is Roslyn's module `NullablePublicOnlyAttribute(bool
+   IncludesInternals)` convention. An absent marker includes every declaration; `false` includes
+   public/protected declarations; `true` additionally includes internal and
+   private-protected declarations. Effective visibility folds the declaration through every
+   containing type. Parameters and generic parameters use their method/type owner. Property and
+   event rows have no CLR accessibility of their own, so Roslyn's
+   `CSharpCompilation.ShouldEmitNullableAttributes` climbs them to the containing type and
+   `PEPropertySymbol` deliberately supplies that type to `PEModuleSymbol` when decoding. A private
+   C# property in a public type is therefore included even though its private accessor MethodDefs
+   are independently suppressed. This unintuitive rule is metadata compatibility, not a Kotlin
+   visibility decision. See Roslyn's
+   [emitter policy](https://github.com/dotnet/roslyn/blob/c67ab9a38782b72900e4c758a6fcea476a600b44/src/Compilers/CSharp/Portable/Compilation/CSharpCompilation.cs#L4917-L4955),
+   [PE property importer](https://github.com/dotnet/roslyn/blob/c67ab9a38782b72900e4c758a6fcea476a600b44/src/Compilers/CSharp/Portable/Symbols/Metadata/PE/PEPropertySymbol.cs#L330-L333),
+   and
+   [nullable metadata contract](https://github.com/dotnet/roslyn/blob/main/docs/features/nullable-metadata.md).
+3. Kotlin Common is unchanged. Selected flags remain foreign evidence; an included declaration
+   without local or enclosing evidence is oblivious, while an excluded declaration is
+   suppressed. Neither result is a definitely-non-null Kotlin type, and Kotlin-produced
+   declarations remain KLIB-authoritative.
+4. The compiler convention and ECMA visibility flags have the same meaning on `net48`,
+   `netstandard2.0`, and `net10.0`. The selected assembly graph may expose different declarations,
+   but no profile changes the selection algorithm.
+5. `DotNetClrNullableEffectiveAccessibilityResolver` computes a closed
+   public/internal/private category from exact metadata flags and bounded containing-type
+   ownership. Then
+   `DotNetClrNullableDeclarationResolver` applies the module policy before decoding local
+   evidence, selects a Param/Field/Property/GenericParam attribute when present, or walks the
+   nearest MethodDef and containing TypeDefs for context. Missing rows are not synthesized and
+   malformed ownership, duplicates, visibility, attributes, cycles, or depth remain structured
+   failures below FIR.
+6. The core-team choice is an explicit `Selected`/`Oblivious`/`Suppressed`/`Invalid` result that
+   still constructs no Kotlin type. This keeps compatibility filtering separate from diagnostic
+   fallback and type-tree application, prevents excluded malformed local payloads from producing
+   spurious diagnostics, and makes the later FIR policy decide how oblivious or invalid foreign
+   evidence is surfaced.
+
+Real Roslyn fixtures pin both values of `NullablePublicOnly`, friend-assembly inclusion,
+public/internal/private/protected members, fields, properties, accessor MethodDefs, and nested
+visibility. Synthetic selected metadata pins an out-of-range parameter, duplicate Param
+attachment, invalid ownership, invalid visibility, containing-type cycles, the traversal limit,
+and malformed local evidence that must remain suppressed when the module policy excludes it.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1508,6 +1557,12 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Architecturally wrong and should be changed**.
 - Retaining flag-count and physical-classification failures below later diagnostic policy:
   **Correct direction**.
+- Declaration-level nullable evidence selection and effective-accessibility filtering before FIR:
+  **Correct direction**.
+- Deriving nullable-public-only accessibility for a Property row from its accessor visibility:
+  **Architecturally wrong and should be changed**.
+- Treating suppressed or missing nullable evidence as definitely non-null:
+  **Architecturally wrong and should be changed**.
 - Deferring Constant and FieldMarshal payloads while retaining their Param flags:
   **Correct temporary implementation, but not a final design**.
 - Lossless MemberRef and reusable FieldSig model: **Correct direction**.

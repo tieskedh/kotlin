@@ -2456,10 +2456,30 @@ session state, process, and a curated task menu. Keep both files updated as you 
   never partial enhancement. Real Roslyn output covers reference generics, arrays, a generic
   parameter context, `ref`, a generic struct with a skipped primitive argument, and an outer
   nullable-value wrapper; synthetic input covers function-pointer ordering and hostile shapes.
-  Next select the nearest method/type/module context and apply `NullablePublicOnly` against
+  Next select the nearest method/type context and apply `NullablePublicOnly` against
   effective CLR accessibility before deciding diagnostic fallback or FIR nullability.
   The focused Roslyn/type-shape test is 1/0/0/0. The fresh strict gate remains 871/0/0/0 across
   16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The nullable-declaration-policy continuation selects evidence before type-tree application or
+  FIR enhancement. `DotNetClrNullableEffectiveAccessibilityResolver` folds TypeDef, MethodDef,
+  and Field visibility through bounded containing-type ownership; parameters and generic
+  parameters follow their method/type owner. `DotNetClrNullableDeclarationResolver` applies the module
+  `NullablePublicOnly(bool IncludesInternals)` policy first, then selects an exact
+  Param/Field/Property/GenericParam transform or the nearest MethodDef/containing-TypeDef context.
+  A missing marker includes all declarations, `false` includes public/protected declarations, and
+  `true` additionally includes internal/private-protected declarations. CLR Property rows have no
+  accessibility: matching Roslyn's emitter/importer contract, the containing type is their access
+  symbol rather than either accessor. Consequently a private property in a public type is
+  selected while its private accessor MethodDefs are independently suppressed. Selected,
+  oblivious, suppressed, and invalid outcomes stay distinct and create no Kotlin type. Real
+  Roslyn output covers both marker values, friend-assembly internals, fields, properties,
+  accessors, and nested visibility. Hostile selected metadata covers out-of-range and duplicate
+  Param attachment, invalid ownership/visibility, cycles, limits, and malformed local evidence
+  that must stay suppressed when filtered out. Next combine selected evidence with the physical
+  type applicator under an explicit diagnostic fallback, then validate generic constraint
+  interaction before FIR projection. The focused Roslyn/declaration-policy test is 1/0/0/0. The
+  fresh strict gate remains 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
+  54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

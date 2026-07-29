@@ -57,6 +57,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintSta
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintValidator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDelegateRuntimeTypesResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDelegateRuntimeTypesResolver
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrEffectiveAccessibility
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrEffectiveAccessibilityResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEffectiveAccessibilityResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedConstructedTypeConstraints
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
@@ -81,9 +84,15 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintSatisfactio
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintUnsupported
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintValidator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableAnnotation
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationEvidence
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationResolver
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationTarget
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceSource
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullablePublicPolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTransform
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeApplication
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeApplicationFailure
@@ -97,6 +106,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveTypeCatalogResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveTypeCatalogResolver
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertyDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintSatisfaction
@@ -2597,6 +2607,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 """
                 using System;
                 using System.Collections.Generic;
+                using System.Runtime.CompilerServices;
+
+                [assembly: InternalsVisibleTo("NullableFriend")]
 
                 namespace Forwarded
                 {
@@ -2639,6 +2652,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                         public void ByReference(ref string? value)
                         {
+                        }
+                    }
+
+                    internal sealed class InternalNullableProbe
+                    {
+                        public string? Echo(string? value) => value;
+
+                        private string? PrivateProperty { get; set; }
+                    }
+
+                    public class NullableVisibilityProbe
+                    {
+                        public string? PublicField;
+
+                        internal string? InternalField;
+
+                        private string? PrivateField;
+
+                        public string? PublicProperty { get; private set; }
+
+                        private string? PrivateProperty { get; set; }
+
+                        internal string? InternalEcho(string? value) => value;
+
+                        protected string? ProtectedEcho(string? value) => value;
+
+                        private string? PrivateEcho(string? value) => value;
+
+                        private sealed class PrivateNested
+                        {
+                            public string? Property { get; set; }
+
+                            public string? Echo(string? value) => value;
+                        }
+
+                        internal sealed class InternalNested
+                        {
+                            private string? Property { get; set; }
+
+                            public string? Echo(string? value) => value;
                         }
                     }
                     #nullable disable
@@ -3187,6 +3240,43 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertEquals(0, destinationCompile.exitCode, destinationCompile.output)
 
+        val publicOnlySource = directory.resolve("publicOnly.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                public sealed class PublicOnlyProbe
+                {
+                    // Mixed flags force NullableAttribute as well as NullableContextAttribute,
+                    // which makes Roslyn synthesize the module public-only marker.
+                    public string? PublicEcho(string value) => value;
+
+                    public string? PublicValue { get; set; }
+
+                    internal string? InternalValue { get; set; }
+
+                    private string? PrivateValue { get; set; }
+
+                    internal string? InternalField;
+
+                    internal string? InternalEcho(string? value) => value;
+
+                    internal sealed class InternalNested
+                    {
+                        public string? Value { get; set; }
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val publicOnlyAssembly = directory.resolve("PublicOnly.dll")
+        val publicOnlyCompile = runModernCSharpCompiler(
+            toolchain,
+            publicOnlySource,
+            publicOnlyAssembly,
+            additionalArguments = listOf("/features:nullablePublicOnly"),
+        )
+        assertEquals(0, publicOnlyCompile.exitCode, publicOnlyCompile.output)
+
         val facadeSource = directory.resolve("facade.cs").apply {
             writeText(
                 """
@@ -3214,6 +3304,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(0, facadeCompile.exitCode, facadeCompile.output)
 
         val destinationMetadata = DotNetClrMetadataReader.read(destinationAssembly)
+        val publicOnlyMetadata = DotNetClrMetadataReader.read(publicOnlyAssembly)
         val facadeMetadata = DotNetClrMetadataReader.read(facadeAssembly)
         val parameterProbe = destinationMetadata.typeDefinitions.single { definition ->
             definition.namespaceName == "Forwarded" &&
@@ -3378,7 +3469,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         reference.name == destinationMetadata.identity.name ->
                     destinationMetadata
 
-                sourceAssembly === destinationMetadata &&
+                (sourceAssembly === destinationMetadata ||
+                        sourceAssembly === publicOnlyMetadata) &&
                         reference.name == systemRuntimeMetadata.identity.name ->
                     systemRuntimeMetadata
 
@@ -3893,6 +3985,44 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 systemType,
             ),
         )
+        fun decoderForSelectedMetadata(
+            selectedMetadata: DotNetClrAssemblyMetadata,
+        ): DotNetClrCustomAttributeDecoder {
+            val selectedResolver = DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+                    if (sourceAssembly === selectedMetadata &&
+                        reference.name == systemRuntimeMetadata.identity.name
+                    ) {
+                        systemRuntimeMetadata
+                    } else {
+                        null
+                    }
+                }
+            )
+            return DotNetClrCustomAttributeDecoder(
+                selectedResolver,
+                DotNetClrSerializedTypeResolver(
+                    selectedResolver,
+                    DotNetClrSerializedAssemblyBinder {
+                            _,
+                            unqualifiedContextAssembly,
+                            assemblyName,
+                        ->
+                        when (assemblyName?.name) {
+                            null -> unqualifiedContextAssembly
+                            selectedMetadata.identity.name -> selectedMetadata
+                            systemRuntimeMetadata.identity.name -> systemRuntimeMetadata
+                            else -> null
+                        }
+                    },
+                ),
+                DotNetClrCustomAttributeCoreTypes(
+                    systemAttribute,
+                    systemEnum,
+                    systemType,
+                ),
+            )
+        }
         val nullableMetadataDecoder = DotNetClrNullableMetadataDecoder(modernAttributeDecoder)
         val nullableProbe = destinationMetadata.typeDefinitions.single { definition ->
             definition.namespaceName == "Forwarded" &&
@@ -3963,7 +4093,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ).value,
         )
         assertEquals(
-            false,
+            true,
             (
                     nullableMetadataDecoder.decodePublicOnly(destinationMetadata) as
                             DotNetClrNullableMetadataResolution.Decoded
@@ -4254,6 +4384,581 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 functionPointerType.signature.parameterTypes.single(),
             ),
             appliedFunctionPointer.components.map { component -> component.type },
+        )
+
+        val effectiveAccessibilityResolver =
+            DotNetClrNullableEffectiveAccessibilityResolver()
+        val nullableDeclarationResolver = DotNetClrNullableDeclarationResolver(
+            nullableMetadataDecoder,
+            effectiveAccessibilityResolver,
+        )
+        val selectedNullableReturn = nullableDeclarationResolver.resolve(
+            destinationMetadata,
+            DotNetClrNullableDeclarationTarget.MethodReturn(nullableTransform),
+        ) as DotNetClrNullableDeclarationEvidence.Selected
+        assertEquals(
+            DotNetClrNullableEvidenceSource.LOCAL_ATTRIBUTE,
+            selectedNullableReturn.source,
+        )
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PUBLIC,
+            selectedNullableReturn.accessibility,
+        )
+        assertEquals(
+            DotNetClrNullablePublicPolicy.PUBLIC_AND_INTERNAL,
+            selectedNullableReturn.publicPolicy,
+        )
+        val selectedContextParameter = nullableDeclarationResolver.resolve(
+            destinationMetadata,
+            DotNetClrNullableDeclarationTarget.MethodParameter(
+                nullableTransform,
+                index = 1,
+            ),
+        ) as DotNetClrNullableDeclarationEvidence.Selected
+        assertEquals(
+            DotNetClrNullableEvidenceSource.CONTEXT_ATTRIBUTE,
+            selectedContextParameter.source,
+        )
+        assertEquals(nullableTransform.handle, selectedContextParameter.contextOwner)
+        assertEquals(
+            DotNetClrNullableTransform.Uniform(
+                DotNetClrNullableAnnotation.NOT_ANNOTATED
+            ),
+            selectedContextParameter.transform,
+        )
+        val selectedGenericParameter = nullableDeclarationResolver.resolve(
+            destinationMetadata,
+            DotNetClrNullableDeclarationTarget.GenericParameter(
+                nullableTypeParameter
+            ),
+        ) as DotNetClrNullableDeclarationEvidence.Selected
+        assertEquals(
+            DotNetClrNullableEvidenceSource.CONTEXT_ATTRIBUTE,
+            selectedGenericParameter.source,
+        )
+        assertEquals(nullableProbe.handle, selectedGenericParameter.contextOwner)
+        assertEquals(
+            DotNetClrNullableTransform.Uniform(
+                DotNetClrNullableAnnotation.ANNOTATED
+            ),
+            selectedGenericParameter.transform,
+        )
+        assertTrue(
+            nullableDeclarationResolver.resolve(
+                destinationMetadata,
+                DotNetClrNullableDeclarationTarget.MethodReturn(obliviousEcho),
+            ) is DotNetClrNullableDeclarationEvidence.Oblivious
+        )
+        assertEquals(
+            false,
+            (
+                    nullableMetadataDecoder.decodePublicOnly(publicOnlyMetadata) as
+                            DotNetClrNullableMetadataResolution.Decoded
+                    ).value,
+        )
+
+        fun selectedNullableMethod(
+            typeName: String,
+            methodName: String,
+            metadata: DotNetClrAssemblyMetadata = destinationMetadata,
+        ): Pair<DotNetClrMethodDefinition, DotNetClrNullableDeclarationEvidence> {
+            val type = metadata.typeDefinitions.single { definition ->
+                definition.metadataName == typeName
+            }
+            val method = metadata.methodDefinitions.single { definition ->
+                definition.declaringType == type.handle && definition.name == methodName
+            }
+            return method to nullableDeclarationResolver.resolve(
+                metadata,
+                DotNetClrNullableDeclarationTarget.MethodReturn(method),
+            )
+        }
+
+        fun selectedNullableField(
+            typeName: String,
+            fieldName: String,
+            metadata: DotNetClrAssemblyMetadata = destinationMetadata,
+        ): Pair<DotNetClrFieldDefinition, DotNetClrNullableDeclarationEvidence> {
+            val type = metadata.typeDefinitions.single { definition ->
+                definition.metadataName == typeName
+            }
+            val field = metadata.fieldDefinitions.single { definition ->
+                definition.declaringType == type.handle && definition.name == fieldName
+            }
+            return field to nullableDeclarationResolver.resolve(
+                metadata,
+                DotNetClrNullableDeclarationTarget.Field(field),
+            )
+        }
+
+        fun selectedNullableProperty(
+            typeName: String,
+            propertyName: String,
+            metadata: DotNetClrAssemblyMetadata = destinationMetadata,
+        ): Pair<DotNetClrPropertyDefinition, DotNetClrNullableDeclarationEvidence> {
+            val type = metadata.typeDefinitions.single { definition ->
+                definition.metadataName == typeName
+            }
+            val property = metadata.propertyDefinitions.single { definition ->
+                definition.declaringType == type.handle && definition.name == propertyName
+            }
+            return property to nullableDeclarationResolver.resolve(
+                metadata,
+                DotNetClrNullableDeclarationTarget.Property(property),
+            )
+        }
+
+        val [internalNullableMethod, internalNullableEvidence] =
+            selectedNullableMethod("InternalNullableProbe", "Echo")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.INTERNAL,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        destinationMetadata,
+                        internalNullableMethod,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(internalNullableEvidence is DotNetClrNullableDeclarationEvidence.Selected)
+
+        val [internalMethod, internalEvidence] =
+            selectedNullableMethod("NullableVisibilityProbe", "InternalEcho")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.INTERNAL,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        destinationMetadata,
+                        internalMethod,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(internalEvidence is DotNetClrNullableDeclarationEvidence.Selected)
+
+        val [protectedMethod, protectedEvidence] =
+            selectedNullableMethod("NullableVisibilityProbe", "ProtectedEcho")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PUBLIC,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        destinationMetadata,
+                        protectedMethod,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(protectedEvidence is DotNetClrNullableDeclarationEvidence.Selected)
+
+        val [privateMethod, privateEvidence] =
+            selectedNullableMethod("NullableVisibilityProbe", "PrivateEcho")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PRIVATE,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        destinationMetadata,
+                        privateMethod,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(privateEvidence is DotNetClrNullableDeclarationEvidence.Suppressed)
+
+        val [privateNestedMethod, privateNestedEvidence] =
+            selectedNullableMethod("PrivateNested", "Echo")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PRIVATE,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        destinationMetadata,
+                        privateNestedMethod,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(
+            privateNestedEvidence is DotNetClrNullableDeclarationEvidence.Suppressed
+        )
+
+        val [internalNestedMethod, internalNestedEvidence] =
+            selectedNullableMethod("InternalNested", "Echo")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.INTERNAL,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        destinationMetadata,
+                        internalNestedMethod,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(
+            internalNestedEvidence is DotNetClrNullableDeclarationEvidence.Selected
+        )
+
+        val [publicField, publicFieldEvidence] =
+            selectedNullableField(typeName = "NullableVisibilityProbe", fieldName = "PublicField")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PUBLIC,
+            (
+                    effectiveAccessibilityResolver.resolve(destinationMetadata, publicField) as
+                            DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(publicFieldEvidence is DotNetClrNullableDeclarationEvidence.Selected)
+
+        val [internalField, internalFieldEvidence] =
+            selectedNullableField(typeName = "NullableVisibilityProbe", fieldName = "InternalField")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.INTERNAL,
+            (
+                    effectiveAccessibilityResolver.resolve(destinationMetadata, internalField) as
+                            DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(internalFieldEvidence is DotNetClrNullableDeclarationEvidence.Selected)
+
+        val [privateField, privateFieldEvidence] =
+            selectedNullableField(typeName = "NullableVisibilityProbe", fieldName = "PrivateField")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PRIVATE,
+            (
+                    effectiveAccessibilityResolver.resolve(destinationMetadata, privateField) as
+                            DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(privateFieldEvidence is DotNetClrNullableDeclarationEvidence.Suppressed)
+
+        val [privateProperty, privatePropertyEvidence] =
+            selectedNullableProperty(
+                typeName = "NullableVisibilityProbe",
+                propertyName = "PrivateProperty",
+            )
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PUBLIC,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        destinationMetadata,
+                        privateProperty,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(privatePropertyEvidence is DotNetClrNullableDeclarationEvidence.Selected)
+        val privatePropertyAccessors = destinationMetadata.methodSemantics
+            .filter { semantics -> semantics.association == privateProperty.handle }
+            .map { semantics ->
+                destinationMetadata.methodDefinitions.single { method ->
+                    method.handle == semantics.method
+                }
+            }
+        assertEquals(2, privatePropertyAccessors.size)
+        for (accessor in privatePropertyAccessors) {
+            assertEquals(
+                DotNetClrEffectiveAccessibility.PRIVATE,
+                (
+                        effectiveAccessibilityResolver.resolve(
+                            destinationMetadata,
+                            accessor,
+                        ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                        ).accessibility,
+            )
+            assertTrue(
+                nullableDeclarationResolver.resolve(
+                    destinationMetadata,
+                    DotNetClrNullableDeclarationTarget.MethodReturn(accessor),
+                ) is DotNetClrNullableDeclarationEvidence.Suppressed
+            )
+        }
+
+        val [publicProperty, publicPropertyEvidence] =
+            selectedNullableProperty(
+                typeName = "NullableVisibilityProbe",
+                propertyName = "PublicProperty",
+            )
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PUBLIC,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        destinationMetadata,
+                        publicProperty,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(publicPropertyEvidence is DotNetClrNullableDeclarationEvidence.Selected)
+
+        val [privateNestedProperty, privateNestedPropertyEvidence] =
+            selectedNullableProperty(typeName = "PrivateNested", propertyName = "Property")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PRIVATE,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        destinationMetadata,
+                        privateNestedProperty,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(
+            privateNestedPropertyEvidence is DotNetClrNullableDeclarationEvidence.Suppressed
+        )
+
+        val [internalNestedProperty, internalNestedPropertyEvidence] =
+            selectedNullableProperty(typeName = "InternalNested", propertyName = "Property")
+        assertEquals(
+            DotNetClrEffectiveAccessibility.INTERNAL,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        destinationMetadata,
+                        internalNestedProperty,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(
+            internalNestedPropertyEvidence is DotNetClrNullableDeclarationEvidence.Selected
+        )
+
+        val [publicOnlyPrivateProperty, publicOnlyPrivatePropertyEvidence] =
+            selectedNullableProperty(
+                typeName = "PublicOnlyProbe",
+                propertyName = "PrivateValue",
+                metadata = publicOnlyMetadata,
+            )
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PUBLIC,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        publicOnlyMetadata,
+                        publicOnlyPrivateProperty,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertEquals(
+            DotNetClrNullablePublicPolicy.PUBLIC,
+            (publicOnlyPrivatePropertyEvidence as DotNetClrNullableDeclarationEvidence.Selected)
+                .publicPolicy,
+        )
+
+        val [publicOnlyInternalField, publicOnlyInternalFieldEvidence] =
+            selectedNullableField(
+                typeName = "PublicOnlyProbe",
+                fieldName = "InternalField",
+                metadata = publicOnlyMetadata,
+            )
+        assertEquals(
+            DotNetClrEffectiveAccessibility.INTERNAL,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        publicOnlyMetadata,
+                        publicOnlyInternalField,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(
+            publicOnlyInternalFieldEvidence is DotNetClrNullableDeclarationEvidence.Suppressed
+        )
+
+        val [publicOnlyInternalMethod, publicOnlyInternalMethodEvidence] =
+            selectedNullableMethod(
+                typeName = "PublicOnlyProbe",
+                methodName = "InternalEcho",
+                metadata = publicOnlyMetadata,
+            )
+        assertEquals(
+            DotNetClrEffectiveAccessibility.INTERNAL,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        publicOnlyMetadata,
+                        publicOnlyInternalMethod,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(
+            publicOnlyInternalMethodEvidence is DotNetClrNullableDeclarationEvidence.Suppressed
+        )
+
+        val [publicOnlyInternalNestedProperty, publicOnlyInternalNestedPropertyEvidence] =
+            selectedNullableProperty(
+                typeName = "InternalNested",
+                propertyName = "Value",
+                metadata = publicOnlyMetadata,
+            )
+        assertEquals(
+            DotNetClrEffectiveAccessibility.INTERNAL,
+            (
+                    effectiveAccessibilityResolver.resolve(
+                        publicOnlyMetadata,
+                        publicOnlyInternalNestedProperty,
+                    ) as DotNetClrEffectiveAccessibilityResolution.Resolved
+                    ).accessibility,
+        )
+        assertTrue(
+            publicOnlyInternalNestedPropertyEvidence is
+                    DotNetClrNullableDeclarationEvidence.Suppressed
+        )
+
+        val invalidParameterIndex = nullableDeclarationResolver.resolve(
+            destinationMetadata,
+            DotNetClrNullableDeclarationTarget.MethodParameter(
+                nullableTransform,
+                index = nullableTransform.signature.parameterTypes.size,
+            ),
+        ) as DotNetClrNullableDeclarationEvidence.Invalid
+        assertEquals(
+            DotNetClrNullableDeclarationFailure.PARAMETER_INDEX_OUT_OF_RANGE,
+            invalidParameterIndex.failure,
+        )
+        val nullableReturnRowForAmbiguity = nullableTransformParameters.single { parameter ->
+            parameter.isReturn
+        }
+        val ambiguousParameterMetadata = destinationMetadata.copy(
+            parameterDefinitions =
+                destinationMetadata.parameterDefinitions + nullableReturnRowForAmbiguity.copy(
+                    handle = DotNetClrMetadataHandle(
+                        nullableReturnRowForAmbiguity.handle.table,
+                        destinationMetadata.parameterDefinitions.maxOf { parameter ->
+                            parameter.handle.row
+                        } + 1,
+                    )
+                )
+        )
+        val ambiguousParameter = nullableDeclarationResolver.resolve(
+            ambiguousParameterMetadata,
+            DotNetClrNullableDeclarationTarget.MethodReturn(nullableTransform),
+        ) as DotNetClrNullableDeclarationEvidence.Invalid
+        assertEquals(
+            DotNetClrNullableDeclarationFailure.AMBIGUOUS_PARAMETER_ROW,
+            ambiguousParameter.failure,
+        )
+        val existingPrivateReturnRows =
+            destinationMetadata.parameterDefinitions.filter { parameter ->
+                parameter.declaringMethod == privateMethod.handle && parameter.isReturn
+            }
+        assertTrue(existingPrivateReturnRows.size <= 1)
+        val suppressedPrivateReturnRow =
+            existingPrivateReturnRows.singleOrNull()
+                ?: nullableReturnRowForAmbiguity.copy(
+                    handle = DotNetClrMetadataHandle(
+                        nullableReturnRowForAmbiguity.handle.table,
+                        destinationMetadata.parameterDefinitions.maxOf { parameter ->
+                            parameter.handle.row
+                        } + 1,
+                    ),
+                    declaringMethod = privateMethod.handle,
+                )
+        val nullableReturnAttributeForSuppression =
+            destinationMetadata.customAttributes.single { attribute ->
+                attribute.parent == nullableReturnRowForAmbiguity.handle
+            }
+        val suppressedCustomAttributeRow =
+            destinationMetadata.customAttributes.maxOf { attribute ->
+                attribute.handle.row
+            } + 1
+        val suppressedMalformedMetadata = destinationMetadata.copy(
+            parameterDefinitions = if (existingPrivateReturnRows.isEmpty()) {
+                destinationMetadata.parameterDefinitions + suppressedPrivateReturnRow
+            } else {
+                destinationMetadata.parameterDefinitions
+            },
+            customAttributes = destinationMetadata.customAttributes + listOf(
+                nullableReturnAttributeForSuppression.copy(
+                    handle = DotNetClrMetadataHandle(
+                        nullableReturnAttributeForSuppression.handle.table,
+                        suppressedCustomAttributeRow,
+                    ),
+                    parent = suppressedPrivateReturnRow.handle,
+                ),
+                nullableReturnAttributeForSuppression.copy(
+                    handle = DotNetClrMetadataHandle(
+                        nullableReturnAttributeForSuppression.handle.table,
+                        suppressedCustomAttributeRow + 1,
+                    ),
+                    parent = suppressedPrivateReturnRow.handle,
+                ),
+            ),
+        )
+        assertTrue(
+            DotNetClrNullableDeclarationResolver(
+                DotNetClrNullableMetadataDecoder(
+                    decoderForSelectedMetadata(suppressedMalformedMetadata)
+                ),
+                effectiveAccessibilityResolver,
+            ).resolve(
+                suppressedMalformedMetadata,
+                DotNetClrNullableDeclarationTarget.MethodReturn(privateMethod),
+            ) is DotNetClrNullableDeclarationEvidence.Suppressed
+        )
+        val nullableVisibilityType =
+            destinationMetadata.typeDefinitions.single { definition ->
+                definition.metadataName == "NullableVisibilityProbe"
+            }
+        val invalidVisibilityMetadata = destinationMetadata.copy(
+            typeDefinitions = destinationMetadata.typeDefinitions.map { definition ->
+                if (definition == nullableVisibilityType) {
+                    definition.copy(
+                        attributes =
+                            (definition.attributes and 0x7L.inv()) or
+                                    DotNetClrTypeVisibility.NESTED_PUBLIC.ordinal.toLong()
+                    )
+                } else {
+                    definition
+                }
+            }
+        )
+        val invalidVisibilityEvidence = nullableDeclarationResolver.resolve(
+            invalidVisibilityMetadata,
+            DotNetClrNullableDeclarationTarget.Field(publicField),
+        ) as DotNetClrNullableDeclarationEvidence.Invalid
+        assertEquals(
+            DotNetClrNullableDeclarationFailure.INVALID_ACCESSIBILITY,
+            invalidVisibilityEvidence.failure,
+        )
+        val invalidPropertyOwner = DotNetClrMetadataHandle(
+            privateProperty.declaringType.table,
+            destinationMetadata.typeDefinitions.maxOf { definition ->
+                definition.handle.row
+            } + 1,
+        )
+        val invalidOwnerProperty = privateProperty.copy(
+            declaringType = invalidPropertyOwner
+        )
+        val invalidOwnerMetadata = destinationMetadata.copy(
+            propertyDefinitions = destinationMetadata.propertyDefinitions.map { property ->
+                if (property == privateProperty) invalidOwnerProperty else property
+            }
+        )
+        val invalidOwnerEvidence = nullableDeclarationResolver.resolve(
+            invalidOwnerMetadata,
+            DotNetClrNullableDeclarationTarget.Property(invalidOwnerProperty),
+        ) as DotNetClrNullableDeclarationEvidence.Invalid
+        assertEquals(
+            DotNetClrNullableDeclarationFailure.INVALID_OWNER,
+            invalidOwnerEvidence.failure,
+        )
+        val privateNestedType = destinationMetadata.typeDefinitions.single { definition ->
+            definition.metadataName == "PrivateNested"
+        }
+        val cyclicNestingMetadata = destinationMetadata.copy(
+            typeDefinitions = destinationMetadata.typeDefinitions.map { definition ->
+                if (definition == privateNestedType) {
+                    definition.copy(declaringType = definition.handle)
+                } else {
+                    definition
+                }
+            }
+        )
+        val cyclicNesting = nullableDeclarationResolver.resolve(
+            cyclicNestingMetadata,
+            DotNetClrNullableDeclarationTarget.Property(privateNestedProperty),
+        ) as DotNetClrNullableDeclarationEvidence.Invalid
+        assertEquals(
+            DotNetClrNullableDeclarationFailure.TYPE_NESTING_CYCLE,
+            cyclicNesting.failure,
+        )
+        val boundedNullableDeclarationResolver = DotNetClrNullableDeclarationResolver(
+            nullableMetadataDecoder,
+            effectiveAccessibilityResolver,
+            nestingLimit = 1,
+        )
+        val excessiveNesting = boundedNullableDeclarationResolver.resolve(
+            destinationMetadata,
+            DotNetClrNullableDeclarationTarget.Property(privateNestedProperty),
+        ) as DotNetClrNullableDeclarationEvidence.Invalid
+        assertEquals(
+            DotNetClrNullableDeclarationFailure.TYPE_NESTING_LIMIT_EXCEEDED,
+            excessiveNesting.failure,
         )
         val genericAttributeConstructors = genericAttributes.map { attribute ->
             (
@@ -6131,45 +6836,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             decodedConstrainedAttribute.fixedArguments.single(),
         )
-        fun decoderForSelectedMetadata(
-            selectedMetadata: DotNetClrAssemblyMetadata,
-        ): DotNetClrCustomAttributeDecoder {
-            val selectedResolver = DotNetClrTypeResolver(
-                DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
-                    if (sourceAssembly === selectedMetadata &&
-                        reference.name == systemRuntimeMetadata.identity.name
-                    ) {
-                        systemRuntimeMetadata
-                    } else {
-                        null
-                    }
-                }
-            )
-            return DotNetClrCustomAttributeDecoder(
-                selectedResolver,
-                DotNetClrSerializedTypeResolver(
-                    selectedResolver,
-                    DotNetClrSerializedAssemblyBinder {
-                            _,
-                            unqualifiedContextAssembly,
-                            assemblyName,
-                        ->
-                        when (assemblyName?.name) {
-                            null -> unqualifiedContextAssembly
-                            selectedMetadata.identity.name -> selectedMetadata
-                            systemRuntimeMetadata.identity.name -> systemRuntimeMetadata
-                            else -> null
-                        }
-                    },
-                ),
-                DotNetClrCustomAttributeCoreTypes(
-                    systemAttribute,
-                    systemEnum,
-                    systemType,
-                ),
-            )
-        }
-
         val nullableReturnParameter =
             nullableTransformParameters.single { parameter -> parameter.isReturn }
         val nullableReturnAttribute = destinationMetadata.customAttributes.single { attribute ->
