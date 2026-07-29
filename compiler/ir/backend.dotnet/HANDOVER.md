@@ -2164,6 +2164,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   parameters, custom-modified types, and delegate variance remain structured unsupported
   boundaries. The fresh strict gate is 871/0/0/0 across 16 XML suites
   (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The array-base continuation injects the selected `System.Array` definition into signature
+  assignability and follows its ordinary hierarchy for every vector and general array. This proves
+  `System.Array`, `System.Object`, and non-generic collection-interface relations without matching
+  names or changing Kotlin `Array` supertypes. General arrays outside that graph are proven not
+  assignable; only vectors against unary generic interfaces retain the renamed
+  `VECTOR_TO_GENERIC_INTERFACE` boundary. Roslyn coverage includes vector and rectangular arrays,
+  `System.Array`, `System.Object`, non-generic `IEnumerable`, generic `IList<object>`, and mixed
+  unsupported/violated aggregate evidence. The fresh strict gate is 871/0/0/0 across 16 XML suites
+  (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - The System.Type/serialized-enum custom-attribute continuation reuses that selected-graph resolver
   for fixed, array, and tagged values. Type values retain the complete resolved structural type or
   explicit null; serialized enums must resolve to a nominal named or constructed type and pass the

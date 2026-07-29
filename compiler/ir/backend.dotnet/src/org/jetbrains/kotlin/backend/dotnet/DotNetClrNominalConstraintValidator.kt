@@ -5,7 +5,7 @@ enum class DotNetClrNominalConstraintUnsupported {
     NON_NOMINAL_CONSTRAINT,
     DEPENDENT_GENERIC_PARAMETER,
     VARIANT_CONVERSION_REQUIRED,
-    ARRAY_NOMINAL_CONVERSION_REQUIRED,
+    VECTOR_INTERFACE_CONVERSION_REQUIRED,
     NESTED_SIGNATURE_CONVERSION_REQUIRED,
 }
 
@@ -50,6 +50,7 @@ class DotNetClrNominalConstraintValidator(
     typeResolver: DotNetClrTypeResolver,
     private val primitiveTypes: DotNetClrPrimitiveTypeCatalog,
     physicalTypeClassifier: DotNetClrPhysicalTypeClassifier,
+    systemArray: DotNetClrResolvedTypeDefinition,
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
 ) {
     private val assignabilityResolver =
@@ -57,6 +58,7 @@ class DotNetClrNominalConstraintValidator(
             typeResolver,
             physicalTypeClassifier,
             primitiveTypes,
+            systemArray,
             resolutionLimit,
         )
 
@@ -115,9 +117,10 @@ class DotNetClrNominalConstraintValidator(
             is DotNetClrTypeAssignability.UnsupportedSignatureConversion ->
                 DotNetClrNominalConstraintSatisfaction.Unsupported(
                     when (resolution.reason) {
-                        DotNetClrSignatureConversionUnsupported.ARRAY_TO_NOMINAL ->
+                        DotNetClrSignatureConversionUnsupported
+                            .VECTOR_TO_GENERIC_INTERFACE ->
                             DotNetClrNominalConstraintUnsupported
-                                .ARRAY_NOMINAL_CONVERSION_REQUIRED
+                                .VECTOR_INTERFACE_CONVERSION_REQUIRED
 
                         DotNetClrSignatureConversionUnsupported.NOMINAL_TO_ARRAY ->
                             DotNetClrNominalConstraintUnsupported
