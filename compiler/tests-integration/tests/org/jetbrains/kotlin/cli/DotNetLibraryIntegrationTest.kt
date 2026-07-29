@@ -88,6 +88,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationEvidence
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationTarget
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplication
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplicator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceSource
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataFailure
@@ -4443,12 +4445,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             selectedGenericParameter.transform,
         )
-        assertTrue(
-            nullableDeclarationResolver.resolve(
-                destinationMetadata,
-                DotNetClrNullableDeclarationTarget.MethodReturn(obliviousEcho),
-            ) is DotNetClrNullableDeclarationEvidence.Oblivious
+        val obliviousEvidence = nullableDeclarationResolver.resolve(
+            destinationMetadata,
+            DotNetClrNullableDeclarationTarget.MethodReturn(obliviousEcho),
         )
+        assertTrue(obliviousEvidence is DotNetClrNullableDeclarationEvidence.Oblivious)
         assertEquals(
             false,
             (
@@ -4869,7 +4870,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
             ),
         )
-        assertTrue(
+        val suppressedMalformedEvidence =
             DotNetClrNullableDeclarationResolver(
                 DotNetClrNullableMetadataDecoder(
                     decoderForSelectedMetadata(suppressedMalformedMetadata)
@@ -4878,7 +4879,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ).resolve(
                 suppressedMalformedMetadata,
                 DotNetClrNullableDeclarationTarget.MethodReturn(privateMethod),
-            ) is DotNetClrNullableDeclarationEvidence.Suppressed
+            )
+        assertTrue(
+            suppressedMalformedEvidence is DotNetClrNullableDeclarationEvidence.Suppressed
         )
         val nullableVisibilityType =
             destinationMetadata.typeDefinitions.single { definition ->
@@ -4960,6 +4963,76 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetClrNullableDeclarationFailure.TYPE_NESTING_LIMIT_EXCEEDED,
             excessiveNesting.failure,
         )
+
+        val nullableEvidenceApplicator =
+            DotNetClrNullableEvidenceApplicator(nullableTypeApplicator)
+        val appliedSelectedEvidence = nullableEvidenceApplicator.apply(
+            resolvedNullableReturn,
+            selectedNullableReturn,
+        ) as DotNetClrNullableEvidenceApplication.Applied
+        assertSame(selectedNullableReturn, appliedSelectedEvidence.evidence)
+        assertEquals(appliedNullableReturn, appliedSelectedEvidence.application)
+        assertSame(resolvedNullableReturn, appliedSelectedEvidence.type)
+
+        val appliedContextEvidence = nullableEvidenceApplicator.apply(
+            resolvedNullableTransform.parameterTypes[1],
+            selectedContextParameter,
+        ) as DotNetClrNullableEvidenceApplication.Applied
+        assertSame(selectedContextParameter, appliedContextEvidence.evidence)
+        assertEquals(appliedContextParameter, appliedContextEvidence.application)
+
+        val resolvedObliviousReturn =
+            resolvedNullableSignature(obliviousEcho).returnType
+        val unchangedOblivious = nullableEvidenceApplicator.apply(
+            resolvedObliviousReturn,
+            obliviousEvidence,
+        ) as DotNetClrNullableEvidenceApplication.Oblivious
+        assertSame(resolvedObliviousReturn, unchangedOblivious.type)
+        assertSame(obliviousEvidence, unchangedOblivious.evidence)
+
+        val resolvedPrivateReturn =
+            resolvedNullableSignature(privateMethod).returnType
+        val unchangedSuppressed = nullableEvidenceApplicator.apply(
+            resolvedPrivateReturn,
+            suppressedMalformedEvidence,
+        ) as DotNetClrNullableEvidenceApplication.Suppressed
+        assertSame(resolvedPrivateReturn, unchangedSuppressed.type)
+        assertSame(suppressedMalformedEvidence, unchangedSuppressed.evidence)
+
+        val invalidDeclarationFallback = nullableEvidenceApplicator.apply(
+            resolvedNullableReturn,
+            ambiguousParameter,
+        ) as DotNetClrNullableEvidenceApplication.DiagnosticFallback.InvalidDeclaration
+        assertSame(resolvedNullableReturn, invalidDeclarationFallback.type)
+        assertSame(ambiguousParameter, invalidDeclarationFallback.evidence)
+
+        val mismatchedSelectedEvidence = selectedNullableReturn.copy(
+            transform = DotNetClrNullableTransform.Sequence(
+                listOf(DotNetClrNullableAnnotation.ANNOTATED)
+            )
+        )
+        val flagCountFallback = nullableEvidenceApplicator.apply(
+            resolvedNullableReturn,
+            mismatchedSelectedEvidence,
+        ) as DotNetClrNullableEvidenceApplication.DiagnosticFallback.InvalidTypeApplication
+        assertSame(mismatchedSelectedEvidence, flagCountFallback.evidence)
+        assertSame(resolvedNullableReturn, flagCountFallback.type)
+        assertEquals(
+            DotNetClrNullableTypeApplicationFailure.FLAG_COUNT_MISMATCH,
+            flagCountFallback.application.failure,
+        )
+
+        val physicalTypeFallback = nullableEvidenceApplicator.apply(
+            invalidValueEncoding,
+            selectedNullableReturn,
+        ) as DotNetClrNullableEvidenceApplication.DiagnosticFallback.InvalidTypeApplication
+        assertSame(selectedNullableReturn, physicalTypeFallback.evidence)
+        assertSame(invalidValueEncoding, physicalTypeFallback.type)
+        assertEquals(
+            DotNetClrNullableTypeApplicationFailure.INVALID_PHYSICAL_TYPE,
+            physicalTypeFallback.application.failure,
+        )
+
         val genericAttributeConstructors = genericAttributes.map { attribute ->
             (
                     modernAttributeDecoder.resolveConstructor(
