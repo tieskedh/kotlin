@@ -2,8 +2,9 @@
 
 Date: 2026-07-29
 
-Status: first foreign nullable-aware FIR slice plus exact `NotNullWhen` and parameter `NotNull`
-flow contracts implemented; public Kotlin/.NET source-annotation names remain undecided.
+Status: first foreign nullable-aware FIR slice plus exact `NotNullWhen`, parameter `NotNull`, and
+return-target `NotNullIfNotNull` flow contracts implemented; public Kotlin/.NET source-annotation
+names remain undecided.
 
 ## Governing rule
 
@@ -54,7 +55,7 @@ Primary Kotlin references:
 | Nominal types and members | TypeDef, MethodDef, Field, Property, Event, MethodSemantics | Physical rows retained; no foreign FIR provider | CLR is authoritative for a foreign library. Prefer real Property/Event rows over inferred naming |
 | Signatures and generic constraints | Signature blobs, GenericParam, GenericParamConstraint | Lossless physical and selected-graph models exist | CLR is authoritative for the physical foreign signature. Apply a separate Kotlin usability policy |
 | Declaration nullability | Roslyn `NullableAttribute`, `NullableContextAttribute`, and `NullablePublicOnlyAttribute` | Fully decoded, selected, aligned, and projected to Kotlin qualifier vocabulary below FIR | Trust valid evidence for foreign enhanced types; use flexible types when absent, suppressed, contradictory, or malformed |
-| Conditional/flow nullability | `AllowNull`, `DisallowNull`, `MaybeNull`, `NotNull`, `MaybeNullWhen`, `NotNullWhen`, `NotNullIfNotNull`, `MemberNotNull`, and `MemberNotNullWhen` | `NotNullWhen` and parameter `NotNull` decode to exact common FIR effects; the other positions/attributes remain raw/deferred | Integrate per target and exact contract; do not flatten conditional facts into declaration nullability or bypass Kotlin value stability |
+| Conditional/flow nullability | `AllowNull`, `DisallowNull`, `MaybeNull`, `NotNull`, `MaybeNullWhen`, `NotNullWhen`, `NotNullIfNotNull`, `MemberNotNull`, and `MemberNotNullWhen` | `NotNullWhen`, parameter `NotNull`, and return-target `NotNullIfNotNull` decode to exact common FIR effects; the other positions/attributes remain raw/deferred | Integrate per target and exact contract; do not flatten conditional facts into declaration nullability or bypass Kotlin value stability |
 | Kotlin contracts | No general CLR contract format; CodeAnalysis attributes exactly cover a null-state subset such as `returns(true) implies (x != null)` and non-returning functions | KLIB contract metadata only | Bidirectionally map only the exact subset. Keep `callsInPlace`, arbitrary type predicates, and general multi-value implications in KLIB |
 | Extension call view | `ExtensionAttribute` plus the physical static signature; newer C# extension declarations require a Roslyn metadata probe | Raw custom attributes only | Consume only after receiver, generic ownership, accessibility, and collision rules are proven. Do not infer from the first parameter alone |
 | Variable argument call view | Param-array/collection attributes plus the physical array/collection parameter | Raw custom attributes only | Consume as a Kotlin call-site view only where element and spread semantics are representable. Do not confuse it with Kotlin declaration identity |
@@ -95,6 +96,22 @@ behavior without preserving which method was the Kotlin declaration, which was a
 dispatcher, which methods are bridges, or which physical slots jointly implement one logical
 member. A large assembly-level attribute containing that graph would be Kotlin metadata under a
 different envelope, not greater C# interoperability.
+
+For the exact CodeAnalysis subset, a foreign DLL needs no Kotlin contract record: the importer can
+reconstruct the complete common effect from the standard attribute. That fact does not currently
+make the attribute authoritative for a Kotlin-produced DLL. The embedded KLIB remains a
+self-contained logical Kotlin declaration, and the CLR attribute is its derived foreign view.
+The two routes normalize to the same FIR effect but are not merged for one declaration.
+
+Omitting representable effects from KLIB would be a coherent alternative only if Kotlin/.NET
+deliberately redefined its embedded metadata as a *remainder* that must always be merged with the
+physical assembly. That would make attribute stripping or rewriting alter Kotlin semantics,
+require KLIB-only tools to understand CLR metadata, and require effect ownership/deduplication
+across bridges, dispatchers, and split-interface methods. The existing annotation decoder plumbing
+is reusable for such a design and for projection validation, but its existence does not settle
+that metadata/ABI choice. The current design follows mature-target precedent: common Kotlin
+semantics stay in Kotlin metadata, while standard target metadata supplies an interoperable
+derived view.
 
 ## First FIR slice
 
@@ -158,7 +175,7 @@ therefore per attribute *and per target*, not per attribute name:
 | `NotNull` on a by-value reference parameter | `returns() implies (parameter != null)` | Exact positive common FIR effect; implemented for the closed `string`/`object` slice |
 | `NotNullWhen(Boolean)` on a reference parameter | `returns(value) implies (parameter != null)` | Exact positive common FIR effect; implemented for Boolean-returning methods |
 | `NotNull` / `MaybeNull` on a return | Enhanced call-result type/null-state | Adopt in a separate return-target slice after precedence with Roslyn declaration nullability is pinned |
-| `NotNullIfNotNull(parameterName)` on a return | `(parameter != null) implies returnsNotNull()` | Exact reverse common FIR effect; next eligible slice, but name binding, duplicate attributes, and language-version behavior need adversarial coverage |
+| `NotNullIfNotNull(parameterName)` on a return | `(parameter != null) implies returnsNotNull()` | Exact reverse common FIR effect; implemented with exact Param-name binding, meaningful multiplicity, all-or-nothing invalid evidence, and an older-language-level consumer |
 | `DoesNotReturn` | Unreachable normal continuation / Kotlin `Nothing` call view | Semantically exact, but the physical CLR return signature must remain distinct from the Kotlin control-flow view |
 | `DoesNotReturnIf(Boolean)` on a Boolean parameter | Normal return implies that the argument had the opposite value | Exact subset candidate; keep ordinary Kotlin argument stability and do not rewrite the physical signature |
 | `AllowNull` / `DisallowNull` | Input/precondition type distinct from output/read type | Ordinary by-value parameters and property setters need separate policies; a property annotation cannot be flattened into one Kotlin property type |
@@ -302,6 +319,61 @@ same-name polyfill plus a physically corrupted blob prove duplicates, a wrong co
 payloads, malformed prologs, and value parameters add no effect. The focused test is 1/0/0/0.
 The fresh strict gate is 874/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
 57 library integration tests).
+
+## Exact dependent return-contract slice: `NotNullIfNotNull`
+
+CLR
+
+```csharp
+[return: NotNullIfNotNull(nameof(value))]
+string? Echo(string? value)
+```
+
+and Kotlin Common
+
+```kotlin
+(value != null) implies returnsNotNull()
+```
+
+state the same direction of implication: a non-null argument guarantees a non-null call result.
+They do not state that a null argument forces a null result. The result declaration remains
+nullable because the postcondition depends on caller state.
+
+This slice:
+
+- recognizes only an exact selected-graph, top-level, non-generic
+  `System.Diagnostics.CodeAnalysis.NotNullIfNotNullAttribute` deriving from `System.Attribute`
+  with its single-`String` instance constructor;
+- reads attributes only from the physical return Param row (sequence zero), decodes exactly one
+  non-null string and no named arguments per instance, and binds that string case-sensitively to
+  one physical value Param row on the same MethodDef;
+- requires both the output and named input to be `string` or `object` in the current FIR grammar;
+- emits a common `ConeConditionalReturnsDeclaration` whose `parameter != null` condition implies
+  `Returns(NOT_NULL)`;
+- accepts the platform's meaningful `AllowMultiple=true`: different parameter names produce
+  separate implications, while repeated identical names normalize to one effect;
+- treats the recognized attributes as one evidence set. A malformed payload, null name,
+  unresolved/ambiguous name, named payload, non-reference condition, non-reference result, or
+  ambiguous return Param row contributes no effect at all rather than partially strengthening the
+  return.
+
+Parameter and property targets of the same CLR attribute remain deferred. They describe output
+locations rather than the call result and will require by-reference/property state machinery.
+
+Kotlin source syntax for reverse implications was introduced behind
+`ConditionImpliesReturnsContracts`, but the resolved effect and its KLIB deserializer are common
+compiler representations. A foreign binary contract is therefore consumed when the compiler
+understands that representation even for a Kotlin 2.2 consumer; this does not enable the newer
+contract-authoring syntax in that source.
+
+The real Roslyn fixture proves non-null declared arguments, a nullable argument refined in a
+branch, literal arguments, two independent condition parameters, and `object` results. Negative
+coverage proves the inverse, absence, missing names, value-type conditions, and value-type
+returns do not strengthen the result. A hostile same-name polyfill proves identical duplicate
+normalization and all-or-nothing rejection of mixed named payloads, wrong constructors, null
+names, and missing/non-reference names; a physically corrupted blob proves malformed values add
+no effect. The focused Kotlin 2.2 consumer test is 1/0/0/0. The fresh strict gate is 875/0/0/0
+across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 58 library integration tests).
 
 ## Deferred big decision
 

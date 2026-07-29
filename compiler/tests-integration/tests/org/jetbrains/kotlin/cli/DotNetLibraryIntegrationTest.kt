@@ -20429,6 +20429,330 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testForeignClrNotNullIfNotNullEnhancesFirDataFlow() {
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val toolchain = checkNotNull(csharpToolchain)
+        val systemRuntime = toolchain.referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(systemRuntime.isFile) { "Missing net10 System.Runtime reference assembly" }
+
+        val fixtureSource = File(tmpdir, "foreign-dependent-nullability.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace ForeignDependentContracts
+                {
+                    public interface DependentApi
+                    {
+                        [return: NotNullIfNotNull(nameof(value))]
+                        string? Echo(string? value);
+
+                        [return: NotNullIfNotNull(nameof(first))]
+                        [return: NotNullIfNotNull(nameof(second))]
+                        string? Either(string? first, string? second);
+
+                        [return: NotNullIfNotNull(nameof(value))]
+                        object? Box(string? value);
+
+                        string? Unknown(string? value);
+
+                        [return: NotNullIfNotNull("missing")]
+                        string? Missing(string? value);
+
+                        [return: NotNullIfNotNull(nameof(value))]
+                        int WrongReturn(string? value);
+
+                        [return: NotNullIfNotNull(nameof(value))]
+                        string? WrongCondition(int value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val fixtureAssembly = File(tmpdir, "Foreign.DependentNullability.dll")
+        val fixtureResult = runModernCSharpCompiler(
+            toolchain,
+            fixtureSource,
+            fixtureAssembly,
+        )
+        assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+
+        val hostileSource = File(tmpdir, "foreign-dependent-nullability-hostile.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System;
+
+                namespace System.Diagnostics.CodeAnalysis
+                {
+                    [AttributeUsage(AttributeTargets.ReturnValue, AllowMultiple = true)]
+                    public sealed class NotNullIfNotNullAttribute : Attribute
+                    {
+                        public NotNullIfNotNullAttribute(string parameterName) {}
+                        public NotNullIfNotNullAttribute(int wrongValue) {}
+                        public bool Unexpected;
+                    }
+                }
+
+                namespace HostileDependentContracts
+                {
+                    using System.Diagnostics.CodeAnalysis;
+
+                    public interface HostileDependentApi
+                    {
+                        [return: NotNullIfNotNull("value")]
+                        [return: NotNullIfNotNull("value")]
+                        string? Duplicate(string? value);
+
+                        [return: NotNullIfNotNull("value")]
+                        [return: NotNullIfNotNull("value", Unexpected = true)]
+                        string? MixedInvalid(string? value);
+
+                        [return: NotNullIfNotNull(1)]
+                        string? WrongConstructor(string? value);
+
+                        [return: NotNullIfNotNull(null)]
+                        string? NullName(string? value);
+
+                        [return: NotNullIfNotNull("missing")]
+                        string? Missing(string? value);
+
+                        [return: NotNullIfNotNull("value")]
+                        string? WrongCondition(int value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val hostileAssembly = File(tmpdir, "Foreign.DependentNullability.Hostile.dll")
+        val hostileResult = runModernCSharpCompiler(
+            toolchain,
+            hostileSource,
+            hostileAssembly,
+            additionalArguments = listOf("/nowarn:0436,8625"),
+        )
+        assertEquals(0, hostileResult.exitCode, hostileResult.output)
+
+        val malformedSource = File(tmpdir, "foreign-dependent-nullability-malformed.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace MalformedDependentContracts
+                {
+                    public interface MalformedDependentApi
+                    {
+                        [return: NotNullIfNotNull(nameof(value))]
+                        string? Malformed(string? value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val pristineMalformedAssembly =
+            File(tmpdir, "Foreign.DependentNullability.Malformed.Primitive.dll")
+        val malformedResult = runModernCSharpCompiler(
+            toolchain,
+            malformedSource,
+            pristineMalformedAssembly,
+        )
+        assertEquals(0, malformedResult.exitCode, malformedResult.output)
+        val malformedMetadata = DotNetClrMetadataReader.read(pristineMalformedAssembly)
+        val malformedApi = malformedMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "MalformedDependentContracts" &&
+                    type.metadataName == "MalformedDependentApi"
+        }
+        val malformedMethod = malformedMetadata.methodDefinitions.single { method ->
+            method.declaringType == malformedApi.handle &&
+                    method.name == "Malformed"
+        }
+        val malformedReturn = malformedMetadata.parameterDefinitions.single { parameter ->
+            parameter.declaringMethod == malformedMethod.handle &&
+                    parameter.isReturn
+        }
+        val malformedAttribute = malformedMetadata.customAttributes.single { attribute ->
+            if (attribute.parent != malformedReturn.handle) return@single false
+            val constructor = malformedMetadata.memberReferences.singleOrNull { member ->
+                member.handle == attribute.constructor
+            } ?: return@single false
+            malformedMetadata.typeReferences.any { type ->
+                type.handle == constructor.parent &&
+                        type.namespaceName == "System.Diagnostics.CodeAnalysis" &&
+                        type.metadataName == "NotNullIfNotNullAttribute"
+            }
+        }
+        val malformedImage = pristineMalformedAssembly.readBytes()
+        val malformedTables = locateClrMetadataTables(malformedImage)
+        val malformedValueIndex = readLittleEndianIndex(
+            malformedImage,
+            malformedTables.rowOffset(12, malformedAttribute.handle.row) +
+                    malformedTables.hasCustomAttributeIndexSize +
+                    malformedTables.customAttributeTypeIndexSize,
+            malformedTables.blobIndexSize,
+        )
+        val malformedValueOffset =
+            malformedTables.blobContentOffset(malformedImage, malformedValueIndex)
+        assertEquals(1, malformedImage[malformedValueOffset].toInt() and 0xff)
+        malformedImage[malformedValueOffset] = 0
+        val malformedAssembly =
+            File(tmpdir, "Foreign.DependentNullability.Malformed.dll").apply {
+                writeBytes(malformedImage)
+            }
+
+        fun compileForeignConsumer(
+            sourceName: String,
+            sourceText: String,
+            classpath: List<File>,
+        ): Pair<String, ExitCode> {
+            val source = File(tmpdir, sourceName).apply { writeText(sourceText) }
+            return AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    K2DotNetCompilerArguments::noStdlib.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    classpath.joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::languageVersion.cliArgument,
+                    "2.2",
+                    K2DotNetCompilerArguments::moduleName.cliArgument,
+                    "ForeignDependentNullabilityConsumer",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "$sourceName.il").path,
+                )
+            )
+        }
+
+        val [dependentDiagnostics, dependentExitCode] = compileForeignConsumer(
+            "foreign-dependent-nullability.kt",
+            """
+            package consumer
+
+            import ForeignDependentContracts.DependentApi
+
+            public fun acceptedKnown(api: DependentApi, value: String): Int =
+                api.Echo(value).length + 101
+
+            public fun acceptedBranch(api: DependentApi, value: String?): Int {
+                if (value != null) return api.Echo(value).length + 102
+                return 0
+            }
+
+            public fun acceptedFirst(api: DependentApi): Int =
+                api.Either("first", null).length + 103
+
+            public fun acceptedSecond(api: DependentApi): Int =
+                api.Either(null, "second").length + 104
+
+            public fun acceptedBox(api: DependentApi): Int =
+                api.Box("value").hashCode() + 105
+
+            public fun rejectedInverse(api: DependentApi, value: String?): Int {
+                if (value == null) return api.Echo(value).length + 211
+                return 0
+            }
+
+            public fun rejectedUnknown(api: DependentApi): Int =
+                api.Unknown("value").length + 212
+
+            public fun rejectedMissing(api: DependentApi): Int =
+                api.Missing("value").length + 213
+
+            public fun rejectedWrongCondition(api: DependentApi): Int =
+                api.WrongCondition(1).length + 214
+            """.trimIndent(),
+            listOf(fixtureAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, dependentExitCode, dependentDiagnostics)
+        assertFalse("api.Echo(value).length + 101" in dependentDiagnostics) {
+            dependentDiagnostics
+        }
+        assertFalse("api.Echo(value).length + 102" in dependentDiagnostics) {
+            dependentDiagnostics
+        }
+        assertFalse("api.Either(\"first\", null).length + 103" in dependentDiagnostics) {
+            dependentDiagnostics
+        }
+        assertFalse("api.Either(null, \"second\").length + 104" in dependentDiagnostics) {
+            dependentDiagnostics
+        }
+        assertFalse("api.Box(\"value\").hashCode() + 105" in dependentDiagnostics) {
+            dependentDiagnostics
+        }
+        assertTrue("api.Echo(value).length + 211" in dependentDiagnostics) {
+            dependentDiagnostics
+        }
+        assertTrue("api.Unknown(\"value\").length + 212" in dependentDiagnostics) {
+            dependentDiagnostics
+        }
+        assertTrue("api.Missing(\"value\").length + 213" in dependentDiagnostics) {
+            dependentDiagnostics
+        }
+        assertTrue("api.WrongCondition(1).length + 214" in dependentDiagnostics) {
+            dependentDiagnostics
+        }
+
+        val [hostileDiagnostics, hostileExitCode] = compileForeignConsumer(
+            "foreign-dependent-nullability-hostile.kt",
+            """
+            package consumer
+
+            import HostileDependentContracts.HostileDependentApi
+            import MalformedDependentContracts.MalformedDependentApi
+
+            public fun acceptedDuplicate(api: HostileDependentApi): Int =
+                api.Duplicate("value").length + 301
+
+            public fun rejectedMixed(api: HostileDependentApi): Int =
+                api.MixedInvalid("value").length + 402
+
+            public fun rejectedWrongConstructor(api: HostileDependentApi): Int =
+                api.WrongConstructor("value").length + 403
+
+            public fun rejectedNullName(api: HostileDependentApi): Int =
+                api.NullName("value").length + 404
+
+            public fun rejectedMissing(api: HostileDependentApi): Int =
+                api.Missing("value").length + 405
+
+            public fun rejectedWrongCondition(api: HostileDependentApi): Int =
+                api.WrongCondition(1).length + 406
+
+            public fun rejectedMalformed(api: MalformedDependentApi): Int =
+                api.Malformed("value").length + 407
+            """.trimIndent(),
+            listOf(hostileAssembly, malformedAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, hostileExitCode, hostileDiagnostics)
+        assertFalse("api.Duplicate(\"value\").length + 301" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("api.MixedInvalid(\"value\").length + 402" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("api.WrongConstructor(\"value\").length + 403" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("api.NullName(\"value\").length + 404" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("api.Missing(\"value\").length + 405" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("api.WrongCondition(1).length + 406" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("api.Malformed(\"value\").length + 407" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+    }
+
+    @Test
     fun testMetadataCompilerRecognizesDotNetAsItsOwnPlatform() {
         val unknownPlatforms = mutableListOf<String>()
         val targetPlatform = MetadataConfigurationUpdater.computeTargetPlatformOrNull(

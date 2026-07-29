@@ -25,6 +25,30 @@ sealed interface DotNetClrNotNullMetadataResolution {
     ) : DotNetClrNotNullMetadataResolution
 }
 
+enum class DotNetClrNotNullIfNotNullMetadataFailure {
+    VALUE_DECODING_FAILED,
+    INVALID_VALUE_SHAPE,
+}
+
+sealed interface DotNetClrNotNullIfNotNullMetadataResolution {
+    data object Absent : DotNetClrNotNullIfNotNullMetadataResolution
+
+    data class DecodedAttribute(
+        val attribute: DotNetClrMetadataHandle,
+        val parameterName: String,
+    )
+
+    data class Decoded(
+        val attributes: List<DecodedAttribute>,
+    ) : DotNetClrNotNullIfNotNullMetadataResolution
+
+    data class Invalid(
+        val failure: DotNetClrNotNullIfNotNullMetadataFailure,
+        val attributes: List<DotNetClrMetadataHandle>,
+        val valueDecoding: DotNetClrCustomAttributeValueDecoding? = null,
+    ) : DotNetClrNotNullIfNotNullMetadataResolution
+}
+
 enum class DotNetClrNotNullWhenMetadataFailure {
     DUPLICATE_ATTRIBUTE,
     VALUE_DECODING_FAILED,
@@ -136,6 +160,111 @@ class DotNetClrNotNullMetadataDecoder(
     private companion object {
         const val ATTRIBUTE_NAMESPACE = "System.Diagnostics.CodeAnalysis"
         const val ATTRIBUTE_NAME = "NotNullAttribute"
+    }
+}
+
+/**
+ * Decodes Roslyn's conditional output postcondition without binding its parameter-name payload.
+ *
+ * The standard attribute deliberately allows multiple instances. All recognized instances are
+ * decoded as one evidence set so the later declaration layer can reject an invalid name or
+ * inapplicable target without partially strengthening the return value.
+ */
+class DotNetClrNotNullIfNotNullMetadataDecoder(
+    private val customAttributeDecoder: DotNetClrCustomAttributeDecoder,
+) {
+    fun decode(
+        assembly: DotNetClrAssemblyMetadata,
+        output: DotNetClrMetadataHandle,
+    ): DotNetClrNotNullIfNotNullMetadataResolution {
+        val candidates = assembly.customAttributes
+            .asSequence()
+            .filter { attribute -> attribute.parent == output }
+            .mapNotNull { attribute ->
+                val constructor = when (
+                    val resolution =
+                        customAttributeDecoder.resolveConstructor(assembly, attribute)
+                ) {
+                    is DotNetClrCustomAttributeConstructorResolution.Resolved ->
+                        resolution.constructor
+                    is DotNetClrCustomAttributeConstructorResolution.Invalid ->
+                        return@mapNotNull null
+                }
+                val definition = constructor.attributeType.type.definition
+                if (
+                    definition.declaringType != null ||
+                    definition.namespaceName != ATTRIBUTE_NAMESPACE ||
+                    definition.metadataName != ATTRIBUTE_NAME ||
+                    constructor.attributeType.arguments.isNotEmpty() ||
+                    constructor.signature.parameterTypes.singleOrNull() != STRING_TYPE
+                ) {
+                    return@mapNotNull null
+                }
+                RecognizedAttribute(attribute, constructor)
+            }
+            .toList()
+        if (candidates.isEmpty()) {
+            return DotNetClrNotNullIfNotNullMetadataResolution.Absent
+        }
+
+        val decodedAttributes =
+            mutableListOf<DotNetClrNotNullIfNotNullMetadataResolution.DecodedAttribute>()
+        for (candidate in candidates) {
+            val decoded = when (
+                val valueDecoding = customAttributeDecoder.decodeValue(
+                    assembly,
+                    candidate.attribute,
+                    candidate.constructor,
+                )
+            ) {
+                is DotNetClrCustomAttributeValueDecoding.Decoded -> valueDecoding.attribute
+                is DotNetClrCustomAttributeValueDecoding.Invalid ->
+                    return DotNetClrNotNullIfNotNullMetadataResolution.Invalid(
+                        failure =
+                            DotNetClrNotNullIfNotNullMetadataFailure.VALUE_DECODING_FAILED,
+                        attributes =
+                            candidates.map { recognized -> recognized.attribute.handle },
+                        valueDecoding = valueDecoding,
+                    )
+                is DotNetClrCustomAttributeValueDecoding.Unsupported ->
+                    return DotNetClrNotNullIfNotNullMetadataResolution.Invalid(
+                        failure =
+                            DotNetClrNotNullIfNotNullMetadataFailure.VALUE_DECODING_FAILED,
+                        attributes =
+                            candidates.map { recognized -> recognized.attribute.handle },
+                        valueDecoding = valueDecoding,
+                    )
+            }
+            val argument = decoded.fixedArguments.singleOrNull()
+            val parameterName =
+                (argument as? DotNetClrCustomAttributeValue.StringValue)?.value
+            if (parameterName == null || decoded.namedArguments.isNotEmpty()) {
+                return DotNetClrNotNullIfNotNullMetadataResolution.Invalid(
+                    failure =
+                        DotNetClrNotNullIfNotNullMetadataFailure.INVALID_VALUE_SHAPE,
+                    attributes =
+                        candidates.map { recognized -> recognized.attribute.handle },
+                )
+            }
+            decodedAttributes +=
+                DotNetClrNotNullIfNotNullMetadataResolution.DecodedAttribute(
+                    candidate.attribute.handle,
+                    parameterName,
+                )
+        }
+        return DotNetClrNotNullIfNotNullMetadataResolution.Decoded(decodedAttributes)
+    }
+
+    private data class RecognizedAttribute(
+        val attribute: DotNetClrCustomAttribute,
+        val constructor: DotNetClrResolvedCustomAttributeConstructor,
+    )
+
+    private companion object {
+        const val ATTRIBUTE_NAMESPACE = "System.Diagnostics.CodeAnalysis"
+        const val ATTRIBUTE_NAME = "NotNullIfNotNullAttribute"
+        val STRING_TYPE =
+            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.STRING)
     }
 }
 
