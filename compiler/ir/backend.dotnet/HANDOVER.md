@@ -2699,6 +2699,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   properties and pins exact MemberRefs on CLR 4.8 and CoreCLR 10. Its `AllowNull` negative also
   covers both real compiler layouts: Property-row evidence under Framework and setter-Param
   evidence under modern Roslyn. The focused test is 1/0/0/0.
+- Exact method-level CLR deprecation is implemented. The decoder recognizes only the selected
+  core-library `System.ObsoleteAttribute` TypeDef and its three standard constructors, preserving
+  message, `IsError`, and modern `DiagnosticId`/`UrlFormat` values. The provider synthesizes
+  Common `kotlin.Deprecated`: omitted/null messages use `Deprecated in .NET`, false/default maps
+  to `WARNING`, and true maps to `ERROR`, never `HIDDEN`. Warning calls still codegen through the
+  exact retained MethodDef; error calls stay resolvable and fail through the Common deprecation
+  checker. Real Framework and modern fixtures cover the constructor/severity/message matrix and
+  modern named diagnostic metadata. A source-defined same-name attribute and a physically
+  corrupted core blob add no deprecation. The Common deprecation provider is created through the
+  foreign-annotation path: CLR fixes `ObsoleteAttribute` to `Inherited=false`, so a Kotlin
+  override remains current when called through its own type even though the underlying interface
+  member remains deprecated. The focused test is 1/0/0/0. The fresh strict gate is 881/0/0/0
+  across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 64 library integration tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
@@ -2758,7 +2771,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 880 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 881 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2803,6 +2816,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
    preconditions. The first non-indexed interface-property slice has landed and withholds
    classifiers whose accessors need distinct read/write states; `ref`/`out` and any broader
    foreign-property view remain separate-state work.
+   Exact selected-core method `ObsoleteAttribute` now maps to Common warning/error deprecation;
+   other attribute targets and semantic markers remain separately reviewed slices.
    Member attributes must preserve Kotlin smart-cast stability rather than adopt Roslyn's milder
    member-state rules. Extensions, param arrays, indexers, events, and semantic markers
    each require their own documented contract. Preserve Kotlin declaration identity and Common

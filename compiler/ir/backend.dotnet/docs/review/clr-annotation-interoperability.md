@@ -6,7 +6,8 @@ Status: first foreign nullable-aware FIR slice plus exact `NotNullWhen`, paramet
 return-target `NotNull`/`MaybeNull` result enhancement, return-target `NotNullIfNotNull`, and
 parameter-target `DoesNotReturnIf` flow contracts implemented; method-target `DoesNotReturn` also
 supplies a logical Kotlin `Nothing` view, and ordinary by-value parameters honor exact
-`AllowNull`/`DisallowNull` input preconditions. Public Kotlin/.NET source-annotation names remain
+`AllowNull`/`DisallowNull` input preconditions. Closed non-indexed CLR interface properties and
+their exact accessor binding are implemented. Public Kotlin/.NET source-annotation names remain
 undecided.
 
 ## Governing rule
@@ -66,7 +67,7 @@ Primary Kotlin references:
 | Optional/default values | Param flags and Constant rows | Physical values retained; Kotlin export uses `$default` dispatchers | A CLR constant is authoritative for a foreign CLR optional parameter, but it is not a Kotlin default declaration. Kotlin defaults keep KLIB/dispatcher semantics |
 | Indexers/default member | Property signatures and `DefaultMemberAttribute` | Property rows retained | Prefer the property row; use the attribute only for the default/indexer call view after collision rules are specified |
 | Compiler-generated declarations | `CompilerGeneratedAttribute` and physical flags/names | Kotlin compiler ABI marker plus `EditorBrowsable(Never)` on selected internals; no general marker | May guide tooling, but never infer a Kotlin logical role or hide ABI solely from this marker |
-| Deprecation | `ObsoleteAttribute` | Raw custom attributes only | Project to Kotlin deprecation diagnostics after constructor/named-argument policy is specified |
+| Deprecation | `ObsoleteAttribute` | Exact selected-core method projection implemented | Project exact method-level message/severity in the first slice below; retain modern diagnostic ID/URL metadata because Kotlin has no dynamic diagnostic-ID channel |
 | Required/init/read-only/by-ref-like semantics | `RequiredMemberAttribute`, `IsExternalInit`, `IsReadOnlyAttribute`, `IsByRefLikeAttribute`, modreqs, and physical flags | Several physical/semantic classifiers exist; no FIR view | Consume only as the selected profile defines them. Attribute names without exact selected identity are insufficient |
 | Friend access | `InternalsVisibleToAttribute` | KLIB friend list and emitted CLR attribute are both validated | Deliberate dual view: KLIB grants Kotlin compiler friendship; CLR metadata grants runtime/C# access |
 | Target framework | `TargetFrameworkAttribute` | Emitted and validated with the selected product/profile | CLR-facing artifact identity; not a Kotlin declaration fact |
@@ -785,6 +786,67 @@ The attack rules out three tempting partial projections:
   read-only one despite the provider's complete-classifier promise;
 - accepting an indexer as a property loses its value-parameter semantics. Indexers need their own
   documented Kotlin view.
+
+## Exact CLR method-deprecation projection
+
+`System.ObsoleteAttribute` and `kotlin.Deprecated` share the declaration-use fact needed by the
+compiler: a message plus warning-or-error severity. Kotlin Common is therefore authoritative for
+the diagnostic view, while the physical CLR attribute remains the foreign binary authority. The
+first slice is deliberately method-only inside the already closed interface provider:
+
+- recognize exactly the selected core-library `System.ObsoleteAttribute` TypeDef, resolved from
+  the same physical core assembly as `System.Attribute`; a source-defined namespace/name
+  look-alike is not the platform attribute;
+- require exactly one MethodDef attribute and one of the standard resolved constructors `()`,
+  `(string)`, or `(string, bool)`;
+- decode the complete value, accepting only the standard modern `DiagnosticId` and `UrlFormat`
+  named string properties in addition to those constructors;
+- map omitted or null `Message` to `Deprecated in .NET`, matching the JVM importer's synthetic
+  `Deprecated in Java` fallback;
+- map default/false `IsError` to `DeprecationLevel.WARNING` and true to
+  `DeprecationLevel.ERROR`. Never map to `HIDDEN`: an error-level CLR member remains name
+  resolvable, whereas Kotlin `HIDDEN` removes it from source resolution;
+- treat the synthesized annotation as foreign when Common creates its deprecation provider.
+  Kotlin-authored `kotlin.Deprecated` propagates to overrides, but the CLR platform declaration
+  fixes `ObsoleteAttribute` to `Inherited=false`; matching the JVM foreign-import path prevents
+  a Kotlin override from acquiring a deprecation that is not present on that override;
+- retain `DiagnosticId` and `UrlFormat` in the physical CLR metadata but do not invent a Kotlin
+  replacement expression or dynamic warning ID. Kotlin's diagnostic system has no per-declaration
+  equivalent of Roslyn's configurable diagnostic ID/URL.
+
+The provider synthesizes an ordinary resolved `kotlin.Deprecated` annotation and lets the Common
+deprecation machinery issue the diagnostic. Codegen continues to bind the same retained
+MethodDef; deprecation never changes the physical signature or deployment edge. Class,
+property/accessor, constructor, event, and field targets remain separate projections because the
+current provider does not expose all of those declaration kinds and accessor-local deprecation
+can differ across one Kotlin property.
+
+The attack rejects several superficially simpler policies:
+
+- matching only `System.ObsoleteAttribute` spelling would trust a user look-alike;
+- treating `IsError=true` as `HIDDEN` would make the Kotlin view stricter than C# by removing a
+  still-resolvable member;
+- dropping a malformed duplicate/value into a best-effort warning would manufacture a contract
+  from invalid metadata;
+- ignoring a valid deprecation because Kotlin cannot reproduce `DiagnosticId` would discard the
+  exact common warning/error fact. The CLR-specific ID and URL remain retained foreign metadata.
+
+Implementation evidence: real CLR 4.8 and CoreCLR 10 reference profiles exercise all three
+standard constructors, omitted/null/message payloads, warning and error severity, and a current
+control method. The modern fixture also carries `DiagnosticId` and `UrlFormat`. Warning-level
+methods remain callable through exact backend binding; error-level methods remain resolvable but
+receive the Common deprecation error. A source-defined `System.ObsoleteAttribute` look-alike and a
+physically corrupted core attribute produce no deprecation. A Kotlin override remains current
+when called through its own type, while a call through the obsolete CLR interface remains
+deprecated. The focused test is 1/0/0/0. The fresh strict gate is 881/0/0/0 across 16 XML suites
+(796 FIR/IL/box, 21 generated CLI, and 64 library integration tests).
+
+References:
+
+- <https://learn.microsoft.com/en-us/dotnet/api/system.obsoleteattribute>
+- <https://learn.microsoft.com/en-us/dotnet/fundamentals/syslib-diagnostics/obsoletions-overview>
+- <https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-deprecated/>
+- <https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-deprecation-level/>
 
 ## Deferred big decision
 

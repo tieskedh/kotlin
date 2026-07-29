@@ -41,6 +41,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullWhenMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullWhenMetadataResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrObsoleteMetadataDecoder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrObsoleteMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertyDefinition
@@ -84,7 +86,12 @@ import org.jetbrains.kotlin.fir.declarations.builder.buildProperty
 import org.jetbrains.kotlin.fir.declarations.builder.buildPropertyAccessor
 import org.jetbrains.kotlin.fir.declarations.builder.buildRegularClass
 import org.jetbrains.kotlin.fir.declarations.builder.buildValueParameter
+import org.jetbrains.kotlin.fir.declarations.getDeprecationsProviderFromAnnotations
 import org.jetbrains.kotlin.fir.declarations.impl.FirResolvedDeclarationStatusImpl
+import org.jetbrains.kotlin.fir.expressions.builder.buildAnnotation
+import org.jetbrains.kotlin.fir.expressions.builder.buildAnnotationArgumentMapping
+import org.jetbrains.kotlin.fir.expressions.builder.buildEnumEntryDeserializedAccessExpression
+import org.jetbrains.kotlin.fir.expressions.builder.buildLiteralExpression
 import org.jetbrains.kotlin.fir.resolve.providers.FirSymbolNamesProvider
 import org.jetbrains.kotlin.fir.resolve.providers.FirSymbolNamesProviderWithoutCallables
 import org.jetbrains.kotlin.fir.resolve.providers.FirSymbolProvider
@@ -103,13 +110,17 @@ import org.jetbrains.kotlin.fir.types.ConeKotlinType
 import org.jetbrains.kotlin.fir.types.ConeRigidType
 import org.jetbrains.kotlin.fir.types.builder.buildResolvedTypeRef
 import org.jetbrains.kotlin.fir.types.coneType
+import org.jetbrains.kotlin.fir.types.constructClassType
 import org.jetbrains.kotlin.fir.types.constructType
+import org.jetbrains.kotlin.fir.types.toLookupTag
 import org.jetbrains.kotlin.fir.types.typeContext
 import org.jetbrains.kotlin.fir.types.withNullability
 import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.name.StandardClassIds
+import org.jetbrains.kotlin.types.ConstantValueKind
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -572,6 +583,36 @@ internal class DotNetClrFirSymbolProvider(
             method,
             valueParameters,
         )
+        annotationServices.obsolete(assembly, method)?.let { obsolete ->
+            annotations += buildDeprecatedAnnotation(obsolete)
+        }
+    }.apply {
+        replaceDeprecationsProvider(annotations.getDeprecationsProviderFromAnnotations(session, fromJava = true))
+    }
+
+    private fun buildDeprecatedAnnotation(
+        obsolete: DotNetClrObsoleteMetadataResolution.Decoded,
+    ) = buildAnnotation {
+        annotationTypeRef = buildResolvedTypeRef {
+            coneType =
+                StandardClassIds.Annotations.Deprecated.toLookupTag().constructClassType()
+        }
+        argumentMapping = buildAnnotationArgumentMapping {
+            mapping[StandardClassIds.Annotations.ParameterNames.deprecatedMessage] =
+                buildLiteralExpression(
+                    source = null,
+                    kind = ConstantValueKind.String,
+                    value = obsolete.message ?: "Deprecated in .NET",
+                    setType = true,
+                )
+            mapping[StandardClassIds.Annotations.ParameterNames.deprecatedLevel] =
+                buildEnumEntryDeserializedAccessExpression {
+                    enumClassId = StandardClassIds.DeprecationLevel
+                    enumEntryName = Name.identifier(
+                        if (obsolete.isError) "ERROR" else "WARNING"
+                    )
+                }
+        }
     }
 
     private fun parameterName(
@@ -652,9 +693,17 @@ internal class DotNetClrFirSymbolProvider(
         private val notNullDecoder: DotNetClrNotNullMetadataDecoder?,
         private val notNullIfNotNullDecoder: DotNetClrNotNullIfNotNullMetadataDecoder?,
         private val notNullWhenDecoder: DotNetClrNotNullWhenMetadataDecoder?,
+        private val obsoleteDecoder: DotNetClrObsoleteMetadataDecoder?,
     ) {
         private val inputNullabilityEnhancer = DotNetClrInputNullabilityEnhancer()
         private val returnNullabilityEnhancer = DotNetClrReturnNullabilityEnhancer()
+
+        fun obsolete(
+            assembly: DotNetClrAssemblyMetadata,
+            method: DotNetClrMethodDefinition,
+        ): DotNetClrObsoleteMetadataResolution.Decoded? =
+            obsoleteDecoder?.decode(assembly, method.handle)
+                as? DotNetClrObsoleteMetadataResolution.Decoded
 
         fun returnsNothing(
             assembly: DotNetClrAssemblyMetadata,
@@ -995,6 +1044,7 @@ internal class DotNetClrFirSymbolProvider(
                         notNullDecoder = null,
                         notNullIfNotNullDecoder = null,
                         notNullWhenDecoder = null,
+                        obsoleteDecoder = null,
                     )
                 }
                 val serializedTypeResolver = DotNetClrSerializedTypeResolver(
@@ -1032,6 +1082,20 @@ internal class DotNetClrFirSymbolProvider(
                     DotNetClrNotNullIfNotNullMetadataDecoder(customAttributeDecoder)
                 val notNullWhenDecoder =
                     DotNetClrNotNullWhenMetadataDecoder(customAttributeDecoder)
+                val obsoleteDecoder = when (
+                    val resolution = typeResolver.resolveTopLevelType(
+                        coreTypes.systemAttribute.assembly,
+                        "System",
+                        "ObsoleteAttribute",
+                    )
+                ) {
+                    is DotNetClrTypeResolution.Resolved ->
+                        DotNetClrObsoleteMetadataDecoder(
+                            customAttributeDecoder,
+                            resolution.type,
+                        )
+                    is DotNetClrTypeResolution.Unresolved -> null
+                }
                 val systemValueType =
                     resolveSystemType(assemblies, typeResolver, "ValueType")
                         ?: return unavailable(
@@ -1044,6 +1108,7 @@ internal class DotNetClrFirSymbolProvider(
                             notNullDecoder,
                             notNullIfNotNullDecoder,
                             notNullWhenDecoder,
+                            obsoleteDecoder,
                         )
                 val systemNullable =
                     resolveSystemType(assemblies, typeResolver, "Nullable`1")
@@ -1057,6 +1122,7 @@ internal class DotNetClrFirSymbolProvider(
                             notNullDecoder,
                             notNullIfNotNullDecoder,
                             notNullWhenDecoder,
+                            obsoleteDecoder,
                         )
                 val declarationResolver = DotNetClrNullableDeclarationResolver(
                     DotNetClrNullableMetadataDecoder(customAttributeDecoder)
@@ -1085,6 +1151,7 @@ internal class DotNetClrFirSymbolProvider(
                     notNullDecoder,
                     notNullIfNotNullDecoder,
                     notNullWhenDecoder,
+                    obsoleteDecoder,
                 )
             }
 
@@ -1098,6 +1165,7 @@ internal class DotNetClrFirSymbolProvider(
                 notNullDecoder: DotNetClrNotNullMetadataDecoder,
                 notNullIfNotNullDecoder: DotNetClrNotNullIfNotNullMetadataDecoder,
                 notNullWhenDecoder: DotNetClrNotNullWhenMetadataDecoder,
+                obsoleteDecoder: DotNetClrObsoleteMetadataDecoder?,
             ): ForeignAnnotationServices =
                 ForeignAnnotationServices(
                     declarationResolver = null,
@@ -1112,6 +1180,7 @@ internal class DotNetClrFirSymbolProvider(
                     notNullDecoder = notNullDecoder,
                     notNullIfNotNullDecoder = notNullIfNotNullDecoder,
                     notNullWhenDecoder = notNullWhenDecoder,
+                    obsoleteDecoder = obsoleteDecoder,
                 )
 
             private fun resolveCustomAttributeCoreTypes(
