@@ -2600,7 +2600,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `MemberNotNullWhen` remain useful retained CLR metadata but cannot grant a Kotlin smart cast
   around mutable, getter-backed, public/open, or cross-module property instability.
   `MaybeNull`/`MaybeNullWhen` weakens state rather than proving a positive contract;
-  `AllowNull`/`DisallowNull` needs separate input/setter views; return-target
+  ordinary by-value `AllowNull`/`DisallowNull` is implemented, while properties and `ref`/`out`
+  need separate views; return-target
   `NotNull`/`MaybeNull` needs call-result enhancement. `NotNullIfNotNull` is the exact common
   reverse-effect candidate implemented below.
 - The exact dependent-return postcondition is implemented.
@@ -2656,6 +2657,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   named payloads, wrong targets, mixed valid/invalid evidence, and malformed shared values. The
   focused test is 1/0/0/0. The fresh strict gate is 878/0/0/0 across 16 XML suites (796
   FIR/IL/box, 21 generated CLI, and 61 library integration tests).
+- The exact ordinary by-value parameter precondition view is implemented.
+  `DotNetClrAllowNullMetadataDecoder` and `DotNetClrDisallowNullMetadataDecoder` recognize exact
+  selected-graph parameterless attributes on one physical value Param. Ordinary nullable
+  declaration metadata supplies the base qualifier; `DotNetClrInputNullabilityEnhancer` applies
+  valid `DisallowNull`, otherwise valid `AllowNull`. Exact conflicts select `DisallowNull` in
+  Roslyn call-boundary order. Invalid `DisallowNull` cannot strengthen, while invalid `AllowNull`
+  forces flexibility so broken weakening evidence cannot retain a rigid non-null restriction.
+  The slice excludes properties and `ref`/`out`, which need separate read/write or pre/post
+  states. Real Roslyn metadata composes input preconditions with unconditional and conditional
+  parameter postconditions. Pure-matrix, hostile polyfill, and corrupted-blob cases cover
+  nullable/non-null/oblivious bases, conflicts, duplicates, wrong constructors, named payloads,
+  wrong targets, mixed valid/invalid evidence, and malformed values. The focused test is
+  1/0/0/0. The fresh strict gate is 879/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
+  CLI, and 62 library integration tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
@@ -2719,7 +2734,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 878 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 879 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2760,6 +2775,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
    `DoesNotReturnIf` have landed as common FIR effects; method-target `DoesNotReturn` now maps to a
    logical `Nothing` view while retaining the physical signature. Return-target
    `NotNull`/`MaybeNull` now enhances the logical result with documented Roslyn precedence.
+   Ordinary by-value reference parameters now honor exact `AllowNull`/`DisallowNull`
+   preconditions; properties and `ref`/`out` remain separate-view work.
    Member attributes must preserve Kotlin smart-cast stability rather than adopt Roslyn's milder
    member-state rules. Extensions, param arrays, properties/indexers, events, and semantic markers
    each require their own documented contract. Preserve Kotlin declaration identity and Common

@@ -2041,6 +2041,17 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   declaration result:
   **Architecturally wrong and should be changed; invalid weakening evidence must fall back to
   flexibility**.
+- Applying exact `AllowNull`/`DisallowNull` after ordinary declaration nullability to form the
+  logical input type of an ordinary by-value foreign parameter:
+  **Correct direction**.
+- Giving exact, well-formed parameter `DisallowNull` precedence over exact `AllowNull`:
+  **Reasonable platform-specific divergence because Roslyn applies that order at call sites**.
+- Flattening a property's or `ref`/`out` parameter's `AllowNull`/`DisallowNull` precondition and
+  output/read state into one Kotlin declaration type:
+  **Architecturally wrong and should be changed**.
+- Ignoring malformed or duplicated parameter `AllowNull` and retaining a rigid non-null input:
+  **Architecturally wrong and should be changed; invalid weakening evidence must fall back to
+  flexibility**.
 - Treating `MaybeNull`/`MaybeNullWhen` state weakening as though it were a positive Kotlin
   contract:
   **Architecturally wrong and should be changed**.
@@ -2108,9 +2119,10 @@ mutable property does not make a later read smart-castable. Duplicate, malformed
 wrong-constructor, named-payload, and non-reference shapes contribute no effect.
 
 The wider CodeAnalysis family is classified per target rather than per name. Return-target
-`NotNull`/`MaybeNull` needs call-result enhancement; `AllowNull`/`DisallowNull` needs a distinct
-input/setter view; `MaybeNull`/`MaybeNullWhen` weakens state and cannot be encoded as a positive
-contract; `NotNullIfNotNull` and `DoesNotReturnIf` have exact common-effect candidates; and member
+`NotNull`/`MaybeNull` uses call-result enhancement; ordinary by-value
+`AllowNull`/`DisallowNull` uses a distinct input view, while properties and `ref`/`out` remain
+separate-view work; `MaybeNull`/`MaybeNullWhen` weakens state and cannot be encoded as a positive
+contract; `NotNullIfNotNull` and `DoesNotReturnIf` have exact common effects; and member
 attributes cannot bypass Kotlin stability. Common contracts name receivers and parameters, not
 arbitrary string-selected fields/properties. Kotlin also treats mutable, getter-backed,
 public/open, and cross-module public property reads as unstable in relevant circumstances, so the
@@ -2218,3 +2230,19 @@ non-return precedence. Hostile duplicates, wrong constructors, named payloads, w
 mixed valid/invalid evidence, and corrupted blobs prove the failure matrix. The focused test is
 1/0/0/0. The fresh strict gate is 878/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
 CLI, and 61 library integration tests).
+
+Ordinary by-value reference parameters now also apply exact `AllowNullAttribute` and
+`DisallowNullAttribute` after the declaration qualifier to form the Kotlin call-boundary input
+type. Exact `DisallowNull` wins exact `AllowNull`, following Roslyn's
+`ApplyLValueAnnotations` order. Invalid `DisallowNull` cannot strengthen; invalid `AllowNull`
+forces flexibility so broken weakening evidence cannot preserve an unjustified non-null
+restriction. This is intentionally not C# method-entry body analysis.
+
+Properties and `ref`/`out` remain excluded: each needs distinct input/output or read/write views,
+and flattening those states into one Kotlin declaration type would be unsound. The implementation
+uses structured parameterless-attribute decoders and a pure input enhancer. Real Roslyn metadata
+proves nullable/non-null/oblivious inputs, exact conflicts, and composition with `NotNull` and
+`NotNullWhen`; hostile and corrupted metadata covers duplicates, wrong constructors, named
+payloads, wrong targets, mixed valid/invalid evidence, and malformed values. The focused test is
+1/0/0/0. The fresh strict gate is 879/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
+CLI, and 62 library integration tests).
