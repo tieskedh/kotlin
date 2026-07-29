@@ -11,6 +11,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReferenceBinder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrClasspathAssembly
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeCoreTypes
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeDecoder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnMetadataDecoder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnIfMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnIfMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjection
@@ -311,13 +313,18 @@ internal class DotNetClrFirSymbolProvider(
         symbol = functionSymbol
         dispatchReceiverType = classSymbol.constructType()
         returnTypeRef = buildResolvedTypeRef {
-            coneType = method.signature.returnType.toKotlinType(
-                annotationServices.qualifier(
-                    assembly,
-                    method,
-                    DotNetClrNullableDeclarationTarget.MethodReturn(method),
-                )
-            )
+            coneType =
+                if (annotationServices.returnsNothing(assembly, method)) {
+                    session.builtinTypes.nothingType.coneType
+                } else {
+                    method.signature.returnType.toKotlinType(
+                        annotationServices.qualifier(
+                            assembly,
+                            method,
+                            DotNetClrNullableDeclarationTarget.MethodReturn(method),
+                        )
+                    )
+                }
         }
         method.signature.parameterTypes.forEachIndexed { index, type ->
             valueParameters += buildValueParameter {
@@ -418,11 +425,20 @@ internal class DotNetClrFirSymbolProvider(
         private val signatureResolver: DotNetClrSignatureResolver,
         private val evidenceApplicator: DotNetClrNullableEvidenceApplicator?,
         private val projector: DotNetClrKotlinNullabilityProjector,
+        private val doesNotReturnDecoder: DotNetClrDoesNotReturnMetadataDecoder?,
         private val doesNotReturnIfDecoder: DotNetClrDoesNotReturnIfMetadataDecoder?,
         private val notNullDecoder: DotNetClrNotNullMetadataDecoder?,
         private val notNullIfNotNullDecoder: DotNetClrNotNullIfNotNullMetadataDecoder?,
         private val notNullWhenDecoder: DotNetClrNotNullWhenMetadataDecoder?,
     ) {
+        fun returnsNothing(
+            assembly: DotNetClrAssemblyMetadata,
+            method: DotNetClrMethodDefinition,
+        ): Boolean {
+            val resolution = doesNotReturnDecoder?.decode(assembly, method.handle)
+            return resolution is DotNetClrDoesNotReturnMetadataResolution.Decoded
+        }
+
         fun qualifier(
             assembly: DotNetClrAssemblyMetadata,
             method: DotNetClrMethodDefinition,
@@ -624,6 +640,7 @@ internal class DotNetClrFirSymbolProvider(
                         signatureResolver = signatureResolver,
                         evidenceApplicator = null,
                         projector = DotNetClrKotlinNullabilityProjector(),
+                        doesNotReturnDecoder = null,
                         doesNotReturnIfDecoder = null,
                         notNullDecoder = null,
                         notNullIfNotNullDecoder = null,
@@ -649,6 +666,8 @@ internal class DotNetClrFirSymbolProvider(
                     serializedTypeResolver,
                     coreTypes,
                 )
+                val doesNotReturnDecoder =
+                    DotNetClrDoesNotReturnMetadataDecoder(customAttributeDecoder)
                 val doesNotReturnIfDecoder =
                     DotNetClrDoesNotReturnIfMetadataDecoder(customAttributeDecoder)
                 val notNullDecoder =
@@ -661,6 +680,7 @@ internal class DotNetClrFirSymbolProvider(
                     resolveSystemType(assemblies, typeResolver, "ValueType")
                         ?: return unavailable(
                             signatureResolver,
+                            doesNotReturnDecoder,
                             doesNotReturnIfDecoder,
                             notNullDecoder,
                             notNullIfNotNullDecoder,
@@ -670,6 +690,7 @@ internal class DotNetClrFirSymbolProvider(
                     resolveSystemType(assemblies, typeResolver, "Nullable`1")
                         ?: return unavailable(
                             signatureResolver,
+                            doesNotReturnDecoder,
                             doesNotReturnIfDecoder,
                             notNullDecoder,
                             notNullIfNotNullDecoder,
@@ -694,6 +715,7 @@ internal class DotNetClrFirSymbolProvider(
                         )
                     ),
                     DotNetClrKotlinNullabilityProjector(),
+                    doesNotReturnDecoder,
                     doesNotReturnIfDecoder,
                     notNullDecoder,
                     notNullIfNotNullDecoder,
@@ -703,6 +725,7 @@ internal class DotNetClrFirSymbolProvider(
 
             private fun unavailable(
                 signatureResolver: DotNetClrSignatureResolver,
+                doesNotReturnDecoder: DotNetClrDoesNotReturnMetadataDecoder,
                 doesNotReturnIfDecoder: DotNetClrDoesNotReturnIfMetadataDecoder,
                 notNullDecoder: DotNetClrNotNullMetadataDecoder,
                 notNullIfNotNullDecoder: DotNetClrNotNullIfNotNullMetadataDecoder,
@@ -713,6 +736,7 @@ internal class DotNetClrFirSymbolProvider(
                     signatureResolver = signatureResolver,
                     evidenceApplicator = null,
                     projector = DotNetClrKotlinNullabilityProjector(),
+                    doesNotReturnDecoder = doesNotReturnDecoder,
                     doesNotReturnIfDecoder = doesNotReturnIfDecoder,
                     notNullDecoder = notNullDecoder,
                     notNullIfNotNullDecoder = notNullIfNotNullDecoder,
