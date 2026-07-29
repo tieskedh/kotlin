@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.descriptors.SourceFile
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.serialization.deserialization.IncompatibleVersionErrorData
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedContainerAbiStability
@@ -14,24 +15,41 @@ import org.jetbrains.kotlin.serialization.deserialization.descriptors.Deserializ
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.PreReleaseInfo
 import java.util.IdentityHashMap
 
+sealed class DotNetClrImportedDeclarationSource(
+    val assembly: DotNetClrClasspathAssembly.Foreign,
+    val declaringType: DotNetClrTypeDefinition,
+) : DeserializedContainerSource {
+    init {
+        require(assembly.metadata.typeDefinitions.any { it === declaringType }) {
+            "Imported CLR TypeDef ${declaringType.handle} does not belong to '${assembly.assemblyFile}'"
+        }
+    }
+
+    override val incompatibility: IncompatibleVersionErrorData<*>?
+        get() = null
+    override val preReleaseInfo: PreReleaseInfo
+        get() = PreReleaseInfo.DEFAULT_VISIBLE
+    override val abiStability: DeserializedContainerAbiStability
+        get() = DeserializedContainerAbiStability.STABLE
+
+    override fun getContainingFile(): SourceFile = SourceFile.NO_SOURCE_FILE
+}
+
 /**
- * Exact physical linkage retained on one FIR declaration imported from a resource-free CLR DLL.
+ * Exact physical linkage retained on one FIR function imported from a resource-free CLR DLL.
  *
  * FIR2IR preserves [DeserializedContainerSource] on lazy external functions. Keeping the selected
  * assembly, TypeDef, and MethodDef here prevents codegen from performing a second classpath or
  * display-name lookup after Kotlin type enhancement has produced the logical declaration view.
  */
 class DotNetClrImportedMethodSource(
-    val assembly: DotNetClrClasspathAssembly.Foreign,
-    val declaringType: DotNetClrTypeDefinition,
+    assembly: DotNetClrClasspathAssembly.Foreign,
+    declaringType: DotNetClrTypeDefinition,
     val method: DotNetClrMethodDefinition,
-) : DeserializedContainerSource {
+) : DotNetClrImportedDeclarationSource(assembly, declaringType) {
     init {
         require(method.declaringType == declaringType.handle) {
             "Imported CLR MethodDef ${method.handle} does not belong to TypeDef ${declaringType.handle}"
-        }
-        require(assembly.metadata.typeDefinitions.any { it === declaringType }) {
-            "Imported CLR TypeDef ${declaringType.handle} does not belong to '${assembly.assemblyFile}'"
         }
         require(assembly.metadata.methodDefinitions.any { it === method }) {
             "Imported CLR MethodDef ${method.handle} does not belong to '${assembly.assemblyFile}'"
@@ -41,14 +59,46 @@ class DotNetClrImportedMethodSource(
     override val presentableString: String =
         "${assembly.identityDisplayName()} TypeDef 0x${declaringType.handle.token.toUInt().toString(16)} " +
                 "MethodDef 0x${method.handle.token.toUInt().toString(16)}"
-    override val incompatibility: IncompatibleVersionErrorData<*>?
-        get() = null
-    override val preReleaseInfo: PreReleaseInfo
-        get() = PreReleaseInfo.DEFAULT_VISIBLE
-    override val abiStability: DeserializedContainerAbiStability
-        get() = DeserializedContainerAbiStability.STABLE
+}
 
-    override fun getContainingFile(): SourceFile = SourceFile.NO_SOURCE_FILE
+/**
+ * One physical Property row and its exact MethodSemantics-selected accessors.
+ *
+ * The same source is retained on the lazy IR property, getter, and optional setter. Codegen uses
+ * accessor declaration identity to select [getter] or [setter]; their names are never inferred
+ * from [property].
+ */
+class DotNetClrImportedPropertySource(
+    assembly: DotNetClrClasspathAssembly.Foreign,
+    declaringType: DotNetClrTypeDefinition,
+    val property: DotNetClrPropertyDefinition,
+    val getter: DotNetClrMethodDefinition,
+    val setter: DotNetClrMethodDefinition?,
+) : DotNetClrImportedDeclarationSource(assembly, declaringType) {
+    init {
+        require(property.declaringType == declaringType.handle) {
+            "Imported CLR Property ${property.handle} does not belong to TypeDef ${declaringType.handle}"
+        }
+        require(getter.declaringType == declaringType.handle) {
+            "Imported CLR property getter ${getter.handle} does not belong to TypeDef ${declaringType.handle}"
+        }
+        require(setter == null || setter.declaringType == declaringType.handle) {
+            "Imported CLR property setter ${setter?.handle} does not belong to TypeDef ${declaringType.handle}"
+        }
+        require(assembly.metadata.propertyDefinitions.any { it === property }) {
+            "Imported CLR Property ${property.handle} does not belong to '${assembly.assemblyFile}'"
+        }
+        require(assembly.metadata.methodDefinitions.any { it === getter }) {
+            "Imported CLR property getter ${getter.handle} does not belong to '${assembly.assemblyFile}'"
+        }
+        require(setter == null || assembly.metadata.methodDefinitions.any { it === setter }) {
+            "Imported CLR property setter ${setter?.handle} does not belong to '${assembly.assemblyFile}'"
+        }
+    }
+
+    override val presentableString: String =
+        "${assembly.identityDisplayName()} TypeDef 0x${declaringType.handle.token.toUInt().toString(16)} " +
+                "Property 0x${property.handle.token.toUInt().toString(16)}"
 }
 
 private fun DotNetClrClasspathAssembly.Foreign.identityDisplayName(): String =
@@ -88,22 +138,42 @@ internal class DotNetClrImportedDeclarations(
     }
 
     fun functionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
-        val source = function.containerSource as? DotNetClrImportedMethodSource ?: return null
+        val source =
+            function.containerSource as? DotNetClrImportedDeclarationSource ?: return null
+        val method = when (source) {
+            is DotNetClrImportedMethodSource -> source.method
+            is DotNetClrImportedPropertySource -> {
+                val property = function.correspondingPropertySymbol?.owner
+                    ?: dotNetUnsupported(
+                        "foreign CLR property accessor '${function.name.asString()}' lost its IR property"
+                    )
+                when (function) {
+                    property.getter -> source.getter
+                    property.setter -> source.setter
+                        ?: dotNetUnsupported(
+                            "foreign CLR property '${source.property.name}' has no retained setter"
+                        )
+                    else -> dotNetUnsupported(
+                        "foreign CLR property '${source.property.name}' has an unknown accessor declaration"
+                    )
+                }
+            }
+        }
         val ownerClass = function.parent as? IrClass
             ?: dotNetUnsupported(
-                "foreign CLR MethodDef '${source.method.name}' lost its imported interface owner"
+                "foreign CLR MethodDef '${method.name}' lost its imported interface owner"
             )
         val ownerInfo = classInfoOrNull(ownerClass)
             ?: dotNetUnsupported(
-                "foreign CLR MethodDef '${source.method.name}' lost its exact TypeDef linkage"
+                "foreign CLR MethodDef '${method.name}' lost its exact TypeDef linkage"
             )
-        val signature = source.method.signature
+        val signature = method.signature
         val returnType = when (val physicalReturn = signature.returnType) {
             DotNetClrTypeSignature.Void -> DotNetIlReturnType.Void
             else -> DotNetIlReturnType.Value(
                 physicalReturn.toSupportedImportedIlTypeOrNull()
                     ?: dotNetUnsupported(
-                        "foreign CLR MethodDef '${source.method.name}' has a physical return type " +
+                        "foreign CLR MethodDef '${method.name}' has a physical return type " +
                                 "outside the current .NET backend value grammar"
                     )
             )
@@ -113,7 +183,7 @@ internal class DotNetClrImportedDeclarations(
             signature.parameterTypes.mapTo(this) { physicalParameter ->
                 physicalParameter.toSupportedImportedIlTypeOrNull()
                     ?: dotNetUnsupported(
-                        "foreign CLR MethodDef '${source.method.name}' has a physical parameter type " +
+                        "foreign CLR MethodDef '${method.name}' has a physical parameter type " +
                                 "outside the current .NET backend value grammar"
                     )
             }
@@ -126,14 +196,21 @@ internal class DotNetClrImportedDeclarations(
                 parameterTypes = parameterTypes,
                 hasThis = true,
             ),
-            physicalMethodName = source.method.name,
+            physicalMethodName = method.name,
         )
     }
 
-    private fun IrClass.importedClrSourceOrNull(): DotNetClrImportedMethodSource? {
+    private fun IrClass.importedClrSourceOrNull(): DotNetClrImportedDeclarationSource? {
         val sources = declarations.asSequence()
-            .filterIsInstance<IrSimpleFunction>()
-            .mapNotNull { function -> function.containerSource as? DotNetClrImportedMethodSource }
+            .mapNotNull { declaration ->
+                when (declaration) {
+                    is IrSimpleFunction ->
+                        declaration.containerSource as? DotNetClrImportedDeclarationSource
+                    is IrProperty ->
+                        declaration.containerSource as? DotNetClrImportedDeclarationSource
+                    else -> null
+                }
+            }
             .toList()
         if (sources.isEmpty()) return null
         val first = sources.first()

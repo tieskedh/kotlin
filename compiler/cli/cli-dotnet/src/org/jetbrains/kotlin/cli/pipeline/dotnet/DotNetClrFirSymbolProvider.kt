@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAllowNullMetadataDecoder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrAllowNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReferenceBinder
@@ -17,14 +18,18 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnMetadataResolut
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnIfMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnIfMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDisallowNullMetadataDecoder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrDisallowNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrInputNullabilityEnhancer
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrImportedMethodSource
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrImportedPropertySource
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjection
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjector
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityQualifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodDefinition
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemanticsKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataDecoder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationTarget
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplicator
@@ -36,7 +41,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullWhenMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullWhenMetadataResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertyDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedMethodSignatureResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeSignature
@@ -73,6 +80,8 @@ import org.jetbrains.kotlin.fir.declarations.FirDeclarationOrigin
 import org.jetbrains.kotlin.fir.declarations.FirResolvePhase
 import org.jetbrains.kotlin.fir.declarations.FirValueParameter
 import org.jetbrains.kotlin.fir.declarations.builder.buildNamedFunction
+import org.jetbrains.kotlin.fir.declarations.builder.buildProperty
+import org.jetbrains.kotlin.fir.declarations.builder.buildPropertyAccessor
 import org.jetbrains.kotlin.fir.declarations.builder.buildRegularClass
 import org.jetbrains.kotlin.fir.declarations.builder.buildValueParameter
 import org.jetbrains.kotlin.fir.declarations.impl.FirResolvedDeclarationStatusImpl
@@ -84,8 +93,10 @@ import org.jetbrains.kotlin.fir.scopes.FirScopeProvider
 import org.jetbrains.kotlin.fir.symbols.impl.FirCallableSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassLikeSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol
+import org.jetbrains.kotlin.fir.symbols.impl.FirPropertyAccessorSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirRegularClassSymbol
+import org.jetbrains.kotlin.fir.symbols.impl.FirRegularPropertySymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirValueParameterSymbol
 import org.jetbrains.kotlin.fir.types.ConeFlexibleType
 import org.jetbrains.kotlin.fir.types.ConeKotlinType
@@ -118,6 +129,18 @@ internal class DotNetClrFirSymbolProvider(
         val assembly: DotNetClrClasspathAssembly.Foreign,
         val type: DotNetClrTypeDefinition,
         val methods: List<DotNetClrMethodDefinition>,
+        val properties: List<PropertyCandidate>,
+    )
+
+    private data class PropertyCandidate(
+        val property: DotNetClrPropertyDefinition,
+        val getter: DotNetClrMethodDefinition,
+        val setter: DotNetClrMethodDefinition?,
+    )
+
+    private data class CompleteContract(
+        val methods: List<DotNetClrMethodDefinition>,
+        val properties: List<PropertyCandidate>,
     )
 
     private val foreignAssemblies = assemblies
@@ -191,9 +214,14 @@ internal class DotNetClrFirSymbolProvider(
         for (assembly in foreignAssemblies) {
             for (type in assembly.metadata.typeDefinitions) {
                 val classId = type.classIdOrNull() ?: continue
-                val methods = type.completeSupportedContractOrNull(assembly.metadata) ?: continue
+                val contract = type.completeSupportedContractOrNull(assembly.metadata) ?: continue
                 candidatesById.getOrPut(classId, ::mutableListOf) +=
-                    Candidate(assembly, type, methods)
+                    Candidate(
+                        assembly,
+                        type,
+                        contract.methods,
+                        contract.properties,
+                    )
             }
         }
         return candidatesById.mapNotNull { entry ->
@@ -226,43 +254,126 @@ internal class DotNetClrFirSymbolProvider(
 
     private fun DotNetClrTypeDefinition.completeSupportedContractOrNull(
         assembly: DotNetClrAssemblyMetadata,
-    ): List<DotNetClrMethodDefinition>? {
+    ): CompleteContract? {
         if (
             assembly.genericParameterDefinitions.any { parameter -> parameter.owner == handle } ||
             assembly.interfaceImplementations.any { implementation -> implementation.implementingType == handle } ||
             assembly.typeDefinitions.any { nested -> nested.declaringType == handle } ||
-            assembly.fieldDefinitions.any { field -> field.declaringType == handle } ||
-            assembly.propertyDefinitions.any { property -> property.declaringType == handle }
+            assembly.fieldDefinitions.any { field -> field.declaringType == handle }
         ) {
             return null
+        }
+        val properties = assembly.propertyDefinitions.filter { property ->
+            property.declaringType == handle
+        }
+        if (
+            properties.map(DotNetClrPropertyDefinition::name).distinct().size != properties.size
+        ) {
+            return null
+        }
+        val propertyCandidates = properties.map { property ->
+            property.supportedPropertyOrNull(assembly) ?: return null
+        }
+        val accessorHandles = propertyCandidates.flatMapTo(hashSetOf()) { property ->
+            listOfNotNull(property.getter.handle, property.setter?.handle)
         }
         val publicMethods = assembly.methodDefinitions.filter { method ->
             method.declaringType == handle &&
                     method.visibility == DotNetClrMethodVisibility.PUBLIC
         }
-        if (publicMethods.isEmpty() || publicMethods.any { method -> !method.isSupportedMethod() }) {
+        val ordinaryMethods = publicMethods.filterNot { method -> method.handle in accessorHandles }
+        if (
+            publicMethods.isEmpty() ||
+            ordinaryMethods.any { method -> !method.isSupportedMethod() }
+        ) {
             return null
         }
-        return publicMethods
+        return CompleteContract(ordinaryMethods, propertyCandidates)
     }
 
     private fun DotNetClrMethodDefinition.isSupportedMethod(): Boolean =
+        hasSupportedAbstractInstanceShape() &&
+                !isSpecialName &&
+                !isRuntimeSpecialName &&
+                Name.isValidIdentifier(name) &&
+                signature.returnType.isSupportedType(allowVoid = true) &&
+                signature.parameterTypes.all { type -> type.isSupportedType(allowVoid = false) }
+
+    private fun DotNetClrMethodDefinition.hasSupportedAbstractInstanceShape(): Boolean =
         !isStatic &&
                 isAbstract &&
                 isVirtual &&
                 !isFinal &&
                 relativeVirtualAddress == 0L &&
                 implementationAttributes == 0 &&
-                !isSpecialName &&
                 !isRuntimeSpecialName &&
-                Name.isValidIdentifier(name) &&
                 signature.callingConvention == DotNetClrSignatureCallingConvention.DEFAULT &&
                 signature.hasThis &&
                 !signature.hasExplicitThis &&
                 signature.genericParameterCount == 0 &&
-                signature.varargParameterStart == null &&
-                signature.returnType.isSupportedType(allowVoid = true) &&
-                signature.parameterTypes.all { type -> type.isSupportedType(allowVoid = false) }
+                signature.varargParameterStart == null
+
+    private fun DotNetClrPropertyDefinition.supportedPropertyOrNull(
+        assembly: DotNetClrAssemblyMetadata,
+    ): PropertyCandidate? {
+        if (
+            !Name.isValidIdentifier(name) ||
+            hasDefault ||
+            !signature.hasThis ||
+            signature.indexParameterTypes.isNotEmpty() ||
+            !signature.propertyType.isSupportedType(allowVoid = false)
+        ) {
+            return null
+        }
+        val semantics = assembly.methodSemantics.filter { semantic ->
+            semantic.association == handle
+        }
+        if (semantics.any { semantic ->
+                semantic.kind !in setOf(
+                    DotNetClrMethodSemanticsKind.GETTER,
+                    DotNetClrMethodSemanticsKind.SETTER,
+                )
+            }
+        ) {
+            return null
+        }
+        val getterHandle = semantics.singleOrNull { semantic ->
+            semantic.kind == DotNetClrMethodSemanticsKind.GETTER
+        }?.method ?: return null
+        val setterHandle = semantics.singleOrNull { semantic ->
+            semantic.kind == DotNetClrMethodSemanticsKind.SETTER
+        }?.method
+        val getter = assembly.methodDefinitions.singleOrNull { method ->
+            method.handle == getterHandle
+        } ?: return null
+        val setter = setterHandle?.let { handle ->
+            assembly.methodDefinitions.singleOrNull { method -> method.handle == handle }
+                ?: return null
+        }
+        if (
+            getter.visibility != DotNetClrMethodVisibility.PUBLIC ||
+            !getter.hasSupportedAbstractInstanceShape() ||
+            getter.signature.returnType != signature.propertyType ||
+            getter.signature.parameterTypes.isNotEmpty()
+        ) {
+            return null
+        }
+        if (
+            setter != null &&
+            (
+                    setter.visibility != DotNetClrMethodVisibility.PUBLIC ||
+                            !setter.hasSupportedAbstractInstanceShape() ||
+                            setter.signature.returnType != DotNetClrTypeSignature.Void ||
+                            setter.signature.parameterTypes != listOf(signature.propertyType)
+                    )
+        ) {
+            return null
+        }
+        if (annotationServices.hasSplitPropertyState(assembly, this, getter, setter)) {
+            return null
+        }
+        return PropertyCandidate(this, getter, setter)
+    }
 
     private fun DotNetClrTypeSignature.isSupportedType(allowVoid: Boolean): Boolean =
         when (this) {
@@ -296,8 +407,103 @@ internal class DotNetClrFirSymbolProvider(
             for (method in candidate.methods) {
                 declarations += buildMethod(classId, classSymbol, candidate, method)
             }
+            for (property in candidate.properties) {
+                declarations += buildProperty(classId, classSymbol, candidate, property)
+            }
         }
         return classSymbol
+    }
+
+    private fun buildProperty(
+        classId: ClassId,
+        classSymbol: FirRegularClassSymbol,
+        candidate: Candidate,
+        candidateProperty: PropertyCandidate,
+    ) = buildProperty {
+        val assembly = candidate.assembly.metadata
+        val physicalProperty = candidateProperty.property
+        val propertyName = Name.identifier(physicalProperty.name)
+        val propertySymbol = FirRegularPropertySymbol(CallableId(classId, propertyName))
+        val propertyType = physicalProperty.signature.propertyType.toKotlinType(
+            annotationServices.propertyQualifier(
+                assembly,
+                physicalProperty,
+            )
+        )
+        resolvePhase = FirResolvePhase.ANALYZED_DEPENDENCIES
+        origin = FirDeclarationOrigin.Library
+        moduleData = this@DotNetClrFirSymbolProvider.moduleData
+        status = FirResolvedDeclarationStatusImpl(
+            Visibilities.Public,
+            Modality.ABSTRACT,
+            EffectiveVisibility.Public,
+        )
+        isLocal = false
+        returnTypeRef = buildResolvedTypeRef {
+            coneType = propertyType
+        }
+        dispatchReceiverType = classSymbol.constructType()
+        name = propertyName
+        isVar = candidateProperty.setter != null
+        symbol = propertySymbol
+        containerSource = DotNetClrImportedPropertySource(
+            candidate.assembly,
+            candidate.type,
+            physicalProperty,
+            candidateProperty.getter,
+            candidateProperty.setter,
+        )
+        getter = buildPropertyAccessor {
+            resolvePhase = FirResolvePhase.ANALYZED_DEPENDENCIES
+            origin = FirDeclarationOrigin.Library
+            moduleData = this@DotNetClrFirSymbolProvider.moduleData
+            status = FirResolvedDeclarationStatusImpl(
+                Visibilities.Public,
+                Modality.ABSTRACT,
+                EffectiveVisibility.Public,
+            )
+            returnTypeRef = buildResolvedTypeRef {
+                coneType = propertyType
+            }
+            dispatchReceiverType = classSymbol.constructType()
+            symbol = FirPropertyAccessorSymbol()
+            this.propertySymbol = propertySymbol
+            isGetter = true
+        }
+        setter = candidateProperty.setter?.let {
+            val setterSymbol = FirPropertyAccessorSymbol()
+            buildPropertyAccessor {
+                resolvePhase = FirResolvePhase.ANALYZED_DEPENDENCIES
+                origin = FirDeclarationOrigin.Library
+                moduleData = this@DotNetClrFirSymbolProvider.moduleData
+                status = FirResolvedDeclarationStatusImpl(
+                    Visibilities.Public,
+                    Modality.ABSTRACT,
+                    EffectiveVisibility.Public,
+                )
+                returnTypeRef = buildResolvedTypeRef {
+                    coneType = session.builtinTypes.unitType.coneType
+                }
+                dispatchReceiverType = classSymbol.constructType()
+                symbol = setterSymbol
+                this.propertySymbol = propertySymbol
+                isGetter = false
+                valueParameters += buildValueParameter {
+                    resolvePhase = FirResolvePhase.ANALYZED_DEPENDENCIES
+                    origin = FirDeclarationOrigin.Library
+                    moduleData = this@DotNetClrFirSymbolProvider.moduleData
+                    returnTypeRef = buildResolvedTypeRef {
+                        coneType = propertyType
+                    }
+                    name = Name.identifier("value")
+                    symbol = FirValueParameterSymbol()
+                    containingDeclarationSymbol = setterSymbol
+                    isCrossinline = false
+                    isNoinline = false
+                    isVararg = false
+                }
+            }
+        }
     }
 
     private fun buildMethod(
@@ -456,6 +662,79 @@ internal class DotNetClrFirSymbolProvider(
         ): Boolean {
             val resolution = doesNotReturnDecoder?.decode(assembly, method.handle)
             return resolution is DotNetClrDoesNotReturnMetadataResolution.Decoded
+        }
+
+        fun hasSplitPropertyState(
+            assembly: DotNetClrAssemblyMetadata,
+            property: DotNetClrPropertyDefinition,
+            getter: DotNetClrMethodDefinition,
+            setter: DotNetClrMethodDefinition?,
+        ): Boolean {
+            val evidenceParents = buildList {
+                add(property.handle)
+                assembly.parameterDefinitions.asSequence()
+                    .filter { parameter ->
+                        (parameter.declaringMethod == getter.handle && parameter.isReturn) ||
+                                (
+                                        setter != null &&
+                                                parameter.declaringMethod == setter.handle &&
+                                                !parameter.isReturn &&
+                                                parameter.parameterIndex == 0
+                                        )
+                    }
+                    .mapTo(this, DotNetClrParameterDefinition::handle)
+            }
+            return evidenceParents.any { parent ->
+                val allowNull = allowNullDecoder?.decode(assembly, parent)
+                val disallowNull = disallowNullDecoder?.decode(assembly, parent)
+                val notNull = notNullDecoder?.decode(assembly, parent)
+                val maybeNull = maybeNullDecoder?.decode(assembly, parent)
+                (allowNull != null &&
+                        allowNull !== DotNetClrAllowNullMetadataResolution.Absent) ||
+                        (disallowNull != null &&
+                                disallowNull !== DotNetClrDisallowNullMetadataResolution.Absent) ||
+                        (notNull != null &&
+                                notNull !== DotNetClrNotNullMetadataResolution.Absent) ||
+                        (maybeNull != null &&
+                                maybeNull !== DotNetClrMaybeNullMetadataResolution.Absent)
+            }
+        }
+
+        fun propertyQualifier(
+            assembly: DotNetClrAssemblyMetadata,
+            property: DotNetClrPropertyDefinition,
+        ): DotNetClrKotlinNullabilityQualifier {
+            val type = when (val signature = property.signature.propertyType) {
+                is DotNetClrTypeSignature.Primitive ->
+                    DotNetClrResolvedTypeSignature.Primitive(signature.type)
+                else -> return DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY
+            }
+            if (!type.isReferencePrimitive()) {
+                return DotNetClrKotlinNullabilityQualifier.NOT_NULL
+            }
+            val resolver = declarationResolver
+                ?: return DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY
+            val applicator = evidenceApplicator
+                ?: return DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY
+            return when (
+                val projection = projector.project(
+                    applicator.apply(
+                        type,
+                        resolver.resolve(
+                            assembly,
+                            DotNetClrNullableDeclarationTarget.Property(property),
+                        ),
+                    )
+                )
+            ) {
+                is DotNetClrKotlinNullabilityProjection.Projected ->
+                    projection.components.singleOrNull()?.qualifier
+                        ?: DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY
+                is DotNetClrKotlinNullabilityProjection.Oblivious,
+                is DotNetClrKotlinNullabilityProjection.Suppressed,
+                is DotNetClrKotlinNullabilityProjection.DiagnosticFallback,
+                -> DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY
+            }
         }
 
         fun qualifier(
