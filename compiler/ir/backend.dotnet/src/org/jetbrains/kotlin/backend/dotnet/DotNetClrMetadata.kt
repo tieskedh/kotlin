@@ -260,6 +260,9 @@ data class DotNetClrFieldDefinition(
     val isRuntimeSpecialName: Boolean
         get() = attributes and RUNTIME_SPECIAL_NAME_ATTRIBUTE != 0
 
+    val hasDefault: Boolean
+        get() = attributes and HAS_DEFAULT_ATTRIBUTE != 0
+
     private companion object {
         const val FIELD_ACCESS_MASK = 0x0007
         const val STATIC_ATTRIBUTE = 0x0010
@@ -267,6 +270,7 @@ data class DotNetClrFieldDefinition(
         const val LITERAL_ATTRIBUTE = 0x0040
         const val SPECIAL_NAME_ATTRIBUTE = 0x0200
         const val RUNTIME_SPECIAL_NAME_ATTRIBUTE = 0x0400
+        const val HAS_DEFAULT_ATTRIBUTE = 0x8000
     }
 }
 
@@ -420,6 +424,74 @@ data class DotNetClrParameterDefinition(
     }
 }
 
+/**
+ * A semantic view of one physical Constant-table value.
+ *
+ * Integral and floating variants retain exact bits rather than a host-language numeric
+ * approximation. The owning [DotNetClrConstantDefinition] separately retains the entire raw
+ * blob, including bytes beyond the scalar prefix consumed by the CLR metadata reader.
+ */
+sealed interface DotNetClrConstantValue {
+    data class BooleanValue(
+        val value: Boolean,
+    ) : DotNetClrConstantValue
+
+    data class CharValue(
+        val value: Char,
+    ) : DotNetClrConstantValue
+
+    data class IntegralValue(
+        val type: DotNetClrPrimitiveType,
+        val bits: ULong,
+    ) : DotNetClrConstantValue {
+        init {
+            val bitWidth = when (type) {
+                DotNetClrPrimitiveType.INT8,
+                DotNetClrPrimitiveType.UINT8,
+                -> 8
+
+                DotNetClrPrimitiveType.INT16,
+                DotNetClrPrimitiveType.UINT16,
+                -> 16
+
+                DotNetClrPrimitiveType.INT32,
+                DotNetClrPrimitiveType.UINT32,
+                -> 32
+
+                DotNetClrPrimitiveType.INT64,
+                DotNetClrPrimitiveType.UINT64,
+                -> 64
+
+                else -> error("Constant integral value cannot have type $type")
+            }
+            require(bitWidth == 64 || bits < (1uL shl bitWidth)) {
+                "Constant $type value does not fit in $bitWidth bits"
+            }
+        }
+    }
+
+    data class Float32Value(
+        val bits: Int,
+    ) : DotNetClrConstantValue
+
+    data class Float64Value(
+        val bits: Long,
+    ) : DotNetClrConstantValue
+
+    data class StringValue(
+        val value: String,
+    ) : DotNetClrConstantValue
+
+    data object NullReference : DotNetClrConstantValue
+}
+
+data class DotNetClrConstantDefinition(
+    val handle: DotNetClrMetadataHandle,
+    val parent: DotNetClrMetadataHandle,
+    val value: DotNetClrConstantValue,
+    val rawValue: DotNetClrBlob,
+)
+
 data class DotNetClrPropertySignature(
     val hasThis: Boolean,
     val propertyType: DotNetClrTypeSignature,
@@ -437,8 +509,12 @@ data class DotNetClrPropertyDefinition(
     val isSpecialName: Boolean
         get() = attributes and SPECIAL_NAME_ATTRIBUTE != 0
 
+    val hasDefault: Boolean
+        get() = attributes and HAS_DEFAULT_ATTRIBUTE != 0
+
     private companion object {
         const val SPECIAL_NAME_ATTRIBUTE = 0x200
+        const val HAS_DEFAULT_ATTRIBUTE = 0x1000
     }
 }
 
@@ -531,6 +607,7 @@ data class DotNetClrAssemblyMetadata(
     val fieldDefinitions: List<DotNetClrFieldDefinition>,
     val methodDefinitions: List<DotNetClrMethodDefinition>,
     val parameterDefinitions: List<DotNetClrParameterDefinition>,
+    val constantDefinitions: List<DotNetClrConstantDefinition>,
     val memberReferences: List<DotNetClrMemberReference>,
     val customAttributes: List<DotNetClrCustomAttribute>,
     val propertyDefinitions: List<DotNetClrPropertyDefinition>,
