@@ -44,6 +44,7 @@ data class DotNetClrConstructedTypeNominalConstraintValidation(
  */
 class DotNetClrNominalConstraintValidator(
     typeResolver: DotNetClrTypeResolver,
+    private val primitiveTypes: DotNetClrPrimitiveTypeCatalog,
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
 ) {
     private val assignabilityResolver =
@@ -114,6 +115,9 @@ class DotNetClrNominalConstraintValidator(
     private fun DotNetClrResolvedTypeSignature.toNominalView():
             DotNetClrResolvedTypeView? =
         when (this) {
+            is DotNetClrResolvedTypeSignature.Primitive ->
+                DotNetClrResolvedTypeView(primitiveTypes[type], emptyList())
+
             is DotNetClrResolvedTypeSignature.Named ->
                 DotNetClrResolvedTypeView(type, emptyList())
                     .takeIf { type.genericArity() == 0 }
