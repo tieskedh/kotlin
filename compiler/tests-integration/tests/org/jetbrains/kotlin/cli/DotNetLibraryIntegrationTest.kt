@@ -64,6 +64,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterConstraint
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterContextResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterContextResolutionFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterContextResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterVariance
@@ -106,6 +109,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedProcessorArchitect
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomAttributeNamedMember
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomModifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericConstraintType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericParameterContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureSubstitutionFailure
@@ -2926,6 +2930,64 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public sealed class OpenConstraintTarget<T>
+                        where T : class, IComparable<T>, new()
+                    {
+                    }
+
+                    public sealed class DependentConstraintTarget<TBase, TDerived>
+                        where TDerived : TBase
+                    {
+                    }
+
+                    public abstract class ConstraintBase
+                    {
+                    }
+
+                    public interface IReferenceShapeMarker
+                    {
+                    }
+
+                    public sealed class StrongOpenSource<T>
+                        where T : class, IComparable<T>, new()
+                    {
+                    }
+
+                    public sealed class ClassBoundOpenSource<T>
+                        where T : ConstraintBase
+                    {
+                    }
+
+                    public sealed class InterfaceBoundOpenSource<T>
+                        where T : IReferenceShapeMarker
+                    {
+                    }
+
+                    public sealed class ValueOpenSource<T>
+                        where T : struct
+                    {
+                    }
+
+                    public sealed class WeakOpenSource<T>
+                        where T : class
+                    {
+                    }
+
+                    public sealed class RefLikeOpenSource<T>
+                        where T : allows ref struct
+                    {
+                    }
+
+                    public sealed class OpenMethodHost<T>
+                        where T : class, IComparable<T>, new()
+                    {
+                        public void Bind<U, V>()
+                            where U : class, IComparable<U>, new()
+                            where V : U
+                        {
+                        }
+                    }
+
                     public sealed class PublicDefaultConstructor
                     {
                     }
@@ -3353,8 +3415,47 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public delegate TResult VariantDelegate<in T, out TResult>(
                         T value);
 
+                    public abstract class GenericConstraintBase
+                    {
+                    }
+
+                    public sealed class GenericConstraintValue :
+                        GenericConstraintBase,
+                        IComparable<GenericConstraintValue>
+                    {
+                        public GenericConstraintValue()
+                        {
+                        }
+
+                        public int CompareTo(GenericConstraintValue other)
+                        {
+                            return 0;
+                        }
+                    }
+
+                    public sealed class GenericConstraintTarget<T>
+                        where T :
+                            GenericConstraintBase,
+                            IComparable<T>,
+                            new()
+                    {
+                        public int Value
+                        {
+                            get { return 7; }
+                        }
+                    }
+
                     public static class Program
                     {
+                        private static int UseOpenParameter<T>()
+                            where T :
+                                GenericConstraintBase,
+                                IComparable<T>,
+                                new()
+                        {
+                            return new GenericConstraintTarget<T>().Value;
+                        }
+
                         public static int Main()
                         {
                             bool valid =
@@ -3371,7 +3472,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                         typeof(VariantDelegate<int, string>)) &&
                                 !typeof(VariantDelegate<object, object>)
                                     .IsAssignableFrom(
-                                        typeof(VariantDelegate<int, string>));
+                                        typeof(VariantDelegate<int, string>)) &&
+                                UseOpenParameter<GenericConstraintValue>() == 7;
                             if (!valid)
                             {
                                 return 1;
@@ -4082,7 +4184,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         fun resolvedConstructedConstraints(
             metadataName: String,
-            argument: DotNetClrResolvedTypeSignature,
+            arguments: List<DotNetClrResolvedTypeSignature>,
         ) = (
                 DotNetClrConstructedTypeConstraintResolver(resolver).resolve(
                     DotNetClrResolvedTypeView(
@@ -4093,10 +4195,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                     metadataName,
                                 ) as DotNetClrTypeResolution.Resolved
                                 ).type,
-                        listOf(argument),
+                        arguments,
                     )
                 ) as DotNetClrConstructedTypeConstraintResolution.Resolved
                 ).constraints
+
+        fun resolvedConstructedConstraints(
+            metadataName: String,
+            argument: DotNetClrResolvedTypeSignature,
+        ): DotNetClrResolvedConstructedTypeConstraints =
+            resolvedConstructedConstraints(metadataName, listOf(argument))
 
         fun specialConstraintValidator(
             target: DotNetTarget = DotNetTarget.NET10_0,
@@ -4150,10 +4258,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             constraints: DotNetClrResolvedConstructedTypeConstraints,
             target: DotNetTarget = DotNetTarget.NET10_0,
             classifier: DotNetClrByRefLikeClassifier = byRefLikeClassifier,
+            genericParameterContext:
+                    DotNetClrResolvedGenericParameterContext? = null,
         ) = DotNetClrConstructedTypeConstraintValidator(
             nominalConstraintValidator,
             specialConstraintValidator(target, classifier),
-        ).validate(constraints)
+        ).validate(constraints, genericParameterContext)
 
         assertSame(
             DotNetClrConstructedTypeConstraintStatus.Satisfied,
@@ -4218,6 +4328,400 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         DotNetClrSpecialConstraintUnsupported
                             .DEPENDENT_GENERIC_PARAMETER
             }
+        )
+        assertTrue(
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "DependentConstraintTarget`2",
+                    listOf(
+                        DotNetClrResolvedTypeSignature.GenericParameter(
+                            DotNetClrGenericParameterKind.TYPE,
+                            0,
+                        ),
+                        DotNetClrResolvedTypeSignature.GenericParameter(
+                            DotNetClrGenericParameterKind.TYPE,
+                            0,
+                        ),
+                    ),
+                )
+            ).status is DotNetClrConstructedTypeConstraintStatus.Unsupported
+        )
+
+        fun resolvedOpenTypeView(
+            metadataName: String,
+        ): DotNetClrResolvedTypeView {
+            val type = (
+                    resolver.resolveTopLevelType(
+                        destinationMetadata,
+                        "Forwarded",
+                        metadataName,
+                    ) as DotNetClrTypeResolution.Resolved
+                    ).type
+            val parameters = destinationMetadata.genericParameterDefinitions
+                .filter { parameter -> parameter.owner == type.definition.handle }
+                .sortedBy(DotNetClrGenericParameterDefinition::number)
+            return DotNetClrResolvedTypeView(
+                type,
+                parameters.map { parameter ->
+                    DotNetClrResolvedTypeSignature.GenericParameter(
+                        DotNetClrGenericParameterKind.TYPE,
+                        parameter.number,
+                    )
+                },
+            )
+        }
+
+        val genericParameterContextResolver =
+            DotNetClrGenericParameterContextResolver(resolver)
+        fun resolvedOpenContext(
+            metadataName: String,
+            methodName: String? = null,
+        ): DotNetClrResolvedGenericParameterContext {
+            val view = resolvedOpenTypeView(metadataName)
+            val method = methodName?.let { selectedName ->
+                destinationMetadata.methodDefinitions.single { candidate ->
+                    candidate.declaringType == view.type.definition.handle &&
+                            candidate.name == selectedName
+                }
+            }
+            return (
+                    genericParameterContextResolver.resolve(view, method) as
+                            DotNetClrGenericParameterContextResolution.Resolved
+                    ).context
+        }
+
+        val openTypeParameter =
+            DotNetClrResolvedTypeSignature.GenericParameter(
+                DotNetClrGenericParameterKind.TYPE,
+                0,
+            )
+        val secondOpenTypeParameter =
+            DotNetClrResolvedTypeSignature.GenericParameter(
+                DotNetClrGenericParameterKind.TYPE,
+                1,
+            )
+        val substitutedTypeContext =
+            resolvedOpenContext("DependentConstraintTarget`2").let { context ->
+                context.copy(
+                    declaringType = context.declaringType.copy(
+                        arguments = listOf(
+                            secondOpenTypeParameter,
+                            secondOpenTypeParameter,
+                        )
+                    )
+                )
+            }
+        assertTrue(
+            substitutedTypeContext.binding(secondOpenTypeParameter) == null
+        )
+
+        val strongOpenContext = resolvedOpenContext("StrongOpenSource`1")
+        assertEquals("T", strongOpenContext.typeParameters.single().parameter.name)
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "OpenConstraintTarget`1",
+                    openTypeParameter,
+                ),
+                genericParameterContext = strongOpenContext,
+            ).status,
+        )
+
+        val weakOpenValidation =
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "OpenConstraintTarget`1",
+                    openTypeParameter,
+                ),
+                genericParameterContext =
+                    resolvedOpenContext("WeakOpenSource`1"),
+            )
+        val weakOpenStatus =
+            weakOpenValidation.status as
+                    DotNetClrConstructedTypeConstraintStatus.Violated
+        assertEquals(1, weakOpenStatus.nominal.size)
+        assertEquals(1, weakOpenStatus.special.size)
+        assertEquals(
+            DotNetClrSpecialConstraintViolation
+                .REQUIRES_PUBLIC_PARAMETERLESS_CONSTRUCTOR,
+            (
+                    weakOpenStatus.special.single().validation.satisfaction as
+                            DotNetClrSpecialConstraintSatisfaction.Violated
+                    ).reason,
+        )
+
+        val classBoundContext =
+            resolvedOpenContext("ClassBoundOpenSource`1")
+        assertFalse(
+            classBoundContext.typeParameters.single().parameter
+                .hasReferenceTypeConstraint
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "ReferenceProbe`1",
+                    openTypeParameter,
+                ),
+                genericParameterContext = classBoundContext,
+            ).status,
+        )
+        assertTrue(
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "ReferenceProbe`1",
+                    openTypeParameter,
+                ),
+                genericParameterContext =
+                    resolvedOpenContext("InterfaceBoundOpenSource`1"),
+            ).status is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+
+        val valueOpenContext = resolvedOpenContext("ValueOpenSource`1")
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "ValueProbe`1",
+                    openTypeParameter,
+                ),
+                genericParameterContext = valueOpenContext,
+            ).status,
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "NewProbe`1",
+                    openTypeParameter,
+                ),
+                genericParameterContext = valueOpenContext,
+            ).status,
+        )
+
+        val openMethodContext =
+            resolvedOpenContext("OpenMethodHost`1", "Bind")
+        assertEquals(
+            listOf("U", "V"),
+            openMethodContext.methodParameters.map { binding ->
+                binding.parameter.name
+            },
+        )
+        val openMethodParameter =
+            DotNetClrResolvedTypeSignature.GenericParameter(
+                DotNetClrGenericParameterKind.METHOD,
+                0,
+            )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "OpenConstraintTarget`1",
+                    openMethodParameter,
+                ),
+                genericParameterContext = openMethodContext,
+            ).status,
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "OpenConstraintTarget`1",
+                    openTypeParameter,
+                ),
+                genericParameterContext = openMethodContext,
+            ).status,
+        )
+        val dependentMethodParameter =
+            DotNetClrResolvedTypeSignature.GenericParameter(
+                DotNetClrGenericParameterKind.METHOD,
+                1,
+            )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "DependentConstraintTarget`2",
+                    listOf(
+                        openMethodParameter,
+                        dependentMethodParameter,
+                    ),
+                ),
+                genericParameterContext = openMethodContext,
+            ).status,
+        )
+
+        val unrelatedMethod =
+            destinationMetadata.methodDefinitions.single { method ->
+                method.name == ".ctor" &&
+                        method.declaringType ==
+                        strongOpenContext.declaringType.type.definition.handle
+            }
+        val mismatchedMethodContext =
+            genericParameterContextResolver.resolve(
+                resolvedOpenTypeView("OpenMethodHost`1"),
+                unrelatedMethod,
+            ) as DotNetClrGenericParameterContextResolution.Invalid
+        assertEquals(
+            DotNetClrGenericParameterContextResolutionFailure
+                .METHOD_NOT_DECLARED_BY_TYPE,
+            mismatchedMethodContext.failure,
+        )
+
+        val methodConstraintRow =
+            openMethodContext.methodParameters.first().constraints.single().row
+        val methodConstraintSpecification =
+            destinationMetadata.typeSpecifications.single { specification ->
+                specification.handle == methodConstraintRow.constraint
+            }
+        val methodConstraintSignature =
+            methodConstraintSpecification.signature as
+                    DotNetClrTypeSignature.GenericInstance
+        val outOfScopeContextMetadata = destinationMetadata.copy(
+            typeSpecifications = destinationMetadata.typeSpecifications.map {
+                    specification ->
+                if (specification.handle == methodConstraintSpecification.handle) {
+                    specification.copy(
+                        signature = methodConstraintSignature.copy(
+                            arguments = listOf(
+                                DotNetClrTypeSignature.GenericParameter(
+                                    DotNetClrGenericParameterKind.METHOD,
+                                    99,
+                                )
+                            )
+                        )
+                    )
+                } else {
+                    specification
+                }
+            }
+        )
+        val outOfScopeContextResolver =
+            DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+                    if (
+                        sourceAssembly === outOfScopeContextMetadata &&
+                        reference.name == systemRuntimeMetadata.identity.name
+                    ) {
+                        systemRuntimeMetadata
+                    } else {
+                        null
+                    }
+                }
+            )
+        val outOfScopeHost = (
+                outOfScopeContextResolver.resolveTopLevelType(
+                    outOfScopeContextMetadata,
+                    "Forwarded",
+                    "OpenMethodHost`1",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        val outOfScopeMethod =
+            outOfScopeContextMetadata.methodDefinitions.single { method ->
+                method.handle == checkNotNull(openMethodContext.method).handle
+            }
+        val outOfScopeContext =
+            DotNetClrGenericParameterContextResolver(outOfScopeContextResolver)
+                .resolve(
+                    DotNetClrResolvedTypeView(
+                        outOfScopeHost,
+                        listOf(openTypeParameter),
+                    ),
+                    outOfScopeMethod,
+                ) as DotNetClrGenericParameterContextResolution.Invalid
+        assertEquals(
+            DotNetClrGenericParameterContextResolutionFailure
+                .METHOD_CONSTRAINT_PARAMETER_OUT_OF_SCOPE,
+            outOfScopeContext.failure,
+        )
+        assertEquals(
+            DotNetClrResolvedTypeSignature.GenericParameter(
+                DotNetClrGenericParameterKind.METHOD,
+                99,
+            ),
+            outOfScopeContext.outOfScopeParameter,
+        )
+
+        val sourceConstraint =
+            openMethodContext.methodParameters.first().constraints.single()
+        val cyclicMethodContext = openMethodContext.copy(
+            methodParameters = listOf(
+                openMethodContext.methodParameters[0].copy(
+                    constraints = listOf(
+                        sourceConstraint.copy(
+                            type =
+                                DotNetClrResolvedGenericConstraintType
+                                    .Specification(
+                                        dependentMethodParameter
+                                    )
+                        )
+                    )
+                ),
+                openMethodContext.methodParameters[1].copy(
+                    constraints = listOf(
+                        sourceConstraint.copy(
+                            type =
+                                DotNetClrResolvedGenericConstraintType
+                                    .Specification(
+                                        openMethodParameter
+                                    )
+                        )
+                    )
+                ),
+            )
+        )
+        val cyclicOpenStatus =
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "ComparableProbe`1",
+                    openMethodParameter,
+                ),
+                genericParameterContext = cyclicMethodContext,
+            ).status as DotNetClrConstructedTypeConstraintStatus.Invalid
+        assertEquals(1, cyclicOpenStatus.nominal.size)
+        assertTrue(cyclicOpenStatus.special.isEmpty())
+
+        val refLikeOpenContext =
+            resolvedOpenContext("RefLikeOpenSource`1")
+        assertTrue(
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "OrdinaryGenericProbe`1",
+                    openTypeParameter,
+                ),
+                genericParameterContext = refLikeOpenContext,
+            ).status is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "AllowsRefLikeProbe`1",
+                    openTypeParameter,
+                ),
+                genericParameterContext = refLikeOpenContext,
+            ).status,
+        )
+        assertTrue(
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "AllowsRefLikeProbe`1",
+                    openTypeParameter,
+                ),
+                target = DotNetTarget.NET48,
+                genericParameterContext = refLikeOpenContext,
+            ).status is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        assertTrue(
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "AllowsRefLikeProbe`1",
+                    openTypeParameter,
+                ),
+                target = DotNetTarget.NETSTANDARD_2_0,
+                genericParameterContext = refLikeOpenContext,
+            ).status is DotNetClrConstructedTypeConstraintStatus.Violated
         )
 
         fun forwardedReferenceArgument(

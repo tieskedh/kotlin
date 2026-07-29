@@ -930,8 +930,21 @@ without treating those CLR flags as Kotlin nullability or ordinary Kotlin upper 
 and modern ILAsm exercise invariant/variant parameters and open constraints; a Roslyn fixture
 adds reference, value, constructor, recursive parameter, and `allows ref struct` forms. Real
 `mscorlib` and `System.Runtime` metadata and a corrupted generic-arity copy are covered. Constraint
-resolution/classification, semantic attributes/nullability, and the lazy import policy/provider
-remain next.
+resolution and physical classification are now implemented through the bounded selected-graph
+layers described below; semantic nullability and the lazy import policy/provider remain next.
+
+**CLR open-generic-constraint progress (2026-07-29):** constructed generic validation now accepts
+an explicit declaration-qualified parameter context. This follows the mature targets' retention of
+logical declaration ownership rather than treating a parameter index as a global identity. The CLR
+difference is physical: `!n` and `!!n` are separate TypeDef- and MethodDef-owned spaces, and VES
+generic-argument validation uses boxed nominal implications plus independent special constraints.
+The context resolver validates the selected owner, numbering, arity, and every open reference;
+only a complete identity TypeDef view exposes its own `!n` bindings. Nominal bounds are followed
+under a cycle guard, while `class`, `struct`, `new()`, and `AllowByRefLike` use deliberately narrow
+proof rules. The latter remains a `net10.0`-only permission. No Kotlin bound is inferred and global
+signature assignability is unchanged. Real Roslyn metadata, hostile scope/cycle mutations, and
+Framework/CoreCLR runtime probes cover the rule. Semantic nullability and the FIR import policy
+remain above this physical validity layer.
 
 ## 5. Explicitly parked work
 

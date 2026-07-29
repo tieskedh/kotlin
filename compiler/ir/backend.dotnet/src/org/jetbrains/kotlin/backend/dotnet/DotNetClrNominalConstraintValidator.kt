@@ -48,7 +48,7 @@ data class DotNetClrConstructedTypeNominalConstraintValidation(
 class DotNetClrNominalConstraintValidator(
     typeResolver: DotNetClrTypeResolver,
     private val primitiveTypes: DotNetClrPrimitiveTypeCatalog,
-    physicalTypeClassifier: DotNetClrPhysicalTypeClassifier,
+    private val physicalTypeClassifier: DotNetClrPhysicalTypeClassifier,
     arrayRuntimeTypes: DotNetClrArrayRuntimeTypes,
     delegateRuntimeTypes: DotNetClrDelegateRuntimeTypes,
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
@@ -65,6 +65,7 @@ class DotNetClrNominalConstraintValidator(
 
     fun validate(
         constraints: DotNetClrResolvedConstructedTypeConstraints,
+        genericParameterContext: DotNetClrResolvedGenericParameterContext? = null,
     ): DotNetClrConstructedTypeNominalConstraintValidation =
         DotNetClrConstructedTypeNominalConstraintValidation(
             constraints,
@@ -74,7 +75,11 @@ class DotNetClrNominalConstraintValidator(
                     binding.constraints.map { constraint ->
                         DotNetClrNominalConstraintValidation(
                             constraint,
-                            validate(binding.argument, constraint.type),
+                            validate(
+                                binding.argument,
+                                constraint.type,
+                                genericParameterContext,
+                            ),
                         )
                     },
                 )
@@ -84,14 +89,27 @@ class DotNetClrNominalConstraintValidator(
     private fun validate(
         argument: DotNetClrResolvedTypeSignature,
         constraint: DotNetClrResolvedGenericConstraintType,
+        genericParameterContext: DotNetClrResolvedGenericParameterContext?,
     ): DotNetClrNominalConstraintSatisfaction {
-        if (argument is DotNetClrResolvedTypeSignature.GenericParameter) {
-            return DotNetClrNominalConstraintSatisfaction.Unsupported(
-                DotNetClrNominalConstraintUnsupported.DEPENDENT_GENERIC_PARAMETER,
-                argument,
-            )
-        }
         val constraintSignature = constraint.asResolvedSignature()
+        return if (
+            argument is DotNetClrResolvedTypeSignature.GenericParameter
+        ) {
+            validateGenericParameter(
+                argument,
+                constraintSignature,
+                genericParameterContext,
+                linkedSetOf(),
+            )
+        } else {
+            validateConcrete(argument, constraintSignature)
+        }
+    }
+
+    private fun validateConcrete(
+        argument: DotNetClrResolvedTypeSignature,
+        constraintSignature: DotNetClrResolvedTypeSignature,
+    ): DotNetClrNominalConstraintSatisfaction {
         val actualView = argument.toNominalView()
         val expectedView = constraintSignature.toNominalView()
         return when (
@@ -156,17 +174,84 @@ class DotNetClrNominalConstraintValidator(
         }
     }
 
-    private fun DotNetClrResolvedGenericConstraintType.asResolvedSignature():
-            DotNetClrResolvedTypeSignature =
-        when (this) {
-            is DotNetClrResolvedGenericConstraintType.Nominal ->
-                DotNetClrResolvedTypeSignature.Named(
-                    type,
-                    isValueType = false,
-                )
-
-            is DotNetClrResolvedGenericConstraintType.Specification -> type
+    /**
+     * Proves the boxed open parameter against one target constraint from its selected declaration
+     * context. This is intentionally not part of global signature assignability, where an
+     * unboxed open parameter remains assignable only to itself.
+     */
+    private fun validateGenericParameter(
+        argument: DotNetClrResolvedTypeSignature.GenericParameter,
+        constraintSignature: DotNetClrResolvedTypeSignature,
+        genericParameterContext: DotNetClrResolvedGenericParameterContext?,
+        active: MutableSet<GenericParameterConstraintPair>,
+    ): DotNetClrNominalConstraintSatisfaction {
+        val binding = genericParameterContext?.binding(argument)
+            ?: return DotNetClrNominalConstraintSatisfaction.Unsupported(
+                DotNetClrNominalConstraintUnsupported.DEPENDENT_GENERIC_PARAMETER,
+                argument,
+            )
+        if (argument == constraintSignature ||
+            constraintSignature.isSelectedSystemObject()
+        ) {
+            return DotNetClrNominalConstraintSatisfaction.Satisfied
         }
+        if (binding.parameter.hasNotNullableValueTypeConstraint &&
+            constraintSignature.isSelectedSystemValueType()
+        ) {
+            return DotNetClrNominalConstraintSatisfaction.Satisfied
+        }
+
+        val pair = GenericParameterConstraintPair(argument, constraintSignature)
+        if (!active.add(pair)) {
+            return DotNetClrNominalConstraintSatisfaction.InvalidAssignability(
+                DotNetClrTypeAssignability.SignatureCycle(argument)
+            )
+        }
+        return try {
+            var firstInvalid:
+                    DotNetClrNominalConstraintSatisfaction.InvalidAssignability? = null
+            var firstUnsupported:
+                    DotNetClrNominalConstraintSatisfaction.Unsupported? = null
+            for (sourceConstraint in binding.constraints) {
+                val sourceSignature = sourceConstraint.type.asResolvedSignature()
+                val satisfaction =
+                    if (
+                        sourceSignature is
+                                DotNetClrResolvedTypeSignature.GenericParameter
+                    ) {
+                        validateGenericParameter(
+                            sourceSignature,
+                            constraintSignature,
+                            genericParameterContext,
+                            active,
+                        )
+                    } else {
+                        validateConcrete(sourceSignature, constraintSignature)
+                    }
+                when (satisfaction) {
+                    DotNetClrNominalConstraintSatisfaction.Satisfied ->
+                        return satisfaction
+
+                    DotNetClrNominalConstraintSatisfaction.Violated -> Unit
+                    is DotNetClrNominalConstraintSatisfaction.Unsupported ->
+                        if (firstUnsupported == null) {
+                            firstUnsupported = satisfaction
+                        }
+
+                    is DotNetClrNominalConstraintSatisfaction
+                            .InvalidAssignability ->
+                        if (firstInvalid == null) {
+                            firstInvalid = satisfaction
+                        }
+                }
+            }
+            firstInvalid
+                ?: firstUnsupported
+                ?: DotNetClrNominalConstraintSatisfaction.Violated
+        } finally {
+            active.remove(pair)
+        }
+    }
 
     private fun DotNetClrResolvedTypeSignature.toNominalView():
             DotNetClrResolvedTypeView? =
@@ -186,6 +271,29 @@ class DotNetClrNominalConstraintValidator(
 
             else -> null
         }
+
+    private fun DotNetClrResolvedTypeSignature.isSelectedSystemObject(): Boolean =
+        when (this) {
+            is DotNetClrResolvedTypeSignature.Primitive ->
+                type == DotNetClrPrimitiveType.OBJECT
+
+            is DotNetClrResolvedTypeSignature.Named ->
+                type.hasSameIdentityAs(
+                    primitiveTypes[DotNetClrPrimitiveType.OBJECT]
+                )
+
+            else -> false
+        }
+
+    private fun DotNetClrResolvedTypeSignature.isSelectedSystemValueType():
+            Boolean =
+        this is DotNetClrResolvedTypeSignature.Named &&
+                type.hasSameIdentityAs(physicalTypeClassifier.systemValueType)
+
+    private data class GenericParameterConstraintPair(
+        val argument: DotNetClrResolvedTypeSignature.GenericParameter,
+        val constraint: DotNetClrResolvedTypeSignature,
+    )
 
     private companion object {
         const val DEFAULT_RESOLUTION_LIMIT = 256

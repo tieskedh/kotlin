@@ -12,7 +12,7 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 51
+toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 54
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
 `compiler/tests-integration/build/test-results/dn/`; the current baseline is 871 tests with zero
@@ -365,10 +365,22 @@ landed shape as a compatibility constraint.
    structured unsupported boundaries. Signature assignability never inserts boxing; use the
    distinct nominal-view relation when generic constraints intentionally compare selected type
    definitions.
-   Dependent parameter constraints still require their remaining shared assignability policy;
-   dependent arguments are explicitly unsupported in both nominal and special validation. Special
-   flags and by-ref-like eligibility use
-   the physical classification and selected-profile policy below. Resolve compact CLR primitive
+   An open generic argument has meaning only through a
+   `DotNetClrResolvedGenericParameterContext` selected from its exact TypeDef view and optional
+   MethodDef. `!n` and `!!n` are distinct owner-relative spaces, never global `(kind, index)`
+   identities. Validate owner, numbering, arity, and every referenced parameter before exposing
+   the context. Expose TypeDef-owned `!n` bindings only for the complete identity view
+   `Owner<!0, !1, ...>`; a substituted view requires its outer declaration context and must not
+   relabel a coincidentally equal parameter index. Nominal constraint validation may follow naked
+   parameter and concrete declared bounds transitively under its own cycle guard because the VES
+   tests boxed generic arguments against those constraints. Keep that proof local to constructed
+   generic-argument validation: ordinary signature assignability still treats an unboxed open
+   parameter as assignable only to itself. Special validation proves only implications carried by
+   the source parameter: own `class` or a concrete non-root class bound, own `struct`, own `new()`
+   or `struct`, and profile-aware `AllowByRefLike`. Without a selected context the outcome remains
+   structured unsupported. Never infer new Kotlin bounds or stronger public CLR constraints from
+   a use site. Special flags and by-ref-like eligibility use the physical classification and
+   selected-profile policy below. Resolve compact CLR primitive
    signatures through one complete selected-core catalog (`mscorlib`, the selected portable
    facade graph, or `System.Runtime`/CoreLib), then use that TypeDef's boxed hierarchy view for
    nominal constraint assignability. Never consult host reflection or treat this physical catalog
@@ -391,9 +403,9 @@ landed shape as a compatibility constraint.
    `NotNullableValueTypeConstraint` against the non-nullable-value category. Treat
    `AllowByRefLike` as permission, not a requirement: a by-ref-like argument additionally requires
    that flag and the `net10.0` target; `net48` and `netstandard2.0` do not gain that runtime
-   capability. Preserve missing marker and invalid classification as non-boolean outcomes. Do not
-   combine this partial result with nominal-row success into an “all constraints satisfied” flag:
-   dependent generic parameters and later ref-safety/FIR policy remain separate. Validate the CLR
+   capability. Preserve missing marker and invalid classification as non-boolean outcomes; even a
+   fully satisfied CLR construction does not decide later Kotlin ref-safety/FIR policy. Validate
+   the CLR
    `DefaultConstructorConstraint` as the CLI rule, never as Kotlin syntax: any physical value type
    (including `Nullable<T>` under the standalone flag) satisfies it; a reference type must be
    concrete and own an exact public parameterless instance `.ctor`. Constructors are not inherited.

@@ -50,9 +50,12 @@ class DotNetClrConstructedTypeConstraintValidator(
 ) {
     fun validate(
         constraints: DotNetClrResolvedConstructedTypeConstraints,
+        genericParameterContext: DotNetClrResolvedGenericParameterContext? = null,
     ): DotNetClrConstructedTypeConstraintValidation {
-        val nominal = nominalValidator.validate(constraints)
-        val special = specialValidator.validate(constraints)
+        val nominal =
+            nominalValidator.validate(constraints, genericParameterContext)
+        val special =
+            specialValidator.validate(constraints, genericParameterContext)
         return DotNetClrConstructedTypeConstraintValidation(
             constraints,
             nominal,
