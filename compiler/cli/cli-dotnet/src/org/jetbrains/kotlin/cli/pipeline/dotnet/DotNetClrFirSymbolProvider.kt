@@ -44,6 +44,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullWhenMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullWhenMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrObsoleteMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrObsoleteMetadataResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrParamArrayMetadataDecoder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrParamArrayMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertyDefinition
@@ -109,11 +111,13 @@ import org.jetbrains.kotlin.fir.symbols.impl.FirRegularPropertySymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirValueParameterSymbol
 import org.jetbrains.kotlin.fir.types.ConeFlexibleType
 import org.jetbrains.kotlin.fir.types.ConeKotlinType
+import org.jetbrains.kotlin.fir.types.ConeKotlinTypeProjectionOut
 import org.jetbrains.kotlin.fir.types.ConeRigidType
 import org.jetbrains.kotlin.fir.types.builder.buildResolvedTypeRef
 import org.jetbrains.kotlin.fir.types.coneType
 import org.jetbrains.kotlin.fir.types.constructClassType
 import org.jetbrains.kotlin.fir.types.constructType
+import org.jetbrains.kotlin.fir.types.createArrayType
 import org.jetbrains.kotlin.fir.types.toLookupTag
 import org.jetbrains.kotlin.fir.types.typeContext
 import org.jetbrains.kotlin.fir.types.withNullability
@@ -154,6 +158,16 @@ internal class DotNetClrFirSymbolProvider(
     private data class CompleteContract(
         val methods: List<DotNetClrMethodDefinition>,
         val properties: List<PropertyCandidate>,
+    )
+
+    private data class ReferenceArrayQualifiers(
+        val array: DotNetClrKotlinNullabilityQualifier,
+        val element: DotNetClrKotlinNullabilityQualifier,
+    )
+
+    private data class MethodParameterView(
+        val type: ConeKotlinType,
+        val isVararg: Boolean,
     )
 
     private val foreignAssemblies = assemblies
@@ -297,20 +311,51 @@ internal class DotNetClrFirSymbolProvider(
         val ordinaryMethods = publicMethods.filterNot { method -> method.handle in accessorHandles }
         if (
             publicMethods.isEmpty() ||
-            ordinaryMethods.any { method -> !method.isSupportedMethod() }
+            ordinaryMethods.any { method -> !method.isSupportedMethod(assembly) }
         ) {
             return null
         }
         return CompleteContract(ordinaryMethods, propertyCandidates)
     }
 
-    private fun DotNetClrMethodDefinition.isSupportedMethod(): Boolean =
-        hasSupportedAbstractInstanceShape() &&
-                !isSpecialName &&
-                !isRuntimeSpecialName &&
-                Name.isValidIdentifier(name) &&
-                signature.returnType.isSupportedType(allowVoid = true) &&
-                signature.parameterTypes.all { type -> type.isSupportedType(allowVoid = false) }
+    private fun DotNetClrMethodDefinition.isSupportedMethod(
+        assembly: DotNetClrAssemblyMetadata,
+    ): Boolean {
+        if (
+            !hasSupportedAbstractInstanceShape() ||
+            isSpecialName ||
+            isRuntimeSpecialName ||
+            !Name.isValidIdentifier(name) ||
+            !signature.returnType.isSupportedType(allowVoid = true)
+        ) {
+            return false
+        }
+        return signature.parameterTypes.withIndex().all { [index, type] ->
+            val parameterRows = assembly.parameterDefinitions.filter { parameter ->
+                parameter.declaringMethod == handle &&
+                        !parameter.isReturn &&
+                        parameter.parameterIndex == index
+            }
+            when (type) {
+                is DotNetClrTypeSignature.Primitive ->
+                    type.isSupportedType(allowVoid = false) &&
+                            parameterRows.all { parameter ->
+                                annotationServices.paramArray(assembly, parameter.handle) ===
+                                        DotNetClrParamArrayMetadataResolution.Absent
+                            }
+                is DotNetClrTypeSignature.SzArray -> {
+                    val element = type.elementType as? DotNetClrTypeSignature.Primitive
+                    index == signature.parameterTypes.lastIndex &&
+                            element?.type in REFERENCE_PRIMITIVES &&
+                            parameterRows.singleOrNull()?.let { parameter ->
+                                annotationServices.paramArray(assembly, parameter.handle) is
+                                        DotNetClrParamArrayMetadataResolution.Decoded
+                            } == true
+                }
+                else -> false
+            }
+        }
+    }
 
     private fun DotNetClrMethodDefinition.hasSupportedAbstractInstanceShape(): Boolean =
         !isStatic &&
@@ -590,25 +635,20 @@ internal class DotNetClrFirSymbolProvider(
                 }
         }
         method.signature.parameterTypes.forEachIndexed { index, type ->
+            val parameterView = methodParameterView(assembly, method, index, type)
             valueParameters += buildValueParameter {
                 resolvePhase = FirResolvePhase.ANALYZED_DEPENDENCIES
                 origin = FirDeclarationOrigin.Library
                 moduleData = this@DotNetClrFirSymbolProvider.moduleData
                 returnTypeRef = buildResolvedTypeRef {
-                    coneType = type.toKotlinType(
-                        annotationServices.qualifier(
-                            assembly,
-                            method,
-                            DotNetClrNullableDeclarationTarget.MethodParameter(method, index),
-                        )
-                    )
+                    coneType = parameterView.type
                 }
                 name = parameterName(assembly, method, index)
                 symbol = FirValueParameterSymbol()
                 containingDeclarationSymbol = functionSymbol
                 isCrossinline = false
                 isNoinline = false
-                isVararg = false
+                isVararg = parameterView.isVararg
             }
         }
         contractDescription = annotationServices.contractDescription(
@@ -622,6 +662,39 @@ internal class DotNetClrFirSymbolProvider(
     }.apply {
         replaceDeprecationsProvider(annotations.getDeprecationsProviderFromAnnotations(session, fromJava = true))
     }
+
+    private fun methodParameterView(
+        assembly: DotNetClrAssemblyMetadata,
+        method: DotNetClrMethodDefinition,
+        index: Int,
+        type: DotNetClrTypeSignature,
+    ): MethodParameterView =
+        when (type) {
+            is DotNetClrTypeSignature.SzArray -> {
+                val element = type.elementType as? DotNetClrTypeSignature.Primitive
+                    ?: error("Unsupported parameter array entered the closed foreign CLR FIR slice")
+                val qualifiers =
+                    annotationServices.referenceArrayQualifiers(assembly, method, index)
+                val elementType = element.toKotlinType(qualifiers.element)
+                val arrayType = ConeKotlinTypeProjectionOut(elementType)
+                    .createArrayType(
+                        nullable = false,
+                        createPrimitiveArrayTypeIfPossible = false,
+                    )
+                    .withQualifier(qualifiers.array)
+                MethodParameterView(arrayType, isVararg = true)
+            }
+            else -> MethodParameterView(
+                type.toKotlinType(
+                    annotationServices.qualifier(
+                        assembly,
+                        method,
+                        DotNetClrNullableDeclarationTarget.MethodParameter(method, index),
+                    )
+                ),
+                isVararg = false,
+            )
+        }
 
     private fun buildDeprecatedAnnotation(
         obsolete: DotNetClrObsoleteMetadataResolution.Decoded,
@@ -729,6 +802,7 @@ internal class DotNetClrFirSymbolProvider(
         private val notNullIfNotNullDecoder: DotNetClrNotNullIfNotNullMetadataDecoder?,
         private val notNullWhenDecoder: DotNetClrNotNullWhenMetadataDecoder?,
         private val obsoleteDecoder: DotNetClrObsoleteMetadataDecoder?,
+        private val paramArrayDecoder: DotNetClrParamArrayMetadataDecoder?,
     ) {
         private val inputNullabilityEnhancer = DotNetClrInputNullabilityEnhancer()
         private val returnNullabilityEnhancer = DotNetClrReturnNullabilityEnhancer()
@@ -739,6 +813,13 @@ internal class DotNetClrFirSymbolProvider(
         ): DotNetClrObsoleteMetadataResolution.Decoded? =
             obsoleteDecoder?.decode(assembly, parent)
                 as? DotNetClrObsoleteMetadataResolution.Decoded
+
+        fun paramArray(
+            assembly: DotNetClrAssemblyMetadata,
+            parent: DotNetClrMetadataHandle,
+        ): DotNetClrParamArrayMetadataResolution =
+            paramArrayDecoder?.decode(assembly, parent)
+                ?: DotNetClrParamArrayMetadataResolution.Absent
 
         fun returnsNothing(
             assembly: DotNetClrAssemblyMetadata,
@@ -874,6 +955,70 @@ internal class DotNetClrFirSymbolProvider(
                     )
                 else -> declarationQualifier
             }
+        }
+
+        fun referenceArrayQualifiers(
+            assembly: DotNetClrAssemblyMetadata,
+            method: DotNetClrMethodDefinition,
+            index: Int,
+        ): ReferenceArrayQualifiers {
+            val fallback = ReferenceArrayQualifiers(
+                array = DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY,
+                element = DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY,
+            )
+            val type = when (
+                val resolution = signatureResolver.resolve(assembly, method.signature)
+            ) {
+                is DotNetClrResolvedMethodSignatureResolution.Resolved ->
+                    resolution.signature.parameterTypes.getOrNull(index)
+                        as? DotNetClrResolvedTypeSignature.SzArray
+                        ?: return fallback
+                is DotNetClrResolvedMethodSignatureResolution.Invalid,
+                is DotNetClrResolvedMethodSignatureResolution.UnresolvedType,
+                -> return fallback
+            }
+            if (!type.elementType.isReferencePrimitive()) {
+                return fallback
+            }
+            val resolver = declarationResolver
+                ?: return fallback.copy(
+                    array = inputQualifier(assembly, method, index, fallback.array)
+                )
+            val applicator = evidenceApplicator
+                ?: return fallback.copy(
+                    array = inputQualifier(assembly, method, index, fallback.array)
+                )
+            val projection = projector.project(
+                applicator.apply(
+                    type,
+                    resolver.resolve(
+                        assembly,
+                        DotNetClrNullableDeclarationTarget.MethodParameter(method, index),
+                    ),
+                )
+            )
+            val declarationQualifiers =
+                if (
+                    projection is DotNetClrKotlinNullabilityProjection.Projected &&
+                    projection.components.size == 2 &&
+                    projection.components[0].type == type &&
+                    projection.components[1].type == type.elementType
+                ) {
+                    ReferenceArrayQualifiers(
+                        array = projection.components[0].qualifier,
+                        element = projection.components[1].qualifier,
+                    )
+                } else {
+                    fallback
+                }
+            return declarationQualifiers.copy(
+                array = inputQualifier(
+                    assembly,
+                    method,
+                    index,
+                    declarationQualifiers.array,
+                )
+            )
         }
 
         private fun inputQualifier(
@@ -1080,6 +1225,7 @@ internal class DotNetClrFirSymbolProvider(
                         notNullIfNotNullDecoder = null,
                         notNullWhenDecoder = null,
                         obsoleteDecoder = null,
+                        paramArrayDecoder = null,
                     )
                 }
                 val serializedTypeResolver = DotNetClrSerializedTypeResolver(
@@ -1131,6 +1277,20 @@ internal class DotNetClrFirSymbolProvider(
                         )
                     is DotNetClrTypeResolution.Unresolved -> null
                 }
+                val paramArrayDecoder = when (
+                    val resolution = typeResolver.resolveTopLevelType(
+                        coreTypes.systemAttribute.assembly,
+                        "System",
+                        "ParamArrayAttribute",
+                    )
+                ) {
+                    is DotNetClrTypeResolution.Resolved ->
+                        DotNetClrParamArrayMetadataDecoder(
+                            customAttributeDecoder,
+                            resolution.type,
+                        )
+                    is DotNetClrTypeResolution.Unresolved -> null
+                }
                 val systemValueType =
                     resolveSystemType(assemblies, typeResolver, "ValueType")
                         ?: return unavailable(
@@ -1144,6 +1304,7 @@ internal class DotNetClrFirSymbolProvider(
                             notNullIfNotNullDecoder,
                             notNullWhenDecoder,
                             obsoleteDecoder,
+                            paramArrayDecoder,
                         )
                 val systemNullable =
                     resolveSystemType(assemblies, typeResolver, "Nullable`1")
@@ -1158,14 +1319,15 @@ internal class DotNetClrFirSymbolProvider(
                             notNullIfNotNullDecoder,
                             notNullWhenDecoder,
                             obsoleteDecoder,
+                            paramArrayDecoder,
                         )
                 val declarationResolver = DotNetClrNullableDeclarationResolver(
                     DotNetClrNullableMetadataDecoder(customAttributeDecoder)
                 )
                 return ForeignAnnotationServices(
-                    declarationResolver,
-                    signatureResolver,
-                    DotNetClrNullableEvidenceApplicator(
+                    declarationResolver = declarationResolver,
+                    signatureResolver = signatureResolver,
+                    evidenceApplicator = DotNetClrNullableEvidenceApplicator(
                         DotNetClrNullableTypeTransformApplicator(
                             org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassifier(
                                 typeResolver,
@@ -1177,16 +1339,17 @@ internal class DotNetClrFirSymbolProvider(
                             )
                         )
                     ),
-                    DotNetClrKotlinNullabilityProjector(),
-                    allowNullDecoder,
-                    doesNotReturnDecoder,
-                    doesNotReturnIfDecoder,
-                    disallowNullDecoder,
-                    maybeNullDecoder,
-                    notNullDecoder,
-                    notNullIfNotNullDecoder,
-                    notNullWhenDecoder,
-                    obsoleteDecoder,
+                    projector = DotNetClrKotlinNullabilityProjector(),
+                    allowNullDecoder = allowNullDecoder,
+                    doesNotReturnDecoder = doesNotReturnDecoder,
+                    doesNotReturnIfDecoder = doesNotReturnIfDecoder,
+                    disallowNullDecoder = disallowNullDecoder,
+                    maybeNullDecoder = maybeNullDecoder,
+                    notNullDecoder = notNullDecoder,
+                    notNullIfNotNullDecoder = notNullIfNotNullDecoder,
+                    notNullWhenDecoder = notNullWhenDecoder,
+                    obsoleteDecoder = obsoleteDecoder,
+                    paramArrayDecoder = paramArrayDecoder,
                 )
             }
 
@@ -1201,6 +1364,7 @@ internal class DotNetClrFirSymbolProvider(
                 notNullIfNotNullDecoder: DotNetClrNotNullIfNotNullMetadataDecoder,
                 notNullWhenDecoder: DotNetClrNotNullWhenMetadataDecoder,
                 obsoleteDecoder: DotNetClrObsoleteMetadataDecoder?,
+                paramArrayDecoder: DotNetClrParamArrayMetadataDecoder?,
             ): ForeignAnnotationServices =
                 ForeignAnnotationServices(
                     declarationResolver = null,
@@ -1216,6 +1380,7 @@ internal class DotNetClrFirSymbolProvider(
                     notNullIfNotNullDecoder = notNullIfNotNullDecoder,
                     notNullWhenDecoder = notNullWhenDecoder,
                     obsoleteDecoder = obsoleteDecoder,
+                    paramArrayDecoder = paramArrayDecoder,
                 )
 
             private fun resolveCustomAttributeCoreTypes(
@@ -1315,6 +1480,11 @@ internal class DotNetClrFirSymbolProvider(
     }
 
     private companion object {
+        val REFERENCE_PRIMITIVES = setOf(
+            DotNetClrPrimitiveType.STRING,
+            DotNetClrPrimitiveType.OBJECT,
+        )
+
         val SUPPORTED_PRIMITIVES = setOf(
             DotNetClrPrimitiveType.BOOLEAN,
             DotNetClrPrimitiveType.CHAR,

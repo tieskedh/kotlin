@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 63
+toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 65
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 880 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 882 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -743,6 +743,16 @@ landed shape as a compatibility constraint.
    modern Roslyn accepts it and emits the MethodDef attribute, so the importer follows exact
    metadata rather than the older source restriction. The retained TypeDef/Property/MethodDef
    still owns physical identity/invocation. Other declaration targets remain separate slices.
+   Foreign CLR parameter arrays follow the JVM foreign-vararg precedent without changing the
+   Kotlin-to-Kotlin export ABI. Admit only one final one-dimensional `string[]` or `object[]`
+   Param carrying exactly one selected-core `System.ParamArrayAttribute()`; expose Common
+   `vararg` logically while retaining the raw MethodDef vector signature for physical binding.
+   Reuse Common expanded/omitted/spread calls and the concrete-reference vararg lowering. Resolve
+   Roslyn array and element nullability independently. Withhold the whole classifier for
+   malformed, duplicate, wrong-identity, non-final, multidimensional, scalar, or unannotated
+   evidence. Primitive CLR params arrays remain excluded because Kotlin/.NET primitive-array
+   wrappers are not the foreign raw vectors. `ParamCollectionAttribute` remains a separate
+   collection-construction decision.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased
