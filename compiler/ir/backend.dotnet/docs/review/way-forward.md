@@ -1163,8 +1163,25 @@ The broader CodeAnalysis family is now classified per target in
 retained metadata but cannot make mutable, getter-backed, public/open, or cross-module member
 access stable merely because Roslyn updates its null-state. `MaybeNull`/`MaybeNullWhen` is
 state-weakening; `AllowNull`/`DisallowNull` requires a split input/setter view; return-target
-postconditions require result enhancement. `NotNullIfNotNull` is the next exact common-effect
-candidate.
+postconditions require result enhancement. `NotNullIfNotNull` is the exact common-effect slice
+implemented below.
+
+**Foreign return `NotNullIfNotNull` contract enhancement (2026-07-29):** an exact
+return-target string attribute now binds to one physical value Param row and maps to common FIR's
+`(parameter != null) implies returnsNotNull()` effect. `AllowMultiple=true` is honored:
+different names add implications and identical names normalize, while one malformed or
+inapplicable recognized item prevents partial strengthening. Real Roslyn, hostile polyfill, and
+corrupted-blob cases cover nullable branches, literals, two independent parameters, `object`,
+invalid inverses, absence, mixed evidence, wrong constructors, null/missing/value names, and
+malformed payloads. The focused consumer deliberately uses Kotlin language level 2.2, proving
+that the newer source-authoring gate does not suppress an understood resolved binary effect. The
+focused test is 1/0/0/0. The fresh strict gate is 875/0/0/0 across 16 XML suites (796
+FIR/IL/box, 21 generated CLI, and 58 library integration tests).
+
+The exact CLR subset is sufficient to reconstruct contracts for foreign libraries. It remains a
+derived projection for Kotlin-produced libraries, whose embedded KLIB stays self-contained.
+Using the already-required decoder does not require redefining KLIB as a remainder that all tools
+must merge with physical bridge/dispatcher/split-interface metadata.
 
 ## 5. Explicitly parked work
 
