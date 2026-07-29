@@ -45,6 +45,8 @@ data class DotNetClrSpecialConstraintValidation(
 data class DotNetClrSpecialGenericParameterValidation(
     val binding: DotNetClrResolvedGenericParameterBinding,
     val argumentClassification: DotNetClrByRefLikeClassification,
+    val argumentGenericParameter:
+            DotNetClrResolvedGenericParameterContextBinding?,
     val constraints: List<DotNetClrSpecialConstraintValidation>,
 )
 
@@ -67,16 +69,26 @@ class DotNetClrSpecialConstraintValidator(
 ) {
     fun validate(
         constraints: DotNetClrResolvedConstructedTypeConstraints,
+        genericParameterContext: DotNetClrResolvedGenericParameterContext? = null,
     ): DotNetClrConstructedTypeSpecialConstraintValidation =
         DotNetClrConstructedTypeSpecialConstraintValidation(
             constraints,
-            constraints.parameters.map(::validate),
+            constraints.parameters.map { binding ->
+                validate(binding, genericParameterContext)
+            },
         )
 
     private fun validate(
         binding: DotNetClrResolvedGenericParameterBinding,
+        genericParameterContext: DotNetClrResolvedGenericParameterContext?,
     ): DotNetClrSpecialGenericParameterValidation {
         val classification = byRefLikeClassifier.classify(binding.argument)
+        val argumentGenericParameter =
+            (binding.argument as?
+                    DotNetClrResolvedTypeSignature.GenericParameter)?.let {
+                    parameter ->
+                genericParameterContext?.binding(parameter)
+            }
         val kinds = buildList {
             if (binding.parameter.hasReferenceTypeConstraint) {
                 add(DotNetClrSpecialConstraintKind.REFERENCE_TYPE)
@@ -92,10 +104,16 @@ class DotNetClrSpecialConstraintValidator(
         return DotNetClrSpecialGenericParameterValidation(
             binding,
             classification,
+            argumentGenericParameter,
             kinds.map { kind ->
                 DotNetClrSpecialConstraintValidation(
                     kind,
-                    validate(kind, binding, classification),
+                    validate(
+                        kind,
+                        binding,
+                        classification,
+                        argumentGenericParameter,
+                    ),
                 )
             },
         )
@@ -105,7 +123,26 @@ class DotNetClrSpecialConstraintValidator(
         kind: DotNetClrSpecialConstraintKind,
         binding: DotNetClrResolvedGenericParameterBinding,
         classification: DotNetClrByRefLikeClassification,
+        argumentGenericParameter:
+                DotNetClrResolvedGenericParameterContextBinding?,
     ): DotNetClrSpecialConstraintSatisfaction {
+        if (
+            binding.argument is
+                    DotNetClrResolvedTypeSignature.GenericParameter
+        ) {
+            return if (argumentGenericParameter == null) {
+                DotNetClrSpecialConstraintSatisfaction.Unsupported(
+                    DotNetClrSpecialConstraintUnsupported
+                        .DEPENDENT_GENERIC_PARAMETER
+                )
+            } else {
+                validateGenericParameter(
+                    kind,
+                    binding,
+                    argumentGenericParameter,
+                )
+            }
+        }
         classification.dependentGenericParameterUnsupportedOrNull()?.let {
             return it
         }
@@ -142,6 +179,125 @@ class DotNetClrSpecialConstraintValidator(
             DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY ->
                 validateByRefLikeEligibility(binding, classified.status)
         }
+    }
+
+    private fun validateGenericParameter(
+        kind: DotNetClrSpecialConstraintKind,
+        targetBinding: DotNetClrResolvedGenericParameterBinding,
+        argumentBinding: DotNetClrResolvedGenericParameterContextBinding,
+    ): DotNetClrSpecialConstraintSatisfaction =
+        when (kind) {
+            DotNetClrSpecialConstraintKind.REFERENCE_TYPE ->
+                validateGenericParameterReferenceType(argumentBinding)
+
+            DotNetClrSpecialConstraintKind.NON_NULLABLE_VALUE_TYPE ->
+                if (
+                    argumentBinding.parameter
+                        .hasNotNullableValueTypeConstraint
+                ) {
+                    DotNetClrSpecialConstraintSatisfaction.Satisfied
+                } else {
+                    violated(
+                        DotNetClrSpecialConstraintViolation
+                            .REQUIRES_NON_NULLABLE_VALUE_TYPE
+                    )
+                }
+
+            DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR ->
+                if (
+                    argumentBinding.parameter
+                        .hasDefaultConstructorConstraint ||
+                    argumentBinding.parameter
+                        .hasNotNullableValueTypeConstraint
+                ) {
+                    DotNetClrSpecialConstraintSatisfaction.Satisfied
+                } else {
+                    violated(
+                        DotNetClrSpecialConstraintViolation
+                            .REQUIRES_PUBLIC_PARAMETERLESS_CONSTRUCTOR
+                    )
+                }
+
+            DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY ->
+                when {
+                    !argumentBinding.parameter.allowsByRefLike ->
+                        DotNetClrSpecialConstraintSatisfaction.Satisfied
+
+                    target != DotNetTarget.NET10_0 ->
+                        violated(
+                            DotNetClrSpecialConstraintViolation
+                                .BY_REF_LIKE_NOT_SUPPORTED_BY_TARGET
+                        )
+
+                    !targetBinding.parameter.allowsByRefLike ->
+                        violated(
+                            DotNetClrSpecialConstraintViolation
+                                .BY_REF_LIKE_NOT_ALLOWED_BY_PARAMETER
+                        )
+
+                    else ->
+                        DotNetClrSpecialConstraintSatisfaction.Satisfied
+                }
+        }
+
+    private fun validateGenericParameterReferenceType(
+        binding: DotNetClrResolvedGenericParameterContextBinding,
+    ): DotNetClrSpecialConstraintSatisfaction {
+        if (binding.parameter.hasReferenceTypeConstraint) {
+            return DotNetClrSpecialConstraintSatisfaction.Satisfied
+        }
+        if (binding.parameter.hasNotNullableValueTypeConstraint) {
+            return violated(
+                DotNetClrSpecialConstraintViolation.REQUIRES_REFERENCE_TYPE
+            )
+        }
+
+        var firstInvalid: DotNetClrByRefLikeClassification? = null
+        for (constraint in binding.constraints) {
+            val signature = constraint.type.asResolvedSignature()
+            if (
+                signature is
+                        DotNetClrResolvedTypeSignature.GenericParameter
+            ) {
+                continue
+            }
+            val definition = signature.nominalDefinitionOrNull()
+            if (definition?.definition?.isInterface == true ||
+                definition?.hasSameIdentityAs(
+                    primitiveTypes[DotNetClrPrimitiveType.OBJECT]
+                ) == true ||
+                definition?.hasSameIdentityAs(
+                    byRefLikeClassifier.systemValueType
+                ) == true ||
+                definition?.hasSameIdentityAs(
+                    byRefLikeClassifier.systemEnum
+                ) == true
+            ) {
+                continue
+            }
+            when (val classification = byRefLikeClassifier.classify(signature)) {
+                is DotNetClrByRefLikeClassification.Classified ->
+                    if (
+                        classification.physicalKind ==
+                        DotNetClrPhysicalTypeKind.REFERENCE
+                    ) {
+                        return DotNetClrSpecialConstraintSatisfaction.Satisfied
+                    }
+
+                is DotNetClrByRefLikeClassification.PhysicalTypeFailure,
+                is DotNetClrByRefLikeClassification.InvalidAttributeConstructor,
+                is DotNetClrByRefLikeClassification.InvalidMarkerValue,
+                is DotNetClrByRefLikeClassification.Invalid,
+                -> if (firstInvalid == null) {
+                    firstInvalid = classification
+                }
+            }
+        }
+        return firstInvalid?.let {
+            DotNetClrSpecialConstraintSatisfaction.InvalidClassification(it)
+        } ?: violated(
+            DotNetClrSpecialConstraintViolation.REQUIRES_REFERENCE_TYPE
+        )
     }
 
     private fun validateDefaultConstructor(
@@ -249,6 +405,22 @@ class DotNetClrSpecialConstraintValidator(
             is DotNetClrResolvedTypeSignature.GenericInstance -> genericType.type
             is DotNetClrResolvedTypeSignature.Modified ->
                 unmodifiedType.referenceTypeDefinitionOrNull()
+
+            else -> null
+        }
+
+    private fun DotNetClrResolvedTypeSignature.nominalDefinitionOrNull():
+            DotNetClrResolvedTypeDefinition? =
+        when (this) {
+            is DotNetClrResolvedTypeSignature.Primitive ->
+                primitiveTypes[type]
+
+            is DotNetClrResolvedTypeSignature.Named -> type
+            is DotNetClrResolvedTypeSignature.GenericInstance ->
+                genericType.type
+
+            is DotNetClrResolvedTypeSignature.Modified ->
+                unmodifiedType.nominalDefinitionOrNull()
 
             else -> null
         }
