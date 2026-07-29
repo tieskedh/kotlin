@@ -351,8 +351,9 @@ landed shape as a compatibility constraint.
    use the containing TypeDef for nullable-public-only filtering, never an accessor MethodDef. A
    private property in a public type is therefore included even when its private accessors are
    independently suppressed as methods. Apply this module filter before decoding local/context
-   evidence. Then prefer an exact Param/Field/Property/GenericParam `NullableAttribute`, followed
-   by the nearest MethodDef and containing-TypeDef `NullableContextAttribute`. Keep selected,
+   evidence. Then prefer an exact Param/Field/Property/GenericParam/GenericParamConstraint
+   `NullableAttribute`, followed by the nearest MethodDef and containing-TypeDef
+   `NullableContextAttribute`. Keep selected,
    oblivious, suppressed, and invalid outcomes distinct; missing or suppressed evidence never
    becomes definitely non-null. Ownership ambiguity, invalid visibility, malformed attributes,
    containing-type cycles, and limits remain structured failures below FIR. When composing this
@@ -362,7 +363,13 @@ landed shape as a compatibility constraint.
    invalid transform/type alignment also retains that runtime signature, matching JVM/Roslyn
    foreign-type fallback, but must carry a distinct structured diagnostic cause. Never collapse
    malformed metadata into ordinary obliviousness, drop the CLR declaration, or infer a Kotlin
-   type at this layer.
+   type at this layer. Generic-parameter declaration evidence and GenericParamConstraint type
+   evidence are independent: retain the former as a single declaration-level marker and resolve
+   and apply the latter once per physical constraint row. Use only an identity,
+   declaration-qualified generic-parameter context for constraint alignment; applying a
+   parameter marker to every constraint or aligning against an already-substituted constraint
+   tree is forbidden. Kotlin bound propagation and definitely-non-null decisions remain FIR
+   policy after every bound has been enhanced.
    Property, PropertyMap, and MethodSemantics rows now
    retain the physical property token, declaring TypeDef, metadata name/flags, structural
    property/index signature, raw blob, and accessor MethodDef handles. Association comes only from

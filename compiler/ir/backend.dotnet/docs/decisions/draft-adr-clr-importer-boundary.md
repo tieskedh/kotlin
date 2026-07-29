@@ -1515,6 +1515,46 @@ non-diagnostic result. Synthetic selected metadata pins both flag-count and phys
 classification fallback, while an invalid declaration target pins the distinct declaration
 diagnostic path.
 
+The forty-second slice keeps nullable generic-parameter declaration evidence separate from
+nullable evidence on each constraint type.
+
+1. JVM `AbstractSignatureParts` enhances every Java bound first, then derives
+   `boundsNullability` from those enhanced bounds when qualifying a type-parameter use. A
+   declaration/default qualifier is not copied blindly across every bound. The .NET importer
+   follows the same order: preserve declaration evidence, enhance individual constraints, and
+   leave bound propagation to the Kotlin-facing layer.
+2. Roslyn has two physically independent channels. `PETypeParameterSymbol` reads a single
+   GenericParam `NullableAttribute` value or the containing method/type context for the C#
+   `class`, `class?`, `notnull`, and unconstrained marker. It separately calls
+   `NullableTypeDecoder.TransformType` with each GenericParamConstraint handle, using the
+   containing symbol for accessibility and context. See Roslyn's
+   [constraint-row transform](https://github.com/dotnet/roslyn/blob/c67ab9a38782b72900e4c758a6fcea476a600b44/src/Compilers/CSharp/Portable/Symbols/Metadata/PE/PETypeParameterSymbol.cs#L296-L305)
+   and
+   [parameter-marker interpretation](https://github.com/dotnet/roslyn/blob/c67ab9a38782b72900e4c758a6fcea476a600b44/src/Compilers/CSharp/Portable/Symbols/Metadata/PE/PETypeParameterSymbol.cs#L470-L560).
+3. Kotlin Common is unchanged. A C# parameter marker is foreign declaration evidence, not a
+   Kotlin upper bound, and a nullable C# constraint type does not redefine Kotlin's `T : Any?`
+   rule. Definitely-non-null and bound-propagation choices remain in FIR after every imported
+   bound has a Kotlin-facing type.
+4. GenericParam and GenericParamConstraint rows have the same CLI meaning on `net48`,
+   `netstandard2.0`, and `net10.0`. The selected profile resolves nominal identities, but does
+   not change where nullable evidence is attached or how its preorder is aligned.
+5. The declaration resolver therefore gains an exact GenericParamConstraint target. Its
+   accessibility and enclosing context come from the owning generic parameter's TypeDef or
+   MethodDef, while its local transform comes only from the constraint row. A generic-parameter
+   evidence resolver aggregates the untouched parameter marker with one evidence application per
+   resolved row from a declaration-qualified identity context.
+6. The core-team choice rejects two tempting shortcuts. Copying the parameter marker to every
+   constraint loses real nested constraint annotations. Applying constraint flags after
+   substituting `!n` can change the physical tree, so one original flag could be shifted onto
+   several substituted nodes. Only original identity-context constraints are aligned here;
+   substitution and Kotlin bound propagation happen later. Missing context bindings and
+   malformed row evidence remain structured fallback rather than guessed nullability.
+
+Real Roslyn metadata pins `class`, `class?`, `notnull`, and unconstrained parameter markers beside
+non-null, nullable, nested-generic, method-owned, and multiple constraint-row transforms. Hostile
+metadata pins owner mismatch, non-identity context rejection, non-scalar parameter markers,
+malformed constraint-row fallback, and accessibility suppression before malformed local decoding.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1607,6 +1647,12 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Silently collapsing invalid nullable evidence into ordinary obliviousness:
   **Architecturally wrong and should be changed**.
 - Dropping a valid CLR declaration because its advisory nullable metadata is malformed:
+  **Architecturally wrong and should be changed**.
+- Keeping GenericParam declaration evidence separate from per-GenericParamConstraint transforms:
+  **Correct direction**.
+- Applying a generic-parameter marker to every constraint type:
+  **Architecturally wrong and should be changed**.
+- Aligning constraint nullability after generic substitution changes the original type tree:
   **Architecturally wrong and should be changed**.
 - Deferring Constant and FieldMarshal payloads while retaining their Param flags:
   **Correct temporary implementation, but not a final design**.
