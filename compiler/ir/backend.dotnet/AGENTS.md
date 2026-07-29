@@ -295,7 +295,15 @@ landed shape as a compatibility constraint.
    `docs/decisions/draft-adr-clr-importer-boundary.md`; follows the JVM split between physical
    Java classfile models and Kotlin-facing FIR enhancement, while retaining a CLR-specific
    metadata graph): ordinary foreign DLLs are not Kotlin libraries and must not be assigned KLIB
-   declaration identities. A single bounded, JVM-hosted PE/ECMA-335 reader feeds both managed
+   declaration identities. Classify each DLL exactly once at the frontend boundary. Presence of
+   the reserved `Kotlin.Metadata` managed resource selects the self-describing Kotlin-produced
+   path and its authoritative embedded KLIB; absence selects the ordinary foreign path and its
+   authoritative physical CLR metadata. Never fall back from a present non-private or malformed
+   Kotlin resource to foreign import, and never import a Kotlin-produced assembly's physical rows
+   beside its KLIB. Retain canonical resource-free assemblies and their exact decoded metadata in
+   classpath order for the future lazy FIR provider, but do not manufacture FIR declarations,
+   runtime references, or copied artifacts before that provider selects an actual use. Invalid PE
+   input remains a classpath error. A single bounded, JVM-hosted PE/ECMA-335 reader feeds both managed
    resource loading and an immutable physical CLR model. It exposes Assembly, AssemblyRef,
    TypeRef, TypeDef, TypeDefOrRef base handles, NestedClass ownership, and raw flags. The lossless
    signature layer additionally decodes TypeSpec and MethodDef signatures into structural CLR

@@ -2521,6 +2521,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   diagnostic severity and actual FIR construction remain next layers. The focused adversarial
   integration test is 1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML suites
   (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The DLL-classpath importer continuation is implemented. The frontend classifies each DLL into
+  exactly one path: presence of the reserved
+  `Kotlin.Metadata` resource selects the self-describing Kotlin-produced dependency and its
+  authoritative KLIB; absence selects an ordinary foreign CLR assembly and its authoritative
+  physical metadata. A present non-private or malformed resource must never fall back to foreign
+  import, and an invalid PE remains an error. Canonical foreign files plus exact decoded metadata
+  are retained in classpath order for the future lazy FIR provider without creating FIR,
+  runtime dependencies, or deployment copies. This follows JVM's Kotlin-metadata/Java-class split;
+  the resource discriminator is the CLR-specific artifact boundary. Malformed nullable-metadata
+  severity still waits for the provider/source boundary. `DotNetClrClasspathAssemblyReader` uses
+  one bounded PE-reader session and one parsed metadata image for both selection and retained
+  rows. The focused adversarial test is 1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML
+  suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
