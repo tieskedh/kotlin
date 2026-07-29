@@ -5,7 +5,8 @@ Date: 2026-07-29
 Status: first foreign nullable-aware FIR slice plus exact `NotNullWhen`, parameter `NotNull`,
 return-target `NotNull`/`MaybeNull` result enhancement, return-target `NotNullIfNotNull`, and
 parameter-target `DoesNotReturnIf` flow contracts implemented; method-target `DoesNotReturn` also
-supplies a logical Kotlin `Nothing` view. Public Kotlin/.NET source-annotation names remain
+supplies a logical Kotlin `Nothing` view, and ordinary by-value parameters honor exact
+`AllowNull`/`DisallowNull` input preconditions. Public Kotlin/.NET source-annotation names remain
 undecided.
 
 ## Governing rule
@@ -57,7 +58,7 @@ Primary Kotlin references:
 | Nominal types and members | TypeDef, MethodDef, Field, Property, Event, MethodSemantics | Physical rows retained; no foreign FIR provider | CLR is authoritative for a foreign library. Prefer real Property/Event rows over inferred naming |
 | Signatures and generic constraints | Signature blobs, GenericParam, GenericParamConstraint | Lossless physical and selected-graph models exist | CLR is authoritative for the physical foreign signature. Apply a separate Kotlin usability policy |
 | Declaration nullability | Roslyn `NullableAttribute`, `NullableContextAttribute`, and `NullablePublicOnlyAttribute` | Fully decoded, selected, aligned, and projected to Kotlin qualifier vocabulary below FIR | Trust valid evidence for foreign enhanced types; use flexible types when absent, suppressed, contradictory, or malformed |
-| Conditional/flow nullability | `AllowNull`, `DisallowNull`, `MaybeNull`, `NotNull`, `MaybeNullWhen`, `NotNullWhen`, `NotNullIfNotNull`, `MemberNotNull`, and `MemberNotNullWhen` | `NotNullWhen`, parameter `NotNull`, and return-target `NotNullIfNotNull` decode to exact common FIR effects; the other positions/attributes remain raw/deferred | Integrate per target and exact contract; do not flatten conditional facts into declaration nullability or bypass Kotlin value stability |
+| Conditional/flow nullability | `AllowNull`, `DisallowNull`, `MaybeNull`, `NotNull`, `MaybeNullWhen`, `NotNullWhen`, `NotNullIfNotNull`, `MemberNotNull`, and `MemberNotNullWhen` | `NotNullWhen`, parameter `NotNull`, and return-target `NotNullIfNotNull` decode to exact common FIR effects; return `NotNull`/`MaybeNull` and by-value `AllowNull`/`DisallowNull` enhance call views; the remaining positions/attributes stay raw/deferred | Integrate per target and exact contract; do not flatten conditional facts into declaration nullability or bypass Kotlin value stability |
 | Normal-return reachability | `DoesNotReturn` and parameter-target `DoesNotReturnIf` | `DoesNotReturnIf` decodes to the exact opposite-Boolean normal-return implication; method-target `DoesNotReturn` supplies a logical `Nothing` view while retaining the physical CLR return signature | Feed exact facts into common control-flow and keep logical reachability separate from physical invocation |
 | Kotlin contracts | No general CLR contract format; CodeAnalysis attributes exactly cover a null-state subset such as `returns(true) implies (x != null)` and non-returning functions | Kotlin-produced declarations keep complete KLIB contracts; the exact implemented foreign CodeAnalysis subset normalizes to common FIR | Bidirectionally map only the exact subset. Keep `callsInPlace`, arbitrary type predicates, and general multi-value implications in KLIB |
 | Extension call view | `ExtensionAttribute` plus the physical static signature; newer C# extension declarations require a Roslyn metadata probe | Raw custom attributes only | Consume only after receiver, generic ownership, accessibility, and collision rules are proven. Do not infer from the first parameter alone |
@@ -181,7 +182,7 @@ therefore per attribute *and per target*, not per attribute name:
 | `NotNullIfNotNull(parameterName)` on a return | `(parameter != null) implies returnsNotNull()` | Exact reverse common FIR effect; implemented with exact Param-name binding, meaningful multiplicity, all-or-nothing invalid evidence, and an older-language-level consumer |
 | `DoesNotReturn` | Kotlin `Nothing` call view | Implemented: expose the trusted non-return promise as logical `Nothing`, retain the original CLR return signature, and reject invalid evidence without strengthening |
 | `DoesNotReturnIf(Boolean)` on a Boolean parameter | Normal return implies that the argument had the opposite value | Exact common FIR effect; implemented without rewriting the physical signature or adding target-specific data-flow |
-| `AllowNull` / `DisallowNull` | Input/precondition type distinct from output/read type | Ordinary by-value parameters and property setters need separate policies; a property annotation cannot be flattened into one Kotlin property type |
+| `AllowNull` / `DisallowNull` | Input/precondition type distinct from output/read type | Enhance ordinary by-value parameter input types; keep properties and `ref`/`out` separate because one Kotlin type cannot flatten their input and output views |
 | `MaybeNull` / `MaybeNullWhen` on a parameter | Weaken or invalidate the caller's post-call null-state | Not a positive Kotlin contract. It becomes material for `ref`/`out`, which are outside the closed signature slice and require explicit state invalidation |
 | `MemberNotNull` / `MemberNotNullWhen` | Flow fact about a named field/property on the receiver | Preserve as CLR metadata, but do not grant a Kotlin smart cast merely because Roslyn does. Common contracts cannot name arbitrary members, and Kotlin stability remains authoritative |
 
@@ -322,6 +323,80 @@ same-name polyfill plus a physically corrupted blob prove duplicates, a wrong co
 payloads, malformed prologs, and value parameters add no effect. The focused test is 1/0/0/0.
 The fresh strict gate is 874/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
 57 library integration tests).
+
+## Exact by-value parameter precondition slice: `AllowNull` and `DisallowNull`
+
+CLR precondition attributes change which values a caller may supply without changing the
+declaration's ordinary nullable annotation:
+
+```csharp
+void AcceptsNull([AllowNull] string value);
+void RejectsNull([DisallowNull] string? value);
+```
+
+For an ordinary by-value foreign parameter, Kotlin's logical parameter type is the call-boundary
+precondition. The two methods therefore import as accepting `String?` and `String` respectively,
+while the original physical signature and nullable metadata remain retained.
+
+This follows the JVM importer's user-visible rule: trusted foreign parameter nullability changes
+Kotlin call checking rather than merely issuing an informational warning. It differs only in
+where the fact comes from. Java commonly places the qualifier directly on the declaration/type;
+the CLR deliberately separates a declaration's general nullability from its input precondition.
+Kotlin/.NET first resolves the declaration qualifier and then applies the exact precondition.
+
+Roslyn's call-site `ApplyLValueAnnotations` checks `DisallowNull` before `AllowNull`. The selected
+input order is therefore:
+
+1. Invalid or duplicated recognized `AllowNull` evidence produces flexibility. Treating broken
+   weakening evidence as absent could retain an unjustified rigid non-null call restriction.
+2. Otherwise exact `DisallowNull` produces non-null.
+3. Otherwise exact `AllowNull` produces nullable.
+4. Otherwise retain the ordinary declaration qualifier. Invalid or duplicated `DisallowNull`
+   cannot strengthen it.
+
+Two exact attributes consequently select non-null, matching Roslyn's call-boundary precedence.
+A valid `AllowNull` still wins over invalid `DisallowNull`; invalid `AllowNull` forces flexibility
+even beside valid `DisallowNull`, because that is no longer the well-formed conflict for which
+the CLR precedence was selected.
+
+Roslyn also has method-entry flow-state code, but Microsoft documents these attributes as
+preconditions that inform callers and explicitly says they do not enable additional
+implementation checks. Kotlin/.NET therefore does not attempt to reconstruct C# body analysis.
+For a Kotlin implementation of an imported abstract interface, the enhanced parameter type is
+the inherited call contract: a conforming caller may pass null to `AllowNull` and must not pass
+null to `DisallowNull`.
+
+Parameter postconditions remain independent. `[AllowNull, NotNull] string value` accepts a
+nullable Kotlin argument and refines that stable argument after normal return.
+`[AllowNull, NotNullWhen(true)]` likewise combines a nullable input precondition with the existing
+conditional common FIR effect.
+
+The first slice is deliberately restricted to the provider's ordinary by-value `string`/`object`
+parameters. Properties need separate getter/read and setter/input views, while `ref`/`out`
+parameters need both pre-call and post-call state; flattening either into one declaration type is
+rejected. Value parameters, wrong metadata targets, wrong constructors, unrelated same-name
+types, and named payloads do not gain a precondition.
+
+Recognition requires one unambiguous physical value Param and exact selected-graph, top-level,
+non-generic `System.Diagnostics.CodeAnalysis.AllowNullAttribute` or
+`DisallowNullAttribute` ancestry with its parameterless constructor and no fixed or named
+arguments. Kotlin-produced DLLs remain KLIB-authoritative; any emitted precondition attributes
+are derived C# views.
+
+The implementation uses two structured decoders plus a pure input-qualifier enhancer after
+ordinary nullable declaration projection. The focused test is 1/0/0/0. Real Roslyn metadata
+proves nullable, non-null, oblivious, conflicting, unconditional-postcondition, and
+conditional-postcondition interactions. Hostile polyfills and corrupted blobs cover duplicates,
+wrong constructors, named payloads, wrong targets, mixed valid/invalid evidence, and malformed
+values. The fresh strict gate is 879/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
+CLI, and 62 library integration tests).
+
+Roslyn and Microsoft references:
+
+- <https://github.com/dotnet/roslyn/blob/e84bc2ba08dd68592928f4016c443043bf5a4d48/src/Compilers/CSharp/Portable/FlowAnalysis/NullableWalker.cs>
+- <https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/attributes/nullable-analysis#preconditions-allownull-and-disallownull>
+- <https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.codeanalysis.allownullattribute>
+- <https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.codeanalysis.disallownullattribute>
 
 ## Exact unconditional return-nullability slice: `NotNull` and `MaybeNull`
 
