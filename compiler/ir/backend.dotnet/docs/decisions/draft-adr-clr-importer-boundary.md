@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware exact nominal assignability, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -1012,6 +1012,41 @@ ordinary/nullable/by-ref-like values, and all three target profiles. Synthetic s
 removes `RTSpecialName` from an otherwise matching `.ctor` to prove that name and signature alone
 are insufficient.
 
+The twenty-ninth slice gives compact CLR primitive signatures their selected nominal views.
+
+1. JVM, JS, Native, and Wasm begin with compiler built-in identities and map them to target
+   primitive/boxed representations where target operations require it. JVM generic bounds in
+   particular use the boxed class view of a primitive argument. They do not discover those
+   identities through display names or the compiler host runtime.
+2. CLR signatures encode Boolean, numeric, native-integer, String, and Object types as compact
+   element codes rather than TypeDefOrRef tokens. Generic type constraints are nevertheless
+   checked against their boxed selected `System.*` TypeDefs and interface/base hierarchy. The
+   defining assembly differs by selected graph (`mscorlib`, reference facades, or
+   `System.Runtime`/CoreLib).
+3. Kotlin Common is unchanged. A physical `ELEMENT_TYPE_I4` to selected `System.Int32` mapping is
+   not a new Kotlin `Int` identity, nullability rule, boxing promise, or stdlib declaration.
+4. The primitive set and its CLR metadata names are profile-uniform, while assembly identity and
+   hierarchy come from the selected target graph. Framework coverage resolves every primitive
+   from `mscorlib`; .NET 10 coverage resolves every primitive from its selected
+   `System.Runtime` reference graph. `netstandard2.0` must likewise begin from its selected facade
+   and binder rather than borrowing either runtime's TypeDef.
+5. `DotNetClrPrimitiveTypeCatalogResolver` resolves every compact primitive through
+   `DotNetClrTypeResolver`, fails structurally on the first unresolved definition, and returns an
+   immutable complete catalog. Nominal constraint validation maps a primitive argument to that
+   selected zero-argument TypeView before using the existing bounded hierarchy walker. The
+   default-constructor validator reuses the same catalog for primitive reference types, removing
+   its former object/string-only core catalog.
+6. The core-team choice is one selected-core primitive catalog shared by importer policy layers,
+   following the other backends' built-in-to-physical mapping pattern. Host reflection,
+   hard-coded host assembly identities, decoder-local mappings, and permanent primitive
+   “unsupported” results are rejected.
+
+Real selected-reference tests resolve the complete primitive set from Framework 4.8 `mscorlib`
+and .NET 10 `System.Runtime`, plus a missing-catalog type failure. A Roslyn generic
+`IComparable<T>` constraint proves that compact `Int32` and `String` arguments satisfy their exact
+boxed interface views while `Object` does not. The earlier mixed contract now correctly records
+`Int32 -> System.ValueType` as satisfied and its unrelated project interface as violated.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1113,6 +1148,12 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Keeping CLR constructor-constraint satisfaction separate from Kotlin Common constructor
   semantics: **Correct direction**.
+- Complete selected-core CLR primitive TypeDef catalog with structured resolution:
+  **Correct direction**.
+- Reusing boxed selected primitive views for nominal generic-constraint assignability:
+  **Correct direction**.
+- Keeping the physical primitive catalog separate from Kotlin built-in identity:
+  **Correct direction**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:

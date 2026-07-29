@@ -52,11 +52,6 @@ data class DotNetClrConstructedTypeSpecialConstraintValidation(
     val parameters: List<DotNetClrSpecialGenericParameterValidation>,
 )
 
-data class DotNetClrDefaultConstructorCoreTypes(
-    val systemObject: DotNetClrResolvedTypeDefinition,
-    val systemString: DotNetClrResolvedTypeDefinition,
-)
-
 /**
  * Validates the reference/value/default-constructor special constraints and implicit by-ref-like
  * eligibility of each argument in one resolved constructed CLR type.
@@ -67,7 +62,7 @@ data class DotNetClrDefaultConstructorCoreTypes(
 class DotNetClrSpecialConstraintValidator(
     private val target: DotNetTarget,
     private val byRefLikeClassifier: DotNetClrByRefLikeClassifier,
-    private val defaultConstructorCoreTypes: DotNetClrDefaultConstructorCoreTypes,
+    private val primitiveTypes: DotNetClrPrimitiveTypeCatalog,
 ) {
     fun validate(
         constraints: DotNetClrResolvedConstructedTypeConstraints,
@@ -222,16 +217,7 @@ class DotNetClrSpecialConstraintValidator(
     private fun DotNetClrResolvedTypeSignature.referenceTypeDefinitionOrNull():
             DotNetClrResolvedTypeDefinition? =
         when (this) {
-            is DotNetClrResolvedTypeSignature.Primitive ->
-                when (type) {
-                    DotNetClrPrimitiveType.OBJECT ->
-                        defaultConstructorCoreTypes.systemObject
-
-                    DotNetClrPrimitiveType.STRING ->
-                        defaultConstructorCoreTypes.systemString
-
-                    else -> null
-                }
+            is DotNetClrResolvedTypeSignature.Primitive -> primitiveTypes[type]
 
             is DotNetClrResolvedTypeSignature.Named -> type
             is DotNetClrResolvedTypeSignature.GenericInstance -> genericType.type
