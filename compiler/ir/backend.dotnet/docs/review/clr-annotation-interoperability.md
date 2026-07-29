@@ -2,8 +2,8 @@
 
 Date: 2026-07-29
 
-Status: first foreign nullable-aware FIR slice implemented; public Kotlin/.NET source-annotation
-names remain undecided.
+Status: first foreign nullable-aware FIR slice and exact `NotNullWhen` flow contract implemented;
+public Kotlin/.NET source-annotation names remain undecided.
 
 ## Governing rule
 
@@ -54,7 +54,7 @@ Primary Kotlin references:
 | Nominal types and members | TypeDef, MethodDef, Field, Property, Event, MethodSemantics | Physical rows retained; no foreign FIR provider | CLR is authoritative for a foreign library. Prefer real Property/Event rows over inferred naming |
 | Signatures and generic constraints | Signature blobs, GenericParam, GenericParamConstraint | Lossless physical and selected-graph models exist | CLR is authoritative for the physical foreign signature. Apply a separate Kotlin usability policy |
 | Declaration nullability | Roslyn `NullableAttribute`, `NullableContextAttribute`, and `NullablePublicOnlyAttribute` | Fully decoded, selected, aligned, and projected to Kotlin qualifier vocabulary below FIR | Trust valid evidence for foreign enhanced types; use flexible types when absent, suppressed, contradictory, or malformed |
-| Conditional/flow nullability | `AllowNull`, `DisallowNull`, `MaybeNull`, `NotNull`, `MaybeNullWhen`, `NotNullWhen`, `NotNullIfNotNull`, `MemberNotNull`, and `MemberNotNullWhen` | Raw custom attributes only | Preserve first. Integrate with FIR data flow only per exact contract; do not flatten conditional facts into declaration nullability |
+| Conditional/flow nullability | `AllowNull`, `DisallowNull`, `MaybeNull`, `NotNull`, `MaybeNullWhen`, `NotNullWhen`, `NotNullIfNotNull`, `MemberNotNull`, and `MemberNotNullWhen` | `NotNullWhen` is decoded to an exact common FIR effect; the other attributes remain raw/deferred | Integrate only per exact contract; do not flatten conditional facts into declaration nullability |
 | Kotlin contracts | No general CLR contract format; CodeAnalysis attributes exactly cover a null-state subset such as `returns(true) implies (x != null)` and non-returning functions | KLIB contract metadata only | Bidirectionally map only the exact subset. Keep `callsInPlace`, arbitrary type predicates, and general multi-value implications in KLIB |
 | Extension call view | `ExtensionAttribute` plus the physical static signature; newer C# extension declarations require a Roslyn metadata probe | Raw custom attributes only | Consume only after receiver, generic ownership, accessibility, and collision rules are proven. Do not infer from the first parameter alone |
 | Variable argument call view | Param-array/collection attributes plus the physical array/collection parameter | Raw custom attributes only | Consume as a Kotlin call-site view only where element and spread semantics are representable. Do not confuse it with Kotlin declaration identity |
@@ -147,6 +147,77 @@ The implementation and fixture must attack these ideas:
 - two assemblies defining the same Kotlin classifier identity do not win by classpath accident;
 - Kotlin-produced DLLs remain on the embedded-KLIB path and are never re-imported as foreign CLR
   declarations.
+
+## Exact conditional-contract slice: `NotNullWhen`
+
+Kotlin Common's resolved contract
+
+```kotlin
+returns(true) implies (value != null)
+```
+
+and CLR
+
+```csharp
+bool Test([NotNullWhen(true)] string? value)
+```
+
+state the same caller-side implication. The `false` constructor value maps to
+`returns(false) implies (value != null)`. Neither form makes the declaration type globally
+non-null, proves the implementation, or licenses the inverse implication.
+
+The mature Kotlin precedent has two parts:
+
+- serialized Kotlin contracts are reconstructed as resolved FIR effects and consumed by common
+  data-flow analysis;
+- JVM foreign annotations enhance Java types, but the JVM frontend does not generally promote
+  vendor contract strings into Kotlin's contract algebra.
+
+The CLR-specific difference is justified by the platform itself: `NotNullWhenAttribute` is a
+standard `System.Diagnostics.CodeAnalysis` contract interpreted by Roslyn, with one Boolean
+constructor argument and parameter target. It therefore supplies a shared binary fact rather than
+a target-invented convention. The implementation must feed the existing common FIR effect model,
+not add a .NET-only smart-cast path.
+
+The first conditional slice is closed:
+
+- recognize only an exact top-level
+  `System.Diagnostics.CodeAnalysis.NotNullWhenAttribute` type that resolves through the ordinary
+  selected-graph attribute decoder, derives from `System.Attribute`, is non-generic, and uses the
+  single-`Boolean` instance constructor;
+- require exactly one recognized attribute on a physical Param row, one Boolean fixed argument,
+  no named arguments, a Boolean-returning method, and a `string` or `object` parameter in the
+  current FIR grammar;
+- attach one common `ConeConditionalEffectDeclaration` to the imported function, with
+  `Returns(TRUE|FALSE)` implying the referenced value parameter `!= null`;
+- an absent, duplicate, malformed, wrong-constructor, wrong-target, non-reference-parameter, or
+  non-Boolean-return shape contributes no effect. It never strengthens declaration nullability;
+- keep `MaybeNullWhen`, `NotNullIfNotNull`, `NotNull`, `DoesNotReturn`, member effects, and
+  by-reference `Try*` contracts for separately reviewed slices.
+
+Adversarial coverage must prove both positive branches (`true` and `false`) and both invalid
+inverses, plus absence, duplicate attributes, a wrong constructor signature, named payloads,
+non-reference parameters, and a non-Boolean return. A dishonest but well-formed foreign contract
+is trusted at compile time in the same sense as an authored Kotlin contract or JVM nullability
+annotation; runtime behavior is not proved.
+
+For Kotlin-produced DLLs, an exact Kotlin contract may later emit `NotNullWhen` as its derived C#
+projection. The embedded KLIB contract remains authoritative on Kotlin re-import, and unsupported
+Kotlin effects remain KLIB-only.
+
+Microsoft references:
+
+- <https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/attributes/nullable-analysis>
+- <https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.codeanalysis.notnullwhenattribute>
+
+Implementation evidence: the selected-graph decoder preserves absent, decoded, and
+structured-invalid outcomes. The provider builds ordinary common FIR effects; no target-specific
+data-flow rule exists. Real Roslyn metadata proves smart casts in both valid branches and errors
+in both inverses. A hostile same-name attribute polyfill plus a physically corrupted attribute
+blob cover duplicates, a wrong constructor, named payloads, invalid prologs, non-reference
+parameters, and a non-Boolean return. The focused smart-cast test is 1/0/0/0. The fresh strict
+gate is 873/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 56 library
+integration tests).
 
 ## Deferred big decision
 
