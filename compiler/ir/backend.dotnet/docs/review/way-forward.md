@@ -946,6 +946,21 @@ signature assignability is unchanged. Real Roslyn metadata, hostile scope/cycle 
 Framework/CoreCLR runtime probes cover the rule. Semantic nullability and the FIR import policy
 remain above this physical validity layer.
 
+**CLR parameter-attachment progress (2026-07-29):** the physical importer now retains optional
+Param rows before attempting nullable-reference enhancement. This matches the mature-target rule
+that declaration/return/value-parameter attachment is preserved before source-language type
+mapping. The actual CLR difference is that MethodDef signatures own the types and count while a
+separate Param table optionally carries names, flags, custom attributes, constants, and marshal
+metadata; MethodDef.ParamList owns the rows and sequence 0 denotes the return. The reader retains
+token, owner, raw flags, sequence, nullable name, multiplicity, and row order without synthesizing
+missing rows. It rejects invalid list bounds, reserved flags, and sequences outside the signature,
+while retaining ECMA warning-only gaps, duplicate/decreasing sequences, and non-null empty names
+for later located importer diagnostics. This changes no Kotlin Common contract and is uniform
+across all three profiles. Dual-profile ILAsm, Roslyn semantic shapes, real net10
+`System.Runtime`, and hostile byte-level fixtures cover the rule. NullableAttribute context/flag
+decoding is now the next semantic layer; Constant and FieldMarshal payload decoding remains an
+explicit physical prerequisite when defaults or interop marshaling are imported.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:

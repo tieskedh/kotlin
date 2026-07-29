@@ -376,6 +376,50 @@ data class DotNetClrMethodDefinition(
     }
 }
 
+/**
+ * One physical Param-table row owned by [declaringMethod].
+ *
+ * Param rows are optional CLR metadata. A method's signature remains authoritative for its
+ * parameter count and types; this row preserves names, flags, custom-attribute attachment, and
+ * other metadata for the return value ([sequence] 0) or a value parameter ([sequence] 1 onwards).
+ */
+data class DotNetClrParameterDefinition(
+    val handle: DotNetClrMetadataHandle,
+    val declaringMethod: DotNetClrMetadataHandle,
+    val sequence: Int,
+    val name: String?,
+    val attributes: Int,
+) {
+    val isReturn: Boolean
+        get() = sequence == 0
+
+    val parameterIndex: Int?
+        get() = if (isReturn) null else sequence - 1
+
+    val isIn: Boolean
+        get() = attributes and IN_ATTRIBUTE != 0
+
+    val isOut: Boolean
+        get() = attributes and OUT_ATTRIBUTE != 0
+
+    val isOptional: Boolean
+        get() = attributes and OPTIONAL_ATTRIBUTE != 0
+
+    val hasDefault: Boolean
+        get() = attributes and HAS_DEFAULT_ATTRIBUTE != 0
+
+    val hasFieldMarshal: Boolean
+        get() = attributes and HAS_FIELD_MARSHAL_ATTRIBUTE != 0
+
+    private companion object {
+        const val IN_ATTRIBUTE = 0x0001
+        const val OUT_ATTRIBUTE = 0x0002
+        const val OPTIONAL_ATTRIBUTE = 0x0010
+        const val HAS_DEFAULT_ATTRIBUTE = 0x1000
+        const val HAS_FIELD_MARSHAL_ATTRIBUTE = 0x2000
+    }
+}
+
 data class DotNetClrPropertySignature(
     val hasThis: Boolean,
     val propertyType: DotNetClrTypeSignature,
@@ -486,6 +530,7 @@ data class DotNetClrAssemblyMetadata(
     val typeSpecifications: List<DotNetClrTypeSpecification>,
     val fieldDefinitions: List<DotNetClrFieldDefinition>,
     val methodDefinitions: List<DotNetClrMethodDefinition>,
+    val parameterDefinitions: List<DotNetClrParameterDefinition>,
     val memberReferences: List<DotNetClrMemberReference>,
     val customAttributes: List<DotNetClrCustomAttribute>,
     val propertyDefinitions: List<DotNetClrPropertyDefinition>,
