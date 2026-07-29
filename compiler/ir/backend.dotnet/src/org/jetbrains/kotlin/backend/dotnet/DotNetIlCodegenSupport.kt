@@ -294,6 +294,7 @@ internal class DotNetIlTypeMapper private constructor(
     private val availableClasses: Map<IrClass, DotNetIlClassInfo>,
     val coreLibrary: DotNetCoreLibraryProfile,
     private val externalDeclarations: DotNetExternalDeclarations,
+    private val importedClrDeclarations: DotNetClrImportedDeclarations,
     private val genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo>,
     private val genericInterfaceMapping: DotNetGenericInterfaceMapping,
     private val assemblyReferenceSink: (String) -> Unit,
@@ -304,10 +305,12 @@ internal class DotNetIlTypeMapper private constructor(
         externalDeclarations: DotNetExternalDeclarations = DotNetExternalDeclarations(emptyList()),
         genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
         assemblyReferenceSink: (String) -> Unit = {},
+        foreignAssemblyReferenceSink: (DotNetClrClasspathAssembly.Foreign) -> Unit = {},
     ) : this(
         availableClasses,
         coreLibrary,
         externalDeclarations,
+        DotNetClrImportedDeclarations(foreignAssemblyReferenceSink),
         genericInterfaces,
         DotNetGenericInterfaceMapping.CANONICAL,
         assemblyReferenceSink,
@@ -318,6 +321,7 @@ internal class DotNetIlTypeMapper private constructor(
             availableClasses,
             coreLibrary,
             externalDeclarations,
+            importedClrDeclarations,
             genericInterfaces,
             mapping,
             assemblyReferenceSink,
@@ -456,7 +460,8 @@ internal class DotNetIlTypeMapper private constructor(
         }
             ?: DotNetRuntimeTypes.classInfoFor(irClass)
             ?: DotNetStdlibLibrary.publicImplementationClassInfoOrNull(irClass)
-            ?: externalDeclarations.classInfoOrNull(irClass, this)).also { classInfo ->
+            ?: externalDeclarations.classInfoOrNull(irClass, this)
+            ?: importedClrDeclarations.classInfoOrNull(irClass)).also { classInfo ->
             classInfo?.let(::recordAssemblyReference)
         }
     }
@@ -464,7 +469,8 @@ internal class DotNetIlTypeMapper private constructor(
     fun referencedFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? =
         (DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
             ?: DotNetStdlibLibrary.implementationFunctionInfoOrNull(function, this)
-            ?: externalDeclarations.functionInfoOrNull(function, this)).also { functionInfo ->
+            ?: externalDeclarations.functionInfoOrNull(function, this)
+            ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->
             functionInfo?.owner?.let(::recordAssemblyReference)
         }
 

@@ -22211,6 +22211,295 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testForeignClrInterfaceCallsRetainPhysicalBindingAcrossRuntimeProfiles() {
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(
+            frameworkCSharp != null,
+            ".NET Framework C# compiler is not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(
+            frameworkHost != null,
+            "Windows PowerShell CLR 4 host is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val frameworkCoreLibrary = checkNotNull(frameworkCSharp).parentFile.resolve("mscorlib.dll")
+        assertTrue(frameworkCoreLibrary.isFile) {
+            "Framework compiler has no adjacent mscorlib reference: $frameworkCoreLibrary"
+        }
+        val modernSystemRuntime =
+            checkNotNull(modernCSharp).referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(modernSystemRuntime.isFile) {
+            "Modern reference pack has no System.Runtime reference: $modernSystemRuntime"
+        }
+
+        data class Profile(
+            val target: String,
+            val applicationFileName: String,
+            val fixturePreamble: String,
+            val compileFixture: (File, File) -> CSharpCompilerResult,
+            val systemReference: File,
+            val compileVerifier: (File, File, File) -> CSharpCompilerResult,
+            val executionCommand: (File) -> List<String>,
+        )
+
+        val profiles = listOf(
+            Profile(
+                target = "net48",
+                applicationFileName = "ForeignCallConsumer.exe",
+                fixturePreamble =
+                    """
+                    namespace System.Diagnostics.CodeAnalysis
+                    {
+                        [System.AttributeUsage(System.AttributeTargets.Method)]
+                        public sealed class DoesNotReturnAttribute : System.Attribute {}
+                    }
+                    """.trimIndent(),
+                compileFixture = { source, output ->
+                    runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
+                },
+                systemReference = frameworkCoreLibrary,
+                compileVerifier = { source, output, fixture ->
+                    runCSharpCompiler(
+                        checkNotNull(frameworkCSharp),
+                        source,
+                        output,
+                        fixture,
+                        target = "exe",
+                    )
+                },
+                executionCommand = { executable ->
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), executable)
+                },
+            ),
+            Profile(
+                target = "net10.0",
+                applicationFileName = "ForeignCallConsumer.dll",
+                fixturePreamble = "",
+                compileFixture = { source, output ->
+                    runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
+                },
+                systemReference = modernSystemRuntime,
+                compileVerifier = { source, output, fixture ->
+                    runModernCSharpCompiler(
+                        checkNotNull(modernCSharp),
+                        source,
+                        output,
+                        fixture,
+                        target = "exe",
+                    )
+                },
+                executionCommand = { executable ->
+                    listOf(dotnetHost.path, "exec", executable.path)
+                },
+            ),
+        )
+
+        for (profile in profiles) {
+            val fixtureDirectory =
+                File(tmpdir, "foreign-call-fixture-${profile.target.replace('.', '-')}").apply { mkdirs() }
+            val fixtureSource = fixtureDirectory.resolve("ForeignCallContracts.cs").apply {
+                writeText(
+                    """
+                    using System;
+                    using System.Diagnostics.CodeAnalysis;
+                    using System.Reflection;
+                    [assembly: AssemblyVersion("3.4.5.6")]
+
+                    ${profile.fixturePreamble}
+
+                    namespace ForeignCallContracts
+                    {
+                        public interface Api
+                        {
+                            int Compute(int value);
+                            int Compute(string value);
+                            string Echo(string value);
+                            void Touch();
+
+                            [DoesNotReturn]
+                            int ReturnsValue();
+
+                            [DoesNotReturn]
+                            void ReturnsVoid();
+                        }
+
+                        public sealed class ApiImpl : Api
+                        {
+                            public int Compute(int value) { return value + 1; }
+                            public int Compute(string value) { return value.Length + 10; }
+                            public string Echo(string value) { return value + "!"; }
+                            public void Touch() {}
+                            public int ReturnsValue() { return 999; }
+                            public void ReturnsVoid() {}
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val fixtureAssembly = fixtureDirectory.resolve("Foreign.CallContracts.dll")
+            val fixtureResult = profile.compileFixture(fixtureSource, fixtureAssembly)
+            assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+
+            val applicationDirectory =
+                File(tmpdir, "foreign-call-consumer-${profile.target.replace('.', '-')}").apply { mkdirs() }
+            val kotlinSource = applicationDirectory.resolve("foreignCall.kt").apply {
+                writeText(
+                    """
+                    package consumer
+
+                    import ForeignCallContracts.Api
+
+                    public fun verifyInt(api: Api): Int =
+                        api.Compute(40)
+
+                    public fun verifyString(api: Api): Int =
+                        api.Compute("abcd")
+
+                    public fun verifyEcho(api: Api): String =
+                        api.Echo("ok")
+
+                    public fun verifyTouch(api: Api) {
+                        api.Touch()
+                    }
+
+                    public fun dishonestValue(api: Api): String =
+                        api.ReturnsValue()
+
+                    public fun dishonestVoid(api: Api): String =
+                        api.ReturnsVoid()
+
+                    fun main() {}
+                    """.trimIndent()
+                )
+            }
+            val application = applicationDirectory.resolve(profile.applicationFileName)
+            compileInProcess(
+                K2DotNetCompiler(),
+                kotlinSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument,
+                listOf(fixtureAssembly, profile.systemReference)
+                    .joinToString(File.pathSeparator, transform = File::getPath),
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "ForeignCallConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            val packagedFixture = applicationDirectory.resolve("Foreign.CallContracts.dll")
+            assertTrue(packagedFixture.isFile) {
+                "The referenced foreign assembly was not packaged for ${profile.target}"
+            }
+            assertFalse(
+                applicationDirectory.resolve(profile.systemReference.name).isFile &&
+                        profile.systemReference.canonicalFile !=
+                        applicationDirectory.resolve(profile.systemReference.name).canonicalFile
+            ) {
+                "An annotation-only framework assembly was incorrectly packaged for ${profile.target}"
+            }
+
+            val il = applicationDirectory.resolve("ForeignCallConsumer.il").readText()
+            assertTrue(".assembly extern 'Foreign.CallContracts'" in il) { il }
+            assertTrue(".ver 3:4:5:6" in il) { il }
+            assertTrue(
+                "callvirt instance int32 [Foreign.CallContracts]'ForeignCallContracts.Api'::'Compute'(int32)" in il
+            ) { il }
+            assertTrue(
+                "callvirt instance int32 [Foreign.CallContracts]'ForeignCallContracts.Api'::'Compute'(string)" in il
+            ) { il }
+            assertTrue(
+                "callvirt instance int32 [Foreign.CallContracts]'ForeignCallContracts.Api'::'ReturnsValue'()" in il
+            ) { il }
+            assertTrue(
+                "callvirt instance void [Foreign.CallContracts]'ForeignCallContracts.Api'::'ReturnsVoid'()" in il
+            ) { il }
+
+            val verifierSource = applicationDirectory.resolve("ForeignCallVerifier.cs").apply {
+                writeText(
+                    """
+                    using System;
+                    using System.Reflection;
+                    using ForeignCallContracts;
+
+                    public static class ForeignCallVerifier
+                    {
+                        private static void Require(bool condition, string message)
+                        {
+                            if (!condition) throw new Exception(message);
+                        }
+
+                        private static MethodInfo Method(Type facade, string name)
+                        {
+                            MethodInfo result = facade.GetMethod(
+                                name,
+                                BindingFlags.Public | BindingFlags.Static);
+                            Require(result != null, "missing Kotlin method " + name);
+                            return result;
+                        }
+
+                        private static void RequireNothingGuard(MethodInfo method, Api api)
+                        {
+                            try
+                            {
+                                method.Invoke(null, new object[] { api });
+                                throw new Exception(method.Name + " returned despite its Nothing view");
+                            }
+                            catch (TargetInvocationException invocation)
+                            {
+                                Require(
+                                    invocation.InnerException != null &&
+                                    invocation.InnerException.GetType().FullName ==
+                                        "Kotlin.KotlinNothingValueException",
+                                    method.Name + " did not execute the common Nothing guard");
+                            }
+                        }
+
+                        public static int Main()
+                        {
+                            Assembly kotlin = Assembly.LoadFrom("${application.name}");
+                            Type facade = kotlin.GetType("consumer.foreignCallKt", true);
+                            Api api = new ApiImpl();
+                            Require((int)Method(facade, "verifyInt").Invoke(
+                                null, new object[] { api }) == 41,
+                                "foreign int overload binding failed");
+                            Require((int)Method(facade, "verifyString").Invoke(
+                                null, new object[] { api }) == 14,
+                                "foreign string overload binding failed");
+                            Require((string)Method(facade, "verifyEcho").Invoke(
+                                null, new object[] { api }) == "ok!",
+                                "foreign reference return binding failed");
+                            Method(facade, "verifyTouch").Invoke(
+                                null, new object[] { api });
+                            RequireNothingGuard(Method(facade, "dishonestValue"), api);
+                            RequireNothingGuard(Method(facade, "dishonestVoid"), api);
+                            Console.WriteLine("OK");
+                            return 0;
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val verifier = applicationDirectory.resolve(
+                if (profile.target == "net48") "ForeignCallVerifier.exe" else "ForeignCallVerifier.dll"
+            )
+            val verifierResult = profile.compileVerifier(verifierSource, verifier, packagedFixture)
+            assertEquals(0, verifierResult.exitCode, verifierResult.output)
+            if (profile.target == "net10.0") {
+                applicationDirectory.resolve("ForeignCallVerifier.runtimeconfig.json")
+                    .writeText(net10RuntimeConfig())
+            }
+            runAssemblerPairing(
+                profile.executionCommand(verifier),
+                applicationDirectory,
+                "${profile.target} foreign CLR interface calls",
+            )
+        }
+    }
+
+    @Test
     fun testMetadataCompilerRecognizesDotNetAsItsOwnPlatform() {
         val unknownPlatforms = mutableListOf<String>()
         val targetPlatform = MetadataConfigurationUpdater.computeTargetPlatformOrNull(

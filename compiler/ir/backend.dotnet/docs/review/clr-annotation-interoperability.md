@@ -665,6 +665,74 @@ Microsoft and Kotlin references:
 - <https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.codeanalysis.doesnotreturnattribute>
 - <https://kotlinlang.org/docs/exceptions.html#the-nothing-type>
 
+## Exact backend binding for the closed interface slice
+
+The first executable import slice keeps the logical and physical declarations paired all the way
+through FIR2IR. Each imported FIR function carries a target-owned
+`DeserializedContainerSource` containing the already-selected foreign assembly, declaring
+TypeDef, and MethodDef. FIR2IR preserves that standard binary-container carrier on lazy external
+IR functions. Codegen consumes the carrier directly; it must never search the classpath again or
+reconstruct a foreign member from a Kotlin, C#, or IL display name.
+
+This follows the mature-target split:
+
+- JVM external declarations retain their binary container and map the selected Java declaration's
+  descriptor at the call site; fake overrides resolve to the declaring member before emission.
+- Native C interop first turns the selected foreign declaration into an explicit stub/KLIB
+  linkage. Native codegen does not rediscover a C declaration by a source display name.
+- Kotlin/.NET uses the existing FIR/IR binary-container channel because the physical CLR metadata
+  has already been selected in-process. Introducing a second KLIB for a resource-free CLR DLL
+  would incorrectly make that DLL Kotlin-authored.
+
+The admitted provider slice has a useful exact invariant: every imported classifier is a complete
+interface with at least one declared public method. Consequently an external IR class's method
+carriers identify one and only one selected TypeDef. Class type mapping may obtain that owner from
+the retained member carriers; this is not a `ClassId` lookup or a backend name heuristic. A
+missing, mixed, or inconsistent carrier is an internal linkage failure and must reject emission
+loudly.
+
+Logical Kotlin types remain authoritative for source resolution, contracts, overloads, and
+control flow. The retained MethodDef signature remains authoritative for the emitted CLR
+MemberRef:
+
+- `void` stays physical `void` even though its ordinary Kotlin view is `Unit`;
+- a `[DoesNotReturn] int` method is invoked as returning `int32`, that impossible value is
+  discarded, and the common `KotlinNothingValueExceptionLowering` guard follows;
+- nullable and flow attributes change the Kotlin view only where documented above; they do not
+  rewrite the physical parameter or return signature.
+
+Textual IL cannot encode a cross-assembly MethodDef token directly. Its call operand is a
+MemberRef consisting of the selected assembly scope, TypeDef name, method name, calling
+convention, and exact physical signature. Retaining the original TypeDef/MethodDef handles still
+matters for audit and for a future direct metadata writer, while the current IL sink emits the
+structural MemberRef that the CLR resolves. The module emits one `.assembly extern` for the exact
+selected producer identity and copies only a producer actually referenced by surviving emitted
+code next to an executable.
+
+The attack on this design has three relevant failure cases:
+
+- Re-deriving the signature from enhanced IR is unsound for `DoesNotReturn` and can silently turn
+  a non-void MethodDef into `void`.
+- Looking up a MethodDef by namespace/name/signature in the backend duplicates importer policy
+  and can select a different overload or classpath producer.
+- Treating all configured foreign DLLs as emitted dependencies creates false AssemblyRefs and
+  deploys unused artifacts.
+
+The implementation therefore accepts only the existing backend-supported physical primitive,
+string, and object call shapes inside the wider FIR grammar, while unsupported backend value
+types continue to fail through the ordinary located codegen gate. Signed neutral-culture
+assemblies retain their exact public-key token. Non-neutral culture remains outside this first
+IL-emission slice and is rejected rather than approximated.
+
+Implementation evidence: the real C# fixture is compiled independently for CLR 4.8 and CoreCLR
+10. Kotlin calls and executes same-name `int32`/`string` overloads, a reference return, and a
+`void` member through the imported interface on both runtimes. Dishonest value-returning and
+void-returning `DoesNotReturn` implementations prove the exact physical call/pop/common-guard
+sequence. The emitted IL pins assembly version `3.4.5.6` and both overload MemberRefs; the
+referenced fixture is copied beside each executable, while an annotation-only framework
+dependency is not copied. The focused test is 1/0/0/0. The fresh strict gate is 880/0/0/0 across
+16 XML suites (796 FIR/IL/box, 21 generated CLI, and 63 library integration tests).
+
 ## Deferred big decision
 
 Public Kotlin source annotations analogous to the JVM/Native/JS export families are desirable, but

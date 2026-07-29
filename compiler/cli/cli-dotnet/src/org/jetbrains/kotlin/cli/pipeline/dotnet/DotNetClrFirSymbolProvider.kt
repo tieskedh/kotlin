@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnIfMetadataDecod
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnIfMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDisallowNullMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrInputNullabilityEnhancer
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjection
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjector
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityQualifier
@@ -114,12 +115,13 @@ internal class DotNetClrFirSymbolProvider(
     assemblies: List<DotNetClrClasspathAssembly.Foreign>,
 ) : FirSymbolProvider(session) {
     private data class Candidate(
-        val assembly: DotNetClrAssemblyMetadata,
+        val assembly: DotNetClrClasspathAssembly.Foreign,
         val type: DotNetClrTypeDefinition,
         val methods: List<DotNetClrMethodDefinition>,
     )
 
-    private val metadata = assemblies.map(DotNetClrClasspathAssembly.Foreign::metadata)
+    private val foreignAssemblies = assemblies
+    private val metadata = foreignAssemblies.map(DotNetClrClasspathAssembly.Foreign::metadata)
     private val annotationServices = ForeignAnnotationServices.create(metadata)
     private val candidates: Map<ClassId, Candidate> = buildCandidates()
     private val symbols = ConcurrentHashMap<ClassId, FirRegularClassSymbol>()
@@ -186,10 +188,10 @@ internal class DotNetClrFirSymbolProvider(
 
     private fun buildCandidates(): Map<ClassId, Candidate> {
         val candidatesById = linkedMapOf<ClassId, MutableList<Candidate>>()
-        for (assembly in metadata) {
-            for (type in assembly.typeDefinitions) {
+        for (assembly in foreignAssemblies) {
+            for (type in assembly.metadata.typeDefinitions) {
                 val classId = type.classIdOrNull() ?: continue
-                val methods = type.completeSupportedContractOrNull(assembly) ?: continue
+                val methods = type.completeSupportedContractOrNull(assembly.metadata) ?: continue
                 candidatesById.getOrPut(classId, ::mutableListOf) +=
                     Candidate(assembly, type, methods)
             }
@@ -292,7 +294,7 @@ internal class DotNetClrFirSymbolProvider(
             }
 
             for (method in candidate.methods) {
-                declarations += buildMethod(classId, classSymbol, candidate.assembly, method)
+                declarations += buildMethod(classId, classSymbol, candidate, method)
             }
         }
         return classSymbol
@@ -301,9 +303,10 @@ internal class DotNetClrFirSymbolProvider(
     private fun buildMethod(
         classId: ClassId,
         classSymbol: FirRegularClassSymbol,
-        assembly: DotNetClrAssemblyMetadata,
+        candidate: Candidate,
         method: DotNetClrMethodDefinition,
     ) = buildNamedFunction {
+        val assembly = candidate.assembly.metadata
         resolvePhase = FirResolvePhase.ANALYZED_DEPENDENCIES
         origin = FirDeclarationOrigin.Library
         moduleData = this@DotNetClrFirSymbolProvider.moduleData
@@ -314,6 +317,11 @@ internal class DotNetClrFirSymbolProvider(
         )
         isLocal = false
         name = Name.identifier(method.name)
+        containerSource = DotNetClrImportedMethodSource(
+            candidate.assembly,
+            candidate.type,
+            method,
+        )
         val functionSymbol = FirNamedFunctionSymbol(CallableId(classId, name))
         symbol = functionSymbol
         dispatchReceiverType = classSymbol.constructType()

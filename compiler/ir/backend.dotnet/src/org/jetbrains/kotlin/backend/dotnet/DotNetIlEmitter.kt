@@ -437,12 +437,17 @@ internal class DotNetIlEmitter(
             registerClassTree(irClass)
         }
         val referencedAssemblies = linkedSetOf<String>()
+        val referencedForeignAssemblies =
+            java.util.Collections.newSetFromMap(
+                java.util.IdentityHashMap<DotNetClrClasspathAssembly.Foreign, Boolean>()
+            )
         val typeMapper = DotNetIlTypeMapper(
             availableClasses,
             coreLibrary,
             externalDeclarations,
             genericInterfaces,
             referencedAssemblies::add,
+            referencedForeignAssemblies::add,
         )
         val declaredGenericTypeMapper = typeMapper.declaredGenericInterfaceView()
         val exactGenericTypeMapper = typeMapper.exactGenericInterfaceView()
@@ -1305,6 +1310,7 @@ internal class DotNetIlEmitter(
             // A failed declaration forces another fixpoint round, so clearing here guarantees
             // that the final set describes only IL which actually survived emission.
             referencedAssemblies.clear()
+            referencedForeignAssemblies.clear()
             renderedClasses.clear()
             renderedMethods.clear()
             renderedStaticInitializers.clear()
@@ -1658,6 +1664,21 @@ internal class DotNetIlEmitter(
             )
             return null
         }
+        val ambiguousForeignAssemblyName = referencedForeignAssemblies
+            .groupBy { assembly -> assembly.metadata.identity.name.lowercase() }
+            .values
+            .firstOrNull { assemblies ->
+                assemblies.map { assembly -> assembly.assemblyFile.canonicalFile }.distinct().size > 1
+            }
+        if (ambiguousForeignAssemblyName != null) {
+            val name = ambiguousForeignAssemblyName.first().metadata.identity.name
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "The emitted module references multiple selected foreign CLR identities named '$name'; " +
+                        "the textual IL assembly scope cannot distinguish them."
+            )
+            return null
+        }
 
         // Kotlin.Runtime is a mandatory foundation of every Kotlin-produced CLR assembly. This
         // is an explicit target ABI dependency, not an accident of whichever helper happened to
@@ -1798,6 +1819,7 @@ internal class DotNetIlEmitter(
                                 referenced.equals(library.artifact.assemblyName, ignoreCase = true)
                             }
                 },
+                referencedForeignAssemblies = referencedForeignAssemblies.toList(),
                 friendAssemblies = friendAssemblies,
                 hasCSharpImplementationManifest = managedResources.isNotEmpty(),
                 hasKotlinMetadataResource = hasKotlinMetadataResource,
@@ -1811,6 +1833,7 @@ internal class DotNetIlEmitter(
             ilText,
             declarations,
             referencedAssemblies.toSet(),
+            referencedForeignAssemblies.toList(),
             managedResources,
         )
     }
@@ -3968,6 +3991,7 @@ internal class DotNetIlEmitter(
         referencesStdlibAssembly: Boolean,
         referencesEditorBrowsableAssembly: Boolean,
         referencedExternalLibraries: List<DotNetExternalLibrary>,
+        referencedForeignAssemblies: List<DotNetClrClasspathAssembly.Foreign>,
         friendAssemblies: List<DotNetFriendAssemblyIdentity>,
         hasCSharpImplementationManifest: Boolean,
         hasKotlinMetadataResource: Boolean,
@@ -3992,6 +4016,25 @@ internal class DotNetIlEmitter(
             appendLine(".assembly extern ${library.artifact.assemblyName.toIlIdentifier()}")
             appendLine("{")
             appendLine("  .ver ${library.artifact.assemblyVersionIl}")
+            appendLine("}")
+        }
+        for (assembly in referencedForeignAssemblies.sortedWith(
+            compareBy(
+                { it.metadata.identity.name.lowercase() },
+                { it.metadata.identity.version },
+                { it.assemblyFile.path },
+            )
+        )) {
+            val identity = assembly.metadata.identity
+            appendLine(".assembly extern ${identity.name.toIlIdentifier()}")
+            appendLine("{")
+            appendLine("  .ver ${identity.version.replace('.', ':')}")
+            if (identity.publicKeyToken.isNotEmpty()) {
+                val token = identity.publicKeyToken.joinToString(" ") { byte ->
+                    byte.toString(16).uppercase().padStart(2, '0')
+                }
+                appendLine("  .publickeytoken = ($token)")
+            }
             appendLine("}")
         }
         val emittedAssemblyVersion = when {
@@ -4034,5 +4077,6 @@ internal data class DotNetIlEmissionResult(
     val ilText: String,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val referencedAssemblies: Set<String>,
+    val referencedForeignAssemblies: List<DotNetClrClasspathAssembly.Foreign>,
     val managedResources: Map<String, ByteArray>,
 )
