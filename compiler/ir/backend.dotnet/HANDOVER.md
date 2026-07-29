@@ -2173,6 +2173,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `System.Array`, `System.Object`, non-generic `IEnumerable`, generic `IList<object>`, and mixed
   unsupported/violated aggregate evidence. The fresh strict gate is 871/0/0/0 across 16 XML suites
   (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The vector-interface continuation replaces that temporary boundary with
+  `DotNetClrArrayRuntimeTypes`: a complete selected catalog for `System.Array`, `IList<T>`,
+  `ICollection<T>`, `IEnumerable<T>`, `IReadOnlyList<T>`, and
+  `IReadOnlyCollection<T>`. The resolver validates class/interface shape and arity before
+  assignability sees the identities. Vectors use the existing array-element-compatible relation,
+  including reduced integer/enum storage; general arrays and unrelated unary interfaces are
+  proven not assignable. Roslyn coverage includes mutable, enumerable, read-only, reduced,
+  enum-backed, non-pair, general-array, and unrelated-interface cases. Catalog resolution is
+  exercised against both the selected modern core graph and Framework `mscorlib`. The strict gate
+  is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
+  tests).
 - The System.Type/serialized-enum custom-attribute continuation reuses that selected-graph resolver
   for fixed, array, and tagged values. Type values retain the complete resolved structural type or
   explicit null; serialized enums must resolve to a nominal named or constructed type and pass the
