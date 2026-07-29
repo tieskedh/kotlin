@@ -2045,3 +2045,16 @@ proves that physical foreign metadata and its nullable attributes affect Kotlin 
 
 The detailed mature-target comparison, carrier matrix, attacks, and deferred public-annotation
 decision are recorded in `docs/review/clr-annotation-interoperability.md`.
+
+The first conditional-flow slice, `NotNullWhenAttribute`, is implemented. Its Boolean constructor
+maps exactly
+to common FIR's `returns(true|false) implies (parameter != null)` effect for a Boolean-returning
+method and a reference parameter. This mapping does not alter the parameter's declaration type,
+infer the inverse condition, or introduce a .NET-only data-flow rule. Duplicate, malformed,
+wrong-signature, named-payload, non-reference, and non-Boolean-return shapes contribute no effect.
+The JVM frontend's reluctance to import vendor contract strings remains relevant; this CLR
+divergence is justified only because `System.Diagnostics.CodeAnalysis.NotNullWhenAttribute` is a
+standard platform binary contract consumed by Roslyn and matches Kotlin's effect algebra exactly.
+The focused real/hostile-metadata smart-cast test is 1/0/0/0. The fresh strict gate is
+873/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 56 library integration
+tests).
