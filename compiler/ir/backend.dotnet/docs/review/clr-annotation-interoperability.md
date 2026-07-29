@@ -2,9 +2,9 @@
 
 Date: 2026-07-29
 
-Status: first foreign nullable-aware FIR slice plus exact `NotNullWhen`, parameter `NotNull`, and
-return-target `NotNullIfNotNull` flow contracts implemented; public Kotlin/.NET source-annotation
-names remain undecided.
+Status: first foreign nullable-aware FIR slice plus exact `NotNullWhen`, parameter `NotNull`,
+return-target `NotNullIfNotNull`, and parameter-target `DoesNotReturnIf` flow contracts
+implemented; public Kotlin/.NET source-annotation names remain undecided.
 
 ## Governing rule
 
@@ -56,7 +56,8 @@ Primary Kotlin references:
 | Signatures and generic constraints | Signature blobs, GenericParam, GenericParamConstraint | Lossless physical and selected-graph models exist | CLR is authoritative for the physical foreign signature. Apply a separate Kotlin usability policy |
 | Declaration nullability | Roslyn `NullableAttribute`, `NullableContextAttribute`, and `NullablePublicOnlyAttribute` | Fully decoded, selected, aligned, and projected to Kotlin qualifier vocabulary below FIR | Trust valid evidence for foreign enhanced types; use flexible types when absent, suppressed, contradictory, or malformed |
 | Conditional/flow nullability | `AllowNull`, `DisallowNull`, `MaybeNull`, `NotNull`, `MaybeNullWhen`, `NotNullWhen`, `NotNullIfNotNull`, `MemberNotNull`, and `MemberNotNullWhen` | `NotNullWhen`, parameter `NotNull`, and return-target `NotNullIfNotNull` decode to exact common FIR effects; the other positions/attributes remain raw/deferred | Integrate per target and exact contract; do not flatten conditional facts into declaration nullability or bypass Kotlin value stability |
-| Kotlin contracts | No general CLR contract format; CodeAnalysis attributes exactly cover a null-state subset such as `returns(true) implies (x != null)` and non-returning functions | KLIB contract metadata only | Bidirectionally map only the exact subset. Keep `callsInPlace`, arbitrary type predicates, and general multi-value implications in KLIB |
+| Normal-return reachability | `DoesNotReturn` and parameter-target `DoesNotReturnIf` | `DoesNotReturnIf` decodes to the exact opposite-Boolean normal-return implication; unconditional `DoesNotReturn` remains deferred | Feed exact facts into common control-flow while retaining the physical CLR return signature |
+| Kotlin contracts | No general CLR contract format; CodeAnalysis attributes exactly cover a null-state subset such as `returns(true) implies (x != null)` and non-returning functions | Kotlin-produced declarations keep complete KLIB contracts; the exact implemented foreign CodeAnalysis subset normalizes to common FIR | Bidirectionally map only the exact subset. Keep `callsInPlace`, arbitrary type predicates, and general multi-value implications in KLIB |
 | Extension call view | `ExtensionAttribute` plus the physical static signature; newer C# extension declarations require a Roslyn metadata probe | Raw custom attributes only | Consume only after receiver, generic ownership, accessibility, and collision rules are proven. Do not infer from the first parameter alone |
 | Variable argument call view | Param-array/collection attributes plus the physical array/collection parameter | Raw custom attributes only | Consume as a Kotlin call-site view only where element and spread semantics are representable. Do not confuse it with Kotlin declaration identity |
 | Optional/default values | Param flags and Constant rows | Physical values retained; Kotlin export uses `$default` dispatchers | A CLR constant is authoritative for a foreign CLR optional parameter, but it is not a Kotlin default declaration. Kotlin defaults keep KLIB/dispatcher semantics |
@@ -177,7 +178,7 @@ therefore per attribute *and per target*, not per attribute name:
 | `NotNull` / `MaybeNull` on a return | Enhanced call-result type/null-state | Adopt in a separate return-target slice after precedence with Roslyn declaration nullability is pinned |
 | `NotNullIfNotNull(parameterName)` on a return | `(parameter != null) implies returnsNotNull()` | Exact reverse common FIR effect; implemented with exact Param-name binding, meaningful multiplicity, all-or-nothing invalid evidence, and an older-language-level consumer |
 | `DoesNotReturn` | Unreachable normal continuation / Kotlin `Nothing` call view | Semantically exact, but the physical CLR return signature must remain distinct from the Kotlin control-flow view |
-| `DoesNotReturnIf(Boolean)` on a Boolean parameter | Normal return implies that the argument had the opposite value | Exact subset candidate; keep ordinary Kotlin argument stability and do not rewrite the physical signature |
+| `DoesNotReturnIf(Boolean)` on a Boolean parameter | Normal return implies that the argument had the opposite value | Exact common FIR effect; implemented without rewriting the physical signature or adding target-specific data-flow |
 | `AllowNull` / `DisallowNull` | Input/precondition type distinct from output/read type | Ordinary by-value parameters and property setters need separate policies; a property annotation cannot be flattened into one Kotlin property type |
 | `MaybeNull` / `MaybeNullWhen` on a parameter | Weaken or invalidate the caller's post-call null-state | Not a positive Kotlin contract. It becomes material for `ref`/`out`, which are outside the closed signature slice and require explicit state invalidation |
 | `MemberNotNull` / `MemberNotNullWhen` | Flow fact about a named field/property on the receiver | Preserve as CLR metadata, but do not grant a Kotlin smart cast merely because Roslyn does. Common contracts cannot name arbitrary members, and Kotlin stability remains authoritative |
@@ -374,6 +375,62 @@ normalization and all-or-nothing rejection of mixed named payloads, wrong constr
 names, and missing/non-reference names; a physically corrupted blob proves malformed values add
 no effect. The focused Kotlin 2.2 consumer test is 1/0/0/0. The fresh strict gate is 875/0/0/0
 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 58 library integration tests).
+
+## Exact conditional non-return slice: `DoesNotReturnIf`
+
+CLR
+
+```csharp
+void FailIf([DoesNotReturnIf(true)] bool condition)
+```
+
+means that a normal continuation proves `condition == false`. It therefore maps to common FIR
+
+```kotlin
+returns() implies (!condition)
+```
+
+The `false` constructor value maps to `returns() implies condition`. This is the exact
+contrapositive supplied by the attribute: the function cannot return normally when the argument
+has the named value, and normal return therefore proves the opposite value. It does not claim
+that the function always returns for the opposite argument.
+
+The mature-target rule is the same as for the other implemented CodeAnalysis effects: common FIR
+contracts remain the semantic consumer. JVM has no standard class-file counterpart to import,
+while the CLR-specific justification is that
+`System.Diagnostics.CodeAnalysis.DoesNotReturnIfAttribute` is the platform contract Roslyn
+consumes. Kotlin/.NET translates that shared binary fact into an existing common effect rather
+than creating target-specific data-flow.
+
+This slice:
+
+- recognizes only an exact selected-graph, top-level, non-generic
+  `System.Diagnostics.CodeAnalysis.DoesNotReturnIfAttribute` deriving from `System.Attribute`
+  with its single-`Boolean` instance constructor;
+- requires exactly one recognized attribute on a physical Boolean value Param row, one Boolean
+  fixed argument, and no named arguments;
+- emits a common wildcard-return conditional effect whose condition is the Boolean parameter for
+  constructor value `false` and its logical negation for constructor value `true`;
+- leaves the declared Kotlin return type and physical CLR signature unchanged. A value-returning
+  CLR method receives the same normal-continuation fact as a `void` method;
+- treats absence, duplicates, malformed blobs, wrong constructors, named payloads, and
+  non-Boolean parameters as contributing no effect.
+
+The attack on the mapping is that a dishonest foreign attribute can make unreachable-looking
+Kotlin code execute, just as a dishonest Kotlin contract or JVM nullability annotation can.
+Compile-time trust is deliberate, but only for an exact, well-formed standard contract. The
+implementation neither proves the foreign body nor imports an inverse implication.
+
+The real Roslyn fixture proves constructor values `true` and `false`, including both `void` and
+value-returning methods. Negative cases prove both inverse call conditions, absence, and an
+annotated non-Boolean parameter do not refine a nullable value. A hostile same-name polyfill plus
+a physically corrupted blob prove duplicates, a wrong constructor, named payloads, and malformed
+values add no effect. The focused test is 1/0/0/0. The fresh strict gate is 876/0/0/0 across 16
+XML suites (796 FIR/IL/box, 21 generated CLI, and 59 library integration tests).
+
+Microsoft reference:
+
+- <https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.codeanalysis.doesnotreturnifattribute>
 
 ## Deferred big decision
 
