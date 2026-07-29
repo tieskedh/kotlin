@@ -13,6 +13,7 @@ sealed interface DotNetClrTypeAssignability {
     data class InvalidVariance(
         val actual: DotNetClrResolvedTypeView,
         val expected: DotNetClrResolvedTypeView,
+        val failure: DotNetClrVarianceFailure,
     ) : DotNetClrTypeAssignability
 
     data class InvalidTypeClassification(
@@ -53,6 +54,12 @@ sealed interface DotNetClrTypeAssignability {
         val limit: Int,
         val type: DotNetClrResolvedTypeSignature,
     ) : DotNetClrTypeAssignability
+}
+
+enum class DotNetClrVarianceFailure {
+    OWNER_IS_NOT_INTERFACE_OR_DELEGATE,
+    DELEGATE_IS_NOT_SEALED,
+    GENERIC_PARAMETER_LAYOUT,
 }
 
 enum class DotNetClrSignatureConversionUnsupported {
