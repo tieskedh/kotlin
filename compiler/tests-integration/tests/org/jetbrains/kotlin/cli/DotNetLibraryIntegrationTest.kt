@@ -22211,6 +22211,328 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testForeignClrObsoleteMethodsUseCommonDeprecationDiagnostics() {
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(
+            frameworkCSharp != null,
+            ".NET Framework C# compiler is not available",
+        )
+        val frameworkCoreLibrary = checkNotNull(frameworkCSharp).parentFile.resolve("mscorlib.dll")
+        assertTrue(frameworkCoreLibrary.isFile) {
+            "Framework compiler has no adjacent mscorlib reference: $frameworkCoreLibrary"
+        }
+        val modernSystemRuntime =
+            checkNotNull(modernCSharp).referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(modernSystemRuntime.isFile) {
+            "Modern reference pack has no System.Runtime reference: $modernSystemRuntime"
+        }
+
+        data class Profile(
+            val target: String,
+            val modernDiagnosticMethod: String,
+            val modernDiagnosticCall: String,
+            val compileFixture: (File, File) -> CSharpCompilerResult,
+            val systemReference: File,
+        )
+
+        val profiles = listOf(
+            Profile(
+                target = "net48",
+                modernDiagnosticMethod = "",
+                modernDiagnosticCall = "",
+                compileFixture = { source, output ->
+                    runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
+                },
+                systemReference = frameworkCoreLibrary,
+            ),
+            Profile(
+                target = "net10.0",
+                modernDiagnosticMethod =
+                    """
+                    [Obsolete(
+                        "diagnostic message",
+                        DiagnosticId = "DOTNET123",
+                        UrlFormat = "https://example.test/{0}")]
+                    void Diagnostic();
+                    """.trimIndent(),
+                modernDiagnosticCall = "api.Diagnostic()",
+                compileFixture = { source, output ->
+                    runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
+                },
+                systemReference = modernSystemRuntime,
+            ),
+        )
+
+        fun compileConsumer(
+            sourceName: String,
+            sourceText: String,
+            classpath: List<File>,
+            target: String,
+        ): Pair<String, ExitCode> {
+            val source = File(tmpdir, sourceName).apply { writeText(sourceText) }
+            return AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    K2DotNetCompilerArguments::noStdlib.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    classpath.joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, "ForeignObsoleteConsumer",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "$sourceName.il").path,
+                )
+            )
+        }
+
+        for (profile in profiles) {
+            val profileSuffix = profile.target.replace('.', '-')
+            val fixtureSource = File(tmpdir, "foreign-obsolete-$profileSuffix.cs").apply {
+                writeText(
+                    """
+                    using System;
+
+                    namespace ForeignObsoleteContracts
+                    {
+                        public interface DeprecatedApi
+                        {
+                            [Obsolete]
+                            void NoMessage();
+
+                            [Obsolete(null)]
+                            void NullMessage();
+
+                            [Obsolete("warning message")]
+                            void Warning();
+
+                            [Obsolete("error message", true)]
+                            void Error();
+
+                            ${profile.modernDiagnosticMethod}
+
+                            void Current();
+                        }
+
+                        public interface OverrideApi
+                        {
+                            [Obsolete("base-only message")]
+                            void BaseOnly();
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val fixtureAssembly = File(tmpdir, "Foreign.Obsolete.$profileSuffix.dll")
+            val fixtureResult = profile.compileFixture(fixtureSource, fixtureAssembly)
+            assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+
+            val [warningDiagnostics, warningExitCode] = compileConsumer(
+                "foreign-obsolete-warning-$profileSuffix.kt",
+                """
+                package consumer
+
+                import ForeignObsoleteContracts.DeprecatedApi
+
+                public fun use(api: DeprecatedApi) {
+                    api.NoMessage()
+                    api.NullMessage()
+                    api.Warning()
+                    ${profile.modernDiagnosticCall}
+                    api.Current()
+                }
+                """.trimIndent(),
+                listOf(fixtureAssembly, profile.systemReference),
+                profile.target,
+            )
+            assertEquals(ExitCode.OK, warningExitCode, warningDiagnostics)
+            assertTrue("Deprecated in .NET" in warningDiagnostics) { warningDiagnostics }
+            assertTrue("warning message" in warningDiagnostics) { warningDiagnostics }
+            if (profile.modernDiagnosticCall.isNotEmpty()) {
+                assertTrue("diagnostic message" in warningDiagnostics) { warningDiagnostics }
+            }
+            assertFalse("api.Current()" in warningDiagnostics) { warningDiagnostics }
+            assertFalse("unresolved reference 'DeprecatedApi'" in warningDiagnostics) {
+                warningDiagnostics
+            }
+
+            val [errorDiagnostics, errorExitCode] = compileConsumer(
+                "foreign-obsolete-error-$profileSuffix.kt",
+                """
+                package consumer
+
+                import ForeignObsoleteContracts.DeprecatedApi
+
+                public fun rejected(api: DeprecatedApi) {
+                    api.Error()
+                }
+                """.trimIndent(),
+                listOf(fixtureAssembly, profile.systemReference),
+                profile.target,
+            )
+            assertEquals(ExitCode.COMPILATION_ERROR, errorExitCode, errorDiagnostics)
+            assertTrue("error message" in errorDiagnostics) { errorDiagnostics }
+
+            val [overrideDiagnostics, overrideExitCode] = compileConsumer(
+                "foreign-obsolete-override-$profileSuffix.kt",
+                """
+                package consumer
+
+                import ForeignObsoleteContracts.OverrideApi
+
+                public class CurrentOverride : OverrideApi {
+                    override fun BaseOnly() {}
+                }
+
+                public fun accepted(api: CurrentOverride) {
+                    api.BaseOnly()
+                }
+                """.trimIndent(),
+                listOf(fixtureAssembly, profile.systemReference),
+                profile.target,
+            )
+            assertEquals(ExitCode.OK, overrideExitCode, overrideDiagnostics)
+            assertFalse("base-only message" in overrideDiagnostics) {
+                overrideDiagnostics
+            }
+        }
+
+        val hostileSource = File(tmpdir, "foreign-obsolete-lookalike.cs").apply {
+            writeText(
+                """
+                using System;
+
+                namespace System
+                {
+                    [AttributeUsage(AttributeTargets.Method)]
+                    public sealed class ObsoleteAttribute : Attribute
+                    {
+                        public ObsoleteAttribute(string message) {}
+                    }
+                }
+
+                namespace HostileObsoleteContracts
+                {
+                    public interface LookalikeApi
+                    {
+                        [System.Obsolete("look-alike must not deprecate")]
+                        void Current();
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val hostileAssembly = File(tmpdir, "Foreign.Obsolete.Lookalike.dll")
+        val hostileResult = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            hostileSource,
+            hostileAssembly,
+            additionalArguments = listOf("/nowarn:0436"),
+        )
+        assertEquals(0, hostileResult.exitCode, hostileResult.output)
+        val [hostileDiagnostics, hostileExitCode] = compileConsumer(
+            "foreign-obsolete-lookalike.kt",
+            """
+            package consumer
+
+            import HostileObsoleteContracts.LookalikeApi
+
+            public fun accepted(api: LookalikeApi) {
+                api.Current()
+            }
+            """.trimIndent(),
+            listOf(hostileAssembly, modernSystemRuntime),
+            "net10.0",
+        )
+        assertEquals(ExitCode.OK, hostileExitCode, hostileDiagnostics)
+        assertFalse("look-alike must not deprecate" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+
+        val malformedSource = File(tmpdir, "foreign-obsolete-malformed.cs").apply {
+            writeText(
+                """
+                using System;
+
+                namespace MalformedObsoleteContracts
+                {
+                    public interface MalformedApi
+                    {
+                        [Obsolete("malformed must not deprecate", true)]
+                        void Malformed();
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val pristineMalformedAssembly = File(tmpdir, "Foreign.Obsolete.Malformed.Primitive.dll")
+        val malformedResult = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            malformedSource,
+            pristineMalformedAssembly,
+        )
+        assertEquals(0, malformedResult.exitCode, malformedResult.output)
+        val malformedMetadata = DotNetClrMetadataReader.read(pristineMalformedAssembly)
+        val malformedApi = malformedMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "MalformedObsoleteContracts" &&
+                    type.metadataName == "MalformedApi"
+        }
+        val malformedMethod = malformedMetadata.methodDefinitions.single { method ->
+            method.declaringType == malformedApi.handle &&
+                    method.name == "Malformed"
+        }
+        val malformedAttribute = malformedMetadata.customAttributes.single { attribute ->
+            if (attribute.parent != malformedMethod.handle) return@single false
+            val constructor = malformedMetadata.memberReferences.singleOrNull { member ->
+                member.handle == attribute.constructor
+            } ?: return@single false
+            malformedMetadata.typeReferences.any { type ->
+                type.handle == constructor.parent &&
+                        type.namespaceName == "System" &&
+                        type.metadataName == "ObsoleteAttribute"
+            }
+        }
+        val malformedImage = pristineMalformedAssembly.readBytes()
+        val malformedTables = locateClrMetadataTables(malformedImage)
+        val malformedValueIndex = readLittleEndianIndex(
+            malformedImage,
+            malformedTables.rowOffset(12, malformedAttribute.handle.row) +
+                    malformedTables.hasCustomAttributeIndexSize +
+                    malformedTables.customAttributeTypeIndexSize,
+            malformedTables.blobIndexSize,
+        )
+        val malformedValueOffset =
+            malformedTables.blobContentOffset(malformedImage, malformedValueIndex)
+        assertEquals(1, malformedImage[malformedValueOffset].toInt() and 0xff)
+        malformedImage[malformedValueOffset] = 0
+        val malformedAssembly = File(tmpdir, "Foreign.Obsolete.Malformed.dll").apply {
+            writeBytes(malformedImage)
+        }
+        val [malformedDiagnostics, malformedExitCode] = compileConsumer(
+            "foreign-obsolete-malformed.kt",
+            """
+            package consumer
+
+            import MalformedObsoleteContracts.MalformedApi
+
+            public fun accepted(api: MalformedApi) {
+                api.Malformed()
+            }
+            """.trimIndent(),
+            listOf(malformedAssembly, modernSystemRuntime),
+            "net10.0",
+        )
+        assertEquals(ExitCode.OK, malformedExitCode, malformedDiagnostics)
+        assertFalse("malformed must not deprecate" in malformedDiagnostics) {
+            malformedDiagnostics
+        }
+    }
+
+    @Test
     fun testForeignClrInterfaceCallsRetainPhysicalBindingAcrossRuntimeProfiles() {
         val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
         requireOrAssumeToolchain(
