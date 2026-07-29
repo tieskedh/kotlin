@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface variance, complete CLR vector-interface, and array assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface/delegate variance, complete CLR vector-interface, and array assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -1227,6 +1227,38 @@ Roslyn coverage proves `IList<object>`, `IEnumerable<object>`, `IReadOnlyList<ob
 generic interface. The catalog itself is resolved from both the selected modern core graph and the
 installed .NET Framework 4.8 `mscorlib`.
 
+The thirty-fifth slice evaluates physical CLR delegate variance.
+
+1. Kotlin/JVM keeps Kotlin function types under common Kotlin variance and imports Java functional
+   interfaces through the Java enhancement/type-checking boundary. Native similarly represents
+   Objective-C blocks as interop types and generated adapters, while JS and Wasm retain their own
+   callable carriers. None changes Kotlin `FunctionN` subtyping to imitate a foreign callable
+   representation.
+2. The CLR uniquely represents delegates as sealed nominal TypeDefs directly derived from
+   `System.MulticastDelegate`. A generic delegate can carry covariant and contravariant
+   GenericParam rows, and compatible-instantiated delegate conversion uses the same
+   reference-argument restriction and direction rules as compatible-instantiated interfaces.
+3. Kotlin Common is unchanged. CLR delegate variance is consulted only for foreign physical
+   signatures; it does not make `System.Func`/`System.Action` canonical Kotlin callable types or
+   weaken Kotlin function-type identity and value-argument semantics.
+4. The VES rule is identical on `net48`, `netstandard2.0`, and `net10.0`. Each compilation must
+   nevertheless resolve `System.MulticastDelegate` through its selected profile graph. No profile
+   recognizes delegates by C# type name, `Invoke` method spelling, or host reflection.
+5. `DotNetClrDelegateRuntimeTypesResolver` validates the selected non-generic abstract
+   `System.MulticastDelegate` definition. The shared signature-assignability layer then accepts
+   variance metadata only on interfaces or sealed TypeDefs whose direct resolved base is that
+   identity. It reuses the existing bounded recursive reference-only variance algorithm; a
+   variant class or non-sealed delegate-shaped TypeDef is invalid metadata rather than an
+   unsupported conversion.
+6. The core-team choice is selected physical identity plus the common variance evaluator, not a
+   delegate-name registry, special cases for `Func`/`Action`, or callable adapters in constraint
+   validation. Kotlin callable export adapters remain a separate importer/exporter concern.
+
+Real Roslyn metadata covers a custom `in`/`out` delegate, `Func`, `Action`, nested covariance,
+unchanged value arguments, and changed value arguments. The selected delegate root is resolved
+from the .NET 10, .NET Framework 4.8, and .NET Standard 2.0 facade graphs; malformed variance on a
+generic class remains invalid instead of becoming delegate-compatible.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1338,14 +1370,16 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   non-assignability: **Correct direction**.
 - Sealed aggregate generic-constraint status with invalid/unsupported/violated/satisfied
   precedence and retained per-row evidence: **Correct direction**.
-- Deferring remaining delegate and dependent-parameter assignability behind explicit
-  unsupported results: **Correct temporary implementation, but not a final design**.
+- Deferring remaining dependent-parameter assignability behind explicit unsupported results:
+  **Correct temporary implementation, but not a final design**.
 - Bounded recursive reference-only CLR generic-interface variance in shared assignability:
   **Correct direction**.
 - Keeping value arguments invariant in CLR variance rather than applying boxing:
   **Correct direction**.
-- Keeping delegate variance conversions as an explicit unsupported boundary:
-  **Correct temporary implementation, but not a final design**.
+- Recognizing physical delegates only by a sealed direct base edge to the selected
+  `System.MulticastDelegate` identity: **Correct direction**.
+- Reusing the bounded reference-only generic variance evaluator for interfaces and delegates:
+  **Correct direction**.
 - Generalizing interface variance into bounded physical signature assignability:
   **Correct direction**.
 - Rank-aware CLR array-to-array assignability without changing Kotlin `Array` invariance:

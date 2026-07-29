@@ -4,21 +4,23 @@ package org.jetbrains.kotlin.backend.dotnet
  * Resolves supported CLR signature assignability above exact nominal hierarchy traversal.
  *
  * Kotlin source subtyping is not inferred here. This is the physical foreign-signature relation
- * used by importer validation. Generic-interface variance and array-to-array conversions are
- * supported; dependent parameters and delegate variance remain explicit boundaries. The
- * signature entry point never inserts boxing. The nominal-view entry point is separate so
- * generic-constraint validation can compare selected type definitions without pretending that an
- * unboxed value is assignment-compatible with a reference location.
+ * used by importer validation. Generic interface/delegate variance and CLR array conversions are
+ * supported; dependent parameters remain an explicit boundary. The signature entry point never
+ * inserts boxing. The nominal-view entry point is separate so generic-constraint validation can
+ * compare selected type definitions without pretending that an unboxed value is
+ * assignment-compatible with a reference location.
  */
 class DotNetClrSignatureTypeAssignabilityResolver(
     private val typeResolver: DotNetClrTypeResolver,
     private val physicalTypeClassifier: DotNetClrPhysicalTypeClassifier,
     private val primitiveTypes: DotNetClrPrimitiveTypeCatalog,
     private val arrayRuntimeTypes: DotNetClrArrayRuntimeTypes,
+    private val delegateRuntimeTypes: DotNetClrDelegateRuntimeTypes,
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
 ) {
     private val exactResolver =
         DotNetClrTypeAssignabilityResolver(typeResolver, resolutionLimit)
+    private val hierarchyResolver = DotNetClrTypeHierarchyViewResolver(typeResolver)
     private val resolutionLimit = resolutionLimit.also { limit ->
         require(limit in 1..MAX_RESOLUTION_LIMIT) {
             "CLR signature assignability resolution limit must be in 1..$MAX_RESOLUTION_LIMIT"
@@ -67,7 +69,7 @@ class DotNetClrSignatureTypeAssignabilityResolver(
         return try {
             when (val exact = exactResolver.isAssignable(actual, expected)) {
                 is DotNetClrTypeAssignability.VariantConversionRequired ->
-                    evaluateInterfaceVariance(exact, active, counter)
+                    evaluateGenericVariance(exact, active, counter)
 
                 else -> exact
             }
@@ -256,7 +258,7 @@ class DotNetClrSignatureTypeAssignabilityResolver(
         )
     }
 
-    private fun evaluateInterfaceVariance(
+    private fun evaluateGenericVariance(
         conversion: DotNetClrTypeAssignability.VariantConversionRequired,
         active: MutableSet<AssignabilityPair>,
         counter: ResolutionCounter,
@@ -266,7 +268,7 @@ class DotNetClrSignatureTypeAssignabilityResolver(
         for (actual in conversion.actualCandidates) {
             when (
                 val result =
-                    evaluateInterfaceVarianceCandidate(
+                    evaluateGenericVarianceCandidate(
                         actual,
                         conversion,
                         active,
@@ -297,14 +299,46 @@ class DotNetClrSignatureTypeAssignabilityResolver(
             ?: DotNetClrTypeAssignability.NotAssignable
     }
 
-    private fun evaluateInterfaceVarianceCandidate(
+    private fun evaluateGenericVarianceCandidate(
         actual: DotNetClrResolvedTypeView,
         original: DotNetClrTypeAssignability.VariantConversionRequired,
         active: MutableSet<AssignabilityPair>,
         counter: ResolutionCounter,
     ): DotNetClrTypeAssignability {
         val expected = original.expected
-        if (!actual.type.definition.isInterface) return original
+        if (!actual.type.definition.isInterface) {
+            val hierarchy = when (
+                val resolution = hierarchyResolver.resolve(actual)
+            ) {
+                is DotNetClrTypeHierarchyViewResolution.Resolved ->
+                    resolution.hierarchy
+
+                is DotNetClrTypeHierarchyViewResolution.Invalid ->
+                    return DotNetClrTypeAssignability.InvalidHierarchy(
+                        actual,
+                        resolution,
+                    )
+            }
+            if (
+                hierarchy.baseType?.type?.hasSameIdentityAs(
+                    delegateRuntimeTypes.systemMulticastDelegate
+                ) != true
+            ) {
+                return DotNetClrTypeAssignability.InvalidVariance(
+                    actual,
+                    expected,
+                    DotNetClrVarianceFailure
+                        .OWNER_IS_NOT_INTERFACE_OR_DELEGATE,
+                )
+            }
+            if (!actual.type.definition.isSealed) {
+                return DotNetClrTypeAssignability.InvalidVariance(
+                    actual,
+                    expected,
+                    DotNetClrVarianceFailure.DELEGATE_IS_NOT_SEALED,
+                )
+            }
+        }
 
         val parameters = actual.type.assembly.genericParameterDefinitions
             .filter { parameter ->
@@ -316,7 +350,11 @@ class DotNetClrSignatureTypeAssignabilityResolver(
             parameters.size != actual.arguments.size ||
             parameters.size != expected.arguments.size
         ) {
-            return DotNetClrTypeAssignability.InvalidVariance(actual, expected)
+            return DotNetClrTypeAssignability.InvalidVariance(
+                actual,
+                expected,
+                DotNetClrVarianceFailure.GENERIC_PARAMETER_LAYOUT,
+            )
         }
 
         for (parameter in parameters) {
