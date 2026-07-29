@@ -708,6 +708,20 @@ landed shape as a compatibility constraint.
    first slice rather than approximating identity. The two-profile C# execution pin covers exact
    overloads, string/void results, dishonest void/value non-return contracts, AssemblyRef version,
    dependency copying, and the absence of an annotation-only deployment copy.
+   The first property continuation follows JVM synthetic-property compatibility and Native
+   selector retention while using the CLR Property row as the stronger grouping authority. One
+   instance, non-indexed Property on a closed imported interface becomes a Kotlin `val` or `var`
+   only when MethodSemantics supplies one exact public abstract getter and an optional exact
+   public abstract setter whose physical signatures agree with the Property signature. Never
+   infer accessors from `get_`/`set_` spelling. One property carrier preserves the selected
+   assembly, TypeDef, Property, getter, and setter through FIR2IR; codegen selects the physical
+   accessor by declaration identity. Kotlin Common permits only one property type, so recognized
+   `AllowNull`/`DisallowNull`/`NotNull`/`MaybeNull` split-state evidence on the Property,
+   getter-return Param, or setter-value Param withholds the complete classifier rather than
+   flattening different read/write states. This includes malformed recognized evidence and both
+   Roslyn layouts observed in the two-profile C# pin: Framework leaves `AllowNull` on Property,
+   while modern Roslyn moves it to the setter Param. Indexers and distinct accessor views remain
+   separate decisions.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased

@@ -2092,8 +2092,20 @@ The first FIR provider is a closed vertical slice over complete public, top-leve
 abstract-interface contracts using primitive, `string`, and `object` signatures. If any public
 declared method is outside the slice, the classifier is withheld rather than partially projected.
 Classifier construction is lazy, duplicate class identities are withheld, and selected-graph
-binding accepts only exact unique classpath assemblies. Backend calls are a later slice; this one
-proves that physical foreign metadata and its nullable attributes affect Kotlin source analysis.
+binding accepts only exact unique classpath assemblies. Exact backend calls now retain the
+selected assembly, TypeDef, MethodDef, and physical signature through FIR2IR rather than
+reconstructing members from a display name.
+
+The first property continuation remains inside that complete interface slice. A Property row
+becomes one real Kotlin `val` or `var` only when it is an instance, non-indexed,
+primitive/string/object property with one exact public abstract getter and, for `var`, one exact
+public abstract setter associated by MethodSemantics. The Property signature and accessor
+MethodDef signatures must agree structurally; spelling is irrelevant. Kotlin Common has one
+property type, so recognized `AllowNull`/`DisallowNull` or `NotNull`/`MaybeNull` split-state
+evidence on the Property row, getter-return Param, or setter-value Param is withheld rather than
+flattened into an untruthful read/write type. Inspecting all three parents is required because
+Roslyn can move a source property attribute to its semantically relevant accessor parameter.
+Indexers and distinct input/output property views remain separate decisions.
 
 The detailed mature-target comparison, carrier matrix, attacks, and deferred public-annotation
 decision are recorded in `docs/review/clr-annotation-interoperability.md`.

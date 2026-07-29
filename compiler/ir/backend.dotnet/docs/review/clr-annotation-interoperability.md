@@ -733,6 +733,59 @@ referenced fixture is copied beside each executable, while an annotation-only fr
 dependency is not copied. The focused test is 1/0/0/0. The fresh strict gate is 880/0/0/0 across
 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 63 library integration tests).
 
+## Closed CLR interface-property projection
+
+Kotlin Common gives one declaration type to a property. A readable property is `val T`; a
+writable property is `var T`, and its setter consumes that same `T`. The first CLR property slice
+therefore admits only shapes that can state that Common contract truthfully:
+
+- one instance Property row on an already-admitted abstract interface, with a valid Kotlin
+  identifier, no index parameters, no default, and a supported primitive/string/object type;
+- exactly one public abstract instance getter associated by MethodSemantics, physically returning
+  the Property signature type and taking no value parameters;
+- optionally one public abstract instance setter associated by MethodSemantics, physically
+  returning `void` and taking exactly the same Property signature type;
+- no `Other` semantics and no accessor recovered from `get_`/`set_` spelling.
+
+The mature-target comparison supports a real Kotlin property rather than two renamed functions.
+JVM has no property row, so FIR synthesizes a property only from a valid Java getter and includes a
+setter only when its parameter is type-compatible with the getter result. Native Objective-C
+interop emits Kotlin property stubs and retains the physical getter/setter selectors on their
+accessor annotations. CLR already supplies the grouping row that Java lacks, so Kotlin/.NET uses
+that row as authority and retains its exact accessor MethodDefs.
+
+Nullable metadata on the Property row forms the single logical Kotlin property type. Physical CLR
+reference signatures remain unchanged. `AllowNull`, `DisallowNull`, `MaybeNull`, and `NotNull`
+can describe different input and output states for one C# property; flattening either side into
+Kotlin's one `var` type would lie in the other direction. Roslyn may encode that split evidence on
+the Property row or move it to the getter-return or setter-value Param row. Any recognized
+split-state evidence on those three exact parents is therefore withheld with the complete
+classifier in this slice, whether valid or malformed. A later design may expose distinct accessor
+functions or introduce a more general foreign-property model, but it may not silently make a
+nullable setter non-null or a non-null getter nullable.
+
+One target-owned property container carrier retains the selected assembly, TypeDef, Property row,
+and exact getter/setter MethodDefs. FIR2IR copies it to the lazy IR property and both accessors.
+Backend property reads and writes then resolve the accessor from declaration identity plus that
+carrier. The accessor spelling and physical signature are never reconstructed from the Kotlin
+property name.
+
+Implementation evidence: independently compiled CLR 4.8 and CoreCLR 10 fixtures expose
+read-only, mutable, and nullable interface properties. Kotlin reads, writes, and round-trips null
+through those declarations on both runtimes, while emitted IL pins the exact getter/setter
+MemberRefs. A split-state `AllowNull` property withholds its complete interface on both profiles;
+the Framework compiler leaves the evidence on the Property row, whereas modern Roslyn places it
+on the setter value Param. The focused cross-runtime test is 1/0/0/0.
+
+The attack rules out three tempting partial projections:
+
+- exposing both accessor functions and a property creates two Kotlin callable surfaces for one
+  CLR contract and gives accessor naming conventions semantic authority;
+- dropping an incompatible or unsupported setter turns a writable foreign contract into a
+  read-only one despite the provider's complete-classifier promise;
+- accepting an indexer as a property loses its value-parameter semantics. Indexers need their own
+  documented Kotlin view.
+
 ## Deferred big decision
 
 Public Kotlin source annotations analogous to the JVM/Native/JS export families are desirable, but
