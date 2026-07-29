@@ -1346,6 +1346,51 @@ sequence, and an invalid ParamList; a warning-only duplicate/decreasing sequence
 losslessly readable. The scale lane validates Param ownership against real .NET 10
 `System.Runtime`.
 
+The thirty-eighth slice decodes Roslyn nullable-reference attribute payloads without yet changing
+Kotlin types.
+
+1. JVM keeps declaration, return, parameter, and type-use annotations in its foreign binary model
+   and applies Java type enhancement only after ownership and type structure are known. Native
+   export/import and JS/Wasm serialization likewise keep logical declaration facts separate from
+   their eventual target type projection. The uniform rule is to preserve and validate the
+   foreign contract before creating Kotlin-facing types.
+2. The CLR-specific difference is the C# compiler convention. Nullable reference annotations are
+   not runtime CLR type distinctions: Roslyn encodes local preorder transforms in
+   `NullableAttribute(byte|byte[])`, inherited defaults in `NullableContextAttribute(byte)`, and
+   optional accessibility filtering in the module-level
+   `NullablePublicOnlyAttribute(bool)`. Roslyn can embed these attribute types privately in each
+   producer, so a fixed framework-assembly identity would reject valid C# output.
+3. Kotlin Common is unchanged. Values 0, 1, and 2 are retained as oblivious, not-annotated, and
+   annotated foreign evidence; they do not immediately become Kotlin platform, non-null, or
+   nullable types. In particular, a missing local attribute may mean an enclosing Roslyn context,
+   deliberate obliviousness, or accessibility filtering. Kotlin-produced declarations remain
+   KLIB-authoritative.
+4. These custom-attribute shapes are legal ordinary metadata on `net48`, `netstandard2.0`, and
+   `net10.0`; framework availability changes whether Roslyn embeds private attribute definitions,
+   not the semantic decoding. Profile selection remains responsible for the assembly graph.
+   Public-only filtering is preserved as a module fact and is not applied until effective CLR
+   accessibility is available.
+5. The decoder therefore reuses exact custom-attribute constructor, ancestry, generic
+   substitution, and value decoding. It recognizes only exact top-level
+   `System.Runtime.CompilerServices` names with the exact Roslyn constructor signatures, without
+   imposing an assembly identity. Scalar and array transforms remain distinct, context and
+   public-only values remain distinct, and no ad-hoc blob parser or C# display-type model is
+   introduced.
+6. The core-team choice is an explicit `Absent`/`Decoded`/`Invalid` result below FIR enhancement.
+   Duplicate recognized compiler attributes, malformed values, null flag arrays, named
+   arguments, and flags outside 0..2 are invalid instead of depending on metadata row order. This
+   is deliberately stricter than arbitrary first-wins recovery while leaving every valid Roslyn
+   binary unaffected. It does not change the ordinary custom-attribute multiset rule: these three
+   attributes are singleton compiler controls, not ordinary repeatable API annotations. Type-tree
+   application, enclosing-context lookup, effective-accessibility filtering, and Kotlin
+   enhancement diagnostics are the next semantic slice.
+
+The Roslyn fixture covers a nullable constructed generic return, nested nullable arguments,
+reference arrays, a nullable generic constraint, context compression, oblivious declarations,
+and the compiler's `nullablePublicOnly` module feature. Synthetic selected-metadata variants prove
+that duplicate attributes, a null byte-array payload, and an out-of-range context flag remain
+located invalid results. The decoder still creates no FIR declaration or Kotlin type.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1408,6 +1453,14 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Decoding nullable-reference attributes before Param attachment exists:
   **Architecturally wrong and should be changed**.
+- Exact Roslyn nullable-attribute recognition by top-level name plus resolved constructor shape,
+  without a fixed defining assembly: **Reasonable platform-specific divergence**.
+- Separate scalar/sequence/context/public-only nullable evidence with explicit invalid results:
+  **Correct direction**.
+- Treating duplicate compiler nullable attributes as first-wins input:
+  **Architecturally wrong and should be changed**.
+- Deferring Kotlin/FIR type enhancement until type-tree, context, accessibility, and generic
+  policy are available: **Correct temporary implementation, but not a final design**.
 - Deferring Constant and FieldMarshal payloads while retaining their Param flags:
   **Correct temporary implementation, but not a final design**.
 - Lossless MemberRef and reusable FieldSig model: **Correct direction**.

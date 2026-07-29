@@ -317,8 +317,21 @@ landed shape as a compatibility constraint.
    order because ECMA classifies those shapes as warnings; the later import-policy layer must
    diagnose any ambiguous Kotlin projection rather than the physical reader dropping data.
    HasDefault and HasFieldMarshal flags are retained, but their Constant/FieldMarshal payloads
-   remain a later physical slice. Do not decode nullable-reference attributes until this
-   attachment model can distinguish method, return, and value-parameter targets.
+   remain a later physical slice. Roslyn nullable-reference metadata is decoded only after this
+   attachment model can distinguish method, return, and value-parameter targets. Recognize the
+   three compiler conventions by exact top-level
+   `System.Runtime.CompilerServices.NullableAttribute`,
+   `NullableContextAttribute`, or `NullablePublicOnlyAttribute` identity plus their exact
+   `byte`/`byte[]`, `byte`, or `bool` constructor signature after ordinary `System.Attribute`
+   ancestry resolution. Do not require one defining assembly: Roslyn may embed private
+   definitions in each producer. Preserve scalar nullable transforms as a uniform tree flag and
+   array transforms as Roslyn-preorder sequences; retain context and module public-only values as
+   separate facts. Flags are only 0 oblivious, 1 not-annotated, and 2 annotated. Duplicate
+   recognized attributes, malformed payloads, null arrays, named arguments, or other flag values
+   are explicit invalid metadata, never first-wins input. This decoder must not create FIR/Kotlin
+   types. A later layer must apply local transforms, enclosing contexts, public-only
+   accessibility, physical type-tree shape, generic constraints, and Kotlin enhancement policy
+   together.
    Property, PropertyMap, and MethodSemantics rows now
    retain the physical property token, declaring TypeDef, metadata name/flags, structural
    property/index signature, raw blob, and accessor MethodDef handles. Association comes only from

@@ -2430,6 +2430,22 @@ session state, process, and a curated task menu. Keep both files updated as you 
   net10 System.Runtime scale, and byte-level hostile images are covered. The focused two-test run
   is 2/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box,
   21 generated CLI, and 54 library integration tests).
+- The nullable-metadata continuation consumes that attachment model but deliberately stops below
+  FIR/Kotlin type enhancement. `DotNetClrNullableMetadataDecoder` recognizes Roslyn's exact
+  top-level `NullableAttribute(byte|byte[])`, `NullableContextAttribute(byte)`, and
+  module `NullablePublicOnlyAttribute(bool)` conventions after ordinary constructor and
+  `System.Attribute` ancestry resolution. It does not require a defining assembly because Roslyn
+  may embed private definitions. Scalar transforms, preorder sequences, contexts, and public-only
+  values remain separate semantic facts with explicit absent/decoded/invalid results. Duplicate
+  recognized attributes, malformed or null payloads, named arguments, and flags outside 0..2
+  never become row-order-dependent enhancement. Real Roslyn output covers constructed generics,
+  nested nullable arguments, arrays, generic constraints, context compression, oblivious
+  declarations, and the public-only feature; hostile selected metadata covers duplicate, null
+  array, and invalid-flag cases. Next apply these facts to a resolved physical type tree with
+  enclosing-context and effective-accessibility policy; do not map them directly to FIR first.
+  The focused Roslyn/hostile-metadata test is 1/0/0/0. The fresh strict gate remains
+  871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
+  tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
