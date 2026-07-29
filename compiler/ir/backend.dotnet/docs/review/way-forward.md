@@ -1018,6 +1018,17 @@ and never remove an otherwise valid CLR declaration. This policy is profile-neut
 Kotlin Common nullability unchanged. Diagnostic severity, generic-constraint interaction, and
 FIR type projection remain later layers.
 
+**CLR nullable-generic-constraint progress (2026-07-29):** generic-parameter markers and
+constraint-type transforms now remain separate. Roslyn reads one GenericParam marker for C#
+`class`, `class?`, `notnull`, or unconstrained context, but decodes each GenericParamConstraint
+type from that row's own nullable transform and the containing declaration context. JVM likewise
+enhances bounds individually before propagating their nullness to type-parameter uses. The .NET
+importer therefore retains and scalar-validates the parameter marker, and applies evidence once
+per original resolved constraint in a declaration-qualified identity context. It does not copy a
+parameter marker across bounds, align after substitution changes a constraint tree, infer a
+Kotlin upper bound, or choose definitely-non-null semantics below FIR. Malformed row evidence,
+malformed parameter markers, and non-identity contexts remain structured fallback.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:

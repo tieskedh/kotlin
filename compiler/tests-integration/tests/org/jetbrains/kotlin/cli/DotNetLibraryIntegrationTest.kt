@@ -91,6 +91,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationTarget
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplication
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplicator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceSource
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableGenericParameterEvidence
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableGenericParameterDeclarationEvidence
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableGenericParameterEvidenceFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableGenericParameterEvidenceResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableGenericParameterEvidenceResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataResolution
@@ -129,6 +134,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedProcessorArchitect
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomAttributeNamedMember
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomModifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericConstraintType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericParameterConstraint
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericParameterContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedMethodSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
@@ -2641,6 +2647,42 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public interface INullableConstraint<T>
+                    {
+                    }
+
+                    public class NullableConstraintBase
+                    {
+                    }
+
+                    public sealed class NullableConstraintProbe<
+                        TClass,
+                        TNullableClass,
+                        TNotNull,
+                        TUnconstrained,
+                        TBase,
+                        TNullableBase,
+                        TInterface,
+                        TNullableInterface,
+                        TMultiple>
+                        where TClass : class
+                        where TNullableClass : class?
+                        where TNotNull : notnull
+                        where TBase : NullableConstraintBase
+                        where TNullableBase : NullableConstraintBase?
+                        where TInterface : INullableConstraint<string?>
+                        where TNullableInterface :
+                            INullableConstraint<string?>?
+                        where TMultiple :
+                            NullableConstraintBase,
+                            INullableConstraint<string?>
+                    {
+                        public void MethodConstraint<TMethod>()
+                            where TMethod : INullableConstraint<string?>?
+                        {
+                        }
+                    }
+
                     public sealed class NullableProbe<T> where T : class?
                     {
                         public Dictionary<string, T?>? Transform(
@@ -2694,6 +2736,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             private string? Property { get; set; }
 
                             public string? Echo(string? value) => value;
+                        }
+
+                        private sealed class PrivateConstraint<T>
+                            where T : INullableConstraint<string?>
+                        {
                         }
                     }
                     #nullable disable
@@ -5758,6 +5805,433 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         assertTrue(
             substitutedTypeContext.binding(secondOpenTypeParameter) == null
+        )
+
+        val nullableGenericEvidenceResolver =
+            DotNetClrNullableGenericParameterEvidenceResolver(
+                nullableDeclarationResolver,
+                nullableEvidenceApplicator,
+            )
+        val nullableGenericContext =
+            resolvedOpenContext("NullableConstraintProbe`9")
+        fun nullableGenericEvidence(
+            context: DotNetClrResolvedGenericParameterContext,
+            name: String,
+            kind: DotNetClrGenericParameterKind =
+                DotNetClrGenericParameterKind.TYPE,
+        ): DotNetClrNullableGenericParameterEvidence {
+            val binding = when (kind) {
+                DotNetClrGenericParameterKind.TYPE -> context.typeParameters
+                DotNetClrGenericParameterKind.METHOD -> context.methodParameters
+            }.single { candidate -> candidate.parameter.name == name }
+            val parameter = DotNetClrResolvedTypeSignature.GenericParameter(
+                kind,
+                binding.parameter.number,
+            )
+            val resolution = nullableGenericEvidenceResolver.resolve(
+                destinationMetadata,
+                context,
+                parameter,
+            ) as DotNetClrNullableGenericParameterEvidenceResolution.Resolved
+            assertSame(binding, resolution.evidence.binding)
+            return resolution.evidence
+        }
+        fun parameterMarker(
+            name: String,
+        ): DotNetClrNullableAnnotation {
+            val selected =
+                nullableGenericEvidence(
+                    nullableGenericContext,
+                    name,
+                ).declaration as
+                    DotNetClrNullableGenericParameterDeclarationEvidence.Selected
+            return selected.annotation
+        }
+        assertEquals(
+            mapOf(
+                "TClass" to DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                "TNullableClass" to DotNetClrNullableAnnotation.ANNOTATED,
+                "TNotNull" to DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                "TUnconstrained" to DotNetClrNullableAnnotation.ANNOTATED,
+            ),
+            listOf(
+                "TClass",
+                "TNullableClass",
+                "TNotNull",
+                "TUnconstrained",
+            ).associateWith(::parameterMarker),
+        )
+        assertTrue(
+            listOf(
+                "TClass",
+                "TNullableClass",
+                "TNotNull",
+                "TUnconstrained",
+            ).all { name ->
+                nullableGenericEvidence(
+                    nullableGenericContext,
+                    name,
+                ).constraints.isEmpty()
+            }
+        )
+        assertTrue(
+            nullableGenericContext.typeParameters.single { binding ->
+                binding.parameter.name == "TClass"
+            }.parameter.hasReferenceTypeConstraint
+        )
+        assertTrue(
+            nullableGenericContext.typeParameters.single { binding ->
+                binding.parameter.name == "TNullableClass"
+            }.parameter.hasReferenceTypeConstraint
+        )
+        assertFalse(
+            nullableGenericContext.typeParameters.single { binding ->
+                binding.parameter.name == "TNotNull"
+            }.parameter.hasReferenceTypeConstraint
+        )
+        assertFalse(
+            nullableGenericContext.typeParameters.single { binding ->
+                binding.parameter.name == "TUnconstrained"
+            }.parameter.hasReferenceTypeConstraint
+        )
+
+        fun constraintApplication(
+            context: DotNetClrResolvedGenericParameterContext,
+            name: String,
+            kind: DotNetClrGenericParameterKind =
+                DotNetClrGenericParameterKind.TYPE,
+        ): Pair<
+                DotNetClrResolvedGenericParameterConstraint,
+                DotNetClrNullableEvidenceApplication.Applied
+                > {
+            val evidence = nullableGenericEvidence(context, name, kind)
+            assertEquals(1, evidence.constraints.size)
+            val constraint = evidence.constraints.single()
+            return constraint.constraint to
+                    (
+                            constraint.application as
+                                    DotNetClrNullableEvidenceApplication.Applied
+                            )
+        }
+        val baseConstraint =
+            constraintApplication(nullableGenericContext, "TBase")
+        val nullableBaseConstraint =
+            constraintApplication(nullableGenericContext, "TNullableBase")
+        val interfaceConstraint =
+            constraintApplication(nullableGenericContext, "TInterface")
+        val nullableInterfaceConstraint =
+            constraintApplication(
+                nullableGenericContext,
+                "TNullableInterface",
+            )
+        assertEquals(
+            listOf(DotNetClrNullableAnnotation.NOT_ANNOTATED),
+            baseConstraint.second.application.components.map { component ->
+                component.annotation
+            },
+        )
+        assertEquals(
+            listOf(DotNetClrNullableAnnotation.ANNOTATED),
+            nullableBaseConstraint.second.application.components.map { component ->
+                component.annotation
+            },
+        )
+        assertEquals(
+            listOf(
+                DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                DotNetClrNullableAnnotation.ANNOTATED,
+            ),
+            interfaceConstraint.second.application.components.map { component ->
+                component.annotation
+            },
+        )
+        assertEquals(
+            listOf(
+                DotNetClrNullableAnnotation.ANNOTATED,
+                DotNetClrNullableAnnotation.ANNOTATED,
+            ),
+            nullableInterfaceConstraint.second.application.components.map { component ->
+                component.annotation
+            },
+        )
+        val multipleConstraintEvidence =
+            nullableGenericEvidence(nullableGenericContext, "TMultiple")
+        assertEquals(2, multipleConstraintEvidence.constraints.size)
+        assertEquals(
+            setOf(
+                listOf(DotNetClrNullableAnnotation.NOT_ANNOTATED),
+                listOf(
+                    DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                    DotNetClrNullableAnnotation.ANNOTATED,
+                ),
+            ),
+            multipleConstraintEvidence.constraints.mapTo(mutableSetOf()) { constraint ->
+                val application =
+                    constraint.application as
+                            DotNetClrNullableEvidenceApplication.Applied
+                application.application.components.map { component ->
+                    component.annotation
+                }
+            },
+        )
+        val interfaceConstraintEvidence =
+            interfaceConstraint.second.evidence
+        assertEquals(
+            DotNetClrNullableEvidenceSource.LOCAL_ATTRIBUTE,
+            interfaceConstraintEvidence.source,
+        )
+        assertEquals(
+            interfaceConstraint.first.row.handle,
+            destinationMetadata.customAttributes.single { attribute ->
+                attribute.handle == interfaceConstraintEvidence.attribute
+            }.parent,
+        )
+        assertTrue(
+            nullableGenericEvidence(
+                nullableGenericContext,
+                "TInterface",
+            ).declaration.evidence !== interfaceConstraintEvidence
+        )
+
+        val nullableConstraintMethodContext = resolvedOpenContext(
+            "NullableConstraintProbe`9",
+            "MethodConstraint",
+        )
+        val methodConstraint = constraintApplication(
+            nullableConstraintMethodContext,
+            "TMethod",
+            DotNetClrGenericParameterKind.METHOD,
+        )
+        assertEquals(
+            listOf(
+                DotNetClrNullableAnnotation.ANNOTATED,
+                DotNetClrNullableAnnotation.ANNOTATED,
+            ),
+            methodConstraint.second.application.components.map { component ->
+                component.annotation
+            },
+        )
+
+        val nonIdentityNullableContext = nullableGenericContext.copy(
+            declaringType = nullableGenericContext.declaringType.copy(
+                arguments = List(nullableGenericContext.typeParameters.size) {
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.OBJECT
+                    )
+                }
+            )
+        )
+        val nonIdentityEvidence = nullableGenericEvidenceResolver.resolve(
+            destinationMetadata,
+            nonIdentityNullableContext,
+            DotNetClrResolvedTypeSignature.GenericParameter(
+                DotNetClrGenericParameterKind.TYPE,
+                nullableGenericContext.typeParameters.single { binding ->
+                    binding.parameter.name == "TInterface"
+                }.parameter.number,
+            ),
+        ) as DotNetClrNullableGenericParameterEvidenceResolution.Invalid
+        assertEquals(
+            DotNetClrNullableGenericParameterEvidenceFailure
+                .CONTEXT_BINDING_NOT_FOUND,
+            nonIdentityEvidence.failure,
+        )
+
+        val invalidConstraintOwner =
+            interfaceConstraint.first.row.copy(
+                owner = DotNetClrMetadataHandle(42, 0x00ff_ffff)
+            )
+        val invalidConstraintMetadata = destinationMetadata.copy(
+            genericParameterConstraints =
+                destinationMetadata.genericParameterConstraints.map { constraint ->
+                    if (constraint == interfaceConstraint.first.row) {
+                        invalidConstraintOwner
+                    } else {
+                        constraint
+                    }
+                }
+        )
+        val invalidConstraintEvidence = nullableDeclarationResolver.resolve(
+            invalidConstraintMetadata,
+            DotNetClrNullableDeclarationTarget.GenericParameterConstraint(
+                invalidConstraintOwner
+            ),
+        ) as DotNetClrNullableDeclarationEvidence.Invalid
+        assertEquals(
+            DotNetClrNullableDeclarationFailure.INVALID_OWNER,
+            invalidConstraintEvidence.failure,
+        )
+        assertEquals(
+            invalidConstraintOwner.handle,
+            invalidConstraintEvidence.declaration,
+        )
+
+        val constraintAttribute =
+            destinationMetadata.customAttributes.single { attribute ->
+                attribute.handle == interfaceConstraintEvidence.attribute
+            }
+        val privateConstraintType =
+            destinationMetadata.typeDefinitions.single { definition ->
+                definition.metadataName == "PrivateConstraint`1"
+            }
+        val privateConstraintParameter =
+            destinationMetadata.genericParameterDefinitions.single { parameter ->
+                parameter.owner == privateConstraintType.handle
+            }
+        val privateConstraintRow =
+            destinationMetadata.genericParameterConstraints.single { constraint ->
+                constraint.owner == privateConstraintParameter.handle
+            }
+        val privateConstraintEvidence = nullableDeclarationResolver.resolve(
+            destinationMetadata,
+            DotNetClrNullableDeclarationTarget.GenericParameterConstraint(
+                privateConstraintRow
+            ),
+        ) as DotNetClrNullableDeclarationEvidence.Suppressed
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PRIVATE,
+            privateConstraintEvidence.accessibility,
+        )
+
+        val duplicateConstraintAttribute = constraintAttribute.copy(
+            handle = DotNetClrMetadataHandle(
+                12,
+                destinationMetadata.customAttributes.maxOf { attribute ->
+                    attribute.handle.row
+                } + 1,
+            )
+        )
+        val duplicateConstraintMetadata = destinationMetadata.copy(
+            customAttributes =
+                destinationMetadata.customAttributes +
+                        duplicateConstraintAttribute
+        )
+        val duplicateConstraintResolver =
+            DotNetClrNullableGenericParameterEvidenceResolver(
+                DotNetClrNullableDeclarationResolver(
+                    DotNetClrNullableMetadataDecoder(
+                        decoderForSelectedMetadata(
+                            duplicateConstraintMetadata
+                        )
+                    ),
+                    effectiveAccessibilityResolver,
+                ),
+                nullableEvidenceApplicator,
+            )
+        val duplicateConstraintResolution =
+            duplicateConstraintResolver.resolve(
+                duplicateConstraintMetadata,
+                nullableGenericContext,
+                DotNetClrResolvedTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    nullableGenericContext.typeParameters.single { binding ->
+                        binding.parameter.name == "TInterface"
+                    }.parameter.number,
+                ),
+            ) as DotNetClrNullableGenericParameterEvidenceResolution.Resolved
+        val duplicateConstraintFallback =
+            duplicateConstraintResolution.evidence.constraints.single()
+                .application as
+                    DotNetClrNullableEvidenceApplication.DiagnosticFallback
+                        .InvalidDeclaration
+        assertEquals(
+            DotNetClrNullableDeclarationFailure.INVALID_LOCAL_TRANSFORM,
+            duplicateConstraintFallback.evidence.failure,
+        )
+        assertSame(
+            interfaceConstraint.second.type,
+            duplicateConstraintFallback.type,
+        )
+
+        val privateConstraintAttributeRow =
+            destinationMetadata.customAttributes.maxOf { attribute ->
+                attribute.handle.row
+            } + 1
+        val malformedPrivateConstraintMetadata = destinationMetadata.copy(
+            customAttributes =
+                destinationMetadata.customAttributes +
+                        constraintAttribute.copy(
+                            handle = DotNetClrMetadataHandle(
+                                12,
+                                privateConstraintAttributeRow,
+                            ),
+                            parent = privateConstraintRow.handle,
+                        ) +
+                        constraintAttribute.copy(
+                            handle = DotNetClrMetadataHandle(
+                                12,
+                                privateConstraintAttributeRow + 1,
+                            ),
+                            parent = privateConstraintRow.handle,
+                        )
+        )
+        val malformedPrivateConstraintEvidence =
+            DotNetClrNullableDeclarationResolver(
+                DotNetClrNullableMetadataDecoder(
+                    decoderForSelectedMetadata(
+                        malformedPrivateConstraintMetadata
+                    )
+                ),
+                effectiveAccessibilityResolver,
+            ).resolve(
+                malformedPrivateConstraintMetadata,
+                DotNetClrNullableDeclarationTarget
+                    .GenericParameterConstraint(privateConstraintRow),
+            ) as DotNetClrNullableDeclarationEvidence.Suppressed
+        assertEquals(
+            DotNetClrEffectiveAccessibility.PRIVATE,
+            malformedPrivateConstraintEvidence.accessibility,
+        )
+
+        val classParameter =
+            nullableGenericContext.typeParameters.single { binding ->
+                binding.parameter.name == "TClass"
+            }.parameter
+        val invalidParameterAttribute = constraintAttribute.copy(
+            handle = DotNetClrMetadataHandle(
+                12,
+                duplicateConstraintAttribute.handle.row + 1,
+            ),
+            parent = classParameter.handle,
+        )
+        val invalidParameterMetadata = destinationMetadata.copy(
+            customAttributes =
+                destinationMetadata.customAttributes.filter { attribute ->
+                    attribute.parent != classParameter.handle
+                } + invalidParameterAttribute
+        )
+        val invalidParameterResolver =
+            DotNetClrNullableGenericParameterEvidenceResolver(
+                DotNetClrNullableDeclarationResolver(
+                    DotNetClrNullableMetadataDecoder(
+                        decoderForSelectedMetadata(
+                            invalidParameterMetadata
+                        )
+                    ),
+                    effectiveAccessibilityResolver,
+                ),
+                nullableEvidenceApplicator,
+            )
+        val invalidParameterResolution =
+            invalidParameterResolver.resolve(
+                invalidParameterMetadata,
+                nullableGenericContext,
+                DotNetClrResolvedTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    classParameter.number,
+                ),
+            ) as DotNetClrNullableGenericParameterEvidenceResolution.Resolved
+        val invalidParameterFallback =
+            invalidParameterResolution.evidence.declaration as
+                    DotNetClrNullableGenericParameterDeclarationEvidence
+                        .DiagnosticFallback.InvalidTransform
+        assertTrue(
+            invalidParameterFallback.evidence.transform is
+                    DotNetClrNullableTransform.Sequence
+        )
+        assertEquals(
+            invalidParameterAttribute.handle,
+            invalidParameterFallback.evidence.attribute,
         )
 
         val strongOpenContext = resolvedOpenContext("StrongOpenSource`1")

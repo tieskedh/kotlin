@@ -2493,6 +2493,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and constraint interaction before FIR projection and diagnostic severity. The focused
   Roslyn/evidence-application test is 1/0/0/0. The fresh strict gate remains 871/0/0/0 across
   16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The nullable-generic-constraint continuation keeps two Roslyn channels independent.
+  `DotNetClrNullableGenericParameterEvidenceResolver` retains the single GenericParam declaration
+  marker used by C# for `class`, `class?`, `notnull`, and unconstrained context, validates its
+  scalar form, and applies each GenericParamConstraint row's separate transform to that original
+  resolved constraint type. It accepts only a declaration-qualified identity generic context:
+  substituting `!n` before nullable alignment can change the constraint tree and shift or
+  multiply flags. Constraint targets inherit accessibility/context from their TypeDef or
+  MethodDef owner, but local evidence attaches only to the constraint row. Parameter markers are
+  never copied over constraints and Kotlin bound propagation remains deferred to FIR. Real
+  Roslyn type/method parameters cover special markers, nullable and nested constraints, and
+  multiple rows. Hostile cases cover non-identity contexts, invalid owners, duplicate row
+  evidence, non-scalar parameter markers, and filtered malformed evidence under a private owner.
+  The focused adversarial test is 1/0/0/0. The fresh strict gate remains 871/0/0/0 across 16 XML
+  suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
