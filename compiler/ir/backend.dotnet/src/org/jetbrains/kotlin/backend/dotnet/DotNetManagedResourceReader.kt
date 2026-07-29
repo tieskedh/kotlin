@@ -153,6 +153,11 @@ private object DotNetPeMetadataReader {
                 metadata.strings,
                 metadata.blobs,
             )
+            val parameterDefinitions = readParameterDefinitions(
+                metadata.tables,
+                metadata.strings,
+                methodDefinitions,
+            )
             val propertyDefinitions = readPropertyDefinitions(
                 metadata.tables,
                 metadata.strings,
@@ -173,6 +178,7 @@ private object DotNetPeMetadataReader {
                 typeSpecifications = readTypeSpecifications(metadata.tables, metadata.blobs),
                 fieldDefinitions = fieldDefinitions,
                 methodDefinitions = methodDefinitions,
+                parameterDefinitions = parameterDefinitions,
                 memberReferences = readMemberReferences(
                     metadata.tables,
                     metadata.strings,
@@ -787,6 +793,92 @@ private object DotNetPeMetadataReader {
                     attributes = attributes,
                     signature = signature,
                     rawSignature = rawSignature.map { byte -> byte.toInt() and 0xff },
+                )
+            }
+        }
+
+        private fun readParameterDefinitions(
+            tables: MetadataStream,
+            strings: MetadataStream,
+            methodDefinitions: List<DotNetClrMethodDefinition>,
+        ): List<DotNetClrParameterDefinition> {
+            val methodTable = locateMetadataTable(tables, METHOD_DEF_TABLE)
+            val parameterTable = locateMetadataTable(tables, PARAMETER_TABLE)
+            val parameterCount = parameterTable?.rowCount ?: 0L
+            if (methodTable == null) {
+                if (parameterCount != 0L) {
+                    malformed("Param rows exist without a MethodDef table")
+                }
+                return emptyList()
+            }
+            if (methodTable.rowCount != methodDefinitions.size.toLong()) {
+                error("MethodDef metadata model is inconsistent with its physical table")
+            }
+
+            val parameterStarts = List(methodDefinitions.size) { methodIndex ->
+                var position = methodTable.offset + methodIndex.toLong() * methodTable.rowSize
+                position += UINT32_SIZE
+                position += UINT16_SIZE * 2
+                position += methodTable.indexSizes.stringIndexSize
+                position += methodTable.indexSizes.blobIndexSize
+                readIndex(position, methodTable.indexSizes.tableIndexSize(PARAMETER_TABLE))
+            }
+            var previousStart = 1L
+            for ([methodIndex, start] in parameterStarts.withIndex()) {
+                if (start !in 1..parameterCount + 1) {
+                    malformed(
+                        "MethodDef row ${methodIndex + 1} has invalid ParamList index $start"
+                    )
+                }
+                if (start < previousStart) {
+                    malformed("MethodDef ParamList indices are not ordered")
+                }
+                previousStart = start
+            }
+            if (parameterTable == null) return emptyList()
+
+            val owners = arrayOfNulls<DotNetClrMethodDefinition>(
+                parameterCount.toIntChecked("Param row count")
+            )
+            for (methodIndex in parameterStarts.indices) {
+                val start = parameterStarts[methodIndex]
+                val end = parameterStarts.getOrNull(methodIndex + 1) ?: (parameterCount + 1)
+                for (parameterRow in start until end) {
+                    owners[(parameterRow - 1).toInt()] = methodDefinitions[methodIndex]
+                }
+            }
+            if (owners.any { owner -> owner == null }) {
+                malformed("one or more Param rows have no declaring MethodDef")
+            }
+
+            return List(parameterCount.toIntChecked("Param row count")) { rowIndex ->
+                var position = parameterTable.offset + rowIndex.toLong() * parameterTable.rowSize
+                val attributes = readU2(position)
+                position += UINT16_SIZE
+                if (attributes and PARAMETER_ATTRIBUTE_MASK.inv() != 0) {
+                    malformed("Param row ${rowIndex + 1} has invalid attribute flags")
+                }
+                val sequence = readU2(position)
+                position += UINT16_SIZE
+                val nameIndex = readIndex(position, parameterTable.indexSizes.stringIndexSize)
+                val declaringMethod = checkNotNull(owners[rowIndex])
+                if (sequence > declaringMethod.signature.parameterTypes.size) {
+                    malformed(
+                        "Param row ${rowIndex + 1} has sequence $sequence outside MethodDef " +
+                                "token 0x${declaringMethod.handle.token.toUInt().toString(16)}"
+                    )
+                }
+                DotNetClrParameterDefinition(
+                    handle = metadataHandle(
+                        PARAMETER_TABLE,
+                        rowIndex.toLong() + 1,
+                        tables,
+                        "Param",
+                    ),
+                    declaringMethod = declaringMethod.handle,
+                    sequence = sequence,
+                    name = if (nameIndex == 0L) null else readStringHeap(strings, nameIndex),
+                    attributes = attributes,
                 )
             }
         }
@@ -2365,6 +2457,7 @@ private object DotNetPeMetadataReader {
     private const val ASSEMBLY_PUBLIC_KEY_FLAG = 0x1L
     private const val METHOD_ACCESS_MASK = 0x7
     private const val METHOD_STATIC_ATTRIBUTE = 0x10
+    private const val PARAMETER_ATTRIBUTE_MASK = 0x301f
     private const val FIELD_ACCESS_MASK = 0x0007
     private const val FIELD_STATIC_ATTRIBUTE = 0x0010
     private const val FIELD_INIT_ONLY_ATTRIBUTE = 0x0020
