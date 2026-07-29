@@ -2110,6 +2110,21 @@ Indexers and distinct input/output property views remain separate decisions.
 The detailed mature-target comparison, carrier matrix, attacks, and deferred public-annotation
 decision are recorded in `docs/review/clr-annotation-interoperability.md`.
 
+The first non-nullability semantic marker maps exact method-level
+`System.ObsoleteAttribute` to Common `kotlin.Deprecated`. Recognition uses the selected core
+TypeDef identity, not namespace/name alone, and admits only one of the three standard
+constructors. Its message is preserved, with `Deprecated in .NET` for an omitted/null message;
+`IsError=false` maps to `WARNING` and true maps to `ERROR`. It never maps to `HIDDEN`, because a
+CLR error-level obsolete member remains resolvable. Modern `DiagnosticId` and `UrlFormat` named
+properties are validated and retained physically but cannot become dynamic Kotlin diagnostic IDs.
+Invalid, duplicate, wrong-identity, or wrong-shape evidence creates no best-effort deprecation.
+The synthesized annotation is evaluated as foreign metadata so its deprecation does not propagate
+to Kotlin overrides: CLR fixes `ObsoleteAttribute` to `Inherited=false`, matching the JVM
+importer's foreign-deprecation path rather than Kotlin-authored propagation. Other declaration
+targets remain separate slices. The focused cross-profile test is 1/0/0/0. The fresh strict gate
+is 881/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 64 library integration
+tests).
+
 The first conditional-flow slice, `NotNullWhenAttribute`, is implemented. Its Boolean constructor
 maps exactly
 to common FIR's `returns(true|false) implies (parameter != null)` effect for a Boolean-returning
