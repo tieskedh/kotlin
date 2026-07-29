@@ -2630,17 +2630,31 @@ session state, process, and a curated task menu. Keep both files updated as you 
   blob prove that inapplicable or invalid evidence adds no effect. The focused test is 1/0/0/0.
   The fresh strict gate is 876/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
   59 library integration tests).
+- The exact unconditional non-return view is implemented.
+  `DotNetClrDoesNotReturnMetadataDecoder` recognizes only exact selected-graph
+  `System.Diagnostics.CodeAnalysis.DoesNotReturnAttribute()` evidence on a MethodDef. The
+  provider exposes logical Kotlin `Nothing` for every physical return shape in the closed grammar
+  while retaining the original MethodDef signature. This follows Kotlin Common reachability:
+  common FIR does not currently make `returns() implies false` continuation unreachable, whereas
+  `Nothing` does and already receives the mature common `KotlinNothingValueException` guard.
+  Real Roslyn `void` and `int` methods prove null-branch and Elvis reachability,
+  `() -> Nothing` callable references, and bottom-type subtyping. An unannotated control,
+  duplicates, wrong constructors, named payloads, a return-target look-alike, and a corrupted
+  blob prove invalid evidence does not strengthen the view. The focused test is 1/0/0/0. The
+  fresh strict gate is 877/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 60
+  library integration tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
   a separate metadata/ABI decision involving KLIB-only tools, stripped attributes, and physical
   bridge/dispatcher/split-interface ownership.
 - Backend-call binding for the closed interface slice remains required before successful foreign
-  calls may become executable. If annotations continue first, unconditional `DoesNotReturn`
-  requires an explicit logical-return/control-flow policy while keeping the physical CLR
-  signature, and return-target `NotNull`/`MaybeNull` requires precedence with declaration
+  calls may become executable. A `DoesNotReturn` physical call must use the retained CLR return
+  shape, discard an impossible value if necessary, and then reach the ordinary common
+  `KotlinNothingValueException` guard if foreign code violates its contract. If annotations
+  continue first, return-target `NotNull`/`MaybeNull` requires precedence with declaration
   nullable metadata. Do not batch state-weakening member or by-reference `Try*` contracts into
-  either.
+  it.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2693,7 +2707,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 876 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 877 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2731,13 +2745,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
    FIR slice has landed. Continue with the exact CodeAnalysis/Kotlin-contract overlap and
    backend-call binding before broadening the declaration grammar. `NotNullWhen` and
    parameter-target `NotNull`, return-target `NotNullIfNotNull`, and parameter-target
-   `DoesNotReturnIf` have landed as common FIR effects. Unconditional `DoesNotReturn` now needs a
-   documented control-flow/return-view decision before implementation. Member attributes must
-   preserve Kotlin smart-cast stability rather than adopt Roslyn's milder member-state rules.
-   Extensions, param arrays, properties/indexers, events, and semantic markers each require their
-   own documented contract. Preserve Kotlin declaration identity and Common semantics; do not
-   teach the Kotlin-owned backend surface to infer C# conventions. Keep structured
-   metadata-table auditing; do not substitute IL substring checks.
+   `DoesNotReturnIf` have landed as common FIR effects; method-target `DoesNotReturn` now maps to a
+   logical `Nothing` view while retaining the physical signature. Member attributes must preserve
+   Kotlin smart-cast stability rather than adopt Roslyn's milder member-state rules. Return-target
+   `NotNull`/`MaybeNull`, extensions, param arrays, properties/indexers, events, and semantic
+   markers each require their own documented contract. Preserve Kotlin declaration identity and
+   Common semantics; do not teach the Kotlin-owned backend surface to infer C# conventions. Keep
+   structured metadata-table auditing; do not substitute IL substring checks.
 3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part

@@ -2025,6 +2025,12 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Rewriting a foreign method's physical return signature or adding .NET-only data-flow for
   `DoesNotReturnIf`:
   **Architecturally wrong and should be changed**.
+- Mapping exact method-target `DoesNotReturn` to a logical Kotlin `Nothing` return while retaining
+  the original MethodDef return signature:
+  **Correct direction**.
+- Treating `returns() implies false` as working unreachable control-flow without completing the
+  common FIR/DFA semantics, or adding a .NET-only unreachable rule:
+  **Architecturally wrong and should be changed**.
 - Treating `MaybeNull`/`MaybeNullWhen` state weakening as though it were a positive Kotlin
   contract:
   **Architecturally wrong and should be changed**.
@@ -2143,3 +2149,33 @@ evidence contributes no effect.
 
 The focused `DoesNotReturnIf` test is 1/0/0/0. The fresh strict gate is 876/0/0/0 across 16 XML
 suites (796 FIR/IL/box, 21 generated CLI, and 59 library integration tests).
+
+The selected unconditional `DoesNotReturnAttribute` mapping uses logical Kotlin `Nothing`, not a
+target-only flow effect. Kotlin Common defines `Nothing` as the result of an expression that
+cannot complete normally, and the common CFG makes its continuation unreachable. Although the
+contract model can carry an always-false condition, FIR data-flow does not currently turn
+`returns() implies false` into dead continuation; using that representation would silently lose
+the CLR contract.
+
+The original MethodDef return type remains physical authority. A `void`, primitive, or reference
+return therefore has the same logical `Nothing` view when the exact method attribute is present,
+but future backend-call binding must still invoke the retained physical signature and discard any
+impossible returned value before the mature common `KotlinNothingValueException` guard. Callable
+references and overrides use the trusted logical view. This deliberately enforces the authored
+binary promise in Kotlin, just as foreign nullability enhancement affects Kotlin callers and
+implementors; it does not prove the foreign body.
+
+Only exact selected-graph, top-level, non-generic
+`System.Diagnostics.CodeAnalysis.DoesNotReturnAttribute` ancestry with its parameterless
+instance constructor is eligible. Exactly one MethodDef attribute with no fixed or named payload
+is required. Wrong targets, duplicates, wrong constructors, malformed values, and named payloads
+cannot strengthen control-flow. Property/accessor handling remains deferred until the provider
+imports physical properties.
+
+The provider now implements that view for every physical return shape already in the closed
+grammar. Real Roslyn `void` and `int` methods prove null-branch and Elvis reachability,
+`Nothing`-returning callable references, and bottom-type subtyping. An unannotated control plus a
+hostile polyfill and corrupted attribute blob prove absence, duplicates, wrong constructors,
+named payloads, wrong targets, and malformed values do not strengthen the view. The focused test
+is 1/0/0/0. The fresh strict gate is 877/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
+CLI, and 60 library integration tests).

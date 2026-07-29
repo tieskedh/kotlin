@@ -659,6 +659,11 @@ landed shape as a compatibility constraint.
    `returns() implies (!parameter)`; constructor value `false` maps only to
    `returns() implies parameter`. Keep the ordinary Kotlin return type and physical CLR return
    signature; use common FIR contract data-flow rather than a .NET-only reachability rule.
+   Method-target `DoesNotReturn` maps the logical Kotlin return view to `Nothing` while retaining
+   the original MethodDef return signature for physical binding. Common FIR does not currently
+   turn an always-false conditional contract into unreachable continuation; do not invent a
+   .NET-only substitute. A future physical call must invoke and discard according to the retained
+   CLR signature before the ordinary common `KotlinNothingValueException` guard.
    `MemberNotNull`/`MemberNotNullWhen` must never bypass ordinary Kotlin `SmartcastStability`:
    mutable, delegated, getter-backed, public/open, and cross-module public property reads remain
    unstable where Common says so, even when Roslyn would update their null-state. `MaybeNull` and

@@ -1194,11 +1194,19 @@ derived projection for Kotlin-produced libraries, whose embedded KLIB stays self
 Using the already-required decoder does not require redefining KLIB as a remainder that all tools
 must merge with physical bridge/dispatcher/split-interface metadata.
 
-Unconditional `DoesNotReturn` is not the same mechanical slice. Its binary fact is exact, but the
-importer must choose how common FIR represents unreachable normal continuation while retaining a
-possibly `void` or value-returning physical CLR signature. Return-target `NotNull`/`MaybeNull`
-instead needs a precedence rule with Roslyn declaration nullability. Either path should be
-documented independently before implementation.
+**Foreign method `DoesNotReturn` enhancement (2026-07-29):** Kotlin Common represents a call that
+cannot complete normally as `Nothing`; common FIR does not currently make
+`returns() implies false` continuation unreachable. The importer therefore exposes a logical
+`Nothing` result while retaining a possibly `void` or value-returning MethodDef signature for
+future physical binding and the mature common guard against a dishonest return. This also makes
+callable references and overrides honor the trusted foreign promise. Real Roslyn `void` and `int`
+methods prove null-branch and Elvis reachability, `() -> Nothing` references, and bottom-type
+subtyping. Absence, duplicates, wrong constructors, named payloads, wrong targets, and malformed
+blobs add no view. The focused test is 1/0/0/0. The fresh strict gate is 877/0/0/0 across 16 XML
+suites (796 FIR/IL/box, 21 generated CLI, and 60 library integration tests).
+
+Return-target `NotNull`/`MaybeNull` remains separate because it needs a precedence rule with
+Roslyn declaration nullability.
 
 ## 5. Explicitly parked work
 
