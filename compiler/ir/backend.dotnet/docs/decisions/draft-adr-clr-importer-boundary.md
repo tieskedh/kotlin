@@ -2031,6 +2031,16 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Treating `returns() implies false` as working unreachable control-flow without completing the
   common FIR/DFA semantics, or adding a .NET-only unreachable rule:
   **Architecturally wrong and should be changed**.
+- Applying exact return-target `NotNull`/`MaybeNull` after ordinary declaration nullability and
+  exposing the resulting call state as the logical Kotlin result type:
+  **Correct direction**.
+- Giving exact, well-formed return-target `NotNull` precedence over exact `MaybeNull`:
+  **Reasonable platform-specific divergence because Roslyn applies that order to call-result
+  state; Kotlin/JVM otherwise declines equally strong inconsistent qualifiers**.
+- Ignoring malformed or duplicated return-target `MaybeNull` and retaining a rigid non-null
+  declaration result:
+  **Architecturally wrong and should be changed; invalid weakening evidence must fall back to
+  flexibility**.
 - Treating `MaybeNull`/`MaybeNullWhen` state weakening as though it were a positive Kotlin
   contract:
   **Architecturally wrong and should be changed**.
@@ -2179,3 +2189,32 @@ hostile polyfill and corrupted attribute blob prove absence, duplicates, wrong c
 named payloads, wrong targets, and malformed values do not strengthen the view. The focused test
 is 1/0/0/0. The fresh strict gate is 877/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
 CLI, and 60 library integration tests).
+
+Return-target `NotNullAttribute` and `MaybeNullAttribute` are selected as top-level call-result
+enhancements, not common FIR contracts. Ordinary Roslyn nullable declaration metadata establishes
+the base qualifier. One exact decoded `NotNull` on the physical return Param then produces a
+non-null logical result; otherwise one exact decoded `MaybeNull` produces nullable; otherwise the
+base qualifier remains. If both exact attributes are present, `NotNull` wins because Roslyn's
+`ApplyUnconditionalAnnotations(TypeWithState, ...)` applies that order at call sites.
+
+That conflict order is a deliberate CLR-specific divergence from the JVM qualifier resolver,
+which normally declines equally strong inconsistent annotations. It is justified by established
+platform behavior, not by a target-local Kotlin preference. A malformed or duplicated
+`NotNull` cannot strengthen the base. A malformed or duplicated `MaybeNull` instead forces
+flexibility: treating broken weakening evidence as absent could unsafely preserve a rigid
+non-null result. A valid `MaybeNull` still weakens beside invalid `NotNull`; invalid `MaybeNull`
+prevents the well-formed-conflict precedence from applying even if `NotNull` is valid.
+
+The logical enhancement is the Kotlin-facing equivalent of Roslyn's result state. Physical
+MethodDef return type and nullable attributes remain unchanged. `DoesNotReturn` continues to
+select `Nothing` first, and conditional `NotNullIfNotNull` remains a separate common effect.
+Kotlin-produced DLLs do not re-import these physical projections: their complete KLIB return type
+remains authoritative.
+
+The selected policy is implemented by a structured `MaybeNull` decoder, generalized output use
+of the existing `NotNull` decoder, and a pure return-qualifier enhancer. Real Roslyn metadata
+proves nullable/non-null/oblivious bases, the exact conflict, dependent-result interaction, and
+non-return precedence. Hostile duplicates, wrong constructors, named payloads, wrong targets,
+mixed valid/invalid evidence, and corrupted blobs prove the failure matrix. The focused test is
+1/0/0/0. The fresh strict gate is 878/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
+CLI, and 61 library integration tests).
