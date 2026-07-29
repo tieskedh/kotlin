@@ -2601,12 +2601,31 @@ session state, process, and a curated task menu. Keep both files updated as you 
   around mutable, getter-backed, public/open, or cross-module property instability.
   `MaybeNull`/`MaybeNullWhen` weakens state rather than proving a positive contract;
   `AllowNull`/`DisallowNull` needs separate input/setter views; return-target
-  `NotNull`/`MaybeNull` needs call-result enhancement. `NotNullIfNotNull` is the next exact common
-  reverse-effect candidate.
+  `NotNull`/`MaybeNull` needs call-result enhancement. `NotNullIfNotNull` is the exact common
+  reverse-effect candidate implemented below.
+- The exact dependent-return postcondition is implemented.
+  `DotNetClrNotNullIfNotNullMetadataDecoder` decodes every exact selected-graph
+  `System.Diagnostics.CodeAnalysis.NotNullIfNotNullAttribute(String)` on a physical return Param
+  row as one evidence set. The provider binds payloads case-sensitively to value Param rows and
+  maps each distinct reference parameter to common FIR
+  `(parameter != null) implies returnsNotNull()`. Different names are meaningful independent
+  effects; identical names normalize; any recognized malformed/named/null payload or
+  unresolved/ambiguous/non-reference binding prevents partial strengthening. Return and input
+  must be `string`/`object` in the closed grammar. The real/hostile/corrupted fixtures cover
+  nullable branch refinement, literals, `object`, two condition parameters, invalid inverses,
+  absence, mixed valid/invalid evidence, wrong constructors, null/missing/value names, and
+  malformed blobs. The consumer is pinned to Kotlin language 2.2: authoring the reverse DSL is a
+  newer feature, but an understood resolved binary effect is consumed. The focused test is
+  1/0/0/0. The fresh strict gate is 875/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
+  CLI, and 58 library integration tests).
+- Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
+  complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
+  authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
+  a separate metadata/ABI decision involving KLIB-only tools, stripped attributes, and physical
+  bridge/dispatcher/split-interface ownership.
 - Backend-call binding for the closed interface slice remains required before successful foreign
-  calls may become executable. If conditional annotations continue first, review
-  `[return: NotNullIfNotNull("parameter")]` as the next exact common
-  `(parameter != null) implies returnsNotNull()` subset. Do not batch state-weakening member or
+  calls may become executable. If annotations continue first, review `DoesNotReturnIf(Boolean)`
+  as the next exact common normal-return implication. Do not batch state-weakening member or
   by-reference `Try*` contracts into it.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
@@ -2660,7 +2679,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 874 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 875 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2697,12 +2716,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
    vocabulary; KLIB is the exact Kotlin remainder. The closed nullable-aware abstract-interface
    FIR slice has landed. Continue with the exact CodeAnalysis/Kotlin-contract overlap and
    backend-call binding before broadening the declaration grammar. `NotNullWhen` and
-   parameter-target `NotNull` have landed as common FIR effects; `NotNullIfNotNull` is the next
-   exact candidate. Member attributes must preserve Kotlin smart-cast stability rather than adopt
-   Roslyn's milder member-state rules. Extensions, param arrays, properties/indexers, events, and
-   semantic markers each require their own documented contract. Preserve Kotlin declaration
-   identity and Common semantics; do not teach the Kotlin-owned backend surface to infer C#
-   conventions. Keep structured metadata-table auditing; do not substitute IL substring checks.
+   parameter-target `NotNull`, and return-target `NotNullIfNotNull` have landed as common FIR
+   effects; `DoesNotReturnIf` is the next exact candidate. Member attributes must preserve Kotlin
+   smart-cast stability rather than adopt Roslyn's milder member-state rules. Extensions, param
+   arrays, properties/indexers, events, and semantic markers each require their own documented
+   contract. Preserve Kotlin declaration identity and Common semantics; do not teach the
+   Kotlin-owned backend surface to infer C# conventions. Keep structured metadata-table auditing;
+   do not substitute IL substring checks.
 3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
