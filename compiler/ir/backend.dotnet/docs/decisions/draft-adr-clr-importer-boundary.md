@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface variance, and array-to-array assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface variance, array-to-array, and array-base assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -1156,6 +1156,40 @@ the non-pairs `char`/`ushort`, and the explicit array-to-`System.Array` boundary
 conversions now contribute `Satisfied`, proven mismatches contribute `Violated`, and deferred
 array-to-nominal conversions remain `Unsupported`.
 
+The thirty-third slice resolves the nominal CLR array base hierarchy.
+
+1. Kotlin/JVM keeps Java array flexibility in the Java importer and lets the JVM carrier remain an
+   object with the VM-defined array bases; Native, JS, and Wasm likewise keep carrier inheritance
+   outside Kotlin Common's `Array<T>` declaration. The .NET importer follows that split instead of
+   adding `System.Array` as a Kotlin Common supertype.
+2. Every CLR vector and general array is a reference type derived from the selected
+   `System.Array`. Its ordinary base/interface graph supplies `System.Object` and the non-generic
+   `System.Collections` interfaces. Zero-based vectors additionally have VES/BCL-supplied generic
+   interfaces; multidimensional arrays do not.
+3. Kotlin Common remains unchanged. Kotlin `Array<T>` and specialized primitive-array wrappers do
+   not acquire foreign supertypes. This relation is only for imported physical signatures and
+   generic-constraint validation.
+4. `System.Array` is a CTS basis on `net48`, `netstandard2.0`, and `net10.0`. The defining assembly
+   identity differs by the selected reference graph, so the importer receives the resolved
+   definition rather than matching the string `System.Array`. Generic vector interfaces remain a
+   separate profile-capability question.
+5. `DotNetClrSignatureTypeAssignabilityResolver` now walks from any physical array through the
+   injected selected `System.Array` view. A successful ordinary hierarchy result is assignable.
+   If that graph does not match, a general array or a non-interface/non-unary target is proven not
+   assignable. Only a vector facing a unary generic interface retains
+   `VECTOR_TO_GENERIC_INTERFACE`; unsupported aggregate status preserves only the unsupported issue,
+   while the complete nominal validation still retains simultaneous proven violations.
+6. The core-team choice is selected-identity composition, not namespace/name recognition and not a
+   synthetic Kotlin supertype. The generic vector-interface catalog is deliberately the next
+   layer because its exact surface is supplied by the VES/BCL rather than by `System.Array`'s
+   ordinary metadata hierarchy.
+
+Roslyn metadata now proves vector and rectangular-array conversion to `System.Array`,
+`System.Object`, and non-generic `IEnumerable`, rejection of a multidimensional array as generic
+`IList<object>`, and preservation of the vector/generic-interface boundary. Mixed aggregate
+coverage proves that a supported violation is retained in the complete validation even when an
+unsupported row determines the sealed aggregate status.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1267,14 +1301,15 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   non-assignability: **Correct direction**.
 - Sealed aggregate generic-constraint status with invalid/unsupported/violated/satisfied
   precedence and retained per-row evidence: **Correct direction**.
-- Deferring remaining array-to-nominal, vector-to-interface, delegate, and dependent-parameter
-  assignability behind explicit
+- Deferring remaining vector-to-generic-interface, delegate, and dependent-parameter assignability
+  behind explicit
   unsupported results: **Correct temporary implementation, but not a final design**.
 - Bounded recursive reference-only CLR generic-interface variance in shared assignability:
   **Correct direction**.
 - Keeping value arguments invariant in CLR variance rather than applying boxing:
   **Correct direction**.
-- Keeping array-to-nominal and delegate variance conversions explicit unsupported boundaries:
+- Keeping vector-to-generic-interface and delegate variance conversions as explicit unsupported
+  boundaries:
   **Correct temporary implementation, but not a final design**.
 - Generalizing interface variance into bounded physical signature assignability:
   **Correct direction**.
@@ -1282,6 +1317,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Implementing CLR reduced integer/enum array storage compatibility only at the foreign signature
   boundary: **Reasonable platform-specific divergence**.
+- Resolving physical arrays through the selected `System.Array` identity and ordinary hierarchy:
+  **Correct direction**.
+- Treating general arrays as proven outside the vector-only generic interface surface:
+  **Correct direction**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:

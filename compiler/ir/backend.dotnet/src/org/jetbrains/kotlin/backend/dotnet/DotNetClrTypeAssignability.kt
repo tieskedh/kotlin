@@ -56,7 +56,7 @@ sealed interface DotNetClrTypeAssignability {
 }
 
 enum class DotNetClrSignatureConversionUnsupported {
-    ARRAY_TO_NOMINAL,
+    VECTOR_TO_GENERIC_INTERFACE,
     NOMINAL_TO_ARRAY,
     OPEN_GENERIC_PARAMETER,
     NON_NOMINAL_SIGNATURE,

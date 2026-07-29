@@ -5,15 +5,17 @@ package org.jetbrains.kotlin.backend.dotnet
  *
  * Kotlin source subtyping is not inferred here. This is the physical foreign-signature relation
  * used by importer validation. Generic-interface variance and array-to-array conversions are
- * supported; dependent parameters, delegate variance, and array-to-nominal conversions remain
- * explicit boundaries. The signature entry point never inserts boxing. The nominal-view entry
- * point is separate so generic-constraint validation can compare selected type definitions without
- * pretending that an unboxed value is assignment-compatible with a reference location.
+ * supported; dependent parameters, delegate variance, and vector-to-generic-interface
+ * conversions remain explicit boundaries. The signature entry point never inserts boxing. The
+ * nominal-view entry point is separate so generic-constraint validation can compare selected type
+ * definitions without pretending that an unboxed value is assignment-compatible with a reference
+ * location.
  */
 class DotNetClrSignatureTypeAssignabilityResolver(
     private val typeResolver: DotNetClrTypeResolver,
     private val physicalTypeClassifier: DotNetClrPhysicalTypeClassifier,
     private val primitiveTypes: DotNetClrPrimitiveTypeCatalog,
+    private val systemArray: DotNetClrResolvedTypeDefinition,
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
 ) {
     private val exactResolver =
@@ -163,10 +165,11 @@ class DotNetClrSignatureTypeAssignabilityResolver(
 
                 actual.isArraySignature() || expected.isArraySignature() ->
                     if (actual.isArraySignature() && expected.toNominalView() != null) {
-                        DotNetClrTypeAssignability.UnsupportedSignatureConversion(
-                            DotNetClrSignatureConversionUnsupported.ARRAY_TO_NOMINAL,
+                        evaluateArrayToNominal(
                             actual,
                             expected,
+                            active,
+                            counter,
                         )
                     } else if (
                         expected.isArraySignature() &&
@@ -199,6 +202,51 @@ class DotNetClrSignatureTypeAssignabilityResolver(
         } finally {
             active.remove(pair)
         }
+    }
+
+    private fun evaluateArrayToNominal(
+        actual: DotNetClrResolvedTypeSignature,
+        expected: DotNetClrResolvedTypeSignature,
+        active: MutableSet<AssignabilityPair>,
+        counter: ResolutionCounter,
+    ): DotNetClrTypeAssignability {
+        val expectedView = checkNotNull(expected.toNominalView())
+        val expectedClassification = physicalTypeClassifier.classify(expected)
+        val expectedKind =
+            expectedClassification as? DotNetClrPhysicalTypeClassification.Classified
+                ?: return classificationFailure(
+                    actual,
+                    expected,
+                    expected,
+                    expectedClassification,
+                )
+        if (expectedKind.kind != DotNetClrPhysicalTypeKind.REFERENCE) {
+            return DotNetClrTypeAssignability.NotAssignable
+        }
+        when (
+            val baseResult =
+                isAssignable(
+                    DotNetClrResolvedTypeView(systemArray, emptyList()),
+                    expectedView,
+                    active,
+                    counter,
+                )
+        ) {
+            DotNetClrTypeAssignability.Assignable -> return baseResult
+            DotNetClrTypeAssignability.NotAssignable -> Unit
+            else -> return baseResult
+        }
+        if (actual is DotNetClrResolvedTypeSignature.Array ||
+            !expectedView.type.definition.isInterface ||
+            expectedView.arguments.size != 1
+        ) {
+            return DotNetClrTypeAssignability.NotAssignable
+        }
+        return DotNetClrTypeAssignability.UnsupportedSignatureConversion(
+            DotNetClrSignatureConversionUnsupported.VECTOR_TO_GENERIC_INTERFACE,
+            actual,
+            expected,
+        )
     }
 
     private fun evaluateInterfaceVariance(
