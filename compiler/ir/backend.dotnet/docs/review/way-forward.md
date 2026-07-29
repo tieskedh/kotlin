@@ -1064,6 +1064,22 @@ binary evidence at the deserialized declaration/usage boundary. The focused adve
 1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI,
 and 54 library integration tests).
 
+**CLR Constant-table decision (2026-07-29):** the next graph-independent physical slice follows
+JVM binary loading by retaining compile-time values below later FIR foreign-declaration policy.
+Every Constant row keeps its token, exact Field/Param/Property parent, raw blob, and decoded
+little-endian scalar; integral and floating payload bits remain exact. The CLR-specific
+compatibility boundary follows `System.Reflection.Metadata.BlobReader`: non-zero Boolean bytes
+are true, strings preserve UTF-16 code units, and raw trailing bytes remain available even where
+the scalar decoder consumes only its required prefix. Invalid Type/padding/parent, duplicate
+parents, truncation, non-zero nullref, and oversized blobs fail physically. ECMA's exact
+Field.HasDefault and bidirectional Param.HasDefault ownership rules are enforced, while
+Property.HasDefault and CLS parent-type/enum compatibility remain retained for later selected-
+graph validation. A CLR parameter constant is not a Kotlin default argument, and a field constant
+is not runtime storage. The dual-ILAsm fixture covers every allowed Constant Type and all parent
+kinds, exact bits, platform-compatible encodings, and hostile table/blob mutations. The focused
+physical/adversarial test is 1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML suites
+(796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:

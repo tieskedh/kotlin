@@ -57,6 +57,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintRes
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintValidator
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstantDefinition
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstantValue
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDelegateRuntimeTypesResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDelegateRuntimeTypesResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEffectiveAccessibility
@@ -110,6 +112,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeApplication
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeApplicationFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeComponentKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeTransformApplicator
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassification
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationUnsupported
@@ -568,6 +571,40 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     .field public static literal valuetype Fixture.TinyKind 'Zero' = int16(0)
                   }
 
+                  .class public auto ansi beforefieldinit 'ConstantHost'
+                         extends [mscorlib]System.Object
+                  {
+                    .field public static literal bool 'BooleanValue' = bool(true)
+                    .field public static literal char 'CharValue' = char(8364)
+                    .field public static literal int8 'Int8Value' = int8(-7)
+                    .field public static literal unsigned int8 'UInt8Value' = unsigned int8(250)
+                    .field public static literal int16 'Int16Value' = int16(-1234)
+                    .field public static literal unsigned int16 'UInt16Value' = unsigned int16(60000)
+                    .field public static literal int32 'Int32Value' = int32(-1234567)
+                    .field public static literal unsigned int32 'UInt32Value' = unsigned int32(4000000000)
+                    .field public static literal int64 'Int64Value' = int64(-1234567890123)
+                    .field public static literal unsigned int64 'UInt64Value' =
+                        unsigned int64(18000000000000000000)
+                    .field public static literal float32 'Float32Value' = float32(0x7fc01234)
+                    .field public static literal float64 'Float64Value' =
+                        float64(0x8000000000000000)
+                    .field public static literal object 'NullValue' = nullref
+                    .field public static int32 'PropertySeed' = int32(73)
+
+                    .method public hidebysig static void 'Defaults'(
+                        [opt] int32 'number',
+                        [opt] string 'text',
+                        [opt] object 'missing'
+                    ) cil managed
+                    {
+                      .param [1] = int32(42)
+                      .param [2] = "default"
+                      .param [3] = nullref
+                      .maxstack 0
+                      ret
+                    }
+                  }
+
                   .class public auto ansi beforefieldinit 'GenericOwner`1'<T>
                          extends [mscorlib]System.Object
                   {
@@ -716,6 +753,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val genericBase = fixtureTypes.getValue("GenericBase`1")
             val genericBox = fixtureTypes.getValue("GenericBox`1")
             val tinyKind = fixtureTypes.getValue("TinyKind")
+            val constantHost = fixtureTypes.getValue("ConstantHost")
             val genericOwner = fixtureTypes.getValue("GenericOwner`1")
             val signatureHost = fixtureTypes.getValue("SignatureHost`1")
             val propertyHost = fixtureTypes.getValue("PropertyHost")
@@ -769,6 +807,417 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ),
                 ),
                 intArrayBoxInterfaceSpecification.signature,
+            )
+            val constantsByParent =
+                metadata.constantDefinitions.associateBy(DotNetClrConstantDefinition::parent)
+            assertEquals(18, metadata.constantDefinitions.size)
+            assertEquals(metadata.constantDefinitions.size, constantsByParent.size)
+            fun fieldConstant(name: String): DotNetClrConstantDefinition {
+                val field = metadata.fieldDefinitions.single { definition ->
+                    definition.declaringType == constantHost.handle && definition.name == name
+                }
+                assertTrue(field.hasDefault)
+                return constantsByParent.getValue(field.handle)
+            }
+            assertEquals(
+                DotNetClrConstantValue.BooleanValue(true),
+                fieldConstant("BooleanValue").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.CharValue('\u20ac'),
+                fieldConstant("CharValue").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(
+                    DotNetClrPrimitiveType.INT8,
+                    (-7).toByte().toUByte().toULong(),
+                ),
+                fieldConstant("Int8Value").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(DotNetClrPrimitiveType.UINT8, 250uL),
+                fieldConstant("UInt8Value").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(
+                    DotNetClrPrimitiveType.INT16,
+                    (-1234).toShort().toUShort().toULong(),
+                ),
+                fieldConstant("Int16Value").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(DotNetClrPrimitiveType.UINT16, 60_000uL),
+                fieldConstant("UInt16Value").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(
+                    DotNetClrPrimitiveType.INT32,
+                    (-1_234_567).toUInt().toULong(),
+                ),
+                fieldConstant("Int32Value").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(
+                    DotNetClrPrimitiveType.UINT32,
+                    4_000_000_000uL,
+                ),
+                fieldConstant("UInt32Value").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(
+                    DotNetClrPrimitiveType.INT64,
+                    (-1_234_567_890_123L).toULong(),
+                ),
+                fieldConstant("Int64Value").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(
+                    DotNetClrPrimitiveType.UINT64,
+                    18_000_000_000_000_000_000uL,
+                ),
+                fieldConstant("UInt64Value").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.Float32Value(0x7fc01234),
+                fieldConstant("Float32Value").value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.Float64Value(Long.MIN_VALUE),
+                fieldConstant("Float64Value").value,
+            )
+            assertSame(
+                DotNetClrConstantValue.NullReference,
+                fieldConstant("NullValue").value,
+            )
+            val propertySeed = metadata.fieldDefinitions.single { definition ->
+                definition.declaringType == constantHost.handle &&
+                        definition.name == "PropertySeed"
+            }
+            assertTrue(propertySeed.hasDefault)
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(DotNetClrPrimitiveType.INT32, 73uL),
+                constantsByParent.getValue(propertySeed.handle).value,
+            )
+            val defaultsMethod = metadata.methodDefinitions.single { definition ->
+                definition.declaringType == constantHost.handle &&
+                        definition.name == "Defaults"
+            }
+            val defaultParameters = metadata.parameterDefinitions
+                .filter { definition -> definition.declaringMethod == defaultsMethod.handle }
+                .associateBy { definition -> checkNotNull(definition.name) }
+            assertEquals(setOf("number", "text", "missing"), defaultParameters.keys)
+            assertTrue(defaultParameters.values.all(DotNetClrParameterDefinition::isOptional))
+            assertTrue(defaultParameters.values.all(DotNetClrParameterDefinition::hasDefault))
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(DotNetClrPrimitiveType.INT32, 42uL),
+                constantsByParent.getValue(defaultParameters.getValue("number").handle).value,
+            )
+            assertEquals(
+                DotNetClrConstantValue.StringValue("default"),
+                constantsByParent.getValue(defaultParameters.getValue("text").handle).value,
+            )
+            assertSame(
+                DotNetClrConstantValue.NullReference,
+                constantsByParent.getValue(defaultParameters.getValue("missing").handle).value,
+            )
+            val enumZero = metadata.fieldDefinitions.single { definition ->
+                definition.declaringType == tinyKind.handle && definition.name == "Zero"
+            }
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(DotNetClrPrimitiveType.INT16, 0uL),
+                constantsByParent.getValue(enumZero.handle).value,
+            )
+            val metadataTables = locateClrMetadataTables(assembly.readBytes())
+            fun constantValueIndex(
+                image: ByteArray,
+                constant: DotNetClrConstantDefinition,
+            ): Int = readLittleEndianIndex(
+                image,
+                metadataTables.rowOffset(11, constant.handle.row) +
+                        2 + metadataTables.hasConstantIndexSize,
+                metadataTables.blobIndexSize,
+            )
+
+            fun writeConstantValueIndex(
+                image: ByteArray,
+                constant: DotNetClrConstantDefinition,
+                valueIndex: Int,
+            ) {
+                writeLittleEndian(
+                    image,
+                    metadataTables.rowOffset(11, constant.handle.row) +
+                            2 + metadataTables.hasConstantIndexSize,
+                    metadataTables.blobIndexSize,
+                    valueIndex,
+                )
+            }
+
+            fun mutatedMetadata(
+                name: String,
+                mutate: (ByteArray) -> Unit,
+            ): DotNetClrAssemblyMetadata {
+                val mutatedAssembly = File(
+                    assembly.parentFile,
+                    "${assembly.nameWithoutExtension}-$name.dll",
+                )
+                val mutatedImage = assembly.readBytes()
+                mutate(mutatedImage)
+                mutatedAssembly.writeBytes(mutatedImage)
+                return DotNetClrMetadataReader.read(mutatedAssembly)
+            }
+
+            fun assertMalformedConstant(
+                name: String,
+                expectedMessage: String,
+                mutate: (ByteArray) -> Unit,
+            ) {
+                val failure = assertThrows(DotNetBadImageFormatException::class.java) {
+                    mutatedMetadata(name, mutate)
+                }
+                assertTrue(expectedMessage in checkNotNull(failure.message)) {
+                    failure.message
+                }
+            }
+
+            val booleanConstant = fieldConstant("BooleanValue")
+            val int8Constant = fieldConstant("Int8Value")
+            val int32Constant = fieldConstant("Int32Value")
+            val stringConstant = constantsByParent.getValue(
+                defaultParameters.getValue("text").handle
+            )
+            val nullConstant = fieldConstant("NullValue")
+            val numberConstant = constantsByParent.getValue(
+                defaultParameters.getValue("number").handle
+            )
+            assertMalformedConstant("constant-invalid-type", "invalid element type") { image ->
+                image[metadataTables.rowOffset(11, booleanConstant.handle.row)] = 0x1c
+            }
+            assertMalformedConstant(
+                "constant-nonzero-padding",
+                "non-zero reserved padding",
+            ) { image ->
+                image[metadataTables.rowOffset(11, booleanConstant.handle.row) + 1] = 1
+            }
+            assertMalformedConstant("constant-invalid-parent", "invalid tag") { image ->
+                writeLittleEndian(
+                    image,
+                    metadataTables.rowOffset(11, booleanConstant.handle.row) + 2,
+                    metadataTables.hasConstantIndexSize,
+                    (1 shl 2) or 3,
+                )
+            }
+            assertMalformedConstant("constant-duplicate-parent", "duplicates parent token") { image ->
+                val booleanParent = readLittleEndianIndex(
+                    image,
+                    metadataTables.rowOffset(11, booleanConstant.handle.row) + 2,
+                    metadataTables.hasConstantIndexSize,
+                )
+                writeLittleEndian(
+                    image,
+                    metadataTables.rowOffset(11, int8Constant.handle.row) + 2,
+                    metadataTables.hasConstantIndexSize,
+                    booleanParent,
+                )
+            }
+            val ordinaryField = metadata.fieldDefinitions.single { definition ->
+                definition.declaringType == genericOwner.handle && definition.name == "Value"
+            }
+            assertFalse(ordinaryField.hasDefault)
+            assertMalformedConstant(
+                "constant-field-flag-without-row",
+                "HasDefault without a Constant row",
+            ) { image ->
+                val attributesOffset = metadataTables.rowOffset(4, ordinaryField.handle.row)
+                val attributes = readLittleEndianIndex(image, attributesOffset, 2)
+                writeLittleEndian(image, attributesOffset, 2, attributes or 0x8000)
+            }
+            assertMalformedConstant(
+                "constant-param-row-without-flag",
+                "HasDefault flag does not agree",
+            ) { image ->
+                val parameter = defaultParameters.getValue("number")
+                val attributesOffset = metadataTables.rowOffset(8, parameter.handle.row)
+                val attributes = readLittleEndianIndex(image, attributesOffset, 2)
+                writeLittleEndian(image, attributesOffset, 2, attributes and 0x1000.inv())
+            }
+            val echoMethod = metadata.methodDefinitions.single { definition ->
+                definition.declaringType == genericOwner.handle && definition.name == "Echo"
+            }
+            val echoParameter = metadata.parameterDefinitions.single { definition ->
+                definition.declaringMethod == echoMethod.handle && definition.name == "value"
+            }
+            assertFalse(echoParameter.hasDefault)
+            assertMalformedConstant(
+                "constant-param-flag-without-row",
+                "HasDefault flag does not agree",
+            ) { image ->
+                val attributesOffset = metadataTables.rowOffset(8, echoParameter.handle.row)
+                val attributes = readLittleEndianIndex(image, attributesOffset, 2)
+                writeLittleEndian(image, attributesOffset, 2, attributes or 0x1000)
+            }
+            assertMalformedConstant("constant-truncated-scalar", "truncated value") { image ->
+                writeConstantValueIndex(
+                    image,
+                    numberConstant,
+                    constantValueIndex(image, booleanConstant),
+                )
+            }
+            assertMalformedConstant("constant-nonzero-nullref", "non-zero nullref") { image ->
+                writeConstantValueIndex(
+                    image,
+                    nullConstant,
+                    constantValueIndex(image, numberConstant),
+                )
+            }
+
+            val nonCanonicalBoolean = mutatedMetadata("constant-noncanonical-boolean") { image ->
+                writeConstantValueIndex(
+                    image,
+                    booleanConstant,
+                    constantValueIndex(image, int8Constant),
+                )
+            }.constantDefinitions.single { constant -> constant.handle == booleanConstant.handle }
+            assertEquals(DotNetClrConstantValue.BooleanValue(true), nonCanonicalBoolean.value)
+            assertEquals(listOf(249), nonCanonicalBoolean.rawValue.toUnsignedIntList())
+
+            val trailingScalar = mutatedMetadata("constant-trailing-scalar") { image ->
+                writeConstantValueIndex(
+                    image,
+                    int8Constant,
+                    constantValueIndex(image, int32Constant),
+                )
+            }.constantDefinitions.single { constant -> constant.handle == int8Constant.handle }
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(
+                    DotNetClrPrimitiveType.INT8,
+                    (-1_234_567).toByte().toUByte().toULong(),
+                ),
+                trailingScalar.value,
+            )
+            assertEquals(4, trailingScalar.rawValue.size)
+
+            val oddUtf16 = mutatedMetadata("constant-odd-utf16") { image ->
+                writeConstantValueIndex(
+                    image,
+                    stringConstant,
+                    constantValueIndex(image, int8Constant),
+                )
+            }.constantDefinitions.single { constant -> constant.handle == stringConstant.handle }
+            assertEquals(DotNetClrConstantValue.StringValue(""), oddUtf16.value)
+            assertEquals(listOf(249), oddUtf16.rawValue.toUnsignedIntList())
+
+            val charConstant = fieldConstant("CharValue")
+            val unpairedUtf16 = mutatedMetadata("constant-unpaired-utf16") { image ->
+                val charValueIndex = constantValueIndex(image, charConstant)
+                val charValueOffset =
+                    metadataTables.blobContentOffset(image, charValueIndex)
+                image[charValueOffset] = 0
+                image[charValueOffset + 1] = 0xd8.toByte()
+                writeConstantValueIndex(image, stringConstant, charValueIndex)
+            }.constantDefinitions.single { constant -> constant.handle == stringConstant.handle }
+            assertEquals(
+                DotNetClrConstantValue.StringValue("\ud800"),
+                unpairedUtf16.value,
+            )
+            assertEquals(listOf(0, 216), unpairedUtf16.rawValue.toUnsignedIntList())
+
+            val oddNameProperty = metadata.propertyDefinitions.single { property ->
+                property.declaringType == propertyHost.handle && property.name == "Odd Name"
+            }
+            assertFalse(oddNameProperty.hasDefault)
+            val fieldRowWithoutFlag =
+                mutatedMetadata("constant-field-row-without-flag") { image ->
+                    val fieldAttributesOffset =
+                        metadataTables.rowOffset(4, propertySeed.handle.row)
+                    val fieldAttributes =
+                        readLittleEndianIndex(image, fieldAttributesOffset, 2)
+                    writeLittleEndian(
+                        image,
+                        fieldAttributesOffset,
+                        2,
+                        fieldAttributes and 0x8000.inv(),
+                    )
+                }
+            val unflaggedPropertySeed =
+                fieldRowWithoutFlag.fieldDefinitions.single { field ->
+                    field.handle == propertySeed.handle
+                }
+            assertFalse(unflaggedPropertySeed.hasDefault)
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(DotNetClrPrimitiveType.INT32, 73uL),
+                fieldRowWithoutFlag.constantDefinitions.single { constant ->
+                    constant.parent == unflaggedPropertySeed.handle
+                }.value,
+            )
+
+            val propertyFlagWithoutRow =
+                mutatedMetadata("constant-property-flag-without-row") { image ->
+                    val propertyAttributesOffset =
+                        metadataTables.rowOffset(23, oddNameProperty.handle.row)
+                    val propertyAttributes =
+                        readLittleEndianIndex(image, propertyAttributesOffset, 2)
+                    writeLittleEndian(
+                        image,
+                        propertyAttributesOffset,
+                        2,
+                        propertyAttributes or 0x1000,
+                    )
+                }
+            val flaggedOddName =
+                propertyFlagWithoutRow.propertyDefinitions.single { property ->
+                    property.handle == oddNameProperty.handle
+                }
+            assertTrue(flaggedOddName.hasDefault)
+            assertTrue(
+                propertyFlagWithoutRow.constantDefinitions.none { constant ->
+                    constant.parent == flaggedOddName.handle
+                }
+            )
+
+            val propertyConstantMetadata =
+                mutatedMetadata("constant-property-parent") { image ->
+                    val parentOffset =
+                        metadataTables.rowOffset(11, constantsByParent.getValue(propertySeed.handle).handle.row) + 2
+                    writeLittleEndian(
+                        image,
+                        parentOffset,
+                        metadataTables.hasConstantIndexSize,
+                        (oddNameProperty.handle.row shl 2) or 2,
+                    )
+                    val fieldAttributesOffset =
+                        metadataTables.rowOffset(4, propertySeed.handle.row)
+                    val fieldAttributes =
+                        readLittleEndianIndex(image, fieldAttributesOffset, 2)
+                    writeLittleEndian(
+                        image,
+                        fieldAttributesOffset,
+                        2,
+                        fieldAttributes and 0x8000.inv(),
+                    )
+                    val propertyAttributesOffset =
+                        metadataTables.rowOffset(23, oddNameProperty.handle.row)
+                    val propertyAttributes =
+                        readLittleEndianIndex(image, propertyAttributesOffset, 2)
+                    writeLittleEndian(
+                        image,
+                        propertyAttributesOffset,
+                        2,
+                        propertyAttributes or 0x1000,
+                    )
+                }
+            val mutatedProperty = propertyConstantMetadata.propertyDefinitions.single { property ->
+                property.handle == oddNameProperty.handle
+            }
+            val mutatedPropertySeed = propertyConstantMetadata.fieldDefinitions.single { field ->
+                field.handle == propertySeed.handle
+            }
+            assertTrue(mutatedProperty.hasDefault)
+            assertFalse(mutatedPropertySeed.hasDefault)
+            assertEquals(
+                DotNetClrConstantValue.IntegralValue(DotNetClrPrimitiveType.INT32, 73uL),
+                propertyConstantMetadata.constantDefinitions.single { constant ->
+                    constant.parent == mutatedProperty.handle
+                }.value,
             )
             val intArrayBoxImplementation =
                 metadata.interfaceImplementations.single { implementation ->
@@ -2360,11 +2809,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "ImporterFixture-malformed-member-reference-signature.dll",
             )
             val malformedMemberReferenceImage = assembly.readBytes()
-            val rawFieldSignature = ByteArray(emptyFieldReference.rawSignature.size) { index ->
-                emptyFieldReference.rawSignature[index].toByte()
-            }
-            val fieldSignatureOffset =
-                malformedMemberReferenceImage.uniqueSequenceOffset(rawFieldSignature)
+            val memberReferenceSignatureIndexOffset =
+                metadataTables.rowOffset(10, emptyFieldReference.handle.row) +
+                        metadataTables.memberRefParentIndexSize +
+                        metadataTables.stringIndexSize
+            val memberReferenceSignatureIndex = readLittleEndianIndex(
+                malformedMemberReferenceImage,
+                memberReferenceSignatureIndexOffset,
+                metadataTables.blobIndexSize,
+            )
+            val fieldSignatureOffset = metadataTables.blobContentOffset(
+                malformedMemberReferenceImage,
+                memberReferenceSignatureIndex,
+            )
             malformedMemberReferenceImage[fieldSignatureOffset] = 0x07
             malformedMemberReferenceAssembly.writeBytes(malformedMemberReferenceImage)
             val malformedMemberReference = assertThrows(DotNetBadImageFormatException::class.java) {
@@ -9367,6 +9824,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 fieldDefinitions = emptyList(),
                 methodDefinitions = emptyList(),
                 parameterDefinitions = emptyList(),
+                constantDefinitions = emptyList(),
                 memberReferences = emptyList(),
                 customAttributes = emptyList(),
                 propertyDefinitions = emptyList(),
@@ -24842,8 +25300,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ((bytes[offset + 2].toInt() and 0xff) shl 16) or
                 ((bytes[offset + 3].toInt() and 0xff) shl 24)
 
+    private fun readLittleEndianIndex(
+        bytes: ByteArray,
+        offset: Int,
+        width: Int,
+    ): Int {
+        require(width == 2 || width == 4)
+        var value = 0
+        repeat(width) { byteIndex ->
+            value = value or ((bytes[offset + byteIndex].toInt() and 0xff) shl (byteIndex * 8))
+        }
+        return value
+    }
+
     private class ClrMetadataTablesLayout(
         private val tablesOffset: Int,
+        private val blobHeapOffset: Int,
         private val validMask: Long,
         private val rowCounts: IntArray,
         val stringIndexSize: Int,
@@ -24855,6 +25327,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         fun tableIndexSize(table: Int): Int =
             if (rowCounts[table] < 0x1_0000) 2 else 4
+
+        val hasConstantIndexSize: Int
+            get() = codedIndexSize(2, 4, 8, 23)
+
+        val memberRefParentIndexSize: Int
+            get() = codedIndexSize(3, 2, 1, 26, 6, 27)
+
+        fun blobContentOffset(image: ByteArray, index: Int): Int {
+            require(index > 0)
+            val offset = blobHeapOffset + index
+            val first = image[offset].toInt() and 0xff
+            val headerSize = when {
+                first and 0x80 == 0 -> 1
+                first and 0xc0 == 0x80 -> 2
+                first and 0xe0 == 0xc0 -> 4
+                else -> error("Invalid test metadata blob length")
+            }
+            return offset + headerSize
+        }
 
         fun rowOffset(table: Int, row: Int): Int {
             require(hasTable(table))
@@ -24887,6 +25378,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             6 -> 8 + stringIndexSize + blobIndexSize + tableIndexSize(8)
             7 -> tableIndexSize(8)
             8 -> 4 + stringIndexSize
+            9 -> tableIndexSize(2) + codedIndexSize(2, 2, 1, 27)
+            10 -> codedIndexSize(3, 2, 1, 26, 6, 27) + stringIndexSize + blobIndexSize
+            11 -> 2 + hasConstantIndexSize + blobIndexSize
+            12 -> codedIndexSize(
+                5,
+                6, 4, 1, 2, 8, 9, 10, 0, 14, 23, 20,
+                17, 26, 27, 32, 35, 38, 39, 40, 42, 44, 43,
+            ) + codedIndexSize(3, 6, 10) + blobIndexSize
+            13 -> codedIndexSize(1, 4, 8) + blobIndexSize
+            14 -> 2 + codedIndexSize(2, 2, 6, 32) + blobIndexSize
+            15 -> 6 + tableIndexSize(2)
+            16 -> 4 + tableIndexSize(4)
+            17 -> blobIndexSize
+            18 -> tableIndexSize(2) + tableIndexSize(20)
+            19 -> tableIndexSize(20)
+            20 -> 2 + stringIndexSize + codedIndexSize(2, 2, 1, 27)
+            21 -> tableIndexSize(2) + tableIndexSize(23)
+            22 -> tableIndexSize(23)
+            23 -> 2 + stringIndexSize + blobIndexSize
             else -> error("Test metadata locator does not require table $table")
         }
     }
@@ -24941,6 +25451,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val streamCount = u2(streamHeaderOffset)
         streamHeaderOffset += 2
         var tablesOffset: Int? = null
+        var blobHeapOffset: Int? = null
         repeat(streamCount) {
             val streamOffset = u4(streamHeaderOffset).toInt()
             var nameEnd = streamHeaderOffset + 8
@@ -24949,6 +25460,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 .toString(Charsets.US_ASCII)
             if (name == "#~" || name == "#-") {
                 tablesOffset = metadataOffset + streamOffset
+            }
+            if (name == "#Blob") {
+                blobHeapOffset = metadataOffset + streamOffset
             }
             streamHeaderOffset += align4(8 + nameEnd - (streamHeaderOffset + 8) + 1)
         }
@@ -24964,6 +25478,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         return ClrMetadataTablesLayout(
             tablesOffset = resolvedTablesOffset,
+            blobHeapOffset = checkNotNull(blobHeapOffset),
             validMask = validMask,
             rowCounts = rowCounts,
             stringIndexSize = if (heapSizes and 0x1 != 0) 4 else 2,
@@ -24979,6 +25494,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         value: Int,
     ) {
         require(width == 2 || width == 4)
+        require(width == 4 || value ushr 16 == 0)
         repeat(width) { index ->
             bytes[offset + index] = (value ushr (index * 8)).toByte()
         }

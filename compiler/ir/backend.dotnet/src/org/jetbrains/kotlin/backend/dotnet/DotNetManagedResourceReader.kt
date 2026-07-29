@@ -206,6 +206,13 @@ private object DotNetPeMetadataReader {
                 metadata.strings,
                 metadata.blobs,
             )
+            val constantDefinitions = readConstantDefinitions(
+                metadata.tables,
+                metadata.blobs,
+                fieldDefinitions,
+                parameterDefinitions,
+                propertyDefinitions,
+            )
             val genericParameterDefinitions = readGenericParameterDefinitions(
                 metadata.tables,
                 metadata.strings,
@@ -222,6 +229,7 @@ private object DotNetPeMetadataReader {
                 fieldDefinitions = fieldDefinitions,
                 methodDefinitions = methodDefinitions,
                 parameterDefinitions = parameterDefinitions,
+                constantDefinitions = constantDefinitions,
                 memberReferences = readMemberReferences(
                     metadata.tables,
                     metadata.strings,
@@ -1096,6 +1104,169 @@ private object DotNetPeMetadataReader {
                         description = "CustomAttribute constructor",
                     ) ?: malformed("CustomAttribute row ${rowIndex + 1} has no constructor"),
                     rawValue = rawValue,
+                )
+            }
+        }
+
+        private fun readConstantDefinitions(
+            tables: MetadataStream,
+            blobs: MetadataStream?,
+            fieldDefinitions: List<DotNetClrFieldDefinition>,
+            parameterDefinitions: List<DotNetClrParameterDefinition>,
+            propertyDefinitions: List<DotNetClrPropertyDefinition>,
+        ): List<DotNetClrConstantDefinition> {
+            val table = locateMetadataTable(tables, CONSTANT_TABLE)
+            val parentHandles = buildSet {
+                fieldDefinitions.mapTo(this, DotNetClrFieldDefinition::handle)
+                parameterDefinitions.mapTo(this, DotNetClrParameterDefinition::handle)
+                propertyDefinitions.mapTo(this, DotNetClrPropertyDefinition::handle)
+            }
+            val valueBlobsByIndex = mutableMapOf<Long, Pair<DotNetClrBlob, ByteArray>>()
+            val seenParents = mutableSetOf<DotNetClrMetadataHandle>()
+            val constants = if (table == null) {
+                emptyList()
+            } else {
+                List(table.rowCount.toIntChecked("Constant row count")) { rowIndex ->
+                    var position = table.offset + rowIndex.toLong() * table.rowSize
+                    val type = readU1(position)
+                    position += 1
+                    val padding = readU1(position)
+                    position += 1
+                    if (padding != 0) {
+                        malformed("Constant row ${rowIndex + 1} has non-zero reserved padding")
+                    }
+                    val parentIndex = readIndex(position, table.indexSizes.hasConstantIndexSize)
+                    position += table.indexSizes.hasConstantIndexSize
+                    val valueIndex = readIndex(position, table.indexSizes.blobIndexSize)
+                    val parent = decodeCodedHandle(
+                        value = parentIndex,
+                        tagBits = 2,
+                        tablesByTag = HAS_CONSTANT_TABLES,
+                        metadataTables = tables,
+                        description = "Constant parent",
+                    ) ?: malformed("Constant row ${rowIndex + 1} has a nil parent")
+                    if (parent !in parentHandles) {
+                        malformed("Constant row ${rowIndex + 1} refers to an unread parent")
+                    }
+                    if (!seenParents.add(parent)) {
+                        malformed(
+                            "Constant row ${rowIndex + 1} duplicates parent token " +
+                                    "0x${parent.token.toUInt().toString(16)}"
+                        )
+                    }
+                    val valueBlob = valueBlobsByIndex.getOrPut(valueIndex) {
+                        val valueSize = readBlobHeapSize(blobs, valueIndex)
+                        if (valueSize > MAX_CONSTANT_BLOB_SIZE) {
+                            malformed("Constant row ${rowIndex + 1} has an oversized value")
+                        }
+                        val bytes = readBlobHeap(blobs, valueIndex)
+                        DotNetClrBlob.wrapOwned(bytes) to bytes
+                    }
+                    DotNetClrConstantDefinition(
+                        handle = metadataHandle(
+                            CONSTANT_TABLE,
+                            rowIndex.toLong() + 1,
+                            tables,
+                            "Constant",
+                        ),
+                        parent = parent,
+                        value = decodeConstantValue(type, valueBlob.second, rowIndex),
+                        rawValue = valueBlob.first,
+                    )
+                }
+            }
+            fieldDefinitions.forEach { field ->
+                if (field.hasDefault && field.handle !in seenParents) {
+                    malformed(
+                        "Field token 0x${field.handle.token.toUInt().toString(16)} has " +
+                                "HasDefault without a Constant row"
+                    )
+                }
+            }
+            parameterDefinitions.forEach { parameter ->
+                val ownsConstant = parameter.handle in seenParents
+                if (parameter.hasDefault != ownsConstant) {
+                    malformed(
+                        "Param token 0x${parameter.handle.token.toUInt().toString(16)} " +
+                                "HasDefault flag does not agree with its Constant row"
+                    )
+                }
+            }
+            return constants
+        }
+
+        private fun decodeConstantValue(
+            type: Int,
+            bytes: ByteArray,
+            rowIndex: Int,
+        ): DotNetClrConstantValue {
+            fun unsigned(byteCount: Int): ULong {
+                if (bytes.size < byteCount) {
+                    malformed(
+                        "Constant row ${rowIndex + 1} has a truncated value for " +
+                                "element type 0x${type.toString(16)}"
+                    )
+                }
+                var value = 0uL
+                repeat(byteCount) { byteIndex ->
+                    value = value or
+                            ((bytes[byteIndex].toInt() and 0xff).toULong() shl (byteIndex * 8))
+                }
+                return value
+            }
+
+            fun integral(
+                primitive: DotNetClrPrimitiveType,
+                byteCount: Int,
+            ): DotNetClrConstantValue =
+                DotNetClrConstantValue.IntegralValue(primitive, unsigned(byteCount))
+
+            return when (type) {
+                ELEMENT_TYPE_BOOLEAN ->
+                    DotNetClrConstantValue.BooleanValue(unsigned(1) != 0uL)
+
+                ELEMENT_TYPE_CHAR ->
+                    DotNetClrConstantValue.CharValue(unsigned(2).toInt().toChar())
+
+                ELEMENT_TYPE_I1 -> integral(DotNetClrPrimitiveType.INT8, 1)
+                ELEMENT_TYPE_U1 -> integral(DotNetClrPrimitiveType.UINT8, 1)
+                ELEMENT_TYPE_I2 -> integral(DotNetClrPrimitiveType.INT16, 2)
+                ELEMENT_TYPE_U2 -> integral(DotNetClrPrimitiveType.UINT16, 2)
+                ELEMENT_TYPE_I4 -> integral(DotNetClrPrimitiveType.INT32, 4)
+                ELEMENT_TYPE_U4 -> integral(DotNetClrPrimitiveType.UINT32, 4)
+                ELEMENT_TYPE_I8 -> integral(DotNetClrPrimitiveType.INT64, 8)
+                ELEMENT_TYPE_U8 -> integral(DotNetClrPrimitiveType.UINT64, 8)
+                ELEMENT_TYPE_R4 ->
+                    DotNetClrConstantValue.Float32Value(unsigned(4).toInt())
+
+                ELEMENT_TYPE_R8 ->
+                    DotNetClrConstantValue.Float64Value(unsigned(8).toLong())
+
+                ELEMENT_TYPE_STRING ->
+                    DotNetClrConstantValue.StringValue(
+                        buildString(bytes.size / 2) {
+                            repeat(bytes.size / 2) { characterIndex ->
+                                val byteIndex = characterIndex * 2
+                                append(
+                                    (
+                                            (bytes[byteIndex].toInt() and 0xff) or
+                                                    ((bytes[byteIndex + 1].toInt() and 0xff) shl 8)
+                                            ).toChar()
+                                )
+                            }
+                        }
+                    )
+
+                ELEMENT_TYPE_CLASS -> {
+                    if (unsigned(4) != 0uL) {
+                        malformed("Constant row ${rowIndex + 1} has a non-zero nullref value")
+                    }
+                    DotNetClrConstantValue.NullReference
+                }
+
+                else -> malformed(
+                    "Constant row ${rowIndex + 1} has invalid element type " +
+                            "0x${type.toString(16)}"
                 )
             }
         }
@@ -2329,7 +2500,7 @@ private object DotNetPeMetadataReader {
             get() = codedIndexSize(2, 2, 1, 27)
         val memberRefParentIndexSize
             get() = codedIndexSize(3, 2, 1, 26, 6, 27)
-        private val hasConstantIndexSize
+        val hasConstantIndexSize
             get() = codedIndexSize(2, 4, 8, 23)
         val hasCustomAttributeIndexSize
             get() = codedIndexSize(
@@ -2446,6 +2617,7 @@ private object DotNetPeMetadataReader {
     private const val PARAMETER_TABLE = 8
     private const val INTERFACE_IMPLEMENTATION_TABLE = 9
     private const val MEMBER_REF_TABLE = 10
+    private const val CONSTANT_TABLE = 11
     private const val CUSTOM_ATTRIBUTE_TABLE = 12
     private const val DECLARATIVE_SECURITY_TABLE = 14
     private const val STANDALONE_SIGNATURE_TABLE = 17
@@ -2494,6 +2666,12 @@ private object DotNetPeMetadataReader {
         METHOD_DEF_TABLE,
         MEMBER_REF_TABLE,
     )
+    private val HAS_CONSTANT_TABLES = intArrayOf(
+        FIELD_TABLE,
+        PARAMETER_TABLE,
+        PROPERTY_TABLE,
+        -1,
+    )
     private const val STRING_HEAP_LARGE = 0x1
     private const val GUID_HEAP_LARGE = 0x2
     private const val BLOB_HEAP_LARGE = 0x4
@@ -2523,6 +2701,7 @@ private object DotNetPeMetadataReader {
     private const val GENERIC_PARAMETER_ATTRIBUTE_MASK = 0x003f
     private const val MAX_SIGNATURE_DEPTH = 128
     private const val MAX_SIGNATURE_BLOB_SIZE = 1024 * 1024
+    private const val MAX_CONSTANT_BLOB_SIZE = 64 * 1024 * 1024
     private const val MAX_CUSTOM_ATTRIBUTE_BLOB_SIZE = 64 * 1024 * 1024
     private const val PUBLIC_KEY_TOKEN_SIZE = 8
     private const val ELEMENT_TYPE_VOID = 0x01

@@ -2534,6 +2534,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   one bounded PE-reader session and one parsed metadata image for both selection and retained
   rows. The focused adversarial test is 1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML
   suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The physical CLR Constant table is now decoded below foreign-declaration policy. Every row keeps
+  its token, exact Field/Param/Property parent, raw blob, and semantic scalar with exact integral
+  or floating bits. Decoding follows official `System.Reflection.Metadata.BlobReader`
+  compatibility for non-zero true, UTF-16 code units, required scalar prefixes, and retained raw
+  trailing bytes. The reader rejects invalid Type/padding/parent, duplicate parents,
+  truncation/non-zero nullref, and the normative Field/Param flag violations without performing
+  the selected-graph CLS type/enum check, inferring Kotlin defaults, or treating field constants
+  as runtime storage. The `constantprobe_s1` IL spelling assembled with modern 10.0.9 and
+  Framework 4.8 ILAsm and its Framework executable returned zero. The focused dual-ILAsm
+  physical/adversarial test is 1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML suites
+  (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
