@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability, nominal constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability, nominal plus reference/value/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -939,6 +939,43 @@ primitive, and a struct carrying a same-short-name foreign marker. Synthetic sel
 covers a missing marker catalog, duplicate exact markers, a truncated marker value, and an exact
 marker attached to a reference class.
 
+The twenty-seventh slice applies physical classification to the first special generic-constraint
+rules.
+
+1. JVM, JS, Native, and Wasm all keep declaration-level generic bounds separate from the
+   target-specific representation checks applied to an actual type argument. JVM is the closest
+   foreign-import precedent: Java bounds and classfile constraint evidence are imported into the
+   compiler type model rather than re-decided by bytecode emission. None of those targets has a
+   CLR-style by-ref-like anti-constraint.
+2. The CLR separately encodes `ReferenceTypeConstraint`,
+   `NotNullableValueTypeConstraint`, and `AllowByRefLike`. The first two constrain the physical
+   argument category. The last is an anti-constraint: it permits a by-ref-like argument but does
+   not require one. The selected runtime must also support by-ref-like generic instantiation.
+3. Kotlin Common is unchanged. CLR `class` is not Kotlin `T : Any`, CLR `struct` is not a Kotlin
+   value-class bound, and `AllowByRefLike` does not make ordinary Kotlin generic code ref-safe.
+   These results are foreign constructed-type validation only.
+4. `net10.0` admits a by-ref-like argument only when the parameter has `AllowByRefLike`.
+   `net48` and `netstandard2.0` reject such an instantiation even if hostile or mismatched metadata
+   sets the flag. An ordinary non-by-ref-like argument remains legal with or without that
+   anti-constraint. A missing selected marker identity remains unsupported rather than silently
+   treating every value type as ordinary.
+5. `DotNetClrSpecialConstraintValidator` consumes the same resolved parameter bindings as nominal
+   constraint validation and composes them with the shared by-ref-like classifier. It emits one
+   structured result per applicable reference/value rule plus the implicit by-ref-like eligibility
+   rule. It preserves invalid classification and marker-unavailable outcomes and exposes no
+   aggregate success boolean.
+6. The core-team choice is a separate policy validator over the common resolved-constraint model,
+   not attribute-decoder logic, a C# syntax check, or a codegen heuristic. The CLR
+   default-constructor constraint remains a separately recorded next slice because public
+   parameterless constructors, abstract reference types, and implicit value-type construction
+   require their own exact member/instantiation rules.
+
+Real Roslyn .NET 10 definitions cover `class`, `struct`, unconstrained, and
+`allows ref struct` parameters. Constructed-view tests cover references, ordinary values,
+`Nullable<int>`, a real ref struct, both portable targets, absent marker identity, and an invalid
+class/value signature. They also prove the orthogonality of physical value-type satisfaction and
+by-ref-like eligibility.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1034,6 +1071,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Keeping by-ref-like identity separate from Kotlin usability and `AllowByRefLike` legality:
   **Correct direction**.
+- Per-rule reference/value/by-ref-like constructed-argument validation with explicit target
+  profile and non-boolean unsupported/invalid results: **Correct direction**.
+- Deferring the CLR default-constructor constraint until exact constructor/member policy is
+  available: **Correct temporary implementation, but not a final design**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:

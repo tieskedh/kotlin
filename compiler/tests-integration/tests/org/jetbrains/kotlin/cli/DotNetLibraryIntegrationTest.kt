@@ -51,6 +51,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueUnsuppor
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolver
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedConstructedTypeConstraints
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldDefinition
@@ -78,6 +79,12 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeCoreTypes
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintSatisfaction
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintUnsupported
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintValidator
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintViolation
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialGenericParameterValidation
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyContentType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyBinder
@@ -2637,6 +2644,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public sealed class ReferenceProbe<T>
+                        where T : class
+                    {
+                    }
+
+                    public sealed class ValueProbe<T>
+                        where T : struct
+                    {
+                    }
+
+                    public sealed class AllowsRefLikeProbe<T>
+                        where T : allows ref struct
+                    {
+                    }
+
+                    public sealed class OrdinaryGenericProbe<T>
+                    {
+                    }
+
                     [AttributeUsage(AttributeTargets.Struct)]
                     public sealed class IsByRefLikeAttribute : Attribute
                     {
@@ -3389,6 +3415,259 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(
             DotNetClrByRefLikeStatus.MARKER_UNAVAILABLE,
             unavailableByRefLikeMarker,
+        )
+
+        fun resolvedConstructedConstraints(
+            metadataName: String,
+            argument: DotNetClrResolvedTypeSignature,
+        ) = (
+                DotNetClrConstructedTypeConstraintResolver(resolver).resolve(
+                    DotNetClrResolvedTypeView(
+                        (
+                                resolver.resolveTopLevelType(
+                                    destinationMetadata,
+                                    "Forwarded",
+                                    metadataName,
+                                ) as DotNetClrTypeResolution.Resolved
+                                ).type,
+                        listOf(argument),
+                    )
+                ) as DotNetClrConstructedTypeConstraintResolution.Resolved
+                ).constraints
+
+        fun validateSpecialConstraints(
+            constraints: DotNetClrResolvedConstructedTypeConstraints,
+            target: DotNetTarget = DotNetTarget.NET10_0,
+            classifier: DotNetClrByRefLikeClassifier = byRefLikeClassifier,
+        ) = DotNetClrSpecialConstraintValidator(target, classifier)
+            .validate(constraints)
+            .parameters
+            .single()
+
+        fun specialSatisfaction(
+            validation: DotNetClrSpecialGenericParameterValidation,
+            kind: DotNetClrSpecialConstraintKind,
+        ) = validation.constraints.single { constraint -> constraint.kind == kind }
+            .satisfaction
+
+        val outerArgument = DotNetClrResolvedTypeSignature.Named(
+            resolvedOuter,
+            isValueType = false,
+        )
+        val ordinaryValueArgument = DotNetClrResolvedTypeSignature.Named(
+            resolvedProbeConstraintValue,
+            isValueType = true,
+        )
+        val refLikeArgument = DotNetClrResolvedTypeSignature.Named(
+            resolvedProbeRefValue,
+            isValueType = true,
+        )
+        val nullableIntArgument = DotNetClrResolvedTypeSignature.GenericInstance(
+            DotNetClrResolvedTypeSignature.Named(
+                systemNullableType,
+                isValueType = true,
+            ),
+            listOf(
+                DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.INT32
+                )
+            ),
+        )
+
+        val validReferenceSpecial = validateSpecialConstraints(
+            resolvedConstructedConstraints("ReferenceProbe`1", outerArgument)
+        )
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                validReferenceSpecial,
+                DotNetClrSpecialConstraintKind.REFERENCE_TYPE,
+            ),
+        )
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                validReferenceSpecial,
+                DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY,
+            ),
+        )
+        val invalidReferenceSpecial = validateSpecialConstraints(
+            resolvedConstructedConstraints(
+                "ReferenceProbe`1",
+                ordinaryValueArgument,
+            )
+        )
+        assertEquals(
+            DotNetClrSpecialConstraintViolation.REQUIRES_REFERENCE_TYPE,
+            (
+                    specialSatisfaction(
+                        invalidReferenceSpecial,
+                        DotNetClrSpecialConstraintKind.REFERENCE_TYPE,
+                    ) as DotNetClrSpecialConstraintSatisfaction.Violated
+                    ).reason,
+        )
+
+        val validValueSpecial = validateSpecialConstraints(
+            resolvedConstructedConstraints("ValueProbe`1", ordinaryValueArgument)
+        )
+        assertEquals(
+            listOf(
+                DotNetClrSpecialConstraintKind.NON_NULLABLE_VALUE_TYPE,
+                DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY,
+            ),
+            validValueSpecial.constraints.map { constraint -> constraint.kind },
+        )
+        assertTrue(
+            validValueSpecial.constraints.all { constraint ->
+                constraint.satisfaction ===
+                        DotNetClrSpecialConstraintSatisfaction.Satisfied
+            }
+        )
+        val nullableValueSpecial = validateSpecialConstraints(
+            resolvedConstructedConstraints("ValueProbe`1", nullableIntArgument)
+        )
+        assertEquals(
+            DotNetClrSpecialConstraintViolation
+                .REQUIRES_NON_NULLABLE_VALUE_TYPE,
+            (
+                    specialSatisfaction(
+                        nullableValueSpecial,
+                        DotNetClrSpecialConstraintKind.NON_NULLABLE_VALUE_TYPE,
+                    ) as DotNetClrSpecialConstraintSatisfaction.Violated
+                    ).reason,
+        )
+        val refLikeValueSpecial = validateSpecialConstraints(
+            resolvedConstructedConstraints("ValueProbe`1", refLikeArgument)
+        )
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                refLikeValueSpecial,
+                DotNetClrSpecialConstraintKind.NON_NULLABLE_VALUE_TYPE,
+            ),
+        )
+        assertEquals(
+            DotNetClrSpecialConstraintViolation
+                .BY_REF_LIKE_NOT_ALLOWED_BY_PARAMETER,
+            (
+                    specialSatisfaction(
+                        refLikeValueSpecial,
+                        DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY,
+                    ) as DotNetClrSpecialConstraintSatisfaction.Violated
+                    ).reason,
+        )
+
+        val allowedRefLikeConstraints =
+            resolvedConstructedConstraints(
+                "AllowsRefLikeProbe`1",
+                refLikeArgument,
+            )
+        val allowedRefLikeSpecial =
+            validateSpecialConstraints(allowedRefLikeConstraints)
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                allowedRefLikeSpecial,
+                DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY,
+            ),
+        )
+        assertTrue(allowedRefLikeSpecial.binding.parameter.allowsByRefLike)
+        for (
+            portableTarget in
+            listOf(DotNetTarget.NET48, DotNetTarget.NETSTANDARD_2_0)
+        ) {
+            val portableRefLikeSpecial = validateSpecialConstraints(
+                allowedRefLikeConstraints,
+                target = portableTarget,
+            )
+            assertEquals(
+                DotNetClrSpecialConstraintViolation
+                    .BY_REF_LIKE_NOT_SUPPORTED_BY_TARGET,
+                (
+                        specialSatisfaction(
+                            portableRefLikeSpecial,
+                            DotNetClrSpecialConstraintKind
+                                .BY_REF_LIKE_ELIGIBILITY,
+                        ) as DotNetClrSpecialConstraintSatisfaction.Violated
+                        ).reason,
+            )
+        }
+
+        val disallowedRefLikeSpecial = validateSpecialConstraints(
+            resolvedConstructedConstraints(
+                "OrdinaryGenericProbe`1",
+                refLikeArgument,
+            )
+        )
+        assertFalse(disallowedRefLikeSpecial.binding.parameter.allowsByRefLike)
+        assertEquals(
+            DotNetClrSpecialConstraintViolation
+                .BY_REF_LIKE_NOT_ALLOWED_BY_PARAMETER,
+            (
+                    specialSatisfaction(
+                        disallowedRefLikeSpecial,
+                        DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY,
+                    ) as DotNetClrSpecialConstraintSatisfaction.Violated
+                    ).reason,
+        )
+        val ordinaryAllowedArgument = validateSpecialConstraints(
+            resolvedConstructedConstraints(
+                "AllowsRefLikeProbe`1",
+                ordinaryValueArgument,
+            )
+        )
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                ordinaryAllowedArgument,
+                DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY,
+            ),
+        )
+
+        val unavailableMarkerSpecial = validateSpecialConstraints(
+            resolvedConstructedConstraints(
+                "ValueProbe`1",
+                ordinaryValueArgument,
+            ),
+            classifier = DotNetClrByRefLikeClassifier(
+                physicalTypeClassifier,
+                modernAttributeDecoder,
+                isByRefLikeAttribute = null,
+            ),
+        )
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                unavailableMarkerSpecial,
+                DotNetClrSpecialConstraintKind.NON_NULLABLE_VALUE_TYPE,
+            ),
+        )
+        assertEquals(
+            DotNetClrSpecialConstraintUnsupported
+                .BY_REF_LIKE_MARKER_UNAVAILABLE,
+            (
+                    specialSatisfaction(
+                        unavailableMarkerSpecial,
+                        DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY,
+                    ) as DotNetClrSpecialConstraintSatisfaction.Unsupported
+                    ).reason,
+        )
+
+        val invalidSpecialClassification = validateSpecialConstraints(
+            resolvedConstructedConstraints(
+                "ReferenceProbe`1",
+                DotNetClrResolvedTypeSignature.Named(
+                    resolvedOuter,
+                    isValueType = true,
+                ),
+            )
+        )
+        assertTrue(
+            invalidSpecialClassification.constraints.all { constraint ->
+                constraint.satisfaction is
+                        DotNetClrSpecialConstraintSatisfaction
+                            .InvalidClassification
+            }
         )
 
         val falseClassEncoding =

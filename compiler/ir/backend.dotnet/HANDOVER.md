@@ -2300,6 +2300,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Kotlin boxing/capture/heap storage or generic use; `AllowByRefLike` and profile/ref-safety policy
   remain separate. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box,
   21 generated CLI, and 54 library integration tests).
+- The special-constraint-validation continuation consumes the same resolved constructed-type
+  bindings as nominal validation. It checks `ReferenceTypeConstraint` against physical references,
+  `NotNullableValueTypeConstraint` against non-nullable values, and every argument's implicit
+  by-ref-like eligibility. `AllowByRefLike` is permission rather than a requirement: a real ref
+  struct additionally requires that flag and `net10.0`; `net48` and `netstandard2.0` reject the
+  instantiation. Marker absence and invalid classification remain structured non-boolean results.
+  Real Roslyn declarations plus constructed views cover class/value/Nullable/ref-like arguments,
+  the anti-constraint on ordinary values, both portable targets, missing marker identity, and a
+  false class/value signature. The default-constructor rule, dependent parameters, and Kotlin
+  ref-safety/FIR use remain separate; do not report complete generic-constraint satisfaction yet.
+  The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
+  54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

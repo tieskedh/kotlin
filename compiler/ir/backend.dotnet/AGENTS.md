@@ -355,7 +355,15 @@ landed shape as a compatibility constraint.
    non-value target. A same-short-name foreign attribute is unrelated. If the selected profile
    lacks the marker identity, retain `MARKER_UNAVAILABLE`; never infer ordinary-struct status.
    Classification still does not authorize Kotlin capture, boxing, heap storage, or generic use;
-   `AllowByRefLike` and profile/ref-safety policy remain later gates.
+   selected-profile generic eligibility is a separate shared constraint-policy gate. Validate
+   `ReferenceTypeConstraint` against the physical reference category and
+   `NotNullableValueTypeConstraint` against the non-nullable-value category. Treat
+   `AllowByRefLike` as permission, not a requirement: a by-ref-like argument additionally requires
+   that flag and the `net10.0` target; `net48` and `netstandard2.0` do not gain that runtime
+   capability. Preserve missing marker and invalid classification as non-boolean outcomes. Do not
+   combine this partial result with nominal-row success into an “all constraints satisfied” flag:
+   the CLR default-constructor rule, dependent generic parameters, and later ref-safety/FIR policy
+   remain separate.
    MemberRef rows preserve their exact
    TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and closed
    method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely
