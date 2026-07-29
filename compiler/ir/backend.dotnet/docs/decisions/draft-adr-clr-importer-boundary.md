@@ -1391,6 +1391,44 @@ and the compiler's `nullablePublicOnly` module feature. Synthetic selected-metad
 that duplicate attributes, a null byte-array payload, and an out-of-range context flag remain
 located invalid results. The decoder still creates no FIR declaration or Kotlin type.
 
+The thirty-ninth slice aligns one selected transform with the resolved CLR signature tree.
+
+1. JVM enhancement flattens a foreign type into indexed components and computes qualifiers for
+   those components before constructing enhanced Kotlin types. Roslyn likewise traverses its
+   resolved `TypeWithAnnotations` tree in a deterministic preorder and accepts an array transform
+   only when every position is consumed. The shared architectural rule is an explicit alignment
+   phase between decoded annotation evidence and the resolved foreign type shape.
+2. CLR type structure changes which nodes consume a Roslyn flag. Reference primitives, nominal
+   references, generic parameters, pointers, arrays, ordinary generic instances, and function
+   pointers consume before their children. Non-generic value types and `Nullable<T>` consume no
+   position, while another generic value type consumes an oblivious position before its
+   arguments. `ref` and custom modifiers are signature wrappers rather than C# type nodes and
+   consume no position. Function pointers then traverse return type followed by parameters.
+3. Kotlin Common remains untouched. `NOT_ANNOTATED` is deliberately named as Roslyn evidence
+   rather than `NOT_NULL`; neither it nor `ANNOTATED` becomes a Kotlin type in this layer.
+   Value-type skipping is metadata alignment, not a declaration that CLR value types obey Kotlin
+   nullability or boxing semantics.
+4. The traversal is identical on `net48`, `netstandard2.0`, and `net10.0`. The selected profile
+   supplies the actual nominal definitions and hierarchy used to validate class/value encoding
+   and identify `System.Nullable<T>`; no profile gains a different nullability meaning.
+5. The implementation reuses `DotNetClrResolvedTypeSignature` and
+   `DotNetClrPhysicalTypeClassifier`. It returns a flat ordered list of exact resolved component
+   nodes, matching the mature indexed-qualifier pattern, instead of introducing a parallel C#
+   display-type tree. Uniform transforms repeat over every consuming component. Sequence
+   transforms must match the component count exactly.
+6. The core-team choice is a non-throwing `Applied`/`Invalid` result below FIR. A flag-count
+   mismatch or invalid nominal class/value shape remains located invalid evidence; no prefix is
+   applied and no later flags are shifted onto the wrong generic argument. Roslyn recovers from a
+   mismatch by leaving its type unchanged; the Kotlin importer retains the reason explicitly so
+   its later diagnostic policy can choose an oblivious fallback without hiding malformed input.
+   Enclosing-context selection and `NullablePublicOnly` accessibility remain the next declaration
+   policy slice.
+
+Real Roslyn output pins a nullable reference generic return, generic parameter context, arrays,
+`ref`, a generic struct with a skipped primitive argument, and the special outer
+`Nullable<GenericStruct<...>>` rule. Synthetic input pins function-pointer return/parameter order,
+exact count mismatch, and invalid nominal class/value encoding.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1461,6 +1499,15 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Architecturally wrong and should be changed**.
 - Deferring Kotlin/FIR type enhancement until type-tree, context, accessibility, and generic
   policy are available: **Correct temporary implementation, but not a final design**.
+- Roslyn-preorder alignment over resolved CLR signature components:
+  **Correct direction**.
+- Skipping non-generic value types, `Nullable<T>`, by-reference, and modifier wrappers while
+  retaining generic-value and function-pointer positions:
+  **Reasonable platform-specific divergence**.
+- Partially applying a short or long nullable transform:
+  **Architecturally wrong and should be changed**.
+- Retaining flag-count and physical-classification failures below later diagnostic policy:
+  **Correct direction**.
 - Deferring Constant and FieldMarshal payloads while retaining their Param flags:
   **Correct temporary implementation, but not a final design**.
 - Lossless MemberRef and reusable FieldSig model: **Correct direction**.
