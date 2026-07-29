@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface/delegate variance, complete CLR vector-interface, and array assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, scope-qualified open-parameter implication, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration and Param-attachment metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface/delegate variance, complete CLR vector-interface, and array assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, scope-qualified open-parameter implication, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -1303,6 +1303,49 @@ rejection, owner mismatch, and the distinct `!0`/`!!0` spaces. Direct Framework 
 compilation/execution probes keep the ordinary rules profile-uniform, while synthetic selected
 metadata pins modern by-ref-like permission and malformed/cyclic contexts.
 
+The thirty-seventh slice preserves physical Param ownership before nullable-reference semantics.
+
+1. JVM retains method, return, and value-parameter annotation attachment in the Java classfile
+   model before signature enhancement; Native, JS, and Wasm likewise preserve declaration
+   ownership before mapping foreign or serialized metadata into Kotlin types. No mature target
+   guesses a return annotation from its payload or applies a declaration annotation to every
+   parameter because the physical attachment was discarded.
+2. The CLR-specific difference is structural rather than architectural. A MethodDef signature
+   contains the authoritative return and parameter types, but optional Param rows separately
+   carry names, flags, custom attributes, constants, and marshal metadata. MethodDef.ParamList
+   partitions the Param table into contiguous owner runs. Param sequence 0 denotes the return;
+   sequence `n + 1` denotes value parameter `n`. An absent Param row is legal, so a foreign
+   declaration cannot use Param-row presence as its parameter-count model.
+3. Kotlin Common is unchanged. Raw CLR `In`, `Out`, `Optional`, nullable-reference, default, or
+   marshal metadata does not itself become a Kotlin modifier, nullability rule, default
+   expression, or type. Kotlin-produced declarations remain KLIB-authoritative. This slice
+   preserves the evidence required for a later explicit CLR-to-Kotlin policy and creates no FIR
+   declaration.
+4. The Param table and attachment rules are common CLI metadata on `net48`,
+   `netstandard2.0`, and `net10.0`; profile-specific C# compilers may emit different optional
+   rows and attributes, but the physical decoding rule does not change. The reader rejects
+   invalid ParamList bounds/ordering, reserved flags, and a sequence outside the owner signature.
+   It preserves row gaps, duplicate/decreasing sequences, and non-null empty names because ECMA
+   classifies those as warnings, leaving ambiguous source projection to a located import-policy
+   diagnostic.
+5. The implementation therefore extends the existing immutable physical model rather than
+   inventing a nullable or C#-parameter model. Each row retains its token, MethodDef owner, raw
+   flags, sequence, and nullable name in physical order. Existing CustomAttribute parent handles
+   can now attach unambiguously to a return or parameter row. The MethodDef signature still owns
+   types and count; missing rows are not synthesized or collapsed into a map.
+6. The core-team choice is to land this lossless attachment prerequisite before decoding
+   NullableAttribute/NullableContextAttribute. Applying nullable flags first would necessarily
+   mis-associate some return or parameter annotations. Constant and FieldMarshal payload tables
+   remain explicit later physical slices; their presence flags are retained now and are not
+   treated as decoded values.
+
+Framework and modern ILAsm independently preserve named generic-method parameters. A Roslyn
+fixture covers an attributed return, attributed input, `out`, optional/default, and marshal
+metadata. Byte-level hostile images prove rejection of a reserved flag, an out-of-signature
+sequence, and an invalid ParamList; a warning-only duplicate/decreasing sequence remains
+losslessly readable. The scale lane validates Param ownership against real .NET 10
+`System.Runtime`.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1361,6 +1404,12 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Bounded JVM-hosted physical reader: **Correct direction**.
 - CLR-specific immutable metadata model: **Reasonable platform-specific divergence**.
 - Lossless TypeSpec and MethodDef signature model: **Correct direction**.
+- Lossless optional Param rows with MethodDef/return/value-parameter attachment:
+  **Correct direction**.
+- Decoding nullable-reference attributes before Param attachment exists:
+  **Architecturally wrong and should be changed**.
+- Deferring Constant and FieldMarshal payloads while retaining their Param flags:
+  **Correct temporary implementation, but not a final design**.
 - Lossless MemberRef and reusable FieldSig model: **Correct direction**.
 - Physical FieldDef preservation on the reusable FieldSig model: **Correct direction**.
 - Physical Property/PropertyMap/MethodSemantics preservation: **Correct direction**.
