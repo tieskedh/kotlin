@@ -1162,7 +1162,8 @@ The broader CodeAnalysis family is now classified per target in
 `docs/review/clr-annotation-interoperability.md`. `MemberNotNull`/`MemberNotNullWhen` remains
 retained metadata but cannot make mutable, getter-backed, public/open, or cross-module member
 access stable merely because Roslyn updates its null-state. `MaybeNull`/`MaybeNullWhen` is
-state-weakening; `AllowNull`/`DisallowNull` requires a split input/setter view; return-target
+state-weakening; ordinary by-value `AllowNull`/`DisallowNull` is implemented, while properties
+and `ref`/`out` require split views; return-target
 postconditions require result enhancement. `NotNullIfNotNull` is the exact common-effect slice
 implemented below.
 
@@ -1218,6 +1219,17 @@ blob cases cover nullable/non-null/oblivious bases, conflicts, mixed validity, w
 constructors, named payloads, duplicates, conditional interaction, and non-return precedence.
 The focused test is 1/0/0/0. The fresh strict gate is 878/0/0/0 across 16 XML suites (796
 FIR/IL/box, 21 generated CLI, and 61 library integration tests).
+
+**Foreign by-value `AllowNull`/`DisallowNull` enhancement (2026-07-29):** ordinary nullable
+declaration metadata supplies the base parameter qualifier, then exact physical value-Param
+preconditions form the Kotlin call-boundary input type. Exact `DisallowNull` wins exact
+`AllowNull`, matching Roslyn's call-site order. Invalid `DisallowNull` cannot strengthen, while
+invalid `AllowNull` forces flexibility so broken weakening evidence cannot preserve a rigid
+non-null restriction. The view composes with `NotNull`/`NotNullWhen` postconditions but does not
+reconstruct C# method-body analysis. Properties and `ref`/`out` stay deferred because they need
+distinct read/write or pre/post views. Real Roslyn, pure-matrix, hostile-polyfill, and
+corrupted-blob coverage is 1/0/0/0. The fresh strict gate is 879/0/0/0 across 16 XML suites (796
+FIR/IL/box, 21 generated CLI, and 62 library integration tests).
 
 ## 5. Explicitly parked work
 
