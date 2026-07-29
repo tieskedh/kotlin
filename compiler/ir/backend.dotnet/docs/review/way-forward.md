@@ -1110,6 +1110,31 @@ kinds, exact bits, platform-compatible encodings, and hostile table/blob mutatio
 physical/adversarial test is 1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML suites
 (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 
+**CLR annotation-interoperability direction (2026-07-29):** standard CLR tables and established
+.NET/Roslyn attributes are the preferred shared vocabulary whenever they preserve the fact
+truthfully. For foreign libraries, valid nullable metadata must enhance the Kotlin type rather
+than merely produce an informational warning; absent or invalid evidence remains flexible. For
+Kotlin-produced libraries, KLIB remains the authoritative source and the same nullable attributes
+are the C# projection. Conditional flow attributes are not declaration nullability, and neither
+`CompilerGeneratedAttribute` nor physical naming can reconstruct Kotlin logical roles. The first
+lazy FIR provider slice is deliberately closed to complete public non-generic abstract-interface
+contracts over primitive/string/object signatures; it withholds a classifier rather than expose a
+partial contract. Public Kotlin/.NET export-annotation names remain a separate language/API
+decision. See `docs/review/clr-annotation-interoperability.md`.
+
+**First annotation-aware foreign FIR slice (2026-07-29):** the .NET metadata session now installs
+a target-owned provider for resource-free foreign assemblies after the Kotlin-produced/KLIB path
+has been selected. It lazily exposes only complete public top-level non-generic abstract
+interfaces over primitive/string/object signatures. Existing selected-graph Roslyn nullable
+decoding now produces rigid non-null, rigid nullable, or flexible Kotlin types for both returns
+and parameters. Unsupported public members and duplicate classifier identities withhold the
+entire classifier; exact classpath identity binding does not probe target code. The focused
+Roslyn/FIR test covers `#nullable enable`, `#nullable disable`, nullable arguments/returns,
+partial-contract rejection, and duplicate identities at 1/0/0/0. The fresh strict gate is
+872/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 55 library integration
+tests). Backend-call binding remains a later slice, so the integration fixture deliberately
+terminates at frontend diagnostics.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:

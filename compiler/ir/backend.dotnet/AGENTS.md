@@ -642,6 +642,19 @@ landed shape as a compatibility constraint.
    selected `net48`, `netstandard2.0`, or `net10.0` reference graph; the reader itself is
    profile-neutral. Never map raw CLR rows directly to Kotlin IR or infer a foreign member again
    from a Kotlin/C# display name.
+   Standard CLR tables and established .NET/Roslyn attributes are the shared foreign-language
+   vocabulary whenever they express a fact exactly. A valid foreign nullable contract changes the
+   enhanced Kotlin type, following JVM Java-type enhancement; missing, suppressed, invalid, or
+   unbound evidence remains flexible and never silently strengthens a reference. Conditional
+   CodeAnalysis attributes are flow contracts and must not be flattened into declaration
+   nullability. Kotlin-produced DLLs still take the embedded-KLIB path, so their nullable
+   attributes are a derived C# view rather than a second Kotlin authority. The first FIR provider
+   slice may expose only complete public top-level non-generic abstract-interface contracts over
+   the documented primitive/string/object grammar; if any public declared method is outside that
+   grammar, withhold the classifier instead of silently dropping members. Exact details and the
+   mature-target comparison are in `docs/review/clr-annotation-interoperability.md`. Public
+   Kotlin/.NET export-annotation names are a separate language/API decision and must not be
+   invented inside the importer.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased

@@ -48,12 +48,14 @@ import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.moduleName
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.fir.DependencyListForCliModule
+import org.jetbrains.kotlin.fir.FirBinaryDependenciesModuleData
 import org.jetbrains.kotlin.fir.extensions.FirExtensionRegistrar
 import org.jetbrains.kotlin.fir.pipeline.AllModulesFrontendOutput
 import org.jetbrains.kotlin.fir.pipeline.buildFirFromKtFiles
 import org.jetbrains.kotlin.fir.pipeline.buildFirViaLightTree
 import org.jetbrains.kotlin.fir.pipeline.resolveAndCheckFir
 import org.jetbrains.kotlin.fir.pipeline.runPlatformCheckers
+import org.jetbrains.kotlin.fir.session.AdditionalProvidersSupplier
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_UNIQUE_NAME
 import org.jetbrains.kotlin.library.KotlinLibrary
 import org.jetbrains.kotlin.library.loader.loadPackedMetadataKlib
@@ -121,6 +123,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
                 groupedSources.isCommonSourceForLt,
                 groupedSources.fileBelongsToModuleForLt,
                 incrementalCompilationContext = null,
+                additionalProviders = configuration.dotNetForeignClrProviders(),
             )
             sessionsWithSources.map { (session, files) ->
                 val firFiles = session.buildFirViaLightTree(files, diagnosticsReporter) { filesCount, lines ->
@@ -148,6 +151,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
                 isCommonSourceForPsi,
                 fileBelongsToModuleForPsi,
                 incrementalCompilationContext = null,
+                additionalProviders = configuration.dotNetForeignClrProviders(),
             )
             sessionsWithSources.map { (session, files) ->
                 val firFiles = session.buildFirFromKtFiles(files)
@@ -165,6 +169,28 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
         return DotNetFrontendPipelineArtifact(AllModulesFrontendOutput(outputs), configuration, sourceFiles)
     }
 }
+
+private fun org.jetbrains.kotlin.config.CompilerConfiguration.dotNetForeignClrProviders() =
+    AdditionalProvidersSupplier { session, _, scopeProvider, _ ->
+        val assemblies = dotNetExternalClrAssemblies
+        if (assemblies.isEmpty()) {
+            emptyList()
+        } else {
+            val moduleData = FirBinaryDependenciesModuleData(
+                Name.special("<foreign CLR dependencies>")
+            ).apply {
+                bindSession(session)
+            }
+            listOf(
+                DotNetClrFirSymbolProvider(
+                    session,
+                    moduleData,
+                    scopeProvider,
+                    assemblies,
+                )
+            )
+        }
+    }
 
 private data class DotNetEmbeddedMetadataSource(
     val assemblyFile: File,

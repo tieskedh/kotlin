@@ -2557,13 +2557,26 @@ session state, process, and a curated task menu. Keep both files updated as you 
   descriptors, and present-empty blobs. The focused integration test is 1/0/0/0. The fresh
   strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
   integration tests).
-- The next priority is an annotation-interoperability audit, not full runtime reflection. Build a
-  written import/export matrix for standard CLR/Roslyn metadata versus Kotlin-only facts before
-  adding a public target annotation API. The first implementation target should be a narrow lazy
-  FIR foreign-declaration path that consumes the existing nullable/custom-attribute evidence.
-  Then evaluate established .NET flow-nullability, extension, params, property/event/indexer, and
-  semantic runtime markers. Do not replace authoritative KLIB identity or the split-interface
-  C# implementation manifest's Kotlin-only contracts with inferred CLR annotations.
+- The CLR annotation-interoperability audit and first foreign FIR slice are implemented. The
+  written mature-target/carrier comparison is
+  `docs/review/clr-annotation-interoperability.md`. `prepareMetadataSessions` now accepts an
+  optional target supplier, and the .NET frontend installs a foreign-CLR symbol provider after
+  KLIB selection. The provider lazily constructs complete public top-level non-generic abstract
+  interfaces over primitive/string/object signatures. It reuses the selected-graph nullable
+  decoder/evidence/projector pipeline: valid Roslyn metadata produces rigid non-null or nullable
+  Kotlin types; absent, disabled, invalid, or unbound evidence stays flexible. A partly
+  unsupported public contract and a duplicate classifier identity are withheld. The provider
+  binds only exact unique assemblies already selected on the classpath and never probes or loads
+  target code. The focused Roslyn/FIR test is 1/0/0/0 and covers return/parameter enhancement,
+  `#nullable disable`, partial-contract rejection, and duplicate identities. The fresh strict
+  gate is 872/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 55 library
+  integration tests).
+- The next annotation slice is the exact Kotlin-contract/CodeAnalysis overlap, beginning with
+  `NotNullWhen` rather than general reflection. Preserve conditional facts as flow effects; never
+  flatten them into declaration nullability. Attack false equivalences, invalid constructor
+  payloads, non-reference parameters, contradictory duplicates, and unsupported receiver/member
+  effects before attaching anything to FIR. Backend-call binding for the closed interface slice
+  also remains required before successful foreign calls may become executable.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2616,7 +2629,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 871 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 872 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2648,12 +2661,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
    Keep the current same-run fallback only until all bootstrap tests select a complete installed
    pair.
 2. **Continue the CLR importer above its physical declaration and type-resolution foundation.**
-   Add semantic custom-attribute records before introducing the CLR-to-Kotlin policy and lazy FIR
-   provider. Preserve Kotlin
-   declaration identity and Common semantics; decode nullability, variance, properties, and
-   exceptions at the importer boundary instead of teaching the Kotlin-owned backend surface to
-   infer C# conventions. Keep structured metadata-table auditing; do not substitute IL substring
-   checks.
+   The attribute-carrier review is now recorded in
+   `docs/review/clr-annotation-interoperability.md`. Standard CLR/Roslyn metadata is the shared
+   vocabulary; KLIB is the exact Kotlin remainder. The closed nullable-aware abstract-interface
+   FIR slice has landed. Continue with the exact CodeAnalysis/Kotlin-contract overlap and
+   backend-call binding before broadening the declaration grammar; extensions, param arrays,
+   properties/indexers, events, and semantic markers each require their own documented contract.
+   Preserve Kotlin declaration identity and Common semantics; do not teach the Kotlin-owned
+   backend surface to infer C# conventions. Keep structured metadata-table auditing; do not
+   substitute IL substring checks.
 3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
