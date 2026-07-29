@@ -324,9 +324,27 @@ landed shape as a compatibility constraint.
    signature. Preserve gaps, duplicate or decreasing sequences, and a non-null empty name in row
    order because ECMA classifies those shapes as warnings; the later import-policy layer must
    diagnose any ambiguous Kotlin projection rather than the physical reader dropping data.
-   HasDefault and HasFieldMarshal flags are retained, but their Constant/FieldMarshal payloads
-   remain a later physical slice. Roslyn nullable-reference metadata is decoded only after this
-   attachment model can distinguish method, return, and value-parameter targets. Recognize the
+   Decode the Constant table as a separate physical row model before any FIR projection.
+   Preserve each Constant token, exact Field/Param/Property parent, decoded scalar, and raw value
+   blob. The Type byte admits only Boolean, Char, signed/unsigned 8/16/32/64-bit integer,
+   Float32, Float64, String, and Class-as-nullref; its reserved padding byte is zero. Decode
+   little-endian scalar bits losslessly, including floating NaN payloads and signed zero.
+   Follow `System.Reflection.Metadata.BlobReader`: any non-zero Boolean byte is true, String is
+   the complete UTF-16LE code-unit pairs in the blob, scalar readers require their value width
+   but do not discard or reinterpret retained trailing bytes, and nullref requires a four-byte
+   zero prefix. Reject a truncated value, non-zero nullref prefix, invalid Type/padding/parent,
+   duplicate parent, or oversized blob. Enforce ECMA's physical flag relationships exactly:
+   Field.HasDefault requires one Constant row; Param.HasDefault requires one and an unset
+   Param.HasDefault forbids one. ECMA does not impose the corresponding Property-table
+   validation rule, so retain Property.HasDefault without inventing one. Constant.Type versus
+   the declared parent type is a CLS/selected-graph check, especially for enums, and must not be
+   guessed in the profile-neutral reader. A Param constant is CLR metadata, not permission to
+   manufacture a Kotlin default argument; a Field constant is not runtime storage. JVM binary
+   loading likewise retains `ConstantValue` data in the Java model before FIR decides Kotlin
+   constant semantics, while Kotlin metadata/KLIB serializes compile-time values separately from
+   declarations. FieldMarshal payloads remain a later physical slice.
+   Roslyn nullable-reference metadata is decoded only after this attachment model can distinguish
+   method, return, and value-parameter targets. Recognize the
    three compiler conventions by exact top-level
    `System.Runtime.CompilerServices.NullableAttribute`,
    `NullableContextAttribute`, or `NullablePublicOnlyAttribute` identity plus their exact

@@ -1651,6 +1651,62 @@ carrier remains on the Kotlin path and fails. The focused test is 1/0/0/0. The f
 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
 tests).
 
+The forty-fifth slice preserves and decodes physical Constant rows without yet projecting a
+foreign declaration.
+
+1. JVM classfile loading retains the `ConstantValue` attribute as
+   `JavaField.initializerValue`; FIR later creates a foreign constant expression and decides
+   whether it has Kotlin compile-time meaning. Kotlin metadata/KLIB similarly serializes a
+   compile-time value separately from the declaration. The CLR reader therefore keeps Constant
+   rows separate from Field, Param, and Property definitions rather than mutating those models
+   into Kotlin defaults.
+2. Each row retains its Constant token, exact HasConstant parent, semantic scalar, and raw blob.
+   The Type byte admits only Boolean, Char, I1/U1/I2/U2/I4/U4/I8/U8, R4/R8, String, or
+   Class-as-nullref, followed by the required zero padding byte. Integral and floating values keep
+   their exact little-endian bits, so unsigned maxima, signed zero, and NaN payloads survive.
+3. The value decoder follows the official `System.Reflection.Metadata.BlobReader` compatibility
+   contract rather than inventing a stricter source-language encoding. A one-byte Boolean treats
+   any non-zero value as true. A String consumes complete UTF-16LE code-unit pairs; unpaired
+   surrogates remain code units, and a final odd raw byte is retained but has no character.
+   Fixed-width scalars require at least their width and retain any trailing raw bytes. Nullref
+   requires a four-byte zero prefix. This is the CLR-specific reason not to reject encodings that
+   the platform metadata reader accepts.
+4. The physical reader rejects an invalid Type, non-zero padding, invalid or nil parent,
+   duplicate parent, truncated scalar, non-zero nullref prefix, or oversized value. ECMA requires
+   a Field with HasDefault to own exactly one Constant row. A Param has the stronger bidirectional
+   rule: HasDefault owns one, and absence forbids one. The Property table defines HasDefault but
+   does not specify an equivalent error rule, so the physical layer retains that flag without
+   adding one.
+5. Constant.Type matching the declared parent type is a CLS rule and can require selected-graph
+   knowledge, notably an enum's exact underlying type. That validation stays above the
+   profile-neutral reader. The reader also does not infer a missing row from `literal` or
+   HasDefault, coerce a row through C# syntax, or treat a field constant as runtime storage.
+6. Kotlin Common remains authoritative. A CLR Param constant is not a Kotlin default argument, a
+   Property constant is not a Kotlin property initializer, and a Field constant becomes a Kotlin
+   compile-time initializer only if the future FIR provider's explicit foreign-import policy
+   chooses that projection. Kotlin-produced DLLs continue to use their KLIB metadata instead of
+   these physical rows.
+7. The core-team choice rejects attaching the decoded value directly to Field/Param/Property and
+   losing its row token: custom attributes and diagnostics can target the Constant row/parent
+   distinction, while ambiguous or CLS-invalid type relationships need later structured
+   diagnostics. It also rejects converting floating values through host `Float`/`Double`
+   equality, which would lose observable payload bits.
+
+The implementation gate is a dual-ILAsm executable probe plus a physical-reader fixture covering
+every supported Type and Field/Param/Property ownership. Hostile images must cover invalid
+Type/padding/tag, duplicate parents, truncated values, non-zero nullref, and both directions of
+the normative flag/row rules. Compatibility cases must pin non-one true, raw trailing bytes,
+UTF-16 code units, and exact floating bits. No test may claim Kotlin default-argument or constant
+projection at this slice.
+
+The completed probe assembled with modern 10.0.9 and Framework 4.8 ILAsm, and its Framework
+executable returned zero. The focused dual-ILAsm physical/adversarial test is 1/0/0/0. It covers
+every allowed Type, all three parent kinds, exact NaN/signed/unsigned bits, non-one true, odd and
+unpaired UTF-16, trailing scalar bytes, invalid Type/padding/tag/duplicate parent,
+truncation/non-zero nullref, and the exact Field/Param/Property flag asymmetry. The fresh strict
+gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
+integration tests).
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1772,7 +1828,9 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Architecturally wrong and should be changed**.
 - Binding or projecting retained foreign assemblies before a lazy FIR provider owns lookup and
   source policy: **Correct temporary deferral, but not a final design**.
-- Deferring Constant and FieldMarshal payloads while retaining their Param flags:
+- Lossless physical Constant rows with platform-compatible scalar decoding and later
+  Field/Param/Property semantic projection: **Correct direction**.
+- Deferring FieldMarshal payloads while retaining their Param/Field flags:
   **Correct temporary implementation, but not a final design**.
 - Lossless MemberRef and reusable FieldSig model: **Correct direction**.
 - Physical FieldDef preservation on the reusable FieldSig model: **Correct direction**.
