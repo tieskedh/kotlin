@@ -5,6 +5,8 @@ enum class DotNetClrNominalConstraintUnsupported {
     NON_NOMINAL_CONSTRAINT,
     DEPENDENT_GENERIC_PARAMETER,
     VARIANT_CONVERSION_REQUIRED,
+    ARRAY_NOMINAL_CONVERSION_REQUIRED,
+    NESTED_SIGNATURE_CONVERSION_REQUIRED,
 }
 
 sealed interface DotNetClrNominalConstraintSatisfaction {
@@ -51,7 +53,7 @@ class DotNetClrNominalConstraintValidator(
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
 ) {
     private val assignabilityResolver =
-        DotNetClrVariantTypeAssignabilityResolver(
+        DotNetClrSignatureTypeAssignabilityResolver(
             typeResolver,
             physicalTypeClassifier,
             primitiveTypes,
@@ -86,20 +88,16 @@ class DotNetClrNominalConstraintValidator(
                 argument,
             )
         }
-        val actualView = argument.toNominalView()
-            ?: return DotNetClrNominalConstraintSatisfaction.Unsupported(
-                DotNetClrNominalConstraintUnsupported.NON_NOMINAL_ARGUMENT,
-                argument,
-            )
         val constraintSignature = constraint.asResolvedSignature()
+        val actualView = argument.toNominalView()
         val expectedView = constraintSignature.toNominalView()
-            ?: return DotNetClrNominalConstraintSatisfaction.Unsupported(
-                DotNetClrNominalConstraintUnsupported.NON_NOMINAL_CONSTRAINT,
-                constraintSignature,
-            )
         return when (
             val resolution =
-                assignabilityResolver.isAssignable(actualView, expectedView)
+                if (actualView != null && expectedView != null) {
+                    assignabilityResolver.isAssignable(actualView, expectedView)
+                } else {
+                    assignabilityResolver.isAssignable(argument, constraintSignature)
+                }
         ) {
             DotNetClrTypeAssignability.Assignable ->
                 DotNetClrNominalConstraintSatisfaction.Satisfied
@@ -114,11 +112,47 @@ class DotNetClrNominalConstraintValidator(
                     constraintSignature,
                 )
 
+            is DotNetClrTypeAssignability.UnsupportedSignatureConversion ->
+                DotNetClrNominalConstraintSatisfaction.Unsupported(
+                    when (resolution.reason) {
+                        DotNetClrSignatureConversionUnsupported.ARRAY_TO_NOMINAL ->
+                            DotNetClrNominalConstraintUnsupported
+                                .ARRAY_NOMINAL_CONVERSION_REQUIRED
+
+                        DotNetClrSignatureConversionUnsupported.NOMINAL_TO_ARRAY ->
+                            DotNetClrNominalConstraintUnsupported
+                                .NON_NOMINAL_CONSTRAINT
+
+                        DotNetClrSignatureConversionUnsupported.OPEN_GENERIC_PARAMETER ->
+                            DotNetClrNominalConstraintUnsupported
+                                .DEPENDENT_GENERIC_PARAMETER
+
+                        DotNetClrSignatureConversionUnsupported.NON_NOMINAL_SIGNATURE ->
+                            when {
+                                resolution.actual == argument ->
+                                    DotNetClrNominalConstraintUnsupported
+                                        .NON_NOMINAL_ARGUMENT
+
+                                resolution.expected == constraintSignature ->
+                                    DotNetClrNominalConstraintUnsupported
+                                        .NON_NOMINAL_CONSTRAINT
+
+                                else ->
+                                    DotNetClrNominalConstraintUnsupported
+                                        .NESTED_SIGNATURE_CONVERSION_REQUIRED
+                            }
+                    },
+                    constraintSignature,
+                )
+
             is DotNetClrTypeAssignability.InvalidVariance,
             is DotNetClrTypeAssignability.InvalidTypeClassification,
+            is DotNetClrTypeAssignability.InvalidEnumStorage,
             is DotNetClrTypeAssignability.InvalidHierarchy,
             is DotNetClrTypeAssignability.InheritanceCycle,
+            is DotNetClrTypeAssignability.SignatureCycle,
             is DotNetClrTypeAssignability.ResolutionLimitExceeded,
+            is DotNetClrTypeAssignability.SignatureResolutionLimitExceeded,
             -> DotNetClrNominalConstraintSatisfaction.InvalidAssignability(resolution)
         }
     }

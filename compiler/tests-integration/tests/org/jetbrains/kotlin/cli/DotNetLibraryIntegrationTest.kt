@@ -90,6 +90,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintValidator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintViolation
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialGenericParameterValidation
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureTypeAssignabilityResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyContentType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyBinder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameFailure
@@ -99,6 +100,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyProperty
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyVersion
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedProcessorArchitecture
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomAttributeNamedMember
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomModifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericConstraintType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureFailure
@@ -2719,6 +2721,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public sealed class VariantIntArrayConstraint :
+                        IVariantConstraint<int[]>
+                    {
+                    }
+
+                    public sealed class VariantStringMatrixConstraint :
+                        IVariantConstraint<string[,]>
+                    {
+                    }
+
+                    public sealed class VariantStringJaggedArrayConstraint :
+                        IVariantConstraint<string[][]>
+                    {
+                    }
+
+                    public enum SignedArrayEnum : int
+                    {
+                        Zero = 0,
+                    }
+
+                    public sealed class VariantSignedArrayEnumConstraint :
+                        IVariantConstraint<SignedArrayEnum[]>
+                    {
+                    }
+
+                    public sealed class VariantCharArrayConstraint :
+                        IVariantConstraint<char[]>
+                    {
+                    }
+
                     public sealed class VariantConstraintProbe<T>
                         where T : IVariantConstraint<object>
                     {
@@ -2731,6 +2763,31 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public sealed class ArrayVariantConstraintProbe<T>
                         where T : IVariantConstraint<object[]>
+                    {
+                    }
+
+                    public sealed class MatrixVariantConstraintProbe<T>
+                        where T : IVariantConstraint<object[,]>
+                    {
+                    }
+
+                    public sealed class JaggedArrayVariantConstraintProbe<T>
+                        where T : IVariantConstraint<object[][]>
+                    {
+                    }
+
+                    public sealed class UIntArrayVariantConstraintProbe<T>
+                        where T : IVariantConstraint<uint[]>
+                    {
+                    }
+
+                    public sealed class UShortArrayVariantConstraintProbe<T>
+                        where T : IVariantConstraint<ushort[]>
+                    {
+                    }
+
+                    public sealed class ArrayBaseVariantConstraintProbe<T>
+                        where T : IVariantConstraint<Array>
                     {
                     }
 
@@ -3061,6 +3118,64 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 systemEnum,
                 systemNullableType,
             ),
+        )
+        val signatureAssignability =
+            DotNetClrSignatureTypeAssignabilityResolver(
+                resolver,
+                physicalTypeClassifier,
+                primitiveTypeCatalog,
+            )
+        assertSame(
+            DotNetClrTypeAssignability.Assignable,
+            signatureAssignability.isAssignable(
+                DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.STRING
+                ),
+                DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.OBJECT
+                ),
+            ),
+        )
+        assertSame(
+            DotNetClrTypeAssignability.NotAssignable,
+            signatureAssignability.isAssignable(
+                DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.INT32
+                ),
+                DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.OBJECT
+                ),
+            ),
+        )
+        assertSame(
+            DotNetClrTypeAssignability.Assignable,
+            signatureAssignability.isAssignable(
+                DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.INT32
+                ),
+                DotNetClrResolvedTypeSignature.Named(
+                    primitiveTypeCatalog[DotNetClrPrimitiveType.INT32],
+                    isValueType = true,
+                ),
+            ),
+        )
+        assertTrue(
+            signatureAssignability.isAssignable(
+                DotNetClrResolvedTypeSignature.Modified(
+                    listOf(
+                        DotNetClrResolvedCustomModifier(
+                            isRequired = false,
+                            modifierType = systemObjectType,
+                        )
+                    ),
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.STRING
+                    ),
+                ),
+                DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.OBJECT
+                ),
+            ) is DotNetClrTypeAssignability.UnsupportedSignatureConversion
         )
         val isByRefLikeAttributeType = (
                 resolver.resolveTopLevelType(
@@ -3747,7 +3862,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         issue.validation.satisfaction as
                                 DotNetClrNominalConstraintSatisfaction.Unsupported
                         ).reason ==
-                        DotNetClrNominalConstraintUnsupported.NON_NOMINAL_ARGUMENT
+                        DotNetClrNominalConstraintUnsupported
+                            .ARRAY_NOMINAL_CONVERSION_REQUIRED
             }
         )
 
@@ -3846,16 +3962,69 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "VariantIntConstraint",
             ) is DotNetClrConstructedTypeConstraintStatus.Violated
         )
-        val arrayVariantStatus =
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
             variantConstraintStatus(
                 "ArrayVariantConstraintProbe`1",
+                "VariantArrayConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "MatrixVariantConstraintProbe`1",
+                "VariantStringMatrixConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "JaggedArrayVariantConstraintProbe`1",
+                "VariantStringJaggedArrayConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "UIntArrayVariantConstraintProbe`1",
+                "VariantIntArrayConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "UIntArrayVariantConstraintProbe`1",
+                "VariantSignedArrayEnumConstraint",
+            ),
+        )
+        assertTrue(
+            variantConstraintStatus(
+                "ArrayVariantConstraintProbe`1",
+                "VariantIntArrayConstraint",
+            ) is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        assertTrue(
+            variantConstraintStatus(
+                "ArrayVariantConstraintProbe`1",
+                "VariantStringMatrixConstraint",
+            ) is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        assertTrue(
+            variantConstraintStatus(
+                "UShortArrayVariantConstraintProbe`1",
+                "VariantCharArrayConstraint",
+            ) is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        val arrayNominalStatus =
+            variantConstraintStatus(
+                "ArrayBaseVariantConstraintProbe`1",
                 "VariantArrayConstraint",
             ) as DotNetClrConstructedTypeConstraintStatus.Unsupported
         assertEquals(
             DotNetClrNominalConstraintUnsupported
-                .VARIANT_CONVERSION_REQUIRED,
+                .ARRAY_NOMINAL_CONVERSION_REQUIRED,
             (
-                    arrayVariantStatus.nominal.single()
+                    arrayNominalStatus.nominal.single()
                         .validation.satisfaction as
                             DotNetClrNominalConstraintSatisfaction.Unsupported
                     ).reason,

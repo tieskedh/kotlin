@@ -346,14 +346,20 @@ landed shape as a compatibility constraint.
    use of a variant expected definition unsupported, and do not report a false violation. For a
    generic interface, require complete contiguous variance rows and reference-type arguments.
    Covariance checks actual-to-expected, contravariance expected-to-actual, invariance identity;
-   recurse through the same nominal/primitive/interface resolver under explicit bounds. Never use
-   boxing to make a value argument variant. Retain every reachable same-definition candidate, not
-   merely the first; any successful candidate proves assignability. Arrays, open parameters, and
-   delegate candidates retain `VariantConversionRequired` until their separate physical rules are
-   implemented.
-   Array arguments and dependent parameter constraints still require their own shared
-   assignability policy; dependent arguments are explicitly unsupported in both nominal and
-   special validation. Special flags and by-ref-like eligibility use
+   recurse through the same signature resolver under explicit bounds. Never use boxing to make a
+   value argument variant. Retain every reachable same-definition candidate, not merely the first;
+   any successful candidate proves assignability. For array-to-array conversion, require vector
+   against vector or general array against the same rank. Recurse for reference elements; for value
+   elements accept identity or the CLR reduced signed/unsigned integer kind, including validated
+   enum storage, but never `bool`/`byte` or `char`/`ushort`. This is foreign physical
+   assignability, not Kotlin `Array` covariance. Array-to-`System.Array`, vector-to-generic
+   interface, open-parameter, custom-modified, and delegate candidates remain structured
+   unsupported boundaries until their separate physical rules are implemented. Signature
+   assignability never inserts boxing; use the distinct nominal-view relation when generic
+   constraints intentionally compare selected type definitions.
+   Array-to-nominal/interface relations and dependent parameter constraints still require their
+   remaining shared assignability policy; dependent arguments are explicitly unsupported in both
+   nominal and special validation. Special flags and by-ref-like eligibility use
    the physical classification and selected-profile policy below. Resolve compact CLR primitive
    signatures through one complete selected-core catalog (`mscorlib`, the selected portable
    facade graph, or `System.Runtime`/CoreLib), then use that TypeDef's boxed hierarchy view for

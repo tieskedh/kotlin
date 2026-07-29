@@ -2153,6 +2153,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   open parameters, and delegate candidates remain
   `VariantConversionRequired`. The fresh strict gate is 871/0/0/0 across 16 XML suites
   (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The array-assignability continuation generalizes that variance-only layer into
+  `DotNetClrSignatureTypeAssignabilityResolver`. Physical vectors convert to vectors and general
+  arrays to general arrays of the same rank. Reference elements recurse through the same bounded
+  nominal/interface/array relation; value elements require identity or the CLR reduced
+  signed/unsigned integer kind, with enum storage resolved and validated from the selected graph.
+  This does not change Kotlin `Array` invariance. Roslyn coverage proves reference vectors,
+  rectangular and jagged arrays, rank and value/reference failures, `int`/`uint`, enum/`uint`, and
+  the non-pair `char`/`ushort`. Array-to-`System.Array`, vector-to-generic-interface, open
+  parameters, custom-modified types, and delegate variance remain structured unsupported
+  boundaries. The fresh strict gate is 871/0/0/0 across 16 XML suites
+  (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - The System.Type/serialized-enum custom-attribute continuation reuses that selected-graph resolver
   for fixed, array, and tagged values. Type values retain the complete resolved structural type or
   explicit null; serialized enums must resolve to a nominal named or constructed type and pass the

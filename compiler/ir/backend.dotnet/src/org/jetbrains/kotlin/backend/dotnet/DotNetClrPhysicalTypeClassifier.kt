@@ -63,6 +63,9 @@ class DotNetClrPhysicalTypeClassifier(
     private val coreTypes: DotNetClrPhysicalTypeCoreTypes,
     resolutionLimit: Int = DEFAULT_RESOLUTION_LIMIT,
 ) {
+    internal val systemEnum: DotNetClrResolvedTypeDefinition
+        get() = coreTypes.systemEnum
+
     private val assignabilityResolver =
         DotNetClrTypeAssignabilityResolver(typeResolver, resolutionLimit)
 
@@ -173,9 +176,13 @@ class DotNetClrPhysicalTypeClassifier(
                 is DotNetClrTypeAssignability.VariantConversionRequired,
                 is DotNetClrTypeAssignability.InvalidVariance,
                 is DotNetClrTypeAssignability.InvalidTypeClassification,
+                is DotNetClrTypeAssignability.UnsupportedSignatureConversion,
+                is DotNetClrTypeAssignability.InvalidEnumStorage,
                 is DotNetClrTypeAssignability.InvalidHierarchy,
                 is DotNetClrTypeAssignability.InheritanceCycle,
+                is DotNetClrTypeAssignability.SignatureCycle,
                 is DotNetClrTypeAssignability.ResolutionLimitExceeded,
+                is DotNetClrTypeAssignability.SignatureResolutionLimitExceeded,
                 -> return DotNetClrPhysicalTypeClassification.InvalidHierarchy(
                     originalType,
                     resolution,
