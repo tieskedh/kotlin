@@ -2687,6 +2687,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   core dependency is not deployed. The focused test is 1/0/0/0. The fresh strict gate is
   880/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 63 library integration
   tests).
+- Closed imported CLR interface properties are implemented. The provider admits only an
+  instance, non-indexed Property with one exact public abstract getter and an optional exact
+  public abstract setter selected by MethodSemantics; Property and accessor signatures must
+  agree. It creates one real Kotlin `val`/`var`, retains assembly/TypeDef/Property/getter/setter
+  identity through FIR2IR, and binds reads and writes to the selected physical accessor without
+  inferring `get_`/`set_` names. Kotlin Common still owns the single property type. Recognized
+  `AllowNull`/`DisallowNull`/`NotNull`/`MaybeNull` evidence on the Property, getter-return Param,
+  or setter-value Param therefore withholds the complete classifier in this slice instead of
+  flattening split C# states. The two-profile fixture executes read-only, mutable, and nullable
+  properties and pins exact MemberRefs on CLR 4.8 and CoreCLR 10. Its `AllowNull` negative also
+  covers both real compiler layouts: Property-row evidence under Framework and setter-Param
+  evidence under modern Roslyn. The focused test is 1/0/0/0.
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
@@ -2746,7 +2758,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 879 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 880 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2788,9 +2800,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
    logical `Nothing` view while retaining the physical signature. Return-target
    `NotNull`/`MaybeNull` now enhances the logical result with documented Roslyn precedence.
    Ordinary by-value reference parameters now honor exact `AllowNull`/`DisallowNull`
-   preconditions; properties and `ref`/`out` remain separate-view work.
+   preconditions. The first non-indexed interface-property slice has landed and withholds
+   classifiers whose accessors need distinct read/write states; `ref`/`out` and any broader
+   foreign-property view remain separate-state work.
    Member attributes must preserve Kotlin smart-cast stability rather than adopt Roslyn's milder
-   member-state rules. Extensions, param arrays, properties/indexers, events, and semantic markers
+   member-state rules. Extensions, param arrays, indexers, events, and semantic markers
    each require their own documented contract. Preserve Kotlin declaration identity and Common
    semantics; do not teach the Kotlin-owned backend surface to infer C# conventions. Keep
    structured metadata-table auditing; do not substitute IL substring checks.
