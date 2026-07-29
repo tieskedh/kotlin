@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability, nominal plus reference/value/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -965,16 +965,52 @@ rules.
    rule. It preserves invalid classification and marker-unavailable outcomes and exposes no
    aggregate success boolean.
 6. The core-team choice is a separate policy validator over the common resolved-constraint model,
-   not attribute-decoder logic, a C# syntax check, or a codegen heuristic. The CLR
-   default-constructor constraint remains a separately recorded next slice because public
-   parameterless constructors, abstract reference types, and implicit value-type construction
-   require their own exact member/instantiation rules.
+   not attribute-decoder logic, a C# syntax check, or a codegen heuristic. At this slice the CLR
+   default-constructor constraint remained separate because public parameterless constructors,
+   abstract reference types, and implicit value-type construction required their own exact
+   member/instantiation rules; the following slice closes that boundary.
 
 Real Roslyn .NET 10 definitions cover `class`, `struct`, unconstrained, and
 `allows ref struct` parameters. Constructed-view tests cover references, ordinary values,
 `Nullable<int>`, a real ref struct, both portable targets, absent marker identity, and an invalid
 class/value signature. They also prove the orthogonality of physical value-type satisfaction and
 by-ref-like eligibility.
+
+The twenty-eighth slice adds the CLR default-constructor special constraint.
+
+1. Kotlin Common and the JVM/JS/Native/Wasm backends have no common generic “has a constructor”
+   bound. Where a target imports constructor-bearing foreign declarations, constructors remain
+   target callables and generic-bound satisfaction uses the target type/member model. The .NET
+   target follows that separation instead of inventing Kotlin syntax for CLR `.ctor`.
+2. ECMA-335 defines the `.ctor` special constraint as either a value type or a concrete reference
+   type with a public constructor taking no arguments. Constructors are not inherited. The
+   [CLI generic-parameter rule](https://www.ecma-international.org/publications-and-standards/standards/ecma-335/)
+   is the ABI authority; the
+   [C# `new()` contract](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/new-constraint)
+   provides the source-language surface but does not redefine the metadata rule.
+3. Kotlin Common remains unchanged. Satisfying this foreign constraint does not add a Kotlin
+   constructor bound, make `T()` legal in common code, or change Kotlin constructor visibility.
+4. The CLI rule is uniform on `net48`, `netstandard2.0`, and `net10.0`. Every physical value type,
+   including `Nullable<T>` under the standalone `.ctor` flag, satisfies it. A reference argument
+   must be non-abstract and own an exact public parameterless CLR instance constructor. Arrays,
+   strings, non-public/parameterized constructors, and inherited constructors do not satisfy it.
+   By-ref-like eligibility remains an independent profile-aware rule.
+5. `DotNetClrSpecialConstraintValidator` resolves primitive `System.Object`/`System.String`
+   through an explicit selected-core catalog and inspects the selected nominal TypeDef's own
+   MethodDefs. A constructor requires exact `.ctor`, public instance visibility,
+   `SpecialName`/`RTSpecialName`, default instance calling convention, zero generic/value
+   parameters, and `void` return shape. Invalid physical/by-ref-like classification remains
+   structured rather than being collapsed into a constructor failure.
+6. The core-team choice is to apply the CLI rule to selected metadata, not look for Kotlin
+   constructors, C# source syntax, inherited members, or a method named `.ctor` alone. The result
+   remains per-rule and non-aggregate because nominal constraints and dependent generic-parameter
+   arguments still have their own validation paths.
+
+Real Roslyn .NET 10 definitions cover implicit public, parameterized, private, abstract-public,
+and derived-without-own-default constructors. Tests cover `System.Object`, `System.String`, arrays,
+ordinary/nullable/by-ref-like values, and all three target profiles. Synthetic selected metadata
+removes `RTSpecialName` from an otherwise matching `.ctor` to prove that name and signature alone
+are insufficient.
 
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
@@ -1073,8 +1109,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Per-rule reference/value/by-ref-like constructed-argument validation with explicit target
   profile and non-boolean unsupported/invalid results: **Correct direction**.
-- Deferring the CLR default-constructor constraint until exact constructor/member policy is
-  available: **Correct temporary implementation, but not a final design**.
+- Exact selected-TypeDef/MethodDef validation of the CLR default-constructor constraint:
+  **Correct direction**.
+- Keeping CLR constructor-constraint satisfaction separate from Kotlin Common constructor
+  semantics: **Correct direction**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:
