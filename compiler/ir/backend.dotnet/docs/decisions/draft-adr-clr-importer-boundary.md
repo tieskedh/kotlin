@@ -2139,6 +2139,19 @@ malformed-TypeDef cases pass in the focused cross-profile test, 1/0/0/0. The fre
 881/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 64 library integration
 tests).
 
+The property continuation preserves three Common channels: a valid Property-row
+`ObsoleteAttribute` deprecates the whole property, while exact getter/setter MethodDef attributes
+deprecate reads/writes respectively. It does not change physical accessor binding, is evaluated as
+foreign metadata, and does not propagate to Kotlin overrides. The source-level attack exposed a
+profile split: Framework C# rejects accessor obsoletion with `CS1667`, while modern Roslyn accepts
+the same source and emits the attribute on the accessor MethodDef. Because the importer consumes
+physical CLR metadata and Common already represents separate accessor deprecation, the older
+compiler restriction does not justify discarding a shape ordinary modern C# produces. Invalid or
+duplicate evidence on each physical parent creates no best-effort diagnostic. The structured
+cross-profile source/metadata and Kotlin diagnostic test is 1/0/0/0. The fresh strict gate is
+881/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 64 library integration
+tests).
+
 The first conditional-flow slice, `NotNullWhenAttribute`, is implemented. Its Boolean constructor
 maps exactly
 to common FIR's `returns(true|false) implies (parameter != null)` effect for a Boolean-returning
