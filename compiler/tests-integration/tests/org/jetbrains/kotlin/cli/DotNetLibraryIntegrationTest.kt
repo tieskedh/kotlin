@@ -19847,6 +19847,315 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testForeignClrNotNullWhenEnhancesFirDataFlow() {
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val toolchain = checkNotNull(csharpToolchain)
+        val systemRuntime = toolchain.referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(systemRuntime.isFile) { "Missing net10 System.Runtime reference assembly" }
+
+        val fixtureSource = File(tmpdir, "foreign-flow-nullability.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace ForeignFlowContracts
+                {
+                    public interface FlowApi
+                    {
+                        bool Present([NotNullWhen(true)] string? value);
+                        bool Absent([NotNullWhen(false)] string? value);
+                        bool Both(
+                            [NotNullWhen(true)] string? first,
+                            [NotNullWhen(true)] string? second);
+                        bool Unknown(string? value);
+                        int WrongReturn([NotNullWhen(true)] string? value);
+                        bool Value([NotNullWhen(true)] int value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val fixtureAssembly = File(tmpdir, "Foreign.FlowNullability.dll")
+        val fixtureResult = runModernCSharpCompiler(
+            toolchain,
+            fixtureSource,
+            fixtureAssembly,
+        )
+        assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+
+        val hostileSource = File(tmpdir, "foreign-flow-nullability-hostile.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System;
+
+                namespace System.Diagnostics.CodeAnalysis
+                {
+                    [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = true)]
+                    public sealed class NotNullWhenAttribute : Attribute
+                    {
+                        public NotNullWhenAttribute(bool returnValue) {}
+                        public NotNullWhenAttribute(int wrongValue) {}
+                        public bool Unexpected;
+                    }
+                }
+
+                namespace HostileFlowContracts
+                {
+                    using System.Diagnostics.CodeAnalysis;
+
+                    public interface HostileApi
+                    {
+                        bool Duplicate(
+                            [NotNullWhen(true), NotNullWhen(false)] string? value);
+                        bool WrongConstructor([NotNullWhen(1)] string? value);
+                        bool Named(
+                            [NotNullWhen(true, Unexpected = true)] string? value);
+                        int WrongReturn([NotNullWhen(true)] string? value);
+                        bool WrongType([NotNullWhen(true)] int value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val hostileAssembly = File(tmpdir, "Foreign.FlowNullability.Hostile.dll")
+        val hostileResult = runModernCSharpCompiler(
+            toolchain,
+            hostileSource,
+            hostileAssembly,
+            additionalArguments = listOf("/nowarn:0436"),
+        )
+        assertEquals(0, hostileResult.exitCode, hostileResult.output)
+
+        val malformedSource = File(tmpdir, "foreign-flow-nullability-malformed.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace MalformedFlowContracts
+                {
+                    public interface MalformedApi
+                    {
+                        bool Malformed([NotNullWhen(true)] string? value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val pristineMalformedAssembly =
+            File(tmpdir, "Foreign.FlowNullability.Malformed.Primitive.dll")
+        val malformedResult = runModernCSharpCompiler(
+            toolchain,
+            malformedSource,
+            pristineMalformedAssembly,
+        )
+        assertEquals(0, malformedResult.exitCode, malformedResult.output)
+        val malformedMetadata = DotNetClrMetadataReader.read(pristineMalformedAssembly)
+        val malformedApi = malformedMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "MalformedFlowContracts" &&
+                    type.metadataName == "MalformedApi"
+        }
+        val malformedMethod = malformedMetadata.methodDefinitions.single { method ->
+            method.declaringType == malformedApi.handle &&
+                    method.name == "Malformed"
+        }
+        val malformedParameter = malformedMetadata.parameterDefinitions.single { parameter ->
+            parameter.declaringMethod == malformedMethod.handle &&
+                    parameter.parameterIndex == 0
+        }
+        val malformedAttribute = malformedMetadata.customAttributes.single { attribute ->
+            if (attribute.parent != malformedParameter.handle) return@single false
+            val constructor = malformedMetadata.memberReferences.singleOrNull { member ->
+                member.handle == attribute.constructor
+            } ?: return@single false
+            malformedMetadata.typeReferences.any { type ->
+                type.handle == constructor.parent &&
+                        type.namespaceName == "System.Diagnostics.CodeAnalysis" &&
+                        type.metadataName == "NotNullWhenAttribute"
+            }
+        }
+        val malformedImage = pristineMalformedAssembly.readBytes()
+        val malformedTables = locateClrMetadataTables(malformedImage)
+        val malformedValueIndex = readLittleEndianIndex(
+            malformedImage,
+            malformedTables.rowOffset(12, malformedAttribute.handle.row) +
+                    malformedTables.hasCustomAttributeIndexSize +
+                    malformedTables.customAttributeTypeIndexSize,
+            malformedTables.blobIndexSize,
+        )
+        val malformedValueOffset =
+            malformedTables.blobContentOffset(malformedImage, malformedValueIndex)
+        assertEquals(1, malformedImage[malformedValueOffset].toInt() and 0xff)
+        malformedImage[malformedValueOffset] = 0
+        val malformedAssembly = File(tmpdir, "Foreign.FlowNullability.Malformed.dll").apply {
+            writeBytes(malformedImage)
+        }
+        val rereadMalformedAttribute = DotNetClrMetadataReader.read(malformedAssembly)
+            .customAttributes.single { attribute ->
+                attribute.handle == malformedAttribute.handle
+            }
+        assertEquals(
+            0,
+            checkNotNull(rereadMalformedAttribute.rawValue)
+                .toByteArray()
+                .first()
+                .toInt() and 0xff,
+        )
+
+        fun compileForeignConsumer(
+            sourceName: String,
+            sourceText: String,
+            classpath: List<File>,
+        ): Pair<String, ExitCode> {
+            val source = File(tmpdir, sourceName).apply { writeText(sourceText) }
+            return AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    K2DotNetCompilerArguments::noStdlib.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    classpath.joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::moduleName.cliArgument,
+                    "ForeignFlowNullabilityConsumer",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "$sourceName.il").path,
+                )
+            )
+        }
+
+        val [flowDiagnostics, flowExitCode] = compileForeignConsumer(
+            "foreign-flow-nullability.kt",
+            """
+            package consumer
+
+            import ForeignFlowContracts.FlowApi
+
+            public fun acceptedTrue(api: FlowApi, value: String?): Int {
+                if (api.Present(value)) return value.length
+                return 0
+            }
+
+            public fun acceptedFalse(api: FlowApi, value: String?): Int {
+                if (!api.Absent(value)) return value.length
+                return 0
+            }
+
+            public fun acceptedBoth(
+                api: FlowApi,
+                first: String?,
+                second: String?,
+            ): Int {
+                if (api.Both(first, second)) return first.length + second.length
+                return 0
+            }
+
+            public fun rejectedInverseTrue(api: FlowApi, value: String?): Int {
+                if (!api.Present(value)) return value.length
+                return 0
+            }
+
+            public fun rejectedInverseFalse(api: FlowApi, value: String?): Int {
+                if (api.Absent(value)) return value.length
+                return 0
+            }
+
+            public fun rejectedAbsent(api: FlowApi, value: String?): Int {
+                if (api.Unknown(value)) return value.length
+                return 0
+            }
+
+            public fun rejectedWrongReturn(api: FlowApi, value: String?): Int {
+                if (api.WrongReturn(value) == 1) return value.length
+                return 0
+            }
+            """.trimIndent(),
+            listOf(fixtureAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, flowExitCode, flowDiagnostics)
+        assertFalse("if (api.Present(value)) return value.length" in flowDiagnostics) {
+            flowDiagnostics
+        }
+        assertFalse("if (!api.Absent(value)) return value.length" in flowDiagnostics) {
+            flowDiagnostics
+        }
+        assertFalse(
+            "if (api.Both(first, second)) return first.length + second.length" in flowDiagnostics
+        ) {
+            flowDiagnostics
+        }
+        assertTrue("if (!api.Present(value)) return value.length" in flowDiagnostics) {
+            flowDiagnostics
+        }
+        assertTrue("if (api.Absent(value)) return value.length" in flowDiagnostics) {
+            flowDiagnostics
+        }
+        assertTrue("if (api.Unknown(value)) return value.length" in flowDiagnostics) {
+            flowDiagnostics
+        }
+        assertTrue("if (api.WrongReturn(value) == 1) return value.length" in flowDiagnostics) {
+            flowDiagnostics
+        }
+
+        val [hostileDiagnostics, hostileExitCode] = compileForeignConsumer(
+            "foreign-flow-nullability-hostile.kt",
+            """
+            package consumer
+
+            import HostileFlowContracts.HostileApi
+            import MalformedFlowContracts.MalformedApi
+
+            public fun duplicate(api: HostileApi, value: String?): Int {
+                if (api.Duplicate(value)) return value.length
+                return 0
+            }
+
+            public fun wrongConstructor(api: HostileApi, value: String?): Int {
+                if (api.WrongConstructor(value)) return value.length
+                return 0
+            }
+
+            public fun named(api: HostileApi, value: String?): Int {
+                if (api.Named(value)) return value.length
+                return 0
+            }
+
+            public fun wrongReturn(api: HostileApi, value: String?): Int {
+                if (api.WrongReturn(value) == 1) return value.length
+                return 0
+            }
+
+            public fun malformed(api: MalformedApi, value: String?): Int {
+                if (api.Malformed(value)) return value.length
+                return 0
+            }
+            """.trimIndent(),
+            listOf(hostileAssembly, malformedAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, hostileExitCode, hostileDiagnostics)
+        assertTrue("if (api.Duplicate(value)) return value.length" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("if (api.WrongConstructor(value)) return value.length" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("if (api.Named(value)) return value.length" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("if (api.WrongReturn(value) == 1) return value.length" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("if (api.Malformed(value)) return value.length" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+    }
+
+    @Test
     fun testMetadataCompilerRecognizesDotNetAsItsOwnPlatform() {
         val unknownPlatforms = mutableListOf<String>()
         val targetPlatform = MetadataConfigurationUpdater.computeTargetPlatformOrNull(
@@ -25684,6 +25993,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val hasFieldMarshalIndexSize: Int
             get() = codedIndexSize(1, 4, 8)
 
+        val hasCustomAttributeIndexSize: Int
+            get() = codedIndexSize(
+                5,
+                6, 4, 1, 2, 8, 9, 10, 0, 14, 23, 20,
+                17, 26, 27, 32, 35, 38, 39, 40, 42, 44, 43,
+            )
+
+        val customAttributeTypeIndexSize: Int
+            get() = codedIndexSize(3, 6, 10)
+
         val memberRefParentIndexSize: Int
             get() = codedIndexSize(3, 2, 1, 26, 6, 27)
 
@@ -25739,11 +26058,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             9 -> tableIndexSize(2) + codedIndexSize(2, 2, 1, 27)
             10 -> codedIndexSize(3, 2, 1, 26, 6, 27) + stringIndexSize + blobIndexSize
             11 -> 2 + hasConstantIndexSize + blobIndexSize
-            12 -> codedIndexSize(
-                5,
-                6, 4, 1, 2, 8, 9, 10, 0, 14, 23, 20,
-                17, 26, 27, 32, 35, 38, 39, 40, 42, 44, 43,
-            ) + codedIndexSize(3, 6, 10) + blobIndexSize
+            12 -> hasCustomAttributeIndexSize + customAttributeTypeIndexSize + blobIndexSize
             13 -> codedIndexSize(1, 4, 8) + blobIndexSize
             14 -> 2 + codedIndexSize(2, 2, 6, 32) + blobIndexSize
             15 -> 6 + tableIndexSize(2)

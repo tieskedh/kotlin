@@ -1135,6 +1135,18 @@ partial-contract rejection, and duplicate identities at 1/0/0/0. The fresh stric
 tests). Backend-call binding remains a later slice, so the integration fixture deliberately
 terminates at frontend diagnostics.
 
+**Foreign `NotNullWhen` contract enhancement (2026-07-29):** the standard CodeAnalysis
+conditional postcondition now maps to common FIR's exact
+`returns(true|false) implies (parameter != null)` effect for Boolean-returning methods and
+string/object parameters. The selected-graph decoder retains absent, decoded, and
+structured-invalid outcomes; the provider neither changes declaration nullability nor infers an
+inverse condition. The real Roslyn fixture proves smart casts in the two valid branches and
+errors in their inverses. A hostile polyfill and corrupted attribute blob prove that absence,
+duplicates, a wrong constructor, named payloads, invalid prologs, non-reference parameters, and
+non-Boolean returns add no effect. The focused smart-cast test is 1/0/0/0. The fresh strict gate
+is 873/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 56 library integration
+tests).
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:
