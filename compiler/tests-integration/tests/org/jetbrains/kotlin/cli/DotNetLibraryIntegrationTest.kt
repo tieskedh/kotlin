@@ -80,6 +80,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintSatisfaction
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintUnsupported
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintValidator
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableAnnotation
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataDecoder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTransform
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassification
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationUnsupported
@@ -2585,6 +2590,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             writeText(
                 """
                 using System;
+                using System.Collections.Generic;
 
                 namespace Forwarded
                 {
@@ -2607,6 +2613,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             output = input;
                             return optional ?? marshalled;
                         }
+                    }
+
+                    #nullable enable
+                    public sealed class NullableProbe<T> where T : class?
+                    {
+                        public Dictionary<string, T?>? Transform(
+                            List<string?> input,
+                            T value,
+                            object?[] items) => null;
+                    }
+                    #nullable disable
+
+                    public sealed class ObliviousProbe
+                    {
+                        public string Echo(string value) => value;
                     }
 
                     public abstract class SemanticProbeBaseAttribute<T> : Attribute
@@ -3144,6 +3165,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             toolchain,
             destinationSource,
             destinationAssembly,
+            additionalArguments = listOf("/features:nullablePublicOnly"),
         )
         assertEquals(0, destinationCompile.exitCode, destinationCompile.output)
 
@@ -3839,6 +3861,114 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 systemEnum,
                 systemType,
             ),
+        )
+        val nullableMetadataDecoder = DotNetClrNullableMetadataDecoder(modernAttributeDecoder)
+        val nullableProbe = destinationMetadata.typeDefinitions.single { definition ->
+            definition.namespaceName == "Forwarded" &&
+                    definition.metadataName == "NullableProbe`1"
+        }
+        val nullableTransform = destinationMetadata.methodDefinitions.single { method ->
+            method.declaringType == nullableProbe.handle && method.name == "Transform"
+        }
+        val nullableTransformParameters = destinationMetadata.parameterDefinitions
+            .filter { parameter -> parameter.declaringMethod == nullableTransform.handle }
+        assertEquals(
+            DotNetClrNullableTransform.Sequence(
+                listOf(
+                    DotNetClrNullableAnnotation.ANNOTATED,
+                    DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                    DotNetClrNullableAnnotation.ANNOTATED,
+                )
+            ),
+            (
+                    nullableMetadataDecoder.decodeTransform(
+                        destinationMetadata,
+                        nullableTransformParameters.single { parameter -> parameter.isReturn }.handle,
+                    ) as DotNetClrNullableMetadataResolution.Decoded
+                    ).value,
+        )
+        assertEquals(
+            DotNetClrNullableTransform.Sequence(
+                listOf(
+                    DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                    DotNetClrNullableAnnotation.ANNOTATED,
+                )
+            ),
+            (
+                    nullableMetadataDecoder.decodeTransform(
+                        destinationMetadata,
+                        nullableTransformParameters.single { parameter -> parameter.name == "input" }.handle,
+                    ) as DotNetClrNullableMetadataResolution.Decoded
+                    ).value,
+        )
+        assertSame(
+            DotNetClrNullableMetadataResolution.Absent,
+            nullableMetadataDecoder.decodeTransform(
+                destinationMetadata,
+                nullableTransformParameters.single { parameter -> parameter.name == "value" }.handle,
+            ),
+        )
+        assertEquals(
+            DotNetClrNullableTransform.Sequence(
+                listOf(
+                    DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                    DotNetClrNullableAnnotation.ANNOTATED,
+                )
+            ),
+            (
+                    nullableMetadataDecoder.decodeTransform(
+                        destinationMetadata,
+                        nullableTransformParameters.single { parameter -> parameter.name == "items" }.handle,
+                    ) as DotNetClrNullableMetadataResolution.Decoded
+                    ).value,
+        )
+        assertEquals(
+            DotNetClrNullableAnnotation.NOT_ANNOTATED,
+            (
+                    nullableMetadataDecoder.decodeContext(
+                        destinationMetadata,
+                        nullableTransform.handle,
+                    ) as DotNetClrNullableMetadataResolution.Decoded
+                    ).value,
+        )
+        assertEquals(
+            false,
+            (
+                    nullableMetadataDecoder.decodePublicOnly(destinationMetadata) as
+                            DotNetClrNullableMetadataResolution.Decoded
+                    ).value,
+        )
+        val nullableTypeParameter =
+            destinationMetadata.genericParameterDefinitions.single { parameter ->
+                parameter.owner == nullableProbe.handle
+            }
+        assertEquals(
+            DotNetClrNullableTransform.Uniform(DotNetClrNullableAnnotation.ANNOTATED),
+            (
+                    nullableMetadataDecoder.decodeTransform(
+                        destinationMetadata,
+                        nullableTypeParameter.handle,
+                    ) as DotNetClrNullableMetadataResolution.Decoded
+                    ).value,
+        )
+        val obliviousProbe = destinationMetadata.typeDefinitions.single { definition ->
+            definition.namespaceName == "Forwarded" &&
+                    definition.metadataName == "ObliviousProbe"
+        }
+        val obliviousEcho = destinationMetadata.methodDefinitions.single { method ->
+            method.declaringType == obliviousProbe.handle && method.name == "Echo"
+        }
+        assertSame(
+            DotNetClrNullableMetadataResolution.Absent,
+            nullableMetadataDecoder.decodeContext(destinationMetadata, obliviousEcho.handle),
+        )
+        assertTrue(
+            destinationMetadata.parameterDefinitions
+                .filter { parameter -> parameter.declaringMethod == obliviousEcho.handle }
+                .all { parameter ->
+                    nullableMetadataDecoder.decodeTransform(destinationMetadata, parameter.handle) ===
+                            DotNetClrNullableMetadataResolution.Absent
+                }
         )
         val genericAttributeConstructors = genericAttributes.map { attribute ->
             (
@@ -5754,6 +5884,103 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
             )
         }
+
+        val nullableReturnParameter =
+            nullableTransformParameters.single { parameter -> parameter.isReturn }
+        val nullableReturnAttribute = destinationMetadata.customAttributes.single { attribute ->
+            attribute.handle == (
+                    nullableMetadataDecoder.decodeTransform(
+                        destinationMetadata,
+                        nullableReturnParameter.handle,
+                    ) as DotNetClrNullableMetadataResolution.Decoded
+                    ).attribute
+        }
+        val duplicateNullableAttribute = nullableReturnAttribute.copy(
+            handle = DotNetClrMetadataHandle(
+                table = nullableReturnAttribute.handle.table,
+                row = destinationMetadata.customAttributes.maxOf { attribute ->
+                    attribute.handle.row
+                } + 1,
+            )
+        )
+        val duplicateNullableMetadata = destinationMetadata.copy(
+            customAttributes =
+                destinationMetadata.customAttributes + duplicateNullableAttribute
+        )
+        val duplicateNullableResult = DotNetClrNullableMetadataDecoder(
+            decoderForSelectedMetadata(duplicateNullableMetadata)
+        ).decodeTransform(duplicateNullableMetadata, nullableReturnParameter.handle)
+                as DotNetClrNullableMetadataResolution.Invalid
+        assertEquals(
+            DotNetClrNullableMetadataFailure.DUPLICATE_ATTRIBUTE,
+            duplicateNullableResult.failure,
+        )
+        assertEquals(
+            setOf(nullableReturnAttribute.handle, duplicateNullableAttribute.handle),
+            duplicateNullableResult.attributes.toSet(),
+        )
+
+        val nullArrayNullableMetadata = destinationMetadata.copy(
+            customAttributes = destinationMetadata.customAttributes.map { attribute ->
+                if (attribute.handle == nullableReturnAttribute.handle) {
+                    attribute.copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(
+                                0x01,
+                                0x00,
+                                0xff.toByte(),
+                                0xff.toByte(),
+                                0xff.toByte(),
+                                0xff.toByte(),
+                                0x00,
+                                0x00,
+                            )
+                        )
+                    )
+                } else {
+                    attribute
+                }
+            }
+        )
+        val nullArrayNullableResult = DotNetClrNullableMetadataDecoder(
+            decoderForSelectedMetadata(nullArrayNullableMetadata)
+        ).decodeTransform(nullArrayNullableMetadata, nullableReturnParameter.handle)
+                as DotNetClrNullableMetadataResolution.Invalid
+        assertEquals(
+            DotNetClrNullableMetadataFailure.INVALID_VALUE_SHAPE,
+            nullArrayNullableResult.failure,
+        )
+
+        val nullableContextAttribute = destinationMetadata.customAttributes.single { attribute ->
+            attribute.handle == (
+                    nullableMetadataDecoder.decodeContext(
+                        destinationMetadata,
+                        nullableTransform.handle,
+                    ) as DotNetClrNullableMetadataResolution.Decoded
+                    ).attribute
+        }
+        val invalidNullableContextMetadata = destinationMetadata.copy(
+            customAttributes = destinationMetadata.customAttributes.map { attribute ->
+                if (attribute.handle == nullableContextAttribute.handle) {
+                    attribute.copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(0x01, 0x00, 0x03, 0x00, 0x00)
+                        )
+                    )
+                } else {
+                    attribute
+                }
+            }
+        )
+        val invalidNullableContextResult = DotNetClrNullableMetadataDecoder(
+            decoderForSelectedMetadata(invalidNullableContextMetadata)
+        ).decodeContext(invalidNullableContextMetadata, nullableTransform.handle)
+                as DotNetClrNullableMetadataResolution.Invalid
+        assertEquals(
+            DotNetClrNullableMetadataFailure.INVALID_ANNOTATION_FLAG,
+            invalidNullableContextResult.failure,
+        )
+        assertEquals(3, invalidNullableContextResult.invalidFlag)
 
         fun validateSelectedDefaultConstructor(
             selectedMetadata: DotNetClrAssemblyMetadata,
@@ -22733,6 +22960,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         analyzers: List<File> = emptyList(),
         generatedFilesDirectory: File? = null,
         resources: List<Pair<File, String>> = emptyList(),
+        additionalArguments: List<String> = emptyList(),
     ): CSharpCompilerResult {
         output.delete()
         val frameworkReferences = toolchain.referenceDirectory.listFiles { file ->
@@ -22771,6 +22999,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 directory.mkdirs()
                 add("/generatedfilesout:${directory.path}")
             }
+            addAll(additionalArguments)
             add(source.path)
         }
         val process = ProcessBuilder(arguments)
