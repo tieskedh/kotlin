@@ -650,7 +650,11 @@ landed shape as a compatibility constraint.
    nullability. Exact standard overlap may become a common FIR contract:
    `NotNullWhen(true|false)` on a reference parameter of a Boolean-returning method maps only to
    `returns(true|false) implies (parameter != null)`; parameter-target `NotNull` maps only to
-   `returns() implies (parameter != null)`. Neither changes the declaration type.
+   `returns() implies (parameter != null)`; return-target
+   `NotNullIfNotNull("parameter")` maps only to
+   `(parameter != null) implies returnsNotNull()`. Meaningful multiple dependent-return
+   attributes become separate common effects and identical parameter names normalize; malformed
+   or unbound evidence prevents partial strengthening. None changes the declaration type.
    `MemberNotNull`/`MemberNotNullWhen` must never bypass ordinary Kotlin `SmartcastStability`:
    mutable, delegated, getter-backed, public/open, and cross-module public property reads remain
    unstable where Common says so, even when Roslyn would update their null-state. `MaybeNull` and
@@ -664,6 +668,11 @@ landed shape as a compatibility constraint.
    mature-target comparison are in `docs/review/clr-annotation-interoperability.md`. Public
    Kotlin/.NET export-annotation names are a separate language/API decision and must not be
    invented inside the importer.
+   The same decoder plumbing reconstructs these exact effects for a foreign DLL, but
+   Kotlin-produced DLLs do not split one logical contract between KLIB and CLR attributes. KLIB is
+   a self-contained authority; attributes are derived projections. Redefining KLIB as a remainder
+   that must be merged with physical metadata is a separate metadata/ABI decision, not an importer
+   optimization.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased

@@ -2013,12 +2013,22 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Mapping parameter-target `NotNull` to common
   `returns() implies (parameter != null)` without changing the declaration type:
   **Correct direction**.
+- Mapping return-target `NotNullIfNotNull` to common
+  `(parameter != null) implies returnsNotNull()` after exact physical Param-name binding:
+  **Correct direction**.
+- Partially applying a multiple `NotNullIfNotNull` evidence set after one recognized payload or
+  parameter binding is invalid:
+  **Architecturally wrong and should be changed**.
 - Treating `MaybeNull`/`MaybeNullWhen` state weakening as though it were a positive Kotlin
   contract:
   **Architecturally wrong and should be changed**.
 - Granting a smart cast to a CLR member named by `MemberNotNull`/`MemberNotNullWhen` without the
   ordinary Kotlin `SmartcastStability` result:
   **Architecturally wrong and should be changed**.
+- Omitting CLR-representable effects from Kotlin-produced KLIB without first redefining every
+  Kotlin metadata consumer to merge physical CLR projections:
+  **Architecturally wrong under the current self-contained-KLIB authority; a different composite
+  metadata model requires its own ABI decision**.
 - Withholding a foreign classifier when the provider cannot represent its complete public
   contract: **Correct temporary implementation for a closed first slice**.
 - Inventing public Kotlin/.NET export-annotation names inside an importer implementation:
@@ -2086,3 +2096,26 @@ fact that Roslyn updates a member's null-state is insufficient for a Kotlin smar
 
 The focused `NotNull` test is 1/0/0/0. The fresh strict gate is 874/0/0/0 across 16 XML suites
 (796 FIR/IL/box, 21 generated CLI, and 57 library integration tests).
+
+The dependent return postcondition, `NotNullIfNotNullAttribute`, is implemented for return Param
+rows in the closed reference-primitive slice. Each exact string payload binds case-sensitively to
+one physical value Param on the same MethodDef and maps to common FIR's
+`(parameter != null) implies returnsNotNull()` effect. The attribute's `AllowMultiple=true` is
+meaningful: different names add independent implications, identical names normalize, and one
+malformed or inapplicable recognized item prevents partial strengthening.
+
+The test also fixes language-version policy. Reverse implications are common resolved/KLIB
+effects; the source DSL's `ConditionImpliesReturnsContracts` feature controls authoring, not
+consumption of an understood foreign binary contract. A Kotlin 2.2 consumer therefore benefits
+from the imported effect without gaining the newer source syntax.
+
+An exact foreign effect can be reconstructed fully from the CLR attribute and needs no KLIB.
+Kotlin-produced declarations nevertheless keep their complete contract in KLIB and emit the
+attribute as a derived view. Sharing the annotation decoder does not require sharing authority.
+Making KLIB only the CLR-unrepresentable remainder would couple KLIB-only tools and logical
+contract ownership to physical bridges/dispatchers/split methods and would let attribute
+stripping change Kotlin semantics; that composite metadata model is not adopted by this importer
+slice.
+
+The focused `NotNullIfNotNull` test is 1/0/0/0. The fresh strict gate is 875/0/0/0 across 16 XML
+suites (796 FIR/IL/box, 21 generated CLI, and 58 library integration tests).
