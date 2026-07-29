@@ -2446,6 +2446,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   The focused Roslyn/hostile-metadata test is 1/0/0/0. The fresh strict gate remains
   871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
   tests).
+- The nullable-type-shape continuation adds a physical preorder applicator without crossing into
+  Kotlin/FIR enhancement. It reuses resolved CLR signatures and the selected-profile physical
+  classifier. Reference/generic/array/pointer/function-pointer nodes consume before children;
+  non-generic values and `System.Nullable<T>` do not; another generic struct consumes an
+  oblivious position; `ref` and modifier wrappers are transparent; function pointers visit return
+  then parameters. Uniform transforms repeat over consuming nodes and sequence transforms must
+  match exactly. Count mismatch and invalid class/value encoding are structured invalid results,
+  never partial enhancement. Real Roslyn output covers reference generics, arrays, a generic
+  parameter context, `ref`, a generic struct with a skipped primitive argument, and an outer
+  nullable-value wrapper; synthetic input covers function-pointer ordering and hostile shapes.
+  Next select the nearest method/type/module context and apply `NullablePublicOnly` against
+  effective CLR accessibility before deciding diagnostic fallback or FIR nullability.
+  The focused Roslyn/type-shape test is 1/0/0/0. The fresh strict gate remains 871/0/0/0 across
+  16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
