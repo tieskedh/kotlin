@@ -2326,6 +2326,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   remain separate; do not report complete generic-constraint satisfaction yet. The fresh strict
   gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
   integration tests).
+- The selected-primitive-catalog continuation resolves every compact CLR primitive signature code
+  to its exact `System.*` TypeDef through the selected graph. It is immutable and complete or
+  returns the first structured resolution failure; host reflection and host assembly identity are
+  never consulted. Nominal generic-constraint validation now feeds a primitive's boxed TypeView
+  into the existing hierarchy walker, and default-constructor validation reuses the same catalog
+  instead of its former object/string-only input. Real Framework 4.8 `mscorlib` and .NET 10
+  `System.Runtime` reference graphs resolve all primitive definitions. Roslyn
+  `IComparable<T>` constraints prove exact `Int32`/`String` success and `Object` failure; a mixed
+  contract proves `Int32 -> System.ValueType` succeeds while an unrelated interface fails.
+  Arrays, dependent generic parameters, variance, and complete constraint aggregation remain
+  separate. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
+  CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

@@ -51,7 +51,6 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueUnsuppor
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDefaultConstructorCoreTypes
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedConstructedTypeConstraints
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
@@ -79,6 +78,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeCoreTypes
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveTypeCatalogResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveTypeCatalogResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintSatisfaction
@@ -1596,6 +1597,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             "Nullable`1",
                         ) as DotNetClrTypeResolution.Resolved
                         ).type
+                val frameworkPrimitiveTypes = (
+                        DotNetClrPrimitiveTypeCatalogResolver(resolver).resolve(
+                            frameworkCoreMetadata
+                        ) as DotNetClrPrimitiveTypeCatalogResolution.Resolved
+                        ).catalog
+                assertTrue(
+                    DotNetClrPrimitiveType.entries.all { primitive ->
+                        frameworkPrimitiveTypes[primitive].assembly ===
+                                frameworkCoreMetadata
+                    }
+                )
+                assertEquals(
+                    "Int32",
+                    frameworkPrimitiveTypes[
+                        DotNetClrPrimitiveType.INT32
+                    ].definition.metadataName,
+                )
                 val frameworkPhysicalTypeClassifier =
                     DotNetClrPhysicalTypeClassifier(
                         resolver,
@@ -2664,6 +2682,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public sealed class ComparableProbe<T>
+                        where T : IComparable<T>
+                    {
+                    }
+
                     public sealed class NewProbe<T>
                         where T : new()
                     {
@@ -2937,6 +2960,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "Nullable`1",
                 ) as DotNetClrTypeResolution.Resolved
                 ).type
+        val primitiveTypeCatalog = (
+                DotNetClrPrimitiveTypeCatalogResolver(resolver).resolve(
+                    systemRuntimeMetadata
+                ) as DotNetClrPrimitiveTypeCatalogResolution.Resolved
+                ).catalog
+        assertTrue(
+            DotNetClrPrimitiveType.entries.all { primitive ->
+                primitiveTypeCatalog[primitive].assembly ===
+                        systemRuntimeMetadata
+            }
+        )
+        val unresolvedPrimitiveCatalog =
+            DotNetClrPrimitiveTypeCatalogResolver(resolver).resolve(
+                destinationMetadata
+            ) as DotNetClrPrimitiveTypeCatalogResolution.Unresolved
+        assertEquals(
+            DotNetClrPrimitiveType.BOOLEAN,
+            unresolvedPrimitiveCatalog.primitive,
+        )
+        assertEquals(
+            DotNetClrTypeResolutionFailure.TYPE_NOT_FOUND,
+            unresolvedPrimitiveCatalog.resolution.failure,
+        )
         val isByRefLikeAttributeType = (
                 resolver.resolveTopLevelType(
                     systemRuntimeMetadata,
@@ -3188,7 +3234,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
         )
         val nominalConstraintValidator =
-            DotNetClrNominalConstraintValidator(resolver)
+            DotNetClrNominalConstraintValidator(
+                resolver,
+                primitiveTypeCatalog,
+            )
         val satisfiedNominalConstraints =
             nominalConstraintValidator.validate(
                 constrainedAttributeConstructor.attributeTypeConstraints
@@ -3235,7 +3284,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         )
 
-        val unsupportedArgumentConstraints =
+        val primitiveArgumentConstraints =
             nominalConstraintValidator.validate(
                 constraintsWithArgument(
                     DotNetClrResolvedTypeSignature.Primitive(
@@ -3243,14 +3292,64 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     )
                 )
             )
-        assertTrue(
-            unsupportedArgumentConstraints.parameters.single().constraints.all { validation ->
-                val unsupported =
-                    validation.satisfaction as
-                            DotNetClrNominalConstraintSatisfaction.Unsupported
-                unsupported.reason ==
-                        DotNetClrNominalConstraintUnsupported.NON_NOMINAL_ARGUMENT
-            }
+        val primitiveConstraintValidations =
+            primitiveArgumentConstraints.parameters.single().constraints
+        assertSame(
+            DotNetClrNominalConstraintSatisfaction.Satisfied,
+            primitiveConstraintValidations.single { validation ->
+                val type = validation.constraint.type
+                type is DotNetClrResolvedGenericConstraintType.Nominal &&
+                        type.type.hasSameIdentityAs(systemValueType)
+            }.satisfaction,
+        )
+        assertSame(
+            DotNetClrNominalConstraintSatisfaction.Violated,
+            primitiveConstraintValidations.single { validation ->
+                validation.constraint.type is
+                        DotNetClrResolvedGenericConstraintType.Specification
+            }.satisfaction,
+        )
+
+        val comparableProbe = (
+                resolver.resolveTopLevelType(
+                    destinationMetadata,
+                    "Forwarded",
+                    "ComparableProbe`1",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        fun validateComparablePrimitive(
+            primitive: DotNetClrPrimitiveType,
+        ): DotNetClrNominalConstraintSatisfaction {
+            val constraints = (
+                    DotNetClrConstructedTypeConstraintResolver(resolver).resolve(
+                        DotNetClrResolvedTypeView(
+                            comparableProbe,
+                            listOf(
+                                DotNetClrResolvedTypeSignature.Primitive(
+                                    primitive
+                                )
+                            ),
+                        )
+                    ) as DotNetClrConstructedTypeConstraintResolution.Resolved
+                    ).constraints
+            return nominalConstraintValidator.validate(constraints)
+                .parameters
+                .single()
+                .constraints
+                .single()
+                .satisfaction
+        }
+        assertSame(
+            DotNetClrNominalConstraintSatisfaction.Satisfied,
+            validateComparablePrimitive(DotNetClrPrimitiveType.INT32),
+        )
+        assertSame(
+            DotNetClrNominalConstraintSatisfaction.Satisfied,
+            validateComparablePrimitive(DotNetClrPrimitiveType.STRING),
+        )
+        assertSame(
+            DotNetClrNominalConstraintSatisfaction.Violated,
+            validateComparablePrimitive(DotNetClrPrimitiveType.OBJECT),
         )
 
         val nonNominalConstraint =
@@ -3297,6 +3396,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val limitedConstraint =
             DotNetClrNominalConstraintValidator(
                 resolver,
+                primitiveTypeCatalog,
                 resolutionLimit = 1,
             ).validate(limitedConstraintContract)
                 .parameters.single().constraints.single().satisfaction as
@@ -3495,10 +3595,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ) = DotNetClrSpecialConstraintValidator(
             target,
             classifier,
-            DotNetClrDefaultConstructorCoreTypes(
-                systemObjectType,
-                systemStringType,
-            ),
+            primitiveTypeCatalog,
         )
             .validate(constraints)
             .parameters
@@ -4088,10 +4185,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     decoderForSelectedMetadata(selectedMetadata),
                     isByRefLikeAttributeType,
                 ),
-                DotNetClrDefaultConstructorCoreTypes(
-                    systemObjectType,
-                    systemStringType,
-                ),
+                primitiveTypeCatalog,
             ).validate(constraints)
                 .parameters
                 .single()
