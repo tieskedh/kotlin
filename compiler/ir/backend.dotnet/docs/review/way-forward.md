@@ -990,6 +990,22 @@ shapes plus synthetic function-pointer and hostile inputs cover the rule. Enclos
 effective accessibility/`NullablePublicOnly`, diagnostic fallback, generic constraint
 interaction, and FIR projection remain separate next layers.
 
+**CLR nullable-declaration-policy progress (2026-07-29):** nullable evidence selection now happens
+at the physical declaration boundary before type-tree application or FIR projection. As on JVM,
+declaration ownership and inherited defaults are resolved before foreign type enhancement. The
+CLR-specific policy decodes Roslyn's module `NullablePublicOnly(bool IncludesInternals)` marker
+and computes effective public/internal/private accessibility through containing types. Parameters
+and generic parameters follow their method/type owner. CLR Property rows have no accessibility;
+matching Roslyn, their nullable-public-only access symbol is the containing type rather than
+either accessor. Thus a private property in a public type is included while its private accessor
+MethodDefs are suppressed when considered separately. Local Param/Field/Property/GenericParam
+evidence wins, followed by the nearest MethodDef and containing-TypeDef context. The result stays
+explicitly selected, oblivious, suppressed, or invalid and creates no Kotlin type. Real Roslyn
+fixtures cover both public-only modes, friend-assembly internals, accessor asymmetry, and nested
+visibility; hostile metadata covers ambiguous Param rows, invalid ownership, cycles, and depth.
+It also proves that excluded malformed local evidence stays suppressed. Diagnostic fallback,
+generic-constraint interaction, and FIR enhancement remain later layers.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:

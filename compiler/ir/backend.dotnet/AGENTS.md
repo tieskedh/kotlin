@@ -342,7 +342,20 @@ landed shape as a compatibility constraint.
    A sequence must cover the consuming component count exactly; never partially apply or shift
    excess flags. Retain a uniform transform as repeated evidence and report count mismatch or
    invalid nominal physical classification structurally. The resulting NOT_ANNOTATED evidence is
-   still not a Kotlin definitely-non-null type.
+   still not a Kotlin definitely-non-null type. Select the declaration's evidence before applying
+   that transform. An absent module `NullablePublicOnly` marker includes all declarations;
+   `false` includes effective public/protected declarations, while `true` additionally includes
+   effective internal/private-protected declarations. Fold MethodDef and Field visibility through
+   every containing TypeDef; parameters and generic parameters inherit their method/type owner's
+   category. Property rows have no CLR accessibility: matching Roslyn's emitter and PE importer,
+   use the containing TypeDef for nullable-public-only filtering, never an accessor MethodDef. A
+   private property in a public type is therefore included even when its private accessors are
+   independently suppressed as methods. Apply this module filter before decoding local/context
+   evidence. Then prefer an exact Param/Field/Property/GenericParam `NullableAttribute`, followed
+   by the nearest MethodDef and containing-TypeDef `NullableContextAttribute`. Keep selected,
+   oblivious, suppressed, and invalid outcomes distinct; missing or suppressed evidence never
+   becomes definitely non-null. Ownership ambiguity, invalid visibility, malformed attributes,
+   containing-type cycles, and limits remain structured failures below FIR.
    Property, PropertyMap, and MethodSemantics rows now
    retain the physical property token, declaring TypeDef, metadata name/flags, structural
    property/index signature, raw blob, and accessor MethodDef handles. Association comes only from
