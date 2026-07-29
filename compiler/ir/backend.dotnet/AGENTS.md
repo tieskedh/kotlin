@@ -341,9 +341,14 @@ landed shape as a compatibility constraint.
    each resolved row through the shared assignability resolver and preserve satisfied, violated,
    unsupported non-nominal, and invalid-assignability outcomes distinctly. Retain the parameter
    binding and its special flags, but never turn “all nominal rows satisfied” into a complete
-   constraint-satisfaction boolean. Primitive/array arguments and dependent parameter constraints
-   still require their own shared assignability policy; special flags and by-ref-like eligibility
-   use the physical classification and selected-profile policy below.
+   constraint-satisfaction boolean. Array arguments and dependent parameter constraints still
+   require their own shared assignability policy; special flags and by-ref-like eligibility use
+   the physical classification and selected-profile policy below. Resolve compact CLR primitive
+   signatures through one complete selected-core catalog (`mscorlib`, the selected portable
+   facade graph, or `System.Runtime`/CoreLib), then use that TypeDef's boxed hierarchy view for
+   nominal constraint assignability. Never consult host reflection or treat this physical catalog
+   as Kotlin built-in identity. A missing primitive definition is a structured selected-graph
+   failure, not an unsupported/fallback primitive.
    The shared physical signature classifier distinguishes reference, non-nullable value, and
    exact `System.Nullable<T>` categories using an explicit selected-core catalog. Validate a
    nominal signature's encoded `class`/`valuetype` bit against its selected
