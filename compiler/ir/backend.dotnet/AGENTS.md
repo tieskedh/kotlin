@@ -306,7 +306,20 @@ landed shape as a compatibility constraint.
    canonical compressed integers: custom modifiers are legal at the extra CLR-supported type
    positions and may retain an unresolved TypeSpec handle, while named/generic type constructors
    remain TypeDef/TypeRef and a later resolver must reject modifier cycles. MethodDef signatures
-   never admit a call-site vararg sentinel. Property, PropertyMap, and MethodSemantics rows now
+   never admit a call-site vararg sentinel. Param rows retain their own token, MethodDef owner
+   derived from the MethodDef ParamList partition, raw flags, zero-based return versus one-based
+   value-parameter sequence, and nullable metadata name. They are optional descriptive metadata:
+   the MethodDef signature remains authoritative for parameter count and types, and the physical
+   reader never synthesizes a missing Param row. Sequence 0 attaches to the return type; sequence
+   `n + 1` attaches to value parameter `n`, including custom attributes whose parent is that exact
+   Param handle. Reject invalid ownership/list bounds, reserved flags, and sequences outside the
+   signature. Preserve gaps, duplicate or decreasing sequences, and a non-null empty name in row
+   order because ECMA classifies those shapes as warnings; the later import-policy layer must
+   diagnose any ambiguous Kotlin projection rather than the physical reader dropping data.
+   HasDefault and HasFieldMarshal flags are retained, but their Constant/FieldMarshal payloads
+   remain a later physical slice. Do not decode nullable-reference attributes until this
+   attachment model can distinguish method, return, and value-parameter targets.
+   Property, PropertyMap, and MethodSemantics rows now
    retain the physical property token, declaring TypeDef, metadata name/flags, structural
    property/index signature, raw blob, and accessor MethodDef handles. Association comes only from
    MethodSemantics, never from `get_`/`set_` spelling; CTS structural invariants are enforced while

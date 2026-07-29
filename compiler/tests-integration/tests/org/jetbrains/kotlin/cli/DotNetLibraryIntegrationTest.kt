@@ -1291,6 +1291,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
                 transform.signature.parameterTypes,
             )
+            val transformParameters = metadata.parameterDefinitions
+                .filter { parameter -> parameter.declaringMethod == transform.handle }
+            assertEquals(
+                listOf(1, 2, 3, 4),
+                transformParameters.map { parameter -> parameter.sequence },
+            )
+            assertEquals(
+                listOf("input", "value", "matrix", "argument"),
+                transformParameters.map { parameter -> parameter.name },
+            )
+            assertTrue(transformParameters.none { parameter -> parameter.isReturn })
 
             val boxParameter = metadata.genericParameterDefinitions.single { parameter ->
                 parameter.owner == box.handle
@@ -2577,6 +2588,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 namespace Forwarded
                 {
+                    [AttributeUsage(AttributeTargets.ReturnValue | AttributeTargets.Parameter)]
+                    public sealed class ParamMarkerAttribute : Attribute
+                    {
+                    }
+
+                    public static class ParameterProbe
+                    {
+                        [return: ParamMarker]
+                        public static string Rows(
+                            [ParamMarker, System.Runtime.InteropServices.In] string input,
+                            [System.Runtime.InteropServices.Out] out string output,
+                            string optional = "fallback",
+                            [System.Runtime.InteropServices.MarshalAs(
+                                System.Runtime.InteropServices.UnmanagedType.LPWStr)]
+                            string marshalled = null)
+                        {
+                            output = input;
+                            return optional ?? marshalled;
+                        }
+                    }
+
                     public abstract class SemanticProbeBaseAttribute<T> : Attribute
                     {
                         public T InheritedField;
@@ -3143,6 +3175,116 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         val destinationMetadata = DotNetClrMetadataReader.read(destinationAssembly)
         val facadeMetadata = DotNetClrMetadataReader.read(facadeAssembly)
+        val parameterProbe = destinationMetadata.typeDefinitions.single { definition ->
+            definition.namespaceName == "Forwarded" &&
+                    definition.metadataName == "ParameterProbe"
+        }
+        val parameterRowsMethod = destinationMetadata.methodDefinitions.single { method ->
+            method.declaringType == parameterProbe.handle && method.name == "Rows"
+        }
+        val parameterRows = destinationMetadata.parameterDefinitions
+            .filter { parameter -> parameter.declaringMethod == parameterRowsMethod.handle }
+        assertEquals(listOf(0, 1, 2, 3, 4), parameterRows.map { parameter -> parameter.sequence })
+        assertEquals(null, parameterRows.single { parameter -> parameter.isReturn }.name)
+        assertEquals(
+            listOf("input", "output", "optional", "marshalled"),
+            parameterRows.filterNot { parameter -> parameter.isReturn }
+                .map { parameter -> parameter.name },
+        )
+        assertEquals(
+            listOf(0, 1, 2, 3),
+            parameterRows.filterNot { parameter -> parameter.isReturn }
+                .map { parameter -> parameter.parameterIndex },
+        )
+        assertTrue(parameterRows.single { parameter -> parameter.name == "input" }.isIn)
+        assertTrue(parameterRows.single { parameter -> parameter.name == "output" }.isOut)
+        assertTrue(parameterRows.single { parameter -> parameter.name == "optional" }.isOptional)
+        assertTrue(parameterRows.single { parameter -> parameter.name == "optional" }.hasDefault)
+        assertTrue(parameterRows.single { parameter -> parameter.name == "marshalled" }.isOptional)
+        assertTrue(parameterRows.single { parameter -> parameter.name == "marshalled" }.hasDefault)
+        assertTrue(parameterRows.single { parameter -> parameter.name == "marshalled" }.hasFieldMarshal)
+        assertEquals(
+            2,
+            destinationMetadata.customAttributes.count { attribute ->
+                attribute.parent in parameterRows.mapTo(mutableSetOf()) { parameter -> parameter.handle }
+            },
+        )
+        fun assertRejectedParameterMetadata(
+            suffix: String,
+            expectedDiagnostic: String,
+            patch: (ByteArray, ClrMetadataTablesLayout) -> Unit,
+        ) {
+            val image = destinationAssembly.readBytes()
+            patch(image, locateClrMetadataTables(image))
+            val corrupted = directory.resolve("ForwardDestination-$suffix.dll")
+            corrupted.writeBytes(image)
+            val exception = assertThrows(DotNetBadImageFormatException::class.java) {
+                DotNetClrMetadataReader.read(corrupted)
+            }
+            assertTrue(
+                exception.message.orEmpty().contains(expectedDiagnostic),
+                exception.message,
+            )
+        }
+        val inputParameter = parameterRows.single { parameter -> parameter.name == "input" }
+        assertRejectedParameterMetadata(
+            suffix = "reserved-param-flag",
+            expectedDiagnostic = "invalid attribute flags",
+        ) { image, tables ->
+            writeLittleEndian(
+                image,
+                tables.rowOffset(8, inputParameter.handle.row),
+                2,
+                inputParameter.attributes or 0x0020,
+            )
+        }
+        val marshalledParameter =
+            parameterRows.single { parameter -> parameter.name == "marshalled" }
+        assertRejectedParameterMetadata(
+            suffix = "invalid-param-sequence",
+            expectedDiagnostic = "has sequence 5 outside MethodDef",
+        ) { image, tables ->
+            writeLittleEndian(
+                image,
+                tables.rowOffset(8, marshalledParameter.handle.row) + 2,
+                2,
+                5,
+            )
+        }
+        assertRejectedParameterMetadata(
+            suffix = "invalid-param-list",
+            expectedDiagnostic = "invalid ParamList index 0",
+        ) { image, tables ->
+            val paramListOffset =
+                tables.rowOffset(6, parameterRowsMethod.handle.row) +
+                        8 +
+                        tables.stringIndexSize +
+                        tables.blobIndexSize
+            writeLittleEndian(
+                image,
+                paramListOffset,
+                tables.tableIndexSize(8),
+                0,
+            )
+        }
+        val warningOnlyImage = destinationAssembly.readBytes()
+        val warningOnlyTables = locateClrMetadataTables(warningOnlyImage)
+        val outputParameter = parameterRows.single { parameter -> parameter.name == "output" }
+        writeLittleEndian(
+            warningOnlyImage,
+            warningOnlyTables.rowOffset(8, outputParameter.handle.row) + 2,
+            2,
+            1,
+        )
+        val warningOnlyAssembly = directory.resolve("ForwardDestination-param-order-warning.dll")
+        warningOnlyAssembly.writeBytes(warningOnlyImage)
+        val warningOnlyMetadata = DotNetClrMetadataReader.read(warningOnlyAssembly)
+        assertEquals(
+            listOf(0, 1, 1, 3, 4),
+            warningOnlyMetadata.parameterDefinitions
+                .filter { parameter -> parameter.declaringMethod == parameterRowsMethod.handle }
+                .map { parameter -> parameter.sequence },
+        )
         assertEquals(
             setOf("ExternalKind", "Outer", "Inner"),
             facadeMetadata.exportedTypes.mapTo(mutableSetOf(), DotNetClrExportedType::metadataName),
@@ -3166,6 +3308,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             toolchain.referenceDirectory.resolve("System.Runtime.dll")
         assertTrue(systemRuntimeAssembly.isFile)
         val systemRuntimeMetadata = DotNetClrMetadataReader.read(systemRuntimeAssembly)
+        val systemRuntimeMethods =
+            systemRuntimeMetadata.methodDefinitions.associateBy(DotNetClrMethodDefinition::handle)
+        assertTrue(systemRuntimeMetadata.parameterDefinitions.isNotEmpty())
+        assertTrue(
+            systemRuntimeMetadata.parameterDefinitions.all { parameter ->
+                parameter.sequence <=
+                        checkNotNull(systemRuntimeMethods[parameter.declaringMethod])
+                            .signature.parameterTypes.size
+            }
+        )
         val systemRuntimeReference = destinationMetadata.assemblyReferences.single { reference ->
             reference.name == systemRuntimeMetadata.identity.name
         }
@@ -7319,6 +7471,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 typeSpecifications = emptyList(),
                 fieldDefinitions = emptyList(),
                 methodDefinitions = emptyList(),
+                parameterDefinitions = emptyList(),
                 memberReferences = emptyList(),
                 customAttributes = emptyList(),
                 propertyDefinitions = emptyList(),
@@ -22778,6 +22931,148 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ((bytes[offset + 1].toInt() and 0xff) shl 8) or
                 ((bytes[offset + 2].toInt() and 0xff) shl 16) or
                 ((bytes[offset + 3].toInt() and 0xff) shl 24)
+
+    private class ClrMetadataTablesLayout(
+        private val tablesOffset: Int,
+        private val validMask: Long,
+        private val rowCounts: IntArray,
+        val stringIndexSize: Int,
+        val blobIndexSize: Int,
+        private val guidIndexSize: Int,
+    ) {
+        private val tableDataOffset =
+            tablesOffset + 24 + rowCounts.indices.count { table -> hasTable(table) } * 4
+
+        fun tableIndexSize(table: Int): Int =
+            if (rowCounts[table] < 0x1_0000) 2 else 4
+
+        fun rowOffset(table: Int, row: Int): Int {
+            require(hasTable(table))
+            require(row in 1..rowCounts[table])
+            var offset = tableDataOffset
+            for (precedingTable in 0 until table) {
+                if (hasTable(precedingTable)) {
+                    offset += rowCounts[precedingTable] * rowSize(precedingTable)
+                }
+            }
+            return offset + (row - 1) * rowSize(table)
+        }
+
+        private fun hasTable(table: Int): Boolean =
+            validMask ushr table and 1L != 0L
+
+        private fun codedIndexSize(tagBits: Int, vararg tables: Int): Int {
+            val maximumRows = tables.maxOf { table -> rowCounts[table] }
+            return if (maximumRows < (1 shl (16 - tagBits))) 2 else 4
+        }
+
+        private fun rowSize(table: Int): Int = when (table) {
+            0 -> 2 + stringIndexSize + guidIndexSize * 3
+            1 -> codedIndexSize(2, 0, 26, 35, 1) + stringIndexSize * 2
+            2 -> 4 + stringIndexSize * 2 + codedIndexSize(2, 2, 1, 27) +
+                    tableIndexSize(4) + tableIndexSize(6)
+            3 -> tableIndexSize(4)
+            4 -> 2 + stringIndexSize + blobIndexSize
+            5 -> tableIndexSize(6)
+            6 -> 8 + stringIndexSize + blobIndexSize + tableIndexSize(8)
+            7 -> tableIndexSize(8)
+            8 -> 4 + stringIndexSize
+            else -> error("Test metadata locator does not require table $table")
+        }
+    }
+
+    private fun locateClrMetadataTables(image: ByteArray): ClrMetadataTablesLayout {
+        fun u2(offset: Int): Int =
+            image[offset].toInt() and 0xff or
+                    ((image[offset + 1].toInt() and 0xff) shl 8)
+
+        fun u4(offset: Int): Long =
+            readLittleEndianInt(image, offset).toLong() and 0xffff_ffffL
+
+        fun u8(offset: Int): Long =
+            u4(offset) or (u4(offset + 4) shl 32)
+
+        fun align4(value: Int): Int = (value + 3) and 3.inv()
+
+        val peOffset = u4(0x3c).toInt()
+        require(readLittleEndianInt(image, peOffset) == 0x0000_4550)
+        val sectionCount = u2(peOffset + 6)
+        val optionalHeaderSize = u2(peOffset + 20)
+        val optionalHeaderOffset = peOffset + 24
+        val dataDirectoriesOffset = when (u2(optionalHeaderOffset)) {
+            0x10b -> optionalHeaderOffset + 96
+            0x20b -> optionalHeaderOffset + 112
+            else -> error("Unsupported PE optional-header kind")
+        }
+        val sectionHeadersOffset = optionalHeaderOffset + optionalHeaderSize
+
+        fun rvaToFileOffset(rva: Long): Int {
+            repeat(sectionCount) { sectionIndex ->
+                val sectionOffset = sectionHeadersOffset + sectionIndex * 40
+                val virtualSize = u4(sectionOffset + 8)
+                val virtualAddress = u4(sectionOffset + 12)
+                val rawSize = u4(sectionOffset + 16)
+                val rawOffset = u4(sectionOffset + 20)
+                val sectionSize = maxOf(virtualSize, rawSize)
+                if (rva >= virtualAddress && rva - virtualAddress < sectionSize) {
+                    return (rawOffset + rva - virtualAddress).toInt()
+                }
+            }
+            error("RVA 0x${rva.toString(16)} is outside the PE sections")
+        }
+
+        val cliRva = u4(dataDirectoriesOffset + 14 * 8)
+        val cliOffset = rvaToFileOffset(cliRva)
+        val metadataOffset = rvaToFileOffset(u4(cliOffset + 8))
+        require(u4(metadataOffset) == 0x424a_5342L)
+        val versionLength = u4(metadataOffset + 12).toInt()
+        var streamHeaderOffset = metadataOffset + align4(16 + versionLength)
+        streamHeaderOffset += 2
+        val streamCount = u2(streamHeaderOffset)
+        streamHeaderOffset += 2
+        var tablesOffset: Int? = null
+        repeat(streamCount) {
+            val streamOffset = u4(streamHeaderOffset).toInt()
+            var nameEnd = streamHeaderOffset + 8
+            while (image[nameEnd].toInt() != 0) nameEnd++
+            val name = image.copyOfRange(streamHeaderOffset + 8, nameEnd)
+                .toString(Charsets.US_ASCII)
+            if (name == "#~" || name == "#-") {
+                tablesOffset = metadataOffset + streamOffset
+            }
+            streamHeaderOffset += align4(8 + nameEnd - (streamHeaderOffset + 8) + 1)
+        }
+        val resolvedTablesOffset = checkNotNull(tablesOffset)
+        val heapSizes = image[resolvedTablesOffset + 6].toInt() and 0xff
+        val validMask = u8(resolvedTablesOffset + 8)
+        val rowCounts = IntArray(64)
+        var rowCountOffset = resolvedTablesOffset + 24
+        for (table in rowCounts.indices) {
+            if (validMask ushr table and 1L == 0L) continue
+            rowCounts[table] = u4(rowCountOffset).toInt()
+            rowCountOffset += 4
+        }
+        return ClrMetadataTablesLayout(
+            tablesOffset = resolvedTablesOffset,
+            validMask = validMask,
+            rowCounts = rowCounts,
+            stringIndexSize = if (heapSizes and 0x1 != 0) 4 else 2,
+            blobIndexSize = if (heapSizes and 0x4 != 0) 4 else 2,
+            guidIndexSize = if (heapSizes and 0x2 != 0) 4 else 2,
+        )
+    }
+
+    private fun writeLittleEndian(
+        bytes: ByteArray,
+        offset: Int,
+        width: Int,
+        value: Int,
+    ) {
+        require(width == 2 || width == 4)
+        repeat(width) { index ->
+            bytes[offset + index] = (value ushr (index * 8)).toByte()
+        }
+    }
 
     private fun corruptCSharpManifestLogicalDeclaration(
         assembly: File,

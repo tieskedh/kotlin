@@ -1,6 +1,6 @@
 # Handover — Kotlin/.NET backend, interim development
 
-Written 2026-07-14 and updated 2026-07-28 for the next agent working on the `dotnet` branch
+Written 2026-07-14 and updated 2026-07-29 for the next agent working on the `dotnet` branch
 (array content operations complete; explicit CLR function/property boundaries, nullability,
 defaults, overload-aware function selection, immutable callable-provenance invocation, and the
 bounded typed-argument callable capability implemented; bounded Kotlin property-reference values,
@@ -2416,6 +2416,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   bounds, owner/scope failures, hostile cycles, all three profile policies, and direct
   Framework/CoreCLR compilation/execution are covered. The fresh strict gate is 871/0/0/0 across
   16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The Param-metadata continuation establishes the attachment prerequisite for semantic CLR
+  nullability. `DotNetClrAssemblyMetadata` now retains each optional Param row with its token,
+  declaring MethodDef, raw flags, sequence, and nullable name. MethodDef ParamList runs establish
+  ownership; sequence 0 is the return and sequence `n + 1` is value parameter `n`, while the
+  MethodDef signature remains authoritative for types and count. Invalid list indices, reserved
+  flags, and out-of-signature sequences fail as bad images. ECMA warning-only row order, gaps,
+  duplicate sequences, and empty non-null names remain lossless physical input for later
+  import-policy diagnostics. Return/parameter custom attributes now have an unambiguous physical
+  attachment target, but NullableAttribute/NullableContextAttribute interpretation and
+  Constant/FieldMarshal payload decoding are deliberately not part of this slice. Framework and
+  modern ILAsm parameter ownership, Roslyn return/in/out/optional/default/marshal rows, real
+  net10 System.Runtime scale, and byte-level hostile images are covered. The focused two-test run
+  is 2/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box,
+  21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
