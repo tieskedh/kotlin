@@ -2480,6 +2480,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   interaction before FIR projection. The focused Roslyn/declaration-policy test is 1/0/0/0. The
   fresh strict gate remains 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
   54 library integration tests).
+- The nullable-evidence-application continuation composes declaration selection with physical
+  preorder alignment while still creating no Kotlin type. `DotNetClrNullableEvidenceApplicator`
+  follows JVM's unenhanced-foreign-type fallback and Roslyn's unchanged-metadata-type recovery.
+  Selected valid evidence produces applied physical components; ordinary oblivious and
+  accessibility-suppressed evidence retain the exact resolved CLR signature as distinct
+  non-diagnostic results. Invalid declaration evidence and invalid transform/type alignment also
+  retain that signature, but as separate mandatory `DiagnosticFallback` results carrying the
+  original structured cause. Malformed advisory C# metadata therefore neither becomes ordinary
+  obliviousness nor removes a valid runtime declaration. The rule is profile-neutral and does not
+  interpret NOT_ANNOTATED as Kotlin definitely-non-null. Next validate nullable generic-parameter
+  and constraint interaction before FIR projection and diagnostic severity. The focused
+  Roslyn/evidence-application test is 1/0/0/0. The fresh strict gate remains 871/0/0/0 across
+  16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

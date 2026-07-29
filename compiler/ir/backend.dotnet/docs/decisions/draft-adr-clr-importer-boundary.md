@@ -1478,6 +1478,43 @@ visibility. Synthetic selected metadata pins an out-of-range parameter, duplicat
 attachment, invalid ownership, invalid visibility, containing-type cycles, the traversal limit,
 and malformed local evidence that must remain suppressed when the module policy excludes it.
 
+The forty-first slice composes declaration evidence with type-shape application while retaining
+an explicit unchanged-type fallback.
+
+1. JVM FIR signature enhancement computes indexed qualifiers with `JavaTypeQualifiers.NONE` for
+   an unqualified component and uses the unenhanced converted Java type when enhancement returns
+   no replacement. The important boundary is that absence does not delete the foreign
+   declaration or manufacture a rigid Kotlin type. The .NET importer follows that fallback shape
+   below FIR.
+2. Roslyn's `NullableTypeDecoder.TransformType` returns the unchanged metadata type when no local
+   or context flag exists, the module accessibility policy excludes the declaration, or an array
+   transform does not line up with the type tree. That is a CLR/C#-metadata compatibility rule:
+   nullable-reference metadata is advisory compiler evidence, not the runtime signature. See the
+   [Roslyn decoder](https://github.com/dotnet/roslyn/blob/c67ab9a38782b72900e4c758a6fcea476a600b44/src/Compilers/CSharp/Portable/Symbols/Metadata/PE/NullableTypeDecoder.cs#L14-L72).
+3. Kotlin Common is unchanged. “Unchanged” here means the exact resolved physical CLR signature,
+   not a Kotlin platform type and not a claim that an unannotated reference is non-null.
+   `NOT_ANNOTATED` and `ANNOTATED` remain ordered evidence until generic interaction and FIR
+   projection choose Kotlin-facing types.
+4. The fallback and evidence application are profile-neutral on `net48`, `netstandard2.0`, and
+   `net10.0`; the selected profile still owns nominal type resolution and physical
+   classification.
+5. `DotNetClrNullableEvidenceApplicator` composes the existing declaration resolver's output with
+   the physical preorder applicator without re-resolving or guessing a declaration signature.
+   Selected valid evidence becomes `Applied`; ordinary missing and accessibility-filtered
+   evidence remain separate `Oblivious` and `Suppressed` results. Invalid declaration evidence
+   and invalid type-transform alignment become distinct `DiagnosticFallback` results carrying
+   the unchanged physical type and original structured cause.
+6. The core-team choice is not Roslyn's silent invalid-input recovery. Importing the unchanged
+   runtime signature preserves the foreign API, but the invalid cause remains mandatory for the
+   later FIR diagnostic policy. Collapsing it into ordinary obliviousness would hide malformed
+   metadata; failing or dropping the whole declaration would let advisory C# metadata shrink a
+   valid CLR API. Diagnostic severity and the Kotlin type remain later policy.
+
+Real selected, context, oblivious, and accessibility-suppressed Roslyn evidence pins every
+non-diagnostic result. Synthetic selected metadata pins both flag-count and physical
+classification fallback, while an invalid declaration target pins the distinct declaration
+diagnostic path.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1562,6 +1599,14 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Deriving nullable-public-only accessibility for a Property row from its accessor visibility:
   **Architecturally wrong and should be changed**.
 - Treating suppressed or missing nullable evidence as definitely non-null:
+  **Architecturally wrong and should be changed**.
+- Unchanged physical-type fallback for oblivious or accessibility-suppressed nullable evidence:
+  **Correct direction**.
+- Retaining malformed declaration/type-alignment causes in an explicit diagnostic fallback:
+  **Correct direction**.
+- Silently collapsing invalid nullable evidence into ordinary obliviousness:
+  **Architecturally wrong and should be changed**.
+- Dropping a valid CLR declaration because its advisory nullable metadata is malformed:
   **Architecturally wrong and should be changed**.
 - Deferring Constant and FieldMarshal payloads while retaining their Param flags:
   **Correct temporary implementation, but not a final design**.

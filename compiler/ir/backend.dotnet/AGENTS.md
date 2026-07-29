@@ -355,7 +355,14 @@ landed shape as a compatibility constraint.
    by the nearest MethodDef and containing-TypeDef `NullableContextAttribute`. Keep selected,
    oblivious, suppressed, and invalid outcomes distinct; missing or suppressed evidence never
    becomes definitely non-null. Ownership ambiguity, invalid visibility, malformed attributes,
-   containing-type cycles, and limits remain structured failures below FIR.
+   containing-type cycles, and limits remain structured failures below FIR. When composing this
+   declaration evidence with the physical preorder applicator, selected valid evidence yields
+   applied components. Oblivious and accessibility-suppressed evidence retain the exact unchanged
+   resolved CLR signature as distinct non-diagnostic outcomes. Invalid declaration evidence or
+   invalid transform/type alignment also retains that runtime signature, matching JVM/Roslyn
+   foreign-type fallback, but must carry a distinct structured diagnostic cause. Never collapse
+   malformed metadata into ordinary obliviousness, drop the CLR declaration, or infer a Kotlin
+   type at this layer.
    Property, PropertyMap, and MethodSemantics rows now
    retain the physical property token, declaring TypeDef, metadata name/flags, structural
    property/index signature, raw blob, and accessor MethodDef handles. Association comes only from
