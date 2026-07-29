@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 62
+toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 63
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 879 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 880 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -693,6 +693,21 @@ landed shape as a compatibility constraint.
    a self-contained authority; attributes are derived projections. Redefining KLIB as a remainder
    that must be merged with physical metadata is a separate metadata/ABI decision, not an importer
    optimization.
+   Closed foreign-interface calls retain the already-selected assembly, TypeDef, MethodDef, and
+   physical signature on a target-owned `DeserializedContainerSource`. FIR2IR preserves that
+   carrier on the lazy external IR function; codegen consumes it directly and never resolves a
+   ClassId or display name against the classpath again. The complete-interface provider invariant
+   guarantees at least one such member carrier for exact class-owner mapping. Logical enhanced
+   IR remains authoritative for Kotlin resolution and control flow, while the MethodDef signature
+   owns the emitted MemberRef: in particular a value-returning `DoesNotReturn` call is invoked
+   with that value return, popped, and followed by the common `KotlinNothingValueException` guard.
+   Textual IL cannot encode the retained MethodDef token cross-assembly, so it emits the selected
+   assembly scope, TypeDef name, method name, calling convention, and exact physical signature.
+   Emit one exact version/token AssemblyRef and deploy only a foreign producer referenced by
+   surviving code. Reject non-neutral culture and ambiguous same-simple-name producers in this
+   first slice rather than approximating identity. The two-profile C# execution pin covers exact
+   overloads, string/void results, dishonest void/value non-return contracts, AssemblyRef version,
+   dependency copying, and the absence of an annotation-only deployment copy.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased
