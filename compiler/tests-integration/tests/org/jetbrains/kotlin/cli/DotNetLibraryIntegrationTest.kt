@@ -51,6 +51,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueUnsuppor
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolver
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintStatus
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintValidator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedConstructedTypeConstraints
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
@@ -2687,6 +2689,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public interface IVariantConstraint<out T>
+                    {
+                    }
+
+                    public sealed class VariantStringConstraint :
+                        IVariantConstraint<string>
+                    {
+                    }
+
+                    public sealed class VariantConstraintProbe<T>
+                        where T : IVariantConstraint<object>
+                    {
+                    }
+
                     public sealed class NewProbe<T>
                         where T : new()
                     {
@@ -3588,8 +3604,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ) as DotNetClrConstructedTypeConstraintResolution.Resolved
                 ).constraints
 
-        fun validateSpecialConstraints(
-            constraints: DotNetClrResolvedConstructedTypeConstraints,
+        fun specialConstraintValidator(
             target: DotNetTarget = DotNetTarget.NET10_0,
             classifier: DotNetClrByRefLikeClassifier = byRefLikeClassifier,
         ) = DotNetClrSpecialConstraintValidator(
@@ -3597,6 +3612,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             classifier,
             primitiveTypeCatalog,
         )
+
+        fun validateSpecialConstraints(
+            constraints: DotNetClrResolvedConstructedTypeConstraints,
+            target: DotNetTarget = DotNetTarget.NET10_0,
+            classifier: DotNetClrByRefLikeClassifier = byRefLikeClassifier,
+        ) = specialConstraintValidator(target, classifier)
             .validate(constraints)
             .parameters
             .single()
@@ -3630,6 +3651,119 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 )
             ),
         )
+
+        fun validateAllConstraints(
+            constraints: DotNetClrResolvedConstructedTypeConstraints,
+            target: DotNetTarget = DotNetTarget.NET10_0,
+            classifier: DotNetClrByRefLikeClassifier = byRefLikeClassifier,
+        ) = DotNetClrConstructedTypeConstraintValidator(
+            nominalConstraintValidator,
+            specialConstraintValidator(target, classifier),
+        ).validate(constraints)
+
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            validateAllConstraints(
+                constrainedAttributeConstructor.attributeTypeConstraints
+            ).status,
+        )
+        val violatedAllConstraints =
+            validateAllConstraints(constraintsWithArgument(outerArgument)).status as
+                    DotNetClrConstructedTypeConstraintStatus.Violated
+        assertEquals(2, violatedAllConstraints.nominal.size)
+        assertEquals(1, violatedAllConstraints.special.size)
+
+        val arrayAllConstraints =
+            validateAllConstraints(
+                constraintsWithArgument(
+                    DotNetClrResolvedTypeSignature.SzArray(
+                        DotNetClrResolvedTypeSignature.Primitive(
+                            DotNetClrPrimitiveType.INT32
+                        )
+                    )
+                )
+            ).status as DotNetClrConstructedTypeConstraintStatus.Unsupported
+        assertEquals(2, arrayAllConstraints.nominal.size)
+        assertTrue(
+            arrayAllConstraints.nominal.all { issue ->
+                (
+                        issue.validation.satisfaction as
+                                DotNetClrNominalConstraintSatisfaction.Unsupported
+                        ).reason ==
+                        DotNetClrNominalConstraintUnsupported.NON_NOMINAL_ARGUMENT
+            }
+        )
+
+        val dependentAllConstraints =
+            validateAllConstraints(
+                constraintsWithArgument(
+                    DotNetClrResolvedTypeSignature.GenericParameter(
+                        DotNetClrGenericParameterKind.TYPE,
+                        0,
+                    )
+                )
+            ).status as DotNetClrConstructedTypeConstraintStatus.Unsupported
+        assertTrue(
+            dependentAllConstraints.nominal.all { issue ->
+                (
+                        issue.validation.satisfaction as
+                                DotNetClrNominalConstraintSatisfaction.Unsupported
+                        ).reason ==
+                        DotNetClrNominalConstraintUnsupported
+                            .DEPENDENT_GENERIC_PARAMETER
+            }
+        )
+        assertTrue(
+            dependentAllConstraints.special.all { issue ->
+                (
+                        issue.validation.satisfaction as
+                                DotNetClrSpecialConstraintSatisfaction.Unsupported
+                        ).reason ==
+                        DotNetClrSpecialConstraintUnsupported
+                            .DEPENDENT_GENERIC_PARAMETER
+            }
+        )
+
+        val variantConstraintArgument =
+            DotNetClrResolvedTypeSignature.Named(
+                (
+                        resolver.resolveTopLevelType(
+                            destinationMetadata,
+                            "Forwarded",
+                            "VariantStringConstraint",
+                        ) as DotNetClrTypeResolution.Resolved
+                        ).type,
+                isValueType = false,
+            )
+        val variantAllConstraints =
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "VariantConstraintProbe`1",
+                    variantConstraintArgument,
+                )
+            ).status as DotNetClrConstructedTypeConstraintStatus.Unsupported
+        assertEquals(
+            DotNetClrNominalConstraintUnsupported
+                .VARIANT_CONVERSION_REQUIRED,
+            (
+                    variantAllConstraints.nominal.single()
+                        .validation.satisfaction as
+                            DotNetClrNominalConstraintSatisfaction.Unsupported
+                    ).reason,
+        )
+
+        val invalidAllConstraints =
+            validateAllConstraints(
+                resolvedConstructedConstraints(
+                    "ReferenceProbe`1",
+                    DotNetClrResolvedTypeSignature.Named(
+                        resolvedOuter,
+                        isValueType = true,
+                    ),
+                )
+            ).status as DotNetClrConstructedTypeConstraintStatus.Invalid
+        assertTrue(invalidAllConstraints.nominal.isEmpty())
+        assertEquals(2, invalidAllConstraints.special.size)
 
         val validReferenceSpecial = validateSpecialConstraints(
             resolvedConstructedConstraints("ReferenceProbe`1", outerArgument)
