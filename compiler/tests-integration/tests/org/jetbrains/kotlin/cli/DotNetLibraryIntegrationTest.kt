@@ -51,6 +51,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueUnsuppor
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolver
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrDefaultConstructorCoreTypes
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedConstructedTypeConstraints
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
@@ -2663,6 +2664,51 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public sealed class NewProbe<T>
+                        where T : new()
+                    {
+                    }
+
+                    public sealed class PublicDefaultConstructor
+                    {
+                    }
+
+                    public sealed class ParameterizedConstructor
+                    {
+                        public ParameterizedConstructor(int value)
+                        {
+                        }
+                    }
+
+                    public sealed class PrivateDefaultConstructor
+                    {
+                        private PrivateDefaultConstructor()
+                        {
+                        }
+                    }
+
+                    public abstract class AbstractPublicDefaultConstructor
+                    {
+                        public AbstractPublicDefaultConstructor()
+                        {
+                        }
+                    }
+
+                    public class ConstructorBase
+                    {
+                        public ConstructorBase()
+                        {
+                        }
+                    }
+
+                    public sealed class ConstructorDerivedWithoutDefault :
+                        ConstructorBase
+                    {
+                        public ConstructorDerivedWithoutDefault(int value)
+                        {
+                        }
+                    }
+
                     [AttributeUsage(AttributeTargets.Struct)]
                     public sealed class IsByRefLikeAttribute : Attribute
                     {
@@ -2875,6 +2921,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     systemRuntimeMetadata,
                     "System",
                     "Object",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        val systemStringType = (
+                resolver.resolveTopLevelType(
+                    systemRuntimeMetadata,
+                    "System",
+                    "String",
                 ) as DotNetClrTypeResolution.Resolved
                 ).type
         val systemNullableType = (
@@ -3439,7 +3492,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             constraints: DotNetClrResolvedConstructedTypeConstraints,
             target: DotNetTarget = DotNetTarget.NET10_0,
             classifier: DotNetClrByRefLikeClassifier = byRefLikeClassifier,
-        ) = DotNetClrSpecialConstraintValidator(target, classifier)
+        ) = DotNetClrSpecialConstraintValidator(
+            target,
+            classifier,
+            DotNetClrDefaultConstructorCoreTypes(
+                systemObjectType,
+                systemStringType,
+            ),
+        )
             .validate(constraints)
             .parameters
             .single()
@@ -3513,6 +3573,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(
             listOf(
                 DotNetClrSpecialConstraintKind.NON_NULLABLE_VALUE_TYPE,
+                DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR,
                 DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY,
             ),
             validValueSpecial.constraints.map { constraint -> constraint.kind },
@@ -3535,6 +3596,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         DotNetClrSpecialConstraintKind.NON_NULLABLE_VALUE_TYPE,
                     ) as DotNetClrSpecialConstraintSatisfaction.Violated
                     ).reason,
+        )
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                nullableValueSpecial,
+                DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR,
+            ),
         )
         val refLikeValueSpecial = validateSpecialConstraints(
             resolvedConstructedConstraints("ValueProbe`1", refLikeArgument)
@@ -3622,6 +3690,146 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ordinaryAllowedArgument,
                 DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY,
             ),
+        )
+
+        fun forwardedArgument(
+            metadataName: String,
+        ): DotNetClrResolvedTypeSignature.Named =
+            DotNetClrResolvedTypeSignature.Named(
+                (
+                        resolver.resolveTopLevelType(
+                            destinationMetadata,
+                            "Forwarded",
+                            metadataName,
+                        ) as DotNetClrTypeResolution.Resolved
+                        ).type,
+                isValueType = false,
+            )
+
+        fun validateDefaultConstructor(
+            argument: DotNetClrResolvedTypeSignature,
+            target: DotNetTarget = DotNetTarget.NET10_0,
+        ): DotNetClrSpecialGenericParameterValidation =
+            validateSpecialConstraints(
+                resolvedConstructedConstraints("NewProbe`1", argument),
+                target,
+            )
+
+        val publicDefaultConstructorArgument =
+            forwardedArgument("PublicDefaultConstructor")
+        for (target in DotNetTarget.entries) {
+            val publicDefaultConstructor =
+                validateDefaultConstructor(
+                    publicDefaultConstructorArgument,
+                    target,
+                )
+            assertSame(
+                DotNetClrSpecialConstraintSatisfaction.Satisfied,
+                specialSatisfaction(
+                    publicDefaultConstructor,
+                    DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR,
+                ),
+            )
+            val nullableDefaultConstructor =
+                validateDefaultConstructor(nullableIntArgument, target)
+            assertSame(
+                DotNetClrSpecialConstraintSatisfaction.Satisfied,
+                specialSatisfaction(
+                    nullableDefaultConstructor,
+                    DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR,
+                ),
+            )
+        }
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                validateDefaultConstructor(ordinaryValueArgument),
+                DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR,
+            ),
+        )
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                validateDefaultConstructor(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                ),
+                DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR,
+            ),
+        )
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                validateDefaultConstructor(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.OBJECT
+                    )
+                ),
+                DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR,
+            ),
+        )
+
+        for (
+            missingDefaultConstructor in listOf(
+                forwardedArgument("ParameterizedConstructor"),
+                forwardedArgument("PrivateDefaultConstructor"),
+                forwardedArgument("ConstructorDerivedWithoutDefault"),
+                DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.STRING
+                ),
+                DotNetClrResolvedTypeSignature.SzArray(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                ),
+            )
+        ) {
+            assertEquals(
+                DotNetClrSpecialConstraintViolation
+                    .REQUIRES_PUBLIC_PARAMETERLESS_CONSTRUCTOR,
+                (
+                        specialSatisfaction(
+                            validateDefaultConstructor(
+                                missingDefaultConstructor
+                            ),
+                            DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR,
+                        ) as DotNetClrSpecialConstraintSatisfaction.Violated
+                        ).reason,
+            )
+        }
+        assertEquals(
+            DotNetClrSpecialConstraintViolation
+                .REQUIRES_CONCRETE_REFERENCE_TYPE,
+            (
+                    specialSatisfaction(
+                        validateDefaultConstructor(
+                            forwardedArgument(
+                                "AbstractPublicDefaultConstructor"
+                            )
+                        ),
+                        DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR,
+                    ) as DotNetClrSpecialConstraintSatisfaction.Violated
+                    ).reason,
+        )
+        val refLikeDefaultConstructor =
+            validateDefaultConstructor(refLikeArgument)
+        assertSame(
+            DotNetClrSpecialConstraintSatisfaction.Satisfied,
+            specialSatisfaction(
+                refLikeDefaultConstructor,
+                DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR,
+            ),
+        )
+        assertEquals(
+            DotNetClrSpecialConstraintViolation
+                .BY_REF_LIKE_NOT_ALLOWED_BY_PARAMETER,
+            (
+                    specialSatisfaction(
+                        refLikeDefaultConstructor,
+                        DotNetClrSpecialConstraintKind.BY_REF_LIKE_ELIGIBILITY,
+                    ) as DotNetClrSpecialConstraintSatisfaction.Violated
+                    ).reason,
         )
 
         val unavailableMarkerSpecial = validateSpecialConstraints(
@@ -3827,6 +4035,106 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
             )
         }
+
+        fun validateSelectedDefaultConstructor(
+            selectedMetadata: DotNetClrAssemblyMetadata,
+        ): DotNetClrSpecialConstraintSatisfaction {
+            val selectedResolver = DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+                    if (sourceAssembly === selectedMetadata &&
+                        reference.name == systemRuntimeMetadata.identity.name
+                    ) {
+                        systemRuntimeMetadata
+                    } else {
+                        null
+                    }
+                }
+            )
+            fun selectedType(metadataName: String): DotNetClrResolvedTypeDefinition =
+                (
+                        selectedResolver.resolveTopLevelType(
+                            selectedMetadata,
+                            "Forwarded",
+                            metadataName,
+                        ) as DotNetClrTypeResolution.Resolved
+                        ).type
+            val constraints = (
+                    DotNetClrConstructedTypeConstraintResolver(
+                        selectedResolver
+                    ).resolve(
+                        DotNetClrResolvedTypeView(
+                            selectedType("NewProbe`1"),
+                            listOf(
+                                DotNetClrResolvedTypeSignature.Named(
+                                    selectedType("PublicDefaultConstructor"),
+                                    isValueType = false,
+                                )
+                            ),
+                        )
+                    ) as DotNetClrConstructedTypeConstraintResolution.Resolved
+                    ).constraints
+            val selectedPhysicalClassifier = DotNetClrPhysicalTypeClassifier(
+                selectedResolver,
+                DotNetClrPhysicalTypeCoreTypes(
+                    systemValueType,
+                    systemEnum,
+                    systemNullableType,
+                ),
+            )
+            return DotNetClrSpecialConstraintValidator(
+                DotNetTarget.NET10_0,
+                DotNetClrByRefLikeClassifier(
+                    selectedPhysicalClassifier,
+                    decoderForSelectedMetadata(selectedMetadata),
+                    isByRefLikeAttributeType,
+                ),
+                DotNetClrDefaultConstructorCoreTypes(
+                    systemObjectType,
+                    systemStringType,
+                ),
+            ).validate(constraints)
+                .parameters
+                .single()
+                .constraints
+                .single { constraint ->
+                    constraint.kind ==
+                            DotNetClrSpecialConstraintKind.DEFAULT_CONSTRUCTOR
+                }
+                .satisfaction
+        }
+
+        val publicDefaultConstructorDefinition =
+            destinationMetadata.typeDefinitions.single { definition ->
+                definition.namespaceName == "Forwarded" &&
+                        definition.metadataName == "PublicDefaultConstructor"
+            }
+        val publicDefaultConstructorMethod =
+            destinationMetadata.methodDefinitions.single { method ->
+                method.declaringType == publicDefaultConstructorDefinition.handle &&
+                        method.name == ".ctor"
+            }
+        val runtimeSpecialNameAttribute = 0x1000
+        val pseudoConstructorMetadata = destinationMetadata.copy(
+            methodDefinitions = destinationMetadata.methodDefinitions.map { method ->
+                if (method.handle == publicDefaultConstructorMethod.handle) {
+                    method.copy(
+                        attributes = method.attributes and
+                                runtimeSpecialNameAttribute.inv()
+                    )
+                } else {
+                    method
+                }
+            }
+        )
+        assertEquals(
+            DotNetClrSpecialConstraintViolation
+                .REQUIRES_PUBLIC_PARAMETERLESS_CONSTRUCTOR,
+            (
+                    validateSelectedDefaultConstructor(
+                        pseudoConstructorMetadata
+                    ) as DotNetClrSpecialConstraintSatisfaction.Violated
+                    ).reason,
+        )
 
         val probeRefMarkerAttribute =
             destinationMetadata.customAttributes
