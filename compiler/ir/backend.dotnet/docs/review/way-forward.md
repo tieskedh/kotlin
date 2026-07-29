@@ -961,6 +961,21 @@ across all three profiles. Dual-profile ILAsm, Roslyn semantic shapes, real net1
 decoding is now the next semantic layer; Constant and FieldMarshal payload decoding remains an
 explicit physical prerequisite when defaults or interop marshaling are imported.
 
+**CLR nullable-metadata progress (2026-07-29):** the importer now decodes Roslyn's three
+nullable-reference metadata conventions without projecting a Kotlin type. This follows JVM
+foreign-type enhancement by retaining annotation ownership and semantic payload before applying
+language policy. The actual CLR difference is that C# nullability is compiler metadata rather
+than a runtime type distinction, and Roslyn may privately embed its well-known attribute
+definitions in the producing assembly. Recognition therefore requires the exact top-level
+`System.Runtime.CompilerServices` name and exact resolved `byte`/`byte[]`, `byte`, or `bool`
+constructor shape, but deliberately no fixed assembly identity. Scalar uniform transforms,
+preorder sequences, enclosing contexts, and module public-only policy remain distinct evidence.
+Duplicate recognized attributes, malformed/null payloads, named arguments, and flags outside
+0..2 fail as explicit semantic metadata errors. Real Roslyn generic/array/oblivious/context and
+public-only output plus hostile selected-metadata variants cover the decoder. Kotlin Common is
+unchanged: effective context lookup, accessibility filtering, physical type-tree application,
+generic interaction, diagnostics, and FIR enhancement remain the next importer slice.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:
