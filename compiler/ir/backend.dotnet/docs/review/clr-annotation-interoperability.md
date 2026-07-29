@@ -67,7 +67,7 @@ Primary Kotlin references:
 | Optional/default values | Param flags and Constant rows | Physical values retained; Kotlin export uses `$default` dispatchers | A CLR constant is authoritative for a foreign CLR optional parameter, but it is not a Kotlin default declaration. Kotlin defaults keep KLIB/dispatcher semantics |
 | Indexers/default member | Property signatures and `DefaultMemberAttribute` | Property rows retained | Prefer the property row; use the attribute only for the default/indexer call view after collision rules are specified |
 | Compiler-generated declarations | `CompilerGeneratedAttribute` and physical flags/names | Kotlin compiler ABI marker plus `EditorBrowsable(Never)` on selected internals; no general marker | May guide tooling, but never infer a Kotlin logical role or hide ABI solely from this marker |
-| Deprecation | `ObsoleteAttribute` | Exact selected-core method projection implemented | Project exact method-level message/severity in the first slice below; retain modern diagnostic ID/URL metadata because Kotlin has no dynamic diagnostic-ID channel |
+| Deprecation | `ObsoleteAttribute` | Exact selected-core method and imported-interface TypeDef projections implemented | Project exact declaration-level message/severity per supported declaration kind; retain modern diagnostic ID/URL metadata because Kotlin has no dynamic diagnostic-ID channel |
 | Required/init/read-only/by-ref-like semantics | `RequiredMemberAttribute`, `IsExternalInit`, `IsReadOnlyAttribute`, `IsByRefLikeAttribute`, modreqs, and physical flags | Several physical/semantic classifiers exist; no FIR view | Consume only as the selected profile defines them. Attribute names without exact selected identity are insufficient |
 | Friend access | `InternalsVisibleToAttribute` | KLIB friend list and emitted CLR attribute are both validated | Deliberate dual view: KLIB grants Kotlin compiler friendship; CLR metadata grants runtime/C# access |
 | Target framework | `TargetFrameworkAttribute` | Emitted and validated with the selected product/profile | CLR-facing artifact identity; not a Kotlin declaration fact |
@@ -840,6 +840,44 @@ physically corrupted core attribute produce no deprecation. A Kotlin override re
 when called through its own type, while a call through the obsolete CLR interface remains
 deprecated. The focused test is 1/0/0/0. The fresh strict gate is 881/0/0/0 across 16 XML suites
 (796 FIR/IL/box, 21 generated CLI, and 64 library integration tests).
+
+### Imported-interface TypeDef continuation
+
+The bounded continuation is the already admissible top-level public CLR interface TypeDef. Kotlin
+Common explicitly permits `kotlin.Deprecated` on a class, CLR explicitly permits
+`ObsoleteAttribute` on an interface, and JVM imports a foreign deprecated class through the same
+Common deprecation machinery. The exact policy is:
+
+- reuse selected-core identity and the already strict constructor/value decoder; attaching the
+  row to a TypeDef rather than a MethodDef does not change its message or severity algebra;
+- synthesize the resolved annotation on the `FirRegularClass` and create its deprecation provider
+  through the foreign-annotation path;
+- report direct uses of the imported interface at `WARNING` or `ERROR` while keeping the
+  classifier resolvable. `IsError=true` still does not mean `HIDDEN`;
+- do not copy a type-level marker onto its members or onto a Kotlin implementation. CLR fixes
+  `ObsoleteAttribute` to `Inherited=false`, Java class deprecation is foreign and
+  non-propagating, and Common already diagnoses the direct obsolete supertype use;
+- leave classes, structs, enums, delegates, nested types, and the property/accessor target matrix
+  for the provider slices that actually expose those declaration kinds.
+
+The attack rejects four broader interpretations:
+
+- hiding an error-level interface would make name resolution stricter than both CLR and the
+  existing method policy;
+- marking every member of an obsolete interface would manufacture declaration annotations that
+  are absent from CLR metadata;
+- marking a Kotlin implementation obsolete would contradict `Inherited=false` and make later
+  uses of the current implementation warn after the one direct supertype use;
+- matching a namespace/name look-alike or tolerating malformed/duplicate values would weaken the
+  exact-identity rule merely because the parent table changed.
+
+Implementation evidence: the existing CLR 4.8 and CoreCLR 10 fixtures now also contain warning-
+and error-level obsolete interfaces. Direct Kotlin type uses receive the Common message/severity
+while both classifiers remain resolved. A Kotlin implementation suppresses its one direct
+obsolete-supertype use and then remains current through its own type. Same-name source-defined
+attributes on a TypeDef and physically corrupted core TypeDef attributes create no deprecation.
+The focused cross-profile test is 1/0/0/0. The fresh strict gate is 881/0/0/0 across 16 XML
+suites (796 FIR/IL/box, 21 generated CLI, and 64 library integration tests).
 
 References:
 
