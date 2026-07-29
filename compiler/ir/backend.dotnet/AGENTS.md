@@ -344,11 +344,14 @@ landed shape as a compatibility constraint.
    constraint-satisfaction boolean. If the exact hierarchy reaches the same variant definition
    with different arguments, pass the candidate to shared variant assignability; do not call every
    use of a variant expected definition unsupported, and do not report a false violation. For a
-   generic interface, require complete contiguous variance rows and reference-type arguments.
-   Covariance checks actual-to-expected, contravariance expected-to-actual, invariance identity;
-   recurse through the same signature resolver under explicit bounds. Never use boxing to make a
-   value argument variant. Retain every reachable same-definition candidate, not merely the first;
-   any successful candidate proves assignability. For array-to-array conversion, require vector
+   generic interface or delegate, require complete contiguous variance rows and reference-type
+   arguments. Recognize a delegate only as a sealed TypeDef whose direct resolved base is the
+   selected `System.MulticastDelegate`; never use `Func`/`Action` names or an `Invoke` convention.
+   A variant class or non-sealed delegate-shaped type is invalid metadata. Covariance checks
+   actual-to-expected, contravariance expected-to-actual, invariance identity; recurse through the
+   same signature resolver under explicit bounds. Never use boxing to make a value argument
+   variant. Retain every reachable same-definition candidate, not merely the first; any successful
+   candidate proves assignability. For array-to-array conversion, require vector
    against vector or general array against the same rank. Recurse for reference elements; for value
    elements accept identity or the CLR reduced signed/unsigned integer kind, including validated
    enum storage, but never `bool`/`byte` or `char`/`ushort`. This is foreign physical
@@ -358,9 +361,9 @@ landed shape as a compatibility constraint.
    `IEnumerable<T>`, `IReadOnlyList<T>`, and `IReadOnlyCollection<T>` as one complete selected
    identity catalog. Only vectors implement that catalog, and they use array-element compatibility
    rather than ordinary generic variance; this includes reduced integer/enum storage. An unrelated
-   unary interface is not assignable. Open-parameter, custom-modified, and delegate candidates
-   remain structured unsupported boundaries. Signature assignability never inserts boxing; use
-   the distinct nominal-view relation when generic constraints intentionally compare selected type
+   unary interface is not assignable. Open-parameter and custom-modified candidates remain
+   structured unsupported boundaries. Signature assignability never inserts boxing; use the
+   distinct nominal-view relation when generic constraints intentionally compare selected type
    definitions.
    Dependent parameter constraints still require their remaining shared assignability policy;
    dependent arguments are explicitly unsupported in both nominal and special validation. Special

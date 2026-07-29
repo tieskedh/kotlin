@@ -2184,6 +2184,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   exercised against both the selected modern core graph and Framework `mscorlib`. The strict gate
   is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
   tests).
+- The delegate-variance continuation resolves and validates the selected
+  `System.MulticastDelegate` identity for each profile graph. Shared signature assignability now
+  accepts variance metadata on interfaces and on sealed TypeDefs whose direct resolved base is
+  that identity, using the same bounded reference-only covariance/contravariance algorithm. It
+  never recognizes `Func`, `Action`, or `Invoke` by name. Real Roslyn constraints cover a custom
+  `in`/`out` delegate, `Func`, `Action`, nested reference conversion, unchanged value arguments,
+  and rejected changed value arguments. Mutated metadata proves that variant classes and
+  non-sealed delegate definitions are invalid. The selected root is resolved from modern
+  `System.Runtime`, Framework `mscorlib`, and the .NET Standard 2.0 facade graph; direct runtime
+  probes execute the conversion matrix on CoreCLR 10 and CLR 4. The strict gate is 871/0/0/0
+  across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - The System.Type/serialized-enum custom-attribute continuation reuses that selected-graph resolver
   for fixed, array, and tagged values. Type values retain the complete resolved structural type or
   explicit null; serialized enums must resolve to a nominal named or constructed type and pass the

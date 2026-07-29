@@ -55,6 +55,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintRes
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintValidator
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrDelegateRuntimeTypesResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrDelegateRuntimeTypesResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedConstructedTypeConstraints
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
@@ -131,6 +133,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeAssignability
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeAssignabilityResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeViewResolutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrVarianceFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrVectorGenericInterface
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
@@ -2839,6 +2842,61 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public delegate TResult VariantDelegate<in T, out TResult>(
+                        T value);
+
+                    public sealed class VariantDelegateReferenceConstraint :
+                        IVariantConstraint<
+                            VariantDelegate<object, string>>
+                    {
+                    }
+
+                    public sealed class VariantDelegateReferenceConstraintProbe<T>
+                        where T : IVariantConstraint<
+                            VariantDelegate<string, object>>
+                    {
+                    }
+
+                    public sealed class VariantDelegateValueConstraint :
+                        IVariantConstraint<
+                            VariantDelegate<int, string>>
+                    {
+                    }
+
+                    public sealed class VariantDelegateValueConstraintProbe<T>
+                        where T : IVariantConstraint<
+                            VariantDelegate<int, object>>
+                    {
+                    }
+
+                    public sealed class VariantDelegateChangedValueConstraintProbe<T>
+                        where T : IVariantConstraint<
+                            VariantDelegate<object, object>>
+                    {
+                    }
+
+                    public sealed class FuncReferenceConstraint :
+                        IVariantConstraint<
+                            Func<object, string>>
+                    {
+                    }
+
+                    public sealed class FuncReferenceConstraintProbe<T>
+                        where T : IVariantConstraint<
+                            Func<string, object>>
+                    {
+                    }
+
+                    public sealed class ActionReferenceConstraint :
+                        IVariantConstraint<Action<object>>
+                    {
+                    }
+
+                    public sealed class ActionReferenceConstraintProbe<T>
+                        where T : IVariantConstraint<Action<string>>
+                    {
+                    }
+
                     public sealed class ObjectComparable : IComparable<object>
                     {
                         public int CompareTo(object other) => 0;
@@ -3190,6 +3248,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ).type
             assertSame(kind, arrayRuntimeTypes.vectorInterface(interfaceType))
         }
+        val delegateRuntimeTypes = (
+                DotNetClrDelegateRuntimeTypesResolver(resolver).resolve(
+                    systemRuntimeMetadata
+                ) as DotNetClrDelegateRuntimeTypesResolution.Resolved
+                ).types
+        val systemMulticastDelegateType = (
+                resolver.resolveTopLevelType(
+                    systemRuntimeMetadata,
+                    "System",
+                    "MulticastDelegate",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        assertEquals(
+            systemMulticastDelegateType,
+            delegateRuntimeTypes.systemMulticastDelegate,
+        )
         val frameworkCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
         requireOrAssumeToolchain(
             frameworkCompiler != null,
@@ -3225,12 +3299,149 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 frameworkArrayRuntimeTypes.vectorInterface(interfaceType),
             )
         }
+        val frameworkDelegateRuntimeTypes = (
+                DotNetClrDelegateRuntimeTypesResolver(frameworkTypeResolver)
+                    .resolve(frameworkCoreMetadata) as
+                        DotNetClrDelegateRuntimeTypesResolution.Resolved
+                ).types
+        val frameworkMulticastDelegateType = (
+                frameworkTypeResolver.resolveTopLevelType(
+                    frameworkCoreMetadata,
+                    "System",
+                    "MulticastDelegate",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        assertEquals(
+            frameworkMulticastDelegateType,
+            frameworkDelegateRuntimeTypes.systemMulticastDelegate,
+        )
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Standard 2.0 facade is not available",
+        )
+        val netStandardMetadata =
+            DotNetClrMetadataReader.read(checkNotNull(frameworkNetStandardFacade))
+        val netStandardTypeResolver =
+            DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+                    if (
+                        sourceAssembly === netStandardMetadata &&
+                        reference.name == frameworkCoreMetadata.identity.name
+                    ) {
+                        frameworkCoreMetadata
+                    } else {
+                        null
+                    }
+                }
+            )
+        val netStandardDelegateRuntimeTypes = (
+                DotNetClrDelegateRuntimeTypesResolver(netStandardTypeResolver)
+                    .resolve(netStandardMetadata) as
+                        DotNetClrDelegateRuntimeTypesResolution.Resolved
+                ).types
+        assertTrue(
+            netStandardDelegateRuntimeTypes.systemMulticastDelegate
+                .hasSameIdentityAs(frameworkMulticastDelegateType)
+        )
+        val delegateRuntimeProbeSource =
+            directory.resolve("delegate-runtime-probe.cs").apply {
+                writeText(
+                    """
+                    using System;
+
+                    public delegate TResult VariantDelegate<in T, out TResult>(
+                        T value);
+
+                    public static class Program
+                    {
+                        public static int Main()
+                        {
+                            bool valid =
+                                typeof(VariantDelegate<string, object>)
+                                    .IsAssignableFrom(
+                                        typeof(VariantDelegate<object, string>)) &&
+                                typeof(Func<string, object>)
+                                    .IsAssignableFrom(
+                                        typeof(Func<object, string>)) &&
+                                typeof(Action<string>)
+                                    .IsAssignableFrom(typeof(Action<object>)) &&
+                                typeof(VariantDelegate<int, object>)
+                                    .IsAssignableFrom(
+                                        typeof(VariantDelegate<int, string>)) &&
+                                !typeof(VariantDelegate<object, object>)
+                                    .IsAssignableFrom(
+                                        typeof(VariantDelegate<int, string>));
+                            if (!valid)
+                            {
+                                return 1;
+                            }
+                            Console.WriteLine("OK");
+                            return 0;
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+        val modernDelegateRuntimeProbe =
+            directory.resolve("DelegateRuntimeProbe-modern.dll")
+        val modernDelegateRuntimeProbeCompile =
+            runModernCSharpCompiler(
+                toolchain,
+                delegateRuntimeProbeSource,
+                modernDelegateRuntimeProbe,
+                target = "exe",
+            )
+        assertEquals(
+            0,
+            modernDelegateRuntimeProbeCompile.exitCode,
+            modernDelegateRuntimeProbeCompile.output,
+        )
+        directory.resolve("DelegateRuntimeProbe-modern.runtimeconfig.json")
+            .writeText(net10RuntimeConfig())
+        runAssemblerPairing(
+            listOf(
+                toolchain.dotNetHost.path,
+                "exec",
+                modernDelegateRuntimeProbe.path,
+            ),
+            directory,
+            ".NET 10 delegate-variance runtime probe",
+        )
+        val frameworkDelegateRuntimeProbe =
+            directory.resolve("DelegateRuntimeProbe-framework.exe")
+        val frameworkDelegateRuntimeProbeCompile =
+            runCSharpCompiler(
+                checkNotNull(frameworkCompiler),
+                delegateRuntimeProbeSource,
+                frameworkDelegateRuntimeProbe,
+                target = "exe",
+            )
+        assertEquals(
+            0,
+            frameworkDelegateRuntimeProbeCompile.exitCode,
+            frameworkDelegateRuntimeProbeCompile.output,
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(
+            frameworkHost != null,
+            "Windows PowerShell CLR 4 host is not available",
+        )
+        runAssemblerPairing(
+            frameworkExecutionCommand(
+                checkNotNull(frameworkHost),
+                frameworkDelegateRuntimeProbe,
+            ),
+            directory,
+            ".NET Framework delegate-variance runtime probe",
+        )
         val signatureAssignability =
             DotNetClrSignatureTypeAssignabilityResolver(
                 resolver,
                 physicalTypeClassifier,
                 primitiveTypeCatalog,
                 arrayRuntimeTypes,
+                delegateRuntimeTypes,
             )
         assertSame(
             DotNetClrTypeAssignability.Assignable,
@@ -3540,6 +3751,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 primitiveTypeCatalog,
                 physicalTypeClassifier,
                 arrayRuntimeTypes,
+                delegateRuntimeTypes,
             )
         val satisfiedNominalConstraints =
             nominalConstraintValidator.validate(
@@ -3702,6 +3914,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 primitiveTypeCatalog,
                 physicalTypeClassifier,
                 arrayRuntimeTypes,
+                delegateRuntimeTypes,
                 resolutionLimit = 1,
             ).validate(limitedConstraintContract)
                 .parameters.single().constraints.single().satisfaction as
@@ -4212,6 +4425,163 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "UnrelatedVectorInterfaceConstraintProbe`1",
                 "VariantArrayConstraint",
             ) is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "VariantDelegateReferenceConstraintProbe`1",
+                "VariantDelegateReferenceConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "VariantDelegateValueConstraintProbe`1",
+                "VariantDelegateValueConstraint",
+            ),
+        )
+        assertTrue(
+            variantConstraintStatus(
+                "VariantDelegateChangedValueConstraintProbe`1",
+                "VariantDelegateValueConstraint",
+            ) is DotNetClrConstructedTypeConstraintStatus.Violated
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "FuncReferenceConstraintProbe`1",
+                "FuncReferenceConstraint",
+            ),
+        )
+        assertSame(
+            DotNetClrConstructedTypeConstraintStatus.Satisfied,
+            variantConstraintStatus(
+                "ActionReferenceConstraintProbe`1",
+                "ActionReferenceConstraint",
+            ),
+        )
+        val ordinaryGenericProbeDefinition =
+            destinationMetadata.typeDefinitions.single { definition ->
+                definition.namespaceName == "Forwarded" &&
+                        definition.metadataName == "OrdinaryGenericProbe`1"
+            }
+        val variantDelegateDefinition =
+            destinationMetadata.typeDefinitions.single { definition ->
+                definition.namespaceName == "Forwarded" &&
+                        definition.metadataName == "VariantDelegate`2"
+            }
+        val malformedVarianceMetadata = destinationMetadata.copy(
+            typeDefinitions = destinationMetadata.typeDefinitions.map { definition ->
+                if (definition.handle == variantDelegateDefinition.handle) {
+                    definition.copy(
+                        attributes = definition.attributes and 0x100L.inv()
+                    )
+                } else {
+                    definition
+                }
+            },
+            genericParameterDefinitions =
+                destinationMetadata.genericParameterDefinitions.map { parameter ->
+                    if (parameter.owner == ordinaryGenericProbeDefinition.handle) {
+                        parameter.copy(attributes = parameter.attributes or 1)
+                    } else {
+                        parameter
+                    }
+                }
+        )
+        val malformedVarianceResolver =
+            DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+                    if (
+                        sourceAssembly === malformedVarianceMetadata &&
+                        reference.name == systemRuntimeMetadata.identity.name
+                    ) {
+                        systemRuntimeMetadata
+                    } else {
+                        null
+                    }
+                }
+            )
+        val malformedVarianceType = (
+                malformedVarianceResolver.resolveTopLevelType(
+                    malformedVarianceMetadata,
+                    "Forwarded",
+                    "OrdinaryGenericProbe`1",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        val malformedVarianceAssignability =
+            DotNetClrSignatureTypeAssignabilityResolver(
+                malformedVarianceResolver,
+                DotNetClrPhysicalTypeClassifier(
+                    malformedVarianceResolver,
+                    DotNetClrPhysicalTypeCoreTypes(
+                        systemValueType,
+                        systemEnum,
+                        systemNullableType,
+                    ),
+                ),
+                primitiveTypeCatalog,
+                arrayRuntimeTypes,
+                delegateRuntimeTypes,
+            )
+        val invalidVariance =
+            malformedVarianceAssignability.isAssignable(
+                DotNetClrResolvedTypeView(
+                    malformedVarianceType,
+                    listOf(
+                        DotNetClrResolvedTypeSignature.Primitive(
+                            DotNetClrPrimitiveType.STRING
+                        )
+                    ),
+                ),
+                DotNetClrResolvedTypeView(
+                    malformedVarianceType,
+                    listOf(
+                        DotNetClrResolvedTypeSignature.Primitive(
+                            DotNetClrPrimitiveType.OBJECT
+                        )
+                    ),
+                ),
+            ) as DotNetClrTypeAssignability.InvalidVariance
+        assertEquals(
+            DotNetClrVarianceFailure.OWNER_IS_NOT_INTERFACE_OR_DELEGATE,
+            invalidVariance.failure,
+        )
+        val malformedDelegateType = (
+                malformedVarianceResolver.resolveTopLevelType(
+                    malformedVarianceMetadata,
+                    "Forwarded",
+                    "VariantDelegate`2",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        val invalidDelegateVariance =
+            malformedVarianceAssignability.isAssignable(
+                DotNetClrResolvedTypeView(
+                    malformedDelegateType,
+                    listOf(
+                        DotNetClrResolvedTypeSignature.Primitive(
+                            DotNetClrPrimitiveType.OBJECT
+                        ),
+                        DotNetClrResolvedTypeSignature.Primitive(
+                            DotNetClrPrimitiveType.STRING
+                        ),
+                    ),
+                ),
+                DotNetClrResolvedTypeView(
+                    malformedDelegateType,
+                    listOf(
+                        DotNetClrResolvedTypeSignature.Primitive(
+                            DotNetClrPrimitiveType.STRING
+                        ),
+                        DotNetClrResolvedTypeSignature.Primitive(
+                            DotNetClrPrimitiveType.OBJECT
+                        ),
+                    ),
+                ),
+            ) as DotNetClrTypeAssignability.InvalidVariance
+        assertEquals(
+            DotNetClrVarianceFailure.DELEGATE_IS_NOT_SEALED,
+            invalidDelegateVariance.failure,
         )
 
         val invalidAllConstraints =
