@@ -20753,6 +20753,290 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testForeignClrDoesNotReturnIfEnhancesFirDataFlow() {
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val toolchain = checkNotNull(csharpToolchain)
+        val systemRuntime = toolchain.referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(systemRuntime.isFile) { "Missing net10 System.Runtime reference assembly" }
+
+        val fixtureSource = File(tmpdir, "foreign-non-returning-condition.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace ForeignGuardContracts
+                {
+                    public interface GuardApi
+                    {
+                        void FailIf([DoesNotReturnIf(true)] bool condition);
+                        int FailUnless([DoesNotReturnIf(false)] bool condition);
+                        void Unknown(bool condition);
+                        void WrongType([DoesNotReturnIf(true)] int condition);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val fixtureAssembly = File(tmpdir, "Foreign.GuardContracts.dll")
+        val fixtureResult = runModernCSharpCompiler(
+            toolchain,
+            fixtureSource,
+            fixtureAssembly,
+        )
+        assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+
+        val hostileSource = File(tmpdir, "foreign-non-returning-condition-hostile.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System;
+
+                namespace System.Diagnostics.CodeAnalysis
+                {
+                    [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = true)]
+                    public sealed class DoesNotReturnIfAttribute : Attribute
+                    {
+                        public DoesNotReturnIfAttribute(bool parameterValue) {}
+                        public DoesNotReturnIfAttribute(int wrongValue) {}
+                        public bool Unexpected;
+                    }
+                }
+
+                namespace HostileGuardContracts
+                {
+                    using System.Diagnostics.CodeAnalysis;
+
+                    public interface HostileGuardApi
+                    {
+                        void Duplicate(
+                            [DoesNotReturnIf(true), DoesNotReturnIf(false)] bool condition);
+                        void WrongConstructor([DoesNotReturnIf(1)] bool condition);
+                        void Named(
+                            [DoesNotReturnIf(true, Unexpected = true)] bool condition);
+                        void WrongType([DoesNotReturnIf(true)] int condition);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val hostileAssembly = File(tmpdir, "Foreign.GuardContracts.Hostile.dll")
+        val hostileResult = runModernCSharpCompiler(
+            toolchain,
+            hostileSource,
+            hostileAssembly,
+            additionalArguments = listOf("/nowarn:0436"),
+        )
+        assertEquals(0, hostileResult.exitCode, hostileResult.output)
+
+        val malformedSource = File(tmpdir, "foreign-non-returning-condition-malformed.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace MalformedGuardContracts
+                {
+                    public interface MalformedGuardApi
+                    {
+                        void Malformed([DoesNotReturnIf(true)] bool condition);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val pristineMalformedAssembly =
+            File(tmpdir, "Foreign.GuardContracts.Malformed.Primitive.dll")
+        val malformedResult = runModernCSharpCompiler(
+            toolchain,
+            malformedSource,
+            pristineMalformedAssembly,
+        )
+        assertEquals(0, malformedResult.exitCode, malformedResult.output)
+        val malformedMetadata = DotNetClrMetadataReader.read(pristineMalformedAssembly)
+        val malformedApi = malformedMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "MalformedGuardContracts" &&
+                    type.metadataName == "MalformedGuardApi"
+        }
+        val malformedMethod = malformedMetadata.methodDefinitions.single { method ->
+            method.declaringType == malformedApi.handle &&
+                    method.name == "Malformed"
+        }
+        val malformedParameter = malformedMetadata.parameterDefinitions.single { parameter ->
+            parameter.declaringMethod == malformedMethod.handle &&
+                    parameter.parameterIndex == 0
+        }
+        val malformedAttribute = malformedMetadata.customAttributes.single { attribute ->
+            if (attribute.parent != malformedParameter.handle) return@single false
+            val constructor = malformedMetadata.memberReferences.singleOrNull { member ->
+                member.handle == attribute.constructor
+            } ?: return@single false
+            malformedMetadata.typeReferences.any { type ->
+                type.handle == constructor.parent &&
+                        type.namespaceName == "System.Diagnostics.CodeAnalysis" &&
+                        type.metadataName == "DoesNotReturnIfAttribute"
+            }
+        }
+        val malformedImage = pristineMalformedAssembly.readBytes()
+        val malformedTables = locateClrMetadataTables(malformedImage)
+        val malformedValueIndex = readLittleEndianIndex(
+            malformedImage,
+            malformedTables.rowOffset(12, malformedAttribute.handle.row) +
+                    malformedTables.hasCustomAttributeIndexSize +
+                    malformedTables.customAttributeTypeIndexSize,
+            malformedTables.blobIndexSize,
+        )
+        val malformedValueOffset =
+            malformedTables.blobContentOffset(malformedImage, malformedValueIndex)
+        assertEquals(1, malformedImage[malformedValueOffset].toInt() and 0xff)
+        malformedImage[malformedValueOffset] = 0
+        val malformedAssembly =
+            File(tmpdir, "Foreign.GuardContracts.Malformed.dll").apply {
+                writeBytes(malformedImage)
+            }
+
+        fun compileForeignConsumer(
+            sourceName: String,
+            sourceText: String,
+            classpath: List<File>,
+        ): Pair<String, ExitCode> {
+            val source = File(tmpdir, sourceName).apply { writeText(sourceText) }
+            return AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    K2DotNetCompilerArguments::noStdlib.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    classpath.joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::moduleName.cliArgument,
+                    "ForeignGuardConsumer",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "$sourceName.il").path,
+                )
+            )
+        }
+
+        val [guardDiagnostics, guardExitCode] = compileForeignConsumer(
+            "foreign-non-returning-condition.kt",
+            """
+            package consumer
+
+            import ForeignGuardContracts.GuardApi
+
+            public fun acceptedTrue(api: GuardApi, value: String?): Int {
+                api.FailIf(value == null)
+                return value.length + 101
+            }
+
+            public fun acceptedFalse(api: GuardApi, value: String?): Int {
+                api.FailUnless(value != null)
+                return value.length + 102
+            }
+
+            public fun rejectedInverseTrue(api: GuardApi, value: String?): Int {
+                api.FailIf(value != null)
+                return value.length + 201
+            }
+
+            public fun rejectedInverseFalse(api: GuardApi, value: String?): Int {
+                api.FailUnless(value == null)
+                return value.length + 202
+            }
+
+            public fun rejectedAbsent(api: GuardApi, value: String?): Int {
+                api.Unknown(value == null)
+                return value.length + 203
+            }
+
+            public fun rejectedWrongType(api: GuardApi, value: String?): Int {
+                api.WrongType(if (value == null) 1 else 0)
+                return value.length + 204
+            }
+            """.trimIndent(),
+            listOf(fixtureAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, guardExitCode, guardDiagnostics)
+        assertFalse("return value.length + 101" in guardDiagnostics) {
+            guardDiagnostics
+        }
+        assertFalse("return value.length + 102" in guardDiagnostics) {
+            guardDiagnostics
+        }
+        assertTrue("return value.length + 201" in guardDiagnostics) {
+            guardDiagnostics
+        }
+        assertTrue("return value.length + 202" in guardDiagnostics) {
+            guardDiagnostics
+        }
+        assertTrue("return value.length + 203" in guardDiagnostics) {
+            guardDiagnostics
+        }
+        assertTrue("return value.length + 204" in guardDiagnostics) {
+            guardDiagnostics
+        }
+
+        val [hostileDiagnostics, hostileExitCode] = compileForeignConsumer(
+            "foreign-non-returning-condition-hostile.kt",
+            """
+            package consumer
+
+            import HostileGuardContracts.HostileGuardApi
+            import MalformedGuardContracts.MalformedGuardApi
+
+            public fun rejectedDuplicate(
+                api: HostileGuardApi,
+                value: String?,
+            ): Int {
+                api.Duplicate(value == null)
+                return value.length + 301
+            }
+
+            public fun rejectedWrongConstructor(
+                api: HostileGuardApi,
+                value: String?,
+            ): Int {
+                api.WrongConstructor(value == null)
+                return value.length + 302
+            }
+
+            public fun rejectedNamed(
+                api: HostileGuardApi,
+                value: String?,
+            ): Int {
+                api.Named(value == null)
+                return value.length + 303
+            }
+
+            public fun rejectedMalformed(
+                api: MalformedGuardApi,
+                value: String?,
+            ): Int {
+                api.Malformed(value == null)
+                return value.length + 304
+            }
+            """.trimIndent(),
+            listOf(hostileAssembly, malformedAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, hostileExitCode, hostileDiagnostics)
+        assertTrue("return value.length + 301" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("return value.length + 302" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("return value.length + 303" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("return value.length + 304" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+    }
+
+    @Test
     fun testMetadataCompilerRecognizesDotNetAsItsOwnPlatform() {
         val unknownPlatforms = mutableListOf<String>()
         val targetPlatform = MetadataConfigurationUpdater.computeTargetPlatformOrNull(

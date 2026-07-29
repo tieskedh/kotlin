@@ -655,6 +655,10 @@ landed shape as a compatibility constraint.
    `(parameter != null) implies returnsNotNull()`. Meaningful multiple dependent-return
    attributes become separate common effects and identical parameter names normalize; malformed
    or unbound evidence prevents partial strengthening. None changes the declaration type.
+   `DoesNotReturnIf(true)` on a Boolean value parameter maps only to
+   `returns() implies (!parameter)`; constructor value `false` maps only to
+   `returns() implies parameter`. Keep the ordinary Kotlin return type and physical CLR return
+   signature; use common FIR contract data-flow rather than a .NET-only reachability rule.
    `MemberNotNull`/`MemberNotNullWhen` must never bypass ordinary Kotlin `SmartcastStability`:
    mutable, delegated, getter-backed, public/open, and cross-module public property reads remain
    unstable where Common says so, even when Roslyn would update their null-state. `MaybeNull` and
