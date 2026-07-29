@@ -334,15 +334,16 @@ landed shape as a compatibility constraint.
    views. It compares selected assembly identity plus every reified argument, deduplicates
    diamonds, and reports unresolved hierarchy, cycles, and limits structurally when no exact path
    proves the relation. A positive path does not replace whole-import malformed-graph validation.
-   Until physical reference/value/ref-like classification exists, do not add optimistic CLR
-   variance, array, boxing, `Nullable<T>`, or generic-parameter conversions to this walker.
+   Do not add optimistic CLR variance, array, boxing, `Nullable<T>`, or generic-parameter
+   conversions to this exact-nominal walker; the separate physical classifiers and policy
+   validators own those dimensions.
    Nominal GenericParamConstraint validation is a separately named partial operation. Validate
    each resolved row through the shared assignability resolver and preserve satisfied, violated,
    unsupported non-nominal, and invalid-assignability outcomes distinctly. Retain the parameter
    binding and its special flags, but never turn “all nominal rows satisfied” into a complete
-   constraint-satisfaction boolean. Primitive/array arguments, dependent parameter constraints,
-   reference/value/default-constructor flags, and by-ref-like eligibility require shared physical
-   classification and selected-profile policy.
+   constraint-satisfaction boolean. Primitive/array arguments and dependent parameter constraints
+   still require their own shared assignability policy; special flags and by-ref-like eligibility
+   use the physical classification and selected-profile policy below.
    The shared physical signature classifier distinguishes reference, non-nullable value, and
    exact `System.Nullable<T>` categories using an explicit selected-core catalog. Validate a
    nominal signature's encoded `class`/`valuetype` bit against its selected
@@ -362,8 +363,15 @@ landed shape as a compatibility constraint.
    that flag and the `net10.0` target; `net48` and `netstandard2.0` do not gain that runtime
    capability. Preserve missing marker and invalid classification as non-boolean outcomes. Do not
    combine this partial result with nominal-row success into an “all constraints satisfied” flag:
-   the CLR default-constructor rule, dependent generic parameters, and later ref-safety/FIR policy
-   remain separate.
+   dependent generic parameters and later ref-safety/FIR policy remain separate. Validate the CLR
+   `DefaultConstructorConstraint` as the CLI rule, never as Kotlin syntax: any physical value type
+   (including `Nullable<T>` under the standalone flag) satisfies it; a reference type must be
+   concrete and own an exact public parameterless instance `.ctor`. Constructors are not inherited.
+   Require the selected MethodDef's `SpecialName`/`RTSpecialName`, default instance calling
+   convention, zero generic/value parameters, and `void` return; a method merely named `.ctor`
+   is not evidence. Resolve primitive `System.Object`/`System.String` through the selected core
+   catalog. This rule is uniform across `net48`, `netstandard2.0`, and `net10.0`; by-ref-like
+   eligibility remains orthogonal.
    MemberRef rows preserve their exact
    TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and closed
    method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely
