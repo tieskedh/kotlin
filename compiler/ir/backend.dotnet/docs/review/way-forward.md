@@ -1231,6 +1231,19 @@ distinct read/write or pre/post views. Real Roslyn, pure-matrix, hostile-polyfil
 corrupted-blob coverage is 1/0/0/0. The fresh strict gate is 879/0/0/0 across 16 XML suites (796
 FIR/IL/box, 21 generated CLI, and 62 library integration tests).
 
+**Foreign reference parameter arrays (2026-07-30):** one exact final selected-core
+`System.ParamArrayAttribute()` on a one-dimensional `string[]` or `object[]` parameter now
+projects Common `vararg` while the retained MethodDef keeps the raw CLR vector signature.
+Expanded, omitted, and spread calls reuse Common resolution plus the existing concrete-reference
+vararg lowering. Array and element nullability are enhanced independently. Real CLR 4.8 and
+CoreCLR 10 execution pins exact `string[]`/`object[]` MemberRefs; unannotated arrays and
+`params int[]` remain unresolved. A structured hostile image covers malformed, duplicate,
+non-final, scalar, multidimensional, and look-alike evidence while retaining a valid neighbor.
+The focused cross-runtime/adversarial pair is 2/0/0/0. Primitive params arrays remain deferred
+because Kotlin/.NET primitive arrays use wrapper identity, and current params collections remain
+a separate construction policy. The fresh strict gate is 882/0/0/0 across 16 XML suites (796
+FIR/IL/box, 21 generated CLI, and 65 library integration tests).
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:

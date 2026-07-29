@@ -2152,6 +2152,34 @@ cross-profile source/metadata and Kotlin diagnostic test is 1/0/0/0. The fresh s
 881/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 64 library integration
 tests).
 
+The first parameter-array continuation follows the JVM foreign-vararg precedent and Common call
+semantics. One exact final Param carrying the selected core-library
+`System.ParamArrayAttribute()` maps to Common `vararg` only when its physical type is
+single-dimensional `string[]` or `object[]`; the retained MethodDef still owns the raw vector
+signature. Expanded, omitted, and spread arguments stay ordinary Common calls plus the existing
+.NET concrete-reference-vararg lowering. C# requires the parameter to be final, and current
+non-array params collections use a different `ParamCollectionAttribute`, so neither malformed
+placement nor a params collection is inferred. Primitive parameter arrays remain separate:
+Kotlin/.NET primitive arrays have runtime-wrapper identity, whereas C# params primitives use raw
+CLR vectors. Invalid/duplicate/wrong-identity evidence and unannotated arrays withhold the
+complete classifier rather than exposing a partial or physically dishonest view. Nested Roslyn
+nullable metadata remains authoritative for both reference-vector and element qualifiers.
+
+The implementation preserves two views explicitly. FIR creates `Array<out E>` plus Common
+`vararg` for call resolution, with independent Roslyn qualifiers on the vector and `E`; the
+target-owned physical carrier and mapper retain `string[]` or `object[]` for the emitted
+MemberRef. Real CLR 4.8 and CoreCLR 10 consumers execute expanded, omitted, and spread calls and
+pin those exact signatures. Unannotated reference arrays and primitive params are unresolved.
+
+A structured hostile image keeps one valid neighbor while corrupting the other Param parents:
+malformed payload, duplicate exact attribute, non-final placement, scalar placement,
+multidimensional placement, and a same-name look-alike all withhold the classifier. Because
+Roslyn interns identical empty custom-attribute blobs, the malformed row is redirected to a
+uniquely encoded look-alike blob rather than mutating shared storage; the test audits the patched
+parent counts before invoking the compiler. The focused cross-runtime/adversarial pair is
+2/0/0/0. The fresh strict gate is 882/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
+CLI, and 65 library integration tests).
+
 The first conditional-flow slice, `NotNullWhenAttribute`, is implemented. Its Boolean constructor
 maps exactly
 to common FIR's `returns(true|false) implies (parameter != null)` effect for a Boolean-returning
