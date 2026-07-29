@@ -2507,6 +2507,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   evidence, non-scalar parameter markers, and filtered malformed evidence under a private owner.
   The focused adversarial test is 1/0/0/0. The fresh strict gate remains 871/0/0/0 across 16 XML
   suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The nullable-qualifier-projection continuation follows JVM's foreign-type qualifier vocabulary
+  and C#'s three-state type model without constructing FIR. Valid aligned component flags 0, 1,
+  and 2 project exactly to forced-flexibility, not-null, and nullable; explicit C# nonnullable
+  evidence is not weakened into a platform type or warning-only migration contract. Roslyn's
+  mandatory leading 0 for a generic value type is tagged and validated as structural preorder
+  padding, retained in the physical application, and omitted from Kotlin qualifiers while its
+  semantic type arguments still project.
+  `DotNetClrKotlinNullabilityProjector` retains the original evidence application, while ordinary
+  obliviousness, public-only suppression, invalid declaration evidence, and invalid physical
+  alignment remain distinct unchanged-type projections. Generic-parameter declaration markers
+  still require all enhanced bounds before any definitely-non-null decision. Malformed-metadata
+  diagnostic severity and actual FIR construction remain next layers. The focused adversarial
+  integration test is 1/0/0/0. The fresh strict gate is 871/0/0/0 across 16 XML suites
+  (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

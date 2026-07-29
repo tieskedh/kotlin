@@ -1555,6 +1555,58 @@ non-null, nullable, nested-generic, method-owned, and multiple constraint-row tr
 metadata pins owner mismatch, non-identity context rejection, non-scalar parameter markers,
 malformed constraint-row fallback, and accessibility suppression before malformed local decoding.
 
+The forty-third slice projects valid nullable evidence into Kotlin's established foreign-type
+qualifier vocabulary without constructing a FIR type.
+
+1. JVM `NullabilityQualifier` has exactly the three policy states needed here:
+   `FORCE_FLEXIBILITY`, `NOT_NULL`, and `NULLABLE`. JVM enhancement keeps an unenhanced foreign
+   type when no qualifier applies, while a forced-flexibility qualifier can explicitly preserve a
+   platform position even when surrounding defaults or bounds might otherwise make it rigid. The
+   .NET importer follows that Kotlin-facing model rather than inventing C#-named Kotlin type
+   categories.
+2. C# defines the corresponding type states as oblivious, nonnullable, and nullable, and Roslyn
+   serializes them as nullable flags 0, 1, and 2. For semantic nullable positions the projection
+   is therefore exact: `OBLIVIOUS -> FORCE_FLEXIBILITY`,
+   `NOT_ANNOTATED -> NOT_NULL`, and `ANNOTATED -> NULLABLE`. See the C#
+   [three-state type model](https://github.com/dotnet/csharplang/blob/main/proposals/csharp-9.0/nullable-reference-types-specification.md#nullability-of-types)
+   and Roslyn's
+   [metadata encoding](https://github.com/dotnet/roslyn/blob/main/docs/features/nullable-metadata.md#nullableattribute).
+3. Roslyn's generic-value-type leading 0 is a CLR-specific structural exception. It exists only to
+   keep preorder decoding independent of generic constraints and is not a nullable type position.
+   The physical applicator tags it as `GENERIC_VALUE_TYPE_PADDING`, requires the value to remain
+   oblivious, and retains it for alignment auditing. The Kotlin projector omits that component
+   while continuing to project every semantic type argument beneath the value type. Treating the
+   padding as a platform type would make Kotlin Common nullability depend on a serialization
+   convenience.
+4. Kotlin Common remains authoritative and unchanged. This mapping affects only imported CLR type
+   positions carrying valid C# compiler evidence. Kotlin declarations retain their own declared
+   nullability, and a known CLR value type never acquires a reference-nullability qualifier.
+5. `DotNetClrKotlinNullabilityProjector` maps every already aligned semantic component and retains
+   the original evidence application, including structural padding, for auditing. Ordinary
+   oblivious declarations,
+   accessibility-suppressed declarations, and both structured diagnostic fallbacks remain
+   separate unchanged-type projections. The projector does not re-run metadata selection,
+   alignment, or physical classification.
+6. Valid Roslyn nullable metadata is a compiler-owned foreign type contract, not a configurable
+   third-party migration annotation. The projected qualifier therefore has no warning-only mode:
+   a later FIR adapter must apply valid `NOT_NULL` and `NULLABLE` evidence as ordinary enhanced
+   types. This does not decide the severity of the separate malformed-metadata diagnostic.
+7. The core-team choice rejects weakening flag 1 to flexibility: that would erase C#'s explicit
+   nonnullable contract and make flags 0 and 1 observably identical. It also rejects deriving
+   definitely-non-null from a generic-parameter marker. JVM computes that property only with
+   enhanced parameter bounds in view, and C# likewise defines type-parameter nullability from the
+   complete constraint set.
+8. Malformed-metadata diagnostic severity remains a later slice. Assigning severity here would
+   couple a reusable type-qualifier operation to declaration source locations, language settings,
+   and FIR reporting that do not exist at this boundary. The existing mandatory diagnostic
+   fallback remains intact so that later policy cannot silently reinterpret it as obliviousness.
+
+Real Roslyn returns and generic constraints pin not-null, nullable, nested mixed sequences, and
+generic-value padding; synthetic selected semantic evidence pins forced flexibility. A
+non-oblivious hostile padding value is rejected. Existing oblivious, public-only-suppressed,
+flag-count, physical-classification, and malformed-declaration cases adversarially pin every
+unchanged projection and exact object identity across fallback.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1653,6 +1705,18 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Applying a generic-parameter marker to every constraint type:
   **Architecturally wrong and should be changed**.
 - Aligning constraint nullability after generic substitution changes the original type tree:
+  **Architecturally wrong and should be changed**.
+- Exact 0/1/2 projection to forced-flexible/not-null/nullable Kotlin foreign qualifiers:
+  **Correct direction**.
+- Projecting a generic-value-type preorder padding flag as Kotlin nullability:
+  **Architecturally wrong and should be changed**.
+- Retaining and validating generic-value padding in physical evidence while omitting it from
+  Kotlin qualifiers: **Reasonable platform-specific divergence**.
+- Treating valid C# nonnullable evidence as a platform type:
+  **Architecturally wrong and should be changed**.
+- Deriving Kotlin definitely-non-null from a CLR generic-parameter marker before enhanced bounds:
+  **Architecturally wrong and should be changed**.
+- Assigning malformed-nullable-metadata diagnostic severity in the reusable qualifier projector:
   **Architecturally wrong and should be changed**.
 - Deferring Constant and FieldMarshal payloads while retaining their Param flags:
   **Correct temporary implementation, but not a final design**.

@@ -73,6 +73,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterContextResol
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterVariance
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjection
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjector
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityQualifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataReader
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataHandle
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMemberReferenceSignature
@@ -103,6 +106,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullablePublicPolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTransform
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeApplication
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeApplicationFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeComponentKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeTransformApplicator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassification
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationFailure
@@ -4308,6 +4312,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             appliedValueShape.components.map { component -> component.annotation },
         )
+        assertEquals(
+            listOf(
+                DotNetClrNullableTypeComponentKind.GENERIC_VALUE_TYPE_PADDING,
+                DotNetClrNullableTypeComponentKind.NULLABILITY,
+            ),
+            appliedValueShape.components.map { component -> component.kind },
+        )
+        val invalidValueShapePadding = nullableTypeApplicator.apply(
+            resolvedValueShape,
+            DotNetClrNullableTransform.Sequence(
+                listOf(
+                    DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                    DotNetClrNullableAnnotation.ANNOTATED,
+                )
+            ),
+        ) as DotNetClrNullableTypeApplication.Invalid
+        assertEquals(
+            DotNetClrNullableTypeApplicationFailure
+                .GENERIC_VALUE_TYPE_PADDING_NOT_OBLIVIOUS,
+            invalidValueShapePadding.failure,
+        )
+        assertEquals(0, invalidValueShapePadding.invalidComponentIndex)
+        assertEquals(
+            DotNetClrNullableAnnotation.NOT_ANNOTATED,
+            invalidValueShapePadding.invalidAnnotation,
+        )
 
         val nullableValueShape = destinationMetadata.methodDefinitions.single { method ->
             method.declaringType == nullableProbe.handle && method.name == "NullableValueShape"
@@ -5079,6 +5109,128 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetClrNullableTypeApplicationFailure.INVALID_PHYSICAL_TYPE,
             physicalTypeFallback.application.failure,
         )
+
+        val kotlinNullabilityProjector =
+            DotNetClrKotlinNullabilityProjector()
+        val projectedNullableReturn = kotlinNullabilityProjector.project(
+            appliedSelectedEvidence
+        ) as DotNetClrKotlinNullabilityProjection.Projected
+        assertSame(appliedSelectedEvidence, projectedNullableReturn.application)
+        assertSame(resolvedNullableReturn, projectedNullableReturn.type)
+        assertEquals(
+            listOf(
+                DotNetClrKotlinNullabilityQualifier.NULLABLE,
+                DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+                DotNetClrKotlinNullabilityQualifier.NULLABLE,
+            ),
+            projectedNullableReturn.components.map { component ->
+                component.qualifier
+            },
+        )
+        assertEquals(
+            appliedNullableReturn.components,
+            projectedNullableReturn.components.map { component ->
+                component.component
+            },
+        )
+        assertEquals(
+            appliedNullableReturn.components.map { component -> component.type },
+            projectedNullableReturn.components.map { component -> component.type },
+        )
+
+        val forcedFlexibleEvidence = selectedNullableReturn.copy(
+            transform = DotNetClrNullableTransform.Sequence(
+                listOf(
+                    DotNetClrNullableAnnotation.OBLIVIOUS,
+                    DotNetClrNullableAnnotation.NOT_ANNOTATED,
+                    DotNetClrNullableAnnotation.ANNOTATED,
+                )
+            )
+        )
+        val forcedFlexibleApplication = nullableEvidenceApplicator.apply(
+            resolvedNullableReturn,
+            forcedFlexibleEvidence,
+        ) as DotNetClrNullableEvidenceApplication.Applied
+        val projectedForcedFlexible = kotlinNullabilityProjector.project(
+            forcedFlexibleApplication
+        ) as DotNetClrKotlinNullabilityProjection.Projected
+        assertEquals(
+            listOf(
+                DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY,
+                DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+                DotNetClrKotlinNullabilityQualifier.NULLABLE,
+            ),
+            projectedForcedFlexible.components.map { component ->
+                component.qualifier
+            },
+        )
+
+        val selectedValueShapeReturn = nullableDeclarationResolver.resolve(
+            destinationMetadata,
+            DotNetClrNullableDeclarationTarget.MethodReturn(valueShape),
+        ) as DotNetClrNullableDeclarationEvidence.Selected
+        val valueShapeEvidenceApplication = nullableEvidenceApplicator.apply(
+            resolvedValueShape,
+            selectedValueShapeReturn,
+        ) as DotNetClrNullableEvidenceApplication.Applied
+        assertEquals(appliedValueShape, valueShapeEvidenceApplication.application)
+        val projectedValueShape = kotlinNullabilityProjector.project(
+            valueShapeEvidenceApplication
+        ) as DotNetClrKotlinNullabilityProjection.Projected
+        assertSame(
+            valueShapeEvidenceApplication,
+            projectedValueShape.application,
+        )
+        assertSame(resolvedValueShape, projectedValueShape.type)
+        assertEquals(
+            listOf(DotNetClrKotlinNullabilityQualifier.NULLABLE),
+            projectedValueShape.components.map { component ->
+                component.qualifier
+            },
+        )
+        assertEquals(
+            listOf(resolvedValueShape.arguments[1]),
+            projectedValueShape.components.map { component -> component.type },
+        )
+
+        val projectedOblivious = kotlinNullabilityProjector.project(
+            unchangedOblivious
+        ) as DotNetClrKotlinNullabilityProjection.Oblivious
+        assertSame(unchangedOblivious, projectedOblivious.application)
+        assertSame(resolvedObliviousReturn, projectedOblivious.type)
+
+        val projectedSuppressed = kotlinNullabilityProjector.project(
+            unchangedSuppressed
+        ) as DotNetClrKotlinNullabilityProjection.Suppressed
+        assertSame(unchangedSuppressed, projectedSuppressed.application)
+        assertSame(resolvedPrivateReturn, projectedSuppressed.type)
+
+        val projectedInvalidDeclaration = kotlinNullabilityProjector.project(
+            invalidDeclarationFallback
+        ) as DotNetClrKotlinNullabilityProjection.DiagnosticFallback
+            .InvalidDeclaration
+        assertSame(
+            invalidDeclarationFallback,
+            projectedInvalidDeclaration.application,
+        )
+        assertSame(resolvedNullableReturn, projectedInvalidDeclaration.type)
+
+        val projectedFlagCountFallback = kotlinNullabilityProjector.project(
+            flagCountFallback
+        ) as DotNetClrKotlinNullabilityProjection.DiagnosticFallback
+            .InvalidTypeApplication
+        assertSame(flagCountFallback, projectedFlagCountFallback.application)
+        assertSame(resolvedNullableReturn, projectedFlagCountFallback.type)
+
+        val projectedPhysicalTypeFallback = kotlinNullabilityProjector.project(
+            physicalTypeFallback
+        ) as DotNetClrKotlinNullabilityProjection.DiagnosticFallback
+            .InvalidTypeApplication
+        assertSame(
+            physicalTypeFallback,
+            projectedPhysicalTypeFallback.application,
+        )
+        assertSame(invalidValueEncoding, projectedPhysicalTypeFallback.type)
 
         val genericAttributeConstructors = genericAttributes.map { attribute ->
             (
@@ -6009,6 +6161,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             methodConstraint.second.application.components.map { component ->
                 component.annotation
+            },
+        )
+        val projectedInterfaceConstraint = kotlinNullabilityProjector.project(
+            interfaceConstraint.second
+        ) as DotNetClrKotlinNullabilityProjection.Projected
+        assertSame(
+            interfaceConstraint.second,
+            projectedInterfaceConstraint.application,
+        )
+        assertEquals(
+            listOf(
+                DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+                DotNetClrKotlinNullabilityQualifier.NULLABLE,
+            ),
+            projectedInterfaceConstraint.components.map { component ->
+                component.qualifier
             },
         )
 
