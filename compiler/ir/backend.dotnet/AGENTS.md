@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 54
+toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 62
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 871 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 879 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -673,7 +673,12 @@ landed shape as a compatibility constraint.
    order; invalid `NotNull` cannot strengthen, while invalid `MaybeNull` forces flexibility so
    broken weakening evidence cannot leave a rigid non-null result. `DoesNotReturn` still selects
    `Nothing` before result nullability, and `NotNullIfNotNull` remains a separate conditional
-   effect. Elsewhere, absent, duplicate, malformed, wrong-signature, named-payload, wrong-target,
+   effect. For one ordinary by-value reference Param, apply exact `AllowNull`/`DisallowNull` after
+   declaration nullability to form the logical input type. Exact `DisallowNull` wins exact
+   `AllowNull`, matching Roslyn's call-boundary order; invalid `DisallowNull` cannot strengthen,
+   while invalid `AllowNull` forces flexibility. Do not apply this flattened view to properties
+   or `ref`/`out`: they require distinct read/write or pre/post states. Elsewhere, absent,
+   duplicate, malformed, wrong-signature, named-payload, wrong-target,
    and inapplicable shapes contribute no effect. Kotlin-produced DLLs still take the embedded-KLIB
    path, so their nullable attributes are a derived C# view rather than a second Kotlin authority.
    The first FIR provider slice may

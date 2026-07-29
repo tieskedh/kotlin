@@ -6,6 +6,8 @@
 package org.jetbrains.kotlin.cli
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrAllowNullMetadataFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrAllowNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
 import org.jetbrains.kotlin.backend.dotnet.DotNetStaticInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
@@ -63,6 +65,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrDelegateRuntimeTypesResoluti
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrDelegateRuntimeTypesResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEffectiveAccessibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEffectiveAccessibilityResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrDisallowNullMetadataFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrDisallowNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEffectiveAccessibilityResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedConstructedTypeConstraints
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
@@ -78,6 +82,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterContextResol
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterVariance
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrInputNullabilityEnhancer
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjection
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjector
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityQualifier
@@ -20429,6 +20434,439 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             hostileDiagnostics
         }
         assertTrue("return value.length + 14" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+    }
+
+    @Test
+    fun testForeignClrInputFlowAttributesEnhanceFirTypes() {
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val toolchain = checkNotNull(csharpToolchain)
+        val systemRuntime = toolchain.referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(systemRuntime.isFile) { "Missing net10 System.Runtime reference assembly" }
+
+        val inputNullabilityEnhancer = DotNetClrInputNullabilityEnhancer()
+        val attributeHandle = DotNetClrMetadataHandle(table = 12, row = 1)
+        val decodedAllowNull =
+            DotNetClrAllowNullMetadataResolution.Decoded(attributeHandle)
+        val decodedDisallowNull =
+            DotNetClrDisallowNullMetadataResolution.Decoded(attributeHandle)
+        val invalidAllowNull = DotNetClrAllowNullMetadataResolution.Invalid(
+            DotNetClrAllowNullMetadataFailure.DUPLICATE_ATTRIBUTE,
+            listOf(attributeHandle),
+        )
+        val invalidDisallowNull = DotNetClrDisallowNullMetadataResolution.Invalid(
+            DotNetClrDisallowNullMetadataFailure.DUPLICATE_ATTRIBUTE,
+            listOf(attributeHandle),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.NULLABLE,
+            inputNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+                decodedAllowNull,
+                DotNetClrDisallowNullMetadataResolution.Absent,
+            ),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+            inputNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.NULLABLE,
+                DotNetClrAllowNullMetadataResolution.Absent,
+                decodedDisallowNull,
+            ),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+            inputNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY,
+                decodedAllowNull,
+                decodedDisallowNull,
+            ),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY,
+            inputNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+                invalidAllowNull,
+                decodedDisallowNull,
+            ),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.NULLABLE,
+            inputNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.NOT_NULL,
+                decodedAllowNull,
+                invalidDisallowNull,
+            ),
+        )
+        assertEquals(
+            DotNetClrKotlinNullabilityQualifier.NULLABLE,
+            inputNullabilityEnhancer.enhance(
+                DotNetClrKotlinNullabilityQualifier.NULLABLE,
+                DotNetClrAllowNullMetadataResolution.Absent,
+                invalidDisallowNull,
+            ),
+        )
+
+        val fixtureSource = File(tmpdir, "foreign-input-flow-nullability.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace ForeignInputFlowContracts
+                {
+                    public interface InputFlowApi
+                    {
+                        void AcceptsNull([AllowNull] string value);
+                        void RejectsNull([DisallowNull] string? value);
+                        void Plain(string value);
+                        void PlainNullable(string? value);
+                        void Conflict([AllowNull, DisallowNull] string? value);
+                        void Ensure([AllowNull, NotNull] string value);
+                        bool Present([AllowNull, NotNullWhen(true)] string value);
+
+                #nullable disable
+                        void LegacyAcceptsNull([AllowNull] string value);
+                        void LegacyRejectsNull([DisallowNull] string value);
+                #nullable restore
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val fixtureAssembly = File(tmpdir, "Foreign.InputFlowNullability.dll")
+        val fixtureResult = runModernCSharpCompiler(
+            toolchain,
+            fixtureSource,
+            fixtureAssembly,
+        )
+        assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+
+        val hostileSource = File(tmpdir, "foreign-input-flow-nullability-hostile.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System;
+
+                namespace System.Diagnostics.CodeAnalysis
+                {
+                    [AttributeUsage(
+                        AttributeTargets.Method | AttributeTargets.Parameter,
+                        AllowMultiple = true)]
+                    public sealed class AllowNullAttribute : Attribute
+                    {
+                        public AllowNullAttribute() {}
+                        public AllowNullAttribute(int wrongValue) {}
+                        public bool Unexpected;
+                    }
+
+                    [AttributeUsage(
+                        AttributeTargets.Method | AttributeTargets.Parameter,
+                        AllowMultiple = true)]
+                    public sealed class DisallowNullAttribute : Attribute
+                    {
+                        public DisallowNullAttribute() {}
+                        public DisallowNullAttribute(int wrongValue) {}
+                        public bool Unexpected;
+                    }
+                }
+
+                namespace HostileInputFlowContracts
+                {
+                    using System.Diagnostics.CodeAnalysis;
+
+                    public interface HostileInputFlowApi
+                    {
+                        void DuplicateAllowNull(
+                            [AllowNull, AllowNull] string value);
+                        void WrongAllowNullConstructor(
+                            [AllowNull(1)] string value);
+                        void NamedAllowNull(
+                            [AllowNull(Unexpected = true)] string value);
+
+                        void DuplicateDisallowNull(
+                            [DisallowNull, DisallowNull] string? value);
+                        void WrongDisallowNullConstructor(
+                            [DisallowNull(1)] string? value);
+                        void NamedDisallowNull(
+                            [DisallowNull(Unexpected = true)] string? value);
+
+                        void ValidAllowNullWithInvalidDisallowNull(
+                            [AllowNull, DisallowNull, DisallowNull] string value);
+                        void ValidDisallowNullWithInvalidAllowNull(
+                            [DisallowNull, AllowNull, AllowNull] string? value);
+
+                        [AllowNull]
+                        void WrongTargetAllowNull(string value);
+
+                        [DisallowNull]
+                        void WrongTargetDisallowNull(string? value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val hostileAssembly = File(tmpdir, "Foreign.InputFlowNullability.Hostile.dll")
+        val hostileResult = runModernCSharpCompiler(
+            toolchain,
+            hostileSource,
+            hostileAssembly,
+            additionalArguments = listOf("/nowarn:0436"),
+        )
+        assertEquals(0, hostileResult.exitCode, hostileResult.output)
+
+        val malformedSource = File(tmpdir, "foreign-input-flow-nullability-malformed.cs").apply {
+            writeText(
+                """
+                #nullable enable
+                using System.Diagnostics.CodeAnalysis;
+
+                namespace MalformedInputFlowContracts
+                {
+                    public interface MalformedInputFlowApi
+                    {
+                        void MalformedAllowNull([AllowNull] string value);
+                        void MalformedDisallowNull([DisallowNull] string? value);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val pristineMalformedAssembly =
+            File(tmpdir, "Foreign.InputFlowNullability.Malformed.Primitive.dll")
+        val malformedResult = runModernCSharpCompiler(
+            toolchain,
+            malformedSource,
+            pristineMalformedAssembly,
+        )
+        assertEquals(0, malformedResult.exitCode, malformedResult.output)
+        val malformedMetadata = DotNetClrMetadataReader.read(pristineMalformedAssembly)
+        val malformedApi = malformedMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "MalformedInputFlowContracts" &&
+                    type.metadataName == "MalformedInputFlowApi"
+        }
+        val malformedMethods = malformedMetadata.methodDefinitions.filter { method ->
+            method.declaringType == malformedApi.handle
+        }
+        assertEquals(
+            setOf("MalformedAllowNull", "MalformedDisallowNull"),
+            malformedMethods.mapTo(linkedSetOf()) { method -> method.name },
+        )
+        val malformedParameters = malformedMetadata.parameterDefinitions.filter { parameter ->
+            !parameter.isReturn &&
+                    malformedMethods.any { method ->
+                        method.handle == parameter.declaringMethod
+                    }
+        }
+        assertEquals(2, malformedParameters.size)
+        val malformedParameterHandles =
+            malformedParameters.mapTo(linkedSetOf()) { parameter -> parameter.handle }
+        val malformedAttributes = malformedMetadata.customAttributes.filter { attribute ->
+            if (attribute.parent !in malformedParameterHandles) return@filter false
+            val constructor = malformedMetadata.memberReferences.singleOrNull { member ->
+                member.handle == attribute.constructor
+            } ?: return@filter false
+            malformedMetadata.typeReferences.any { type ->
+                type.handle == constructor.parent &&
+                        type.namespaceName == "System.Diagnostics.CodeAnalysis" &&
+                        type.metadataName in
+                        setOf("AllowNullAttribute", "DisallowNullAttribute")
+            }
+        }
+        assertEquals(2, malformedAttributes.size)
+        val malformedImage = pristineMalformedAssembly.readBytes()
+        val malformedTables = locateClrMetadataTables(malformedImage)
+        val malformedValueOffsets = malformedAttributes.map { attribute ->
+            val malformedValueIndex = readLittleEndianIndex(
+                malformedImage,
+                malformedTables.rowOffset(12, attribute.handle.row) +
+                        malformedTables.hasCustomAttributeIndexSize +
+                        malformedTables.customAttributeTypeIndexSize,
+                malformedTables.blobIndexSize,
+            )
+            malformedTables.blobContentOffset(malformedImage, malformedValueIndex)
+        }.distinct()
+        assertTrue(malformedValueOffsets.isNotEmpty())
+        for (malformedValueOffset in malformedValueOffsets) {
+            assertEquals(1, malformedImage[malformedValueOffset].toInt() and 0xff)
+            malformedImage[malformedValueOffset] = 0
+        }
+        val malformedAssembly =
+            File(tmpdir, "Foreign.InputFlowNullability.Malformed.dll").apply {
+                writeBytes(malformedImage)
+            }
+
+        fun compileForeignConsumer(
+            sourceName: String,
+            sourceText: String,
+            classpath: List<File>,
+        ): Pair<String, ExitCode> {
+            val source = File(tmpdir, sourceName).apply { writeText(sourceText) }
+            return AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    K2DotNetCompilerArguments::noStdlib.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    classpath.joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::moduleName.cliArgument,
+                    "ForeignInputFlowNullabilityConsumer",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "$sourceName.il").path,
+                )
+            )
+        }
+
+        val [consumerDiagnostics, consumerExitCode] = compileForeignConsumer(
+            "foreign-input-flow-nullability.kt",
+            """
+            package consumer
+
+            import ForeignInputFlowContracts.InputFlowApi
+
+            public fun acceptedNullableInputs(
+                api: InputFlowApi,
+                value: String?,
+            ) {
+                api.AcceptsNull(value)
+                api.PlainNullable(value)
+                api.LegacyAcceptsNull(value)
+            }
+
+            public fun acceptedPostcondition(
+                api: InputFlowApi,
+                value: String?,
+            ): Int {
+                api.Ensure(value)
+                return value.length + 1
+            }
+
+            public fun acceptedConditional(
+                api: InputFlowApi,
+                value: String?,
+            ): Int {
+                if (api.Present(value)) return value.length + 2
+                return 0
+            }
+
+            public fun rejectedDisallowNull(
+                api: InputFlowApi,
+                value: String?,
+            ) {
+                api.RejectsNull(value)
+            }
+
+            public fun rejectedPlain(
+                api: InputFlowApi,
+                value: String?,
+            ) {
+                api.Plain(value)
+            }
+
+            public fun rejectedConflict(
+                api: InputFlowApi,
+                value: String?,
+            ) {
+                api.Conflict(value)
+            }
+
+            public fun rejectedLegacyDisallowNull(
+                api: InputFlowApi,
+                value: String?,
+            ) {
+                api.LegacyRejectsNull(value)
+            }
+            """.trimIndent(),
+            listOf(fixtureAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, consumerExitCode, consumerDiagnostics)
+        assertFalse("api.AcceptsNull(value)" in consumerDiagnostics) { consumerDiagnostics }
+        assertFalse("api.PlainNullable(value)" in consumerDiagnostics) { consumerDiagnostics }
+        assertFalse("api.LegacyAcceptsNull(value)" in consumerDiagnostics) {
+            consumerDiagnostics
+        }
+        assertFalse("return value.length + 1" in consumerDiagnostics) { consumerDiagnostics }
+        assertFalse("return value.length + 2" in consumerDiagnostics) { consumerDiagnostics }
+        assertTrue("api.RejectsNull(value)" in consumerDiagnostics) { consumerDiagnostics }
+        assertTrue("api.Plain(value)" in consumerDiagnostics) { consumerDiagnostics }
+        assertTrue("api.Conflict(value)" in consumerDiagnostics) { consumerDiagnostics }
+        assertTrue("api.LegacyRejectsNull(value)" in consumerDiagnostics) {
+            consumerDiagnostics
+        }
+
+        val [hostileDiagnostics, hostileExitCode] = compileForeignConsumer(
+            "foreign-input-flow-nullability-hostile.kt",
+            """
+            package consumer
+
+            import HostileInputFlowContracts.HostileInputFlowApi
+            import MalformedInputFlowContracts.MalformedInputFlowApi
+
+            public fun hostile(
+                api: HostileInputFlowApi,
+                malformed: MalformedInputFlowApi,
+                value: String?,
+            ) {
+                api.DuplicateAllowNull(value)
+                api.WrongAllowNullConstructor(value)
+                api.NamedAllowNull(value)
+                api.DuplicateDisallowNull(value)
+                api.WrongDisallowNullConstructor(value)
+                api.NamedDisallowNull(value)
+                api.ValidAllowNullWithInvalidDisallowNull(value)
+                api.ValidDisallowNullWithInvalidAllowNull(value)
+                api.WrongTargetAllowNull(value)
+                api.WrongTargetDisallowNull(value)
+                malformed.MalformedAllowNull(value)
+                malformed.MalformedDisallowNull(value)
+            }
+            """.trimIndent(),
+            listOf(hostileAssembly, malformedAssembly, systemRuntime),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, hostileExitCode, hostileDiagnostics)
+        assertFalse("api.DuplicateAllowNull(value)" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertTrue("api.WrongAllowNullConstructor(value)" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("api.NamedAllowNull(value)" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("api.DuplicateDisallowNull(value)" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("api.WrongDisallowNullConstructor(value)" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("api.NamedDisallowNull(value)" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse(
+            "api.ValidAllowNullWithInvalidDisallowNull(value)" in hostileDiagnostics
+        ) {
+            hostileDiagnostics
+        }
+        assertFalse(
+            "api.ValidDisallowNullWithInvalidAllowNull(value)" in hostileDiagnostics
+        ) {
+            hostileDiagnostics
+        }
+        assertTrue("api.WrongTargetAllowNull(value)" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("api.WrongTargetDisallowNull(value)" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("malformed.MalformedAllowNull(value)" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("malformed.MalformedDisallowNull(value)" in hostileDiagnostics) {
             hostileDiagnostics
         }
     }
