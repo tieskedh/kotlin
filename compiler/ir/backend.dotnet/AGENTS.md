@@ -342,7 +342,21 @@ landed shape as a compatibility constraint.
    manufacture a Kotlin default argument; a Field constant is not runtime storage. JVM binary
    loading likewise retains `ConstantValue` data in the Java model before FIR decides Kotlin
    constant semantics, while Kotlin metadata/KLIB serializes compile-time values separately from
-   declarations. FieldMarshal payloads remain a later physical slice.
+   declarations.
+   Preserve the FieldMarshal table as a separate lossless physical row model before any CLR
+   interop or FIR policy. Each row keeps its token, exact Field/Param parent, and a present raw
+   NativeType blob. Reject a nil/unread parent, duplicate parent, nil blob index, or oversized
+   blob. Enforce ECMA's one-way physical flag implications: Field.HasFieldMarshal and
+   Param.HasFieldMarshal each require one row, but a row does not require the corresponding flag.
+   Do not validate or normalize the MarshalSpec grammar in this profile-neutral reader.
+   `System.Reflection.Metadata` exposes the descriptor as a raw `BlobHandle`, and .NET
+   `UnmanagedType` values extend the narrow ECMA-335 grammar; a present empty or unknown blob
+   therefore remains distinguishable evidence for a later selected-profile interop decoder and
+   structured diagnostic. This is a CLR-specific physical difference, not permission to change
+   Kotlin Common types or modifiers. JVM has no equivalent unmanaged descriptor, while
+   Kotlin/Native C interop adds explicit Native-only stub annotations after Common semantics are
+   fixed. Kotlin-produced DLLs remain KLIB-authoritative, and no FieldMarshal row may manufacture
+   a Kotlin annotation, string type, by-reference mode, default, or storage rule.
    Roslyn nullable-reference metadata is decoded only after this attachment model can distinguish
    method, return, and value-parameter targets. Recognize the
    three compiler conventions by exact top-level
