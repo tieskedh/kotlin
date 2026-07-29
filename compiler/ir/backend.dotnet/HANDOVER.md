@@ -2338,6 +2338,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Arrays, dependent generic parameters, variance, and complete constraint aggregation remain
   separate. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
   CLI, and 54 library integration tests).
+- The aggregate-constraint-status continuation prevents partial exact assignability from creating
+  false diagnostics. The hierarchy walker now returns `VariantConversionRequired` only when it
+  actually reaches the same variant definition with different arguments; unrelated types remain
+  proven not assignable. Dependent generic parameters are explicit unsupported outcomes in both
+  nominal and special validation. `DotNetClrConstructedTypeConstraintValidator` retains complete
+  sub-validations plus issue coordinates and classifies with invalid > unsupported > violated >
+  satisfied precedence. Roslyn covariance, unrelated `IComparable<Object>`, full success,
+  simultaneous nominal/special violations, array multiplicity, dependent parameters, and invalid
+  class/value metadata are covered. Actual CLR variance, arrays, and dependent-parameter
+  implication remain next layers; only `Satisfied` may gate later importer projection. The fresh
+  strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
+  integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
