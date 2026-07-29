@@ -213,6 +213,12 @@ private object DotNetPeMetadataReader {
                 parameterDefinitions,
                 propertyDefinitions,
             )
+            val fieldMarshalDefinitions = readFieldMarshalDefinitions(
+                metadata.tables,
+                metadata.blobs,
+                fieldDefinitions,
+                parameterDefinitions,
+            )
             val genericParameterDefinitions = readGenericParameterDefinitions(
                 metadata.tables,
                 metadata.strings,
@@ -230,6 +236,7 @@ private object DotNetPeMetadataReader {
                 methodDefinitions = methodDefinitions,
                 parameterDefinitions = parameterDefinitions,
                 constantDefinitions = constantDefinitions,
+                fieldMarshalDefinitions = fieldMarshalDefinitions,
                 memberReferences = readMemberReferences(
                     metadata.tables,
                     metadata.strings,
@@ -1193,6 +1200,89 @@ private object DotNetPeMetadataReader {
                 }
             }
             return constants
+        }
+
+        private fun readFieldMarshalDefinitions(
+            tables: MetadataStream,
+            blobs: MetadataStream?,
+            fieldDefinitions: List<DotNetClrFieldDefinition>,
+            parameterDefinitions: List<DotNetClrParameterDefinition>,
+        ): List<DotNetClrFieldMarshalDefinition> {
+            val table = locateMetadataTable(tables, FIELD_MARSHAL_TABLE)
+            val parentHandles = buildSet {
+                fieldDefinitions.mapTo(this, DotNetClrFieldDefinition::handle)
+                parameterDefinitions.mapTo(this, DotNetClrParameterDefinition::handle)
+            }
+            val nativeTypesByIndex = mutableMapOf<Long, DotNetClrBlob>()
+            val seenParents = mutableSetOf<DotNetClrMetadataHandle>()
+            val definitions = if (table == null) {
+                emptyList()
+            } else {
+                List(table.rowCount.toIntChecked("FieldMarshal row count")) { rowIndex ->
+                    var position = table.offset + rowIndex.toLong() * table.rowSize
+                    val parentIndex = readIndex(
+                        position,
+                        table.indexSizes.hasFieldMarshalIndexSize,
+                    )
+                    position += table.indexSizes.hasFieldMarshalIndexSize
+                    val nativeTypeIndex = readIndex(position, table.indexSizes.blobIndexSize)
+                    val parent = decodeCodedHandle(
+                        value = parentIndex,
+                        tagBits = 1,
+                        tablesByTag = HAS_FIELD_MARSHAL_TABLES,
+                        metadataTables = tables,
+                        description = "FieldMarshal parent",
+                    ) ?: malformed("FieldMarshal row ${rowIndex + 1} has a nil parent")
+                    if (parent !in parentHandles) {
+                        malformed("FieldMarshal row ${rowIndex + 1} refers to an unread parent")
+                    }
+                    if (!seenParents.add(parent)) {
+                        malformed(
+                            "FieldMarshal row ${rowIndex + 1} duplicates parent token " +
+                                    "0x${parent.token.toUInt().toString(16)}"
+                        )
+                    }
+                    if (nativeTypeIndex == 0L) {
+                        malformed("FieldMarshal row ${rowIndex + 1} has a nil NativeType blob")
+                    }
+                    val nativeType = nativeTypesByIndex.getOrPut(nativeTypeIndex) {
+                        val nativeTypeSize = readBlobHeapSize(blobs, nativeTypeIndex)
+                        if (nativeTypeSize > MAX_FIELD_MARSHAL_BLOB_SIZE) {
+                            malformed(
+                                "FieldMarshal row ${rowIndex + 1} has an oversized NativeType blob"
+                            )
+                        }
+                        DotNetClrBlob.wrapOwned(readBlobHeap(blobs, nativeTypeIndex))
+                    }
+                    DotNetClrFieldMarshalDefinition(
+                        handle = metadataHandle(
+                            FIELD_MARSHAL_TABLE,
+                            rowIndex.toLong() + 1,
+                            tables,
+                            "FieldMarshal",
+                        ),
+                        parent = parent,
+                        nativeType = nativeType,
+                    )
+                }
+            }
+            fieldDefinitions.forEach { field ->
+                if (field.hasFieldMarshal && field.handle !in seenParents) {
+                    malformed(
+                        "Field token 0x${field.handle.token.toUInt().toString(16)} has " +
+                                "HasFieldMarshal without a FieldMarshal row"
+                    )
+                }
+            }
+            parameterDefinitions.forEach { parameter ->
+                if (parameter.hasFieldMarshal && parameter.handle !in seenParents) {
+                    malformed(
+                        "Param token 0x${parameter.handle.token.toUInt().toString(16)} has " +
+                                "HasFieldMarshal without a FieldMarshal row"
+                    )
+                }
+            }
+            return definitions
         }
 
         private fun decodeConstantValue(
@@ -2510,7 +2600,7 @@ private object DotNetPeMetadataReader {
             )
         val customAttributeTypeIndexSize
             get() = codedIndexSize(3, 6, 10)
-        private val hasFieldMarshalIndexSize
+        val hasFieldMarshalIndexSize
             get() = codedIndexSize(1, 4, 8)
         private val hasDeclSecurityIndexSize
             get() = codedIndexSize(2, 2, 6, 32)
@@ -2619,6 +2709,7 @@ private object DotNetPeMetadataReader {
     private const val MEMBER_REF_TABLE = 10
     private const val CONSTANT_TABLE = 11
     private const val CUSTOM_ATTRIBUTE_TABLE = 12
+    private const val FIELD_MARSHAL_TABLE = 13
     private const val DECLARATIVE_SECURITY_TABLE = 14
     private const val STANDALONE_SIGNATURE_TABLE = 17
     private const val EVENT_TABLE = 20
@@ -2672,6 +2763,10 @@ private object DotNetPeMetadataReader {
         PROPERTY_TABLE,
         -1,
     )
+    private val HAS_FIELD_MARSHAL_TABLES = intArrayOf(
+        FIELD_TABLE,
+        PARAMETER_TABLE,
+    )
     private const val STRING_HEAP_LARGE = 0x1
     private const val GUID_HEAP_LARGE = 0x2
     private const val BLOB_HEAP_LARGE = 0x4
@@ -2702,6 +2797,7 @@ private object DotNetPeMetadataReader {
     private const val MAX_SIGNATURE_DEPTH = 128
     private const val MAX_SIGNATURE_BLOB_SIZE = 1024 * 1024
     private const val MAX_CONSTANT_BLOB_SIZE = 64 * 1024 * 1024
+    private const val MAX_FIELD_MARSHAL_BLOB_SIZE = 64 * 1024 * 1024
     private const val MAX_CUSTOM_ATTRIBUTE_BLOB_SIZE = 64 * 1024 * 1024
     private const val PUBLIC_KEY_TOKEN_SIZE = 8
     private const val ELEMENT_TYPE_VOID = 0x01
