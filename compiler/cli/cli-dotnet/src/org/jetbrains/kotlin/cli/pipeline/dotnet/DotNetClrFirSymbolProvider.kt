@@ -65,6 +65,7 @@ import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.EffectiveVisibility
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.Visibilities
+import org.jetbrains.kotlin.descriptors.annotations.AnnotationUseSiteTarget
 import org.jetbrains.kotlin.fir.FirModuleData
 import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.contracts.FirEffectDeclaration
@@ -526,6 +527,27 @@ internal class DotNetClrFirSymbolProvider(
                 }
             }
         }
+        annotationServices.obsolete(assembly, physicalProperty.handle)?.let { obsolete ->
+            annotations += buildDeprecatedAnnotation(obsolete)
+        }
+        annotationServices.obsolete(assembly, candidateProperty.getter.handle)?.let { obsolete ->
+            annotations += buildDeprecatedAnnotation(
+                obsolete,
+                AnnotationUseSiteTarget.PROPERTY_GETTER,
+            )
+        }
+        candidateProperty.setter?.let { setter ->
+            annotationServices.obsolete(assembly, setter.handle)?.let { obsolete ->
+                annotations += buildDeprecatedAnnotation(
+                    obsolete,
+                    AnnotationUseSiteTarget.PROPERTY_SETTER,
+                )
+            }
+        }
+    }.apply {
+        replaceDeprecationsProvider(
+            annotations.getDeprecationsProviderFromAnnotations(session, fromJava = true)
+        )
     }
 
     private fun buildMethod(
@@ -603,7 +625,9 @@ internal class DotNetClrFirSymbolProvider(
 
     private fun buildDeprecatedAnnotation(
         obsolete: DotNetClrObsoleteMetadataResolution.Decoded,
+        useSiteTarget: AnnotationUseSiteTarget? = null,
     ) = buildAnnotation {
+        this.useSiteTarget = useSiteTarget
         annotationTypeRef = buildResolvedTypeRef {
             coneType =
                 StandardClassIds.Annotations.Deprecated.toLookupTag().constructClassType()

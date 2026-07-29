@@ -22292,6 +22292,93 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         for (profile in profiles) {
             val profileSuffix = profile.target.replace('.', '-')
+            val supportsAccessorDeprecation = profile.target == "net10.0"
+            val accessorSource =
+                File(tmpdir, "foreign-obsolete-accessor-$profileSuffix.cs").apply {
+                    writeText(
+                        """
+                        using System;
+
+                        public interface AccessorObsoleteProbe
+                        {
+                            string Value
+                            {
+                                [Obsolete("accessor obsoletion probe")]
+                                get;
+                            }
+                        }
+                        """.trimIndent()
+                    )
+                }
+            val accessorAssembly =
+                File(tmpdir, "Foreign.Obsolete.Accessor.$profileSuffix.dll")
+            val accessorCompilerResult = profile.compileFixture(
+                accessorSource,
+                accessorAssembly,
+            )
+            if (supportsAccessorDeprecation) {
+                assertEquals(0, accessorCompilerResult.exitCode, accessorCompilerResult.output)
+                val accessorMetadata = DotNetClrMetadataReader.read(accessorAssembly)
+                val accessorType = accessorMetadata.typeDefinitions.single { type ->
+                    type.namespaceName.isEmpty() &&
+                            type.metadataName == "AccessorObsoleteProbe"
+                }
+                val accessorProperty =
+                    accessorMetadata.propertyDefinitions.single { property ->
+                        property.declaringType == accessorType.handle &&
+                                property.name == "Value"
+                    }
+                val accessorGetter = accessorMetadata.methodSemantics.single { semantics ->
+                    semantics.association == accessorProperty.handle &&
+                            semantics.kind == DotNetClrMethodSemanticsKind.GETTER
+                }.method
+                assertEquals(
+                    1,
+                    accessorMetadata.customAttributes.count { attribute ->
+                        if (attribute.parent != accessorGetter) return@count false
+                        val constructor =
+                            accessorMetadata.memberReferences.singleOrNull { member ->
+                                member.handle == attribute.constructor
+                            } ?: return@count false
+                        accessorMetadata.typeReferences.any { type ->
+                            type.handle == constructor.parent &&
+                                    type.namespaceName == "System" &&
+                                    type.metadataName == "ObsoleteAttribute"
+                        }
+                    },
+                )
+            } else {
+                assertTrue(accessorCompilerResult.exitCode != 0) {
+                    accessorCompilerResult.output
+                }
+                assertTrue("CS1667" in accessorCompilerResult.output) {
+                    accessorCompilerResult.output
+                }
+            }
+
+            val accessorDeclarations =
+                if (supportsAccessorDeprecation) {
+                    """
+                    string AccessorSplit
+                    {
+                        [Obsolete("getter error message", true)]
+                        get;
+
+                        [Obsolete("setter warning message")]
+                        set;
+                    }
+
+                    string SetterError
+                    {
+                        get;
+
+                        [Obsolete("setter error message", true)]
+                        set;
+                    }
+                    """.trimIndent()
+                } else {
+                    ""
+                }
             val fixtureSource = File(tmpdir, "foreign-obsolete-$profileSuffix.cs").apply {
                 writeText(
                     """
@@ -22335,6 +22422,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         {
                             void Current();
                         }
+
+                        public interface DeprecatedPropertyApi
+                        {
+                            [Obsolete("whole property warning message")]
+                            string Whole { get; set; }
+
+                            [Obsolete("whole property error message", true)]
+                            string ErrorProperty { get; set; }
+
+                            $accessorDeclarations
+
+                            string Current { get; set; }
+                        }
                     }
                     """.trimIndent()
                 )
@@ -22349,15 +22449,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 package consumer
 
                 import ForeignObsoleteContracts.DeprecatedApi
+                import ForeignObsoleteContracts.DeprecatedPropertyApi
                 import ForeignObsoleteContracts.WarningTypeApi
 
-                public fun use(api: DeprecatedApi, type: WarningTypeApi) {
+                public fun use(
+                    api: DeprecatedApi,
+                    type: WarningTypeApi,
+                    properties: DeprecatedPropertyApi,
+                ) {
                     api.NoMessage()
                     api.NullMessage()
                     api.Warning()
                     ${profile.modernDiagnosticCall}
                     api.Current()
                     type.Current()
+                    val current = properties.Current
+                    properties.Current = current
+                    properties.Whole = properties.Whole
+                    ${if (supportsAccessorDeprecation) "properties.AccessorSplit = current\nproperties.SetterError" else ""}
                 }
                 """.trimIndent(),
                 listOf(fixtureAssembly, profile.systemReference),
@@ -22368,6 +22477,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue("warning message" in warningDiagnostics) { warningDiagnostics }
             assertTrue("warning interface message" in warningDiagnostics) {
                 warningDiagnostics
+            }
+            assertTrue("whole property warning message" in warningDiagnostics) {
+                warningDiagnostics
+            }
+            assertFalse("whole property error message" in warningDiagnostics) {
+                warningDiagnostics
+            }
+            if (supportsAccessorDeprecation) {
+                assertTrue("setter warning message" in warningDiagnostics) {
+                    warningDiagnostics
+                }
+                assertFalse("getter error message" in warningDiagnostics) {
+                    warningDiagnostics
+                }
+                assertFalse("setter error message" in warningDiagnostics) {
+                    warningDiagnostics
+                }
             }
             if (profile.modernDiagnosticCall.isNotEmpty()) {
                 assertTrue("diagnostic message" in warningDiagnostics) { warningDiagnostics }
@@ -22383,11 +22509,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 package consumer
 
                 import ForeignObsoleteContracts.DeprecatedApi
+                import ForeignObsoleteContracts.DeprecatedPropertyApi
                 import ForeignObsoleteContracts.ErrorTypeApi
 
-                public fun rejected(api: DeprecatedApi, type: ErrorTypeApi) {
+                public fun rejected(
+                    api: DeprecatedApi,
+                    type: ErrorTypeApi,
+                    properties: DeprecatedPropertyApi,
+                ) {
                     api.Error()
                     type.Current()
+                    val value = properties.ErrorProperty
+                    properties.ErrorProperty = value
+                    ${if (supportsAccessorDeprecation) "val accessorValue = properties.AccessorSplit\nproperties.SetterError = accessorValue" else ""}
                 }
                 """.trimIndent(),
                 listOf(fixtureAssembly, profile.systemReference),
@@ -22396,12 +22530,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(ExitCode.COMPILATION_ERROR, errorExitCode, errorDiagnostics)
             assertTrue("error message" in errorDiagnostics) { errorDiagnostics }
             assertTrue("error interface message" in errorDiagnostics) { errorDiagnostics }
+            assertTrue("whole property error message" in errorDiagnostics) {
+                errorDiagnostics
+            }
+            assertFalse("whole property warning message" in errorDiagnostics) {
+                errorDiagnostics
+            }
+            if (supportsAccessorDeprecation) {
+                assertTrue("getter error message" in errorDiagnostics) { errorDiagnostics }
+                assertTrue("setter error message" in errorDiagnostics) { errorDiagnostics }
+                assertFalse("setter warning message" in errorDiagnostics) {
+                    errorDiagnostics
+                }
+            }
 
             val [overrideDiagnostics, overrideExitCode] = compileConsumer(
                 "foreign-obsolete-override-$profileSuffix.kt",
                 """
                 package consumer
 
+                import ForeignObsoleteContracts.DeprecatedPropertyApi
                 import ForeignObsoleteContracts.OverrideApi
                 import ForeignObsoleteContracts.WarningTypeApi
 
@@ -22414,12 +22562,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     override fun Current() {}
                 }
 
+                @Suppress("DEPRECATION", "DEPRECATION_ERROR")
+                public class CurrentPropertyImplementation : DeprecatedPropertyApi {
+                    override var Whole: String = ""
+                    override var ErrorProperty: String = ""
+                    ${if (supportsAccessorDeprecation) "override var AccessorSplit: String = \"\"\noverride var SetterError: String = \"\"" else ""}
+                    override var Current: String = ""
+                }
+
                 public fun accepted(
                     api: CurrentOverride,
                     implementation: CurrentImplementation,
+                    properties: CurrentPropertyImplementation,
                 ) {
                     api.BaseOnly()
                     implementation.Current()
+                    properties.Whole = properties.Whole
+                    properties.ErrorProperty = properties.ErrorProperty
+                    ${if (supportsAccessorDeprecation) "properties.AccessorSplit = properties.AccessorSplit\nproperties.SetterError = properties.SetterError" else ""}
+                    properties.Current = properties.Current
                 }
                 """.trimIndent(),
                 listOf(fixtureAssembly, profile.systemReference),
@@ -22432,6 +22593,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertFalse("warning interface message" in overrideDiagnostics) {
                 overrideDiagnostics
             }
+            assertFalse("whole property warning message" in overrideDiagnostics) {
+                overrideDiagnostics
+            }
+            assertFalse("whole property error message" in overrideDiagnostics) {
+                overrideDiagnostics
+            }
+            assertFalse("getter error message" in overrideDiagnostics) {
+                overrideDiagnostics
+            }
+            assertFalse("setter warning message" in overrideDiagnostics) {
+                overrideDiagnostics
+            }
+            assertFalse("setter error message" in overrideDiagnostics) {
+                overrideDiagnostics
+            }
         }
 
         val hostileSource = File(tmpdir, "foreign-obsolete-lookalike.cs").apply {
@@ -22441,7 +22617,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 namespace System
                 {
-                    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Interface)]
+                    [AttributeUsage(
+                        AttributeTargets.Method |
+                        AttributeTargets.Interface |
+                        AttributeTargets.Property)]
                     public sealed class ObsoleteAttribute : Attribute
                     {
                         public ObsoleteAttribute(string message) {}
@@ -22461,6 +22640,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         void Current();
                     }
+
+                    public interface LookalikePropertyApi
+                    {
+                        [System.Obsolete("look-alike property must not deprecate")]
+                        string CurrentProperty { get; }
+                    }
                 }
                 """.trimIndent()
             )
@@ -22479,11 +22664,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             package consumer
 
             import HostileObsoleteContracts.LookalikeApi
+            import HostileObsoleteContracts.LookalikePropertyApi
             import HostileObsoleteContracts.LookalikeTypeApi
 
-            public fun accepted(api: LookalikeApi, type: LookalikeTypeApi) {
+            public fun accepted(
+                api: LookalikeApi,
+                type: LookalikeTypeApi,
+                properties: LookalikePropertyApi,
+            ) {
                 api.Current()
                 type.Current()
+                properties.CurrentProperty
             }
             """.trimIndent(),
             listOf(hostileAssembly, modernSystemRuntime),
@@ -22494,6 +22685,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             hostileDiagnostics
         }
         assertFalse("look-alike type must not deprecate" in hostileDiagnostics) {
+            hostileDiagnostics
+        }
+        assertFalse("look-alike property must not deprecate" in hostileDiagnostics) {
             hostileDiagnostics
         }
 
@@ -22508,6 +22702,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         [Obsolete("malformed must not deprecate", true)]
                         void Malformed();
+
+                        [Obsolete("malformed property must not deprecate", true)]
+                        string MalformedProperty { get; }
+
+                        [Obsolete("malformed accessor must not deprecate", true)]
+                        string AccessorShaped { get; }
+
+                        [Obsolete("duplicate property must not deprecate", true)]
+                        string DuplicateProperty { get; }
+
+                        [Obsolete("duplicate seed", true)]
+                        void DuplicateSeed();
                     }
 
                     [Obsolete("malformed type must not deprecate", true)]
@@ -22539,7 +22745,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             type.namespaceName == "MalformedObsoleteContracts" &&
                     type.metadataName == "MalformedTypeApi"
         }
-        val malformedParents = setOf(malformedMethod.handle, malformedTypeApi.handle)
+        val malformedProperty = malformedMetadata.propertyDefinitions.single { property ->
+            property.declaringType == malformedApi.handle &&
+                    property.name == "MalformedProperty"
+        }
+        val accessorShapedProperty =
+            malformedMetadata.propertyDefinitions.single { property ->
+                property.declaringType == malformedApi.handle &&
+                        property.name == "AccessorShaped"
+            }
+        val accessorShapedGetter = malformedMetadata.methodSemantics.single { semantics ->
+            semantics.association == accessorShapedProperty.handle &&
+                    semantics.kind == DotNetClrMethodSemanticsKind.GETTER
+        }.method
+        val duplicateProperty =
+            malformedMetadata.propertyDefinitions.single { property ->
+                property.declaringType == malformedApi.handle &&
+                        property.name == "DuplicateProperty"
+            }
+        val duplicateSeed = malformedMetadata.methodDefinitions.single { method ->
+            method.declaringType == malformedApi.handle &&
+                    method.name == "DuplicateSeed"
+        }
+        val malformedParents = setOf(
+            malformedMethod.handle,
+            malformedTypeApi.handle,
+            malformedProperty.handle,
+        )
         val malformedAttributes = malformedMetadata.customAttributes.filter { attribute ->
             if (attribute.parent !in malformedParents) return@filter false
             val constructor = malformedMetadata.memberReferences.singleOrNull { member ->
@@ -22551,10 +22783,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         type.metadataName == "ObsoleteAttribute"
             }
         }
-        assertEquals(2, malformedAttributes.size)
+        assertEquals(3, malformedAttributes.size)
+        val accessorShapedAttribute = malformedMetadata.customAttributes.single { attribute ->
+            if (attribute.parent != accessorShapedProperty.handle) return@single false
+            val constructor = malformedMetadata.memberReferences.singleOrNull { member ->
+                member.handle == attribute.constructor
+            } ?: return@single false
+            malformedMetadata.typeReferences.any { type ->
+                type.handle == constructor.parent &&
+                        type.namespaceName == "System" &&
+                        type.metadataName == "ObsoleteAttribute"
+            }
+        }
+        val duplicateSeedAttribute = malformedMetadata.customAttributes.single { attribute ->
+            if (attribute.parent != duplicateSeed.handle) return@single false
+            val constructor = malformedMetadata.memberReferences.singleOrNull { member ->
+                member.handle == attribute.constructor
+            } ?: return@single false
+            malformedMetadata.typeReferences.any { type ->
+                type.handle == constructor.parent &&
+                        type.namespaceName == "System" &&
+                        type.metadataName == "ObsoleteAttribute"
+            }
+        }
         val malformedImage = pristineMalformedAssembly.readBytes()
         val malformedTables = locateClrMetadataTables(malformedImage)
-        for (malformedAttribute in malformedAttributes) {
+        for (malformedAttribute in malformedAttributes + accessorShapedAttribute) {
             val malformedValueIndex = readLittleEndianIndex(
                 malformedImage,
                 malformedTables.rowOffset(12, malformedAttribute.handle.row) +
@@ -22567,6 +22821,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(1, malformedImage[malformedValueOffset].toInt() and 0xff)
             malformedImage[malformedValueOffset] = 0
         }
+        // HasCustomAttribute uses five tag bits; MethodDef is tag 0 and Property is tag 9.
+        writeLittleEndian(
+            malformedImage,
+            malformedTables.rowOffset(12, accessorShapedAttribute.handle.row),
+            malformedTables.hasCustomAttributeIndexSize,
+            accessorShapedGetter.row shl 5,
+        )
+        writeLittleEndian(
+            malformedImage,
+            malformedTables.rowOffset(12, duplicateSeedAttribute.handle.row),
+            malformedTables.hasCustomAttributeIndexSize,
+            (duplicateProperty.handle.row shl 5) or 9,
+        )
         val malformedAssembly = File(tmpdir, "Foreign.Obsolete.Malformed.dll").apply {
             writeBytes(malformedImage)
         }
@@ -22580,6 +22847,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
             public fun accepted(api: MalformedApi, type: MalformedTypeApi) {
                 api.Malformed()
+                api.MalformedProperty
+                api.AccessorShaped
+                api.DuplicateProperty
                 type.Current()
             }
             """.trimIndent(),
@@ -22591,6 +22861,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             malformedDiagnostics
         }
         assertFalse("malformed type must not deprecate" in malformedDiagnostics) {
+            malformedDiagnostics
+        }
+        assertFalse("malformed property must not deprecate" in malformedDiagnostics) {
+            malformedDiagnostics
+        }
+        assertFalse("malformed accessor must not deprecate" in malformedDiagnostics) {
+            malformedDiagnostics
+        }
+        assertFalse("duplicate property must not deprecate" in malformedDiagnostics) {
             malformedDiagnostics
         }
     }
