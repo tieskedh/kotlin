@@ -2699,7 +2699,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   properties and pins exact MemberRefs on CLR 4.8 and CoreCLR 10. Its `AllowNull` negative also
   covers both real compiler layouts: Property-row evidence under Framework and setter-Param
   evidence under modern Roslyn. The focused test is 1/0/0/0.
-- Exact method-level and imported-interface TypeDef CLR deprecation are implemented. The decoder
+- Exact method-level, imported-interface TypeDef, Property, and accessor CLR deprecation are
+  implemented. The decoder
   recognizes only the selected core-library `System.ObsoleteAttribute` TypeDef and its three
   standard constructors, preserving message, `IsError`, and modern
   `DiagnosticId`/`UrlFormat` values. The provider synthesizes Common `kotlin.Deprecated`:
@@ -2708,12 +2709,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   through the exact retained MethodDef, while error uses fail through the Common deprecation
   checker. Real Framework and modern fixtures cover the method
   constructor/severity/message matrix, modern named diagnostic metadata, and warning/error
-  interface types. The Common deprecation provider is created through the foreign-annotation
-  path: CLR fixes `ObsoleteAttribute` to `Inherited=false`, so Kotlin overrides and
-  implementations remain current through their own declarations. Type-level deprecation is not
-  copied onto members. Same-name and physically corrupted method/TypeDef attributes add no
-  deprecation. The focused test is 1/0/0/0. The fresh strict gate is 881/0/0/0 across 16 XML
-  suites (796 FIR/IL/box, 21 generated CLI, and 64 library integration tests).
+  interface types. Property-row evidence maps to whole-property deprecation, while exact
+  getter/setter MethodDef evidence maps to Common getter/setter use sites without flattening.
+  Framework C# rejects the accessor form with `CS1667`; modern Roslyn accepts it and emits the
+  MethodDef attribute, so exact metadata remains authoritative. The Common deprecation provider
+  is created through the foreign-annotation path: CLR fixes `ObsoleteAttribute` to
+  `Inherited=false`, so Kotlin overrides and implementations remain current through their own
+  declarations. Type-level deprecation is not copied onto members. Same-name, duplicate, and
+  physically corrupted method/TypeDef/Property/accessor evidence adds no deprecation. The focused
+  test is 1/0/0/0. The fresh strict gate is 881/0/0/0 across 16 XML suites (796 FIR/IL/box,
+  21 generated CLI, and 64 library integration tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
@@ -2818,9 +2823,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
    preconditions. The first non-indexed interface-property slice has landed and withholds
    classifiers whose accessors need distinct read/write states; `ref`/`out` and any broader
    foreign-property view remain separate-state work.
-   Exact selected-core method and imported-interface TypeDef `ObsoleteAttribute` now map to Common
-   warning/error deprecation; other attribute targets and semantic markers remain separately
-   reviewed slices.
+   Exact selected-core method, imported-interface TypeDef, Property, and accessor
+   `ObsoleteAttribute` now map to the corresponding Common warning/error deprecation channel;
+   other attribute targets and semantic markers remain separately reviewed slices.
    Member attributes must preserve Kotlin smart-cast stability rather than adopt Roslyn's milder
    member-state rules. Extensions, param arrays, indexers, events, and semantic markers
    each require their own documented contract. Preserve Kotlin declaration identity and Common

@@ -67,7 +67,7 @@ Primary Kotlin references:
 | Optional/default values | Param flags and Constant rows | Physical values retained; Kotlin export uses `$default` dispatchers | A CLR constant is authoritative for a foreign CLR optional parameter, but it is not a Kotlin default declaration. Kotlin defaults keep KLIB/dispatcher semantics |
 | Indexers/default member | Property signatures and `DefaultMemberAttribute` | Property rows retained | Prefer the property row; use the attribute only for the default/indexer call view after collision rules are specified |
 | Compiler-generated declarations | `CompilerGeneratedAttribute` and physical flags/names | Kotlin compiler ABI marker plus `EditorBrowsable(Never)` on selected internals; no general marker | May guide tooling, but never infer a Kotlin logical role or hide ABI solely from this marker |
-| Deprecation | `ObsoleteAttribute` | Exact selected-core method and imported-interface TypeDef projections implemented | Project exact declaration-level message/severity per supported declaration kind; retain modern diagnostic ID/URL metadata because Kotlin has no dynamic diagnostic-ID channel |
+| Deprecation | `ObsoleteAttribute` | Exact selected-core method and imported-interface TypeDef projections implemented; property/accessor continuation specified below | Project exact declaration-level message/severity per supported declaration kind; retain modern diagnostic ID/URL metadata because Kotlin has no dynamic diagnostic-ID channel |
 | Required/init/read-only/by-ref-like semantics | `RequiredMemberAttribute`, `IsExternalInit`, `IsReadOnlyAttribute`, `IsByRefLikeAttribute`, modreqs, and physical flags | Several physical/semantic classifiers exist; no FIR view | Consume only as the selected profile defines them. Attribute names without exact selected identity are insufficient |
 | Friend access | `InternalsVisibleToAttribute` | KLIB friend list and emitted CLR attribute are both validated | Deliberate dual view: KLIB grants Kotlin compiler friendship; CLR metadata grants runtime/C# access |
 | Target framework | `TargetFrameworkAttribute` | Emitted and validated with the selected product/profile | CLR-facing artifact identity; not a Kotlin declaration fact |
@@ -878,6 +878,37 @@ obsolete-supertype use and then remains current through its own type. Same-name 
 attributes on a TypeDef and physically corrupted core TypeDef attributes create no deprecation.
 The focused cross-profile test is 1/0/0/0. The fresh strict gate is 881/0/0/0 across 16 XML
 suites (796 FIR/IL/box, 21 generated CLI, and 64 library integration tests).
+
+### Property and accessor continuation
+
+A valid Property-row `ObsoleteAttribute` becomes Common whole-property deprecation and therefore
+participates in reads, writes, and property callable references. Exact getter and setter MethodDef
+attributes become Common getter- and setter-use-site deprecation respectively. None is flattened
+into another channel, and the retained physical Property/getter/setter carriers remain unchanged
+for backend binding.
+
+The adversarial source probe exposed a compiler-profile split rather than a CLR-wide prohibition.
+The Framework C# compiler rejects `ObsoleteAttribute` on an accessor with `CS1667`, despite the
+general C# accessor rule and the attribute's `Method` target. Modern Roslyn accepts the same source
+and emits the attribute on the accessor MethodDef. The importer therefore must not turn an old
+source-compiler restriction into a metadata restriction: ordinary modern C# can produce the
+shape, the selected core attribute identity is exact, and Kotlin Common already models all three
+channels.
+
+This also avoids profile-dependent Kotlin semantics for the same physical DLL. Framework C# may
+not be able to author the accessor form directly, but a valid MethodDef attribute remains
+consumable whether the assembly came from modern Roslyn or another CLR producer. The synthesized
+annotations are evaluated as foreign metadata and do not propagate to Kotlin overrides.
+Malformed or duplicate evidence on any physical parent creates no best-effort diagnostic and does
+not hide the property classifier.
+
+Implementation evidence: the cross-profile source probe pins Framework `CS1667` and modern
+Roslyn's getter-MethodDef emission. Real modern properties independently exercise getter-error,
+setter-warning, and setter-error diagnostics alongside whole-property warning/error behavior.
+Current Kotlin overrides remain current. Exact same-name attributes, corrupted property/accessor
+blobs, and duplicate Property-row evidence add no diagnostic. The focused test is 1/0/0/0. The
+fresh strict gate is 881/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 64
+library integration tests).
 
 References:
 

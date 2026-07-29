@@ -723,7 +723,8 @@ landed shape as a compatibility constraint.
    while modern Roslyn moves it to the setter Param. Indexers and distinct accessor views remain
    separate decisions.
    CLR deprecation follows JVM's foreign-marker synthesis and Kotlin Common diagnostics for the
-   supported method and top-level public interface TypeDef parents. Recognize exactly one
+   supported method, top-level public interface TypeDef, Property, and property-accessor MethodDef
+   parents. Recognize exactly one
    selected core-library `System.ObsoleteAttribute`, using TypeDef identity from the same physical
    core assembly as `System.Attribute`, and accept only `()`, `(string)`, or `(string, bool)`.
    Synthesize resolved `kotlin.Deprecated`: omitted/null messages become `Deprecated in .NET`,
@@ -736,8 +737,12 @@ landed shape as a compatibility constraint.
    it through Common's foreign-annotation deprecation path so it does not propagate to Kotlin
    overrides or implementing classes. CLR fixes `ObsoleteAttribute` to `Inherited=false`,
    whereas a Kotlin-authored `kotlin.Deprecated` normally propagates. A type-level marker is not
-   copied onto its members. The retained TypeDef/MethodDef still owns physical
-   identity/invocation. Other declaration targets remain separate slices.
+   copied onto its members. A Property-row marker maps to whole-property deprecation; exact getter
+   and setter MethodDef markers map to Common getter- and setter-use-site deprecation without
+   flattening the three channels. Framework C# rejects accessor obsoletion with `CS1667`, but
+   modern Roslyn accepts it and emits the MethodDef attribute, so the importer follows exact
+   metadata rather than the older source restriction. The retained TypeDef/Property/MethodDef
+   still owns physical identity/invocation. Other declaration targets remain separate slices.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased
