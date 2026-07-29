@@ -1205,8 +1205,19 @@ subtyping. Absence, duplicates, wrong constructors, named payloads, wrong target
 blobs add no view. The focused test is 1/0/0/0. The fresh strict gate is 877/0/0/0 across 16 XML
 suites (796 FIR/IL/box, 21 generated CLI, and 60 library integration tests).
 
-Return-target `NotNull`/`MaybeNull` remains separate because it needs a precedence rule with
-Roslyn declaration nullability.
+**Foreign return `NotNull`/`MaybeNull` enhancement (2026-07-29):** ordinary nullable declaration
+metadata now supplies the base Kotlin result qualifier, after which exact return Param flow
+attributes refine the call result. Exact `NotNull` strengthens to non-null, otherwise exact
+`MaybeNull` weakens to nullable. If both are valid, `NotNull` wins exactly as Roslyn's
+call-result-state application does. Invalid `NotNull` cannot strengthen; invalid `MaybeNull`
+forces flexibility rather than silently preserving a rigid non-null declaration. This is the
+documented CLR-specific divergence from JVM's usual inconsistent-qualifier fallback.
+`DoesNotReturn` still selects `Nothing` first, while `NotNullIfNotNull` remains an independent
+conditional result effect. Real Roslyn, hostile polyfill, pure precedence-matrix, and corrupted
+blob cases cover nullable/non-null/oblivious bases, conflicts, mixed validity, wrong targets and
+constructors, named payloads, duplicates, conditional interaction, and non-return precedence.
+The focused test is 1/0/0/0. The fresh strict gate is 878/0/0/0 across 16 XML suites (796
+FIR/IL/box, 21 generated CLI, and 61 library integration tests).
 
 ## 5. Explicitly parked work
 
