@@ -1178,10 +1178,27 @@ that the newer source-authoring gate does not suppress an understood resolved bi
 focused test is 1/0/0/0. The fresh strict gate is 875/0/0/0 across 16 XML suites (796
 FIR/IL/box, 21 generated CLI, and 58 library integration tests).
 
+**Foreign parameter `DoesNotReturnIf` contract enhancement (2026-07-29):** the conditional
+non-return contract now maps to common FIR for Boolean value parameters. Constructor value
+`true` becomes `returns() implies (!parameter)` and value `false` becomes
+`returns() implies parameter`. This uses the common contract/DFA path, retains both the Kotlin
+return type and physical CLR signature, and works for `void` and value-returning methods. Real
+Roslyn metadata proves both valid directions; inverse conditions, absence, a non-Boolean
+parameter, hostile duplicates, wrong constructors, named payloads, and a corrupted blob prove
+that invalid or inapplicable evidence contributes no effect. The focused test is 1/0/0/0. The
+fresh strict gate is 876/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 59
+library integration tests).
+
 The exact CLR subset is sufficient to reconstruct contracts for foreign libraries. It remains a
 derived projection for Kotlin-produced libraries, whose embedded KLIB stays self-contained.
 Using the already-required decoder does not require redefining KLIB as a remainder that all tools
 must merge with physical bridge/dispatcher/split-interface metadata.
+
+Unconditional `DoesNotReturn` is not the same mechanical slice. Its binary fact is exact, but the
+importer must choose how common FIR represents unreachable normal continuation while retaining a
+possibly `void` or value-returning physical CLR signature. Return-target `NotNull`/`MaybeNull`
+instead needs a precedence rule with Roslyn declaration nullability. Either path should be
+documented independently before implementation.
 
 ## 5. Explicitly parked work
 

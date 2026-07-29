@@ -2019,6 +2019,12 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Partially applying a multiple `NotNullIfNotNull` evidence set after one recognized payload or
   parameter binding is invalid:
   **Architecturally wrong and should be changed**.
+- Mapping parameter-target `DoesNotReturnIf(true|false)` on a Boolean parameter to the opposite
+  common normal-return implication without changing the physical return signature:
+  **Correct direction**.
+- Rewriting a foreign method's physical return signature or adding .NET-only data-flow for
+  `DoesNotReturnIf`:
+  **Architecturally wrong and should be changed**.
 - Treating `MaybeNull`/`MaybeNullWhen` state weakening as though it were a positive Kotlin
   contract:
   **Architecturally wrong and should be changed**.
@@ -2119,3 +2125,21 @@ slice.
 
 The focused `NotNullIfNotNull` test is 1/0/0/0. The fresh strict gate is 875/0/0/0 across 16 XML
 suites (796 FIR/IL/box, 21 generated CLI, and 58 library integration tests).
+
+The conditional non-return postcondition, `DoesNotReturnIfAttribute(Boolean)`, is implemented for
+Boolean value Param rows. Constructor value `true` maps to common FIR
+`returns() implies (!parameter)` and value `false` maps to
+`returns() implies parameter`. This retains the ordinary Kotlin return type and physical CLR
+signature: both `void` and value-returning methods gain only a common normal-continuation fact.
+There is no target-specific reachability rule.
+
+This is a justified CLR-specific import over JVM precedent because CodeAnalysis supplies an
+established standard binary contract consumed by Roslyn and the effect fits Kotlin's common
+contract algebra exactly. A dishonest well-formed contract remains trusted compile-time metadata;
+the importer does not prove the foreign body or infer an inverse. Exact selected identity,
+constructor shape, target row, Boolean parameter type, one fixed Boolean value, and absence of
+named payloads are required. Duplicate, malformed, wrong-constructor, named, and inapplicable
+evidence contributes no effect.
+
+The focused `DoesNotReturnIf` test is 1/0/0/0. The fresh strict gate is 876/0/0/0 across 16 XML
+suites (796 FIR/IL/box, 21 generated CLI, and 59 library integration tests).

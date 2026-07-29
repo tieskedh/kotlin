@@ -5,6 +5,27 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+enum class DotNetClrDoesNotReturnIfMetadataFailure {
+    DUPLICATE_ATTRIBUTE,
+    VALUE_DECODING_FAILED,
+    INVALID_VALUE_SHAPE,
+}
+
+sealed interface DotNetClrDoesNotReturnIfMetadataResolution {
+    data object Absent : DotNetClrDoesNotReturnIfMetadataResolution
+
+    data class Decoded(
+        val attribute: DotNetClrMetadataHandle,
+        val parameterValue: Boolean,
+    ) : DotNetClrDoesNotReturnIfMetadataResolution
+
+    data class Invalid(
+        val failure: DotNetClrDoesNotReturnIfMetadataFailure,
+        val attributes: List<DotNetClrMetadataHandle>,
+        val valueDecoding: DotNetClrCustomAttributeValueDecoding? = null,
+    ) : DotNetClrDoesNotReturnIfMetadataResolution
+}
+
 enum class DotNetClrNotNullMetadataFailure {
     DUPLICATE_ATTRIBUTE,
     VALUE_DECODING_FAILED,
@@ -68,6 +89,105 @@ sealed interface DotNetClrNotNullWhenMetadataResolution {
         val attributes: List<DotNetClrMetadataHandle>,
         val valueDecoding: DotNetClrCustomAttributeValueDecoding? = null,
     ) : DotNetClrNotNullWhenMetadataResolution
+}
+
+/**
+ * Decodes Roslyn's conditional non-return contract without projecting a Kotlin effect.
+ */
+class DotNetClrDoesNotReturnIfMetadataDecoder(
+    private val customAttributeDecoder: DotNetClrCustomAttributeDecoder,
+) {
+    fun decode(
+        assembly: DotNetClrAssemblyMetadata,
+        parameter: DotNetClrMetadataHandle,
+    ): DotNetClrDoesNotReturnIfMetadataResolution {
+        val candidates = assembly.customAttributes
+            .asSequence()
+            .filter { attribute -> attribute.parent == parameter }
+            .mapNotNull { attribute ->
+                val constructor = when (
+                    val resolution =
+                        customAttributeDecoder.resolveConstructor(assembly, attribute)
+                ) {
+                    is DotNetClrCustomAttributeConstructorResolution.Resolved ->
+                        resolution.constructor
+                    is DotNetClrCustomAttributeConstructorResolution.Invalid ->
+                        return@mapNotNull null
+                }
+                val definition = constructor.attributeType.type.definition
+                if (
+                    definition.declaringType != null ||
+                    definition.namespaceName != ATTRIBUTE_NAMESPACE ||
+                    definition.metadataName != ATTRIBUTE_NAME ||
+                    constructor.attributeType.arguments.isNotEmpty() ||
+                    constructor.signature.parameterTypes.singleOrNull() != BOOLEAN_TYPE
+                ) {
+                    return@mapNotNull null
+                }
+                RecognizedAttribute(attribute, constructor)
+            }
+            .toList()
+        if (candidates.isEmpty()) {
+            return DotNetClrDoesNotReturnIfMetadataResolution.Absent
+        }
+        if (candidates.size != 1) {
+            return DotNetClrDoesNotReturnIfMetadataResolution.Invalid(
+                failure = DotNetClrDoesNotReturnIfMetadataFailure.DUPLICATE_ATTRIBUTE,
+                attributes = candidates.map { candidate -> candidate.attribute.handle },
+            )
+        }
+
+        val candidate = candidates.single()
+        val decoded = when (
+            val valueDecoding = customAttributeDecoder.decodeValue(
+                assembly,
+                candidate.attribute,
+                candidate.constructor,
+            )
+        ) {
+            is DotNetClrCustomAttributeValueDecoding.Decoded -> valueDecoding.attribute
+            is DotNetClrCustomAttributeValueDecoding.Invalid ->
+                return DotNetClrDoesNotReturnIfMetadataResolution.Invalid(
+                    failure =
+                        DotNetClrDoesNotReturnIfMetadataFailure.VALUE_DECODING_FAILED,
+                    attributes = listOf(candidate.attribute.handle),
+                    valueDecoding = valueDecoding,
+                )
+            is DotNetClrCustomAttributeValueDecoding.Unsupported ->
+                return DotNetClrDoesNotReturnIfMetadataResolution.Invalid(
+                    failure =
+                        DotNetClrDoesNotReturnIfMetadataFailure.VALUE_DECODING_FAILED,
+                    attributes = listOf(candidate.attribute.handle),
+                    valueDecoding = valueDecoding,
+                )
+        }
+        val argument = decoded.fixedArguments.singleOrNull()
+        if (
+            argument !is DotNetClrCustomAttributeValue.BooleanValue ||
+            decoded.namedArguments.isNotEmpty()
+        ) {
+            return DotNetClrDoesNotReturnIfMetadataResolution.Invalid(
+                failure = DotNetClrDoesNotReturnIfMetadataFailure.INVALID_VALUE_SHAPE,
+                attributes = listOf(candidate.attribute.handle),
+            )
+        }
+        return DotNetClrDoesNotReturnIfMetadataResolution.Decoded(
+            candidate.attribute.handle,
+            argument.value,
+        )
+    }
+
+    private data class RecognizedAttribute(
+        val attribute: DotNetClrCustomAttribute,
+        val constructor: DotNetClrResolvedCustomAttributeConstructor,
+    )
+
+    private companion object {
+        const val ATTRIBUTE_NAMESPACE = "System.Diagnostics.CodeAnalysis"
+        const val ATTRIBUTE_NAME = "DoesNotReturnIfAttribute"
+        val BOOLEAN_TYPE =
+            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.BOOLEAN)
+    }
 }
 
 /**
