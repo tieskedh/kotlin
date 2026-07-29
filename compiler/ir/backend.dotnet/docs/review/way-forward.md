@@ -1006,6 +1006,18 @@ visibility; hostile metadata covers ambiguous Param rows, invalid ownership, cyc
 It also proves that excluded malformed local evidence stays suppressed. Diagnostic fallback,
 generic-constraint interaction, and FIR enhancement remain later layers.
 
+**CLR nullable-evidence-application progress (2026-07-29):** declaration policy and physical
+type-shape alignment now compose without creating a Kotlin type. This follows JVM FIR enhancement,
+which keeps the converted foreign type when indexed qualifiers produce no enhancement, and
+Roslyn, which returns its unchanged metadata type for absent, filtered, or misaligned nullable
+flags. Selected valid evidence yields applied physical components. Ordinary oblivious and
+accessibility-suppressed evidence remain distinct non-diagnostic results. Malformed declaration
+evidence and transform/type mismatch instead retain the unchanged physical signature in separate
+structured diagnostic fallbacks; they are never silently collapsed into ordinary obliviousness
+and never remove an otherwise valid CLR declaration. This policy is profile-neutral and leaves
+Kotlin Common nullability unchanged. Diagnostic severity, generic-constraint interaction, and
+FIR type projection remain later layers.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:
