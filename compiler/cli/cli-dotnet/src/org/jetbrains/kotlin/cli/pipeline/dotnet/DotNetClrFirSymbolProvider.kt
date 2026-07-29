@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemanticsKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataHandle
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationTarget
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplicator
@@ -421,6 +422,16 @@ internal class DotNetClrFirSymbolProvider(
             for (property in candidate.properties) {
                 declarations += buildProperty(classId, classSymbol, candidate, property)
             }
+            annotationServices.obsolete(
+                candidate.assembly.metadata,
+                candidate.type.handle,
+            )?.let { obsolete ->
+                annotations += buildDeprecatedAnnotation(obsolete)
+            }
+        }.apply {
+            replaceDeprecationsProvider(
+                annotations.getDeprecationsProviderFromAnnotations(session, fromJava = true)
+            )
         }
         return classSymbol
     }
@@ -583,7 +594,7 @@ internal class DotNetClrFirSymbolProvider(
             method,
             valueParameters,
         )
-        annotationServices.obsolete(assembly, method)?.let { obsolete ->
+        annotationServices.obsolete(assembly, method.handle)?.let { obsolete ->
             annotations += buildDeprecatedAnnotation(obsolete)
         }
     }.apply {
@@ -700,9 +711,9 @@ internal class DotNetClrFirSymbolProvider(
 
         fun obsolete(
             assembly: DotNetClrAssemblyMetadata,
-            method: DotNetClrMethodDefinition,
+            parent: DotNetClrMetadataHandle,
         ): DotNetClrObsoleteMetadataResolution.Decoded? =
-            obsoleteDecoder?.decode(assembly, method.handle)
+            obsoleteDecoder?.decode(assembly, parent)
                 as? DotNetClrObsoleteMetadataResolution.Decoded
 
         fun returnsNothing(

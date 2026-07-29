@@ -31,7 +31,7 @@ sealed interface DotNetClrObsoleteMetadataResolution {
 }
 
 /**
- * Decodes the selected core library's method-level `System.ObsoleteAttribute` contract.
+ * Decodes the selected core library's declaration-level `System.ObsoleteAttribute` contract.
  *
  * Unlike the embedded CodeAnalysis attributes, ObsoleteAttribute has one platform-owned identity.
  * [obsoleteType] is resolved from the same selected core assembly as System.Attribute, so a
@@ -43,11 +43,11 @@ class DotNetClrObsoleteMetadataDecoder(
 ) {
     fun decode(
         assembly: DotNetClrAssemblyMetadata,
-        method: DotNetClrMetadataHandle,
+        parent: DotNetClrMetadataHandle,
     ): DotNetClrObsoleteMetadataResolution {
         val candidates = assembly.customAttributes
             .asSequence()
-            .filter { attribute -> attribute.parent == method }
+            .filter { attribute -> attribute.parent == parent }
             .mapNotNull { attribute ->
                 val constructor = when (
                     val resolution =

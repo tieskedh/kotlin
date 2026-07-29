@@ -2125,6 +2125,20 @@ targets remain separate slices. The focused cross-profile test is 1/0/0/0. The f
 is 881/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 64 library integration
 tests).
 
+The TypeDef continuation implements the already supported top-level public interface target.
+Kotlin Common permits `kotlin.Deprecated` on classes, CLR permits `ObsoleteAttribute` on
+interfaces, and JVM imports foreign class deprecation without copying it onto members or derived
+declarations. The TypeDef continuation therefore reuses the exact selected-core decoder,
+synthesizes the same resolved Common annotation on the imported `FirRegularClass`, and evaluates
+it through the foreign-annotation deprecation path. Direct classifier and supertype uses receive
+warning/error diagnostics, but the classifier remains resolvable, its unannotated members do not
+acquire their own deprecation, and a Kotlin implementation does not become obsolete. Other CLR
+type kinds remain outside the closed provider rather than being specified speculatively. Real
+CLR 4.8 and CoreCLR 10 warning/error interfaces plus non-inheritance, false-identity, and
+malformed-TypeDef cases pass in the focused cross-profile test, 1/0/0/0. The fresh strict gate is
+881/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 64 library integration
+tests).
+
 The first conditional-flow slice, `NotNullWhenAttribute`, is implemented. Its Boolean constructor
 maps exactly
 to common FIR's `returns(true|false) implies (parameter != null)` effect for a Boolean-returning
