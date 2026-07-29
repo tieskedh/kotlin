@@ -20,6 +20,17 @@ sealed interface DotNetClrTypeAssignability {
         val classification: DotNetClrPhysicalTypeClassification,
     ) : DotNetClrTypeAssignability
 
+    data class UnsupportedSignatureConversion(
+        val reason: DotNetClrSignatureConversionUnsupported,
+        val actual: DotNetClrResolvedTypeSignature,
+        val expected: DotNetClrResolvedTypeSignature,
+    ) : DotNetClrTypeAssignability
+
+    data class InvalidEnumStorage(
+        val type: DotNetClrResolvedTypeSignature.Named,
+        val resolution: DotNetClrEnumStorageResolution,
+    ) : DotNetClrTypeAssignability
+
     data class InvalidHierarchy(
         val type: DotNetClrResolvedTypeView,
         val resolution: DotNetClrTypeHierarchyViewResolution.Invalid,
@@ -29,10 +40,26 @@ sealed interface DotNetClrTypeAssignability {
         val type: DotNetClrResolvedTypeView,
     ) : DotNetClrTypeAssignability
 
+    data class SignatureCycle(
+        val type: DotNetClrResolvedTypeSignature,
+    ) : DotNetClrTypeAssignability
+
     data class ResolutionLimitExceeded(
         val limit: Int,
         val type: DotNetClrResolvedTypeView,
     ) : DotNetClrTypeAssignability
+
+    data class SignatureResolutionLimitExceeded(
+        val limit: Int,
+        val type: DotNetClrResolvedTypeSignature,
+    ) : DotNetClrTypeAssignability
+}
+
+enum class DotNetClrSignatureConversionUnsupported {
+    ARRAY_TO_NOMINAL,
+    NOMINAL_TO_ARRAY,
+    OPEN_GENERIC_PARAMETER,
+    NON_NOMINAL_SIGNATURE,
 }
 
 /**

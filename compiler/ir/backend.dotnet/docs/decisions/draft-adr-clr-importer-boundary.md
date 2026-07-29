@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal and reference-only generic-interface variance assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with primitive-aware nominal, generic-interface variance, and array-to-array assignability, sealed aggregate constraint status, nominal plus reference/value/default-constructor/by-ref-like constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -1098,7 +1098,7 @@ The thirty-first slice evaluates CLR generic-interface variance.
    selected definitions and available hierarchies differ. Arrays and delegate variance retain
    explicit unsupported boundaries because their physical conversion rules are not supplied by
    the nominal interface graph.
-5. `DotNetClrVariantTypeAssignabilityResolver` composes the bounded exact walker, physical type
+5. `DotNetClrSignatureTypeAssignabilityResolver` composes the bounded exact walker, physical type
    classifier, and primitive catalog. It retains every reachable same-definition interface
    candidate under the existing bound, validates contiguous GenericParam variance metadata,
    requires reference categories, reverses contravariant argument checks, and recursively applies
@@ -1115,6 +1115,46 @@ through `IComparable<in T>`, invariance, nested covariance, a value argument, an
 argument. The supported reference-only
 variant conversions now produce aggregate `Satisfied`; invariant/value cases produce `Violated`;
 the array-dependent conversion remains `Unsupported`.
+
+The thirty-second slice evaluates physical CLR array-to-array assignability.
+
+1. Kotlin Common models `Array<T>` invariantly and keeps specialized primitive arrays nominally
+   separate. JVM imports Java reference arrays as flexible `Array<T>..Array<out T>?` types and its
+   backend recognizes the VM's physical array casts; JS, Native, and Wasm retain their target array
+   carriers behind Kotlin's logical array types. No target changes Kotlin declaration subtyping
+   merely because its runtime carrier admits a wider assignment.
+2. CLR signature compatibility has a platform-specific array relation. Vectors are compatible
+   with vectors and general arrays with general arrays of the same rank when their elements are
+   array-element-compatible. Reference elements recurse through ordinary CLR assignability.
+   Value elements do not gain reference covariance, but signed/unsigned integer pairs and enums
+   with the same reduced storage type are physically compatible without representation change.
+   `bool`/`byte` and `char`/`ushort` are not reduced pairs.
+3. Kotlin Common is unchanged. In particular, `Array<String>` does not become a Kotlin subtype of
+   `Array<Any>`, and `Array<Int>` does not become a Kotlin subtype of `Array<UInt>`. The relation is
+   consulted only while validating or projecting foreign CLR signatures.
+4. The array rule is VES-level and therefore profile-uniform across `net48`,
+   `netstandard2.0`, and `net10.0`. Profile selection can change the nominal types reachable from
+   element signatures, but not vector/rank or reduced-storage compatibility. Runtime store checks
+   remain a foreign interop hazard and do not redefine Kotlin mutation semantics.
+5. The former variance-only layer is generalized as
+   `DotNetClrSignatureTypeAssignabilityResolver`. It composes exact nominal traversal, interface
+   variance, physical type classification, primitive selection, array shape, and validated enum
+   storage under one recursive bound. It distinguishes unsupported signature forms from invalid
+   metadata. Its signature entry point does not insert boxing; generic-constraint validation uses
+   the distinct nominal-view entry point where selected type definitions, rather than stack
+   locations, are being compared. No generic-constraint consumer contains an independent array
+   rule. Unsupported nested signature conversion is retained separately from unsupported top-level
+   arguments or constraint rows, so diagnostics do not assign a failure to the wrong side.
+6. The core-team choice is to implement the complete unambiguous array-to-array subset now and
+   retain array-to-`System.Array`, vector-to-generic-interface, open-parameter, and custom-modified
+   conversions as structured unsupported boundaries. Guessing those relations from C# syntax
+   would omit CLR-only signatures and would make one foreign language the importer authority.
+
+Real Roslyn metadata covers reference vector covariance, rectangular and jagged arrays, rank
+mismatch, value-to-reference rejection, signed/unsigned reduced storage, enum underlying storage,
+the non-pairs `char`/`ushort`, and the explicit array-to-`System.Array` boundary. Supported
+conversions now contribute `Satisfied`, proven mismatches contribute `Violated`, and deferred
+array-to-nominal conversions remain `Unsupported`.
 
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
@@ -1227,14 +1267,21 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   non-assignability: **Correct direction**.
 - Sealed aggregate generic-constraint status with invalid/unsupported/violated/satisfied
   precedence and retained per-row evidence: **Correct direction**.
-- Deferring remaining array, delegate, and dependent-parameter assignability behind explicit
+- Deferring remaining array-to-nominal, vector-to-interface, delegate, and dependent-parameter
+  assignability behind explicit
   unsupported results: **Correct temporary implementation, but not a final design**.
 - Bounded recursive reference-only CLR generic-interface variance in shared assignability:
   **Correct direction**.
 - Keeping value arguments invariant in CLR variance rather than applying boxing:
   **Correct direction**.
-- Keeping array and delegate variance conversions explicit unsupported boundaries:
+- Keeping array-to-nominal and delegate variance conversions explicit unsupported boundaries:
   **Correct temporary implementation, but not a final design**.
+- Generalizing interface variance into bounded physical signature assignability:
+  **Correct direction**.
+- Rank-aware CLR array-to-array assignability without changing Kotlin `Array` invariance:
+  **Correct direction**.
+- Implementing CLR reduced integer/enum array storage compatibility only at the foreign signature
+  boundary: **Reasonable platform-specific divergence**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:
