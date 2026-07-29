@@ -3,9 +3,10 @@
 Date: 2026-07-29
 
 Status: first foreign nullable-aware FIR slice plus exact `NotNullWhen`, parameter `NotNull`,
-return-target `NotNullIfNotNull`, and parameter-target `DoesNotReturnIf` flow contracts
-implemented; method-target `DoesNotReturn` also supplies a logical Kotlin `Nothing` view. Public
-Kotlin/.NET source-annotation names remain undecided.
+return-target `NotNull`/`MaybeNull` result enhancement, return-target `NotNullIfNotNull`, and
+parameter-target `DoesNotReturnIf` flow contracts implemented; method-target `DoesNotReturn` also
+supplies a logical Kotlin `Nothing` view. Public Kotlin/.NET source-annotation names remain
+undecided.
 
 ## Governing rule
 
@@ -176,7 +177,7 @@ therefore per attribute *and per target*, not per attribute name:
 |---|---|---|
 | `NotNull` on a by-value reference parameter | `returns() implies (parameter != null)` | Exact positive common FIR effect; implemented for the closed `string`/`object` slice |
 | `NotNullWhen(Boolean)` on a reference parameter | `returns(value) implies (parameter != null)` | Exact positive common FIR effect; implemented for Boolean-returning methods |
-| `NotNull` / `MaybeNull` on a return | Enhanced call-result type/null-state | Adopt in a separate return-target slice after precedence with Roslyn declaration nullability is pinned |
+| `NotNull` / `MaybeNull` on a return | Enhanced call-result type/null-state | Apply after declaration nullability; exact `NotNull` wins an exact `MaybeNull` as Roslyn does for call-result state, while malformed weakening evidence falls back to flexibility |
 | `NotNullIfNotNull(parameterName)` on a return | `(parameter != null) implies returnsNotNull()` | Exact reverse common FIR effect; implemented with exact Param-name binding, meaningful multiplicity, all-or-nothing invalid evidence, and an older-language-level consumer |
 | `DoesNotReturn` | Kotlin `Nothing` call view | Implemented: expose the trusted non-return promise as logical `Nothing`, retain the original CLR return signature, and reject invalid evidence without strengthening |
 | `DoesNotReturnIf(Boolean)` on a Boolean parameter | Normal return implies that the argument had the opposite value | Exact common FIR effect; implemented without rewriting the physical signature or adding target-specific data-flow |
@@ -321,6 +322,87 @@ same-name polyfill plus a physically corrupted blob prove duplicates, a wrong co
 payloads, malformed prologs, and value parameters add no effect. The focused test is 1/0/0/0.
 The fresh strict gate is 874/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
 57 library integration tests).
+
+## Exact unconditional return-nullability slice: `NotNull` and `MaybeNull`
+
+CLR return flow attributes refine the value observed after a call:
+
+```csharp
+[return: NotNull]
+string? Strengthen();
+
+[return: MaybeNull]
+string Weaken();
+```
+
+The first call has non-null result state even though its declared C# return is nullable. The
+second has maybe-null result state even though its declared C# return is non-null. Kotlin has no
+separate public type spelling for a declaration type plus a top-level call-result flow state, so
+the foreign logical view exposes `String` and `String?` respectively while retaining the
+unchanged physical MethodDef signature and nullable metadata.
+
+This follows the JVM importer at the important Kotlin boundary: a trusted foreign nullability
+annotation enhances the logical Kotlin type rather than merely producing an informational
+warning. The JVM qualifier resolver normally declines equally strong inconsistent annotations.
+The CLR-specific conflict rule differs because the platform defines `NotNull` and `MaybeNull` as
+additive flow-analysis flags and Roslyn's call-result
+`NullableWalker.ApplyUnconditionalAnnotations(TypeWithState, ...)` checks `NotNull` before
+`MaybeNull`. Kotlin/.NET therefore uses the same precedence for two exact, well-formed return
+attributes. This is a platform-defined foreign view, not a change to Kotlin Common nullability.
+
+The selected order and failure policy are:
+
+1. Resolve the ordinary `NullableAttribute`/`NullableContextAttribute` declaration qualifier.
+2. Read flow attributes only from one unambiguous physical return Param row.
+3. If recognized `MaybeNull` evidence is malformed or duplicated, return flexibility. Ignoring
+   broken weakening evidence could expose an unsafe rigid non-null result.
+4. Otherwise, exact decoded `NotNull` produces non-null, including from nullable or oblivious
+   declaration metadata.
+5. Otherwise, exact decoded `MaybeNull` produces nullable, including from non-null or oblivious
+   declaration metadata.
+6. Otherwise, retain the ordinary declaration qualifier. Malformed or duplicated `NotNull`
+   cannot strengthen it.
+
+When both attributes are exact and decoded, step 4 deliberately makes `NotNull` win, matching
+Roslyn's call-site state. A valid `MaybeNull` still wins over invalid `NotNull`; invalid
+`MaybeNull` forces flexibility even beside valid `NotNull`, because the evidence set is no longer
+the well-formed CLR conflict for which Roslyn's precedence was selected. Wrong constructors,
+wrong metadata targets, and unrelated same-name shapes are not the standard contract and
+contribute no flow fact.
+
+`DoesNotReturn` is evaluated before result nullability and continues to expose `Nothing`.
+`NotNullIfNotNull` remains an independent conditional result effect: it is redundant beside an
+unconditional `NotNull`, and can refine the nullable result produced by `MaybeNull` when its
+named input is known non-null.
+
+The attack on rigid enhancement is the same one Kotlin/JVM accepts for dishonest Java
+annotations: a foreign implementation can violate `NotNull` and return null. Kotlin trusts an
+exact standard binary promise at compile time; it does not prove the body. Recognition is
+therefore limited to exact selected-graph, top-level, non-generic
+`System.Diagnostics.CodeAnalysis.NotNullAttribute` and `MaybeNullAttribute` types deriving from
+`System.Attribute`, their parameterless constructors, one instance of each, no fixed or named
+arguments, one physical return Param, and the current `string`/`object` result grammar.
+
+For Kotlin-produced DLLs these attributes remain derived Roslyn-compatible views. Embedded KLIB
+still supplies the complete Kotlin return type and is not reconstructed or amended from the
+physical return attributes.
+
+Implementation evidence: `DotNetClrMaybeNullMetadataDecoder` and the generalized output use of
+`DotNetClrNotNullMetadataDecoder` preserve absent, decoded, and structured-invalid outcomes.
+`DotNetClrReturnNullabilityEnhancer` isolates the precedence/failure matrix from FIR construction.
+The real Roslyn fixture covers non-null, nullable, and oblivious declaration bases, exact
+conflicts, `NotNullIfNotNull`, and `DoesNotReturn`. A hostile same-name polyfill covers
+duplicates, wrong constructors, named payloads, wrong targets, valid weakening beside invalid
+strengthening, and valid strengthening beside invalid weakening; corrupted shared blobs cover
+both decoders. The focused test is 1/0/0/0. The fresh strict gate is 878/0/0/0 across 16 XML
+suites (796 FIR/IL/box, 21 generated CLI, and 61 library integration tests).
+
+Roslyn and Microsoft references:
+
+- <https://github.com/dotnet/roslyn/blob/e84bc2ba08dd68592928f4016c443043bf5a4d48/src/Compilers/CSharp/Portable/FlowAnalysis/NullableWalker.cs>
+- <https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/attributes/nullable-analysis>
+- <https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.codeanalysis.notnullattribute>
+- <https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.codeanalysis.maybenullattribute>
 
 ## Exact dependent return-contract slice: `NotNullIfNotNull`
 
