@@ -1029,6 +1029,23 @@ parameter marker across bounds, align after substitution changes a constraint tr
 Kotlin upper bound, or choose definitely-non-null semantics below FIR. Malformed row evidence,
 malformed parameter markers, and non-identity contexts remain structured fallback.
 
+**CLR nullable-qualifier-projection progress (2026-07-29):** valid aligned evidence now projects
+to Kotlin's established foreign-type qualifier vocabulary without constructing FIR. Following
+JVM enhancement and C#'s three-state type model, flags 0, 1, and 2 map exactly to
+forced-flexibility, not-null, and nullable. This preserves the semantic difference between
+oblivious and explicitly nonnullable C# types; valid compiler-owned Roslyn evidence is not treated
+as a warning-only migration annotation. Roslyn's mandatory leading 0 for a generic value type is
+the CLR-specific exception: it is tagged and validated as structural preorder padding, retained
+in physical evidence, and omitted from Kotlin qualifiers while its type arguments still project.
+The projection retains its source application, while
+missing, public-only-suppressed, malformed-declaration, and invalid-alignment outcomes keep their
+exact unchanged physical type and distinct status. Kotlin Common declarations are unaffected, and
+generic-parameter markers still cannot produce definitely-non-null types before all enhanced
+bounds are available. Malformed-metadata diagnostic severity and actual FIR type construction
+remain separate next layers. The focused adversarial integration test is 1/0/0/0. The fresh
+strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library
+integration tests).
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:
