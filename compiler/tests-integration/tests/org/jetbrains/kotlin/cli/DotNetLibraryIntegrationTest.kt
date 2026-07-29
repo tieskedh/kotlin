@@ -31,6 +31,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayRuntimeTypesResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayRuntimeTypesResolver
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrClasspathAssembly
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrClasspathAssemblyReader
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReferenceBinder
@@ -18950,7 +18952,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testDllClasspathRejectsMissingOrMalformedKotlinMetadata() {
+    fun testDllClasspathClassifiesForeignAndRejectsMalformedMetadata() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val source = File(tmpdir, "dll-metadata-diagnostic.kt").apply {
             writeText("package consumer\n\npublic fun answer(): Int = 42")
@@ -18972,21 +18974,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 MessageCollector.NONE,
             )
         )
-        val [missingResourceDiagnostics, missingResourceExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+        val foreignClassification = DotNetClrClasspathAssemblyReader.read(foreignDll)
+        assertTrue(foreignClassification is DotNetClrClasspathAssembly.Foreign) {
+            "A resource-free managed assembly must be retained as foreign CLR metadata"
+        }
+        foreignClassification as DotNetClrClasspathAssembly.Foreign
+        assertEquals(foreignDll.canonicalFile, foreignClassification.assemblyFile)
+        assertEquals("Foreign.Library", foreignClassification.metadata.identity.name)
+        assertEquals("0.0.0.0", foreignClassification.metadata.identity.version)
+        assertEquals("neutral", foreignClassification.metadata.identity.culture)
+        assertFalse(foreignClassification.metadata.identity.hasPublicKey)
+
+        val [foreignDiagnostics, foreignExitCode] = AbstractCliTest.executeCompilerGrabOutput(
             K2DotNetCompiler(),
             listOf(
                 source.path,
                 K2DotNetCompilerArguments::noStdlib.cliArgument,
                 K2DotNetCompilerArguments::classpath.cliArgument, foreignDll.path,
-                K2DotNetCompilerArguments::moduleName.cliArgument, "MissingMetadataConsumer",
+                K2DotNetCompilerArguments::moduleName.cliArgument, "ForeignAssemblyConsumer",
                 K2DotNetCompilerArguments::destination.cliArgument,
-                File(tmpdir, "MissingMetadataConsumer.il").path,
+                File(tmpdir, "ForeignAssemblyConsumer.il").path,
             )
         )
-        assertEquals(ExitCode.COMPILATION_ERROR, missingResourceExitCode, missingResourceDiagnostics)
-        assertTrue("has no private 'Kotlin.Metadata' Kotlin metadata resource" in missingResourceDiagnostics) {
-            missingResourceDiagnostics
-        }
+        assertEquals(ExitCode.OK, foreignExitCode, foreignDiagnostics)
+        assertFalse("Kotlin.Metadata" in foreignDiagnostics, foreignDiagnostics)
 
         val malformedDll = File(tmpdir, "Malformed.Library.dll").apply {
             writeBytes(byteArrayOf(0x4d, 0x5a))
@@ -19011,6 +19022,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assemblyName = "Malformed.Embedded.Metadata",
             transform = { byteArrayOf(0x50, 0x4b, 0x03, 0x04) },
         )
+        val malformedCarrierClassification = DotNetClrClasspathAssemblyReader.read(malformedMetadataDll)
+        assertTrue(malformedCarrierClassification is DotNetClrClasspathAssembly.KotlinProduced) {
+            "A present reserved resource must stay on the Kotlin-produced path even when its payload is malformed"
+        }
         val malformedMetadataDiagnostics = compileAgainstRejectedDll(malformedMetadataDll)
         assertTrue(
             "has invalid private '${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME}' Kotlin metadata" in

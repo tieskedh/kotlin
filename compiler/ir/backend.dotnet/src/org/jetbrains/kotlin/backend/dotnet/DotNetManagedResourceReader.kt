@@ -44,6 +44,36 @@ object DotNetClrMetadataReader {
         DotNetPeMetadataReader.readClrMetadata(file)
 }
 
+/**
+ * One CLR DLL classpath entry after the physical artifact discriminator has been read.
+ *
+ * Kotlin-produced assemblies remain KLIB-authoritative. Resource-free assemblies remain
+ * physical CLR metadata until a foreign declaration provider applies Kotlin import policy.
+ */
+sealed interface DotNetClrClasspathAssembly {
+    val assemblyFile: File
+
+    data class KotlinProduced(
+        override val assemblyFile: File,
+        val metadataResource: DotNetManagedResource,
+    ) : DotNetClrClasspathAssembly
+
+    data class Foreign(
+        override val assemblyFile: File,
+        val metadata: DotNetClrAssemblyMetadata,
+    ) : DotNetClrClasspathAssembly
+}
+
+object DotNetClrClasspathAssemblyReader {
+    fun read(file: File): DotNetClrClasspathAssembly {
+        val canonicalFile = file.canonicalFile
+        return DotNetPeMetadataReader.readClasspathAssembly(
+            canonicalFile,
+            DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME,
+        )
+    }
+}
+
 class DotNetBadImageFormatException(message: String, cause: Throwable? = null) :
     Exception(message, cause)
 
@@ -61,6 +91,18 @@ object DotNetManagedResourceReader {
  * before it is used.
  */
 private object DotNetPeMetadataReader {
+    fun readClasspathAssembly(file: File, resourceName: String): DotNetClrClasspathAssembly {
+        require(resourceName.isNotEmpty()) { "Managed-resource name must not be empty" }
+        return read(file) { image ->
+            val resource = image.readManagedResource(resourceName)
+            if (resource != null) {
+                DotNetClrClasspathAssembly.KotlinProduced(file, resource)
+            } else {
+                DotNetClrClasspathAssembly.Foreign(file, image.readClrMetadata())
+            }
+        }
+    }
+
     fun readManagedResource(file: File, resourceName: String): DotNetManagedResource? {
         require(resourceName.isNotEmpty()) { "Managed-resource name must not be empty" }
         return read(file) { image -> image.readManagedResource(resourceName) }
@@ -89,9 +131,10 @@ private object DotNetPeMetadataReader {
         private val displayPath: String,
     ) {
         private val fileSize = input.length()
+        private val metadataImage: MetadataImage by lazy(::readMetadataImage)
 
         fun readManagedResource(resourceName: String): DotNetManagedResource? {
-            val metadata = readMetadataImage()
+            val metadata = metadataImage
             val resourceRow =
                 findManifestResource(metadata.tables, metadata.strings, resourceName) ?: return null
             if (resourceRow.implementation != 0L) {
@@ -140,7 +183,7 @@ private object DotNetPeMetadataReader {
         }
 
         fun readClrMetadata(): DotNetClrAssemblyMetadata {
-            val metadata = readMetadataImage()
+            val metadata = metadataImage
             val typeReferences = readTypeReferences(metadata.tables, metadata.strings)
             val typeDefinitions = readTypeDefinitions(metadata.tables, metadata.strings)
             val fieldDefinitions = readFieldDefinitions(

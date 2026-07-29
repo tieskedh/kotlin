@@ -1607,6 +1607,50 @@ non-oblivious hostile padding value is rejected. Existing oblivious, public-only
 flag-count, physical-classification, and malformed-declaration cases adversarially pin every
 unchanged projection and exact object identity across fallback.
 
+The forty-fourth slice classifies every CLR DLL classpath entry before either Kotlin metadata or
+foreign declarations are exposed.
+
+1. JVM classpath loading distinguishes Kotlin-produced class files carrying Kotlin metadata from
+   ordinary Java class files, then feeds each through its own declaration provider. Native
+   likewise does not require a foreign platform library to pretend to be a KLIB. The .NET
+   frontend must therefore stop treating every `.dll` as a Kotlin library whose missing
+   `Kotlin.Metadata` resource is an error.
+2. A private managed resource named `Kotlin.Metadata` is the self-describing Kotlin/.NET artifact
+   discriminator. Its presence selects the existing Kotlin-produced path, where the embedded KLIB
+   remains authoritative and is authenticated against the containing Assembly row. Its absence
+   selects the ordinary CLR path, where the bounded physical metadata graph is authoritative.
+   These alternatives are disjoint even though both use the same PE reader.
+3. Selection never falls back. A present but non-private or malformed `Kotlin.Metadata` resource
+   is an invalid Kotlin-produced dependency, not permission to reinterpret compiler-owned
+   implementation rows as a foreign API. An invalid PE remains a bad classpath entry rather than
+   an ignored dependency.
+4. Kotlin Common is unchanged. Kotlin-produced declarations retain KLIB identity and semantics;
+   ordinary CLR declarations retain only physical assembly metadata at this slice. Merely placing
+   a foreign DLL on the classpath does not manufacture FIR declarations, Kotlin identities,
+   runtime references, or copied deployment artifacts.
+5. The frontend records canonical foreign assembly files and their exact decoded metadata in
+   classpath order. This is the selected-input boundary needed by the future lazy CLR FIR provider
+   and assembly-reference binder. It deliberately does not bind duplicate identities, resolve the
+   graph, or choose first-wins declaration shadowing before that provider owns lookup policy.
+6. The core-team choice rejects ignoring a valid foreign DLL after accepting it: that would make
+   later provider behavior depend on reparsing configuration roots and would lose deterministic
+   classpath order. It also rejects importing Kotlin-produced physical rows beside their KLIB:
+   doing so would create two declaration identities for one assembly.
+7. Malformed nullable-metadata reporting still waits for the provider/source boundary. Mature JVM
+   incompatible-binary checkers report from a deserialized declaration source at a Kotlin usage
+   site; the current metadata-only .NET FIR session has neither a foreign symbol provider nor a
+   foreign source element. DLL classification is the prerequisite, not a reason to invent
+   location-free frontend diagnostics.
+
+The classifier opens each entry through one bounded PE-reader session and reuses one parsed
+metadata image for resource selection and foreign-row decoding. Adversarial coverage distinguishes
+a valid resource-free CLR assembly, existing valid Kotlin-produced metadata carriers, an invalid
+PE, and a carrier whose reserved resource is present but malformed. The foreign case retains its
+exact physical Assembly identity and allows an otherwise unrelated compilation; the malformed
+carrier remains on the Kotlin path and fails. The focused test is 1/0/0/0. The fresh strict gate is
+871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
+tests).
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -1718,6 +1762,16 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Architecturally wrong and should be changed**.
 - Assigning malformed-nullable-metadata diagnostic severity in the reusable qualifier projector:
   **Architecturally wrong and should be changed**.
+- Treating every CLR DLL as a Kotlin-produced embedded KLIB:
+  **Architecturally wrong and should be changed**.
+- Disjoint DLL classification by reserved-resource presence, retaining resource-free assemblies
+  as ordered physical CLR metadata: **Correct direction**.
+- Falling back to foreign import after a present Kotlin metadata resource fails visibility or
+  decoding validation: **Architecturally wrong and should be changed**.
+- Importing the physical CLR rows of a Kotlin-produced dependency beside its authoritative KLIB:
+  **Architecturally wrong and should be changed**.
+- Binding or projecting retained foreign assemblies before a lazy FIR provider owns lookup and
+  source policy: **Correct temporary deferral, but not a final design**.
 - Deferring Constant and FieldMarshal payloads while retaining their Param flags:
   **Correct temporary implementation, but not a final design**.
 - Lossless MemberRef and reusable FieldSig model: **Correct direction**.

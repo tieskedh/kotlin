@@ -6,8 +6,9 @@ import org.jetbrains.kotlin.KtSourceFile
 import org.jetbrains.kotlin.backend.common.loadMetadataKlibs
 import org.jetbrains.kotlin.backend.dotnet.DotNetBadImageFormatException
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifestCodec
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrClasspathAssembly
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrClasspathAssemblyReader
 import org.jetbrains.kotlin.backend.dotnet.DotNetManagedAssemblyIdentity
-import org.jetbrains.kotlin.backend.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalLibrary
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
@@ -16,6 +17,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
 import org.jetbrains.kotlin.backend.dotnet.DotNetPlatformAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
+import org.jetbrains.kotlin.backend.dotnet.DotNetManagedResourceReader
+import org.jetbrains.kotlin.backend.dotnet.dotNetExternalClrAssemblies
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
@@ -69,6 +72,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
         val rootModuleName = Name.special("<${configuration.moduleName!!}>")
         val isLightTree = configuration.getBoolean(CommonConfigurationKeys.USE_LIGHT_TREE)
         val preparedLibraries = configuration.prepareDotNetDllLibraries()
+        configuration.dotNetExternalClrAssemblies = preparedLibraries.foreignAssemblies
         @OptIn(CoreEnvironmentDeprecation::class)
         val environment = KotlinCoreEnvironment.createForProduction(
             rootDisposable,
@@ -172,6 +176,7 @@ private data class PreparedDotNetLibraries(
     val ordinaryLibraryPaths: List<String>,
     val embeddedLibraryByAssembly: Map<File, KotlinLibrary>,
     val embeddedSourceByLibrary: Map<KotlinLibrary, DotNetEmbeddedMetadataSource>,
+    val foreignAssemblies: List<DotNetClrClasspathAssembly.Foreign>,
     val resolvedFriendPaths: List<String>,
 ) {
     fun librariesInClasspathOrder(ordinaryLibraries: List<KotlinLibrary>): List<KotlinLibrary> {
@@ -192,6 +197,7 @@ private data class PreparedDotNetLibraries(
 private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLibraries(): PreparedDotNetLibraries {
     val embeddedLibraryByAssembly = linkedMapOf<File, KotlinLibrary>()
     val sourceByLibrary = linkedMapOf<KotlinLibrary, DotNetEmbeddedMetadataSource>()
+    val classificationByAssembly = linkedMapOf<File, DotNetClrClasspathAssembly>()
     val originalContentRoots = contentRoots
     val classpathOrder = originalContentRoots.mapNotNull { root ->
         (root as? JvmClasspathRoot)?.file?.canonicalFile
@@ -204,20 +210,15 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLi
     fun load(assemblyFile: File): KotlinLibrary? {
         val canonicalAssembly = assemblyFile.canonicalFile
         embeddedLibraryByAssembly[canonicalAssembly]?.let { return it }
-        val resource = try {
-            DotNetManagedResourceReader.read(canonicalAssembly, DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME)
+        val classification = try {
+            DotNetClrClasspathAssemblyReader.read(canonicalAssembly)
         } catch (exception: DotNetBadImageFormatException) {
             report(COMPILER_ARGUMENTS_ERROR, exception.message ?: "Invalid managed assembly '${assemblyFile.path}'.")
             return null
         }
-        if (resource == null) {
-            report(
-                COMPILER_ARGUMENTS_ERROR,
-                "Managed assembly '${assemblyFile.path}' has no private " +
-                        "'${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME}' Kotlin metadata resource.",
-            )
-            return null
-        }
+        classificationByAssembly[canonicalAssembly] = classification
+        if (classification is DotNetClrClasspathAssembly.Foreign) return null
+        val resource = (classification as DotNetClrClasspathAssembly.KotlinProduced).metadataResource
         if (!resource.isPrivate) {
             report(
                 COMPILER_ARGUMENTS_ERROR,
@@ -246,7 +247,10 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLi
         val classpathRoot = root as? JvmClasspathRoot ?: return@filterNot false
         classpathRoot.file.extension.equals("dll", ignoreCase = true)
     }
-    classpathOrder.filter { file -> file.extension.equals("dll", ignoreCase = true) }.forEach(::load)
+    classpathOrder
+        .filter { file -> file.extension.equals("dll", ignoreCase = true) }
+        .distinct()
+        .forEach(::load)
     val resolvedFriendPaths = dotNetFriendPaths.map { friendPath ->
         val friendFile = File(friendPath)
         if (!friendFile.extension.equals("dll", ignoreCase = true)) {
@@ -260,6 +264,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLi
         ordinaryLibraryPaths,
         embeddedLibraryByAssembly,
         sourceByLibrary,
+        classificationByAssembly.values.filterIsInstance<DotNetClrClasspathAssembly.Foreign>(),
         resolvedFriendPaths,
     )
 }
