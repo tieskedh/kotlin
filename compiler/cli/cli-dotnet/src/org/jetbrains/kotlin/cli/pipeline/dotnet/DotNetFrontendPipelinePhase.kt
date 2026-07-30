@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
+import org.jetbrains.kotlin.backend.dotnet.dotNetProducesStdlib
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.collectSources
@@ -45,6 +46,8 @@ import org.jetbrains.kotlin.cli.pipeline.PipelinePhase
 import org.jetbrains.kotlin.cli.report
 import org.jetbrains.kotlin.compiler.plugin.getCompilerExtensions
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
+import org.jetbrains.kotlin.config.LanguageFeature
+import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.moduleName
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.fir.DependencyListForCliModule
@@ -71,6 +74,11 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
     override fun executePhase(input: ConfigurationPipelineArtifact): DotNetFrontendPipelineArtifact {
         val (configuration, rootDisposable) = input
         val diagnosticsReporter = configuration.diagnosticsCollector
+        if (configuration.dotNetProducesStdlib) {
+            check(configuration.languageVersionSettings.supportsFeature(LanguageFeature.MultiPlatformProjects)) {
+                "The Kotlin/.NET stdlib Common/actual source product requires multiplatform FIR sessions"
+            }
+        }
         val rootModuleName = Name.special("<${configuration.moduleName!!}>")
         val isLightTree = configuration.getBoolean(CommonConfigurationKeys.USE_LIGHT_TREE)
         val preparedLibraries = configuration.prepareDotNetDllLibraries()
@@ -124,6 +132,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
                 groupedSources.fileBelongsToModuleForLt,
                 incrementalCompilationContext = null,
                 additionalProviders = configuration.dotNetForeignClrProviders(),
+                metadataCompilationMode = false,
             )
             sessionsWithSources.map { (session, files) ->
                 val firFiles = session.buildFirViaLightTree(files, diagnosticsReporter) { filesCount, lines ->
@@ -152,6 +161,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
                 fileBelongsToModuleForPsi,
                 incrementalCompilationContext = null,
                 additionalProviders = configuration.dotNetForeignClrProviders(),
+                metadataCompilationMode = false,
             )
             sessionsWithSources.map { (session, files) ->
                 val firFiles = session.buildFirFromKtFiles(files)

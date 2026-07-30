@@ -7,7 +7,6 @@ package org.jetbrains.kotlin.fir.backend
 
 import com.intellij.psi.tree.IElementType
 import org.jetbrains.kotlin.*
-import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.contracts.description.LogicOperationKind
 import org.jetbrains.kotlin.descriptors.Visibilities
@@ -90,7 +89,10 @@ class Fir2IrVisitor(
 
     private val throwNoWhenBranchMatchedExceptionSymbol by lazy {
         val id = StandardClassIds.Callables.throwNoWhenBranchMatchedException
-        session.symbolProvider.getTopLevelFunctionSymbols(id.packageName, id.callableName)
+        val symbols = session.symbolProvider.getTopLevelFunctionSymbols(id.packageName, id.callableName)
+        symbols
+            .filter { !it.isExpect }
+            .ifEmpty { symbols }
             .singleOrNull()
             ?.toIrSymbolForCall(null, null) as? IrSimpleFunctionSymbol
     }

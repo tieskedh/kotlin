@@ -58,20 +58,28 @@ intrinsic. The implemented ownership split is:
   `[Kotlin.Runtime]Kotlin.NoWhenBranchMatchedException`, while string
   interpolation continues through ordinary Kotlin codegen.
 
-The current bootstrap stdlib compiles target source directly rather than a
-Common/actual source partition. It therefore carries a target copy of the
-helper and the binary-retained `UsedFromCompilerGeneratedCode` annotation.
-Both are exact mirrors of the Common source contract, not alternative
-semantics. They should disappear into the planned Common-plus-.NET-actual
-source partition once the bootstrap can compile that product shape.
+The first follow-up Common/actual source partition now compiles the exact
+Common `Annotations.kt` and exhaustive-when expect source beside the .NET
+actual helper. The target copy of `UsedFromCompilerGeneratedCode` has been
+deleted. The authoritative Common annotation file is retained for frontend and
+stdlib-KLIB serialization, but remains excluded from the IL shape gate,
+file-facade name reservation, and physical declaration index. In particular,
+none of its annotation classes or internal enum becomes a physical type in a
+user library or `Kotlin.Stdlib`.
 
-The annotation definition is resolution-only target-stdlib input. It is
-retained for frontend and stdlib-KLIB serialization, but excluded from the IL
-shape gate, file-facade name reservation, and physical declaration index. In
-particular, it must not become a class in either a user library or
-`Kotlin.Stdlib`. The strict publication gate caught this distinction when the
-first implementation treated the annotation like a user declaration; the
-dedicated resolution-only source classification is the resulting guard.
+This required the .NET frontend to stop forcing metadata's single source
+session when Common inputs are present. It now uses the shared legacy-MPP
+Common/platform split and runs FIR2IR actualisation before KLIB metadata
+serialization, following JS/Wasm/Native. The common FIR2IR exhaustive-when
+lookup also now follows `Fir2IrBuiltinSymbolsContainer`: prefer a non-expect
+symbol and fall back to expect only when no actual exists. Without that rule,
+the expect and actual formed a two-element lookup and `singleOrNull()` silently
+selected the old parameterless exception path.
+
+The full Common `ExceptionsH.kt` is not yet in the product because its broader
+actual surface remains unsupported. The narrow target exception declaration
+therefore remains temporary, while the helper contract and internal annotation
+vocabulary are already Common-authoritative.
 The packaged fallback catalog is sorted by relative source path and injects
 each file under that same package-relative temp path. This matches the
 ordinary-source producer because FIR orders actual source paths: equal source

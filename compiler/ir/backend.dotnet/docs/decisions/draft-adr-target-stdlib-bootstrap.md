@@ -11,9 +11,10 @@
 > resolved, or accepted.
 >
 > **Source-ownership amendment (2026-07-28):**
-> the canonical bootstrap implementation now consists of ordinary Kotlin files under
-> `libraries/stdlib/dotnet/src`. Repository profile-product tasks pass that complete source set to
-> the compiler. The backend JAR packages a byte-identical read-only copy only as a temporary
+> the canonical bootstrap implementation now consists of ordinary .NET Kotlin files under
+> `libraries/stdlib/dotnet/src` plus the explicitly selected authoritative Common files described
+> below. Repository profile-product tasks pass that complete classified source set to the
+> compiler. The backend JAR packages a byte-identical read-only copy only as a temporary
 > no-installed-stdlib bootstrap fallback; it is not a second implementation.
 
 This is a repository-local decision record for the experimental .NET backend. The `dotnet` branch
@@ -130,12 +131,35 @@ generated common sources, each bootstrap extraction must identify its generator/
 and preserve its semantics. The eventual .NET stdlib build should compile the common generated
 corpus plus narrowly generated .NET actuals rather than maintain a permanent handwritten fork.
 
-The first source-ownership slice makes that endpoint possible without pretending the broad corpus
-already compiles. Its one canonical implementation is stored as ordinary `.kt` files under
+The first source-ownership slice made that endpoint possible without pretending the broad corpus
+already compiles. Its target implementation is stored as ordinary `.kt` files under
 `libraries/stdlib/dotnet/src`. The explicit repository producer compiles those files directly.
-`DotNetStdlibSource` is now only a resource catalog: the backend build packages the same files and
+`DotNetStdlibSource` is only a resource catalog: the backend build packages the same files and
 loads them when a compiler has neither an installed platform pair nor explicit stdlib-product
 sources. Tests require every packaged fallback file to be text-identical to its repository source.
+
+The first Common/actual continuation compiles the exact shared
+`libraries/stdlib/src/kotlin/internal/Annotations.kt` and
+`throwNoWhenBranchMatchedException.kt` files as Common inputs. The .NET helper body is now an
+ordinary `actual`, so its visibility, annotations, signature, and availability contract come from
+Common and the target owns only the platform body. The former .NET copy of
+`UsedFromCompilerGeneratedCode` is deleted. The entire Common annotation file remains
+resolution-only physically: its internal metadata is serialized into the stdlib KLIB, but none of
+its annotation classes or version-kind enum enters `Kotlin.Stdlib.dll`, facade-name reservation,
+or the physical declaration index.
+
+This source partition requires two FIR source sessions. The .NET caller therefore uses the shared
+legacy-MPP session construction rather than metadata's single-session mode, and enables
+`MultiPlatformProjects` only when Common sources or the temporary bootstrap product are present.
+Like JS/Wasm/Native, it converts and actualises FIR before using `Fir2KlibMetadataSerializer`;
+serializing the original expect and actual files before actualisation would create a false
+platform KLIB. The CLR requires no semantic deviation here. The only target-specific mechanism
+remains the three physical profile products and their temporary packaged-source fallback.
+
+The full Common `ExceptionsH.kt` still requires unsupported actuals and exception operations.
+Consequently the narrow target `NoWhenBranchMatchedException` declaration remains the temporary
+bootstrap declaration recorded by the exception ADR; it must become the normal internal actual
+when that Common exception surface enters the product.
 
 This decision follows the mature target product model:
 
@@ -429,6 +453,14 @@ The fallback source catalog is sorted by relative path and injects files under t
 package-relative temp paths as the ordinary-source producer. This is semantic for reproducibility
 even when every file is byte-identical: FIR orders actual source paths, which controls the order
 of otherwise independent physical declarations in generated IL.
+
+The Common/actual continuation additionally rejects an explicit complete source set unless the two
+authoritative Common files are passed through `-Xcommon-sources`. Direct and packaged-fallback
+profile products remain byte-identical in packed KLIB entries, compiler-owned IL, and PE bytes.
+The exhaustive-when IL pins also prove that FIR prefers the non-expect actual helper when both
+symbols are visible; accepting the legacy parameterless fallback would erase the Kotlin 2.5
+message contract. The fresh aggregate validation is 885 tests across 16 XML suites, with zero
+failures, errors, or skips.
 
 The exhaustive-when matrix additionally verifies that the internal subject-aware helper is emitted
 once in `Kotlin.Stdlib`, that a separately compiled application calls that physical facade, and

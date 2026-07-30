@@ -1,6 +1,7 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_COMMON_SOURCE_NAMES
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE_PATHS
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetFriendAssemblyIdentity
@@ -34,6 +35,7 @@ import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.AnalysisFlag
 import org.jetbrains.kotlin.config.AnalysisFlags
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.config.getModuleNameForSource
 import org.jetbrains.kotlin.config.languageVersionSettings
@@ -66,6 +68,7 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         )
         configuration.dotNetProducesStdlib = arguments.dotNetProduceStdlib
         configuration.dotNetProducesLibrary = arguments.dotNetProduceLibrary
+        val commonSources = arguments.commonSources.toSet()
         if (arguments.dotNetProduceStdlib && arguments.dotNetProduceLibrary) {
             configuration.report(
                 COMPILER_ARGUMENTS_ERROR,
@@ -75,18 +78,22 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         if (arguments.dotNetProduceStdlib) {
             if (arguments.freeArgs.isNotEmpty()) {
                 val suppliedSourceNames = arguments.freeArgs.map { File(it).name }
+                val suppliedCommonSourceNames = commonSources.mapTo(linkedSetOf()) { File(it).name }
                 val duplicateSourceNames = suppliedSourceNames.groupingBy { it }
                     .eachCount()
                     .filterValues { it > 1 }
                     .keys
                 if (duplicateSourceNames.isNotEmpty() ||
-                    suppliedSourceNames.toSet() != DOTNET_STDLIB_SOURCES.keys
+                    suppliedSourceNames.toSet() != DOTNET_STDLIB_SOURCES.keys ||
+                    suppliedCommonSourceNames != DOTNET_STDLIB_COMMON_SOURCE_NAMES
                 ) {
                     configuration.report(
                         COMPILER_ARGUMENTS_ERROR,
                         "-Xdotnet-produce-stdlib requires exactly the complete Kotlin/.NET " +
-                                "stdlib source set ${DOTNET_STDLIB_SOURCES.keys.sorted()}; received " +
-                                "${suppliedSourceNames.sorted()}."
+                                "stdlib source set ${DOTNET_STDLIB_SOURCES.keys.sorted()}, with Common sources " +
+                                "${DOTNET_STDLIB_COMMON_SOURCE_NAMES.sorted()}; received " +
+                                "${suppliedSourceNames.sorted()}, with Common sources " +
+                                "${suppliedCommonSourceNames.sorted()}."
                     )
                 }
             }
@@ -121,7 +128,6 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
                 "-Xdotnet-produce-library requires at least one Kotlin source file."
             )
         }
-        val commonSources = arguments.commonSources.toSet()
         val hmppCliModuleStructure = configuration.get(CommonConfigurationKeys.HMPP_MODULE_STRUCTURE)
         for (arg in arguments.freeArgs) {
             configuration.addKotlinSourceRoot(
@@ -272,7 +278,10 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
             arguments.allowKotlinPackage || arguments.dotNetProduceStdlib || usesBootstrapStdlibSources
         configuration.put(CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE, allowsKotlinPackage)
         configuration.languageVersionSettings =
-            configuration.languageVersionSettings.withAllowKotlinPackage(allowsKotlinPackage)
+            configuration.languageVersionSettings.withDotNetSourceProductSettings(
+                allowKotlinPackage = allowsKotlinPackage,
+                enableMultiplatform = usesBootstrapStdlibSources || commonSources.isNotEmpty(),
+            )
 
         val classpathFiles = linkedSetOf<File>()
         for (path in arguments.classpath?.split(File.pathSeparatorChar).orEmpty()) {
@@ -293,12 +302,33 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
     }
 }
 
-private fun LanguageVersionSettings.withAllowKotlinPackage(value: Boolean): LanguageVersionSettings {
+private fun LanguageVersionSettings.withDotNetSourceProductSettings(
+    allowKotlinPackage: Boolean,
+    enableMultiplatform: Boolean,
+): LanguageVersionSettings {
     val delegate = this
     return object : LanguageVersionSettings by delegate {
+        override fun getFeatureSupport(feature: LanguageFeature): LanguageFeature.State {
+            if (feature == LanguageFeature.MultiPlatformProjects && enableMultiplatform) {
+                return LanguageFeature.State.ENABLED
+            }
+            return delegate.getFeatureSupport(feature)
+        }
+
+        override fun supportsFeature(feature: LanguageFeature): Boolean =
+            getFeatureSupport(feature) == LanguageFeature.State.ENABLED
+
+        override fun getCustomizedLanguageFeatures(): Map<LanguageFeature, LanguageFeature.State> =
+            if (enableMultiplatform) {
+                delegate.getCustomizedLanguageFeatures() +
+                        (LanguageFeature.MultiPlatformProjects to LanguageFeature.State.ENABLED)
+            } else {
+                delegate.getCustomizedLanguageFeatures()
+            }
+
         override fun <T> getFlag(flag: AnalysisFlag<T>): T {
             @Suppress("UNCHECKED_CAST")
-            if (flag == AnalysisFlags.allowKotlinPackage) return value as T
+            if (flag == AnalysisFlags.allowKotlinPackage) return allowKotlinPackage as T
             return delegate.getFlag(flag)
         }
     }
@@ -341,6 +371,9 @@ private fun CompilerConfiguration.addDotNetStdlibSourceRoots() {
             stdlibSource.parentFile.mkdirs()
             stdlibSource.writeText(source)
         }
-        addKotlinSourceRoot(stdlibSource.path)
+        addKotlinSourceRoot(
+            path = stdlibSource.path,
+            isCommon = fileName in DOTNET_STDLIB_COMMON_SOURCE_NAMES,
+        )
     }
 }

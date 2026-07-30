@@ -6,6 +6,8 @@
 package org.jetbrains.kotlin.test.runners.codegen
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_COMMON_SOURCE_NAMES
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE_PATHS
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
@@ -30,9 +32,14 @@ import org.jetbrains.kotlin.config.AnalysisFlag
 import org.jetbrains.kotlin.config.AnalysisFlags
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.LanguageVersion
+import org.jetbrains.kotlin.config.LanguageVersionSettings
+import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.targetPlatform
 import org.jetbrains.kotlin.diagnostics.impl.DiagnosticsCollectorImpl
+import org.jetbrains.kotlin.fir.moduleData
+import org.jetbrains.kotlin.fir.pipeline.SingleModuleFrontendOutput
 import org.jetbrains.kotlin.platform.DotNetPlatforms
 import org.jetbrains.kotlin.platform.isDotNet
 import org.jetbrains.kotlin.test.Constructor
@@ -51,6 +58,8 @@ import org.jetbrains.kotlin.test.directives.model.SimpleDirectivesContainer
 import org.jetbrains.kotlin.test.frontend.fir.Fir2IrCliBasedOutputArtifact
 import org.jetbrains.kotlin.test.frontend.fir.Fir2IrCliFacade
 import org.jetbrains.kotlin.test.frontend.fir.FirCliFacade
+import org.jetbrains.kotlin.test.frontend.fir.FirOutputPartForDependsOnModule
+import org.jetbrains.kotlin.test.frontend.fir.toTestOutputPart
 import org.jetbrains.kotlin.test.model.ArtifactKinds
 import org.jetbrains.kotlin.test.model.BackendFacade
 import org.jetbrains.kotlin.test.model.BackendKinds
@@ -68,6 +77,7 @@ import org.jetbrains.kotlin.test.services.getOrCreateTempDirectory
 import org.jetbrains.kotlin.test.services.moduleStructure
 import org.jetbrains.kotlin.test.services.targetPlatform
 import org.jetbrains.kotlin.test.services.temporaryDirectoryManager
+import org.jetbrains.kotlin.test.services.transitiveDependsOnDependencies
 import org.jetbrains.kotlin.test.services.configuration.CommonEnvironmentConfigurator
 import org.jetbrains.kotlin.test.services.configuration.addSourcesForDependsOnClosure
 import org.jetbrains.kotlin.test.services.sourceProviders.MainFunctionForBlackBoxTestsSourceProvider
@@ -215,8 +225,24 @@ private fun TestConfigurationBuilder.configureDotNetBase(
 }
 
 private class FirCliDotNetFacade(
-    testServices: TestServices,
-) : FirCliFacade<DotNetFrontendPipelinePhase, DotNetFrontendPipelineArtifact>(testServices, DotNetFrontendPipelinePhase)
+    private val dotNetTestServices: TestServices,
+) : FirCliFacade<DotNetFrontendPipelinePhase, DotNetFrontendPipelineArtifact>(
+    dotNetTestServices,
+    DotNetFrontendPipelinePhase,
+) {
+    override fun getPartsForDependsOnModules(
+        module: TestModule,
+        firOutputs: List<SingleModuleFrontendOutput>,
+    ): List<FirOutputPartForDependsOnModule> {
+        val modulesBySessionName = module.transitiveDependsOnDependencies(includeSelf = true, reverseOrder = true)
+            .associateBy { "<${it.name}>" }
+        return firOutputs.map { output ->
+            val sessionName = output.session.moduleData.name.asString()
+            val logicalSessionName = sessionName.removeSuffix("-common")
+            output.toTestOutputPart(modulesBySessionName.getValue(logicalSessionName), dotNetTestServices)
+        }
+    }
+}
 
 private class Fir2IrCliDotNetFacade(
     testServices: TestServices,
@@ -279,9 +305,14 @@ private class DotNetEnvironmentConfigurator(
             .map(DotNetPropertyExport::parse)
         configuration.dotNetOutput = getOutputFile(module, artifactName)
         configuration.dotNetTarget = target
+        configuration.languageVersionSettings =
+            configuration.languageVersionSettings.withDotNetMultiplatformSources()
         configuration.addSourcesForDependsOnClosure(module, testServices)
         for (stdlibSource in getOrCreateStdlibSources()) {
-            configuration.addKotlinSourceRoot(stdlibSource.canonicalPath)
+            configuration.addKotlinSourceRoot(
+                path = stdlibSource.canonicalPath,
+                isCommon = stdlibSource.name in DOTNET_STDLIB_COMMON_SOURCE_NAMES,
+            )
         }
     }
 
@@ -295,12 +326,34 @@ private class DotNetEnvironmentConfigurator(
 
     private fun getOrCreateStdlibSources() =
         DOTNET_STDLIB_SOURCES.map { [fileName, source] ->
-            testServices.getOrCreateTempDirectory("dotnet-stdlib").resolve(fileName).also { file ->
+            testServices.getOrCreateTempDirectory("dotnet-stdlib")
+                .resolve(DOTNET_STDLIB_SOURCE_PATHS.getValue(fileName))
+                .also { file ->
                 if (!file.isFile || file.readText() != source) {
+                    file.parentFile.mkdirs()
                     file.writeText(source)
                 }
             }
         }
+}
+
+private fun LanguageVersionSettings.withDotNetMultiplatformSources(): LanguageVersionSettings {
+    val delegate = this
+    return object : LanguageVersionSettings by delegate {
+        override fun getFeatureSupport(feature: LanguageFeature): LanguageFeature.State =
+            if (feature == LanguageFeature.MultiPlatformProjects) {
+                LanguageFeature.State.ENABLED
+            } else {
+                delegate.getFeatureSupport(feature)
+            }
+
+        override fun supportsFeature(feature: LanguageFeature): Boolean =
+            getFeatureSupport(feature) == LanguageFeature.State.ENABLED
+
+        override fun getCustomizedLanguageFeatures(): Map<LanguageFeature, LanguageFeature.State> =
+            delegate.getCustomizedLanguageFeatures() +
+                    (LanguageFeature.MultiPlatformProjects to LanguageFeature.State.ENABLED)
+    }
 }
 
 private object DotNetCodegenDirectives : SimpleDirectivesContainer() {

@@ -181,9 +181,11 @@ private fun <F> prepareKlibSessions(
 }
 
 /**
- * Creates library session and sources session for Common platform (for metadata compilation)
- * Number of created sessions is always one, in this mode modules are compiled against compiled
- *   metadata of dependent modules
+ * Creates library and source sessions using the metadata session factory.
+ *
+ * By default, [metadataCompilationMode] produces one Common source session that compiles against
+ * metadata of dependent modules. Targets that need expect/actual compilation may disable that mode
+ * to preserve separate Common and platform source sessions.
  */
 fun <F> prepareMetadataSessions(
     files: List<F>,
@@ -198,6 +200,7 @@ fun <F> prepareMetadataSessions(
     fileBelongsToModule: (F, String) -> Boolean,
     incrementalCompilationContext: IncrementalCompilationContext?,
     additionalProviders: AdditionalProvidersSupplier? = null,
+    metadataCompilationMode: Boolean = true,
 ): List<SessionWithSources<F>> {
     val packagePartProvider = projectEnvironment.getPackagePartProvider(librariesScope) as PackageAndMetadataPartProvider
     val languageVersionSettings = configuration.languageVersionSettings
@@ -216,7 +219,7 @@ fun <F> prepareMetadataSessions(
     )
     return SessionConstructionUtils.prepareSessions(
         files, configuration, rootModuleName, targetPlatform,
-        metadataCompilationMode = true, libraryList, extensionRegistrars, isCommonSource, isScript = { false }, fileBelongsToModule,
+        metadataCompilationMode, libraryList, extensionRegistrars, isCommonSource, isScript = { false }, fileBelongsToModule,
         createMetadataSessionFactoryContextForHmppCommonLibrarySession = { context },
         createSharedLibrarySession = {
             sessionFactory.createSharedLibrarySession(

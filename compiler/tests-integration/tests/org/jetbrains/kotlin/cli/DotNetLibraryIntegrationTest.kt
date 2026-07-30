@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.cli
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_COMMON_SOURCE_NAMES
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAllowNullMetadataFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAllowNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
@@ -24522,6 +24523,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testStdlibProductRejectsCommonSourcesAsPlatformSources() {
+        val sourceFiles = dotNetStdlibSourceFiles()
+        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+                K2DotNetCompilerArguments::destination.cliArgument,
+                File(tmpdir, "misclassified-common-stdlib").path,
+                *sourceFiles.map(File::getPath).toTypedArray(),
+            )
+        )
+
+        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+        assertTrue("with Common sources ${DOTNET_STDLIB_COMMON_SOURCE_NAMES.sorted()}" in diagnostics) {
+            diagnostics
+        }
+    }
+
+    @Test
     fun testProducesNet10StdlibDll() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         produceAndConsumeSelfDescribingStdlib("net10.0")
@@ -27883,11 +27904,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles: List<File> = emptyList(),
     ): File {
         val stdlibDirectory = File(tmpdir, "produced-$target-stdlib-$run")
+        val commonSourcePaths = sourceFiles
+            .filter { it.name in DOTNET_STDLIB_COMMON_SOURCE_NAMES }
+            .map(File::getPath)
         compileInProcess(
             K2DotNetCompiler(),
             K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
             K2DotNetCompilerArguments::destination.cliArgument, stdlibDirectory.path,
+            *commonSourcePaths
+                .takeIf(List<String>::isNotEmpty)
+                ?.let { paths -> arrayOf("-Xcommon-sources=${paths.joinToString(",")}") }
+                .orEmpty(),
             *sourceFiles.map(File::getPath).toTypedArray(),
         )
 
@@ -27993,15 +28021,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     private fun dotNetStdlibSourceFiles(): List<File> {
-        val sourceDirectory = File("libraries/stdlib/dotnet/src").absoluteFile
-        assertTrue(sourceDirectory.isDirectory) {
-            "Missing ordinary Kotlin/.NET stdlib source directory: $sourceDirectory"
+        val platformSourceDirectory = File("libraries/stdlib/dotnet/src").absoluteFile
+        assertTrue(platformSourceDirectory.isDirectory) {
+            "Missing ordinary Kotlin/.NET stdlib source directory: $platformSourceDirectory"
         }
-        val sourceFiles = sourceDirectory.walkTopDown()
+        val sourceFiles = platformSourceDirectory.walkTopDown()
             .filter(File::isFile)
             .filter { it.extension == "kt" }
-            .sortedBy { it.invariantSeparatorsPath }
-            .toList()
+            .toMutableList()
+        sourceFiles += File("libraries/stdlib/src/kotlin/internal/Annotations.kt").absoluteFile
+        sourceFiles +=
+            File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
+        sourceFiles.sortBy(File::invariantSeparatorsPath)
         assertEquals(DOTNET_STDLIB_SOURCES.keys.sorted(), sourceFiles.map(File::getName).sorted())
         for (sourceFile in sourceFiles) {
             assertEquals(

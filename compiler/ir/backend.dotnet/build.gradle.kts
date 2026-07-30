@@ -25,7 +25,13 @@ sourceSets {
 
 tasks.named<ProcessResources>("processResources") {
     from(rootProject.file("libraries/stdlib/dotnet/src")) {
-        into("kotlin-dotnet-stdlib")
+        into("kotlin-dotnet-stdlib/dotnet/src")
+    }
+    from(files(
+        rootProject.file("libraries/stdlib/src/kotlin/internal/Annotations.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt"),
+    )) {
+        into("kotlin-dotnet-stdlib/src/kotlin/internal")
     }
 }
 

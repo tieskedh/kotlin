@@ -2761,6 +2761,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `docs/review/upstream-sync-2026-07-30.md`. The focused four-test IL filter and one-test
   assembler/runtime matrix pass. The fresh strict gate is 884/0/0/0 across 16 XML suites (798
   FIR/IL/box, 21 generated CLI, and 65 library integration tests).
+- The first Common/actual stdlib source-product slice removes the target
+  `UsedFromCompilerGeneratedCode` mirror and compiles the exact Common `Annotations.kt` plus
+  exhaustive-when expect source beside the .NET actual helper. The CLI and test harness now create
+  distinct Common/platform FIR sessions only for classified Common inputs, and library metadata
+  serialization moved after FIR2IR actualisation through `Fir2KlibMetadataSerializer`. Explicit
+  stdlib products reject the complete file set when the Common files are misclassified as
+  platform sources. FIR2IR's exhaustive-when lookup had a latent expect+actual bug:
+  `singleOrNull()` saw both and silently used the old parameterless builtin. It now follows the
+  existing built-in-symbol rule and prefers the non-expect declaration. Do not accept a golden
+  that drops the `Kotlin.Stdlib` helper call; that is a semantic regression. Net10 and net48
+  direct/fallback product equality, installed consumption, both PSI/LightTree IL pins, and the
+  full net48 assembler/runtime matrix pass in focused runs. The full Common `ExceptionsH.kt`
+  remains outside the product, so its narrow target exception declaration is not yet an `actual`.
+  The fresh strict gate is 885/0/0/0 across 16 XML suites (798 FIR/IL/box, 21 generated CLI, and
+  66 library integration tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
@@ -2820,7 +2835,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 884 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 885 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2844,13 +2859,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Continue the ordinary stdlib source product into generated Common plus .NET actuals.** The
-   complete current bootstrap source now lives under `libraries/stdlib/dotnet/src`, the explicit
-   profile products compile it directly, and the backend resource is only a byte-identical
-   compatibility fallback. Split generated-common declarations from narrow .NET actuals as the
-   supported surface grows; do not add a permanent target-specific copy of Common algorithms.
-   Keep the current same-run fallback only until all bootstrap tests select a complete installed
-   pair.
+1. **Continue the proven Common/.NET-actual stdlib partition from concrete supported surface.**
+   Common's internal annotations and exhaustive-when expect are now authoritative inputs, and the
+   .NET helper is an actual. Move the next generated Common collection body or Common exception
+   declaration only together with every required narrow actual and executable test; do not add a
+   broad generator target that emits an unsupported corpus or restore a target copy of Common
+   algorithms. Keep the current same-run fallback only until all bootstrap tests select a
+   complete installed pair.
 2. **Continue the CLR importer above its physical declaration and type-resolution foundation.**
    The attribute-carrier review is now recorded in
    `docs/review/clr-annotation-interoperability.md`. Standard CLR/Roslyn metadata is the shared
