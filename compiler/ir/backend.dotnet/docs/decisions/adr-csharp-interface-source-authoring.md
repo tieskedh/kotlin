@@ -172,7 +172,7 @@ generic `Array<Int?>` carrier; it is not a specialized primitive-array wrapper a
 to `object[]`. An unsupported leaf rejects the complete authoring substitution with `KDNCS004`;
 the generator never repairs it by widening that leaf to `object`.
 
-The selected core-team-style rule is therefore to recurse through the complete Roslyn type symbol,
+The selected Kotlin-design-aligned target rule is therefore to recurse through the complete Roslyn type symbol,
 admit named constructions and CLR SZARRAY vectors whose children are all representable, and reject
 the first unsupported nested shape with a positional diagnostic. This matches the other backends'
 structural translation rule while making the strong CLR-specific decision not to invent Kotlin
@@ -223,7 +223,7 @@ coincident obligations to the same user-authored body and emits each required ca
 declared/exact, or parent-owned physical adapter to that body. It never invents a combined logical
 member and never copies the body.
 
-**6. Core-team choice.** Accept a closed inherited family when Kotlin permits one effective
+**6. Kotlin-aligned target choice.** Accept a closed inherited family when Kotlin permits one effective
 override and the CLR can represent all of its slots from one body; otherwise reject it before C#
 emission with a precise diagnostic. Blanket rejection would transgress Kotlin Common, while
 blind name-based merging would discard Kotlin identity and override semantics. This is

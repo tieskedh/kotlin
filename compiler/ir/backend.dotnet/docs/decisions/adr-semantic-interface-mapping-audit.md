@@ -127,7 +127,7 @@ or other parallel Kotlin identity is introduced.
 This follows the mature backends: Kotlin metadata owns semantics and logical identity, while the
 target's real dispatch signature describes the physical obligation.
 
-## 6. Kotlin core-team choice
+## 6. Kotlin-aligned target choice
 
 Given the alternatives, the Kotlin-compatible choice is to compare semantic slot satisfaction:
 

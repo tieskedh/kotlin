@@ -74,7 +74,7 @@ The KGP enum and compiler backend's `DotNetTarget` remain boundary-specific repr
 Gradle owns published variant selection, while the compiler owns lowering and output validation.
 The built-in target must map them exhaustively by canonical moniker and test that mapping.
 
-## 6. Core-team choice
+## 6. Kotlin-aligned target choice
 
 The Kotlin-consistent choice is a typed
 `org.jetbrains.kotlin.dotnet.targetFramework` attribute with exact-first selection and only the

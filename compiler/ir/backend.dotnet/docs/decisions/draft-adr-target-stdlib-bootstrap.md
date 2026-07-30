@@ -197,7 +197,7 @@ decision. This preserves Kotlin Common semantics and respects each profile's CLR
 
 Classification: ordinary source-product ownership is **Correct direction**. Retaining the
 packaged-source fallback is a **Correct temporary implementation, but not a final design**. The
-core-team endpoint is generated Common sources plus narrow .NET actuals compiled by the ordinary
+Kotlin-aligned target endpoint is generated Common sources plus narrow .NET actuals compiled by the ordinary
 library product, followed by removal of same-run fallback production once every compiler
 distribution and test bootstrap supplies a complete platform pair.
 

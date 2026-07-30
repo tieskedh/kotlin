@@ -1771,7 +1771,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   portable, modern, and promoted-portable-parent lanes. Direct calls through the closed child
   remain Kotlin-frontend ambiguous, which correctly proves that implementation coalescing did not
   merge declaration identity. The accepted source-authoring ADR records the six-step
-  other-target/CLR/Common/.NET/core-team decision.
+  other-target/CLR/Common/.NET/Kotlin-aligned target decision.
 - The first real same-owner generated-TypeDef collision is now cross-profile pinned. A Kotlin
   interface with a default and a source nested `__KotlinDefaultImpls` would give both declarations
   the same enclosing CLR owner, name, and arity. The existing registration gate rejects the
@@ -1794,7 +1794,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   is deliberately not used because C# cannot naturally author it. Exact IL and both-profile box
   lanes exercise an object property named `INSTANCE`, an inner property named ``this$0``, the
   reserved-suffix case, and independent singleton/outer-field behavior. The accepted private-field
-  disambiguation ADR records the six-step target/CLR/Common/.NET/alignment/core-team decision.
+  disambiguation ADR records the six-step target/CLR/Common/.NET/alignment/target-design decision.
 - Kotlin/.NET now has its own logical metadata and Gradle platform identity:
   metadata `-Xtarget-platform=DotNet` resolves the existing `DotNetPlatform`, while Gradle module
   metadata uses `KotlinPlatformType.dotnet`. It neither impersonates JVM/Common nor gains

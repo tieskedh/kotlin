@@ -114,7 +114,7 @@ CLR-native DLL container as JVM selects its native class-library container. A ne
 metadata type system, declaration-key namespace, archive format, or .NET sidecar process is
 rejected.
 
-## 6. Core-team choice
+## 6. Kotlin-aligned target choice
 
 Make the self-describing DLL the only physical Kotlin/.NET library artifact. Do not produce,
 publish, install, resolve, or accept a standalone Kotlin/.NET KLIB.

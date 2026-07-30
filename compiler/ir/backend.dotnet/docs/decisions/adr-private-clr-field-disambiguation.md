@@ -80,7 +80,7 @@ The CLR's ability to distinguish fields by type is deliberately not used as an a
 scheme. That keeps the generated shape closer to the JVM rule and more usable from normal .NET
 tools.
 
-## 6. Core-team choice
+## 6. Kotlin-aligned target choice
 
 When several representations remain possible, prefer the JVM-proven policy: reserve exposed ABI
 names, suffix private implementation storage, and retain a final physical-collision diagnostic.

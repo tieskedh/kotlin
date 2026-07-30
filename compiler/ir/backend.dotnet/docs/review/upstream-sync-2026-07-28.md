@@ -37,7 +37,7 @@ Every item below records:
 3. the Kotlin Common invariant;
 4. the applicable .NET/profile rule;
 5. the resulting alignment decision; and
-6. the core-team classification.
+6. the Kotlin-aligned target classification.
 
 ## 1. Explicit IR package-module ownership
 
