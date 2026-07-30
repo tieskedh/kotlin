@@ -2804,6 +2804,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Kotlin-shaped output on both Framework CLR 4 and CoreCLR 10. The physical ABI codec and runtime
   surface remain schema 16 / level 9. The fresh strict gate is 889/0/0/0 across 16 XML suites
   (802 FIR/IL/box, 21 generated CLI, and 66 library integration tests).
+- The first Common collections programme slice replaces the handwritten terminal-operation
+  bootstrap with a bounded projection of the authoritative `Elements` generator templates.
+  `Iterable`/`List` `first`, `last`, `firstOrNull`, and `lastOrNull`, together with the exact Common
+  `List.lastIndex` declaration, are classified Common sources and live once on
+  `Kotlin.Collections.CollectionsKt`. Compiler-owned stdlib shards explicitly assigned that facade
+  aggregate into one physical class; duplicate state initializers and facade/class collisions fail
+  instead of silently suffixing the type. Generic extension properties now emit static generic
+  accessors without invalid CLR property rows. Adversarial boxes cover empty, singleton, widened,
+  nullable, primitive/reference, one-shot Iterable, and List implementations whose iterator must
+  not run. Product tests pin direct/fallback identity, installed consumption, and both CLR
+  profiles. The physical ABI codec and runtime surface remain schema 16 / level 9. The fresh strict
+  gate is 893/0/0/0 across 16 XML suites (806 FIR/IL/box, 21 generated CLI, and 66 library
+  integration tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
@@ -2863,7 +2876,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 889 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 893 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2887,14 +2900,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Continue the proven Common/.NET-actual stdlib partition from concrete supported surface.**
-   Common's internal annotations, exhaustive-when contract, and complete exception header are now
-   authoritative inputs. Resume the reviewed `ioH.kt` partition in
-   `docs/review/common-io-source-partition.md`: use CLR standard input, preserve Common EOF
-   behavior, keep Kotlin rendering before Console output, and retain the inert non-JVM
-   `Serializable` marker. Do not add a broad generator target that emits an unsupported corpus or
-   restore a target copy of Common algorithms. Keep the current same-run fallback only until all
-   bootstrap tests select a complete installed pair.
+1. **Audit backend responsibilities before another broad feature expansion.** Classify every
+   production file as configuration, CLR metadata/import, Kotlin library/ABI, FIR integration, IR
+   lowering, CIL codegen, product construction, interop tooling, or packaging. Compare placement
+   with JVM, JS, Wasm, and Native. Preserve behavior and ABI in this slice: first record the
+   producer/consumer graph, then move only a coherent cluster whose frontend, CLI, Gradle, or
+   Roslyn consumers currently depend conceptually on backend implementation details. Keep backend
+   context, lowerings, intrinsics, type mapping, runtime IL construction, and CIL emission in
+   `backend.dotnet`; do not split large coordinators merely to reduce file or constructor size.
+   Package boundaries are useful preparation but are not an endpoint unless dependency direction
+   is enforceable.
 2. **Continue the CLR importer above its physical declaration and type-resolution foundation.**
    The attribute-carrier review is now recorded in
    `docs/review/clr-annotation-interoperability.md`. Standard CLR/Roslyn metadata is the shared
@@ -2922,7 +2937,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
    each require their own documented contract. Preserve Kotlin declaration identity and Common
    semantics; do not teach the Kotlin-owned backend surface to infer C# conventions. Keep
    structured metadata-table auditing; do not substitute IL substring checks.
-3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
+3. **Continue the Common collections programme with a concrete list product.** Use the exact
+   Common/actual dependency closure for `listOf` or an array-backed read-only view. Grow the bounded
+   generator allowlist only as backend support proves each dependency; do not restore target
+   algorithm copies or pretend that the complete generated corpus is supported. Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
    of Kotlin-owned stdlib bootstrapping.
