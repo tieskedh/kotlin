@@ -61,6 +61,7 @@ internal class DotNetSharedVariablesManager(
     }.apply {
         parent = irBuiltIns.anyClass.owner.parent
         isDotNetMutableRefStub = true
+        superTypes = listOf(irBuiltIns.anyType)
         addTypeParameter {
             name = Name.identifier("T")
             superTypes += irBuiltIns.anyNType

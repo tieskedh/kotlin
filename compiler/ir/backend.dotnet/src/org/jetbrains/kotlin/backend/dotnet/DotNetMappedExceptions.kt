@@ -33,6 +33,7 @@ internal enum class DotNetKotlinExceptionTypeId(val abiValue: Int) {
     CANCELLATION_EXCEPTION(14),
     EXCEPTION_IN_INITIALIZER_ERROR(15),
     NO_CLASS_DEF_FOUND_ERROR(16),
+    NO_WHEN_BRANCH_MATCHED_EXCEPTION(17),
 }
 
 /**
@@ -206,6 +207,24 @@ internal object DotNetMappedExceptions {
             DotNetKotlinExceptionTypeId.RUNTIME_EXCEPTION,
             hasMessageCauseCtor = true,
             hasCauseCtor = true,
+        )
+        put(
+            FqName("kotlin.NoWhenBranchMatchedException"),
+            Entry.Mapped(
+                carrierPhysicalTypeRef =
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noWhenBranchMatchedExceptionTypeRef),
+                constructorPhysicalTypeRef =
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noWhenBranchMatchedExceptionTypeRef),
+                typedCatchPhysicalTypeRef =
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noWhenBranchMatchedExceptionTypeRef),
+                classifierTypeId = DotNetKotlinExceptionTypeId.NO_WHEN_BRANCH_MATCHED_EXCEPTION,
+                hasMessageCauseCtor = true,
+                hasCauseCtor = true,
+                physicalSupertypeRefs = setOf(
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.runtimeExceptionTypeRef),
+                    exceptionType,
+                ),
+            )
         )
         classifiedCategory(
             "Error",

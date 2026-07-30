@@ -56,6 +56,7 @@ internal class DotNetPropertyReferenceSymbols(
         }.apply {
             parent = runtimeInternalPackage
             isDotNetPropertyReferenceFactory = true
+            superTypes = listOf(irBuiltIns.anyType)
             createThisReceiverParameter()
         }
     }
