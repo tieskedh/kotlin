@@ -10,9 +10,9 @@ package kotlin.io
 // Target-local inert marker, matching the JS/Native/Wasm actual rather than claiming the BCL's
 // serialization protocol. It is internal Kotlin API and exists only so common implementations
 // retain their source-level marker relationship.
-internal interface Serializable
+internal actual interface Serializable
 
-public fun println() {}
+public actual fun println() {}
 
 public fun println(message: String) {}
 
@@ -26,4 +26,17 @@ public fun println(message: Char) {}
 
 public fun println(message: Boolean) {}
 
-public fun println(message: Any?) {}
+public actual fun println(message: Any?) {}
+
+public actual fun print(message: Any?) {}
+
+@SinceKotlin("1.6")
+public actual fun readln(): String =
+    readlnOrNull() ?: throw ReadAfterEOFException("EOF has already been reached")
+
+@SinceKotlin("1.6")
+public actual fun readlnOrNull(): String? = dotNetReadLine()
+
+// The public functions remain ordinary Kotlin.Stdlib implementations. Only this irreducible CLR
+// operation is intrinsic, matching the JVM/WASI split between the Kotlin EOF policy and host I/O.
+private external fun dotNetReadLine(): String?

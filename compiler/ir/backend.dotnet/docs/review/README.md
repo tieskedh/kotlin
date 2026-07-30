@@ -26,7 +26,7 @@ copying a snapshot review into binding design law.
    Analysis API, and BTA direction for the rebase to `733a49b39`.
 7. [`common-io-source-partition.md`](common-io-source-partition.md) records the mature-target I/O
    comparison, the exception dependency proved by compilation, its completed classified-carrier
-   prerequisite, and the next bounded Common/actual source-product feature.
+   prerequisite, and the implemented Common/actual source-product partition.
 
 Authority order for implementation work:
 

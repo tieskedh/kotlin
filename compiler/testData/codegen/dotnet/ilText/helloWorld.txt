@@ -3,12 +3,36 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'helloWorld' {}
 .module 'main-helloWorld.il'
 
 .class public abstract sealed auto ansi beforefieldinit 'test.helloWorldKt'
        extends [mscorlib]System.Object
 {
+  .method public hidebysig static string 'readRequired'() cil managed
+  {
+    .maxstack 1
+    call string [Kotlin.Stdlib]'Kotlin.Io.ConsoleKt'::'readln'()
+    ret
+  }
+  .method public hidebysig static string 'readOptional'() cil managed
+  {
+    .maxstack 1
+    call string [Kotlin.Stdlib]'Kotlin.Io.ConsoleKt'::'readlnOrNull'()
+    ret
+  }
+  .method public hidebysig static void 'printAny'(object 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::Write(string)
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint

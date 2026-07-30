@@ -166,6 +166,19 @@ non-actual `NoWhenBranchMatchedException` declaration are deleted. Like mature s
 compiler-owned fallback and explicit product mute the expect/actual-class Beta warning; this is
 not applied to unrelated user MPP sources.
 
+The I/O continuation adds the exact Common `ioH.kt`. `DotNetStdlibIo.kt` is the narrow actual
+surface: it keeps the non-JVM inert `Serializable` marker, the JVM-style primitive `println`
+overloads already supported by the target, and ordinary `readln`/`readlnOrNull` bodies on the
+stable `Kotlin.Io.ConsoleKt` facade. Only the target-private `dotNetReadLine` operation is
+intrinsic to `System.Console.ReadLine`; the Common EOF branch and
+`ReadAfterEOFException("EOF has already been reached")` stay Kotlin.Stdlib code. The internal
+exception is physically non-public; like other Kotlin `internal` declarations, its binding stays
+in the private KLIB physical index for authorized friend compilation. Output remains call-site
+intrinsic because it must apply Kotlin value rendering before `Console.Write(string)` or
+`WriteLine(string)`. Mapping to CLR object/numeric overloads is rejected because those carry CLR
+null, Boolean, culture, and floating-point rendering semantics. Mapping `Serializable` to a
+foreign CLR serialization protocol is likewise rejected because Common promises no such protocol.
+
 This decision follows the mature target product model:
 
 - Common/JVM/JS/Wasm generated stdlib source is materialized under the relevant library source
@@ -474,6 +487,16 @@ bind `stackTraceToString`, `printStackTrace`, `addSuppressed`, and
 same Common API on Framework CLR 4 and CoreCLR 10. Runtime-owned exact classes and weak throwable
 state remain outside `Kotlin.Stdlib`, preserving the runtime/stdlib ownership split. The fresh
 strict gate is 889/0/0/0 across 16 XML suites.
+
+The I/O continuation adds `ioH.kt` to the authoritative Common inputs. Direct-source and packaged
+fallback products remain byte-identical, and misclassifying any Common file rejects the complete
+explicit source product. Separate consumers call `Kotlin.Io.ConsoleKt.readln` and
+`readlnOrNull`; only the stdlib IL contains `System.Console.ReadLine()`. Redirected CRLF input,
+null-at-EOF, the exact Common EOF message and `RuntimeException` ancestry, and Kotlin-shaped
+`print(false)`/`print(null)` output execute through one portable stdlib on Framework CLR 4 and
+CoreCLR 10. The new public methods use the existing physical Function record, so no physical
+schema or runtime-surface revision is required. The fresh strict gate is 889/0/0/0 across 16 XML
+suites.
 
 The exhaustive-when matrix additionally verifies that the internal subject-aware helper is emitted
 once in `Kotlin.Stdlib`, that a separately compiled application calls that physical facade, and

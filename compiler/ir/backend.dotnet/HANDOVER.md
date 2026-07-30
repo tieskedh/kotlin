@@ -13,8 +13,8 @@ reproducibility boundary and default Kotlin-home discovery are committed, and th
 `netstandard2.0` platform-library profile is committed; self-describing DLL-only library
 publication, direct embedded-metadata loading, and installed profile-paired runtime/stdlib
 consumption are implemented).
-The complete Common exception source product and the classified carrier's weak
-identity-associated Throwable state are implemented; the reviewed Common I/O partition is next.
+The complete Common exception source product, the classified carrier's weak
+identity-associated Throwable state, and the reviewed Common I/O partition are implemented.
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -2791,6 +2791,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and both CLR profiles. Portable self-describing stdlib consumption and execution also pass.
   The fresh strict gate is 889/0/0/0 across 16 XML suites (802 FIR/IL/box, 21 generated CLI, and
   66 library integration tests).
+- The Common I/O continuation compiles authoritative `ioH.kt` and converts
+  `DotNetStdlibIo.kt` to a narrow actual surface. `readln`/`readlnOrNull` are ordinary
+  `Kotlin.Io.ConsoleKt` stdlib methods; a private external helper alone maps to the independently
+  probe-verified `System.Console.ReadLine()` MemberRef. The Common internal EOF exception is a
+  real CLR-non-public `Kotlin.RuntimeException` child; its binding stays in the private KLIB
+  physical index for authorized friend linkage.
+  `print`/`println` remain resolution-only intrinsics and preserve Kotlin rendering before CLR
+  string output. `Serializable` stays inert like JS/Wasm/Native. Direct/fallback and
+  misclassification pins cover the expanded product, PSI/LightTree pin the consumer calls, and a
+  portable stdlib executes CRLF stripping, nullable EOF, exact `readln` EOF behavior, and
+  Kotlin-shaped output on both Framework CLR 4 and CoreCLR 10. The physical ABI codec and runtime
+  surface remain schema 16 / level 9. The fresh strict gate is 889/0/0/0 across 16 XML suites
+  (802 FIR/IL/box, 21 generated CLI, and 66 library integration tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be

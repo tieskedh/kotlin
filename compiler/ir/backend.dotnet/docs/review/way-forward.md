@@ -896,10 +896,24 @@ and never mutates `Exception.Data`. Stack traces start with the exact CLR diagno
 suppressed graphs on roots and causes with identity-cycle detection. A hostile C# exception overrides `Equals`,
 concurrent writers exercise the state, and a portable self-describing stdlib is compiled,
 installed, and executed on both runtime profiles. Runtime surface level 9 and physical ABI schema
-16 own the new exact identities, classifier ids 18 through 21, and runtime service. With this
-prerequisite closed, the reviewed Common `ioH.kt` partition is the next bounded source-product
-feature. The fresh strict gate is 889/0/0/0 across 16 XML suites (802 FIR/IL/box, 21 generated
-CLI, and 66 library integration tests).
+16 own the new exact identities, classifier ids 18 through 21, and runtime service. This closed
+the prerequisite consumed by the Common `ioH.kt` partition below. The fresh strict gate is
+889/0/0/0 across 16 XML suites (802 FIR/IL/box, 21 generated CLI, and 66 library integration
+tests).
+
+**Common I/O source-product progress (2026-07-30):** the exact Common `ioH.kt` now owns the
+`print`, `println`, `readln`, `readlnOrNull`, internal EOF exception, and `Serializable`
+contracts. The narrow .NET actual follows JVM/WASI input behavior: ordinary
+`Kotlin.Io.ConsoleKt` stdlib methods own the EOF policy and call one private
+`Console.ReadLine()` intrinsic. `print`/`println` retain Kotlin rendering before CLR string
+output; the marker remains inert like JS/Wasm/Native. Direct and packaged product paths classify
+the same Common file, and the distribution producer now includes the complete Common plus shared
+non-JVM source set. The EOF type is CLR-non-public while retaining its private KLIB physical
+binding for authorized friend linkage; separately compiled ordinary consumers bind both public
+input functions through `Kotlin.Stdlib`. The physical index grammar and runtime surface do not
+change, so schema 16 and runtime surface level 9 remain current.
+The fresh strict gate is 889/0/0/0 across 16 XML suites (802 FIR/IL/box, 21 generated CLI, and
+66 library integration tests).
 
 **CLR-importer progress (2026-07-28):** the first importer slice follows the JVM foreign
 classfile/provider split without pretending that CLR metadata is Java metadata. A single bounded,

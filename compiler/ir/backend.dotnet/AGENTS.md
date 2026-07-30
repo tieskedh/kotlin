@@ -2561,6 +2561,14 @@ landed shape as a compatibility constraint.
   only the remaining platform actuals and bodies in `DotNetExceptions.kt`. Do not restore the
   deleted target exception hierarchy: Common owns declarations and the shared non-JVM source owns
   every constructor body that does not require CLR-specific treatment.
+  The following partition compiles the complete Common `ioH.kt`. `DotNetStdlibIo.kt` contains
+  only actuals plus the existing target primitive `println` overloads. `readln` and
+  `readlnOrNull` are ordinary methods on the stable `Kotlin.Io.ConsoleKt` stdlib facade;
+  their private external helper alone is intrinsic to `System.Console.ReadLine()`.
+  `ReadAfterEOFException` is a real CLR-non-public stdlib class. Its physical binding remains in
+  the private KLIB index because authorized friend compilations may link Kotlin `internal`
+  declarations. `Serializable` stays an inert actual interface; do not map it to a foreign CLR
+  serialization protocol.
   The frontend enables multiplatform semantics only when the source product or explicit Common
   inputs require them and asks the shared FIR session construction to create distinct Common and
   .NET source sessions. KLIB metadata serialization runs after FIR2IR actualisation through
@@ -2579,9 +2587,13 @@ landed shape as a compatibility constraint.
   cross-module declarations: private/private-to-this/local `IdSignature`s must not be exported,
   because file-local signatures may contain checkout paths and private implementations are not
   bindable ABI.
-  Resolution-only declarations such as `println`, `Char.code`, array operations, and mapped
+  Resolution-only declarations such as `print`/`println`, `Char.code`, array operations, and mapped
   exception classes are filtered through the intrinsic/exception registries and never emitted
-  into a facade. The Common Throwable operations are different: their actual Kotlin bodies and
+  into a facade. Output intrinsics must apply Kotlin rendering before
+  `Console.Write(string)`/`WriteLine(string)`; CLR object/numeric/Boolean overloads are not Kotlin
+  semantics. The Common input and Throwable operations are different: input's `readln`/
+  `readlnOrNull` actual bodies are emitted once on `Kotlin.Io.ConsoleKt`, and their private
+  `dotNetReadLine` helper is the only direct CLR input operation. Throwable actual Kotlin bodies and
   private immutable snapshot-list implementations are emitted once in
   `Kotlin.DotNetExceptionsKt`/`Kotlin.Stdlib`, while private external calls cross the intrinsic
   registry to the runtime state service. The ordinary Kotlin
