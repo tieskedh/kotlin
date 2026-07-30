@@ -88,7 +88,7 @@ colliding callable on a file facade, and library publication emits neither KLIB 
 same-spelled declaration on another TypeDef remains legal. The compiler never chooses a winner or
 renames the dispatcher according to declaration order.
 
-**6. Core-team choice.** Follow the JVM diagnostic precedent and keep one deterministic
+**6. Kotlin-aligned target choice.** Follow the JVM diagnostic precedent and keep one deterministic
 `$default` identity plus an explicit clash gate. The current emitter-time report is a **Correct
 temporary implementation, but not a final design**; a target FIR/platform diagnostic should
 eventually report both source declarations. Atomic rejection and preservation of the common

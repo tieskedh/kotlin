@@ -66,7 +66,7 @@ Extend `GenerateGradleOptions` with the .NET argument level. Generate:
 Keep the generator metadata to `module-name`. Test that both the common and target-specific
 properties reach `K2DotNetCompilerArguments`.
 
-## 6. Core-team choice
+## 6. Kotlin-aligned target choice
 
 The Kotlin-consistent choice is a generated, minimal compiler-options surface: common options plus
 `moduleName`.

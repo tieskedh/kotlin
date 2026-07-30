@@ -78,7 +78,7 @@ classpath as public Gradle compiler options merely because they exist in the gen
 The built-in target and compilation tasks must own those values. A later generated
 `KotlinDotNetCompilerOptions` surface may select only user-configurable options.
 
-## 6. Core-team choice
+## 6. Kotlin-aligned target choice
 
 The Kotlin-consistent choice is a generated KLIB-based .NET argument leaf with no parallel
 handwritten representation.

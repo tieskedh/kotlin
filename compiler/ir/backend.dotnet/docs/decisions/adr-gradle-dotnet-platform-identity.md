@@ -89,7 +89,7 @@ KLIB platform marking, the profile attribute, built-in target DSL, compiler opti
 artifact publication, and friend association remain separate features. Each must consume this
 logical identity rather than introducing another one.
 
-## 6. Core-team choice
+## 6. Kotlin-aligned target choice
 
 The Kotlin-consistent choice is one `KotlinPlatformType.dotnet` plus one metadata spelling,
 `DotNet`, with framework profiles represented by a second capability attribute.
