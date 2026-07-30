@@ -34,6 +34,7 @@ internal object DotNetStdlibLibrary {
     const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
     const val THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME =
         "kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt"
+    const val EXCEPTIONS_FACADE_IL_NAME = "Kotlin.DotNetExceptionsKt"
     const val ARRAY_ITERATOR_FACTORY_NAME = "dotNetArrayIterator"
     const val ARRAY_ITERABLE_FACTORY_NAME = "dotNetArrayIterable"
 
@@ -44,6 +45,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.EmptyList" to EMPTY_LIST_IL_NAME,
         "kotlin.collections.RandomAccess" to RANDOM_ACCESS_IL_NAME,
         "kotlin.io.Serializable" to SERIALIZABLE_IL_NAME,
+        "kotlin.SuppressedExceptionList" to "Kotlin.SuppressedExceptionList",
+        "kotlin.SuppressedExceptionIterator" to "Kotlin.SuppressedExceptionIterator",
     )
     private val implementationFunctionFacadeIlNames = mapOf(
         "kotlin.collections.emptyList" to COLLECTIONS_FACADE_IL_NAME,
@@ -52,8 +55,13 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.$ARRAY_ITERATOR_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERABLE_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.internal.throwNoWhenBranchMatchedException" to THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,
+        "kotlin.stackTraceToString" to EXCEPTIONS_FACADE_IL_NAME,
+        "kotlin.printStackTrace" to EXCEPTIONS_FACADE_IL_NAME,
+        "kotlin.addSuppressed" to EXCEPTIONS_FACADE_IL_NAME,
     )
-    private val implementationPropertyFacadeIlNames = emptyMap<String, String>()
+    private val implementationPropertyFacadeIlNames = mapOf(
+        "kotlin.suppressedExceptions" to EXCEPTIONS_FACADE_IL_NAME,
+    )
 
     fun hasImplementation(module: IrModuleFragment): Boolean =
         module.files.any(::hasImplementation)
@@ -135,6 +143,7 @@ internal object DotNetStdlibLibrary {
     fun implementationFunctionFacadeIlName(function: IrSimpleFunction): String? {
         if ((function.parent as? IrFile)?.isDotNetStdlibImplementationSource != true) return null
         return function.fqNameWhenAvailable?.asString()?.let(implementationFunctionFacadeIlNames::get)
+            ?: function.correspondingPropertySymbol?.owner?.let(::implementationPropertyFacadeIlName)
     }
 
     fun implementationPropertyFacadeIlName(property: IrProperty): String? {
@@ -151,6 +160,7 @@ internal object DotNetStdlibLibrary {
         return DotNetIlFunctionInfo(
             owner = DotNetIlClassInfo(facadeName, assemblyName = ASSEMBLY_NAME),
             signature = function.dotNetSignature(typeMapper),
+            physicalMethodName = function.dotNetAbiMethodName(),
         )
     }
 
@@ -227,6 +237,17 @@ internal object DotNetStdlibLibrary {
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
         "DotNetStdlibIo.kt" to ImplementationSource(packageFqName = "kotlin.io"),
+        "DotNetExceptions.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = EXCEPTIONS_FACADE_IL_NAME,
+        ),
+        // FIR actualization keeps the Common expect declaration as the canonical IR owner while
+        // attaching the .NET actual body. It is therefore this filename that the stdlib emitter
+        // sees for the four public Throwable operations.
+        "ExceptionsH.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = EXCEPTIONS_FACADE_IL_NAME,
+        ),
         "DotNetThrowNoWhenBranchMatchedException.kt" to ImplementationSource(
             packageFqName = "kotlin.internal",
             facadeIlName = THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,

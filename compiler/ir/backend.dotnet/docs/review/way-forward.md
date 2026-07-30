@@ -886,6 +886,21 @@ supported surface, and a dedicated `FirDotNetSessionFactory` remains later conso
 fresh strict gate is 885/0/0/0 across 16 XML suites (798 FIR/IL/box, 21 generated CLI, and 66
 library integration tests).
 
+**Common exception source-product progress (2026-07-30):** the complete authoritative
+`ExceptionsH.kt` and shared non-JVM exception actual classes now replace the target hierarchy
+mirror. The remaining .NET actuals follow JS/Wasm constructor surfaces, while exact CLR classes
+retain Common modality and truthful `RuntimeException`/`Error` ancestry. Common suppressed state
+uses one weak, thread-safe, reference-identity side table because `System.Exception` has no such
+contract; it retains ordered duplicates, ignores self-suppression, returns immutable snapshots,
+and never mutates `Exception.Data`. Stack traces start with the exact CLR diagnostic and compose
+suppressed graphs on roots and causes with identity-cycle detection. A hostile C# exception overrides `Equals`,
+concurrent writers exercise the state, and a portable self-describing stdlib is compiled,
+installed, and executed on both runtime profiles. Runtime surface level 9 and physical ABI schema
+16 own the new exact identities, classifier ids 18 through 21, and runtime service. With this
+prerequisite closed, the reviewed Common `ioH.kt` partition is the next bounded source-product
+feature. The fresh strict gate is 889/0/0/0 across 16 XML suites (802 FIR/IL/box, 21 generated
+CLI, and 66 library integration tests).
+
 **CLR-importer progress (2026-07-28):** the first importer slice follows the JVM foreign
 classfile/provider split without pretending that CLR metadata is Java metadata. A single bounded,
 JVM-hosted PE/ECMA-335 engine now serves both embedded-resource loading and an immutable physical
