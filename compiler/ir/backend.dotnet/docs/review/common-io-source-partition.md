@@ -1,6 +1,6 @@
 # Common I/O source partition review
 
-Status: exception prerequisite implemented; Common I/O partition is next, 2026-07-30.
+Status: implemented and aggregate-validated, 2026-07-30.
 
 ## Question
 
@@ -38,7 +38,7 @@ The exception header is therefore not the next bounded feature. This does not
 reverse the Common-authoritative endpoint: it identifies the platform issue
 that must be resolved before the entire file can become authoritative.
 
-## Conditional next step: the Common I/O header
+## Selected continuation: the Common I/O header
 
 Compile the exact
 `libraries/stdlib/common/src/kotlin/ioH.kt` as a Common source and convert
@@ -137,9 +137,8 @@ the Kotlin suppressed graph with reference-identity cycle detection.
 The product includes the missing exact identities, a non-empty immutable
 snapshot `List<Throwable>`, installed-stdlib consumption, and Framework/CoreCLR
 execution. The fresh strict gate is 889/0/0/0 across 16 XML suites. This closes
-the dependency found by the failed `ioH.kt` probe. The
-next feature may resume the Common I/O partition described above; it must still
-satisfy the I/O-specific validation obligations below.
+the dependency found by the failed `ioH.kt` probe. The implementation below
+resumes the Common I/O partition and satisfies its validation obligations.
 
 An intentionally empty `addSuppressed` implementation is technically allowed
 by the Common documentation for platforms without suppression support, but is
@@ -147,9 +146,40 @@ rejected. JS, Wasm, and Native preserve the information even when the host does
 not supply Java's mechanism; choosing the weakest permitted behavior would
 create known semantic debt solely to make the source file compile.
 
-## Validation obligations
+## Implementation outcome
 
-The implementation must prove:
+The exact Common `ioH.kt` is now a classified Common source in both the direct
+stdlib product and the byte-identical packaged fallback. The .NET file contains
+only actuals and target overloads. FIR actualisation retains `ioH.kt` as the
+canonical IR owner, so both files map to one stable
+`Kotlin.Io.ConsoleKt` stdlib facade.
+
+`readln` and `readlnOrNull` are ordinary public `Kotlin.Stdlib` functions.
+Their only target-private external helper is intrinsic to
+`System.Console.ReadLine()`. The internal Common `ReadAfterEOFException` is a
+real non-public stdlib class with truthful `Kotlin.RuntimeException` ancestry;
+its physical binding remains in the private KLIB index because Kotlin
+`internal` declarations are linkable by authorized friends. Separately compiled
+ordinary consumers call the two public stdlib methods and never copy either the
+EOF policy or the CLR input operation.
+
+`print` and the existing `println` overloads remain resolution-only output
+intrinsics. They use Kotlin value rendering before the CLR string overloads,
+except for the already-equivalent direct `Char` `println` path. The inert
+`Serializable` marker is now an actual. This follows JVM for available standard
+input and its `ConsoleKt` facade, and JS/Wasm/Native for the marker. The only
+CLR-specific mechanism is the proven `Console.ReadLine` host operation.
+
+The new MemberRef was assembled and executed independently before codegen on
+Framework CLR 4 and CoreCLR 10. A `netstandard2.0` library containing the same
+reference was then consumed on both runtimes. This change adds ordinary
+stdlib-function entries using the existing physical Function record; it changes
+neither the physical-index grammar nor `Kotlin.Runtime`, so ABI schema 16 and
+runtime surface level 9 remain current.
+
+## Validation evidence
+
+The implementation proves:
 
 - explicit products reject `ioH.kt` when it is presented as a platform source;
 - direct-source and packaged-fallback stdlibs remain byte-identical;
@@ -159,3 +189,6 @@ The implementation must prove:
 - `readlnOrNull` returns `null` at EOF;
 - `readln` at EOF throws a `RuntimeException` with the Common message;
 - the behavior works on both CoreCLR and Framework CLR profiles.
+
+The fresh strict gate is 889/0/0/0 across 16 XML suites: 802 FIR/IL/box tests,
+21 generated CLI tests, and 66 library-integration tests.

@@ -28112,6 +28112,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "Cross-module stdlib ABI contains file-private declaration identities: " +
                     physicalDeclarations.keys.filter { "[ File '" in it }
         }
+        val ioFunctions = physicalDeclarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .filter { declaration -> declaration.ownerPath == listOf("Kotlin.Io.ConsoleKt") }
+        assertEquals(setOf("readln", "readlnOrNull"), ioFunctions.mapTo(linkedSetOf()) { it.methodName })
+        assertTrue(ioFunctions.none { declaration -> declaration.isInstance })
+        val eofExceptionBindings = physicalDeclarations.values.filter { declaration ->
+            declaration.ownerPath == listOf("Kotlin.Io.ReadAfterEOFException")
+        }
+        assertEquals(1, eofExceptionBindings.size)
+        assertTrue(eofExceptionBindings.single() is DotNetPhysicalDeclaration.Class)
         assertEquals(
             DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT,
             manifest.getProperty(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY),
@@ -28194,6 +28204,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("'stackTraceToString__KotlinException__" in il)
         assertTrue("'addSuppressed__KotlinException__" in il)
         assertTrue("'get_suppressedExceptions__KotlinException__" in il)
+        assertTrue(".class private auto ansi sealed beforefieldinit 'Kotlin.Io.ReadAfterEOFException'" in il)
+        assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Io.ConsoleKt'" in il)
+        assertTrue(".method public hidebysig static string 'readln'()" in il)
+        assertTrue(".method public hidebysig static string 'readlnOrNull'()" in il)
+        assertTrue("System.Console::ReadLine()" in il)
         return stdlibDirectory
     }
 
@@ -28210,6 +28225,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles +=
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ExceptionsH.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common/src/kotlin/ioH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt").absoluteFile
         sourceFiles.sortBy(File::invariantSeparatorsPath)
         assertEquals(DOTNET_STDLIB_SOURCES.keys.sorted(), sourceFiles.map(File::getName).sorted())
@@ -28277,6 +28293,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     owner.stackTraceToString()
                     return owner.suppressedExceptions
                 }
+
+                public fun readRequired(): String = readln()
+
+                public fun readOptional(): String? = readlnOrNull()
                 """.trimIndent()
             )
         }
@@ -28318,6 +28338,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "[Kotlin.Stdlib]'Kotlin.DotNetExceptionsKt'::" +
                     "'get_suppressedExceptions__KotlinException__" in il
         )
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Io.ConsoleKt'::'readln'()" in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Io.ConsoleKt'::'readlnOrNull'()" in il)
+        assertTrue("System.Console::ReadLine()" !in il) {
+            "The consumer must call the stdlib implementation rather than copying CLR input logic:\n$il"
+        }
     }
 
     private fun consumeInstalledStdlib(
@@ -28352,6 +28377,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun installedRandomAccess(values: List<Int>): Boolean = values is RandomAccess
 
+                public fun installedReadOptional(): String? = readlnOrNull()
+
                 fun main() {
                     val values = Array<String>(2) { index -> if (index == 0) "O" else "K" }
                     val owner = RuntimeException("owner")
@@ -28385,7 +28412,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'last'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>" in il)
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Io.ConsoleKt'::'readlnOrNull'()" in il)
         assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'" !in il)
+        assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Io.ConsoleKt'" !in il)
 
         val executableDirectory =
             File(tmpdir, "installed-executable-$target-$installedProfile").apply { mkdirs() }
@@ -28502,8 +28531,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             writeText(
                 """
                 fun main() {
-                    val values = Array<String>(2) { index -> if (index == 0) "O" else "K" }
-                    println(values.asIterable().first() + values.asIterable().last())
+                    print(false)
+                    print("|")
+                    print(null)
+                    print("|")
+
+                    val first = readln()
+                    val second = readlnOrNull()
+                    val atEof = readlnOrNull()
+                    var readlnEofIsCommon = false
+                    try {
+                        readln()
+                    } catch (failure: RuntimeException) {
+                        readlnEofIsCommon =
+                            failure.message == "EOF has already been reached"
+                    }
+                    println(
+                        first + "|" + second + "|" + (atEof == null) + "|" +
+                            readlnEofIsCommon
+                    )
                 }
                 """.trimIndent()
             )
@@ -28530,9 +28576,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .directory(directory)
             .redirectErrorStream(true)
             .start()
+        process.outputStream.bufferedWriter().use { input ->
+            input.write("alpha\r\nbeta\r\n")
+        }
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
-        assertEquals("OK", processOutput.trim())
+        assertEquals(
+            "false|null|alpha|beta|true|true\n",
+            processOutput.replace("\r\n", "\n"),
+        )
     }
 
     @Test
