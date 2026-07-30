@@ -1883,6 +1883,9 @@ $primitiveArrayHelperTypeIl
             |      ldarg.1
             |      ldc.i4.s 16
             |      beq EC_NoClassDefFoundError
+            |      ldarg.1
+            |      ldc.i4.s 17
+            |      beq EC_NoWhenBranchMatched
             |      br EC_False
             |
             |    EC_Exception:
@@ -1920,6 +1923,12 @@ $primitiveArrayHelperTypeIl
             |      brtrue EC_True
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.InvalidCastException
+            |      brtrue EC_True
+            |      br EC_False
+            |
+            |    EC_NoWhenBranchMatched:
+            |      ldarg.0
+            |      isinst Kotlin.NoWhenBranchMatchedException
             |      brtrue EC_True
             |      br EC_False
             |

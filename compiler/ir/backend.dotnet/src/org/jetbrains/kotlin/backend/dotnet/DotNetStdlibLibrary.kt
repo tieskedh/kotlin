@@ -32,6 +32,8 @@ internal object DotNetStdlibLibrary {
     const val RANDOM_ACCESS_IL_NAME = "Kotlin.Collections.RandomAccess"
     const val SERIALIZABLE_IL_NAME = "Kotlin.Io.Serializable"
     const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
+    const val THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME =
+        "kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt"
     const val ARRAY_ITERATOR_FACTORY_NAME = "dotNetArrayIterator"
     const val ARRAY_ITERABLE_FACTORY_NAME = "dotNetArrayIterable"
 
@@ -49,6 +51,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.last" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERATOR_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERABLE_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.internal.throwNoWhenBranchMatchedException" to THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,
     )
     private val implementationPropertyFacadeIlNames = emptyMap<String, String>()
 
@@ -224,11 +227,21 @@ internal object DotNetStdlibLibrary {
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
         "DotNetStdlibIo.kt" to ImplementationSource(packageFqName = "kotlin.io"),
+        "DotNetThrowNoWhenBranchMatchedException.kt" to ImplementationSource(
+            packageFqName = "kotlin.internal",
+            facadeIlName = THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,
+        ),
+    )
+    private val resolutionOnlySources = mapOf(
+        "DotNetStdlibInternalAnnotations.kt" to "kotlin.internal",
     )
 
     internal fun isImplementationSource(file: IrFile): Boolean =
         implementationSources[file.implementationSourceFileName]
             ?.packageFqName == file.packageFqName.asString()
+
+    internal fun isResolutionOnlySource(file: IrFile): Boolean =
+        resolutionOnlySources[file.implementationSourceFileName] == file.packageFqName.asString()
 }
 
 private val IrFile.implementationSourceFileName: String
@@ -237,6 +250,11 @@ private val IrFile.implementationSourceFileName: String
 /** Temporary same-module source files whose implementations are partitioned into the stdlib. */
 internal val IrFile.isDotNetStdlibImplementationSource: Boolean
     get() = DotNetStdlibLibrary.isImplementationSource(this)
+
+/** Target-bootstrap declarations needed for frontend/KLIB resolution but never physical IL. */
+internal val IrClass.isDotNetResolutionOnlyStdlibDeclaration: Boolean
+    get() = DotNetMappedExceptions.isExceptionStdlibDeclaration(this) ||
+            (parent as? IrFile)?.let(DotNetStdlibLibrary::isResolutionOnlySource) == true
 
 /** Marker for a product or fallback stdlib implementation declaration, never a user class. */
 internal val IrClass.isDotNetStdlibImplementation: Boolean

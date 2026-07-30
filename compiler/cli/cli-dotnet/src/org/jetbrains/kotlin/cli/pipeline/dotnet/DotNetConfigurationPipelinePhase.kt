@@ -1,6 +1,7 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE_PATHS
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetFriendAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
@@ -335,7 +336,7 @@ private fun CompilerConfiguration.addDotNetStdlibSourceRoots() {
     // temp directories.
     val stdlibDirectory = File(System.getProperty("java.io.tmpdir")).resolve("kotlinc-dotnet-stdlib")
     for ([fileName, source] in DOTNET_STDLIB_SOURCES) {
-        val stdlibSource = stdlibDirectory.resolve(fileName)
+        val stdlibSource = stdlibDirectory.resolve(DOTNET_STDLIB_SOURCE_PATHS.getValue(fileName))
         if (!stdlibSource.isFile || stdlibSource.readText() != source) {
             stdlibSource.parentFile.mkdirs()
             stdlibSource.writeText(source)

@@ -20,8 +20,8 @@ public val Char.code: Int
 // the real stdlib, but the backend never emits these classes: each concrete class is either
 // TYPE-MAPPED onto a CLR exception type or rejected with a per-type reason — see
 // DotNetMappedExceptions, which also documents why RuntimeException resolves here and then fails
-// loudly at codegen use. Error, NumberFormatException, and NoSuchElementException map to exact
-// Kotlin.Runtime types.
+// loudly at codegen use. Error, NumberFormatException, NoSuchElementException, and the internal
+// NoWhenBranchMatchedException map to exact Kotlin.Runtime types.
 
 public open class Exception : Throwable {
     public constructor() : super()
@@ -47,6 +47,17 @@ internal open class NoClassDefFoundError : Error {
 }
 
 public open class RuntimeException : Exception {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+    public constructor(message: String?, cause: Throwable?) : super(message, cause)
+    public constructor(cause: Throwable?) : super(cause)
+}
+
+@Deprecated(
+    "This exception type is not supposed to be thrown or caught in common code and will be removed from kotlin-stdlib-common soon.",
+    level = DeprecationLevel.ERROR,
+)
+internal open class NoWhenBranchMatchedException : RuntimeException {
     public constructor() : super()
     public constructor(message: String?) : super(message)
     public constructor(message: String?, cause: Throwable?) : super(message, cause)

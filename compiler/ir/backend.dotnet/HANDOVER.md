@@ -1,6 +1,6 @@
 # Handover — Kotlin/.NET backend, interim development
 
-Written 2026-07-14 and updated 2026-07-29 for the next agent working on the `dotnet` branch
+Written 2026-07-14 and updated 2026-07-30 for the next agent working on the `dotnet` branch
 (array content operations complete; explicit CLR function/property boundaries, nullability,
 defaults, overload-aware function selection, immutable callable-provenance invocation, and the
 bounded typed-argument callable capability implemented; bounded Kotlin property-reference values,
@@ -603,8 +603,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and cause identity through `InnerException`. Source `RuntimeException` remains rejected because
   existing mapped logical children are not physical subclasses and would escape a parent catch.
   The first exact child is open `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException`;
-  exhaustive-when fallthrough now constructs it through the existing JVM-shaped intrinsic rather
-  than throwing plain `System.Exception`. Existing mappings for divide-by-zero, null, bounds, and
+  exhaustive-when fallthrough originally constructed it through the JVM-shaped parameterless
+  intrinsic rather than throwing plain `System.Exception`. Kotlin 2.5's later subject-aware
+  stdlib helper supersedes that emission path below. Existing mappings for divide-by-zero, null, bounds, and
   invalid-cast faults have not moved. `exceptionabi_s1` assembled runtime/consumer pairs with
   modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings preserved exact and
   parent catches, null default message, cause identity, and the boundary from a foreign
@@ -622,8 +623,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   now record physical supertype refs, so the backend verifier handles the exact class's
   instruction-free ArgumentException/Exception widenings generically. A foreign FormatException
   remains distinct pending an explicit parsing/interop translation policy. Direct user use of
-  NoWhenBranchMatchedException was audited and deliberately not exposed: common Kotlin deprecates
-  it at error level as a compiler implementation exception. `exceptionabi_s2` assembled both
+  NoWhenBranchMatchedException was audited and deliberately not exposed as ordinary API: Common
+  Kotlin deprecates it at error level as a compiler implementation exception. The later Kotlin
+  2.5 helper adds an internal, error-deprecated target declaration matching Native/Wasm solely so
+  the stdlib can construct the runtime-owned identity. `exceptionabi_s2` assembled both
   consumer/runtime combinations with both ILAsm versions and ran all eight combinations across
   CoreCLR 10.0.9 and Framework 4.8. Exact IL and box pins cover constructors, exact/parent catches,
   parent/root value widening, identity, virtual message dispatch, and default message/cause state.
@@ -2733,6 +2736,31 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `ParamCollectionAttribute` collections remain a separate design. The fresh strict gate is
   882/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 65 library integration
   tests).
+- The 2026-07-30 upstream-sync continuation rebased all 310 target patches from `6fb64e0c0` onto
+  `733a49b39`. All patches remained `=` in range-diff and the final tree matched the pre-rebase
+  virtual merge exactly; the old tip is retained at
+  `refs/backup/dotnet-before-upstream-rebase-20260730`. The pure rebase passed 882 tests across 16
+  suites. The immediate compatibility slice adopts Kotlin 2.5 Common's
+  `throwNoWhenBranchMatchedException(subject)` contract as an ordinary `Kotlin.Stdlib` helper
+  rather than a target message intrinsic. Its internal, error-deprecated exception declaration
+  matches Native/Wasm and maps to the existing exact runtime-owned type. Explicit product and
+  bootstrap ownership are both registered; separately compiled applications call the physical
+  stdlib facade. Current and feature-disabled legacy IL pins cover both fir2ir paths, while the
+  assembler matrix forces a fallthrough with raw CLR `bool` value `2` and observes the exact type
+  plus `No branch matched for subject: true` on Framework CLR 4 and CoreCLR 10. The same slice adds
+  explicit `Any` supertypes to all seven affected target synthetic classes for upstream's new
+  `IrClassSuperTypesChecker`. The Common-mirrored `UsedFromCompilerGeneratedCode` definition is
+  explicitly resolution-only: frontend/stdlib KLIB can see it, while user IL, facade names, and
+  the physical ABI index cannot. The first full-gate attempt caught its accidental treatment as a
+  user annotation class; the portable user-library producer and all 21 CLI tests pass after the
+  filter. A second full-gate attempt then caught direct-source/fallback IL ordering: adding the
+  helper exposed that the fallback flattened temp source paths while the direct producer retained
+  package paths. The catalog is path-sorted and the injector now preserves those relative paths;
+  the focused net48 reproducibility test passes again. The argument and longer-term KLIB/IDE/BTA
+  implications are in
+  `docs/review/upstream-sync-2026-07-30.md`. The focused four-test IL filter and one-test
+  assembler/runtime matrix pass. The fresh strict gate is 884/0/0/0 across 16 XML suites (798
+  FIR/IL/box, 21 generated CLI, and 65 library integration tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
@@ -2792,7 +2820,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 882 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 884 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2867,7 +2895,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `git merge-tree --write-tree --merge-base=<current-base> dotnet origin/master`; create an exact
   safety ref; then `git rebase --onto origin/master <current-base> dotnet`. Re-run range-diff,
   compiler/KGP API builds, target semantic gates, and generated-API validation before a
-  force-with-lease push. The current base is `6fb64e0c0`.
+  force-with-lease push. The current base is `733a49b39`.
 
 ## When handing back
 

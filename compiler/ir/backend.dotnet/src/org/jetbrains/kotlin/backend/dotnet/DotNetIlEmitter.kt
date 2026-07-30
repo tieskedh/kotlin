@@ -275,9 +275,9 @@ internal class DotNetIlEmitter(
 
         // Class pre-pass: the shape gate. Everything outside the supported class model is
         // rejected whole-class here, so the type mapper only ever sees supported classes. The
-        // injected exception declarations (see DotNetMappedExceptions) are excluded up front — the
-        // class-level parallel of an intrinsic's excludesDeclarationFromCodegen: they exist for
-        // frontend resolution only and must be neither emitted nor skip-warned.
+        // injected resolution-only stdlib declarations are excluded up front — the class-level
+        // parallel of an intrinsic's excludesDeclarationFromCodegen: they exist for frontend/KLIB
+        // resolution only and must be neither emitted nor skip-warned.
         val availableClasses = LinkedHashMap<IrClass, DotNetIlClassInfo>()
         val genericInterfaces = LinkedHashMap<IrClass, DotNetGenericInterfaceInfo>()
         val classSkipReasons = LinkedHashMap<IrClass, String>()
@@ -428,7 +428,7 @@ internal class DotNetIlEmitter(
         }
 
         for (irClass in topLevelClassesByFile.values.flatten().sortedBy { it.isOriginallyLocalDeclaration }) {
-            if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) continue
+            if (irClass.isDotNetResolutionOnlyStdlibDeclaration) continue
             // A generic class's IL name carries the CLS `` `n `` arity suffix INSIDE the
             // quoted identifier ('demo.Box`1' — outside the quotes is an ilasm syntax error,
             // probe-verified genprobe_s2/_s2c). The suffix is CLS convention rather than a
@@ -3516,9 +3516,9 @@ internal class DotNetIlEmitter(
     ): Map<IrFile, String> {
         val usedNames = hashSetOf<String>()
         topLevelClassesByFile.values.flatten()
-            // The injected exception declarations never become IL classes (they are type-mapped
-            // to CLR types, see DotNetMappedExceptions), so they reserve no facade name either.
-            .filterNot(DotNetMappedExceptions::isExceptionStdlibDeclaration)
+            // Injected resolution-only declarations never become IL classes, so they reserve no
+            // facade name either.
+            .filterNot(IrClass::isDotNetResolutionOnlyStdlibDeclaration)
             .mapTo(usedNames) { it.fqNameWhenAvailable!!.asString() }
         return files.associateWith { file ->
             val fileName = file.fileEntry.name.substringAfterLast('/').substringAfterLast('\\').substringBeforeLast('.')

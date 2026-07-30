@@ -691,6 +691,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             visibility = DescriptorVisibilities.PUBLIC
         }.apply {
             parent = owner
+            superTypes = listOf(context.irBuiltIns.anyType)
             createThisReceiverParameter()
         }
         val helper = createHelperFunction(
@@ -727,6 +728,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             visibility = DescriptorVisibilities.PUBLIC
         }.apply {
             parent = semanticParent
+            superTypes = listOf(context.irBuiltIns.anyType)
             createThisReceiverParameter()
         }
         val helper = context.irFactory.createStaticFunctionWithReceivers(
@@ -1514,6 +1516,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         visibility = DescriptorVisibilities.PUBLIC
     }.apply {
         parent = irInterface
+        superTypes = listOf(context.irBuiltIns.anyType)
         createThisReceiverParameter()
     }
 

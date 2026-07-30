@@ -1644,9 +1644,10 @@ private object DotNetIlBooleanNotIntrinsic : DotNetIlIntrinsicMethod() {
 }
 
 /**
- * The synthetic `noWhenBranchMatchedException` builtin fir2ir appends to an exhaustive `when`
- * without a source `else` (JVM precedent: `IrNoWhenBranchMatchedException`, registered in the
- * intrinsic registry and emitted as an inline throw).
+ * The legacy synthetic `noWhenBranchMatchedException` builtin fir2ir appends to an exhaustive
+ * `when` without a source `else` when the subject-aware Kotlin 2.5 language feature is disabled
+ * or its stdlib symbol is unavailable. Current language mode instead calls the ordinary
+ * `kotlin.internal.throwNoWhenBranchMatchedException(subject)` stdlib helper.
  *
  * Roslyn throws `System.Runtime.CompilerServices.SwitchExpressionException`, but that type is
  * scoped through `System.Runtime` and is absent from the .NET Framework facade. The DotNet runtime

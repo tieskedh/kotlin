@@ -2546,14 +2546,18 @@ landed shape as a compatibility constraint.
   declared top-level class reserves its IL name even when it is later skipped, so facade naming
   depends only on what the module declares, never on which classes survive support gates.
   Injected resolution-only stdlib declarations and the executable stdlib implementation are
-  excepted — they are not user-module declarations and reserve no user facade name
-  (`DotNetMappedExceptions.isExceptionStdlibDeclaration` and the emitter ownership scope filter
-  them out).
+  excepted — they are not user-module declarations and reserve no user facade name. The combined
+  `isDotNetResolutionOnlyStdlibDeclaration` predicate covers mapped/rejected exception stubs and
+  the bootstrap copy of `UsedFromCompilerGeneratedCode`; the emitter ownership scope covers
+  executable stdlib declarations. Resolution-only declarations remain available to frontend/KLIB
+  serialization but must not enter the IL shape gate or physical declaration index.
 - The bootstrap stdlib's canonical implementation is ordinary Kotlin source under
   `libraries/stdlib/dotnet/src`, one file per current package. `DotNetStdlibSource` only loads the
   backend-JAR resource copy for same-run bootstrap compatibility. Tests require that copy to be
   text-identical to the ordinary files, and direct-source/fallback products to have identical
-  packed KLIB entries, IL, and DLL bytes. The physical declaration index contains only
+  packed KLIB entries, IL, and DLL bytes. The packaged catalog is sorted by relative path and the
+  fallback injector preserves those package-relative temp paths; FIR orders actual source paths,
+  so a flat temp directory would change emitted declaration order. The physical declaration index contains only
   cross-module declarations: private/private-to-this/local `IdSignature`s must not be exported,
   because file-local signatures may contain checkout paths and private implementations are not
   bindable ABI.
@@ -2675,26 +2679,35 @@ landed shape as a compatibility constraint.
   Before ABI stability, deliberate C# singleton exports/generator adapters must expose a
   barrier-calling property or method; do not solve that interop item by weakening Kotlin
   semantics or restoring `TypeInitializationException`.
-- Exhaustive `when` without a source `else` follows the JVM intrinsic-registry model: fir2ir's
-  synthetic `noWhenBranchMatchedException` call is registered in `DotNetIlIntrinsicMethods` and
-  emits an inline parameterless exception construction + `throw`, in both value and statement
-  positions. Exception choice deliberately deviates from Roslyn: C# uses
+- Exhaustive `when` without a source `else` follows the Kotlin 2.5 Common stdlib model. When the
+  language feature is enabled, fir2ir calls
+  `kotlin.internal.throwNoWhenBranchMatchedException(subject: Any)`; the .NET target stdlib owns
+  that ordinary Kotlin helper and uses the exact JVM/Native/Wasm message body. Its internal,
+  error-deprecated `NoWhenBranchMatchedException` declaration has the four Common constructor
+  forms and maps to the exact runtime-owned
+  `[Kotlin.Runtime]Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException`. The
+  `Kotlin.Stdlib` ownership catalog must include the helper source and facade: explicit stdlib
+  products emit it once, separately compiled consumers bind to it, and the bootstrap path builds
+  and packages the same physical stdlib method. The legacy language-feature-off path deliberately
+  retains fir2ir's old inline parameterless construction. Do not reintroduce a .NET message or
+  throw intrinsic: Common owns the function contract and Kotlin source owns its implementation.
+  Exception choice deliberately deviates from Roslyn: C# uses
   `System.Runtime.CompilerServices.SwitchExpressionException`, but `whenprobe_s1` proved that the
   type requires the `[System.Runtime]` scope on CoreCLR 10.0.9 (`[mscorlib]` assembles but fails
   with `TypeLoadException`), and the .NET Framework `System.Runtime` facade does not contain it.
-  Emitted IL must stay target-independent, so the intrinsic now constructs the exact runtime-owned
-  `[Kotlin.Runtime]Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException`. This preserves
+  Emitted IL must stay target-independent. The Kotlin-owned exception preserves
   the supported `Throwable`/`Exception` catch edges without falsely making the exception a mapped
   `IllegalStateException`. The open runtime class follows JVM/Native and exposes the same four
   constructor forms as its root. `exceptionabi_s1` assembled the hierarchy and consumers with
   modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings preserved the exact
   catch, the RuntimeException parent edge, null default message, cause identity, and the boundary
   from a foreign `InvalidOperationException`. `ilText/exhaustiveWhen.kt` pins both emission
-  positions and the two-handler boundary; `box/exhaustiveWhen.kt` runs all reachable
-  Boolean/Boolean? arms on CoreCLR. `whenprobe_s2` links against that exact golden and
-  passes the noncanonical CLR `bool` value `2` to force the otherwise unreachable fallthrough in
-  a second call-argument position (a prior string remains below the exception on the evaluation
-  stack), runtime-pinning both the throw and cross-target catchability.
+  positions, current subject-aware helper call, exact message construction, and the
+  feature-disabled legacy throw; `box/exhaustiveWhen.kt` runs all reachable Boolean/Boolean? arms
+  on CoreCLR. `testNet48AssemblerMatrix` passes the noncanonical CLR `bool` value `2` to force the
+  otherwise unreachable fallthrough, then runtime-pins the exact type and
+  `No branch matched for subject: true` message across Framework/CoreCLR hosts, both ILAsm
+  implementations, bootstrap production, and separately produced stdlib consumption.
 - try/catch follows the JVM model: `IrTry` maps 1:1 onto the CLR exception table — one `.try`
   block plus consecutive typed `catch` handlers in Kotlin source order (the CLR matches strictly
   first-to-last, probe-verified; the frontend owns unreachable-catch diagnostics) — with no

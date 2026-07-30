@@ -60,10 +60,12 @@ Ownership is split as follows:
 - the user assembly owns only user declarations and calls into those platform assemblies.
 
 The first stdlib implementations are generic Kotlin `ArrayIterator<T>` and `ArrayIterable<T>`,
-the common-shaped `EmptyIterator`/`EmptyList` singleton pair, `emptyList<T>()`, and the top-level
-`Iterable<T>`/`List<T>` `first()` and `last()` operations. The classes and objects are compiled
-through the ordinary pipeline and receive the same compiler-generated canonical and typed
-MethodImpl bridges as user implementations. Explicit array `iterator()`
+the common-shaped `EmptyIterator`/`EmptyList` singleton pair, `emptyList<T>()`, the top-level
+`Iterable<T>`/`List<T>` `first()` and `last()` operations, and the Kotlin 2.5
+`kotlin.internal.throwNoWhenBranchMatchedException(subject)` compiler helper. The classes,
+objects, and helpers are compiled through the ordinary pipeline; collection implementations
+receive the same compiler-generated canonical and typed MethodImpl bridges as user
+implementations. Explicit array `iterator()`
 calls a generic compiler-facing factory in `Kotlin.Stdlib`; the
 handwritten `System.Array` iterator is removed from `Kotlin.Runtime`. Array `asIterable()`
 calls the corresponding generic factory, whose private view stores the original vector and creates
@@ -376,7 +378,12 @@ Costs and limits:
 - the explicit producer flag is POC build control rather than a final distribution interface;
 - installing the discoverable target assembly is opt-in rather than part of the normal distribution;
 - the metadata-public implementation and facade names are compiler/stdlib contracts;
-- the current physical-member mapping covers only compiler-owned stdlib shapes; and
+- the current physical-member mapping and manual source-ownership catalog cover only
+  compiler-owned stdlib shapes; every new executable source/helper must be added to both or it can
+  resolve from embedded metadata while disappearing from the physical DLL;
+- resolution-only bootstrap sources need an explicit catalog entry so their declarations remain
+  available to frontend/KLIB serialization without entering user IL, facade-name reservation, or
+  the physical declaration index; and
 - the standalone producer is still limited to the exact bootstrap stdlib source product.
 
 ## Validation
@@ -417,6 +424,18 @@ classpath; the consumer does not regenerate the stdlib facade or runtime. The re
 and install tasks are also exercised as products: the producer emits the expected DLL pair and
 diagnostic IL, while installation copies exactly the byte-matching DLLs into the distribution and
 does not install the diagnostic IL or a standalone KLIB.
+
+The fallback source catalog is sorted by relative path and injects files under the same
+package-relative temp paths as the ordinary-source producer. This is semantic for reproducibility
+even when every file is byte-identical: FIR orders actual source paths, which controls the order
+of otherwise independent physical declarations in generated IL.
+
+The exhaustive-when matrix additionally verifies that the internal subject-aware helper is emitted
+once in `Kotlin.Stdlib`, that a separately compiled application calls that physical facade, and
+that bootstrap production packages the same dependency. A raw IL caller supplies noncanonical CLR
+`bool` value `2` to force the otherwise unreachable Kotlin fallthrough and observes the exact
+runtime-owned exception plus `No branch matched for subject: true` on Framework CLR 4 and CoreCLR
+10 across both supported ILAsm implementations.
 
 ## Deferred work
 

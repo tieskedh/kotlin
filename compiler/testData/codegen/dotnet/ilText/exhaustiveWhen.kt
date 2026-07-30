@@ -1,10 +1,7 @@
-// fir2ir appends the synthetic noWhenBranchMatchedException call to exhaustive `when`
-// expressions without a source `else`. The DotNet intrinsic emits an inline parameterless
-// Kotlin.NoWhenBranchMatchedException throw from Kotlin.Runtime (JVM intrinsic-registry
-// precedent; target-neutral replacement for Roslyn's modern-only SwitchExpressionException,
-// whenprobe_s1/exceptionabi_s1).
-// Pin value and statement positions, nullable-Boolean composition, and the absence of a false
-// IllegalStateException catch edge.
+// Kotlin 2.5 fir2ir passes the subject of an exhaustive `when` without a source `else` to the
+// Common-authored throwNoWhenBranchMatchedException helper. Pin the ordinary helper call and
+// message-producing body, value and statement positions, nullable-Boolean composition, and the
+// absence of a false IllegalStateException catch edge.
 package test
 
 import kotlin.io.println

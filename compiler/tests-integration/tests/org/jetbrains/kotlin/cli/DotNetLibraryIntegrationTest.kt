@@ -19419,6 +19419,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("'Increment'(int32 'value')" in il)
         assertTrue(".entrypoint" !in il)
         assertTrue("[mscorlib]" !in il)
+        assertTrue("'kotlin.internal.UsedFromCompilerGeneratedCode'" !in il) {
+            "A resolution-only target-stdlib annotation leaked into a user library:\n$il"
+        }
         assertTrue(
             ".mresource private ${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME}" in il
         ) {
@@ -24554,7 +24557,67 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
         requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
 
+        fun writeWhenProbe(
+            file: File,
+            applicationAssemblyName: String,
+            applicationFacadeName: String,
+            applicationFunctionName: String,
+        ): File = file.apply {
+            writeText(
+                """
+                .assembly extern mscorlib {}
+                .assembly extern Kotlin.Runtime
+                {
+                  .ver 1:0:0:0
+                }
+                .assembly extern '$applicationAssemblyName' {}
+                .assembly WhenProbe {}
+                .module WhenProbe.exe
+
+                .class public abstract sealed auto ansi beforefieldinit WhenProbe
+                       extends [mscorlib]System.Object
+                {
+                  .method public hidebysig static void Main() cil managed
+                  {
+                    .entrypoint
+                    .maxstack 2
+                    .try {
+                      ldc.i4.2
+                      call string [$applicationAssemblyName]'$applicationFacadeName'::'$applicationFunctionName'(bool)
+                      pop
+                      ldstr "NO EXCEPTION"
+                      call void [mscorlib]System.Console::WriteLine(string)
+                      leave IL_end
+                    }
+                    catch [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException' {
+                      callvirt instance string [mscorlib]System.Exception::get_Message()
+                      ldstr "No branch matched for subject: true"
+                      call bool [mscorlib]System.String::op_Equality(string, string)
+                      brfalse IL_wrongMessage
+                      ldstr "OK"
+                      call void [mscorlib]System.Console::WriteLine(string)
+                      leave IL_end
+                    IL_wrongMessage:
+                      ldstr "WRONG MESSAGE"
+                      call void [mscorlib]System.Console::WriteLine(string)
+                      leave IL_end
+                    }
+                IL_end:
+                    ret
+                  }
+                }
+                """.trimIndent()
+            )
+        }
+
         val stdlibDirectory = produceSelfDescribingStdlib("net48", "assembler-matrix")
+        val stdlibIlText = stdlibDirectory.resolve("Kotlin.Stdlib.il").readText()
+        assertTrue(
+            "'kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt'" in stdlibIlText &&
+                    "'throwNoWhenBranchMatchedException'(object 'subject')" in stdlibIlText
+        ) {
+            stdlibIlText
+        }
         val frameworkStdlib = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
         val modernStdlib = File(tmpdir, "assembler-matrix-modern/Kotlin.Stdlib.dll")
         val stdlibManagedResources = mapOf(
@@ -24591,6 +24654,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val render = { values.asIterable().first() + values.asIterable().last() }
                     println(render())
                 }
+
+                public fun describeSubject(flag: Boolean): String = when (flag) {
+                    true -> "true"
+                    false -> "false"
+                }
                 """.trimIndent()
             )
         }
@@ -24605,6 +24673,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, frameworkApplication.path,
         )
         val applicationIl = applicationDirectory.resolve("AssemblerMatrix.il")
+        val applicationIlText = applicationIl.readText()
+        assertTrue("'describeSubject'(bool 'flag')" in applicationIlText) { applicationIlText }
+        assertTrue(
+            "[Kotlin.Stdlib]'kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt'::" +
+                    "'throwNoWhenBranchMatchedException'(object)" in applicationIlText
+        ) {
+            applicationIlText
+        }
         val modernFrameworkApplication = applicationDirectory.resolve("AssemblerMatrix-modern.exe")
         assertTrue(
             DotNetIlAssembler.assembleWithExplicitIlasm(
@@ -24636,10 +24712,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(modernRuntime?.isFile == true)
         val coreClrRuntimeConfig = applicationDirectory.resolve("AssemblerMatrix-modern.runtimeconfig.json")
         assertTrue(coreClrRuntimeConfig.isFile)
+        val whenProbeIl = writeWhenProbe(
+            applicationDirectory.resolve("WhenProbe.il"),
+            applicationAssemblyName = "AssemblerMatrix",
+            applicationFacadeName = "mainKt",
+            applicationFunctionName = "describeSubject",
+        )
+        val frameworkWhenProbe = applicationDirectory.resolve("WhenProbe-framework.exe")
+        assertTrue(
+            DotNetIlAssembler.assembleWithExplicitIlasm(
+                checkNotNull(frameworkIlasm),
+                whenProbeIl,
+                frameworkWhenProbe,
+                dll = false,
+                messageCollector = MessageCollector.NONE,
+            )
+        )
+        val modernWhenProbe = applicationDirectory.resolve("WhenProbe-modern.exe")
+        assertTrue(
+            DotNetIlAssembler.assembleWithExplicitIlasm(
+                checkNotNull(modernIlasm),
+                whenProbeIl,
+                modernWhenProbe,
+                dll = false,
+                messageCollector = MessageCollector.NONE,
+            )
+        )
 
         val applications = listOf(
-            "f" to (frameworkApplication to frameworkApplication),
-            "m" to (modernFrameworkApplication to modernCoreClrApplication),
+            "f" to Triple(frameworkApplication, frameworkApplication, frameworkWhenProbe),
+            "m" to Triple(modernFrameworkApplication, modernCoreClrApplication, modernWhenProbe),
         )
         val stdlibs = listOf(
             "f" to frameworkStdlib,
@@ -24660,31 +24762,140 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val runtime = runtimeEntry.second
                     val pairing = "$applicationAssembler-$stdlibAssembler-$runtimeAssembler"
                     val frameworkDirectory = File(tmpdir, "am-f-$pairing").apply { mkdirs() }
-                    val frameworkExecutable = applicationFiles.first.copyTo(
-                        frameworkDirectory.resolve("AssemblerMatrix.exe")
-                    )
+                    applicationFiles.first.copyTo(frameworkDirectory.resolve("AssemblerMatrix.dll"))
+                    val frameworkApplicationExecutable =
+                        applicationFiles.first.copyTo(frameworkDirectory.resolve("AssemblerMatrix.exe"))
+                    val frameworkProbe =
+                        applicationFiles.third.copyTo(frameworkDirectory.resolve("WhenProbe.exe"))
                     stdlib.copyTo(frameworkDirectory.resolve("Kotlin.Stdlib.dll"))
                     runtime.copyTo(frameworkDirectory.resolve("Kotlin.Runtime.dll"))
                     runAssemblerPairing(
-                        frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkExecutable),
+                        frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkApplicationExecutable),
                         frameworkDirectory,
-                        "Framework host, $pairing",
+                        "Framework host application, $pairing",
+                    )
+                    runAssemblerPairing(
+                        frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkProbe),
+                        frameworkDirectory,
+                        "Framework host exhaustive-when probe, $pairing",
                     )
 
                     val coreClrDirectory = File(tmpdir, "am-n-$pairing").apply { mkdirs() }
-                    val coreClrExecutable = applicationFiles.second.copyTo(
-                        coreClrDirectory.resolve("AssemblerMatrix.${applicationFiles.second.extension}")
+                    applicationFiles.second.copyTo(coreClrDirectory.resolve("AssemblerMatrix.dll"))
+                    val coreClrApplicationExecutable = applicationFiles.second.copyTo(
+                        coreClrDirectory.resolve("AssemblerMatrix-run.${applicationFiles.second.extension}")
                     )
-                    coreClrRuntimeConfig.copyTo(coreClrDirectory.resolve("AssemblerMatrix.runtimeconfig.json"))
+                    val coreClrProbe =
+                        applicationFiles.third.copyTo(coreClrDirectory.resolve("WhenProbe.dll"))
+                    coreClrRuntimeConfig.copyTo(
+                        coreClrDirectory.resolve("AssemblerMatrix-run.runtimeconfig.json")
+                    )
+                    coreClrRuntimeConfig.copyTo(coreClrDirectory.resolve("WhenProbe.runtimeconfig.json"))
                     stdlib.copyTo(coreClrDirectory.resolve("Kotlin.Stdlib.dll"))
                     runtime.copyTo(coreClrDirectory.resolve("Kotlin.Runtime.dll"))
                     runAssemblerPairing(
-                        listOf(dotnetHost.path, "exec", coreClrExecutable.path),
+                        listOf(dotnetHost.path, "exec", coreClrApplicationExecutable.path),
                         coreClrDirectory,
-                        "CoreCLR host, $pairing",
+                        "CoreCLR host application, $pairing",
+                    )
+                    runAssemblerPairing(
+                        listOf(dotnetHost.path, "exec", coreClrProbe.path),
+                        coreClrDirectory,
+                        "CoreCLR host exhaustive-when probe, $pairing",
                     )
                 }
             }
+        }
+
+        val bootstrapDirectory = File(tmpdir, "when-bootstrap").apply { mkdirs() }
+        val bootstrapSource = bootstrapDirectory.resolve("bootstrap.kt").apply {
+            writeText(
+                """
+                public fun describeBootstrapSubject(flag: Boolean): String = when (flag) {
+                    true -> "true"
+                    false -> "false"
+                }
+
+                fun main() {}
+                """.trimIndent()
+            )
+        }
+        val frameworkBootstrapApplication = bootstrapDirectory.resolve("BootstrapWhen.exe")
+        compileInProcess(
+            K2DotNetCompiler(),
+            bootstrapSource.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net48",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "BootstrapWhen",
+            K2DotNetCompilerArguments::destination.cliArgument, frameworkBootstrapApplication.path,
+        )
+        val bootstrapStdlib = bootstrapDirectory.resolve("Kotlin.Stdlib.dll")
+        assertTrue(bootstrapStdlib.isFile)
+        val bootstrapIl = bootstrapDirectory.resolve("BootstrapWhen.il")
+        val modernBootstrapApplication = bootstrapDirectory.resolve("BootstrapWhen-modern.exe")
+        assertTrue(
+            DotNetIlAssembler.assembleWithExplicitIlasm(
+                checkNotNull(modernIlasm),
+                bootstrapIl,
+                modernBootstrapApplication,
+                dll = false,
+                messageCollector = MessageCollector.NONE,
+            )
+        )
+        val bootstrapProbeIl = writeWhenProbe(
+            bootstrapDirectory.resolve("WhenProbe.il"),
+            applicationAssemblyName = "BootstrapWhen",
+            applicationFacadeName = "bootstrapKt",
+            applicationFunctionName = "describeBootstrapSubject",
+        )
+        val frameworkBootstrapProbe = bootstrapDirectory.resolve("WhenProbe-framework.exe")
+        assertTrue(
+            DotNetIlAssembler.assembleWithExplicitIlasm(
+                checkNotNull(frameworkIlasm),
+                bootstrapProbeIl,
+                frameworkBootstrapProbe,
+                dll = false,
+                messageCollector = MessageCollector.NONE,
+            )
+        )
+        val modernBootstrapProbe = bootstrapDirectory.resolve("WhenProbe-modern.exe")
+        assertTrue(
+            DotNetIlAssembler.assembleWithExplicitIlasm(
+                checkNotNull(modernIlasm),
+                bootstrapProbeIl,
+                modernBootstrapProbe,
+                dll = false,
+                messageCollector = MessageCollector.NONE,
+            )
+        )
+        val bootstrapVariants = listOf(
+            "f" to Triple(frameworkBootstrapApplication, frameworkBootstrapProbe, frameworkRuntime),
+            "m" to Triple(modernBootstrapApplication, modernBootstrapProbe, checkNotNull(modernRuntime)),
+        )
+        for (entry in bootstrapVariants) {
+            val assembler = entry.first
+            val variant = entry.second
+            val frameworkDirectory = File(tmpdir, "when-bootstrap-f-$assembler").apply { mkdirs() }
+            variant.first.copyTo(frameworkDirectory.resolve("BootstrapWhen.dll"))
+            val frameworkProbe = variant.second.copyTo(frameworkDirectory.resolve("WhenProbe.exe"))
+            variant.third.copyTo(frameworkDirectory.resolve("Kotlin.Runtime.dll"))
+            bootstrapStdlib.copyTo(frameworkDirectory.resolve("Kotlin.Stdlib.dll"))
+            runAssemblerPairing(
+                frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkProbe),
+                frameworkDirectory,
+                "Framework bootstrap exhaustive-when probe, $assembler",
+            )
+
+            val coreClrDirectory = File(tmpdir, "when-bootstrap-n-$assembler").apply { mkdirs() }
+            variant.first.copyTo(coreClrDirectory.resolve("BootstrapWhen.dll"))
+            val coreClrProbe = variant.second.copyTo(coreClrDirectory.resolve("WhenProbe.dll"))
+            variant.third.copyTo(coreClrDirectory.resolve("Kotlin.Runtime.dll"))
+            bootstrapStdlib.copyTo(coreClrDirectory.resolve("Kotlin.Stdlib.dll"))
+            coreClrDirectory.resolve("WhenProbe.runtimeconfig.json").writeText(net10RuntimeConfig())
+            runAssemblerPairing(
+                listOf(dotnetHost.path, "exec", coreClrProbe.path),
+                coreClrDirectory,
+                "CoreCLR bootstrap exhaustive-when probe, $assembler",
+            )
         }
     }
 

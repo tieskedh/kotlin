@@ -3,6 +3,10 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'exhaustiveWhen' {}
 .module 'main-exhaustiveWhen.il'
 
@@ -31,7 +35,11 @@ IL_whenNext_1:
     ldstr "false"
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
+    ldloc.0
+    box [mscorlib]System.Boolean
+    call class [Kotlin.Runtime]'Kotlin.Nothing' [Kotlin.Stdlib]'kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt'::'throwNoWhenBranchMatchedException'(object)
+    pop
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
     throw
 IL_whenEnd_0:
     ret
@@ -83,7 +91,11 @@ IL_whenNext_2:
     ldstr "null"
     br IL_whenEnd_0
 IL_whenNext_3:
-    newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
+    ldloc.0
+    box valuetype [mscorlib]System.Nullable`1<bool>
+    call class [Kotlin.Runtime]'Kotlin.Nothing' [Kotlin.Stdlib]'kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt'::'throwNoWhenBranchMatchedException'(object)
+    pop
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
     throw
 IL_whenEnd_0:
     ret
@@ -112,7 +124,11 @@ IL_whenNext_1:
     call void [mscorlib]System.Console::WriteLine(string)
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
+    ldloc.0
+    box [mscorlib]System.Boolean
+    call class [Kotlin.Runtime]'Kotlin.Nothing' [Kotlin.Stdlib]'kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt'::'throwNoWhenBranchMatchedException'(object)
+    pop
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
     throw
 IL_whenEnd_0:
     ret
@@ -143,7 +159,11 @@ IL_whenNext_2:
       ldstr "false"
       br IL_whenEnd_1
 IL_whenNext_3:
-      newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
+      ldloc.1
+      box [mscorlib]System.Boolean
+      call class [Kotlin.Runtime]'Kotlin.Nothing' [Kotlin.Stdlib]'kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt'::'throwNoWhenBranchMatchedException'(object)
+      pop
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
       throw
 IL_whenEnd_1:
       stloc.0
@@ -210,7 +230,11 @@ IL_whenNext_1:
     ldstr "false"
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
+    ldloc.0
+    box [mscorlib]System.Boolean
+    call class [Kotlin.Runtime]'Kotlin.Nothing' [Kotlin.Stdlib]'kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt'::'throwNoWhenBranchMatchedException'(object)
+    pop
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
     throw
 IL_whenEnd_0:
     call string 'test.exhaustiveWhenKt'::'join'(string, string)
@@ -238,7 +262,11 @@ IL_whenNext_1:
     ldarg.2
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
+    ldloc.0
+    box [mscorlib]System.Boolean
+    call class [Kotlin.Runtime]'Kotlin.Nothing' [Kotlin.Stdlib]'kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt'::'throwNoWhenBranchMatchedException'(object)
+    pop
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
     throw
 IL_whenEnd_0:
     ret
