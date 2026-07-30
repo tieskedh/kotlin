@@ -871,6 +871,21 @@ checkout paths and non-bindable implementation details from becoming ABI. The fa
 transitional; generated Common sources plus narrow .NET actuals and a fully installed platform
 pair remain the core-team endpoint.
 
+**Common/actual source-product progress (2026-07-30):** the first partition now compiles
+Common's exact internal `Annotations.kt` and subject-aware exhaustive-when expect declaration
+beside a narrow .NET actual. The target copy of `UsedFromCompilerGeneratedCode` is gone. The .NET
+frontend enables legacy-MPP source sessions only when the product or explicit Common inputs need
+them, actualises FIR before KLIB metadata serialization through the same
+`Fir2KlibMetadataSerializer` used by mature KLIB targets, and rejects an explicit stdlib source set
+whose Common files are presented as platform sources. A latent common FIR2IR lookup also had to
+adopt the existing built-in-symbol rule of preferring non-expect declarations; otherwise seeing
+both the expect and actual silently restored the legacy parameterless exhaustive-when failure.
+Direct/fallback products remain byte-identical. This is deliberately not the broad generator
+target: Common exception actuals and generated collection bodies move only with their concrete
+supported surface, and a dedicated `FirDotNetSessionFactory` remains later consolidation. The
+fresh strict gate is 885/0/0/0 across 16 XML suites (798 FIR/IL/box, 21 generated CLI, and 66
+library integration tests).
+
 **CLR-importer progress (2026-07-28):** the first importer slice follows the JVM foreign
 classfile/provider split without pretending that CLR metadata is Java metadata. A single bounded,
 JVM-hosted PE/ECMA-335 engine now serves both embedded-resource loading and an immutable physical

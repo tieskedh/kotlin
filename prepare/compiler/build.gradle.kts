@@ -456,9 +456,14 @@ val dotNetStdlibProfiles = linkedMapOf(
 val dotNetStdlibOutputDirectories = dotNetStdlibProfiles.keys.associateWith { targetFramework ->
     layout.buildDirectory.dir("dotnet-stdlib/$targetFramework")
 }
-val dotNetStdlibSources = fileTree(rootProject.file("libraries/stdlib/dotnet/src")) {
+val dotNetStdlibPlatformSources = fileTree(rootProject.file("libraries/stdlib/dotnet/src")) {
     include("**/*.kt")
 }
+val dotNetStdlibCommonSources = files(
+    rootProject.file("libraries/stdlib/src/kotlin/internal/Annotations.kt"),
+    rootProject.file("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt"),
+)
+val dotNetStdlibSources = files(dotNetStdlibPlatformSources, dotNetStdlibCommonSources)
 val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, taskSuffix) ->
     val outputDirectory = dotNetStdlibOutputDirectories.getValue(targetFramework)
     tasks.register<JavaExec>("produceDotNetStdlib$taskSuffix") {
@@ -475,6 +480,7 @@ val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, t
         args(
             "-Xdotnet-produce-stdlib",
             "-Xdotnet-target=$targetFramework",
+            "-Xcommon-sources=${dotNetStdlibCommonSources.files.joinToString(",") { it.absolutePath }}",
             "-d", outputDirectory.get().asFile.absolutePath,
         )
         args(dotNetStdlibSources.files.sortedBy { it.invariantSeparatorsPath }.map { it.absolutePath })

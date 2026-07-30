@@ -233,7 +233,7 @@ internal object DotNetStdlibLibrary {
         ),
     )
     private val resolutionOnlySources = mapOf(
-        "DotNetStdlibInternalAnnotations.kt" to "kotlin.internal",
+        "Annotations.kt" to "kotlin.internal",
     )
 
     internal fun isImplementationSource(file: IrFile): Boolean =

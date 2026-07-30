@@ -25,9 +25,7 @@ import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.fir.packageFqName
-import org.jetbrains.kotlin.fir.resolve.providers.firProvider
-import org.jetbrains.kotlin.fir.serialization.FirKLibSerializerExtension
-import org.jetbrains.kotlin.fir.serialization.serializeSingleFirFile
+import org.jetbrains.kotlin.fir.pipeline.Fir2KlibMetadataSerializer
 import org.jetbrains.kotlin.library.KlibFormat
 import org.jetbrains.kotlin.library.KotlinAbiVersion
 import org.jetbrains.kotlin.library.KotlinLibraryVersioning
@@ -46,12 +44,12 @@ import kotlin.io.path.absolute
 
 /** Serializes the Kotlin declarations embedded in one profile-specific CLR implementation assembly. */
 object DotNetLibraryMetadataSerializationPipelinePhase :
-    PipelinePhase<DotNetFrontendPipelineArtifact, DotNetFrontendPipelineArtifact>(
+    PipelinePhase<DotNetFir2IrPipelineArtifact, DotNetFir2IrPipelineArtifact>(
         name = "DotNetLibraryMetadataSerializationPipelinePhase",
         preActions = setOf(PerformanceNotifications.KlibWritingStarted),
         postActions = setOf(CheckCompilationErrors.CheckDiagnosticCollector),
     ) {
-    override fun executePhase(input: DotNetFrontendPipelineArtifact): DotNetFrontendPipelineArtifact {
+    override fun executePhase(input: DotNetFir2IrPipelineArtifact): DotNetFir2IrPipelineArtifact {
         val configuration = input.configuration
         check(configuration.dotNetProducesStdlib.xor(configuration.dotNetProducesLibrary))
         val artifact = checkNotNull(configuration.dotNetProducedLibraryArtifact)
@@ -63,27 +61,18 @@ object DotNetLibraryMetadataSerializationPipelinePhase :
         val metadataVersion = configuration.metadataVersion()
         val fragments = mutableMapOf<String, MutableList<Pair<String, ByteArray>>>()
         val serializedSourceNames = mutableSetOf<String>()
+        val metadataSerializer = Fir2KlibMetadataSerializer(
+            compilerConfiguration = configuration,
+            firOutputs = input.frontendOutput.outputs,
+            fir2IrActualizedResult = input.result,
+            produceHeaderKlib = false,
+        )
         for (output in input.frontendOutput.outputs) {
-            val (session, scopeSession, fir) = output
-            val languageVersionSettings = configuration.languageVersionSettings
+            val fir = output.fir
             for (firFile in fir) {
                 val isBootstrapStdlibSource = firFile.name in DOTNET_STDLIB_SOURCES
                 if (configuration.dotNetProducesStdlib != isBootstrapStdlibSource) continue
-                val packageFragment = serializeSingleFirFile(
-                    firFile,
-                    session,
-                    scopeSession,
-                    actualizedExpectDeclarations = null,
-                    FirKLibSerializerExtension(
-                        session,
-                        scopeSession,
-                        session.firProvider,
-                        metadataVersion,
-                        exportKDoc = languageVersionSettings.supportsFeature(LanguageFeature.ExportKDocDocumentationToKlib),
-                        additionalMetadataProvider = null,
-                    ),
-                    languageVersionSettings,
-                )
+                val packageFragment = metadataSerializer.serializeSingleFileMetadata(firFile)
                 serializedSourceNames += firFile.name
                 fragments.getOrPut(firFile.packageFqName.asString()) { mutableListOf() }
                     .add(firFile.name to packageFragment.toByteArray())

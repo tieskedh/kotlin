@@ -16,8 +16,8 @@ class DotNetCliPipeline(override val defaultPerformanceManager: PerformanceManag
         return if (arguments.dotNetProduceStdlib || arguments.dotNetProduceLibrary) {
             DotNetConfigurationPipelinePhase then
                     DotNetFrontendPipelinePhase then
-                    DotNetLibraryMetadataSerializationPipelinePhase then
                     DotNetFir2IrPipelinePhase then
+                    DotNetLibraryMetadataSerializationPipelinePhase then
                     DotNetBackendPipelinePhase then
                     DotNetLibraryMetadataFinalizationPipelinePhase
         } else {
