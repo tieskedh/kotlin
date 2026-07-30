@@ -458,11 +458,17 @@ val dotNetStdlibOutputDirectories = dotNetStdlibProfiles.keys.associateWith { ta
 val dotNetStdlibPlatformSources = fileTree(rootProject.file("libraries/stdlib/dotnet/src")) {
     include("**/*.kt")
 }
+val dotNetStdlibSharedPlatformSources = files(
+    rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt"),
+)
 val dotNetStdlibCommonSources = files(
     rootProject.file("libraries/stdlib/src/kotlin/internal/Annotations.kt"),
     rootProject.file("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt"),
+    rootProject.file("libraries/stdlib/common/src/kotlin/ExceptionsH.kt"),
+    rootProject.file("libraries/stdlib/common/src/kotlin/ioH.kt"),
 )
-val dotNetStdlibSources = files(dotNetStdlibPlatformSources, dotNetStdlibCommonSources)
+val dotNetStdlibSources =
+    files(dotNetStdlibPlatformSources, dotNetStdlibSharedPlatformSources, dotNetStdlibCommonSources)
 val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, taskSuffix) ->
     val outputDirectory = dotNetStdlibOutputDirectories.getValue(targetFramework)
     tasks.register<JavaExec>("produceDotNetStdlib$taskSuffix") {

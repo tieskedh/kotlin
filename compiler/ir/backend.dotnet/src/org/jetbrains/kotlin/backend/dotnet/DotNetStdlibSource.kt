@@ -43,6 +43,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "ioH.kt",
+        "common/src/kotlin/ioH.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "Annotations.kt",
         "src/kotlin/internal/Annotations.kt",
         isCommon = true,

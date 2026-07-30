@@ -150,6 +150,8 @@ internal class DotNetIlIntrinsicMethods(
                 to DotNetIlThrowableAddSuppressedIntrinsic,
         Key(kotlinFqn, null, "dotNetSuppressedExceptions", listOf(throwableFqn))
                 to DotNetIlThrowableSuppressedExceptionsIntrinsic,
+        Key(kotlinIoFqn, null, "dotNetReadLine", emptyList()) to DotNetIlReadLineIntrinsic,
+        Key(kotlinIoFqn, null, "print", listOf(anyFqn)) to DotNetIlPrintIntrinsic,
         Key(kotlinIoFqn, null, "println", emptyList()) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(stringFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(intFqn)) to DotNetIlPrintlnIntrinsic,
@@ -2583,6 +2585,52 @@ private class DotNetIlUnsupportedIntrinsic(
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
     ): Boolean = dotNetUnsupported(reason)
+}
+
+/**
+ * The target-private input primitive used by the ordinary Kotlin.Stdlib `readlnOrNull` body.
+ * `Console.ReadLine` already implements the Common contract: it removes LF/CRLF and returns null
+ * only when no input remains. The exact MemberRef was assembled and executed on Framework CLR 4,
+ * CoreCLR 10, and from a netstandard2.0 library on both runtimes.
+ */
+private object DotNetIlReadLineIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (call.arguments.isNotEmpty() || expectedType != DotNetIlValueType.String) return false
+        codegen.emit(
+            "call string ${codegen.coreLibraryReference}System.Console::ReadLine()",
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/**
+ * Common `kotlin.io.print(Any?)`: first render through Kotlin's value-to-string rules, then use
+ * the CLR string overload. Calling `Console.Write(object)` or numeric/Boolean overloads would
+ * reintroduce CLR culture, floating-point, Boolean-casing, and null-rendering semantics.
+ */
+private object DotNetIlPrintIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsStatement(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+    ): Boolean {
+        val argument = call.arguments.singleOrNull()
+            ?: dotNetUnsupported("missing argument in a call to 'print'")
+        codegen.emitStringValueExpression(argument)
+        codegen.emit(
+            "call void ${codegen.coreLibraryReference}System.Console::Write(string)",
+            pops = 1,
+        )
+        return true
+    }
 }
 
 /**
