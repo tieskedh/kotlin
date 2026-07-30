@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 65
+toolchain enforcement and owns 798 FIR/IL/semantic tests, 21 generated-CLI tests, and 66
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 882 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 885 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -2548,15 +2548,28 @@ landed shape as a compatibility constraint.
   Injected resolution-only stdlib declarations and the executable stdlib implementation are
   excepted — they are not user-module declarations and reserve no user facade name. The combined
   `isDotNetResolutionOnlyStdlibDeclaration` predicate covers mapped/rejected exception stubs and
-  the bootstrap copy of `UsedFromCompilerGeneratedCode`; the emitter ownership scope covers
+  the authoritative Common internal-annotation source; the emitter ownership scope covers
   executable stdlib declarations. Resolution-only declarations remain available to frontend/KLIB
   serialization but must not enter the IL shape gate or physical declaration index.
-- The bootstrap stdlib's canonical implementation is ordinary Kotlin source under
-  `libraries/stdlib/dotnet/src`, one file per current package. `DotNetStdlibSource` only loads the
-  backend-JAR resource copy for same-run bootstrap compatibility. Tests require that copy to be
-  text-identical to the ordinary files, and direct-source/fallback products to have identical
-  packed KLIB entries, IL, and DLL bytes. The packaged catalog is sorted by relative path and the
-  fallback injector preserves those package-relative temp paths; FIR orders actual source paths,
+- The bootstrap stdlib's canonical platform implementation is ordinary Kotlin source under
+  `libraries/stdlib/dotnet/src`. Its first real Common/actual partition compiles the authoritative
+  `libraries/stdlib/src/kotlin/internal/Annotations.kt` and
+  `throwNoWhenBranchMatchedException.kt` as Common sources, plus the .NET helper body as an
+  `actual`; the deleted target annotation mirror must not return. The full Common
+  `ExceptionsH.kt` is not yet in the supported product, so the target exception declaration
+  remains the documented temporary bootstrap contract rather than pretending that the broader
+  exception surface actualises.
+  The frontend enables multiplatform semantics only when the source product or explicit Common
+  inputs require them and asks the shared FIR session construction to create distinct Common and
+  .NET source sessions. KLIB metadata serialization runs after FIR2IR actualisation through
+  `Fir2KlibMetadataSerializer`, matching JS/Wasm/Native; serializing before actualisation or
+  flattening Common and actual declarations into one metadata session is forbidden.
+  `DotNetStdlibSource` only loads the backend-JAR resource copy for same-run bootstrap
+  compatibility. Tests require every packaged file to be text-identical to its authoritative
+  repository file, reject a complete set whose Common files are misclassified as platform
+  sources, and require direct-source/fallback products to have identical packed KLIB entries, IL,
+  and DLL bytes. The packaged catalog is sorted by repository-relative path and the fallback
+  injector preserves those paths; FIR orders actual source paths,
   so a flat temp directory would change emitted declaration order. The physical declaration index contains only
   cross-module declarations: private/private-to-this/local `IdSignature`s must not be exported,
   because file-local signatures may contain checkout paths and private implementations are not
