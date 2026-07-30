@@ -91,10 +91,16 @@ internal object DotNetRuntimeLibraryHelpers {
             coreLibraryReference,
             compilerAbiTypeAttributesIl.replace("            |", ""),
         ).prependIndent("            |")
+        val throwableSupportTypesIl = DotNetThrowableRuntime.supportTypesIl(
+            coreLibraryReference,
+            compilerAbiTypeAttributesIl.replace("            |", ""),
+        ).prependIndent("            |")
         return """
             |.namespace Kotlin.Runtime.Internal
             |{
 $primitiveArrayHelperTypeIl
+            |
+$throwableSupportTypesIl
             |
             |  .class public auto ansi sealed beforefieldinit DefaultConstructorMarker
             |         extends ${coreLibraryReference}System.Object
@@ -1886,6 +1892,18 @@ $primitiveArrayHelperTypeIl
             |      ldarg.1
             |      ldc.i4.s 17
             |      beq EC_NoWhenBranchMatched
+            |      ldarg.1
+            |      ldc.i4.s 18
+            |      beq EC_ConcurrentModification
+            |      ldarg.1
+            |      ldc.i4.s 19
+            |      beq EC_AssertionError
+            |      ldarg.1
+            |      ldc.i4.s 20
+            |      beq EC_UninitializedPropertyAccess
+            |      ldarg.1
+            |      ldc.i4.s 21
+            |      beq EC_KotlinNothingValue
             |      br EC_False
             |
             |    EC_Exception:
@@ -1931,6 +1949,23 @@ $primitiveArrayHelperTypeIl
             |      isinst Kotlin.NoWhenBranchMatchedException
             |      brtrue EC_True
             |      br EC_False
+            |
+            |    EC_ConcurrentModification:
+            |      ldarg.0
+            |      isinst Kotlin.ConcurrentModificationException
+            |      br EC_MatchedObject
+            |    EC_AssertionError:
+            |      ldarg.0
+            |      isinst Kotlin.AssertionError
+            |      br EC_MatchedObject
+            |    EC_UninitializedPropertyAccess:
+            |      ldarg.0
+            |      isinst Kotlin.UninitializedPropertyAccessException
+            |      br EC_MatchedObject
+            |    EC_KotlinNothingValue:
+            |      ldarg.0
+            |      isinst Kotlin.KotlinNothingValueException
+            |      br EC_MatchedObject
             |
             |    EC_Error:
             |      ldarg.0

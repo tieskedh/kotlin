@@ -10271,7 +10271,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("15", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("16", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -27668,11 +27668,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 writeText(
                     """
                     using System;
+                    using System.IO;
                     using System.Reflection;
+                    using System.Threading;
 
                     public sealed class ForeignException : Exception
                     {
                         public ForeignException(string message, Exception inner) : base(message, inner) {}
+
+                        // Deliberately hostile equality: all runtime association and cycle checks
+                        // must still use reference identity.
+                        public override bool Equals(object other) { return other is ForeignException; }
+                        public override int GetHashCode() { return 1; }
                     }
 
                     public static class ForeignExceptionVerifier
@@ -27706,7 +27713,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             int[] typeIds = {
                                 Int32.MinValue, -1, 0,
                                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
-                                15, Int32.MaxValue,
+                                15, 16, 17, 18, 19, 20, 21, Int32.MaxValue,
                             };
                             foreach (Exception value in values)
                             {
@@ -27741,6 +27748,53 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 "exceptionboundary.KotlinRuntimeChild", true);
                             Type kotlinFatalFailureType = kotlinAssembly.GetType(
                                 "exceptionboundary.KotlinFatalFailure", true);
+                            Assembly runtimeAssembly = kotlinRuntimeFailureType.BaseType.Assembly;
+                            Type concurrentType = runtimeAssembly.GetType(
+                                "Kotlin.ConcurrentModificationException", true);
+                            Type assertionType = runtimeAssembly.GetType("Kotlin.AssertionError", true);
+                            Type uninitializedType = runtimeAssembly.GetType(
+                                "Kotlin.UninitializedPropertyAccessException", true);
+                            Type nothingFailureType = runtimeAssembly.GetType(
+                                "Kotlin.KotlinNothingValueException", true);
+                            Require(concurrentType.BaseType.FullName == "Kotlin.RuntimeException",
+                                "ConcurrentModificationException lost its exact sibling identity");
+                            Require(assertionType.BaseType.FullName == "Kotlin.Error",
+                                "AssertionError lost its Error ancestry");
+                            Require(!assertionType.IsSealed,
+                                "AssertionError must remain open as required by Common");
+                            Require(uninitializedType.BaseType.FullName == "Kotlin.RuntimeException",
+                                "UninitializedPropertyAccessException lost its runtime ancestry");
+                            Require(nothingFailureType.BaseType.FullName == "Kotlin.RuntimeException",
+                                "KotlinNothingValueException lost its runtime ancestry");
+                            MethodInfo exactClassifier = runtimeAssembly.GetType(
+                                    "Kotlin.Runtime.Internal.ExceptionClassifier", true)
+                                .GetMethod(
+                                    "IsKotlinExceptionInstance",
+                                    BindingFlags.Public | BindingFlags.Static);
+                            Exception concurrentIdentity = (Exception) Activator.CreateInstance(concurrentType);
+                            Exception assertionIdentity = (Exception) Activator.CreateInstance(assertionType);
+                            Exception uninitializedIdentity = (Exception) Activator.CreateInstance(uninitializedType);
+                            Exception nothingIdentity = (Exception) Activator.CreateInstance(nothingFailureType);
+                            Require((bool) exactClassifier.Invoke(
+                                    null, new object[] { concurrentIdentity, 18 }),
+                                "ConcurrentModificationException exact classifier id failed");
+                            Require((bool) exactClassifier.Invoke(
+                                    null, new object[] { assertionIdentity, 19 }),
+                                "AssertionError exact classifier id failed");
+                            Require((bool) exactClassifier.Invoke(
+                                    null, new object[] { uninitializedIdentity, 20 }),
+                                "UninitializedPropertyAccessException exact classifier id failed");
+                            Require((bool) exactClassifier.Invoke(
+                                    null, new object[] { nothingIdentity, 21 }),
+                                "KotlinNothingValueException exact classifier id failed");
+                            Require(!(bool) exactClassifier.Invoke(
+                                    null, new object[] { concurrentIdentity, 6 }),
+                                "ConcurrentModificationException collapsed into IllegalStateException");
+                            Require((bool) exactClassifier.Invoke(
+                                    null, new object[] { assertionIdentity, 4 }) &&
+                                    !(bool) exactClassifier.Invoke(
+                                        null, new object[] { assertionIdentity, 2 }),
+                                "AssertionError did not retain the Kotlin Error/Exception split");
                             Require(kotlinRuntimeFailureType.BaseType.FullName == "Kotlin.RuntimeException",
                                 "Kotlin RuntimeException subclass has untruthful CLR ancestry");
                             Require(kotlinRuntimeFailureType.BaseType.Assembly.GetName().Name == "Kotlin.Runtime",
@@ -27810,6 +27864,117 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                     rethrownForeign.StackTrace.Contains("rethrow"),
                                 "Kotlin catch/rethrow did not expose the CLR rethrow site");
 
+                            Type throwableSupport = runtimeAssembly.GetType(
+                                "Kotlin.Runtime.Internal.ThrowableSupport", true);
+                            MethodInfo addSuppressed = throwableSupport.GetMethod(
+                                "AddSuppressed", BindingFlags.Public | BindingFlags.Static);
+                            MethodInfo getSuppressed = throwableSupport.GetMethod(
+                                "GetSuppressed", BindingFlags.Public | BindingFlags.Static);
+                            MethodInfo stackTraceToString = throwableSupport.GetMethod(
+                                "StackTraceToString", BindingFlags.Public | BindingFlags.Static);
+                            MethodInfo printStackTrace = throwableSupport.GetMethod(
+                                "PrintStackTrace", BindingFlags.Public | BindingFlags.Static);
+                            Require(addSuppressed != null && getSuppressed != null &&
+                                    stackTraceToString != null && printStackTrace != null,
+                                "Throwable support is not public compiler/runtime ABI");
+
+                            Exception stateInner = new Exception("state-inner");
+                            ForeignException stateOwner = new ForeignException(
+                                "state-owner", stateInner);
+                            ForeignException suppressedA = new ForeignException("suppressed-a", null);
+                            ForeignException suppressedB = new ForeignException("suppressed-b", null);
+                            ForeignException causeSuppressed =
+                                new ForeignException("cause-suppressed", null);
+                            object stateMarker = new object();
+                            stateOwner.Data["state-marker"] = stateMarker;
+                            int originalDataCount = stateOwner.Data.Count;
+
+                            addSuppressed.Invoke(null, new object[] { stateOwner, stateOwner });
+                            Require(((Exception[]) getSuppressed.Invoke(
+                                    null, new object[] { stateOwner })).Length == 0,
+                                "self-suppression was not ignored");
+                            addSuppressed.Invoke(null, new object[] { stateOwner, suppressedA });
+                            addSuppressed.Invoke(null, new object[] { stateOwner, suppressedB });
+                            addSuppressed.Invoke(null, new object[] { stateOwner, suppressedA });
+                            addSuppressed.Invoke(null, new object[] { stateInner, causeSuppressed });
+                            Exception[] firstSnapshot = (Exception[]) getSuppressed.Invoke(
+                                null, new object[] { stateOwner });
+                            Require(firstSnapshot.Length == 3 &&
+                                    Object.ReferenceEquals(firstSnapshot[0], suppressedA) &&
+                                    Object.ReferenceEquals(firstSnapshot[1], suppressedB) &&
+                                    Object.ReferenceEquals(firstSnapshot[2], suppressedA),
+                                "suppressed insertion order, duplicates, or identity were lost");
+                            addSuppressed.Invoke(null, new object[] { stateOwner, suppressedB });
+                            Require(firstSnapshot.Length == 3,
+                                "a previously returned suppressed snapshot was mutated");
+
+                            ForeignException equalOwner = new ForeignException("equal-owner", null);
+                            addSuppressed.Invoke(null, new object[] { equalOwner, suppressedB });
+                            Exception[] equalSnapshot = (Exception[]) getSuppressed.Invoke(
+                                null, new object[] { equalOwner });
+                            Require(equalSnapshot.Length == 1 &&
+                                    Object.ReferenceEquals(equalSnapshot[0], suppressedB),
+                                "hostile Equals merged two throwable state identities");
+                            Require(((Exception[]) getSuppressed.Invoke(
+                                    null, new object[] { stateOwner })).Length == 4,
+                                "hostile Equals replaced the original owner's state");
+
+                            addSuppressed.Invoke(null, new object[] { suppressedA, stateOwner });
+                            string clrDiagnostic = stateOwner.ToString();
+                            string rendered = (string) stackTraceToString.Invoke(
+                                null, new object[] { stateOwner });
+                            Require(rendered.StartsWith(clrDiagnostic),
+                                "stackTraceToString did not preserve the CLR diagnostic prefix");
+                            int firstSuppressed = rendered.IndexOf(
+                                "Suppressed: " + suppressedA.ToString(), StringComparison.Ordinal);
+                            int secondSuppressed = rendered.IndexOf(
+                                "Suppressed: " + suppressedB.ToString(), StringComparison.Ordinal);
+                            Require(firstSuppressed >= 0 && secondSuppressed > firstSuppressed,
+                                "stackTraceToString lost suppressed order or CLR descriptions");
+                            Require(rendered.Contains("[CIRCULAR REFERENCE:"),
+                                "cyclic suppression did not terminate with an identity cycle marker");
+                            Require(
+                                rendered.Contains(
+                                    "Suppressed exceptions attached to cause: " +
+                                    stateInner.ToString()) &&
+                                rendered.Contains(
+                                    "Suppressed: " + causeSuppressed.ToString()),
+                                "stackTraceToString lost suppressed state attached to a cause");
+                            Require(stateOwner.Data.Count == originalDataCount &&
+                                    Object.ReferenceEquals(stateOwner.Data["state-marker"], stateMarker),
+                                "Kotlin throwable state mutated Exception.Data");
+
+                            TextWriter originalError = Console.Error;
+                            StringWriter capturedError = new StringWriter();
+                            try
+                            {
+                                Console.SetError(capturedError);
+                                printStackTrace.Invoke(null, new object[] { stateOwner });
+                            }
+                            finally
+                            {
+                                Console.SetError(originalError);
+                            }
+                            Require(capturedError.ToString().Contains(rendered),
+                                "printStackTrace did not print the composed detailed description");
+
+                            ForeignException concurrentOwner = new ForeignException("concurrent", null);
+                            Thread[] writers = new Thread[8];
+                            for (int writerIndex = 0; writerIndex < writers.Length; writerIndex++)
+                            {
+                                writers[writerIndex] = new Thread(delegate()
+                                {
+                                    for (int addition = 0; addition < 50; addition++)
+                                        addSuppressed.Invoke(
+                                            null, new object[] { concurrentOwner, suppressedA });
+                                });
+                                writers[writerIndex].Start();
+                            }
+                            foreach (Thread writer in writers) writer.Join();
+                            Require(((Exception[]) getSuppressed.Invoke(
+                                    null, new object[] { concurrentOwner })).Length == 400,
+                                "concurrent suppressed additions were lost");
+
                             InvalidOperationException runtime = new InvalidOperationException("runtime");
                             int runtimeClassification = (int) classification.Invoke(null, new object[] { runtime });
                             Require(runtimeClassification == 3, "mapped CLR program fault must be Exception and RuntimeException");
@@ -27822,8 +27987,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require(Object.ReferenceEquals(error, roundTrip.Invoke(null, new object[] { error })),
                                 "CLR error identity was replaced");
                             RequireClassifierTotal(
-                                kotlinRuntimeFailureType.BaseType.Assembly,
-                                new Exception[] { null, foreign, runtime, error, kotlinRuntime, kotlinFatal });
+                                runtimeAssembly,
+                                new Exception[] {
+                                    null, foreign, runtime, error, kotlinRuntime, kotlinFatal,
+                                    concurrentIdentity, assertionIdentity,
+                                    uninitializedIdentity, nothingIdentity,
+                                });
                             return 0;
                         }
                     }
@@ -27907,7 +28076,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val commonSourcePaths = sourceFiles
             .filter { it.name in DOTNET_STDLIB_COMMON_SOURCE_NAMES }
             .map(File::getPath)
-        compileInProcess(
+        val diagnostics = compileInProcess(
             K2DotNetCompiler(),
             K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
@@ -27918,6 +28087,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 .orEmpty(),
             *sourceFiles.map(File::getPath).toTypedArray(),
         )
+        assertFalse("'expect'/'actual' classes" in diagnostics) {
+            "The compiler-owned stdlib product leaked an expect/actual Beta warning:\n$diagnostics"
+        }
 
         val implementationLibrary = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
         assertTrue(implementationLibrary.isFile) { "Expected self-describing CLR library at $implementationLibrary" }
@@ -28017,6 +28189,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
                     "'emptyList'<'T'>()" in il
         )
+        assertTrue(".class private auto ansi sealed beforefieldinit 'Kotlin.SuppressedExceptionList'" in il)
+        assertTrue(".class private auto ansi sealed beforefieldinit 'Kotlin.SuppressedExceptionIterator'" in il)
+        assertTrue("'stackTraceToString__KotlinException__" in il)
+        assertTrue("'addSuppressed__KotlinException__" in il)
+        assertTrue("'get_suppressedExceptions__KotlinException__" in il)
         return stdlibDirectory
     }
 
@@ -28032,6 +28209,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/internal/Annotations.kt").absoluteFile
         sourceFiles +=
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common/src/kotlin/ExceptionsH.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt").absoluteFile
         sourceFiles.sortBy(File::invariantSeparatorsPath)
         assertEquals(DOTNET_STDLIB_SOURCES.keys.sorted(), sourceFiles.map(File::getName).sorted())
         for (sourceFile in sourceFiles) {
@@ -28089,6 +28268,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun emptyStrings(): List<String> = emptyList()
 
                 public fun isRandomAccess(values: List<Int>): Boolean = values is RandomAccess
+
+                public fun addAndReadSuppressed(
+                    owner: Throwable,
+                    suppressed: Throwable,
+                ): List<Throwable> {
+                    owner.addSuppressed(suppressed)
+                    owner.stackTraceToString()
+                    return owner.suppressedExceptions
+                }
                 """.trimIndent()
             )
         }
@@ -28118,6 +28306,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<string>" in il)
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
+        assertTrue(
+            "[Kotlin.Stdlib]'Kotlin.DotNetExceptionsKt'::" +
+                    "'addSuppressed__KotlinException__" in il
+        )
+        assertTrue(
+            "[Kotlin.Stdlib]'Kotlin.DotNetExceptionsKt'::" +
+                    "'stackTraceToString__KotlinException__" in il
+        )
+        assertTrue(
+            "[Kotlin.Stdlib]'Kotlin.DotNetExceptionsKt'::" +
+                    "'get_suppressedExceptions__KotlinException__" in il
+        )
     }
 
     private fun consumeInstalledStdlib(
@@ -28154,7 +28354,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 fun main() {
                     val values = Array<String>(2) { index -> if (index == 0) "O" else "K" }
-                    println(values.asIterable().first() + values.asIterable().last())
+                    val owner = RuntimeException("owner")
+                    val suppressed = IllegalStateException("suppressed")
+                    owner.addSuppressed(suppressed)
+                    val snapshot = owner.suppressedExceptions
+                    val collectionsOk =
+                        values.asIterable().first() + values.asIterable().last() == "OK"
+                    val throwableOk =
+                        snapshot.size == 1 &&
+                            snapshot[0] === suppressed &&
+                            owner.stackTraceToString() != owner.toString()
+                    println(if (collectionsOk && throwableOk) "OK" else "FAIL")
                 }
                 """.trimIndent()
             )
@@ -29582,9 +29792,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
     }
 
-    private fun compileInProcess(compiler: CLICompiler<*>, vararg args: String) {
+    private fun compileInProcess(compiler: CLICompiler<*>, vararg args: String): String {
         val [output, exitCode] = AbstractCliTest.executeCompilerGrabOutput(compiler, args.toList())
         if (exitCode != ExitCode.OK) error("Failed to compile: ${args.joinToString(" ")}\nOutput:\n$output")
+        return output
     }
 
     private fun modernDotNetHostOrSkip(): File {
