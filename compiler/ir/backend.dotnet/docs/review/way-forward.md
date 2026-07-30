@@ -918,6 +918,24 @@ change, so schema 16 and runtime surface level 9 remain current.
 The fresh strict gate is 889/0/0/0 across 16 XML suites (802 FIR/IL/box, 21 generated CLI, and
 66 library integration tests).
 
+**Common collections programme (first slice implemented 2026-07-30):** collections are now a
+first-class feature programme rather than enum-only preparation. Kotlin Common declarations and
+`libraries/tools/kotlin-stdlib-gen` remain authoritative; Kotlin-owned collection identity is not
+replaced by `IEnumerable<T>` or `IReadOnlyList<T>`. The first bounded slice projects only proven
+Iterable/List terminal operations from the existing Common `Elements` templates into a classified
+Common product source. This replaces new handwritten algorithm extraction without pretending the
+complete 4,130-line generated collection corpus is supported. It also extracts the exact Common
+`List.lastIndex` declaration with a fail-closed source marker; generic extension properties become
+ordinary static generic CLR accessors without CLR property rows. Compiler-owned stdlib source
+shards explicitly assigned `Kotlin.Collections.CollectionsKt` now aggregate into that one physical
+facade instead of silently producing an unbindable suffixed class. Adversarial tests cover both
+terminal algorithms, nullable results, Common List dispatch, hostile iterators, and direct,
+fallback, installed, portable, Framework CLR 4, and CoreCLR 10 product paths. The physical ABI
+codec and runtime surface remain schema 16 / level 9. The fresh strict gate is 893/0/0/0 across 16
+XML suites (806 FIR/IL/box, 21 generated CLI, and 66 library integration tests). Explicit BCL
+adapters remain a separate interoperability feature. The reviewed programme and attacked
+alternatives are in `common-collections-program.md`.
+
 **CLR-importer progress (2026-07-28):** the first importer slice follows the JVM foreign
 classfile/provider split without pretending that CLR metadata is Java metadata. A single bounded,
 JVM-hosted PE/ECMA-335 engine now serves both embedded-resource loading and an immutable physical
@@ -1313,7 +1331,7 @@ These may remain unimplemented during foundation correction, but must fail loudl
 - coroutine state machines and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;
 - `CharSequence`, `StringBuilder`, and `lateinit`;
-- broad stdlib and Gradle/KMP product integration.
+- stdlib beyond the staged collections programme, and broad Gradle/KMP product integration.
 
 Parking a feature does not permit an adjacent ABI to assume its future representation. In
 particular, value classes constrain generic-interface placement, and coroutines constrain callable

@@ -33,6 +33,23 @@ tasks {
         systemProperty("line.separator", "\n")
     }
 
+    register<JavaExec>("generateDotNetBootstrapCollections") {
+        group = "application"
+        description = "Generates the supported Common collection slice for the experimental .NET stdlib."
+        mainClass = "generators.GenerateDotNetBootstrapCollectionsKt"
+        classpath = sourceSets.main.get().runtimeClasspath
+        args = listOf("$rootDir")
+        systemProperty("line.separator", "\n")
+        outputs.file(
+            rootProject.file(
+                "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapCollections.kt"
+            )
+        )
+        inputs.file(
+            rootProject.file("libraries/stdlib/src/kotlin/collections/Collections.kt")
+        )
+    }
+
     register<JavaExec>("generateStdlibTests") {
         group = "application"
         mainClass = "generators.GenerateStandardLibTestsKt"

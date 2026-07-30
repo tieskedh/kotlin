@@ -27,6 +27,9 @@ copying a snapshot review into binding design law.
 7. [`common-io-source-partition.md`](common-io-source-partition.md) records the mature-target I/O
    comparison, the exception dependency proved by compilation, its completed classified-carrier
    prerequisite, and the implemented Common/actual source-product partition.
+8. [`common-collections-program.md`](common-collections-program.md) selects collections as a
+   first-class feature programme, keeps Common and the stdlib generator authoritative, and
+   separates Kotlin identity from later explicit BCL adapters.
 
 Authority order for implementation work:
 

@@ -155,6 +155,7 @@ internal class DotNetIlEmitter(
             file.declarations.filterIsInstance<IrClass>().filter(emissionScope::owns)
         }
         val fileClassNames = buildFileClassNames(files, topLevelClassesByFile)
+        val facadeFilesByIlName = files.groupBy(fileClassNames::getValue)
         val topLevelPropertiesByFile = files.associateWith { file ->
             file.declarations.filterIsInstance<IrProperty>().filter(emissionScope::owns)
         }
@@ -167,6 +168,28 @@ internal class DotNetIlEmitter(
                 .singleOrNull { it.origin == DOTNET_STATIC_INITIALIZER }
                 ?.let { file to it }
         }.toMap()
+        val ambiguousStatefulFacade = facadeFilesByIlName.entries.firstOrNull { entry ->
+            entry.value.count { file ->
+                file in staticInitializersByFile ||
+                        topLevelPropertiesByFile.getValue(file).any { property -> property.backingField != null }
+            } > 1
+        }
+        if (ambiguousStatefulFacade != null) {
+            val [facadeIlName, facadeFiles] = ambiguousStatefulFacade
+            val statefulFiles = facadeFiles.filter { file ->
+                file in staticInitializersByFile ||
+                        topLevelPropertiesByFile.getValue(file).any { property -> property.backingField != null }
+            }
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "Compiler-owned stdlib facade '$facadeIlName' has physical top-level state in multiple source files: " +
+                        statefulFiles.joinToString { file ->
+                            file.fileEntry.name.substringAfterLast('/').substringAfterLast('\\')
+                        } +
+                        ". Cross-file class-initializer ordering is not supported.",
+            )
+            return null
+        }
         val topLevelFunctionsByFile = files.associateWith { file ->
             file.declarations.filterIsInstance<IrSimpleFunction>().filter { function ->
                 function.origin != DOTNET_STATIC_INITIALIZER &&
@@ -1008,10 +1031,6 @@ internal class DotNetIlEmitter(
                 when {
                     property.isDelegated -> propertySkipReasons[property] = "delegated property '$name' is not supported"
                     property.isLateinit -> propertySkipReasons[property] = "lateinit property '$name' is not supported"
-                    // Generic (extension) properties remain outside the supported declaration
-                    // model even though their accessors would be generic IL methods.
-                    accessors.any { it.typeParameters.isNotEmpty() } ->
-                        propertySkipReasons[property] = "generic property '$name' is not supported yet"
                     property.isConst -> try {
                         constFieldLines[property] = renderConstField(property, typeMapper)
                     } catch (e: DotNetIlUnsupportedException) {
@@ -1019,6 +1038,7 @@ internal class DotNetIlEmitter(
                     }
                     else -> try {
                         for (accessor in accessors) {
+                            accessor.checkDotNetFunctionShapeSupported()
                             availableFunctions[accessor] = DotNetIlFunctionInfo(
                                 facadeClassInfo,
                                 accessor.dotNetSignature(typeMapper),
@@ -1240,30 +1260,30 @@ internal class DotNetIlEmitter(
             }
         }
 
-        // Facade IL method-identity gate: the file facade's analogue of the class member
-        // pre-pass above. All top-level functions and property accessors of one file render
-        // into ONE facade class, so accessor mangling and IL type erasure make the same clashes
-        // possible there: `fun get_x()` vs the getter of `val x`, `g(String)`/`g(String?)`
-        // (reference nullability erases to the same IL `string`), and `h(Any)`/`h(Any?)` (both
-        // map to `object`) — each yields two identical IL method declarations, which ilasm
-        // rejects as a duplicate method declaration (probe-verified on the modern ilasm 10.0.9,
-        // like the class-member gate; the JVM frontend's analogue is
-        // PLATFORM_DECLARATION_CLASH). Granularity follows the facade rules rather than the
-        // whole-class rule: EVERY callable of a clashing identity is evicted (keeping one half
-        // would be an arbitrary pick between legal Kotlin overloads) — a plain function
-        // per-function, an accessor with its whole property, and a backing-field-bearing
-        // property with the file's whole property group (its initializer can no longer run).
-        // Like the class gate, the return type is deliberately not part of the identity key.
-        // Pinned by ilText/facadeMethodClash.kt.
-        for (file in files) {
+        // Facade IL method-identity gate: the physical facade's analogue of the class member
+        // pre-pass above. Normally that is one Kotlin file. Compiler-owned stdlib source shards
+        // may explicitly share one stable facade, so their callables participate in this same
+        // identity set instead of being order-dependently renamed to `Facade1`. Accessor mangling
+        // and IL type erasure make clashes possible in either case: `fun get_x()` vs the getter of
+        // `val x`, `g(String)`/`g(String?)` (reference nullability erases to the same IL `string`),
+        // and `h(Any)`/`h(Any?)` (both map to `object`) each yield duplicate IL declarations.
+        // Granularity follows facade rules: EVERY callable of a clashing identity is evicted
+        // (keeping one half would arbitrarily choose between legal Kotlin overloads) — a plain
+        // function per-function, an accessor with its whole property, and a backing-field-bearing
+        // property with its source file's whole property group. Return type is deliberately not
+        // part of the identity key. Pinned by ilText/facadeMethodClash.kt and the target-stdlib
+        // product's shared CollectionsKt assertions.
+        for (facadeFiles in facadeFilesByIlName.values) {
             val facadeCallables = mutableListOf<IrSimpleFunction>()
-            for (declaration in file.declarations) {
-                when (declaration) {
-                    is IrSimpleFunction -> if (declaration in availableFunctions) facadeCallables += declaration
-                    is IrProperty ->
-                        listOfNotNull(declaration.getter, declaration.setter)
-                            .filterTo(facadeCallables) { it in availableFunctions }
-                    else -> {}
+            for (file in facadeFiles) {
+                for (declaration in file.declarations) {
+                    when (declaration) {
+                        is IrSimpleFunction -> if (declaration in availableFunctions) facadeCallables += declaration
+                        is IrProperty ->
+                            listOfNotNull(declaration.getter, declaration.setter)
+                                .filterTo(facadeCallables) { it in availableFunctions }
+                        else -> {}
+                    }
                 }
             }
             facadeCallables.sortBy { it.isOriginallyLocalDeclaration }
@@ -1298,7 +1318,7 @@ internal class DotNetIlEmitter(
                     } else {
                         evictTopLevelProperty(property, reason)
                         if (property.backingField != null) {
-                            failFilePropertyGroup(file, reason)
+                            failFilePropertyGroup(property.parent as IrFile, reason)
                         }
                     }
                 }
@@ -1691,12 +1711,16 @@ internal class DotNetIlEmitter(
         }
 
         val moduleBody = buildString {
+            val renderedFacadeIlNames = hashSetOf<String>()
             for (file in files) {
                 // Per file: user classes first, then the file facade (the deterministic order
                 // the goldens freeze).
                 for (irClass in topLevelClassesByFile.getValue(file)) {
                     renderedClasses[irClass]?.let { rendered -> append(rendered.ilText) }
                 }
+                val facadeIlName = fileClassNames.getValue(file)
+                if (!renderedFacadeIlNames.add(facadeIlName)) continue
+                val facadeFiles = facadeFilesByIlName.getValue(facadeIlName)
                 // Facade members in declaration order, the `.cctor` first: static backing
                 // fields (const `literal` fields interleaved in declaration order), then the
                 // methods — top-level functions and property accessors — then the static
@@ -1704,66 +1728,74 @@ internal class DotNetIlEmitter(
                 // receiver parameter, and a CLR property with parameters is an indexer, which is
                 // out of scope — the accessors stay callable as plain static methods).
                 val facadeMethods = mutableListOf<DotNetIlRenderedMethod>()
-                renderedStaticInitializers[file]?.let { facadeMethods += it }
-                for (declaration in file.declarations) {
-                    when (declaration) {
-                        is IrSimpleFunction -> {
-                            renderedMethods[declaration]?.let { facadeMethods += it }
-                            renderedExports[declaration]?.methods?.let { methods ->
-                                facadeMethods += methods.map { it.method }
+                facadeFiles.mapNotNull(renderedStaticInitializers::get).singleOrNull()
+                    ?.let { facadeMethods += it }
+                for (facadeFile in facadeFiles) {
+                    for (declaration in facadeFile.declarations) {
+                        when (declaration) {
+                            is IrSimpleFunction -> {
+                                renderedMethods[declaration]?.let { facadeMethods += it }
+                                renderedExports[declaration]?.methods?.let { methods ->
+                                    facadeMethods += methods.map { it.method }
+                                }
                             }
-                        }
-                        is IrProperty -> {
-                            declaration.getter?.let { getter -> renderedMethods[getter]?.let { facadeMethods += it } }
-                            declaration.setter?.let { setter -> renderedMethods[setter]?.let { facadeMethods += it } }
-                            renderedPropertyExports[declaration]?.methods?.let { methods ->
-                                facadeMethods += methods.map { it.method }
+                            is IrProperty -> {
+                                declaration.getter?.let { getter -> renderedMethods[getter]?.let { facadeMethods += it } }
+                                declaration.setter?.let { setter -> renderedMethods[setter]?.let { facadeMethods += it } }
+                                renderedPropertyExports[declaration]?.methods?.let { methods ->
+                                    facadeMethods += methods.map { it.method }
+                                }
                             }
+                            else -> {}
                         }
-                        else -> {}
                     }
                 }
                 val facadeFields = mutableListOf<String>()
-                staticInitializationFailureFieldLines[file]?.let { facadeFields += it }
                 val facadePropertyBlocks = mutableListOf<String>()
-                val fieldLines = staticFieldLines[file].orEmpty()
-                for (property in topLevelPropertiesByFile.getValue(file)) {
-                    if (property in propertySkipReasons || property.isExcludedFromCodegen(intrinsicMethods)) continue
-                    if (property.isConst) {
-                        constFieldLines[property]?.let { facadeFields += it }
-                        continue
-                    }
-                    fieldLines[property]?.let { facadeFields += it }
-                    val getter = property.getter
-                    val setter = property.setter
-                    if ((getter != null || setter != null) && !property.isDotNetExtensionProperty()) {
-                        facadePropertyBlocks += renderPropertyBlock(property, getter, setter, availableFunctions, isStatic = true)
-                    }
-                    renderedPropertyExports[property]?.let { rendered ->
-                        facadePropertyBlocks += rendered.propertyBlock
+                for (facadeFile in facadeFiles) {
+                    staticInitializationFailureFieldLines[facadeFile]?.let { facadeFields += it }
+                    val fieldLines = staticFieldLines[facadeFile].orEmpty()
+                    for (property in topLevelPropertiesByFile.getValue(facadeFile)) {
+                        if (property in propertySkipReasons || property.isExcludedFromCodegen(intrinsicMethods)) continue
+                        if (property.isConst) {
+                            constFieldLines[property]?.let { facadeFields += it }
+                            continue
+                        }
+                        fieldLines[property]?.let { facadeFields += it }
+                        val getter = property.getter
+                        val setter = property.setter
+                        if ((getter != null || setter != null) && !property.isDotNetExtensionProperty()) {
+                            facadePropertyBlocks +=
+                                renderPropertyBlock(property, getter, setter, availableFunctions, isStatic = true)
+                        }
+                        renderedPropertyExports[property]?.let { rendered ->
+                            facadePropertyBlocks += rendered.propertyBlock
+                        }
                     }
                 }
                 if (facadeMethods.isEmpty() && facadeFields.isEmpty() && facadePropertyBlocks.isEmpty()) continue
-                val facadeIsPublic = file.declarations.any { declaration ->
-                    when (declaration) {
-                        is IrSimpleFunction ->
-                            declaration in availableFunctions &&
-                                    !declaration.isOriginallyLocalDeclaration &&
-                                    (declaration.visibility == DescriptorVisibilities.PUBLIC || declaration.isPublishedApi())
-                        is IrProperty ->
-                            declaration !in propertySkipReasons &&
-                                    !declaration.isExcludedFromCodegen(intrinsicMethods) &&
-                                    (declaration.visibility == DescriptorVisibilities.PUBLIC || declaration.isPublishedApi())
-                        else -> false
+                val facadeIsPublic = facadeFiles.any { facadeFile ->
+                    facadeFile.declarations.any { declaration ->
+                        when (declaration) {
+                            is IrSimpleFunction ->
+                                declaration in availableFunctions &&
+                                        !declaration.isOriginallyLocalDeclaration &&
+                                        (declaration.visibility == DescriptorVisibilities.PUBLIC || declaration.isPublishedApi())
+                            is IrProperty ->
+                                declaration !in propertySkipReasons &&
+                                        !declaration.isExcludedFromCodegen(intrinsicMethods) &&
+                                        (declaration.visibility == DescriptorVisibilities.PUBLIC || declaration.isPublishedApi())
+                            else -> false
+                        }
                     }
                 }
                 DotNetIlClassCodegen(
-                    fileClassNames.getValue(file),
+                    facadeIlName,
                     facadeMethods.map { it.ilText },
                     facadeFields,
                     facadePropertyBlocks,
                     exported = facadeIsPublic,
-                    hasClassInitializer = renderedStaticInitializers.containsKey(file),
+                    hasClassInitializer = facadeFiles.any(renderedStaticInitializers::containsKey),
                     coreLibraryReference = coreLibrary.reference,
                 ).generate(this)
             }
@@ -3497,11 +3529,17 @@ internal class DotNetIlEmitter(
     ) : DotNetIlUnsupportedException(reason)
 
     /**
-     * Precomputes the file class name for every file: the package-qualified dotted name
-     * (`pkg.fileKt`) rendered later as a single quoted identifier, with a numeric suffix
-     * deduplicating collisions. The used-name pool is seeded with the IL names of all top-level
-     * user classes — Kotlin-declared and therefore not renamable — so a facade name dodges a
-     * user class that occupies it (`pkg.Foo.kt`'s facade vs a user class `pkg.FooKt`).
+     * Precomputes the physical facade class name for every file. Ordinary files use the
+     * package-qualified dotted name (`pkg.fileKt`) rendered later as a single quoted identifier,
+     * with a numeric suffix deduplicating collisions. Compiler-owned stdlib shards may explicitly
+     * select one shared stable facade; every such file receives the exact same name and the render
+     * aggregates their members into one class.
+     *
+     * The used-name pool is seeded with the IL names of all top-level user classes —
+     * Kotlin-declared and therefore not renamable — so an ordinary facade name dodges a user class
+     * that occupies it (`pkg.Foo.kt`'s facade vs a user class `pkg.FooKt`). An explicit stdlib
+     * facade is compiler ABI and therefore cannot be silently suffixed; colliding with a declared
+     * class is an internal source-catalog error.
      *
      * The seeding is deliberately pre-gate: it runs before the shape gate and the render
      * fixpoint, so a declared class reserves its name even when it is later skipped and absent
@@ -3514,20 +3552,41 @@ internal class DotNetIlEmitter(
         files: List<IrFile>,
         topLevelClassesByFile: Map<IrFile, List<IrClass>>,
     ): Map<IrFile, String> {
-        val usedNames = hashSetOf<String>()
+        val declaredClassNames = hashSetOf<String>()
         topLevelClassesByFile.values.flatten()
             // Injected resolution-only declarations never become IL classes, so they reserve no
             // facade name either.
             .filterNot(IrClass::isDotNetResolutionOnlyStdlibDeclaration)
-            .mapTo(usedNames) { it.fqNameWhenAvailable!!.asString() }
+            .mapTo(declaredClassNames) { it.fqNameWhenAvailable!!.asString() }
+        val explicitStdlibFacadesByFile =
+            if (emissionScope == DotNetIlEmissionScope.STDLIB) {
+                files.mapNotNull { file ->
+                    DotNetStdlibLibrary.implementationFileFacadeIlName(file)?.let { file to it }
+                }.toMap()
+            } else {
+                emptyMap()
+            }
+        for (explicitStdlibFacade in explicitStdlibFacadesByFile.values.toSet()) {
+            check(explicitStdlibFacade !in declaredClassNames) {
+                "Internal .NET backend error: compiler-owned stdlib facade '$explicitStdlibFacade' " +
+                        "collides with a declared CLR class"
+            }
+        }
+        // Reserve explicit ABI names before assigning ordinary facades. Otherwise the result
+        // would depend on whether a coincidentally named ordinary source preceded or followed a
+        // compiler-owned shard in FIR file order.
+        val usedNames = declaredClassNames.toHashSet().apply {
+            addAll(explicitStdlibFacadesByFile.values)
+        }
         return files.associateWith { file ->
             val fileName = file.fileEntry.name.substringAfterLast('/').substringAfterLast('\\').substringBeforeLast('.')
             val packageFqName = file.packageFqName
-            val baseName = if (emissionScope == DotNetIlEmissionScope.STDLIB) {
-                DotNetStdlibLibrary.implementationFileFacadeIlName(file)
-            } else {
-                null
-            } ?: if (packageFqName.isRoot) "${fileName}Kt" else "${packageFqName.asString()}.${fileName}Kt"
+            val explicitStdlibFacade = explicitStdlibFacadesByFile[file]
+            if (explicitStdlibFacade != null) {
+                return@associateWith explicitStdlibFacade
+            }
+            val baseName =
+                if (packageFqName.isRoot) "${fileName}Kt" else "${packageFqName.asString()}.${fileName}Kt"
             var className = baseName
             var suffix = 1
             while (!usedNames.add(className)) {
