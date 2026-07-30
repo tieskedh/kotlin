@@ -3,7 +3,7 @@
 - Status: **Accepted pre-ABI direction; foundational slice implemented**
 - Date: 2026-07-17
 - Scope: physical throwable representation, Kotlin hierarchy classification, catches, signatures,
-  rethrow, and CLR interop
+  rethrow, identity-associated Common state, stack traces, and CLR interop
 
 This is the selected repository direction for the experimental backend. Nothing has shipped, so it
 may replace the current hybrid mappings without a compatibility bridge. It is not a public KEEP or
@@ -173,6 +173,48 @@ may use `rethrow` only if Kotlin evaluation and observable platform behavior are
 `cause` maps to `InnerException` for Kotlin-owned constructors. Foreign objects retain their own
 `InnerException`, `Data`, stack trace, and exact type without normalization.
 
+### Identity-associated Kotlin throwable state
+
+Common `Throwable` semantics that have no `System.Exception` representation are stored as
+identity-associated Kotlin runtime state. The state belongs conceptually to the original throwable
+object but does not alter its physical CLR identity:
+
+- the runtime keys a weak association by the exact `System.Exception` reference;
+- the associated value must not retain its own key, while values such as suppressed exceptions
+  remain strongly reachable for as long as the owning throwable remains reachable;
+- lookup and mutation are thread-safe and preserve insertion order;
+- self-suppression is ignored, matching the mature non-JVM targets;
+- the compiler and stdlib never wrap, clone, translate, or replace the throwable to attach state;
+- foreign extensibility surfaces, especially `Exception.Data`, are not used or mutated.
+
+This state is uniformly available to Kotlin-owned, deliberately mapped BCL, and otherwise unknown
+foreign exception objects. It is a versioned `Kotlin.Runtime` service rather than a field assumed
+to exist on one physical exception base. That follows directly from the one-carrier model:
+Kotlin-only state must not make broad `Throwable` values cease to be their original CLR objects.
+
+The first state is the ordered suppressed-exception collection used by
+`Throwable.addSuppressed` and `Throwable.suppressedExceptions`. Retrieval returns a stable Kotlin
+list view or snapshot and never exposes a mutable runtime collection. An empty state produces the
+canonical empty Kotlin list.
+
+Repeated suppression of the same exception is retained, matching JVM/JS/Wasm list semantics.
+Every non-empty read is a fresh snapshot: later concurrent additions cannot mutate a previously
+returned list. Exact reference identity, rather than virtual `Equals`, controls table ownership,
+self-suppression, and cycle detection.
+
+### Stack traces and detailed descriptions
+
+CLR diagnostic facts remain authoritative: exact CLR type, message, inner-exception chain, and
+captured CLR stack frames are not reconstructed as invented Kotlin frames. Common
+`stackTraceToString` composes those facts with identity-associated Kotlin semantics, including
+suppressed exceptions, cycle detection, and the Common qualifiers. `printStackTrace` writes that
+composed description to the platform error stream.
+
+The implementation may use `System.Exception.ToString()` or lower-level CLR properties as input,
+but it must not lose Kotlin suppressed state or mutate the exception merely to format it. Foreign
+exceptions therefore keep the debugger and C# diagnostic information supplied by CLR while Kotlin
+observes the complete Common contract.
+
 ### Import and export boundary
 
 C# may pass any `System.Exception` to a Kotlin `Throwable` or `Exception` surface. Narrower logical
@@ -187,6 +229,8 @@ export conveniences do not redefine classification.
 
 - Kotlin logical inheritance is uniform while foreign CLR identity and tooling behavior are kept.
 - Catch filters and physical/logical type separation become fundamental backend mechanisms.
+- Kotlin-only throwable state is an additive runtime ABI keyed by object identity rather than a
+  reason to replace or mutate foreign exception objects.
 - Exception-typed physical signatures are less idiomatic to C# than a fabricated class hierarchy;
   export facades own any ergonomic projections.
 - The classifier and hierarchy metadata are runtime ABI and must be versioned and tested across
@@ -214,11 +258,22 @@ The current foundational slice implements:
    slots, from a `netstandard2.0` producer consumed and executed on both application profiles; and
 10. exact `OperationCanceledException` cancellation identity plus the classified
     `IllegalStateException` parent edge, including owned, foreign, and `TaskCanceledException`
-    values, cause preservation, and a Kotlin-owned subclass on both application profiles.
+    values, cause preservation, and a Kotlin-owned subclass on both application profiles;
+11. the complete authoritative Common `ExceptionsH.kt` product plus shared non-JVM actual
+    exception classes, replacing the target hierarchy mirror;
+12. exact open `ConcurrentModificationException` and `AssertionError`, exact final
+    `UninitializedPropertyAccessException`, and exact internal
+    `KotlinNothingValueException` CLR identities as append-only classifier ids 18 through 21;
+13. weak, thread-safe, reference-identity-associated suppressed state for every original
+    `System.Exception`, with ordered duplicates, ignored self-suppression, immutable snapshots,
+    and no `Exception.Data` mutation; and
+14. Common stack-trace and print operations that retain the exact CLR diagnostic prefix, compose
+    suppressed graphs on roots and causes, and terminate reference cycles.
 
-This is not completion of the ADR. In particular, narrow exported-parameter admission, exception
-returns and properties at foreign/narrow boundaries, constructor collisions, broader generic
-boundary positions, and any necessary hierarchy-metadata encoding remain open.
+Runtime surface level 9 and physical ABI schema 16 own items 11 through 14 on all three profiles.
+The ADR is still incomplete at foreign/narrow boundaries: narrow exported-parameter admission,
+constructor collisions, broader generic boundary positions, and any necessary hierarchy-metadata
+encoding remain open.
 
 ## Required validation
 
@@ -228,13 +283,19 @@ Before source exception support expands, commit tests for:
    exact-class catch-order combinations;
 2. unknown C# exception subclasses and known BCL faults on both `net48` and `net10.0`;
 3. one `netstandard2.0` library catching exceptions supplied by applications on both runtimes;
-4. `===` identity, exact CLR type, `InnerException`, `Data`, message, and stack trace before and
-   after Kotlin catch/rethrow;
+4. `===` identity, exact CLR type, `InnerException`, `Data`, message, stack trace, and
+   identity-associated state before and after Kotlin catch/rethrow;
 5. Kotlin user exception subclasses across separately compiled modules;
 6. exception-typed returns, properties, constructor collisions, and remaining generic/boundary
    positions (direct and nested-generic method overloads are now covered);
 7. classifier behavior during filters, including a guarantee that it cannot throw; and
 8. C# provider/consumer tests for broad, narrow, nullable, and exact exception surfaces.
+
+The implemented Common-state slice additionally pins Kotlin-owned, mapped-BCL, and hostile foreign
+owners; self-suppression; ordered duplicates; stable snapshots; open exact subclasses; cyclic
+graphs; captured `Console.Error`; `Exception.Data` preservation; and concurrent writers on both
+application profiles. A portable self-describing stdlib is consumed and executed on both profiles.
+The fresh strict aggregate gate is 889/0/0/0 across 16 XML suites.
 
 ## Deferred details
 

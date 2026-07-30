@@ -156,10 +156,15 @@ serializing the original expect and actual files before actualisation would crea
 platform KLIB. The CLR requires no semantic deviation here. The only target-specific mechanism
 remains the three physical profile products and their temporary packaged-source fallback.
 
-The full Common `ExceptionsH.kt` still requires unsupported actuals and exception operations.
-Consequently the narrow target `NoWhenBranchMatchedException` declaration remains the temporary
-bootstrap declaration recorded by the exception ADR; it must become the normal internal actual
-when that Common exception surface enters the product.
+The next source partition compiles the full Common `ExceptionsH.kt` and the shared non-JVM
+exception actual classes. `DotNetExceptions.kt` supplies only the remaining .NET actual
+identities and Throwable operations. Its public operations are ordinary `Kotlin.Stdlib` methods;
+private external helpers bind through the intrinsic registry to the identity-associated
+`Kotlin.Runtime` service. Exact exception classes remain runtime-owned physical identities and
+are excluded from duplicate stdlib codegen. The former target hierarchy mirror and temporary
+non-actual `NoWhenBranchMatchedException` declaration are deleted. Like mature stdlib builds, the
+compiler-owned fallback and explicit product mute the expect/actual-class Beta warning; this is
+not applied to unrelated user MPP sources.
 
 This decision follows the mature target product model:
 
@@ -461,6 +466,14 @@ The exhaustive-when IL pins also prove that FIR prefers the non-expect actual he
 symbols are visible; accepting the legacy parameterless fallback would erase the Kotlin 2.5
 message contract. The fresh aggregate validation is 885 tests across 16 XML suites, with zero
 failures, errors, or skips.
+
+The exception continuation adds `ExceptionsH.kt` to those authoritative Common inputs and
+packages the shared `common-non-jvm/Exceptions.kt` actual bodies unchanged. Separate consumers
+bind `stackTraceToString`, `printStackTrace`, `addSuppressed`, and
+`suppressedExceptions` through the produced self-describing DLL; the portable pair executes the
+same Common API on Framework CLR 4 and CoreCLR 10. Runtime-owned exact classes and weak throwable
+state remain outside `Kotlin.Stdlib`, preserving the runtime/stdlib ownership split. The fresh
+strict gate is 889/0/0/0 across 16 XML suites.
 
 The exhaustive-when matrix additionally verifies that the internal subject-aware helper is emitted
 once in `Kotlin.Stdlib`, that a separately compiled application calls that physical facade, and
