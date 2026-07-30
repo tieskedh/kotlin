@@ -1,7 +1,7 @@
 # Kotlin/.NET backend way forward
 
-> **Baseline:** branch `dotnet`, rebased on `origin/master` at `6fb64e0c0`, upstream impact
-> re-audited on 2026-07-28
+> **Baseline:** branch `dotnet`, rebased on `origin/master` at `733a49b39`, upstream impact
+> re-audited on 2026-07-30
 >
 > **Status:** living pre-ABI execution plan
 >
@@ -1242,6 +1242,17 @@ non-final, scalar, multidimensional, and look-alike evidence while retaining a v
 The focused cross-runtime/adversarial pair is 2/0/0/0. Primitive params arrays remain deferred
 because Kotlin/.NET primitive arrays use wrapper identity, and current params collections remain
 a separate construction policy. The fresh strict gate is 882/0/0/0 across 16 XML suites (796
+FIR/IL/box, 21 generated CLI, and 65 library integration tests).
+
+**Kotlin 2.5 exhaustive-when compatibility (2026-07-30):** the target now follows Common's
+subject-aware `throwNoWhenBranchMatchedException(subject)` contract instead of retaining the old
+parameterless backend intrinsic. The ordinary target stdlib helper uses the JVM/Native/Wasm
+message body, is physically owned once by `Kotlin.Stdlib`, and maps its internal,
+error-deprecated exception declaration onto the exact runtime-owned Kotlin identity. The legacy
+language-feature-off path remains pinned separately. Seven target-created IR classes now record
+explicit `Any` supertypes for upstream's new `IrClassSuperTypesChecker`. The complete rebase and
+compatibility argument is in `upstream-sync-2026-07-30.md`; the focused four-way IL test and
+assembler/runtime matrix pass. The fresh strict gate is 884/0/0/0 across 16 XML suites (798
 FIR/IL/box, 21 generated CLI, and 65 library integration tests).
 
 ## 5. Explicitly parked work

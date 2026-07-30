@@ -1036,7 +1036,7 @@ internal fun collectDotNetMetadataLinkageKeys(
     }
 
     fun addClass(irClass: IrClass) {
-        if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) return
+        if (irClass.isDotNetResolutionOnlyStdlibDeclaration) return
         if (irClass.isDotNetCrossModuleDeclaration &&
             with(DotNetIrMangler) { irClass.isExported(compatibleMode = false) }
         ) {
