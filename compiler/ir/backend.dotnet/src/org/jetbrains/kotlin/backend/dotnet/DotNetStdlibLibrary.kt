@@ -31,7 +31,9 @@ internal object DotNetStdlibLibrary {
     const val EMPTY_LIST_IL_NAME = "Kotlin.Collections.EmptyList"
     const val RANDOM_ACCESS_IL_NAME = "Kotlin.Collections.RandomAccess"
     const val SERIALIZABLE_IL_NAME = "Kotlin.Io.Serializable"
+    const val READ_AFTER_EOF_EXCEPTION_IL_NAME = "Kotlin.Io.ReadAfterEOFException"
     const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
+    const val IO_FACADE_IL_NAME = "Kotlin.Io.ConsoleKt"
     const val THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME =
         "kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt"
     const val EXCEPTIONS_FACADE_IL_NAME = "Kotlin.DotNetExceptionsKt"
@@ -45,6 +47,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.EmptyList" to EMPTY_LIST_IL_NAME,
         "kotlin.collections.RandomAccess" to RANDOM_ACCESS_IL_NAME,
         "kotlin.io.Serializable" to SERIALIZABLE_IL_NAME,
+        "kotlin.io.ReadAfterEOFException" to READ_AFTER_EOF_EXCEPTION_IL_NAME,
         "kotlin.SuppressedExceptionList" to "Kotlin.SuppressedExceptionList",
         "kotlin.SuppressedExceptionIterator" to "Kotlin.SuppressedExceptionIterator",
     )
@@ -54,6 +57,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.last" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERATOR_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERABLE_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.io.readln" to IO_FACADE_IL_NAME,
+        "kotlin.io.readlnOrNull" to IO_FACADE_IL_NAME,
         "kotlin.internal.throwNoWhenBranchMatchedException" to THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,
         "kotlin.stackTraceToString" to EXCEPTIONS_FACADE_IL_NAME,
         "kotlin.printStackTrace" to EXCEPTIONS_FACADE_IL_NAME,
@@ -236,7 +241,16 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
-        "DotNetStdlibIo.kt" to ImplementationSource(packageFqName = "kotlin.io"),
+        "DotNetStdlibIo.kt" to ImplementationSource(
+            packageFqName = "kotlin.io",
+            facadeIlName = IO_FACADE_IL_NAME,
+        ),
+        // Like ExceptionsH.kt, FIR actualization retains the Common expect declarations as the
+        // canonical IR owners while attaching the .NET bodies.
+        "ioH.kt" to ImplementationSource(
+            packageFqName = "kotlin.io",
+            facadeIlName = IO_FACADE_IL_NAME,
+        ),
         "DotNetExceptions.kt" to ImplementationSource(
             packageFqName = "kotlin",
             facadeIlName = EXCEPTIONS_FACADE_IL_NAME,
