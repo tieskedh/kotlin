@@ -89,15 +89,20 @@ The first such type is:
 Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException
 ```
 
-It exposes the same four constructor shapes. The exhaustive-when intrinsic now constructs that
-type instead of plain System.Exception. Generated consumers reference it through the existing
-versioned Kotlin.Runtime AssemblyRef. It remains catchable by the currently supported
+It exposes the same four constructor shapes. Kotlin 2.5 fir2ir now calls the Common-declared
+`kotlin.internal.throwNoWhenBranchMatchedException(subject)` stdlib helper, whose .NET
+implementation constructs this exact type through the ordinary exception mapping. Generated
+consumers reference the helper through `Kotlin.Stdlib` and the exception through the existing
+versioned `Kotlin.Runtime` AssemblyRef. The exception remains catchable by the currently supported
 `Exception`/`Throwable` mapping, is not accidentally a mapped `IllegalStateException`, and has an
 exact identity available to future reflection/type-test support.
 
-This does not add a source declaration to the fake stdlib. Common Kotlin deprecates direct use of
-`NoWhenBranchMatchedException` at error level because it is a compiler implementation exception,
-so making it a new user-facing API on this target would be a compatibility mistake.
+The target bootstrap now includes an internal, error-deprecated source declaration solely to
+compile that helper, matching Native/Wasm's internal actual and Common's four constructors. It is
+not ordinary user-facing API. Making it public, omitting the error deprecation, or inferring a
+different CLR identity from its source shape would all be compatibility mistakes. Once the target
+stdlib consumes Common plus .NET actual sources directly, that temporary target-side declaration
+should become the normal actual rather than a duplicated Common contract.
 
 The negative-array-size guard uses the same compiler-owned pattern:
 
@@ -214,8 +219,10 @@ and observed the inherited null default message. Repository goldens pin the runt
 primitive, reference, initializer, vararg, and resized-copy allocations; CoreCLR pins the existing
 catch categories, evaluation order, and null message through both FIR parsers.
 
-The compiler exact-IL pin covers both value and statement exhaustive-when throws and the
-Kotlin.Runtime type reference. The existing two-handler test keeps the sibling
+The compiler exact-IL pins cover both value and statement exhaustive-when fallthroughs, the
+subject-aware `Kotlin.Stdlib` helper call and exact message construction, the feature-disabled
+legacy parameterless throw, and the final `Kotlin.Runtime` exception construction. The existing
+two-handler test keeps the sibling
 IllegalStateException boundary. NumberFormatException IL/box pins cover exact construction and
 catch, the mapped IllegalArgumentException value/catch edge, Throwable widening, identity, message
 dispatch, and default state. Error IL/box pins cover all four constructors, exact and root catches,

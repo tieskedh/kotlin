@@ -225,6 +225,7 @@ internal class DotNetSymbols(
             modality = Modality.FINAL
         }.apply {
             parent = markerPackage
+            superTypes = listOf(irBuiltIns.anyType)
             createThisReceiverParameter()
         }.symbol
     }
@@ -286,6 +287,7 @@ internal class DotNetSymbols(
             modality = Modality.FINAL
         }.apply {
             parent = markerPackage
+            superTypes = listOf(irBuiltIns.anyType)
             createThisReceiverParameter()
         }.symbol
     }

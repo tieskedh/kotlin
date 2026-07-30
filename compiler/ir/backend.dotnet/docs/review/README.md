@@ -21,6 +21,9 @@ copying a snapshot review into binding design law.
    [`../decisions`](../decisions).
 5. [`upstream-sync-2026-07-28.md`](upstream-sync-2026-07-28.md) records the six-step impact review
    and adaptations for the rebase from `0349ed5cd` to `6fb64e0c0`.
+6. [`upstream-sync-2026-07-30.md`](upstream-sync-2026-07-30.md) records the 161-commit impact
+   review, exact rebase verification, immediate Common/IR adaptations, and longer-term KLIB,
+   Analysis API, and BTA direction for the rebase to `733a49b39`.
 
 Authority order for implementation work:
 
@@ -36,7 +39,7 @@ choice.
 
 ## Current status
 
-- Snapshot review: `8dd89907d`. The branch is based on `origin/master` at `6fb64e0c0`; do not
+- Snapshot review: `8dd89907d`. The branch is based on `origin/master` at `733a49b39`; do not
   read the snapshot commit as the current implementation state.
 - Maturity: high-quality prototype; credible trajectory; not open for third-party binary ABI.
 - Immediate objective: Gate A in [`way-forward.md`](way-forward.md).
