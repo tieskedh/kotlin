@@ -120,7 +120,7 @@ The public DSL is `dotnet(targetFramework, name, configure)`. Annual .NET profil
 one new DSL method per target framework. Multiple profiles are represented by multiple immutable
 targets with explicit names.
 
-## 6. Core-team choice
+## 6. Kotlin-aligned target choice
 
 Adopt Native's immutable target -> compilation factory -> task architecture, but model a target
 framework as a typed CLR profile rather than as a Native machine target. Use one profile-parameter

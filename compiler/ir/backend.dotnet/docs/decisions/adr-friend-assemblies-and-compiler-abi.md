@@ -70,7 +70,7 @@ inference, and common FIR friend-dependency machinery.
 Do not add CLR authorization to the common associator, expose raw friend flags as public Gradle
 compiler options, or infer friend authority by scanning arbitrary output directories.
 
-## 6. Core-team choice
+## 6. Kotlin-aligned target choice
 
 Treat `associateWith` as the single logical relationship and derive both CLR sides from it. Keep
 the extra producer authorization entirely inside the .NET target implementation. This is the

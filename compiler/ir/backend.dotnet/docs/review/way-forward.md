@@ -8,7 +8,10 @@
 > **Normative boundary:** this document orders work and sets gates; ADRs own representation and ABI
 > decisions.
 
-## 1. Core-team position
+## 1. Kotlin-aligned target position
+
+This is the target authors' working design position, informed by Kotlin's established semantics and
+mature targets. It is not a decision or endorsement by the Kotlin core team.
 
 The backend continues. Its erased Kotlin identity model, CLR-native object model, `System.Object`
 foundation, concrete nullable-primitive representation, and runtime/stdlib ownership split justify
@@ -869,7 +872,7 @@ products are byte-identical in packed metadata, IL, and DLL output. Private/file
 `IdSignature`s are now excluded from the cross-module physical declaration index, preventing
 checkout paths and non-bindable implementation details from becoming ABI. The fallback remains
 transitional; generated Common sources plus narrow .NET actuals and a fully installed platform
-pair remain the core-team endpoint.
+pair remain the Kotlin-aligned target endpoint.
 
 **Common/actual source-product progress (2026-07-30):** the first partition now compiles
 Common's exact internal `Annotations.kt` and subject-aware exhaustive-when expect declaration

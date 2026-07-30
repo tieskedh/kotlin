@@ -109,7 +109,7 @@ The backend separates the work at the same boundaries used by mature targets:
 There is no emitter-only semantic state machine, no global lookup keyed by names, and no
 consumer-side reconstruction of a producer's physical holder.
 
-### 6. Core-team choice
+### 6. Kotlin-aligned target choice
 
 The selected design keeps CLR `.cctor` synchronization but prevents a Kotlin-owned exception from
 escaping it. A private object-typed state field is stored on the physical owner. The public
