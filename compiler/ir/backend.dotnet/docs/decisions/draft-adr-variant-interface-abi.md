@@ -206,7 +206,7 @@ and prevents both the KLIB and DLL from being published. A merely reserved-looki
 different owner or arity remains legal. The public helper identity is never silently renamed in
 response to declaration order because doing so would make cross-module ABI unstable.
 
-**6. Core-team choice.** Keep the actual same-owner rejection and later move its report to a
+**6. Kotlin-aligned target choice.** Keep the actual same-owner rejection and later move its report to a
 target FIR/platform diagnostic. The emitter-time whole-declaration gate is a **Correct temporary
 implementation, but not a final design**; atomic rejection and deterministic helper identity are
 the final constraints. A future helper-name grammar may add a logical-identity digest before ABI

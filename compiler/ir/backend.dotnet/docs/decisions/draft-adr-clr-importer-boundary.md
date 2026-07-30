@@ -649,7 +649,7 @@ whose enum identity is a closed generic instance.
    member validation. It converts the already resolved structure into the existing semantic enum
    identity algebra and does not invent a display-name key or perform decoder-local generic
    substitution.
-6. The core-team choice is to accept only a complete, arity-correct constructed signature, prove
+6. The Kotlin-aligned target choice is to accept only a complete, arity-correct constructed signature, prove
    its exact selected `System.Enum` ancestry and `value__` storage, and decode that width. Invalid
    generic arity is malformed metadata with a located structured failure; unsupported non-enum
    shapes are not repaired by erasure or an open-type fallback.
@@ -689,7 +689,7 @@ generic TypeSpec.
    `DotNetClrResolvedTypeView` plus an already resolved and owner-substituted method signature.
    Value decoding and named-member validation consume that authoritative result; neither
    reconstructs a TypeSpec or substitutes raw assembly-relative handles.
-6. The core-team choice is to reject an open, partially open, non-generic-instance, value-type, or
+6. The Kotlin-aligned target choice is to reject an open, partially open, non-generic-instance, value-type, or
    wrong-arity owner before blob decoding. Unresolved constructor types, out-of-range owner
    parameters, and residual method type parameters are distinct structured failures. There is no
    fallback to the open TypeDef and no display-name identity.
@@ -731,7 +731,7 @@ The twenty-first slice resolves every constraint of one constructed type view.
    parameter numbering and arity, resolves direct nominal targets, resolves TypeSpec targets
    through the common signature resolver, and substitutes owner arguments through the common
    substitution algebra. The custom-attribute constructor merely stores that result.
-6. The core-team choice is to keep direct nominal and structural TypeSpec constraints as distinct
+6. The Kotlin-aligned target choice is to keep direct nominal and structural TypeSpec constraints as distinct
    resolved variants. Constraint resolution failures prevent downstream value decoding, but
    satisfaction is a separate assignability operation. Folding both stages together would either
    duplicate a partial CLR type checker in the attribute decoder or prematurely map foreign
@@ -775,7 +775,7 @@ constructed views.
    with structured failures for arity, resolution, non-nominal TypeSpecs, illegal method
    parameters, and class/interface shape. Neither layer performs FIR projection or transitive
    assignability.
-6. The core-team choice is to preserve the exact row and exact constructed view, and to reject
+6. The Kotlin-aligned target choice is to preserve the exact row and exact constructed view, and to reject
    malformed hierarchy shape before subtype reasoning. A display-name graph or reuse of the
    module-local IL emitter's `DotNetIlClassInfo` would mix imported selected-assembly identity with
    current-module code-generation state. Variance-aware transitive assignability remains the next
@@ -818,7 +818,7 @@ The twenty-third slice walks those views for exact nominal assignability.
    path is a positive proof; if none exists, an encountered malformed edge or cycle is reported
    instead of being weakened to `NotAssignable`. Whole-import graph validation remains a separate
    diagnostic pass and may still reject an unrelated malformed branch.
-6. The core-team choice is to land exact nominal reachability before variance or conversion
+6. The Kotlin-aligned target choice is to land exact nominal reachability before variance or conversion
    policy. Treating every differing generic argument as invariant is conservative: it can defer a
    legal CLR variant conversion but cannot invent one. Variance requires selected-graph
    reference/value/ref-like classification; arrays, boxing, `Nullable<T>`, and type parameters
@@ -854,7 +854,7 @@ GenericParamConstraint rows.
    satisfied, violated, unsupported non-nominal argument/constraint, or invalid assignability.
    The result retains the original parameter binding and therefore its special flags, but exposes
    no aggregate “all constraints satisfied” bit.
-6. The core-team choice is to land this deliberately named partial validator rather than mix
+6. The Kotlin-aligned target choice is to land this deliberately named partial validator rather than mix
    primitive mapping, dependent-parameter reasoning, constructors, nullability, and by-ref-like
    rules into one optimistic boolean. Proven violations are useful evidence; unsupported and
    invalid are not violations, and all nominal rows being satisfied is not complete CLR generic
@@ -894,7 +894,7 @@ or nullable value types.
    shared hierarchy relation, special-cases the two reference roots, classifies primitives and
    arrays directly, and returns structured unsupported or invalid-hierarchy outcomes for forms
    that cannot yet be legal generic arguments.
-6. The core-team choice is to verify both signature evidence and selected hierarchy instead of
+6. The Kotlin-aligned target choice is to verify both signature evidence and selected hierarchy instead of
    trusting either in isolation. By-ref-like status is deliberately not inferred from value-type
    ancestry: it is an orthogonal semantic `IsByRefLikeAttribute` marker whose exact identity,
    payload, and multiplicity must be decoded through the ordinary attribute layer before profile
@@ -929,7 +929,7 @@ The twenty-sixth slice adds the orthogonal CLR by-ref-like dimension.
    custom-attribute constructor/value decoder. It requires exact selected marker identity, a
    decoded empty marker payload, single multiplicity, and a non-nullable-value target. Invalid
    constructors, payloads, duplicates, and target kinds remain structured results.
-6. The core-team choice is to reuse ordinary semantic attribute comparison rather than introduce
+6. The Kotlin-aligned target choice is to reuse ordinary semantic attribute comparison rather than introduce
    a marker-name shortcut or raw-blob special case. A foreign attribute with the same short name
    is unrelated. Profile absence remains explicit, and by-ref-like classification stays separate
    from the later decision whether a particular Kotlin construct can safely use it.
@@ -964,7 +964,7 @@ rules.
    structured result per applicable reference/value rule plus the implicit by-ref-like eligibility
    rule. It preserves invalid classification and marker-unavailable outcomes and exposes no
    aggregate success boolean.
-6. The core-team choice is a separate policy validator over the common resolved-constraint model,
+6. The Kotlin-aligned target choice is a separate policy validator over the common resolved-constraint model,
    not attribute-decoder logic, a C# syntax check, or a codegen heuristic. At this slice the CLR
    default-constructor constraint remained separate because public parameterless constructors,
    abstract reference types, and implicit value-type construction required their own exact
@@ -1001,7 +1001,7 @@ The twenty-eighth slice adds the CLR default-constructor special constraint.
    `SpecialName`/`RTSpecialName`, default instance calling convention, zero generic/value
    parameters, and `void` return shape. Invalid physical/by-ref-like classification remains
    structured rather than being collapsed into a constructor failure.
-6. The core-team choice is to apply the CLI rule to selected metadata, not look for Kotlin
+6. The Kotlin-aligned target choice is to apply the CLI rule to selected metadata, not look for Kotlin
    constructors, C# source syntax, inherited members, or a method named `.ctor` alone. The result
    remains per-rule and non-aggregate because nominal constraints and dependent generic-parameter
    arguments still have their own validation paths.
@@ -1036,7 +1036,7 @@ The twenty-ninth slice gives compact CLR primitive signatures their selected nom
    selected zero-argument TypeView before using the existing bounded hierarchy walker. The
    default-constructor validator reuses the same catalog for primitive reference types, removing
    its former object/string-only core catalog.
-6. The core-team choice is one selected-core primitive catalog shared by importer policy layers,
+6. The Kotlin-aligned target choice is one selected-core primitive catalog shared by importer policy layers,
    following the other backends' built-in-to-physical mapping pattern. Host reflection,
    hard-coded host assembly identities, decoder-local mappings, and permanent primitive
    “unsupported” results are rejected.
@@ -1069,7 +1069,7 @@ conversions.
    per-row results with the precedence invalid metadata > unsupported semantics > proven
    violation > supported satisfaction. Its result retains both complete sub-validations and issue
    coordinates.
-6. The core-team choice is a sealed status over preserved evidence, not a Boolean and not an
+6. The Kotlin-aligned target choice is a sealed status over preserved evidence, not a Boolean and not an
    eager partial implementation of CLR variance. At this slice only a wholly supported
    `Satisfied` shape could proceed, while variant, array, and dependent cases remained actionable
    implementation work rather than false diagnostics. The following slice implements the bounded
@@ -1105,7 +1105,7 @@ The thirty-first slice evaluates CLR generic-interface variance.
    nominal/primitive/interface assignability with its own active-pair and resolution bounds. One
    successful candidate proves the conversion; invalid/unsupported evidence otherwise remains
    structured.
-6. The core-team choice is a dedicated assignability layer shared by every consumer, not
+6. The Kotlin-aligned target choice is a dedicated assignability layer shared by every consumer, not
    C#-specific import sugar or constraint-only logic. Unsupported arrays, open parameters, and
    delegates keep returning `VariantConversionRequired`; they are not guessed from C# conversions
    or made invariant. Value arguments with different identities are proven not assignable.
@@ -1145,7 +1145,7 @@ The thirty-second slice evaluates physical CLR array-to-array assignability.
    locations, are being compared. No generic-constraint consumer contains an independent array
    rule. Unsupported nested signature conversion is retained separately from unsupported top-level
    arguments or constraint rows, so diagnostics do not assign a failure to the wrong side.
-6. The core-team choice is to implement the complete unambiguous array-to-array subset now and
+6. The Kotlin-aligned target choice is to implement the complete unambiguous array-to-array subset now and
    retain array-to-`System.Array`, vector-to-generic-interface, open-parameter, and custom-modified
    conversions as structured unsupported boundaries. Guessing those relations from C# syntax
    would omit CLR-only signatures and would make one foreign language the importer authority.
@@ -1179,7 +1179,7 @@ The thirty-third slice resolves the nominal CLR array base hierarchy.
    assignable. Only a vector facing a unary generic interface retains
    `VECTOR_TO_GENERIC_INTERFACE`; unsupported aggregate status preserves only the unsupported issue,
    while the complete nominal validation still retains simultaneous proven violations.
-6. The core-team choice is selected-identity composition, not namespace/name recognition and not a
+6. The Kotlin-aligned target choice is selected-identity composition, not namespace/name recognition and not a
    synthetic Kotlin supertype. The generic vector-interface catalog is deliberately the next
    layer because its exact surface is supplied by the VES/BCL rather than by `System.Array`'s
    ordinary metadata hierarchy.
@@ -1216,7 +1216,7 @@ The thirty-fourth slice resolves the selected CLR generic vector-interface surfa
    those identities and reuses the same recursive array-element compatibility used for
    array-to-array conversion. An unrelated unary generic interface is now proven not assignable;
    no name is inspected in the checking path.
-6. The core-team choice is a complete selected identity catalog, not a target-profile enum switch,
+6. The Kotlin-aligned target choice is a complete selected identity catalog, not a target-profile enum switch,
    a namespace/name predicate, or synthesis through `IList<T>`'s ordinary hierarchy. The last
    alternative would lose the CLR reduced-storage rule when reaching `IEnumerable<uint>` from an
    `int[]`.
@@ -1250,7 +1250,7 @@ The thirty-fifth slice evaluates physical CLR delegate variance.
    identity. It reuses the existing bounded recursive reference-only variance algorithm; a
    variant class or non-sealed delegate-shaped TypeDef is invalid metadata rather than an
    unsupported conversion.
-6. The core-team choice is selected physical identity plus the common variance evaluator, not a
+6. The Kotlin-aligned target choice is selected physical identity plus the common variance evaluator, not a
    delegate-name registry, special cases for `Func`/`Action`, or callable adapters in constraint
    validation. Kotlin callable export adapters remain a separate importer/exporter concern.
 
@@ -1291,7 +1291,7 @@ The thirty-sixth slice proves constraints for scope-qualified open generic argum
    value shape, `new()` or `struct` proves construction, and by-ref-like permission is checked
    contravariantly. Without the selected context, an open parameter remains explicitly
    unsupported.
-6. The core-team choice is a scope-qualified evidence object passed to constraint validation, not
+6. The Kotlin-aligned target choice is a scope-qualified evidence object passed to constraint validation, not
    a process-global `(kind, index)` map, eager upper-bound erasure, inferred public constraints,
    or a change to generic signature assignability. In particular, the global signature relation
    keeps the VES rule that an unboxed open parameter is assignable only to itself; boxed
@@ -1333,7 +1333,7 @@ The thirty-seventh slice preserves physical Param ownership before nullable-refe
    flags, sequence, and nullable name in physical order. Existing CustomAttribute parent handles
    can now attach unambiguously to a return or parameter row. The MethodDef signature still owns
    types and count; missing rows are not synthesized or collapsed into a map.
-6. The core-team choice is to land this lossless attachment prerequisite before decoding
+6. The Kotlin-aligned target choice is to land this lossless attachment prerequisite before decoding
    NullableAttribute/NullableContextAttribute. Applying nullable flags first would necessarily
    mis-associate some return or parameter annotations. Constant and FieldMarshal payload tables
    remain explicit later physical slices; their presence flags are retained now and are not
@@ -1376,7 +1376,7 @@ Kotlin types.
    imposing an assembly identity. Scalar and array transforms remain distinct, context and
    public-only values remain distinct, and no ad-hoc blob parser or C# display-type model is
    introduced.
-6. The core-team choice is an explicit `Absent`/`Decoded`/`Invalid` result below FIR enhancement.
+6. The Kotlin-aligned target choice is an explicit `Absent`/`Decoded`/`Invalid` result below FIR enhancement.
    Duplicate recognized compiler attributes, malformed values, null flag arrays, named
    arguments, and flags outside 0..2 are invalid instead of depending on metadata row order. This
    is deliberately stricter than arbitrary first-wins recovery while leaving every valid Roslyn
@@ -1416,7 +1416,7 @@ The thirty-ninth slice aligns one selected transform with the resolved CLR signa
    nodes, matching the mature indexed-qualifier pattern, instead of introducing a parallel C#
    display-type tree. Uniform transforms repeat over every consuming component. Sequence
    transforms must match the component count exactly.
-6. The core-team choice is a non-throwing `Applied`/`Invalid` result below FIR. A flag-count
+6. The Kotlin-aligned target choice is a non-throwing `Applied`/`Invalid` result below FIR. A flag-count
    mismatch or invalid nominal class/value shape remains located invalid evidence; no prefix is
    applied and no later flags are shifted onto the wrong generic argument. Roslyn recovers from a
    mismatch by leaving its type unchanged; the Kotlin importer retains the reason explicitly so
@@ -1466,7 +1466,7 @@ that declaration's resolved type.
    nearest MethodDef and containing TypeDefs for context. Missing rows are not synthesized and
    malformed ownership, duplicates, visibility, attributes, cycles, or depth remain structured
    failures below FIR.
-6. The core-team choice is an explicit `Selected`/`Oblivious`/`Suppressed`/`Invalid` result that
+6. The Kotlin-aligned target choice is an explicit `Selected`/`Oblivious`/`Suppressed`/`Invalid` result that
    still constructs no Kotlin type. This keeps compatibility filtering separate from diagnostic
    fallback and type-tree application, prevents excluded malformed local payloads from producing
    spurious diagnostics, and makes the later FIR policy decide how oblivious or invalid foreign
@@ -1504,7 +1504,7 @@ an explicit unchanged-type fallback.
    evidence remain separate `Oblivious` and `Suppressed` results. Invalid declaration evidence
    and invalid type-transform alignment become distinct `DiagnosticFallback` results carrying
    the unchanged physical type and original structured cause.
-6. The core-team choice is not Roslyn's silent invalid-input recovery. Importing the unchanged
+6. The Kotlin-aligned target choice is not Roslyn's silent invalid-input recovery. Importing the unchanged
    runtime signature preserves the foreign API, but the invalid cause remains mandatory for the
    later FIR diagnostic policy. Collapsing it into ordinary obliviousness would hide malformed
    metadata; failing or dropping the whole declaration would let advisory C# metadata shrink a
@@ -1543,7 +1543,7 @@ nullable evidence on each constraint type.
    MethodDef, while its local transform comes only from the constraint row. A generic-parameter
    evidence resolver aggregates the untouched parameter marker with one evidence application per
    resolved row from a declaration-qualified identity context.
-6. The core-team choice rejects two tempting shortcuts. Copying the parameter marker to every
+6. The Kotlin-aligned target choice rejects two tempting shortcuts. Copying the parameter marker to every
    constraint loses real nested constraint annotations. Applying constraint flags after
    substituting `!n` can change the physical tree, so one original flag could be shifted onto
    several substituted nodes. Only original identity-context constraints are aligned here;
@@ -1591,7 +1591,7 @@ qualifier vocabulary without constructing a FIR type.
    third-party migration annotation. The projected qualifier therefore has no warning-only mode:
    a later FIR adapter must apply valid `NOT_NULL` and `NULLABLE` evidence as ordinary enhanced
    types. This does not decide the severity of the separate malformed-metadata diagnostic.
-7. The core-team choice rejects weakening flag 1 to flexibility: that would erase C#'s explicit
+7. The Kotlin-aligned target choice rejects weakening flag 1 to flexibility: that would erase C#'s explicit
    nonnullable contract and make flags 0 and 1 observably identical. It also rejects deriving
    definitely-non-null from a generic-parameter marker. JVM computes that property only with
    enhanced parameter bounds in view, and C# likewise defines type-parameter nullability from the
@@ -1632,7 +1632,7 @@ foreign declarations are exposed.
    classpath order. This is the selected-input boundary needed by the future lazy CLR FIR provider
    and assembly-reference binder. It deliberately does not bind duplicate identities, resolve the
    graph, or choose first-wins declaration shadowing before that provider owns lookup policy.
-6. The core-team choice rejects ignoring a valid foreign DLL after accepting it: that would make
+6. The Kotlin-aligned target choice rejects ignoring a valid foreign DLL after accepting it: that would make
    later provider behavior depend on reparsing configuration roots and would lose deterministic
    classpath order. It also rejects importing Kotlin-produced physical rows beside their KLIB:
    doing so would create two declaration identities for one assembly.
@@ -1686,7 +1686,7 @@ foreign declaration.
    compile-time initializer only if the future FIR provider's explicit foreign-import policy
    chooses that projection. Kotlin-produced DLLs continue to use their KLIB metadata instead of
    these physical rows.
-7. The core-team choice rejects attaching the decoded value directly to Field/Param/Property and
+7. The Kotlin-aligned target choice rejects attaching the decoded value directly to Field/Param/Property and
    losing its row token: custom attributes and diagnostics can target the Constant row/parent
    distinction, while ambiguous or CLS-invalid type relationships need later structured
    diagnostics. It also rejects converting floating values through host `Float`/`Double`
@@ -1731,7 +1731,7 @@ semantics.
    physical metadata. A present zero-length or unknown descriptor remains distinct evidence:
    its semantic validity belongs to a later selected-profile decoder that can issue a located,
    structured interop diagnostic. Nil and present-empty must not collapse.
-5. The core-team choice is lossless layering. Parsing enough bytes merely to reject an empty or
+5. The Kotlin-aligned target choice is lossless layering. Parsing enough bytes merely to reject an empty or
    unknown descriptor here looks stricter, but creates split semantic validation and prevents
    future runtime/profile extensions from reaching the owning declaration. Conversely, treating
    the raw row as a Kotlin `MarshalAs` annotation would expose a C#/.NET implementation detail as
