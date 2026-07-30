@@ -34,6 +34,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/internal/DotNetThrowNoWhenBranchMatchedException.kt",
     ),
     DotNetStdlibSourceResource(
+        "_DotNetBootstrapCollections.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapCollections.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "Exceptions.kt",
         "common-non-jvm/src/kotlin/Exceptions.kt",
     ),

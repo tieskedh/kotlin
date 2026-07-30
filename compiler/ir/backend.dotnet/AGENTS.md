@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 802 FIR/IL/semantic tests, 21 generated-CLI tests, and 66
+toolchain enforcement and owns 806 FIR/IL/semantic tests, 21 generated-CLI tests, and 66
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 889 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 893 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -162,8 +162,9 @@ landed shape as a compatibility constraint.
   `Kotlin.Runtime` retains language identities and compiler/runtime services;
   `Kotlin.Stdlib` owns ordinary Kotlin library implementations. The first implementations are the
   generic `Kotlin.Collections.ArrayIterator<T>` and `ArrayIterable<T>`, compiled through the same
-  class and split generic-interface bridge pipeline as user code, followed by the common
-  `Iterable<T>`/`List<T>` `first()` and `last()` overloads on the current compiler/stdlib physical
+  class and split generic-interface bridge pipeline as user code, followed by the Common-generated
+  `Iterable<T>`/`List<T>` `first()`, `last()`, `firstOrNull()`, and `lastOrNull()` overloads plus
+  Common `List<T>.lastIndex` on the compiler/stdlib physical
   `Kotlin.Collections.CollectionsKt` facade. User calls cross the assembly edge; the function
   bodies run in the stdlib and use split Iterable/Iterator/List capabilities with canonical
   fallback for every implementation.
@@ -283,14 +284,16 @@ landed shape as a compatibility constraint.
   manifest-property encoding is provisional pending a real KLIB component and signature-version
   compatibility policy. .NET Standard is a library target, never an executable runtime. See
   `docs/decisions/draft-adr-dotnet-library-target-profile.md`.
-  The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
-  and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`,
-  including their List overloads and runtime List dispatch. The generated `lastIndex` property is
-  expanded to its exact `size - 1` body because generic extension properties remain deferred. Do not add a generator
-  target that emits an uncompilable broad corpus. The durable endpoint is compiling generated
-  common sources plus narrow .NET actuals once the backend can compile the required generated
-  collection surface; the standalone producer already emits both metadata carriers from one
-  source compilation and one physical declaration index.
+  The broad stdlib generator has Common/JVM/JS/WASM/Native targets but no complete .NET target.
+  The bounded .NET bootstrap generator invokes the authoritative Common `Elements.f_first`,
+  `f_firstOrNull`, `f_last`, and `f_lastOrNull` templates for their Iterable/List variants. It
+  mechanically extracts the complete Common `List.lastIndex` declaration and fails if that unique
+  source marker changes or disappears. Generic extension properties emit ordinary static generic
+  CLR accessors and no CLR `.property` row. Do not add a generator target that emits an
+  uncompilable broad corpus. The durable endpoint is compiling generated Common sources plus narrow
+  .NET actuals once the backend can compile the required generated collection surface; the
+  standalone producer already emits both metadata carriers from one source compilation and one
+  physical declaration index.
  - CLR importer boundary (argumentation:
    `docs/decisions/draft-adr-clr-importer-boundary.md`; follows the JVM split between physical
    Java classfile models and Kotlin-facing FIR enhancement, while retaining a CLR-specific
@@ -1047,14 +1050,15 @@ landed shape as a compatibility constraint.
   reference, not `EmptyList<T>` constructions or adapters. EmptyList implements the public inert
   Kotlin `RandomAccess` marker and the internal inert `kotlin.io.Serializable` target marker; the
   latter deliberately does not claim the BCL serialization protocol.
-  The first top-level collection implementations are the `Iterable<T>` and `List<T>` overloads of
-  `first()` and `last()` in
-  `Kotlin.Stdlib`. Calls use real generic method instantiations on
+  The first Common-generated top-level collection implementations are the `Iterable<T>` and
+  `List<T>` overloads of `first()`, `last()`, `firstOrNull()`, and `lastOrNull()`, plus the Common
+  `List<T>.lastIndex` accessor, in `Kotlin.Stdlib`. Calls use real generic method instantiations on
   `Kotlin.Collections.CollectionsKt`, not intrinsic copies of the algorithms in each user
   assembly. The Iterable overloads retain the common runtime List dispatch; Lists use indexed
   access without calling `iterator()`, including after primitive widening, while other Iterables
-  use the universal iterator algorithm. Empty Lists throw the exact runtime-owned
-  NoSuchElementException with `List is empty.`; other empty Iterables use `Collection is empty.`
+  use the universal iterator algorithm. Nullable terminal operations return null on empty
+  receivers. Empty Lists throw the exact runtime-owned NoSuchElementException with
+  `List is empty.`; other empty Iterables use `Collection is empty.`
   Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector through the generic
   factory instantiated at `!n`/`!!n`; canonical Next narrows through
   `unbox.any !n`/`!!n`. The array mapper still rejects `Array<T?>`, projections, concrete
@@ -1065,7 +1069,8 @@ landed shape as a compatibility constraint.
   bodies, primitive-specialized iterator subclasses, collection/sequence iteration, mutable
   iterators, and CLR enumeration adapters. Pins: `ilText/arrayIterators.kt`, `box/arrayIterators.kt`,
   `ilText/iterables.kt`, `box/iterables.kt`, `ilText/listIterators.kt`,
-  `box/listIterators.kt`, and the iterator-family negatives in
+  `box/listIterators.kt`, `box/collectionTerminalOperations.kt`, the generic extension-property
+  accessor pin in `ilText/genericRejected.kt`, and the iterator-family negatives in
   `ilText/genericArraysRejected.kt`.
 - Read-only Collection ABI candidate (the first stdlib validation of
   `docs/decisions/draft-adr-variant-interface-abi.md`): source `Collection<out E>` uses canonical
@@ -2597,11 +2602,14 @@ landed shape as a compatibility constraint.
   private immutable snapshot-list implementations are emitted once in
   `Kotlin.DotNetExceptionsKt`/`Kotlin.Stdlib`, while private external calls cross the intrinsic
   registry to the runtime state service. The ordinary Kotlin
-  `ArrayIterator<T>`/`ArrayIterable<T>` declarations and the Iterable/List `first()`/`last()` bodies are
-  different: STDLIB-scoped emission owns them and USER-scoped emission excludes them, yielding the
-  classes and stable `Kotlin.Collections.CollectionsKt` facade only in `Kotlin.Stdlib.dll`. USER
-  codegen's stdlib operation intrinsics select those external generic methods; they do not inline
-  the bodies. Injected declarations must compile without any diagnostics, including warnings: the
+  `ArrayIterator<T>`/`ArrayIterable<T>` declarations, Common-generated Iterable/List terminal
+  operations, and Common `List.lastIndex` accessor are different: STDLIB-scoped emission owns them
+  and USER-scoped emission excludes them, yielding the classes and one stable
+  `Kotlin.Collections.CollectionsKt` facade only in `Kotlin.Stdlib.dll`. Compiler-owned stdlib
+  source shards that explicitly select that same facade are aggregated; an automatic suffixed file
+  class would break the KLIB-to-physical binding. USER codegen's stdlib operation intrinsics select
+  those external generic methods; they do not inline the bodies. Injected declarations must
+  compile without any diagnostics, including warnings: the
   FIR test infrastructure maps every reported diagnostic back to a test file and crashes on
   diagnostics in injected files (suppress e.g. deprecations locally).
   Metadata-only KLIB dependencies use the existing FIR metadata-library path. Imported built-in

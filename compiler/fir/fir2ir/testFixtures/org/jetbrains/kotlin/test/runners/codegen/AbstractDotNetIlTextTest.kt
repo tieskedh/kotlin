@@ -566,9 +566,21 @@ private abstract class AbstractDotNetBoxRunner(
             ".class interface public abstract auto ansi 'Kotlin.Collections.RandomAccess'",
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
                     "'emptyList'<'T'>()",
+            ".method public hidebysig specialname static int32 'get_lastIndex'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
+            ".method public hidebysig static object 'firstOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
+            ".method public hidebysig static object 'lastOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
         )
         requiredStdlibIl.firstOrNull { it !in stdlibIlText }?.let { missing ->
             assertions.fail { "Expected Kotlin.Stdlib IL to contain '$missing': ${stdlibIlFile.path}" }
+        }
+        if ("Kotlin.Collections.CollectionsKt1" in stdlibIlText) {
+            assertions.fail {
+                "Compiler-owned collection source shards must share Kotlin.Collections.CollectionsKt: " +
+                        stdlibIlFile.path
+            }
         }
         if (".assembly extern Kotlin.Stdlib" in stdlibIlText) {
             assertions.fail { "Kotlin.Stdlib must not carry an AssemblyRef to itself: ${stdlibIlFile.path}" }

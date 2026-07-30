@@ -111,25 +111,46 @@ without claiming that .NET Standard is an executable runtime. The carrier record
 
 ## Relationship to the stdlib generator
 
-The mature stdlib generator currently emits Common, JVM, JS, WASM, and Native sources; it has no
-.NET target. The Iterable/List `first()` and `last()` overloads are owned by the common
-`Elements.f_first` and `Elements.f_last` templates, not by platform-specific implementations. The
-bootstrap source retains their runtime List dispatch now that the target has a coherent List ABI.
-The generated `List.last()` spells its index through the separately generated `lastIndex`
-extension property; this narrow extraction expands that property to its exact `size - 1` body
-because generic extension properties remain outside the current backend surface.
-`EmptyIterator`, `EmptyList`, and `emptyList()` follow the ordinary common
+The mature stdlib generator emits Common, JVM, JS, WASM, and Native sources. The Iterable/List
+terminal operations are owned by the Common `Elements` templates, not by platform-specific
+implementations. Kotlin/.NET therefore no longer adds handwritten copies for new generated
+algorithms.
+
+The bounded bootstrap generator described in
+[`../review/common-collections-program.md`](../review/common-collections-program.md) invokes those
+same Common template objects and materializes only the explicitly supported Iterable/List
+variants as a classified Common source. The first slice covers the Iterable/List `first`,
+`firstOrNull`, `last`, and `lastOrNull` overloads. `List.last()` depends on the Common
+`List.lastIndex` extension from `kotlin/collections/Collections.kt`; the bootstrap generator
+extracts that complete declaration from the authoritative source file and fails if its unique
+declaration marker changes or disappears. It does not maintain a .NET copy or substitute a
+`size - 1` body.
+
+The generic `lastIndex` extension getter is emitted as a static generic CLR method, following the
+JVM accessor-method representation. Like every extension property it has no CLR `.property` row:
+its receiver is a method parameter, not a CLR property owner. This is ordinary Kotlin declaration
+support rather than a collection intrinsic.
+
+The generated Common file and the target collection-support file are separate source-product
+shards but one CLR API owner. In `STDLIB` emission, files which the compiler-owned source catalog
+explicitly assigns the same facade name are aggregated into one physical class. This follows the
+JVM stdlib's single public collection-facade boundary and prevents an order-dependent
+`CollectionsKt1` implementation from disagreeing with the external binding to `CollectionsKt`.
+The aggregation is deliberately narrower than a general source-level multifile-class feature:
+callables and accessor-only properties may span shards, while at most one shard may own top-level
+physical state and its `.cctor`. Multiple stateful shards are rejected because their cross-file
+initialization order has not been designed.
+
+`EmptyIterator`, `EmptyList`, and `emptyList()` continue to follow the ordinary Common
 `kotlin.collections.Collections.kt` source shape. The only target decisions are the physical
 Nothing carrier plus inert `RandomAccess`/internal Serializable actuals; no singleton intrinsic
-or hand-written collection bridge is introduced.
+or handwritten collection bridge is introduced.
 
-Adding a `KotlinTarget.DotNet` generator entry now would produce a broad corpus that this POC
-cannot compile and would falsely suggest a supported target surface. `first()` and `last()` prove
-straight-line and looping generic common bodies respectively; adding more piecemeal operations
-would not prove standalone dependency consumption. Until standalone stdlib compilation can consume
-generated common sources, each bootstrap extraction must identify its generator/template origin
-and preserve its semantics. The eventual .NET stdlib build should compile the common generated
-corpus plus narrowly generated .NET actuals rather than maintain a permanent handwritten fork.
+Adding a full `KotlinTarget.DotNet` generator entry now would produce a broad corpus that this POC
+cannot compile and would falsely suggest a supported target surface. The temporary capability
+selection is source-product staging, not semantic authority: signatures, bodies, documentation,
+and annotations come from Common templates. The endpoint remains compilation of the full Common
+generated corpus plus narrow .NET actuals, at which point the bootstrap selection is deleted.
 
 The first source-ownership slice made that endpoint possible without pretending the broad corpus
 already compiles. Its target implementation is stored as ordinary `.kt` files under
@@ -497,6 +518,17 @@ null-at-EOF, the exact Common EOF message and `RuntimeException` ancestry, and K
 CoreCLR 10. The new public methods use the existing physical Function record, so no physical
 schema or runtime-surface revision is required. The fresh strict gate is 889/0/0/0 across 16 XML
 suites.
+
+The first collections continuation invokes the authoritative Common `Elements` templates for the
+Iterable/List `first`, `last`, `firstOrNull`, and `lastOrNull` overloads. It extracts the complete
+Common `List.lastIndex` declaration rather than copying or reimplementing its body; source drift
+fails generation. Both direct and fallback products classify the generated file as Common and
+emit it together with the target-private collection implementations on one physical
+`Kotlin.Collections.CollectionsKt` facade. Generic extension properties emit static generic
+accessors and no CLR property row. Separate and installed consumers call that facade, while
+adversarial execution proves empty, singleton, widened, nullable, primitive/reference, one-shot
+Iterable, and non-iterating List behavior on Framework CLR 4 and CoreCLR 10. The physical index
+grammar and runtime surface do not change. The fresh strict gate is 893/0/0/0 across 16 XML suites.
 
 The exhaustive-when matrix additionally verifies that the internal subject-aware helper is emitted
 once in `Kotlin.Stdlib`, that a separately compiled application calls that physical facade, and
