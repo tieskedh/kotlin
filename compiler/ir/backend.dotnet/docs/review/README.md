@@ -24,6 +24,9 @@ copying a snapshot review into binding design law.
 6. [`upstream-sync-2026-07-30.md`](upstream-sync-2026-07-30.md) records the 161-commit impact
    review, exact rebase verification, immediate Common/IR adaptations, and longer-term KLIB,
    Analysis API, and BTA direction for the rebase to `733a49b39`.
+7. [`common-io-source-partition.md`](common-io-source-partition.md) records the mature-target I/O
+   comparison, the exception dependency proved by compilation, its completed classified-carrier
+   prerequisite, and the next bounded Common/actual source-product feature.
 
 Authority order for implementation work:
 

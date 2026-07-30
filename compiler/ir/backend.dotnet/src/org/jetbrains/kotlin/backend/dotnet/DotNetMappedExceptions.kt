@@ -34,6 +34,10 @@ internal enum class DotNetKotlinExceptionTypeId(val abiValue: Int) {
     EXCEPTION_IN_INITIALIZER_ERROR(15),
     NO_CLASS_DEF_FOUND_ERROR(16),
     NO_WHEN_BRANCH_MATCHED_EXCEPTION(17),
+    CONCURRENT_MODIFICATION_EXCEPTION(18),
+    ASSERTION_ERROR(19),
+    UNINITIALIZED_PROPERTY_ACCESS_EXCEPTION(20),
+    KOTLIN_NOTHING_VALUE_EXCEPTION(21),
 }
 
 /**
@@ -89,6 +93,7 @@ internal object DotNetMappedExceptions {
             val hasMessageCauseCtor: Boolean,
             val hasCauseCtor: Boolean,
             private val physicalSupertypeRefs: Set<PhysicalTypeRef>,
+            val hasAnyMessageCtor: Boolean = false,
         ) : Entry() {
             fun carrierTypeRef(coreLibraryReference: String): String =
                 carrierPhysicalTypeRef.render(coreLibraryReference)
@@ -121,6 +126,7 @@ internal object DotNetMappedExceptions {
                     parameterTypes == listOf(DotNetIlValueType.String) -> {}
                     parameterTypes == listOf(DotNetIlValueType.String, causeType) && hasMessageCauseCtor -> {}
                     parameterTypes == listOf(causeType) && hasCauseCtor -> {}
+                    parameterTypes == listOf(DotNetIlValueType.Object) && hasAnyMessageCtor -> {}
                     parameterTypes == listOf(causeType) -> dotNetUnsupported(
                         "constructor '$className(cause)' has no mapped CLR overload; " +
                                 "construct with (message) or (message, cause)"
@@ -180,6 +186,33 @@ internal object DotNetMappedExceptions {
                 )
             )
         }
+        fun runtimeExactlyMapped(
+            kotlinName: String,
+            runtimeTypeRef: String,
+            classifierTypeId: DotNetKotlinExceptionTypeId,
+            physicalParentTypeRef: String,
+            hasMessageCauseCtor: Boolean,
+            hasCauseCtor: Boolean,
+            hasAnyMessageCtor: Boolean = false,
+        ) {
+            val physicalType = PhysicalTypeRef.Exact(runtimeTypeRef)
+            put(
+                FqName("kotlin.$kotlinName"),
+                Entry.Mapped(
+                    carrierPhysicalTypeRef = physicalType,
+                    constructorPhysicalTypeRef = physicalType,
+                    typedCatchPhysicalTypeRef = physicalType,
+                    classifierTypeId = classifierTypeId,
+                    hasMessageCauseCtor = hasMessageCauseCtor,
+                    hasCauseCtor = hasCauseCtor,
+                    hasAnyMessageCtor = hasAnyMessageCtor,
+                    physicalSupertypeRefs = setOf(
+                        PhysicalTypeRef.Exact(physicalParentTypeRef),
+                        exceptionType,
+                    ),
+                )
+            )
+        }
 
         // Throwable is the one broad category exactly expressible as a CLR typed catch.
         put(
@@ -226,12 +259,45 @@ internal object DotNetMappedExceptions {
                 ),
             )
         )
+        runtimeExactlyMapped(
+            "ConcurrentModificationException",
+            DotNetRuntimeLibrary.concurrentModificationExceptionTypeRef,
+            DotNetKotlinExceptionTypeId.CONCURRENT_MODIFICATION_EXCEPTION,
+            DotNetRuntimeLibrary.runtimeExceptionTypeRef,
+            hasMessageCauseCtor = true,
+            hasCauseCtor = true,
+        )
+        runtimeExactlyMapped(
+            "UninitializedPropertyAccessException",
+            DotNetRuntimeLibrary.uninitializedPropertyAccessExceptionTypeRef,
+            DotNetKotlinExceptionTypeId.UNINITIALIZED_PROPERTY_ACCESS_EXCEPTION,
+            DotNetRuntimeLibrary.runtimeExceptionTypeRef,
+            hasMessageCauseCtor = true,
+            hasCauseCtor = true,
+        )
+        runtimeExactlyMapped(
+            "KotlinNothingValueException",
+            DotNetRuntimeLibrary.kotlinNothingValueExceptionTypeRef,
+            DotNetKotlinExceptionTypeId.KOTLIN_NOTHING_VALUE_EXCEPTION,
+            DotNetRuntimeLibrary.runtimeExceptionTypeRef,
+            hasMessageCauseCtor = true,
+            hasCauseCtor = true,
+        )
         classifiedCategory(
             "Error",
             PhysicalTypeRef.Exact(DotNetRuntimeLibrary.errorTypeRef),
             DotNetKotlinExceptionTypeId.ERROR,
             hasMessageCauseCtor = true,
             hasCauseCtor = true,
+        )
+        runtimeExactlyMapped(
+            "AssertionError",
+            DotNetRuntimeLibrary.assertionErrorTypeRef,
+            DotNetKotlinExceptionTypeId.ASSERTION_ERROR,
+            DotNetRuntimeLibrary.errorTypeRef,
+            hasMessageCauseCtor = true,
+            hasCauseCtor = false,
+            hasAnyMessageCtor = true,
         )
         put(
             FqName("kotlin.ExceptionInInitializerError"),

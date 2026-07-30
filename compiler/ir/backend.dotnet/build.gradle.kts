@@ -33,6 +33,12 @@ tasks.named<ProcessResources>("processResources") {
     )) {
         into("kotlin-dotnet-stdlib/src/kotlin/internal")
     }
+    from(rootProject.file("libraries/stdlib/common/src/kotlin/ExceptionsH.kt")) {
+        into("kotlin-dotnet-stdlib/common/src/kotlin")
+    }
+    from(rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt")) {
+        into("kotlin-dotnet-stdlib/common-non-jvm/src/kotlin")
+    }
 }
 
 tasks.register("dotNetTest") {

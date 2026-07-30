@@ -281,6 +281,8 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
             configuration.languageVersionSettings.withDotNetSourceProductSettings(
                 allowKotlinPackage = allowsKotlinPackage,
                 enableMultiplatform = usesBootstrapStdlibSources || commonSources.isNotEmpty(),
+                muteExpectActualClassesWarning =
+                    arguments.dotNetProduceStdlib || usesBootstrapStdlibSources,
             )
 
         val classpathFiles = linkedSetOf<File>()
@@ -305,6 +307,7 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
 private fun LanguageVersionSettings.withDotNetSourceProductSettings(
     allowKotlinPackage: Boolean,
     enableMultiplatform: Boolean,
+    muteExpectActualClassesWarning: Boolean,
 ): LanguageVersionSettings {
     val delegate = this
     return object : LanguageVersionSettings by delegate {
@@ -329,6 +332,11 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(
         override fun <T> getFlag(flag: AnalysisFlag<T>): T {
             @Suppress("UNCHECKED_CAST")
             if (flag == AnalysisFlags.allowKotlinPackage) return allowKotlinPackage as T
+            @Suppress("UNCHECKED_CAST")
+            if (flag == AnalysisFlags.muteExpectActualClassesWarning) {
+                return (muteExpectActualClassesWarning ||
+                        delegate.getFlag(AnalysisFlags.muteExpectActualClassesWarning)) as T
+            }
             return delegate.getFlag(flag)
         }
     }

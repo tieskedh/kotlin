@@ -55,6 +55,15 @@ internal object DotNetRuntimeLibrary {
     val kotlinNothingValueExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.KotlinNothingValueException".toIlIdentifier()}"
 
+    val concurrentModificationExceptionTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.ConcurrentModificationException".toIlIdentifier()}"
+
+    val assertionErrorTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.AssertionError".toIlIdentifier()}"
+
+    val uninitializedPropertyAccessExceptionTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.UninitializedPropertyAccessException".toIlIdentifier()}"
+
     val exceptionClassifierTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.Runtime.Internal.ExceptionClassifier".toIlIdentifier()}"
 
@@ -218,6 +227,7 @@ internal object DotNetRuntimeLibrary {
             coreLibraryReference,
             coreLibrary.editorBrowsableReference,
         )
+        val throwableExceptionTypesIl = DotNetThrowableRuntime.exceptionTypesIl(coreLibraryReference)
         return """
 $assemblyReferenceIl
         .assembly Kotlin.Runtime
@@ -581,6 +591,8 @@ $primitiveArrayTypesIl
               .get instance string Kotlin.Error::'get_Message'()
             }
           }
+
+$throwableExceptionTypesIl
 
           // Internal Kotlin initialization errors need exact runtime identities: generated
           // catch filters and the static-initialization runtime service refer to these public

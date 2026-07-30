@@ -142,6 +142,14 @@ internal class DotNetIlIntrinsicMethods(
                 to DotNetIlObserveStaticInitializationFailureIntrinsic,
         Key(kotlinInternalFqn, null, "staticInitializationFailure", listOf(throwableFqn, stringFqn))
                 to DotNetIlStaticInitializationFailureIntrinsic,
+        Key(kotlinFqn, null, "dotNetStackTraceToString", listOf(throwableFqn))
+                to DotNetIlThrowableStackTraceToStringIntrinsic,
+        Key(kotlinFqn, null, "dotNetPrintStackTrace", listOf(throwableFqn))
+                to DotNetIlThrowablePrintStackTraceIntrinsic,
+        Key(kotlinFqn, null, "dotNetAddSuppressed", listOf(throwableFqn, throwableFqn))
+                to DotNetIlThrowableAddSuppressedIntrinsic,
+        Key(kotlinFqn, null, "dotNetSuppressedExceptions", listOf(throwableFqn))
+                to DotNetIlThrowableSuppressedExceptionsIntrinsic,
         Key(kotlinIoFqn, null, "println", emptyList()) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(stringFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(intFqn)) to DotNetIlPrintlnIntrinsic,
@@ -2797,6 +2805,97 @@ private object DotNetIlExceptionCauseIntrinsic : DotNetIlIntrinsicMethod() {
         codegen.emit(
             "callvirt instance ${exceptionType.nameInSignature} " +
                     "${DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)}::get_InnerException()",
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Common Throwable operations backed by the identity-associated Kotlin.Runtime service. */
+private object DotNetIlThrowableStackTraceToStringIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.String || call.arguments.size != 1) return false
+        val exception = call.arguments.single()
+            ?: dotNetUnsupported("missing exception in a call to 'dotNetStackTraceToString'")
+        val exceptionType = DotNetIlValueType.MappedClass(
+            DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)
+        )
+        codegen.emitExpression(exception, exceptionType)
+        codegen.emit(
+            DotNetThrowableRuntime.stackTraceToStringCallInstruction(codegen.coreLibraryReference),
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+private object DotNetIlThrowablePrintStackTraceIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsStatement(call: IrCall, codegen: DotNetIlExpressionCodegen): Boolean {
+        if (call.arguments.size != 1) return false
+        val exception = call.arguments.single()
+            ?: dotNetUnsupported("missing exception in a call to 'dotNetPrintStackTrace'")
+        val exceptionType = DotNetIlValueType.MappedClass(
+            DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)
+        )
+        codegen.emitExpression(exception, exceptionType)
+        codegen.emit(
+            DotNetThrowableRuntime.printStackTraceCallInstruction(codegen.coreLibraryReference),
+            pops = 1,
+        )
+        return true
+    }
+}
+
+private object DotNetIlThrowableAddSuppressedIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsStatement(call: IrCall, codegen: DotNetIlExpressionCodegen): Boolean {
+        if (call.arguments.size != 2) return false
+        val owner = call.arguments[0]
+            ?: dotNetUnsupported("missing owner in a call to 'dotNetAddSuppressed'")
+        val exception = call.arguments[1]
+            ?: dotNetUnsupported("missing exception in a call to 'dotNetAddSuppressed'")
+        val exceptionType = DotNetIlValueType.MappedClass(
+            DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)
+        )
+        codegen.emitExpression(owner, exceptionType)
+        codegen.emitExpression(exception, exceptionType)
+        codegen.emit(
+            DotNetThrowableRuntime.addSuppressedCallInstruction(codegen.coreLibraryReference),
+            pops = 2,
+        )
+        return true
+    }
+}
+
+private object DotNetIlThrowableSuppressedExceptionsIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val exceptionType = DotNetIlValueType.MappedClass(
+            DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)
+        )
+        val snapshotType = DotNetIlValueType.GenericArray(exceptionType)
+        if (expectedType != snapshotType || call.arguments.size != 1) return false
+        val exception = call.arguments.single()
+            ?: dotNetUnsupported("missing exception in a call to 'dotNetSuppressedExceptions'")
+        codegen.emitExpression(exception, exceptionType)
+        codegen.emit(
+            DotNetThrowableRuntime.getSuppressedCallInstruction(codegen.coreLibraryReference),
             pops = 1,
             pushes = 1,
         )

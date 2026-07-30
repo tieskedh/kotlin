@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 798 FIR/IL/semantic tests, 21 generated-CLI tests, and 66
+toolchain enforcement and owns 802 FIR/IL/semantic tests, 21 generated-CLI tests, and 66
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 885 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 889 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -2555,15 +2555,20 @@ landed shape as a compatibility constraint.
   `libraries/stdlib/dotnet/src`. Its first real Common/actual partition compiles the authoritative
   `libraries/stdlib/src/kotlin/internal/Annotations.kt` and
   `throwNoWhenBranchMatchedException.kt` as Common sources, plus the .NET helper body as an
-  `actual`; the deleted target annotation mirror must not return. The full Common
-  `ExceptionsH.kt` is not yet in the supported product, so the target exception declaration
-  remains the documented temporary bootstrap contract rather than pretending that the broader
-  exception surface actualises.
+  `actual`; the deleted target annotation mirror must not return. The next partition compiles the
+  complete authoritative Common `ExceptionsH.kt` plus the shared
+  `common-non-jvm/src/kotlin/Exceptions.kt` actual class implementations. The .NET target owns
+  only the remaining platform actuals and bodies in `DotNetExceptions.kt`. Do not restore the
+  deleted target exception hierarchy: Common owns declarations and the shared non-JVM source owns
+  every constructor body that does not require CLR-specific treatment.
   The frontend enables multiplatform semantics only when the source product or explicit Common
   inputs require them and asks the shared FIR session construction to create distinct Common and
   .NET source sessions. KLIB metadata serialization runs after FIR2IR actualisation through
   `Fir2KlibMetadataSerializer`, matching JS/Wasm/Native; serializing before actualisation or
-  flattening Common and actual declarations into one metadata session is forbidden.
+  flattening Common and actual declarations into one metadata session is forbidden. The
+  compiler-owned fallback and explicit stdlib product mute the expect/actual-class Beta warning,
+  matching mature stdlib builds; an ordinary user MPP compilation does not silently acquire that
+  flag.
   `DotNetStdlibSource` only loads the backend-JAR resource copy for same-run bootstrap
   compatibility. Tests require every packaged file to be text-identical to its authoritative
   repository file, reject a complete set whose Common files are misclassified as platform
@@ -2574,8 +2579,12 @@ landed shape as a compatibility constraint.
   cross-module declarations: private/private-to-this/local `IdSignature`s must not be exported,
   because file-local signatures may contain checkout paths and private implementations are not
   bindable ABI.
-  Resolution-only declarations such as `println`, `Char.code`, and array operations are filtered
-  through the intrinsic/exception registries and never emitted into a facade. The ordinary Kotlin
+  Resolution-only declarations such as `println`, `Char.code`, array operations, and mapped
+  exception classes are filtered through the intrinsic/exception registries and never emitted
+  into a facade. The Common Throwable operations are different: their actual Kotlin bodies and
+  private immutable snapshot-list implementations are emitted once in
+  `Kotlin.DotNetExceptionsKt`/`Kotlin.Stdlib`, while private external calls cross the intrinsic
+  registry to the runtime state service. The ordinary Kotlin
   `ArrayIterator<T>`/`ArrayIterable<T>` declarations and the Iterable/List `first()`/`last()` bodies are
   different: STDLIB-scoped emission owns them and USER-scoped emission excludes them, yielding the
   classes and stable `Kotlin.Collections.CollectionsKt` facade only in `Kotlin.Stdlib.dll`. USER
@@ -2640,6 +2649,24 @@ landed shape as a compatibility constraint.
   This exact cancellation root plus the classified `IllegalStateException` carrier resolves the
   CLR sibling-root conflict without a wrapper. Classifier id 14, runtime surface level 7, and
   physical ABI schema 13 own the change on all three profiles.
+  The complete Common exception source product adds exact runtime identities for
+  `ConcurrentModificationException`, `AssertionError`,
+  `UninitializedPropertyAccessException`, and `KotlinNothingValueException` as append-only
+  classifier ids 18 through 21. Physical modality follows Common: the first two are open and the
+  uninitialized-property class is final. Runtime surface level 9 and physical ABI schema 16 own
+  this expanded surface on all three profiles.
+  Common throwable state absent from `System.Exception` is attached to the original object by one
+  runtime-owned `ConditionalWeakTable<System.Exception, ThrowableState>`. The value never retains
+  its key; a monitor makes compound lookup, ordered append, and snapshot creation race-free; state
+  lookup uses reference identity even for hostile `Equals` overrides. `addSuppressed` ignores
+  self-suppression, retains duplicates and insertion order, and never mutates `Exception.Data`.
+  Each non-empty `suppressedExceptions` read wraps a fresh CLR vector in a private immutable
+  Kotlin `List`; an empty read returns `emptyList()`. `stackTraceToString` begins with the exact
+  CLR `Exception.ToString()` diagnostic and composes suppressed graphs from both roots and cause
+  chains with reference-identity cycle detection. `printStackTrace` writes that composed text to
+  `Console.Error`. This follows
+  the JVM/JS/Wasm Common behavior while the weak side table is the CLR-required deviation that
+  preserves arbitrary foreign exception identity.
   C# admission to a broad `Throwable`/`Exception`
   boundary accepts any `System.Exception`; narrower export admission remains an explicit deferred
   classifier-guard design rather than a fabricated CLR hierarchy.
