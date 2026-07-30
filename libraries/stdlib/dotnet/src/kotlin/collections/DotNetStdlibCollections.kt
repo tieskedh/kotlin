@@ -160,52 +160,6 @@ public external fun DoubleArray.asIterable(): Iterable<Double>
 public external fun BooleanArray.asIterable(): Iterable<Boolean>
 public external fun CharArray.asIterable(): Iterable<Char>
 
-// Bootstrap subset of libraries/tools/kotlin-stdlib-gen's Elements.f_first common template. The
-// generated List dispatch is retained now that the target has the corresponding physical ABI.
-// Both overloads are emitted on Kotlin.Collections.CollectionsKt in Kotlin.Stdlib, while user call
-// sites reference that physical facade across the assembly edge.
-public fun <T> Iterable<T>.first(): T {
-    when (this) {
-        is List -> return this.first()
-        else -> {
-            val iterator = iterator()
-            if (!iterator.hasNext())
-                throw NoSuchElementException("Collection is empty.")
-            return iterator.next()
-        }
-    }
-}
-
-public fun <T> List<T>.first(): T {
-    if (isEmpty())
-        throw NoSuchElementException("List is empty.")
-    return get(0)
-}
-
-// Bootstrap subset of the same generator's Elements.f_last common template. The mature source
-// spells the final index through the generated List.lastIndex property; `size - 1` is that
-// property's body and avoids expanding this bootstrap slice with an unrelated property export.
-public fun <T> Iterable<T>.last(): T {
-    when (this) {
-        is List -> return this.last()
-        else -> {
-            val iterator = iterator()
-            if (!iterator.hasNext())
-                throw NoSuchElementException("Collection is empty.")
-            var last = iterator.next()
-            while (iterator.hasNext())
-                last = iterator.next()
-            return last
-        }
-    }
-}
-
-public fun <T> List<T>.last(): T {
-    if (isEmpty())
-        throw NoSuchElementException("List is empty.")
-    return get(size - 1)
-}
-
 // Compiler-facing factories are Kotlin-internal but metadata-public: generated user assemblies
 // call them across the Kotlin.Stdlib boundary without making the implementation classes part of
 // the compiler ABI. This follows the JVM/JS helper boundary for array iteration.

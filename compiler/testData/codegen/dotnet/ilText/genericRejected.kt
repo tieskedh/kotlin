@@ -11,12 +11,11 @@
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
 // - inline generic functions (and with them `reified`): no inlining model;
 // - varargs of `T`: the parameter type is the unsupported projected `Array<out T>` ABI;
-// - generic (extension) properties: the property metadata/accessor model does not cover generic
-//   accessors;
 // Widening an unconstrained `T` to `Any?`, structural `==`/`== null`, templates, and `toString`
 // are supported through CLR `box !!n` plus the System.Object Any foundation. Other unconstrained
 // member calls still need a declared bound. The erased callable bridge needs the same general
-// object-boundary conversion for an open logical result.
+// object-boundary conversion for an open logical result. Generic extension properties are
+// supported as ordinary generic accessor methods; they do not emit a CLR property row.
 
 open class Gen<T>(val v: T)
 
@@ -46,5 +45,5 @@ val <T> T.mark: Int
     get() = 0
 
 fun main() {
-    println("ok")
+    println(if ("ok".mark == 0) "ok" else "fail")
 }

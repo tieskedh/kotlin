@@ -54,7 +54,9 @@ internal object DotNetStdlibLibrary {
     private val implementationFunctionFacadeIlNames = mapOf(
         "kotlin.collections.emptyList" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.first" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.firstOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.last" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.lastOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERATOR_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERABLE_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.io.readln" to IO_FACADE_IL_NAME,
@@ -65,6 +67,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.addSuppressed" to EXCEPTIONS_FACADE_IL_NAME,
     )
     private val implementationPropertyFacadeIlNames = mapOf(
+        "kotlin.collections.lastIndex" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.suppressedExceptions" to EXCEPTIONS_FACADE_IL_NAME,
     )
 
@@ -238,6 +241,10 @@ internal object DotNetStdlibLibrary {
 
     private val implementationSources = mapOf(
         "DotNetStdlibCollections.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = COLLECTIONS_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapCollections.kt" to ImplementationSource(
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),

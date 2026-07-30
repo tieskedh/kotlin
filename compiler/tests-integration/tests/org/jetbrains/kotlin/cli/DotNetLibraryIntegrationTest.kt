@@ -28175,6 +28175,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')" in il
         )
         assertTrue(
+            ".method public hidebysig static object 'firstOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static object 'lastOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig specialname static int32 'get_lastIndex'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')" in il
+        )
+        assertTrue(".property int32 'lastIndex'" !in il) {
+            "An extension-property receiver cannot be represented as a CLR property owner"
+        }
+        assertEquals(
+            1,
+            Regex(
+                "^\\.class public abstract sealed auto ansi beforefieldinit " +
+                        "'Kotlin\\.Collections\\.CollectionsKt'$",
+                RegexOption.MULTILINE,
+            ).findAll(il).count(),
+            "The generated Common and target collection shards must share one physical facade",
+        )
+        assertTrue("Kotlin.Collections.CollectionsKt1" !in il) {
+            "A suffixed generated collection facade would disagree with the external stdlib binding"
+        }
+        assertTrue(
             ".class private auto ansi sealed 'Kotlin.Collections.EmptyIterator'\n" +
                     "       extends ${coreLibraryReference}System.Object\n" +
                     "       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', " +
@@ -28214,13 +28241,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
     private fun dotNetStdlibSourceFiles(): List<File> {
         val platformSourceDirectory = File("libraries/stdlib/dotnet/src").absoluteFile
+        val commonSourceDirectory = File("libraries/stdlib/dotnet/common/src").absoluteFile
         assertTrue(platformSourceDirectory.isDirectory) {
             "Missing ordinary Kotlin/.NET stdlib source directory: $platformSourceDirectory"
+        }
+        assertTrue(commonSourceDirectory.isDirectory) {
+            "Missing generated Common Kotlin/.NET stdlib source directory: $commonSourceDirectory"
         }
         val sourceFiles = platformSourceDirectory.walkTopDown()
             .filter(File::isFile)
             .filter { it.extension == "kt" }
             .toMutableList()
+        sourceFiles += commonSourceDirectory.walkTopDown()
+            .filter(File::isFile)
+            .filter { it.extension == "kt" }
         sourceFiles += File("libraries/stdlib/src/kotlin/internal/Annotations.kt").absoluteFile
         sourceFiles +=
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
@@ -28275,6 +28309,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return values.last()
                 }
 
+                public fun <T> optionalEnds(values: Iterable<T>): T? {
+                    values.firstOrNull()
+                    return values.lastOrNull()
+                }
+
+                public fun <T> optionalListEnds(values: List<T>): T? {
+                    values.firstOrNull()
+                    return values.lastOrNull()
+                }
+
+                public fun <T> lastPosition(values: List<T>): Int = values.lastIndex
+
                 public fun firstArray(values: Array<String>): String = values.iterator().next()
 
                 public fun firstArrayIterable(values: Array<String>): String = values.asIterable().first()
@@ -28318,6 +28364,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(
             "::'last'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il
+        )
+        assertTrue(
+            "::'firstOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il
+        )
+        assertTrue(
+            "::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il
         )
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterator'<string>" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<string>" in il)
@@ -28373,6 +28428,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return values.last()
                 }
 
+                public fun <T> installedOptionalEnds(values: Iterable<T>): T? {
+                    values.firstOrNull()
+                    return values.lastOrNull()
+                }
+
+                public fun <T> installedOptionalListEnds(values: List<T>): T? {
+                    values.firstOrNull()
+                    return values.lastOrNull()
+                }
+
+                public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
+
                 public fun installedEmptyInts(): List<Int> = emptyList()
 
                 public fun installedRandomAccess(values: List<Int>): Boolean = values is RandomAccess
@@ -28386,7 +28453,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     owner.addSuppressed(suppressed)
                     val snapshot = owner.suppressedExceptions
                     val collectionsOk =
-                        values.asIterable().first() + values.asIterable().last() == "OK"
+                        values.asIterable().first() + values.asIterable().last() == "OK" &&
+                            values.asIterable().firstOrNull() == "O" &&
+                            values.asIterable().lastOrNull() == "K" &&
+                            emptyArray<String>().asIterable().firstOrNull() == null &&
+                            emptyList<String>().lastOrNull() == null &&
+                            emptyList<String>().lastIndex == -1
                     val throwableOk =
                         snapshot.size == 1 &&
                             snapshot[0] === suppressed &&
@@ -28410,6 +28482,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'" in il)
         assertTrue("::'first'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("::'last'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
+        assertTrue(
+            "::'firstOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue("::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
+        assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>" in il)
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Io.ConsoleKt'::'readlnOrNull'()" in il)

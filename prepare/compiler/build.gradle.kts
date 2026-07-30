@@ -462,6 +462,9 @@ val dotNetStdlibSharedPlatformSources = files(
     rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt"),
 )
 val dotNetStdlibCommonSources = files(
+    rootProject.file(
+        "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapCollections.kt"
+    ),
     rootProject.file("libraries/stdlib/src/kotlin/internal/Annotations.kt"),
     rootProject.file("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt"),
     rootProject.file("libraries/stdlib/common/src/kotlin/ExceptionsH.kt"),
