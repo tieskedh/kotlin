@@ -9,6 +9,6 @@ package kotlin.internal
 @PublishedApi
 @UsedFromCompilerGeneratedCode
 @SinceKotlin("2.5")
-internal fun throwNoWhenBranchMatchedException(subject: Any): Nothing {
+internal actual fun throwNoWhenBranchMatchedException(subject: Any): Nothing {
     throw NoWhenBranchMatchedException("No branch matched for subject: $subject")
 }
