@@ -14,6 +14,7 @@ dependencies {
     implementation(project(":compiler:config"))
     implementation(project(":compiler:config.jvm"))
     implementation(project(":compiler:cli-base"))
+    implementation(project(":core:language.targets.dotnet"))
     implementation(project(":core:language.targets.jvm"))
     implementation(project(":js:js.config"))
     implementation(project(":wasm:wasm.config"))

@@ -7,6 +7,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":core:language.targets.dotnet"))
     implementation(project(":core:descriptors.jvm"))
     implementation(project(":compiler:frontend.java"))
     implementation(project(":core:compiler.common.wasm"))
@@ -46,4 +47,3 @@ sourceSets {
     "main" { projectDefault() }
     "test" { none() }
 }
-

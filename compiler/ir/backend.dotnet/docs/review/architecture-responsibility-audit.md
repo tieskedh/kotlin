@@ -96,16 +96,17 @@ generic layer.
 - `DotNetClrTypeResolver.kt`
 - `DotNetManagedResourceReader.kt`
 
-These files model or validate physical CLR facts. Two cannot move in the
+These files model or validate physical CLR facts. Two could not move in the
 first correction unchanged:
 
-- `DotNetClrSpecialConstraintValidator.kt` reads `DotNetTarget`, whose current
-  definition also owns a backend-only core-library renderer; and
+- `DotNetClrSpecialConstraintValidator.kt` read `DotNetTarget`, whose
+  then-current definition also owned a backend-only core-library renderer; and
 - `DotNetClrConstructedTypeConstraintValidator.kt` composes that validator.
 
-They remain an explicit short-lived outlier until target configuration is
-separated. Replacing the target with an ad-hoc Boolean merely to enable a
-move is rejected.
+The target-configuration correction below gives them a non-backend profile
+dependency. They move into the load module as part of that correction.
+Replacing the target with an ad-hoc Boolean merely to enable the move remains
+rejected.
 
 ### Mixed CLR evidence and Kotlin/FIR policy: 3
 
@@ -255,8 +256,11 @@ constant. Its classpath discriminator accepts the managed-resource name from
 the library-loading caller. This preserves one physical PE read path without
 making the loader own Kotlin library identity.
 
-The new module deliberately has no compiler-project dependencies. Its
-compilation therefore enforces the forbidden-dependency rule:
+The new module initially had no compiler-project dependencies. The subsequent
+target-configuration correction added only
+`core:language.targets.dotnet`, which contains neutral target identity and
+capability vocabulary. Its compilation still enforces the forbidden-dependency
+rule:
 
 - no FIR;
 - no IR;
@@ -319,6 +323,137 @@ prevent the loader from importing backend code. The selected coherent slice
 has a dependency-free closure, so a real module provides enforceable value
 without gratuitous build complexity.
 
+## Second correction: target configuration and dependency roots
+
+The next concrete consumer of a non-backend target profile is the objective
+CLR special-constraint validator. The target-profile/configuration boundary
+is therefore no longer speculative.
+
+The mature-target comparison is:
+
+- JVM keeps `JvmTarget` and platform identity in
+  `core:language.targets.jvm`, makes `compiler:config.jvm` consume that
+  vocabulary, and keeps CLI content-root carriers in `cli-base`;
+- JS keeps generated compiler keys and target configuration in `js.config`;
+- Native keeps generated compiler keys and target configuration in
+  `native.config`; and
+- all three keep physical code-generation rendering outside their shared
+  configuration models.
+
+Kotlin/.NET already has independent target-identity consumers in CLI
+configuration, CLR validation, FIR composition, backend lowering, runtime and
+stdlib construction, physical ABI production, and Gradle target-framework
+selection. That is enough to justify the JVM-shaped language-target seam,
+rather than making target identity configuration machinery.
+
+Kotlin/.NET follows that dependency direction with three deliberately
+distinct owners:
+
+- `core:language.targets.dotnet` owns `DotNetTarget`, parsing, the .NET
+  platform marker, and only narrowly defined target capabilities that are
+  consumed across compiler layers;
+- `compiler:config.dotnet` owns executable eligibility, library-profile
+  compatibility, and generated primitive compiler keys/accessors for output,
+  assembly name, product kind, and target; and
+- `cli-base` owns `DotNetClasspathRoot`, because content roots are CLI
+  composition carriers rather than target-profile facts.
+
+Package placement mirrors the same mature-target boundary:
+`DotNetTarget` is beside `JvmTarget` in `org.jetbrains.kotlin.config`,
+`DotNetPlatform`/`DotNetPlatforms` live in
+`org.jetbrains.kotlin.platform.dotnet`, and generated configuration keys and
+policy extensions stay in `org.jetbrains.kotlin.config`. There is no CLR
+constraint that justifies a backend or extra nested configuration package.
+
+The platform marker deliberately remains one unversioned Kotlin/.NET
+platform. `net48`, `netstandard2.0`, and `net10.0` are target-framework/API
+contracts selected through compiler configuration; they do not become three
+Kotlin language or Analysis API platform identities. This preserves the
+accepted single-platform Gradle model while keeping the target value
+independently consumable.
+
+The language-target module depends only on the shared language-target model.
+The new configuration module depends on it and `compiler:config`. The CLR
+load module depends only on the language-target module so that the
+constructed-type special-constraint validators can consume the exact profile
+and its focused by-ref-like capability rather than a backend renderer or an
+ad-hoc caller-supplied Boolean. `cli-dotnet` and `backend.dotnet` consume both
+target vocabulary and configuration directly.
+
+`DotNetTarget` no longer exposes a backend core-library renderer. The backend
+owns the exhaustive mapping from `DotNetTarget` to
+`DotNetCoreLibraryProfile`; textual `.assembly extern`, target-framework
+attribute, and custom-attribute rendering therefore remain code generation.
+Product kind, runtime identifier, deployment packaging, and future NuGet
+asset selection remain separate axes rather than accumulating on the target
+enum.
+
+`DotNetConfigurationKeys.kt` is split rather than moved wholesale. Runtime
+and stdlib identities, library artifact descriptions, export selectors,
+external-library/friend models, their keys, and the produced-artifact
+projection remain with their current backend consumers until the
+serialization, interop, and product seams are designed.
+
+The content-root correction replaces the accidental use of
+`JvmClasspathRoot` for CLR DLLs and .NET metadata inputs. Its placement mirrors
+`JvmContentRoots.kt`: `DotNetClasspathRoot` and its configuration helper live
+under `org.jetbrains.kotlin.cli.dotnet.config` in `cli-base`, while the .NET
+pipeline alone interprets those roots as managed assemblies or ordinary
+Kotlin libraries.
+
+The correction exits only when:
+
+- target identity, platform identity, target/profile parsing, and primitive
+  keys use the mature-target packages and import no backend type;
+- the CLR load module imports neither FIR, IR, backend, nor CLI code;
+- the two target-coupled CLR constraint validators live with the physical CLR
+  models they validate;
+- `cli-dotnet` contains no `JvmClasspathRoot` reference; and
+- the existing profile, constraint, CLI, assembly, and runtime tests remain
+  behaviorally unchanged.
+
+### Attacked alternatives for the second correction
+
+#### Move the whole backend configuration file
+
+Rejected. It would make a foundational configuration module own
+serialization artifacts, interop selectors, foreign-library state, and
+compiler/runtime distribution identities merely because they currently share
+one file.
+
+#### Put textual core-library facts on `DotNetTarget`
+
+Rejected. Target compatibility and executable capability are pre-FIR facts;
+IL assembly references and custom-attribute blobs are backend rendering. An
+exhaustive backend mapping preserves type safety without reversing ownership.
+
+#### Pass `supportsByRefLikeGenerics` as a Boolean
+
+Rejected. That would erase which API/runtime contract is being validated and
+would make later profile additions silently inherit an arbitrary capability.
+The validator consumes the authoritative profile enum and a focused
+target-capability extension owned beside it.
+
+#### Put `DotNetClasspathRoot` in `config.dotnet`
+
+Rejected. That would force target configuration to depend on CLI content-root
+infrastructure. Mature JVM placement shows that a target-specific root can
+live in `cli-base` without making it a target-profile model.
+
+#### Keep `DotNetTarget` inside `config.dotnet`
+
+Rejected. The target identity already has independent consumers above and
+below configuration. Owning it in `config.dotnet` would make the objective CLR
+loader transitively depend on compiler-configuration machinery and would
+understate the target value's role.
+
+#### Encode product, runtime, and packaging policy on `DotNetTarget`
+
+Rejected. The current enum selects a target-framework/API contract. Library
+versus executable, future runtime identifiers, and package asset selection are
+orthogonal decisions. Only capabilities that genuinely alter multiple
+compiler layers belong beside target identity.
+
 ## Subsequent architecture extraction order
 
 This is the order for later ownership corrections when a concrete consumer
@@ -326,15 +461,16 @@ requires them. It is not a mandate to exhaust every extraction before
 continuing bounded feature work; package or module movement without a new
 producer/consumer boundary would be mechanical churn.
 
-1. Extract target-profile and configuration ownership, then move the two
-   target-coupled CLR constraint validators.
-2. Move the foreign CLR provider and retained declaration-source model into
-   FIR-owned .NET packages/module, leaving IR binding in the backend.
-3. Split KLIB-in-DLL and physical ABI models/codecs from their IR producers
+1. Create a shared retained-declaration carrier seam, then move the foreign
+   CLR provider into a FIR-owned .NET module while leaving IR binding in the
+   backend. The carrier must not be owned solely by the FIR implementation
+   module: mirror JVM's `deserialization.common.jvm` dependency role so FIR
+   and backend can consume it without depending on one another.
+2. Split KLIB-in-DLL and physical ABI models/codecs from their IR producers
    into .NET library/serialization ownership.
-4. Split the C# implementation manifest codec/model from its backend IR
+3. Split the C# implementation manifest codec/model from its backend IR
    collector into a shared interop/ABI owner.
-5. Separate backend transformation/emission from CLI/Gradle application
+4. Separate backend transformation/emission from CLI/Gradle application
    layout only when their artifact handoff owns validation.
 
 The Common collections programme may proceed between these corrections. Its

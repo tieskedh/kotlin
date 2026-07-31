@@ -1,25 +1,12 @@
-package org.jetbrains.kotlin.backend.dotnet
+/*
+ * Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
 
-import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeClassification
-import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeClassifier
-import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeStatus
-import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
-import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodVisibility
-import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassification
-import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassificationUnsupported
-import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeCoreTypes
-import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeKind
-import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
-import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveTypeCatalog
-import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedConstructedTypeConstraints
-import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterBinding
-import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterContext
-import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterContextBinding
-import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
-import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
-import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureCallingConvention
-import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
-import org.jetbrains.kotlin.load.dotnet.asResolvedSignature
+package org.jetbrains.kotlin.load.dotnet
+
+import org.jetbrains.kotlin.config.DotNetTarget
+import org.jetbrains.kotlin.config.supportsByRefLikeGenericArguments
 
 enum class DotNetClrSpecialConstraintKind {
     REFERENCE_TYPE,
@@ -245,7 +232,7 @@ class DotNetClrSpecialConstraintValidator(
                     !argumentBinding.parameter.allowsByRefLike ->
                         DotNetClrSpecialConstraintSatisfaction.Satisfied
 
-                    target != DotNetTarget.NET10_0 ->
+                    !target.supportsByRefLikeGenericArguments ->
                         violated(
                             DotNetClrSpecialConstraintViolation
                                 .BY_REF_LIKE_NOT_SUPPORTED_BY_TARGET
@@ -375,7 +362,7 @@ class DotNetClrSpecialConstraintValidator(
 
             DotNetClrByRefLikeStatus.BY_REF_LIKE ->
                 when {
-                    target != DotNetTarget.NET10_0 ->
+                    !target.supportsByRefLikeGenericArguments ->
                         violated(
                             DotNetClrSpecialConstraintViolation
                                 .BY_REF_LIKE_NOT_SUPPORTED_BY_TARGET

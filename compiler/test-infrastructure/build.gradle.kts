@@ -12,6 +12,7 @@ dependencies {
     testFixturesApi(project(":compiler:cli-metadata"))
     testFixturesApi(project(":native:native.config"))
     testFixturesImplementation(project(":core:descriptors"))
+    testFixturesImplementation(project(":core:language.targets.dotnet"))
     testFixturesImplementation(project(":core:language.targets.jvm"))
     testFixturesImplementation(project(":compiler:container"))
     testFixturesImplementation(project(":compiler:config.jvm"))

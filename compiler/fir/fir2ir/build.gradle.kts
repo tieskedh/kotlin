@@ -42,6 +42,7 @@ dependencies {
     testFixturesApi(testFixtures(project(":compiler:fir:analysis-tests")))
     testFixturesImplementation(testFixtures(project(":generators:test-generator")))
     testFixturesImplementation(testFixtures(project(":compiler:tests-spec")))
+    testFixturesImplementation(project(":core:language.targets.dotnet"))
     testFixturesImplementation(project(":compiler:backend.dotnet"))
     testFixturesImplementation(project(":compiler:cli-dotnet"))
 

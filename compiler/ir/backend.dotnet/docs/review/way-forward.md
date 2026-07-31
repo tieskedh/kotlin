@@ -984,13 +984,24 @@ integration tests).
 package ownership is now the default for the .NET compiler too. The first bounded correction moved
 objective PE/ECMA-335 loading, CLR resolution, and validated metadata evidence out of the IR backend
 into `frontend.common.dotnet` under `org.jetbrains.kotlin.load.dotnet`; the module's only declared
-API dependency is Kotlin stdlib and it has no compiler-project dependency. Kotlin
-nullability/contract projection remains FIR policy; configuration, FIR provider ownership,
-KLIB/ABI serialization, interop manifests, and packaging remain separately ordered slices. IR
-context, lowerings, intrinsics, CIL generation, and physical runtime/stdlib construction stay in
-`backend.dotnet`. The complete 93-file backend inventory,
-nine-file CLI classification, forbidden dependencies, mature-target evidence, and attacked
-alternatives are recorded in `architecture-responsibility-audit.md`.
+compiler-project dependency is the neutral `.NET` language-target vocabulary. Kotlin
+nullability/contract projection remains FIR policy; FIR provider ownership, KLIB/ABI serialization,
+interop manifests, and packaging remain separately ordered slices. IR context, lowerings,
+intrinsics, CIL generation, and physical runtime/stdlib construction stay in `backend.dotnet`.
+
+The second bounded correction mirrors JVM's target/configuration/content-root ownership.
+`core:language.targets.dotnet` owns `DotNetTarget` in `org.jetbrains.kotlin.config` and one
+unversioned platform marker in `org.jetbrains.kotlin.platform.dotnet`;
+`compiler:config.dotnet` owns generated primitive compiler keys and product/library policy; and
+`cli-base` owns `DotNetClasspathRoot` instead of reusing `JvmClasspathRoot` for managed inputs.
+Target-framework identity remains independent from product kind, future RIDs, and packaging.
+Only the by-ref-like generic capability crosses into the physical CLR validator; executable and
+library-compatibility policy stays in configuration, while textual core-library rendering remains
+an exhaustive backend mapping. The complete backend/CLI inventory, forbidden dependencies,
+mature-target package evidence, and attacked alternatives are recorded in
+`architecture-responsibility-audit.md`. The physical ABI codec and runtime surface remain schema
+16 / level 9. The fresh strict gate is 902/0/0/0 across 16 XML suites (814 FIR/IL/box,
+21 generated CLI, and 67 library integration tests).
 
 **CLR-importer progress (2026-07-28):** the first importer slice follows the JVM foreign
 classfile/provider split without pretending that CLR metadata is Java metadata. A single bounded,
