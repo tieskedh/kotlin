@@ -83,6 +83,9 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterContextResolver
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationCarrierVersion
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
 import org.jetbrains.kotlin.fir.dotnet.DotNetClrInputNullabilityEnhancer
 import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityProjection
 import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityProjector
@@ -19758,6 +19761,125 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue("archive has no valid end-of-central-directory record" in malformedMetadataDiagnostics) {
             malformedMetadataDiagnostics
+        }
+    }
+
+    @Test
+    fun testRetainedForeignDeclarationCarrierRejectsDetachedRowsAndWrongOwners() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val foreignIl = File(tmpdir, "Foreign.Carrier.il").apply {
+            writeText(
+                """
+                .assembly Foreign.Carrier {}
+                .module Foreign.Carrier.dll
+
+                .class interface public abstract auto ansi Foreign.IContract
+                {
+                  .method public hidebysig newslot abstract virtual instance int32 Echo(int32 'value') cil managed
+                  {
+                  }
+
+                  .method public hidebysig specialname newslot abstract virtual instance int32 get_Value() cil managed
+                  {
+                  }
+
+                  .method public hidebysig specialname newslot abstract virtual instance void set_Value(int32 'value') cil managed
+                  {
+                  }
+
+                  .property instance int32 Value()
+                  {
+                    .get instance int32 Foreign.IContract::get_Value()
+                    .set instance void Foreign.IContract::set_Value(int32)
+                  }
+                }
+
+                .class interface public abstract auto ansi Foreign.IOther
+                {
+                  .method public hidebysig newslot abstract virtual instance int32 Other() cil managed
+                  {
+                  }
+                }
+                """.trimIndent()
+            )
+        }
+        val foreignDll = File(tmpdir, "Foreign.Carrier.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleLibrary(
+                foreignIl,
+                foreignDll,
+                DotNetTarget.NETSTANDARD_2_0,
+                MessageCollector.NONE,
+            )
+        )
+        val assembly = DotNetClrClasspathAssemblyReader.read(
+            foreignDll,
+            DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME,
+        ) as DotNetClrClasspathAssembly.WithoutCarrier
+        val declaringType = assembly.metadata.typeDefinitions.single { type ->
+            type.namespaceName == "Foreign" && type.metadataName == "IContract"
+        }
+        val wrongOwner = assembly.metadata.typeDefinitions.single { type ->
+            type.namespaceName == "Foreign" && type.metadataName == "IOther"
+        }
+        val method = assembly.metadata.methodDefinitions.single { it.name == "Echo" }
+        val getter = assembly.metadata.methodDefinitions.single { it.name == "get_Value" }
+        val setter = assembly.metadata.methodDefinitions.single { it.name == "set_Value" }
+        val property = assembly.metadata.propertyDefinitions.single { it.name == "Value" }
+
+        val methodSource = DotNetClrImportedMethodSource(assembly, declaringType, method)
+        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V1, methodSource.carrierVersion)
+        assertSame(assembly, methodSource.assembly)
+        assertSame(declaringType, methodSource.declaringType)
+        assertSame(method, methodSource.method)
+
+        val propertySource = DotNetClrImportedPropertySource(
+            assembly,
+            declaringType,
+            property,
+            getter,
+            setter,
+        )
+        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V1, propertySource.carrierVersion)
+        assertSame(property, propertySource.property)
+        assertSame(getter, propertySource.getter)
+        assertSame(setter, propertySource.setter)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetClrImportedMethodSource(assembly, wrongOwner, method)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetClrImportedMethodSource(assembly, declaringType.copy(), method)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetClrImportedMethodSource(assembly, declaringType, method.copy())
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetClrImportedPropertySource(
+                assembly,
+                declaringType,
+                property.copy(),
+                getter,
+                setter,
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetClrImportedPropertySource(
+                assembly,
+                declaringType,
+                property,
+                getter.copy(),
+                setter,
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetClrImportedPropertySource(
+                assembly,
+                declaringType,
+                property,
+                getter,
+                setter.copy(),
+            )
         }
     }
 

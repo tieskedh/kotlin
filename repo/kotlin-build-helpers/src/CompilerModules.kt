@@ -23,6 +23,7 @@ object CompilerModules {
         ":compiler:config",
         ":compiler:config.dotnet",
         ":compiler:config.jvm",
+        ":compiler:dotnet.imports",
         ":compiler:serialization.common",
         ":compiler:compiler.version",
         ":compiler:resolution.common",
@@ -68,6 +69,7 @@ object CompilerModules {
      */
     val firCompilerModules = arrayOf(
         ":compiler:fir:cones",
+        ":compiler:fir:fir-dotnet",
         ":compiler:fir:providers",
         ":compiler:fir:semantics",
         ":compiler:fir:resolve",
