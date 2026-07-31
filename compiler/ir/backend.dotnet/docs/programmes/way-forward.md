@@ -64,6 +64,7 @@ The following decisions constrain new work; their ADRs own the detail:
 - [compiler and Gradle integration](../decisions/compiler-and-gradle-integration.md);
 - [`System.Object` as the physical `Any` foundation](../decisions/system-object-any.md);
 - [classified CLR exceptions](../decisions/classified-clr-exceptions.md);
+- [primitive scalar carriers](../decisions/primitive-scalars.md);
 - [Kotlin-owned primitive arrays](../decisions/primitive-arrays.md);
 - [runtime and stdlib ownership](../decisions/runtime-and-stdlib-ownership.md);
 - [generic nullability and covariant returns](../decisions/adr-hybrid-generic-nullability-and-covariant-returns.md);
