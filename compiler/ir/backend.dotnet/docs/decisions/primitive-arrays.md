@@ -8,6 +8,9 @@
 This is the selected direction for the experimental target. It is not a
 public KEEP or an official Kotlin target commitment.
 
+Primitive vector element spellings and boxed scalar behavior follow the
+[primitive-scalar carrier ADR](primitive-scalars.md).
+
 ## Context
 
 Kotlin gives `Array<Int>` and `IntArray` different nominal types, overload
@@ -128,7 +131,7 @@ Before array-bearing ABI freezes, validation must cover:
 - C# aliasing, repeated-conversion identity, round trips, and stale-artifact
   rejection.
 
-Remaining scalar wrappers, unsigned arrays, debugger projections, enumerator
+Remaining specialized wrappers, unsigned arrays, debugger projections, enumerator
 shape, modern span adapters, implicit-conversion policy, and optimization
 strategy remain open. None may collapse Kotlin wrapper identity or expose a
 profile-specific representation in Common KLIB.
