@@ -22287,7 +22287,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(modernSystemRuntime.isFile) {
             "Modern reference pack has no System.Runtime reference: $modernSystemRuntime"
         }
-
         data class Profile(
             val target: String,
             val modernDiagnosticMethod: String,
@@ -25786,6 +25785,303 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), output)
+    }
+
+    @Test
+    fun testSignedNarrowScalarsAcrossKotlinAndClrBoundaries() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(
+            frameworkCSharp != null,
+            ".NET Framework C# compiler is not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(
+            frameworkHost != null,
+            "Windows PowerShell CLR 4 host is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val frameworkCoreLibrary = checkNotNull(frameworkCSharp).parentFile.resolve("mscorlib.dll")
+        assertTrue(frameworkCoreLibrary.isFile) {
+            "Framework compiler has no adjacent mscorlib reference: $frameworkCoreLibrary"
+        }
+        val modernSystemRuntime =
+            checkNotNull(modernCSharp).referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(modernSystemRuntime.isFile) {
+            "Modern reference pack has no System.Runtime reference: $modernSystemRuntime"
+        }
+
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard 2.0 facade is not available",
+        )
+
+        val libraryDirectory = File(tmpdir, "signed-narrow-scalar-library")
+        val librarySource = File(tmpdir, "narrowScalarLibrary.kt").apply {
+            writeText(
+                """
+                package narrowscalarabi
+
+                public fun classify(value: Byte): Int = value.toInt() + 1000
+
+                public fun classify(value: Short): Int = value.toInt() + 2000
+
+                public fun classify(value: Int): Int = value + 3000
+
+                public fun echo(value: Byte): Byte = value
+
+                public fun echo(value: Short): Short = value
+
+                public fun nullable(value: Byte?): Byte? = value
+
+                public fun nullable(value: Short?): Short? = value
+
+                public class NarrowBox<T>(public val value: T)
+
+                public fun boxedByte(value: Byte): NarrowBox<Byte> = NarrowBox(value)
+
+                public fun boxedShort(value: Short): NarrowBox<Short> = NarrowBox(value)
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "NarrowScalar.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val library = libraryDirectory.resolve("NarrowScalar.Library.dll")
+        val libraryIl = libraryDirectory.resolve("NarrowScalar.Library.il").readText()
+        assertTrue("'classify'(int8 'value')" in libraryIl) { libraryIl }
+        assertTrue("'classify'(int16 'value')" in libraryIl) { libraryIl }
+        assertTrue("'classify'(int32 'value')" in libraryIl) { libraryIl }
+        assertTrue("int8 'echo'(int8 'value')" in libraryIl) { libraryIl }
+        assertTrue("int16 'echo'(int16 'value')" in libraryIl) { libraryIl }
+        assertTrue(
+            "valuetype [netstandard]System.Nullable`1<int8> 'nullable'" in libraryIl
+        ) { libraryIl }
+        assertTrue(
+            "valuetype [netstandard]System.Nullable`1<int16> 'nullable'" in libraryIl
+        ) { libraryIl }
+        assertTrue("class 'narrowscalarabi.NarrowBox`1'<int8> 'boxedByte'" in libraryIl) { libraryIl }
+        assertTrue("class 'narrowscalarabi.NarrowBox`1'<int16> 'boxedShort'" in libraryIl) { libraryIl }
+
+        data class Profile(
+            val target: String,
+            val applicationFileName: String,
+            val compileForeign: (File, File) -> CSharpCompilerResult,
+            val systemReference: File,
+            val verifierProfileReferences: List<File>,
+            val compileVerifier: (File, File, List<File>) -> CSharpCompilerResult,
+            val executionCommand: (File) -> List<String>,
+        )
+
+        val profiles = listOf(
+            Profile(
+                target = "net48",
+                applicationFileName = "NarrowScalarConsumer.exe",
+                compileForeign = { source, output ->
+                    runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
+                },
+                systemReference = frameworkCoreLibrary,
+                verifierProfileReferences = listOf(checkNotNull(frameworkNetStandardFacade)),
+                compileVerifier = { source, output, references ->
+                    runCSharpCompiler(
+                        checkNotNull(frameworkCSharp),
+                        source,
+                        output,
+                        *references.toTypedArray(),
+                        target = "exe",
+                    )
+                },
+                executionCommand = { executable ->
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), executable)
+                },
+            ),
+            Profile(
+                target = "net10.0",
+                applicationFileName = "NarrowScalarConsumer.dll",
+                compileForeign = { source, output ->
+                    runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
+                },
+                systemReference = modernSystemRuntime,
+                verifierProfileReferences = emptyList(),
+                compileVerifier = { source, output, references ->
+                    runModernCSharpCompiler(
+                        checkNotNull(modernCSharp),
+                        source,
+                        output,
+                        *references.toTypedArray(),
+                        target = "exe",
+                    )
+                },
+                executionCommand = { executable ->
+                    listOf(dotnetHost.path, "exec", executable.path)
+                },
+            ),
+        )
+
+        for (profile in profiles) {
+            val profileDirectory =
+                libraryDirectory.resolve("consumer-${profile.target.replace('.', '-')}").apply { mkdirs() }
+            val foreignSource = profileDirectory.resolve("ForeignNarrowScalars.cs").apply {
+                writeText(
+                    """
+                    namespace ForeignNarrowScalars
+                    {
+                        public interface NarrowApi
+                        {
+                            sbyte Echo(sbyte value);
+                            short Echo(short value);
+                            int Echo(int value);
+                        }
+
+                        public sealed class NarrowApiImpl : NarrowApi
+                        {
+                            public sbyte Echo(sbyte value) { return value; }
+                            public short Echo(short value) { return value; }
+                            public int Echo(int value) { return value; }
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val foreignAssembly = profileDirectory.resolve("Foreign.NarrowScalars.dll")
+            val foreignCompile = profile.compileForeign(foreignSource, foreignAssembly)
+            assertEquals(0, foreignCompile.exitCode, foreignCompile.output)
+
+            val consumerSource = profileDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package narrowscalarconsumer
+
+                    import ForeignNarrowScalars.NarrowApi
+                    import narrowscalarabi.*
+
+                    public fun verifyKotlinLibrary(): Int {
+                        val byte = (-7).toByte()
+                        val short = (-300).toShort()
+                        if (classify(byte) != 993) return 1
+                        if (classify(short) != 1700) return 2
+                        if (classify(42) != 3042) return 3
+                        if (echo(byte) != byte || echo(short) != short) return 4
+                        if (nullable(byte) != byte || nullable(short) != short) return 5
+                        val noByte: Byte? = null
+                        val noShort: Short? = null
+                        if (nullable(noByte) != null || nullable(noShort) != null) return 6
+                        if (boxedByte(byte).value != byte || boxedShort(short).value != short) return 7
+                        return 42
+                    }
+
+                    public fun verifyForeign(api: NarrowApi): Int {
+                        val byte = (-8).toByte()
+                        val short = (-301).toShort()
+                        if (api.Echo(byte) != byte) return 11
+                        if (api.Echo(short) != short) return 12
+                        if (api.Echo(43) != 43) return 13
+                        return 42
+                    }
+
+                    fun main() {}
+                    """.trimIndent()
+                )
+            }
+            val application = profileDirectory.resolve(profile.applicationFileName)
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument,
+                listOf(library, foreignAssembly, profile.systemReference)
+                    .joinToString(File.pathSeparator, transform = File::getPath),
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "NarrowScalarConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+
+            val consumerIl = profileDirectory.resolve("NarrowScalarConsumer.il").readText()
+            assertTrue(
+                "call int32 [NarrowScalar.Library]'narrowscalarabi.narrowScalarLibraryKt'::'classify'(int8)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                "call int32 [NarrowScalar.Library]'narrowscalarabi.narrowScalarLibraryKt'::'classify'(int16)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                "callvirt instance int8 [Foreign.NarrowScalars]'ForeignNarrowScalars.NarrowApi'::'Echo'(int8)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                "callvirt instance int16 [Foreign.NarrowScalars]'ForeignNarrowScalars.NarrowApi'::'Echo'(int16)" in consumerIl
+            ) { consumerIl }
+
+            val verifierSource = profileDirectory.resolve("NarrowScalarVerifier.cs").apply {
+                writeText(
+                    """
+                    using System;
+                    using ForeignNarrowScalars;
+
+                    public static class NarrowScalarVerifier
+                    {
+                        public static int Main()
+                        {
+                            if (narrowscalarabi.narrowScalarLibraryKt.classify((sbyte)-7) != 993) return 1;
+                            if (narrowscalarabi.narrowScalarLibraryKt.classify((short)-300) != 1700) return 2;
+                            if (narrowscalarabi.narrowScalarLibraryKt.classify(42) != 3042) return 3;
+                            if (narrowscalarabi.narrowScalarLibraryKt.echo((sbyte)-8) != -8) return 4;
+                            if (narrowscalarabi.narrowScalarLibraryKt.echo((short)-301) != -301) return 5;
+                            if (narrowscalarabi.narrowScalarLibraryKt.nullable((sbyte?)-9) != -9) return 6;
+                            if (narrowscalarabi.narrowScalarLibraryKt.nullable((short?)-302) != -302) return 7;
+                            if (narrowscalarabi.narrowScalarLibraryKt.nullable((sbyte?)null) != null) return 8;
+                            if (narrowscalarabi.narrowScalarLibraryKt.nullable((short?)null) != null) return 9;
+                            if (narrowscalarconsumer.consumerKt.verifyKotlinLibrary() != 42) return 10;
+                            if (narrowscalarconsumer.consumerKt.verifyForeign(new NarrowApiImpl()) != 42) return 11;
+                            Console.WriteLine("OK");
+                            return 0;
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val verifier = profileDirectory.resolve("NarrowScalarVerifier.exe")
+            val verifierReferences =
+                listOf(
+                    application,
+                    profileDirectory.resolve(library.name),
+                    profileDirectory.resolve(foreignAssembly.name),
+                    profileDirectory.resolve("Kotlin.Runtime.dll"),
+                ) + profile.verifierProfileReferences
+            val verifierCompile = profile.compileVerifier(
+                verifierSource,
+                verifier,
+                verifierReferences,
+            )
+            assertEquals(0, verifierCompile.exitCode, verifierCompile.output)
+            if (profile.target == "net10.0") {
+                profileDirectory.resolve("NarrowScalarConsumer.runtimeconfig.json").copyTo(
+                    profileDirectory.resolve("NarrowScalarVerifier.runtimeconfig.json"),
+                    overwrite = true,
+                )
+            }
+            runAssemblerPairing(
+                profile.executionCommand(verifier),
+                profileDirectory,
+                "Signed narrow scalar Kotlin/C# round trip for ${profile.target}",
+            )
+        }
     }
 
     @Test

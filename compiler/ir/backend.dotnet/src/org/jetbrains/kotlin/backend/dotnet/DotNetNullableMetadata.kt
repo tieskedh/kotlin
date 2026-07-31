@@ -65,6 +65,8 @@ internal object DotNetNullableMetadata {
     /** Nullable flags for one source type and its already-selected physical CLR representation. */
     fun flags(type: IrType, physicalType: DotNetIlValueType): List<Int> = when (physicalType) {
         DotNetIlValueType.Boolean,
+        DotNetIlValueType.Int8,
+        DotNetIlValueType.Int16,
         DotNetIlValueType.Int32,
         DotNetIlValueType.Int64,
         DotNetIlValueType.Float64,

@@ -2130,7 +2130,7 @@ $throwableSupportTypesIl
             |IL_hashBoolean:
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.Boolean
-            |      brfalse.s IL_hashChar
+            |      brfalse.s IL_hashSByte
             |      ldarg.0
             |      unbox.any ${coreLibraryReference}System.Boolean
             |      brtrue.s IL_hashTrue
@@ -2138,6 +2138,22 @@ $throwableSupportTypesIl
             |      ret
             |IL_hashTrue:
             |      ldc.i4 1231
+            |      ret
+            |IL_hashSByte:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.SByte
+            |      brfalse.s IL_hashInt16
+            |      ldarg.0
+            |      unbox.any ${coreLibraryReference}System.SByte
+            |      conv.i1
+            |      ret
+            |IL_hashInt16:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int16
+            |      brfalse.s IL_hashChar
+            |      ldarg.0
+            |      unbox.any ${coreLibraryReference}System.Int16
+            |      conv.i2
             |      ret
             |IL_hashChar:
             |      ldarg.0
@@ -2181,6 +2197,12 @@ $throwableSupportTypesIl
             |      call string 'Kotlin.Runtime.Internal.DoubleFormatting'::'DoubleToString'(float64)
             |      ret
             |IL_stringInt:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.SByte
+            |      brtrue.s IL_stringInvariant
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int16
+            |      brtrue.s IL_stringInvariant
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.Int32
             |      brtrue.s IL_stringInvariant

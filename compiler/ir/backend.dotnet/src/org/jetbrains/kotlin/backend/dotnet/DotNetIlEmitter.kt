@@ -3386,6 +3386,8 @@ internal class DotNetIlEmitter(
         )
         return when (fieldType) {
             DotNetIlValueType.Boolean -> "bool(${constant.value as? Boolean ?: unsupportedValue()})"
+            DotNetIlValueType.Int8 -> "int8(${constant.value as? Byte ?: unsupportedValue()})"
+            DotNetIlValueType.Int16 -> "int16(${constant.value as? Short ?: unsupportedValue()})"
             DotNetIlValueType.Int32 -> "int32(${constant.value as? Int ?: unsupportedValue()})"
             DotNetIlValueType.Int64 -> "int64(${constant.value as? Long ?: unsupportedValue()})"
             DotNetIlValueType.Char -> "char(0x%04X)".format((constant.value as? Char ?: unsupportedValue()).code)
@@ -3980,6 +3982,8 @@ internal class DotNetIlEmitter(
     ) {
         val instruction = when (type) {
             DotNetIlValueType.Boolean,
+            DotNetIlValueType.Int8,
+            DotNetIlValueType.Int16,
             DotNetIlValueType.Int32,
             DotNetIlValueType.Char,
                 -> "ldc.i4 0"

@@ -22,10 +22,12 @@ import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isBoolean
+import org.jetbrains.kotlin.ir.types.isByte
 import org.jetbrains.kotlin.ir.types.isChar
 import org.jetbrains.kotlin.ir.types.isDouble
 import org.jetbrains.kotlin.ir.types.isInt
 import org.jetbrains.kotlin.ir.types.isLong
+import org.jetbrains.kotlin.ir.types.isShort
 import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
@@ -532,6 +534,8 @@ internal class DotNetIlTypeMapper private constructor(
         }
         return when {
             type.isBoolean() -> DotNetIlValueType.Boolean
+            type.isByte() -> DotNetIlValueType.Int8
+            type.isShort() -> DotNetIlValueType.Int16
             type.isInt() -> DotNetIlValueType.Int32
             type.isLong() -> DotNetIlValueType.Int64
             type.isDouble() -> DotNetIlValueType.Float64
@@ -613,6 +617,8 @@ internal class DotNetIlTypeMapper private constructor(
         if (type !is IrSimpleType || !type.isMarkedNullable()) return null
         val elementType = when (type.classFqName) {
             StandardNames.FqNames._boolean.toSafe() -> DotNetIlValueType.Boolean
+            StandardNames.FqNames._byte.toSafe() -> DotNetIlValueType.Int8
+            StandardNames.FqNames._short.toSafe() -> DotNetIlValueType.Int16
             StandardNames.FqNames._int.toSafe() -> DotNetIlValueType.Int32
             StandardNames.FqNames._long.toSafe() -> DotNetIlValueType.Int64
             StandardNames.FqNames._double.toSafe() -> DotNetIlValueType.Float64
@@ -783,6 +789,8 @@ internal class DotNetIlTypeMapper private constructor(
             DotNetIlValueType.Boolean,
             DotNetIlValueType.Char,
             DotNetIlValueType.Float64,
+            DotNetIlValueType.Int8,
+            DotNetIlValueType.Int16,
             DotNetIlValueType.Int32,
             DotNetIlValueType.Int64,
             is DotNetIlValueType.MappedClass,

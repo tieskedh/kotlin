@@ -31,8 +31,8 @@ import org.jetbrains.kotlin.name.FqName
  * Registry of function calls compiled directly to IL, keyed on owner/receiver/name/parameter
  * FqNames. Mirrors the JVM backend's `IrIntrinsicMethods`: arithmetic, comparisons and number
  * conversions are registered programmatically by looping over the supported primitive types
- * (the JVM loops over all of `PrimitiveType.entries`; here the loop is restricted to
- * {Int, Long, Double} plus Char special cases while Byte/Short/Float support is deferred).
+ * (the JVM loops over all of `PrimitiveType.entries`; here the loop is restricted to the
+ * landed scalar set plus Char special cases while Float support is deferred).
  */
 internal class DotNetIlIntrinsicMethods(
     irBuiltIns: IrBuiltIns,
@@ -49,6 +49,8 @@ internal class DotNetIlIntrinsicMethods(
     private val listFqn = FqName("kotlin.collections.List")
     private val stringFqn = StandardNames.FqNames.string.toSafe()
     private val throwableFqn = StandardNames.FqNames.throwable
+    private val byteFqn = StandardNames.FqNames._byte.toSafe()
+    private val shortFqn = StandardNames.FqNames._short.toSafe()
     private val intFqn = StandardNames.FqNames._int.toSafe()
     private val longFqn = StandardNames.FqNames._long.toSafe()
     private val doubleFqn = StandardNames.FqNames._double.toSafe()
@@ -88,10 +90,13 @@ internal class DotNetIlIntrinsicMethods(
 
     /**
      * The numeric types binary operators and conversions are generated over, keyed by builtin
-     * FqName. Promotion order is Int32 < Int64 < Float64 (see [promoteNumeric]), matching the
-     * Kotlin stdlib operator signatures (`Int.plus(Long): Long`, `Long.plus(Double): Double`, ...).
+     * FqName. Byte/Short computations promote to Int32; above that the order is
+     * Int32 < Int64 < Float64 (see [promoteNumeric]), matching the Kotlin stdlib operator
+     * signatures (`Byte.plus(Byte): Int`, `Int.plus(Long): Long`, ...).
      */
     private val numericTypes: Map<FqName, DotNetIlValueType> = mapOf(
+        byteFqn to DotNetIlValueType.Int8,
+        shortFqn to DotNetIlValueType.Int16,
         intFqn to DotNetIlValueType.Int32,
         longFqn to DotNetIlValueType.Int64,
         doubleFqn to DotNetIlValueType.Float64,
@@ -404,7 +409,7 @@ internal class DotNetIlIntrinsicMethods(
     }
 
     /**
-     * `<`, `<=`, `>`, `>=` over {Int, Long, Double, Char}. fir2ir converts `a < b` and friends
+     * `<`, `<=`, `>`, `>=` over the landed numeric scalars and Char. fir2ir converts `a < b` and friends
      * over these types to calls of the IrBuiltIns comparison functions
      * (`kotlin.internal.ir.less` etc.) keyed by operand classifier, not to `compareTo`; the JVM
      * backend registers the same symbols in `primitiveComparisonIntrinsics`.
@@ -424,6 +429,8 @@ internal class DotNetIlIntrinsicMethods(
      */
     private fun comparisonIntrinsics(irBuiltIns: IrBuiltIns): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         val comparableTypes = listOf(
+            irBuiltIns.byteClass to DotNetIlValueType.Int8,
+            irBuiltIns.shortClass to DotNetIlValueType.Int16,
             irBuiltIns.intClass to DotNetIlValueType.Int32,
             irBuiltIns.longClass to DotNetIlValueType.Int64,
             irBuiltIns.doubleClass to DotNetIlValueType.Float64,
@@ -451,7 +458,7 @@ internal class DotNetIlIntrinsicMethods(
     }
 
     /**
-     * Member operators of {Int, Long, Double} including all mixed-type overloads
+     * Member operators of the landed numeric scalars including all mixed-type overloads
      * (`Int.plus(Long): Long` etc.), following the JVM backend's
      * `binaryFunForPrimitivesAcrossPrimitives` loop. Operands are widened to the promoted
      * computation type by the emitting intrinsic (see [emitWidenedOperand]).
@@ -475,8 +482,17 @@ internal class DotNetIlIntrinsicMethods(
                             to DotNetIlNumericDivRemIntrinsic(isDivision = false, receiverType, argumentType, resultType)
                 )
             }
-            add(Key(receiverFqn, null, "unaryMinus", emptyList()) to DotNetIlNumericUnaryOperatorIntrinsic("neg", receiverType))
-            add(Key(receiverFqn, null, "unaryPlus", emptyList()) to DotNetIlNumericUnaryOperatorIntrinsic(null, receiverType))
+            val unaryResultType = if (
+                receiverType == DotNetIlValueType.Int8 || receiverType == DotNetIlValueType.Int16
+            ) DotNetIlValueType.Int32 else receiverType
+            add(
+                Key(receiverFqn, null, "unaryMinus", emptyList())
+                        to DotNetIlNumericUnaryOperatorIntrinsic("neg", receiverType, unaryResultType)
+            )
+            add(
+                Key(receiverFqn, null, "unaryPlus", emptyList())
+                        to DotNetIlNumericUnaryOperatorIntrinsic(null, receiverType, unaryResultType)
+            )
             add(Key(receiverFqn, null, "inc", emptyList()) to DotNetIlNumericIncrementIntrinsic("add", receiverType))
             add(Key(receiverFqn, null, "dec", emptyList()) to DotNetIlNumericIncrementIntrinsic("sub", receiverType))
         }
@@ -507,8 +523,7 @@ internal class DotNetIlIntrinsicMethods(
      * `to<Type>()` conversions between the supported primitives, following the JVM backend's
      * `numberConversionMethods`/`NumberCast` (JVM registers every `NUMBER_CONVERSIONS` name on
      * every number type; here only conversions between supported types are registered, so
-     * `toByte`/`toShort`/`toFloat` fall through to regular call handling and fail as
-     * unsupported callees).
+     * `toFloat` still falls through to regular call handling and fails as an unsupported callee).
      *
      * The deprecated `Long.toChar()`/`Double.toChar()` are registered as explicitly unsupported
      * (registry entry now, explicit failure) rather than silently compiled: Kotlin deprecated
@@ -521,6 +536,8 @@ internal class DotNetIlIntrinsicMethods(
      */
     private fun conversionIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         val conversionNamesToTargets = listOf(
+            "toByte" to DotNetIlValueType.Int8,
+            "toShort" to DotNetIlValueType.Int16,
             "toInt" to DotNetIlValueType.Int32,
             "toLong" to DotNetIlValueType.Int64,
             "toDouble" to DotNetIlValueType.Float64,
@@ -565,10 +582,14 @@ internal class DotNetIlIntrinsicMethods(
             // Identity conversions (`Int.toInt()` etc.) and Char -> Int (the char is already a
             // zero-extended int32 on the evaluation stack, like on the JVM).
             fromType == toType || (fromType == DotNetIlValueType.Char && toType == DotNetIlValueType.Int32) -> emptyList()
+            fromType == DotNetIlValueType.Float64 -> return DotNetIlDoubleToIntegralIntrinsic(toType)
+            toType == DotNetIlValueType.Int8 -> listOf("conv.i1")
+            toType == DotNetIlValueType.Int16 -> listOf("conv.i2")
             toType == DotNetIlValueType.Int64 && fromType != DotNetIlValueType.Float64 -> listOf("conv.i8")
             toType == DotNetIlValueType.Float64 -> listOf("conv.r8")
             toType == DotNetIlValueType.Int32 && fromType == DotNetIlValueType.Int64 -> listOf("conv.i4")
-            fromType == DotNetIlValueType.Float64 -> return DotNetIlDoubleToIntegralIntrinsic(toType)
+            toType == DotNetIlValueType.Int32 &&
+                    (fromType == DotNetIlValueType.Int8 || fromType == DotNetIlValueType.Int16) -> emptyList()
             else -> error("Internal .NET backend error: no conversion from $fromType to $toType")
         }
         return DotNetIlNumberConversionIntrinsic(fromType, toType, instructions)
@@ -1604,7 +1625,7 @@ private object DotNetIlArrayContentDeepToStringIntrinsic : DotNetIlIntrinsicMeth
     }
 }
 
-/** Numeric promotion for mixed-type operators: Int32 < Int64 < Float64, like Kotlin/JVM. */
+/** Numeric promotion: Byte/Short -> Int32, then Int32 < Int64 < Float64, like Kotlin/JVM. */
 private fun promoteNumeric(left: DotNetIlValueType, right: DotNetIlValueType): DotNetIlValueType = when {
     left == DotNetIlValueType.Float64 || right == DotNetIlValueType.Float64 -> DotNetIlValueType.Float64
     left == DotNetIlValueType.Int64 || right == DotNetIlValueType.Int64 -> DotNetIlValueType.Int64
@@ -1626,10 +1647,18 @@ private fun DotNetIlExpressionCodegen.emitWidenedOperand(
     emitExpression(operand, operandType)
     if (operandType == computationType) return
     when {
-        computationType == DotNetIlValueType.Int64 && operandType == DotNetIlValueType.Int32 ->
+        computationType == DotNetIlValueType.Int32 &&
+                (operandType == DotNetIlValueType.Int8 || operandType == DotNetIlValueType.Int16) -> Unit
+        computationType == DotNetIlValueType.Int64 &&
+                operandType in setOf(DotNetIlValueType.Int8, DotNetIlValueType.Int16, DotNetIlValueType.Int32) ->
             emit("conv.i8", pops = 1, pushes = 1)
         computationType == DotNetIlValueType.Float64 &&
-                (operandType == DotNetIlValueType.Int32 || operandType == DotNetIlValueType.Int64) ->
+                operandType in setOf(
+                    DotNetIlValueType.Int8,
+                    DotNetIlValueType.Int16,
+                    DotNetIlValueType.Int32,
+                    DotNetIlValueType.Int64,
+                ) ->
             emit("conv.r8", pops = 1, pushes = 1)
         else -> error(
             "Internal .NET backend error: no widening from ${operandType.nameInSignature} to ${computationType.nameInSignature}"
@@ -1914,6 +1943,8 @@ private class DotNetIlEqualityIntrinsic(
         codegen.emitExpression(right, operandType)
         when (operandType) {
             DotNetIlValueType.Boolean,
+            DotNetIlValueType.Int8,
+            DotNetIlValueType.Int16,
             DotNetIlValueType.Int32,
             DotNetIlValueType.Int64,
             DotNetIlValueType.Float64,
@@ -2255,6 +2286,8 @@ private class DotNetIlNumericDivRemIntrinsic(
 
         val zeroLoad = if (resultType == DotNetIlValueType.Int64) "ldc.i8 0" else "ldc.i4.0"
         val constantDivisor: Long? = when (val value = (argument as? IrConst)?.value) {
+            is Byte -> value.toLong()
+            is Short -> value.toLong()
             is Int -> value.toLong()
             is Long -> value
             else -> null
@@ -2302,13 +2335,14 @@ private class DotNetIlNumericDivRemIntrinsic(
 private class DotNetIlNumericUnaryOperatorIntrinsic(
     private val instruction: String?,
     private val operandType: DotNetIlValueType,
+    private val resultType: DotNetIlValueType,
 ) : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
         expectedType: DotNetIlValueType,
     ): Boolean {
-        if (expectedType != operandType || call.arguments.size != 1) return false
+        if (expectedType != resultType || call.arguments.size != 1) return false
         val receiver = call.arguments.single()
             ?: dotNetUnsupported("missing receiver of a unary numeric operator")
         codegen.emitExpression(receiver, operandType)
@@ -2319,7 +2353,7 @@ private class DotNetIlNumericUnaryOperatorIntrinsic(
     }
 }
 
-/** `inc`/`dec` of {Int, Long, Double}: the receiver plus/minus a constant `1` of the operand type. */
+/** `inc`/`dec`: receiver plus/minus one, narrowed back for Byte/Short as Common requires. */
 private class DotNetIlNumericIncrementIntrinsic(
     private val instruction: String,
     private val operandType: DotNetIlValueType,
@@ -2342,6 +2376,11 @@ private class DotNetIlNumericIncrementIntrinsic(
         }
         codegen.emit(oneLoad, pushes = 1)
         codegen.emit(instruction, pops = 2, pushes = 1)
+        when (operandType) {
+            DotNetIlValueType.Int8 -> codegen.emit("conv.i1", pops = 1, pushes = 1)
+            DotNetIlValueType.Int16 -> codegen.emit("conv.i2", pops = 1, pushes = 1)
+            else -> Unit
+        }
         return true
     }
 }
@@ -2451,14 +2490,16 @@ private class DotNetIlComparisonIntrinsic(
 /**
  * A `to<Type>()` conversion mapped to zero or more 1-pop/1-push IL instructions, following the
  * JVM backend's `NumberCast` intrinsic:
- * - Int -> Long: `conv.i8` (sign-extend, = `i2l`); Long -> Int: `conv.i4` (unchecked wrap to the
+ * - Byte/Short use `conv.i1`/`conv.i2` for unchecked narrowing and otherwise their sign-extended
+ *   int32 stack value; Int -> Long: `conv.i8` (sign-extend, = `i2l`); Long -> Int: `conv.i4` (unchecked wrap to the
  *   low 32 bits, = `l2i`; the non-`.ovf` `conv.*` opcodes never throw)
  * - Int/Long/Char -> Double: `conv.r8` (= `i2d`/`l2d`)
  * - Int -> Char: `conv.u2` (16-bit zero-extending truncation, = `i2c`); Char -> Int/`Char.code`:
  *   no instruction, the char already sits on the evaluation stack as a zero-extended int32
  * - identity conversions (`Int.toInt()` etc.): no instruction
  *
- * Double -> Int/Long saturating conversions live in [DotNetIlDoubleToIntegralIntrinsic].
+ * Double -> Byte/Short/Int/Long saturating-then-narrowing conversions live in
+ * [DotNetIlDoubleToIntegralIntrinsic].
  */
 private class DotNetIlNumberConversionIntrinsic(
     private val fromType: DotNetIlValueType,
@@ -2483,7 +2524,8 @@ private class DotNetIlNumberConversionIntrinsic(
 }
 
 /**
- * `Double.toInt()`/`Double.toLong()` with JVM `d2i`/`d2l` semantics: NaN -> 0, above the target
+ * `Double.toByte()`/`toShort()`/`toInt()`/`toLong()` with JVM semantics: narrow targets first
+ * use the `d2i` result and then wrap exactly like `toInt().toByte()/toShort()`; NaN -> 0, above the target
  * MAX (including +Inf) -> MAX, below MIN (including -Inf) -> MIN, otherwise truncation toward
  * zero. A bare `conv.i4`/`conv.i8` must NOT be used: ECMA-335 III leaves float->int conversion
  * of out-of-range values undefined (runtimes differ: legacy CLR wraps, .NET Core saturates or
@@ -2513,6 +2555,13 @@ private class DotNetIlDoubleToIntegralIntrinsic(
         codegen.emitExpression(receiver, DotNetIlValueType.Float64)
 
         val isLongTarget = targetType == DotNetIlValueType.Int64
+        check(
+            isLongTarget || targetType in setOf(
+                DotNetIlValueType.Int8,
+                DotNetIlValueType.Int16,
+                DotNetIlValueType.Int32,
+            )
+        ) { "unsupported Double integral conversion target ${targetType.nameInSignature}" }
         val nanLabel = codegen.nextLabel("d2iNaN")
         val maxLabel = codegen.nextLabel("d2iMax")
         val minLabel = codegen.nextLabel("d2iMin")
@@ -2557,6 +2606,11 @@ private class DotNetIlDoubleToIntegralIntrinsic(
         codegen.emit("pop", pops = 1)
         codegen.emit(if (isLongTarget) "ldc.i8 0" else "ldc.i4.0", pushes = 1)
         codegen.emitLabel(endLabel)
+        when (targetType) {
+            DotNetIlValueType.Int8 -> codegen.emit("conv.i1", pops = 1, pushes = 1)
+            DotNetIlValueType.Int16 -> codegen.emit("conv.i2", pops = 1, pushes = 1)
+            else -> Unit
+        }
         return true
     }
 }
