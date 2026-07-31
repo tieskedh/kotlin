@@ -326,6 +326,31 @@ Provider growth must proceed by complete declaration families with adversarial m
 producer/consumer compilation, and physical binding tests. A successful FIR call may reach the
 backend only when its retained signature grammar is also implemented there.
 
+### 13. Retained declaration linkage is a shared, versioned compiler carrier
+
+The FIR provider produces a `compiler:dotnet.imports` carrier containing direct references to the
+already-selected resource-free assembly, declaring TypeDef, and MethodDef or Property plus exact
+MethodSemantics accessors. The referenced method/property rows already own their structural
+signatures. Construction validates row membership and declaring-owner identity before the carrier
+can enter FIR; the backend consumes the retained references and never repeats classpath or
+display-name resolution.
+
+The carrier protocol is explicitly versioned and exhaustively matched by the backend. A future
+shape change must add a protocol version and consumer branch; it may not silently reinterpret an
+old shape. The carrier has no Kotlin enhancement policy and no CIL mapping policy.
+
+This compiler-level module mirrors the shared source-element role of JVM's
+`core:deserialization.common.jvm`, not its literal location. CLR foreign import is separate from
+KLIB deserialization, while its objective row model currently and intentionally lives in the pure
+`compiler:frontend.common.dotnet` loader. Placing the carrier in `core` would require a forbidden
+`core`-to-compiler dependency or a second physical model. Placing it in the loader would instead
+make objective PE metadata depend on compiler transport types.
+
+`compiler:fir:fir-dotnet` owns the provider and Kotlin-facing nullability/contract projection.
+`cli-dotnet` supplies selected assemblies when composing the FIR session. `backend.dotnet` owns
+only the IR consumer and physical CIL mapping. Neither FIR nor backend imports the other's
+implementation package.
+
 ## Kotlin Common invariant
 
 - Kotlin-owned declarations retain KLIB identity, nullability, contracts, and declaration shape.

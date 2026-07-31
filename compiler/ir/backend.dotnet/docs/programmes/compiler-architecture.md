@@ -1,6 +1,6 @@
 # .NET compiler architecture programme
 
-- Status: **Active — retained foreign-declaration carrier is the next extraction seam**
+- Status: **Active — retained foreign-declaration carrier and FIR ownership extracted; physical ABI serialization is the next seam**
 - Current ownership: [`../../STATUS.md`](../../STATUS.md)
 
 ## Governing rule
@@ -36,7 +36,9 @@ to copy into a new target.
 - CLR content-root carrier: `cli-base`, in `org.jetbrains.kotlin.cli.dotnet.config`.
 - PE/ECMA-335 reading and objective evidence: `compiler:frontend.common.dotnet`, in
   `org.jetbrains.kotlin.load.dotnet`.
-- Kotlin interpretation of foreign evidence: FIR-owned .NET integration, in
+- Retained selected foreign-declaration linkage: `compiler:dotnet.imports`, in
+  `org.jetbrains.kotlin.load.dotnet`.
+- Kotlin interpretation of foreign evidence: `compiler:fir:fir-dotnet`, in
   `org.jetbrains.kotlin.fir.dotnet`.
 - IR context, lowerings, intrinsics, type mapping, CIL generation, and backend product
   construction: `compiler:ir:backend.dotnet`, in `org.jetbrains.kotlin.backend.dotnet`.
@@ -87,9 +89,27 @@ presence/absence and does not decide that an assembly is Kotlin-produced or fore
 
 ### FIR integration
 
-FIR owns Kotlin projection and lazy symbol policy. It may consume the loader and a neutral retained
-declaration carrier. It must not import backend-only CIL, lowering, runtime construction, or
-physical emitter state.
+`compiler:fir:fir-dotnet` owns Kotlin projection and lazy symbol policy. It may consume the loader
+and `compiler:dotnet.imports`. It must not import backend-only CIL, lowering, runtime construction,
+physical emitter state, or CLI pipeline code.
+
+### Retained import linkage
+
+`compiler:dotnet.imports` owns only the compiler carrier that preserves one already-selected
+resource-free assembly, declaring TypeDef, member, and structural signature through FIR2IR. The
+carrier references the immutable objective rows selected by the loader and validates their exact
+assembly and owner membership when it is constructed. It does not select a classpath, enhance a
+Kotlin type, construct FIR, bind IR, or render CIL.
+
+The carrier protocol has an explicit version. A producer must construct a supported version and a
+consumer must match it exhaustively; an unknown version or carrier shape is not reinterpreted from
+display names or tokens.
+
+JVM's `core:deserialization.common.jvm` is the dependency-role precedent for a source element
+shared across frontend and later compiler phases. The .NET carrier is not placed there: its facts
+come from foreign CLR import rather than Kotlin/JVM metadata deserialization, and depending on the
+compiler-level CLR loader from `core` would invert the repository dependency direction. A narrow
+compiler-level import module preserves the precedent without coupling `core` to a target frontend.
 
 ### Backend
 
@@ -103,16 +123,23 @@ Configuration owns target/profile/product validation, not rendered core-library 
 application layout. CLI owns orchestration and content roots; Gradle/packaging owns copying and
 deployment only after compiler product validation.
 
-## Remaining extraction order
+## Extraction order and progress
 
-### 1. Retained foreign-declaration carrier
+### 1. Retained foreign-declaration carrier — completed
 
-Create a neutral carrier for the selected assembly, TypeDef, member, structural signature, and
-other physical facts that must survive FIR2IR. It must be consumable by FIR and backend without
-either depending on the other's implementation module.
+Completed on `dotnet`: `compiler:dotnet.imports` now owns the versioned exact-row carrier,
+`compiler:fir:fir-dotnet` owns foreign Kotlin projection and lazy FIR symbols, `cli-dotnet`
+only installs the provider, and `backend.dotnet` only consumes the retained linkage.
 
-Then move the foreign CLR provider into a FIR-owned .NET module. Keep objective loading in
-`frontend.common.dotnet` and IR binding in `backend.dotnet`.
+Extract the existing self-validating carrier from `backend.dotnet` into
+`compiler:dotnet.imports`. Preserve direct references to the selected objective assembly and rows:
+copying only tokens or display strings would require a second graph lookup and would weaken exact
+classpath identity. Add explicit carrier protocol versioning without changing the admitted
+declaration grammar or physical ABI.
+
+Move the foreign CLR provider and its Kotlin nullability projection together into
+`compiler:fir:fir-dotnet`. Keep objective loading in `frontend.common.dotnet`, session composition
+in `cli-dotnet`, and IR binding in `backend.dotnet`.
 
 Exit conditions:
 
@@ -121,6 +148,12 @@ Exit conditions:
 - every imported callable/property carries exact producer-owned physical linkage;
 - unsupported or stale carrier forms fail structurally; and
 - cross-module foreign calls remain independent of display names.
+
+Evidence: the focused carrier test rejects wrong owners and copied TypeDef, MethodDef, Property,
+getter, and setter rows; dependency analysis reports no production-dependency correction for either
+new module; the strict 925-test .NET gate is green. A targeted four-module rebuild after extraction
+completed with 287 of 292 tasks already up to date, so the new seams do not force a monolithic
+compiler rebuild for an ordinary downstream edit.
 
 ### 2. Kotlin library and physical ABI serialization
 
@@ -182,6 +215,18 @@ state transition or validation boundary.
   not the CLR model.
 - **Move Kotlin policy with attribute decoders.** Valid evidence and Kotlin meaning have different
   owners.
+- **Put the carrier in `frontend.common.dotnet`.** `DeserializedContainerSource` is compiler
+  transport state; making the objective PE/ECMA-335 reader depend on compiler containers would
+  erase its pure physical-evidence boundary.
+- **Put the carrier in `core:deserialization.common.dotnet`.** Unlike JVM Kotlin binary source
+  elements, the carrier retains types from the compiler-level foreign CLR loader. A `core` module
+  cannot depend upward on that compiler module, and duplicating the physical model would create two
+  authorities.
+- **Retain only tokens, names, or copied signatures.** Tokens are scoped to a selected assembly
+  image and names are not identities. Rebinding those snapshots later would restore the second
+  classpath lookup the carrier exists to prevent.
+- **Leave FIR policy in `cli-dotnet`.** CLI constructs sessions and supplies selected inputs; it
+  does not own foreign Kotlin declaration semantics merely because it installs the provider.
 - **Introduce package boundaries without dependency enforcement.** Useful for navigation, but not
   a substitute when a coherent module seam exists.
 - **Split large constructors/classes to reduce size.** This creates abstractions without
