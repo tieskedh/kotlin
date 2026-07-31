@@ -1,3249 +1,479 @@
-# DotNet (CIL) backend — design rules and working notes
+# Kotlin/.NET target bootstrap contract
 
-Prototype Kotlin → .NET CIL target. Objective CLR loading lives in
-`compiler/frontend.common.dotnet/`, IR/CIL work in `compiler/ir/backend.dotnet/`, and pipeline/FIR
-composition in `compiler/cli/cli-dotnet/` (K2 phased pipeline only). IL-text golden tests are the
-primary layout validation: test data in `compiler/testData/codegen/dotnet/ilText/`, runners generated from
-`compiler/fir/fir2ir/testFixtures/.../codegen/AbstractDotNetIlTextTest.kt`
-(`./gradlew :compiler:fir:fir2ir:generateTests`).
-When either supported ILAsm is available, every emitted golden module is also assembled by it;
-the strict toolchain lane requires both Framework and modern ILAsm. CLI tests live in
-`compiler/testData/cli/dotnet/`. The same box corpus compiles for `net10.0` and `net48` and
-executes on real CoreCLR and Framework CLR 4 runtimes through signed system hosts (see "Box tests"
-below).
+This file is the self-contained contract an agent must read before changing
+Kotlin/.NET code. It contains the rules needed to start safely; feature
+rationale and representation detail belong in the linked ADRs.
 
-The commit gate is
-`./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement. Audit every JUnit XML file under
-`compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the expected current file
-and test totals are owned only by [`STATUS.md`](STATUS.md). `dn` is an
-intentionally short private child-task name because the
-Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
-`MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
+The target is a pre-ABI Kotlin-to-CIL prototype. Objective CLR loading lives in
+`compiler/frontend.common.dotnet`, FIR policy is composed through the .NET
+frontend/CLI modules, IR lowering and CIL production live in
+`compiler/ir/backend.dotnet`, and target vocabulary/configuration live above
+those compiler layers.
 
-## Architectural review and work ordering
+Read:
 
-- [`STATUS.md`](STATUS.md) owns the current branch, verification, active-work,
-  blocker, and next-task state. Do not add commit history or changing test
-  totals to this bootstrap contract or to ADRs.
-- `docs/README.md` indexes decisions, active programmes, historical evidence,
-  and the current way forward. Read it before
-  adding an ABI-bearing feature, runtime type, interface member/view, exception mapping, public CLR
-  name, or cross-module binding.
-- `docs/archive/review-2026-07-17.md` is a snapshot review of commit `8dd89907d`, not normative design law.
-  Draft and accepted ADRs own decisions; `docs/review/way-forward.md` owns future sequencing and
-  release gates. When they disagree, reverify the code and amend the relevant ADR rather than
-  silently choosing a review conclusion.
-- Any implementation change to a documented semantic, representation, or ABI rule must amend the
-  affected ADR in the same feature commit. Pure validation infrastructure records fresh evidence
-  in these working notes and the way forward; it must not manufacture ADR churn.
-- Do not describe the current runtime or physical declaration schema as stable ABI 1. No external
-  ABI publication is allowed until the way-forward Gate B requirements are satisfied.
-- Nothing has shipped. Until an explicit freeze is recorded, break current prototype binaries,
-  names, metadata, runtime types, and artifact layouts when architecture requires it. Move all
-  producer/consumer/runtime pieces together, bump the prototype schema, and reject stale artifacts;
-  do not build compatibility shims for an unpublished ABI.
-- `net48`, `netstandard2.0`, and `net10.0` are required profiles. `netstandard2.0` is library-only;
-  the other two produce applications and libraries. Select the profile before target lowerings and
-  emit profile-specific code where CLR capabilities differ while preserving common Kotlin
-  semantics.
+- [`STATUS.md`](STATUS.md) for the current head, last full gate, active work,
+  blockers, and next bounded tasks;
+- [`docs/README.md`](docs/README.md) for the decision/programme/archive index;
+  and
+- the owning ADR before changing a representation, public physical surface,
+  metadata contract, or artifact boundary.
 
-## Design rules
+## Authority and decision order
 
-- Before implementing DotNet backend behavior, inspect how the mature JVM/JS/WASM/Native targets
-  solve the same problem, then make an explicit .NET-specific decision. Do not invent a separate
-  approach unless the CLR platform model gives a concrete reason.
-- When reporting an implemented DotNet backend feature, state which mature target it follows. If the
-  implementation deviates, state the target it deviates from and the CLR-specific reason.
-- If JVM uses an intrinsic registry for a behavior, DotNet wires that behavior through
-  `DotNetIlIntrinsicMethods` too, unless there is a concrete platform reason not to. "Needed later"
-  is not a valid reason to skip the registry shape; add the registry entry now and let unsupported
-  cases fail explicitly.
-- IL codegen fails on unsupported IR (`dotNetUnsupported()`) instead of emitting fallback IL such as
-  empty strings or zero values. The POC emitter currently skips uncompilable functions to a
-  fixpoint (callers of skipped functions are skipped too). This is developer diagnostics, not a
-  library-publication model: any eviction must make library and stdlib production fail, and the
-  endpoint is a located FIR diagnostic before backend codegen.
+Implementation authority descends in this order:
+
+1. accepted Kotlin language and Common stdlib semantics;
+2. repository-wide compiler contracts and generated-source ownership;
+3. accepted Kotlin/.NET ADRs;
+4. current status, the way forward, and active programme gates;
+5. verified historical review evidence.
+
+Common Kotlin declarations and the stdlib generators are authoritative for
+Kotlin behavior. A .NET source file supplies narrow `actual` declarations and
+irreducible host operations; it does not fork a Common algorithm merely
+because a BCL equivalent exists.
+
+Kotlin metadata is authoritative for the logical Kotlin declaration. CLR
+metadata is authoritative for the physical CLR declaration. For a
+Kotlin-produced DLL, retain the complete KLIB contract and derive a truthful
+CLR/Roslyn view in addition to it. For a foreign DLL, exact CLR metadata and
+standard attributes are evidence from which FIR may derive a Kotlin view.
+Never infer authoritative KLIB identity or Kotlin-only split-interface/C#
+implementation-manifest contracts from CLR annotations.
+
+This document records the target authors' working position. Do not describe a
+choice as a Kotlin core-team decision unless the repository contains such a
+decision.
+
+## Module and dependency map
+
+| Owner | Responsibility |
+| --- | --- |
+| `:core:language.targets.dotnet` | One logical .NET platform and the target-framework vocabulary |
+| `:compiler:config.dotnet` | Generated primitive compiler keys and target/product policy |
+| `:compiler:frontend.common.dotnet` | Objective PE/ECMA-335 facts, resolution, and physical evidence |
+| FIR-owned .NET code | Kotlin types, symbols, contracts, enhancement, and diagnostics |
+| `:compiler:cli:cli-base` | Neutral `.NET` content-root carrier |
+| `:compiler:cli:cli-dotnet` | Pipeline sequencing and application of configuration |
+| `:compiler:ir:backend.dotnet` | IR context, lowerings, intrinsics, CIL mapping/emission, and backend products |
+| Kotlin library/ABI infrastructure | Embedded KLIB and physical ABI models/codecs |
+| Gradle/packaging layers | Variant configuration, installation, dependency copying, and layouts |
+| Roslyn authoring project | C#-facing source generation/analyzers over explicit interop contracts |
+
+Enforce these directions:
+
+- language-target code imports no compiler, FIR, IR, backend, CLI, Gradle, or
+  Roslyn layer;
+- `config.dotnet` imports no CLR loader, FIR, IR, backend, or CLI layer;
+- `frontend.common.dotnet` imports neither compiler configuration nor FIR, IR,
+  backend, CLI, Gradle, or Roslyn code;
+- objective CLR parsing never creates Kotlin types, contracts, symbols, or
+  diagnostics;
+- FIR and backend may consume a neutral retained-declaration carrier, but
+  neither may own a carrier required by the other;
+- CLI orchestrates owners and does not become the owner of metadata, ABI, or
+  codegen models;
+- backend code must not be imported merely to obtain a target enum, content
+  root, physical CLR model, or frontend validator; and
+- `.NET` roots are never represented as `JvmClasspathRoot`.
+
+Package placement mirrors the mature target that owns the same concern unless
+the CLR creates a concrete different boundary. Do not introduce generic
+domain/application/infrastructure packages or new Gradle modules solely to
+shorten files or constructors.
+
+See
+[`docs/review/architecture-responsibility-audit.md`](docs/review/architecture-responsibility-audit.md).
+
+## Target and product model
+
+Kotlin/.NET has one unversioned logical Kotlin platform, `DotNet`. The target
+framework is an independent configuration axis represented by
+`org.jetbrains.kotlin.config.DotNetTarget`:
+
+| Target | Applications | Libraries | May consume |
+| --- | --- | --- | --- |
+| `net48` | yes | yes | exact `net48` and `netstandard2.0` |
+| `netstandard2.0` | no | yes | exact `netstandard2.0` |
+| `net10.0` | yes | yes | exact `net10.0` and `netstandard2.0` |
+
+`net48` and `net10.0` never consume one another. Product kind, future runtime
+identifier, packaging, and target framework remain orthogonal. Do not put
+product/layout/textual-CIL facts on `DotNetTarget`.
+
+`-Xdotnet-target={net48|netstandard2.0|net10.0}` defaults to `net48`.
+Configuration rejects invalid values and Standard executables before FIR or
+codegen. Profile selection precedes lowerings and controls legal core-library
+references, target metadata, runtime/stdlib variants, assembly writing, and
+dependency compatibility. Kotlin semantics remain invariant even when
+profile-specific CIL differs.
+
+`net10.0` executable requests produce a DLL plus runtime configuration for
+`dotnet exec`; do not invent a self-hosting modern ILAsm executable.
+`netstandard2.0` produces only portable library DLLs. Framework and modern
+ILAsm are target/profile writers and compatibility oracles, not interchangeable
+requirements for every profile-specific feature.
+
+Compiler arguments, Gradle compiler options, platform identity, target
+attributes, and target/compilation ownership are generated or target-owned as
+recorded in the integration ADRs indexed by
+[`docs/README.md`](docs/README.md). Do not restore handwritten generated
+argument/option models.
+
+## Pre-ABI and publication policy
+
+Nothing has shipped and no public Kotlin/.NET ABI 1 exists. Until an explicit
+freeze is recorded:
+
+- correct prototype binaries, names, metadata, runtime types, and layouts
+  instead of preserving mistakes;
+- move every producer, consumer, runtime, and tool together;
+- bump and validate the relevant versioned schema when a physical contract
+  changes;
+- reject stale artifacts explicitly; and
+- do not add compatibility shims for unpublished identities.
+
+Developer-mode declaration eviction may help incomplete frontend work reach a
+diagnostic fixpoint. A library or stdlib publication with any eviction is an
+error; no successful artifact may silently omit declarations or their
+dependents. The endpoint is a located frontend diagnostic.
+
+Every Kotlin library is one self-describing CLR DLL containing its private
+KLIB payload and physical binding data. Do not emit, install, or publish a
+standalone or sibling Kotlin/.NET KLIB. See
+[`docs/decisions/adr-self-describing-dotnet-library-dll.md`](docs/decisions/adr-self-describing-dotnet-library-dll.md).
+
+## Metadata and CLR interoperability
+
+The objective loader reports selected assembly identity, metadata tables,
+signatures, custom attributes, and validated physical relationships without
+guessing producer language. FIR owns Kotlin-facing enhancement and stability
+rules; backend binding consumes retained identities after frontend decisions.
+See
+[`docs/decisions/draft-adr-clr-importer-boundary.md`](docs/decisions/draft-adr-clr-importer-boundary.md).
+
+Standard CLR/Roslyn attributes are the shared foreign-language vocabulary only
+where their exact target, payload, and semantics are verified. Unknown,
+malformed, inapplicable, or state-weakening evidence contributes no Kotlin
+effect. In particular, Roslyn member-state attributes do not override Kotlin's
+stricter smart-cast rule for mutable properties.
+
+When CLR metadata can express a truthful view of Kotlin semantics, emit both
+the KLIB contract and the standard CLR view. Nullable attributes help C# and
+foreign import; they do not replace Kotlin nullability. CodeAnalysis contract
+attributes can reconstruct only the exact effects they express; Kotlin-only
+contracts and declaration identity remain in KLIB.
+
+C# authoring and export surfaces are explicit opt-in interop products.
+Properties, defaults, callable adapters, collisions, nullability, and
+implementation manifests are not inferred from ordinary Kotlin source names.
+See
+[`docs/decisions/adr-csharp-interface-source-authoring.md`](docs/decisions/adr-csharp-interface-source-authoring.md).
+
+Friend visibility combines Kotlin module authorization with exact CLR
+`InternalsVisibleTo` identity. Metadata-public compiler ABI is not ordinary
+source `public`. See
+[`docs/decisions/adr-friend-assemblies-and-compiler-abi.md`](docs/decisions/adr-friend-assemblies-and-compiler-abi.md).
+
+## Runtime and stdlib ownership
+
+Physical product ownership is:
+
+- `Kotlin.Runtime.dll`: compiler/runtime identities and services required by
+  generated code;
+- `Kotlin.Stdlib.dll`: ordinary Kotlin library declarations and algorithms;
+  and
+- the user assembly: declarations and initialization owned by that
+  compilation.
+
+Do not place an ordinary stdlib algorithm in the emitter or runtime. Do not
+copy it into every consumer. Common/generated source is compiled once into
+the profile-selected stdlib; target-private external helpers cover only
+irreducible CLR operations.
+
+The direct repository stdlib product and temporary packaged-source fallback
+must use the same canonical source set and produce the same logical KLIB/IL
+content. The fallback is a bootstrap cycle breaker, not a second
+implementation or final distribution design. Installed selection treats each
+profile's runtime/stdlib as one pair and copies their bytes unchanged beside
+applications.
+
+Collections follow exact Common generator/source dependency closures.
+Kotlin collection identity is not replaced by BCL collection identity;
+explicit BCL adapters are a separate interop programme. Common I/O owns EOF
+and rendering semantics; `.NET` supplies only narrow actuals and the
+`Console.ReadLine` host operation.
+
+See
+[`docs/decisions/draft-adr-target-stdlib-bootstrap.md`](docs/decisions/draft-adr-target-stdlib-bootstrap.md)
+and
+[`docs/review/common-collections-program.md`](docs/review/common-collections-program.md).
+
+## Nullability model
+
+Nullability uses a hybrid physical representation:
+
+- a nullable non-erased CLR value position uses `System.Nullable<T>`;
+- a nullable reference position uses the same CLR reference type plus truthful
+  nullable metadata where representable;
+- an erased `Any?`/object boundary represents both a boxed value and `null` as
+  CLR object/null, not as a surviving `Nullable<T>` box;
+- generic `T?` representation follows the type parameter's constraints and
+  exact use-site requirements; and
+- Kotlin-produced declarations retain their logical nullability in KLIB even
+  when Roslyn-compatible nullable attributes are also emitted.
+
+Do not globally map `T?`, `Any?`, or a nullable primitive to one CLR shape.
+Boxing, unboxing, equality, type tests, arrays, generic constraints, returns,
+and imported CLR enhancement must preserve the boundary at which nullability
+is observed.
+
+See the
+[generic nullability ADR](docs/decisions/adr-hybrid-generic-nullability-and-covariant-returns.md).
+
+## Core representation boundaries
+
+- `System.Object` is the physical foundation for Kotlin `Any`; Kotlin-facing
+  `equals`, `hashCode`, and `toString` semantics remain explicit compiler or
+  runtime behavior. See
+  [`draft-adr-system-object-any-foundation.md`](docs/decisions/draft-adr-system-object-any-foundation.md).
+- Kotlin primitive arrays use Kotlin-owned wrapper identity around CLR
+  storage. Do not expose raw CLR vectors as Kotlin array identity. See
+  [`draft-adr-kotlin-primitive-array-wrappers.md`](docs/decisions/draft-adr-kotlin-primitive-array-wrappers.md).
+- Variant/generic interfaces use the versioned split-interface/bridge model
+  where one CLR interface cannot truthfully carry all Kotlin views. MethodImpl
+  and effective interface maps are semantic ABI, not IL spelling trivia. See
+  [`draft-adr-variant-interface-abi.md`](docs/decisions/draft-adr-variant-interface-abi.md).
+- Interface default bodies are profile-aware. Do not simulate modern DIM into
+  the Framework ABI or reject a Kotlin body without applying the accepted
+  fallback policy. See
+  [the interface-default ADR](docs/decisions/adr-profile-aware-interface-default-implementations.md).
+- Function values use the selected erased `FunctionN` identity plus exact
+  execution capabilities; callable and property-reference identity is a
+  separate physical contract. See
+  [`draft-adr-erased-callable-abi.md`](docs/decisions/draft-adr-erased-callable-abi.md).
+
+Exact private lowering machinery is not automatically public ABI. Tests own
+private field disambiguation, nested equality views, and conformance
+mechanics; the documentation index identifies the implementation/verification
+files awaiting relocation.
+
+## Exception model
+
+All throwable values remain the original `System.Exception` objects in one
+physical CLR universe. Exact Kotlin or CLR identities are physical only when
+truthful. Broad or non-physical Kotlin subtype relationships are enforced by
+one versioned classifier used consistently by type tests, casts, catches, and
+metadata consumers.
+
+Kotlin `Throwable` state missing from `System.Exception`, especially
+suppressed exceptions, is identity-associated runtime state on the original
+object. Do not wrap, clone, translate, or mutate foreign extensibility
+surfaces such as `Exception.Data`. Stacktrace operations preserve CLR
+diagnostic facts and compose Kotlin suppressed-state semantics with
+reference-identity cycle handling.
+
+See the
+[classified-exception ADR](docs/decisions/draft-adr-classified-clr-exception-model.md).
+
+## Static placement and initialization
+
+Objects and companions follow Kotlin/JVM first-active-use semantics on CLR
+`.cctor` ownership. A plain object owns `INSTANCE`. A companion singleton
+field lives on the selected enclosing static owner, using a non-generic holder
+when a generic owner would otherwise create one singleton per construction.
+
+Companion backing state and init blocks remain on the companion instance; the
+selected owner's `.cctor` constructs it. This is the accepted CLR nested-type
+delta from JVM field hoisting and is observable only under initialization
+re-entrancy.
+
+The **beforefieldinit decision** is to omit `beforefieldinit` for
+Kotlin-initialized types so the CLR cannot run their initializer earlier than
+Kotlin permits. Failed initialization preserves one Kotlin-visible failure
+identity/state above CLR `.cctor` caching rather than exposing unstable
+wrapper chains.
+
+See the
+[static-placement ADR](docs/decisions/adr-companion-static-placement-and-initialization.md)
+and the
+[initialization-failure ADR](docs/decisions/adr-kotlin-static-initialization-failures.md).
+
+## Diagnostics and CIL production
+
+Unsupported IR fails through a specific `dotNetUnsupported()` diagnostic
+path. Never emit plausible fallback IL such as empty strings or zero values.
+Do not let a known-invalid construction reach ILAsm or become JIT-poisoned;
+interface/generic mapping mistakes can assemble successfully and fail only at
+type load or dispatch.
+
+Textual IL plus ILAsm is the accepted prototype production path. The endpoint
+is a structured compiler-owned CIL/metadata model with deterministic text and
+direct-PE sinks; do not add a sidecar merely to exchange one external process
+for another. See
+[`docs/decisions/draft-adr-il-assembly-pipeline.md`](docs/decisions/draft-adr-il-assembly-pipeline.md).
+
+Any IL spelling not already golden-pinned must first be assembled and executed
+in a temporary probe outside the repository. Verify physical metadata through
+tables, reflection/interface maps, and real dispatch as appropriate; substring
+checks alone are insufficient for semantic ABI.
 
 ## Contribution workflow
 
-1. Treat Common Kotlin and its stdlib generators as authoritative for Kotlin
-   behavior and declarations.
-2. Compare JVM, JS, Wasm, and Native before designing a feature. Record how
-   each relevant mature target handles it, attack the preferred design, and
-   deviate only for a concrete CLR constraint.
-3. Amend the owning ADR or active programme before implementing a semantic,
-   representation, or ABI choice. Do not attribute the target authors'
-   position to the Kotlin core team.
-4. Verify any new IL spelling with a temporary assemble-and-run probe before
-   codegen emits it. Keep probes outside the repository.
-5. Build one bounded feature, fail unsupported shapes diagnostically, and
-   test adversarial source, metadata, dispatch, profile, and runtime
-   boundaries rather than only the happy path.
-6. Never edit generated test runners or configuration/API outputs by hand.
-   Use the owning scoped generator and review its output critically.
-7. For a semantic feature, run the strict aggregate gate above and inspect
-   every XML result; quiet Gradle success is insufficient. A Markdown-only
-   ownership or history change does not require the compiler gate, but it
-   does require repository-reference, local-link, and whitespace/diff checks.
-8. Never bypass Smart App Control or weaken a test to avoid it. Missing or
-   blocked required tooling must not become a silent pass.
-9. Keep each completed feature in one intentional commit, including affected
-   ADR and status updates. Preserve unrelated worktree changes. The repository
-   owner has requested direct commits and pushes on `dotnet`; do not create
-   worktrees or modify another branch.
+For every bounded semantic feature:
 
-## Established decisions
+1. Start from authoritative Common Kotlin/source-generator behavior.
+2. Document how JVM, JS, Wasm, and Native handle the concern.
+3. Deviate only for a concrete CLR constraint, not a limitation of the current
+   target implementation.
+4. Attack the preferred design and state what a Kotlin-aligned target team
+   would likely reject; do not manufacture core-team endorsement.
+5. Amend the owning ADR/programme before implementing the representation or
+   semantic choice.
+6. Implement the complete bounded feature across every producer and consumer.
+7. Test adversarial source, metadata, dispatch, profile, artifact, and runtime
+   boundaries.
+8. Commit and push the completed feature with its ADR and status update.
 
-The bullets below also record landed prototype behavior. Where an accepted ADR says that behavior
-must be replaced, the ADR is authoritative even before implementation catches up; do not treat the
-landed shape as a compatibility constraint.
+Also:
 
-- CLR load ownership follows the JVM foreign-metadata dependency direction:
-  `:compiler:frontend.common.dotnet` owns objective PE/ECMA-335 facts, resolution, and validated
-  CLR attribute evidence under `org.jetbrains.kotlin.load.dotnet`. Its sole compiler-project
-  dependency is `:core:language.targets.dotnet`; it never depends on compiler configuration, FIR,
-  IR, a backend, a CLI pipeline, Gradle, or Roslyn tooling. It never converts that evidence into
-  Kotlin types, contracts, symbols, or diagnostics; those are FIR policy under
-  `org.jetbrains.kotlin.fir.dotnet`. Physical constructed-type constraint validation lives with
-  the CLR model and consumes only the neutral target identity/capability vocabulary. Kotlin KLIB
-  carrier identity is likewise caller-owned: the physical classpath reader receives the selected
-  managed resource name and reports only `WithCarrier`/`WithoutCarrier`, without inferring a
-  producer language or importing the Kotlin library/ABI codec. Backend and CLI consume the
-  loader, never the reverse. See `docs/review/architecture-responsibility-audit.md`.
-- Target/configuration ownership mirrors the mature JVM dependency direction:
-  `:core:language.targets.dotnet` owns `DotNetTarget`, parsing, the .NET platform marker, and only
-  focused capabilities shared across compiler layers; `:compiler:config.dotnet` owns generated
-  primitive compiler keys plus product and library-compatibility policy; `cli-base` owns
-  `DotNetClasspathRoot`. `DotNetTarget` and configuration keys use
-  `org.jetbrains.kotlin.config`; platform types use `org.jetbrains.kotlin.platform.dotnet`.
-  The three target frameworks remain one Kotlin/.NET platform rather than separate Analysis API
-  platform identities. Product kind, future runtime identifiers, packaging/NuGet selection,
-  artifact identities, interop selectors, and textual CIL rendering do not belong on
-  `DotNetTarget`. The backend owns the exhaustive `DotNetTarget` to
-  `DotNetCoreLibraryProfile` mapping.
-- IL codegen split: `DotNetIlEmitter` (module orchestration), `DotNetIlClassCodegen` (class shell,
-  method dispatch), `DotNetIlMethodCodegen` (bodies/statements), `DotNetIlExpressionCodegen`
-  (expressions), `DotNetIlMethodContext` (slots/labels/maxstack/stack verification),
-  `DotNetIlCodegenSupport` (type mapping, signatures, escaping), `DotNetIlType` (value types vs
-  return types).
-- POC assembly pipeline (argumentation:
-  `docs/decisions/draft-adr-il-assembly-pipeline.md`): textual IL plus modern ILAsm remains the
-  normal `net` assembly path while representation and runtime ABI are moving; Framework ILAsm is
-  the Framework target assembler and an independent compatibility-floor oracle. This is not a
-  permanent distribution commitment. Before productionization, interpose a structured
-  compiler-owned CIL/metadata model and add a JVM-hosted direct PE writer behind it, while
-  retaining deterministic text rendering and ILAsm conformance tests. Do not introduce a .NET
-  sidecar merely to call `System.Reflection.Metadata`: the compiler is JVM-hosted, so that keeps
-  the external-process boundary and adds another private protocol without solving the core writer
-  ownership problem.
-- String concatenation follows the mature target shape: `FlattenStringConcatenationLowering`, then
-  `DotNetStringConcatenationLowering`, then IL codegen handles `String.plus`/`toString` intrinsics.
-  Avoid ad-hoc IrWhen/boolean handling inside string emission.
-- Lowerings run through `NamedCompilerPhase`/`PhaseEngine`, measured as `PhaseType.IrLowering`.
-- Main selection uses `DotNetMainFunctionDetector`. When one file contains both supported shapes,
-  the parameterized `main(Array<String>)` takes precedence over parameterless `main()`, following
-  Kotlin's mature enhanced-main detector. No wrapper is generated when the selected Kotlin `main`
-  shape already maps to a valid CLR `.entrypoint` method (ECMA-335 allows parameterless or
-  `string[]` entry points); add a wrapper only when a supported source shape needs one.
-- Runtime assembly foundation (probe series `runtimeprobe_s1`; follows the JVM separation between
-  generated programs and a Kotlin-owned runtime, with CLR assembly identity replacing JVM jar
-  identity): every assembled executable carries an AssemblyRef to, and is emitted beside,
-  `Kotlin.Runtime.dll`. All artifacts in the current prototype matrix consistently use the
-  culture-neutral candidate identity
-  `Kotlin.Runtime, Version=1.0.0.0, PublicKeyToken=null`. This is a deterministic build/test
-  identity, not a published ABI major: the version and unsigned status may change before Gate B.
-  Before external publication, decide the first public assembly names, strong-name policy,
-  AssemblyVersion compatibility policy, and package-version relationship together. Once an
-  identity is published, changing its name, version binding policy, or strong-name key is an
-  explicit CLR ABI transition rather than a silent retargeting. The runtime now emits one
-  netstandard2.0 ECMA-335 definition and uses modern ILAsm as
-  its portable writer; Framework ILAsm is not used for the canonical library because it injects
-  an `mscorlib` AssemblyRef. The API remains within the audited netstandard2.0 surface so the same
-  candidate surface runs on Framework 4.8 and modern CoreCLR. `runtimeprobe_s1` originally
-  assembled the runtime and a type-resolving consumer with both
-  modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings ran, while both
-  runtime binaries reported the exact candidate identity above. Namespace ownership is reserved
-  now:
-  Kotlin language ABI types live under `Kotlin`, runtime services under `Kotlin.Runtime`, and
-  compiler-only cross-assembly support under `Kotlin.Runtime.Internal`. The initial
-  foundational type was the deliberately memberless static marker
-  `Kotlin.Runtime.RuntimeInfo`; the callable ABI candidate added afterward is described below.
-  Compiler-generated default constructors use the public-metadata, sealed
-  `Kotlin.Runtime.Internal.DefaultConstructorMarker`, whose constructor is private and whose only
-  emitted value is null. This follows the JVM's collision-marker boundary while keeping the type
-  out of Kotlin-facing namespaces; it is a compiler/runtime ABI type, not a source API.
-  Private-constructor synthetic accessors use the distinct public-metadata, sealed
-  `Kotlin.Runtime.Internal.SyntheticConstructorMarker`, also private-constructed and null-only.
-  Keeping the protocols physically distinct prevents a default-argument stub and a private-access
-  bridge with otherwise equal parameter lists from acquiring the same CLR signature.
-  CLR-public declarations that exist only for separately compiled Kotlin code are identified by
-  `Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute` and hidden from ordinary completion with
-  `EditorBrowsable(Never)`. The marker itself and compiler-helper types carry the same completion
-  policy. This marker was the first runtime-surface-level-2 addition; public Kotlin declarations
-  and explicit C# exports do not receive it. The attribute's physical scope is profile-owned:
-  `[netstandard]` for portable libraries, `[System]` with the Framework 4.0 identity for `net48`,
-  and `[System.Runtime]` with the .NET 10 contract identity for `net10.0`. Neither runtime profile
-  defines `System.ComponentModel.EditorBrowsableAttribute` in its selected core reference. A user
-  assembly emits the supplementary AssemblyRef only when its body carries the attribute;
-  `Kotlin.Runtime` always emits it because the marker and compiler-helper types are annotated.
-  Framework reflection pins the MemberRef as well as the visibility flags, and modern execution
-  pins resolution through the .NET contract facade.
-- Internal/friend/compiler ABI (decision:
-  `docs/decisions/adr-friend-assemblies-and-compiler-abi.md`): ordinary Kotlin `internal`
-  declarations are genuine CLR assembly-internal declarations. A friend relationship is
-  producer-authorized and consumer-declared: the producer emits `InternalsVisibleTo`, schema 4
-  persists the structured unsigned/full-public-key identity, and the consumer supplies the bound
-  KLIB as a friend dependency. The frontend validates producer authority for the actual output
-  assembly before FIR grants source access. `@PublishedApi internal` declarations are instead
-  CLR-public compiler ABI with `KotlinCompilerAbiAttribute` and `EditorBrowsable(Never)` while
-  remaining internal in Kotlin metadata. Build-tool association must eventually wire both halves;
-  the provisional CLI switches are not the public model. Unsigned names are not a security
-  boundary, and signed friends require the full public key rather than a token.
-  The runtime also owns `Kotlin.RuntimeException : System.Exception` as the dormant physical root
-  for exact Kotlin-only exception identities and
-  `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException` as its first child. The first
-  source-visible exact types are `Kotlin.NumberFormatException : System.ArgumentException`,
-  `Kotlin.NoSuchElementException : Kotlin.RuntimeException`, and `Kotlin.Error : System.Exception`.
-  Their hybrid exception policy is described in the
-  exception-model bullet below.
-  The compiler reserves the runtime assembly name, creates no runtimeconfig for the library, and
-  removes stale program outputs when either ILAsm path fails. Shared compiler support is emitted
-  once in the runtime under `Kotlin.Runtime.Internal`, never copied into generated modules.
-- Target stdlib bootstrap (argumentation:
-  `docs/decisions/draft-adr-target-stdlib-bootstrap.md`; follows the JVM split between runtime ABI
-  support and ordinary stdlib implementations, with CLR assemblies as the physical boundary):
-  `Kotlin.Stdlib, Version=1.0.0.0, PublicKeyToken=null` is the second reserved prototype platform
-  identity and is governed by the same pre-publication identity rule as `Kotlin.Runtime`.
-  `Kotlin.Runtime` retains language identities and compiler/runtime services;
-  `Kotlin.Stdlib` owns ordinary Kotlin library implementations. The first implementations are the
-  generic `Kotlin.Collections.ArrayIterator<T>` and `ArrayIterable<T>`, compiled through the same
-  class and split generic-interface bridge pipeline as user code, followed by the Common-generated
-  `Iterable<T>`/`List<T>` `first()`, `last()`, `firstOrNull()`, and `lastOrNull()` overloads plus
-  Common `List<T>.lastIndex` and the Common/actual `Array<out T>.asList()` array-backed view on the
-  compiler/stdlib physical
-  `Kotlin.Collections.CollectionsKt` facade. User calls cross the assembly edge; the function
-  bodies run in the stdlib and use split Iterable/Iterator/List capabilities with canonical
-  fallback for every implementation.
-  The implementation classes are private in both Kotlin source and CLR metadata. Generated user
-  assemblies call the Kotlin-internal, metadata-public generic `dotNetArrayIterator` and
-  `dotNetArrayIterable` factories on `Kotlin.Collections.CollectionsKt`; those methods, rather
-  than implementation class names or constructors, are the compiler/stdlib ABI. This follows the
-  JVM/JS helper boundary for host-array iteration. The canonical current stdlib implementation is
-  ordinary Kotlin source under `libraries/stdlib/dotnet/src`; repository product tasks compile
-  that complete source set directly for each profile. The backend JAR packages the same files only
-  as a byte-identical bootstrap fallback, never as a second implementation. The default fallback
-  path still injects those sources into the same frontend/lowering run and `DotNetIlEmitter`
-  partitions the lowered module into USER and STDLIB ownership scopes. The accepted
-  library-artifact endpoint is one self-describing DLL
-  (`docs/decisions/adr-self-describing-dotnet-library-dll.md`). Every produced user/stdlib DLL
-  embeds the complete packed KLIB as the private managed resource `Kotlin.Metadata`, marked
-  `managed-resource-klib-v1` and self-bound. The CLI classpath and friend resolver now consume that
-  resource directly from a DLL through a bounded JVM-hosted ECMA-335 reader, validate its manifest
-  against the physical Assembly row, and expose its packed metadata through the shared
-  `KotlinLibrary`/`KlibMetadataComponent` contract with the containing DLL as `KotlinLibrary.path`.
-  Canonical archive entries and bounded expansion are validated in common KLIB infrastructure;
-  no temporary KLIB file participates in dependency loading and no second artifact path exists.
-  The compiler producer, installed-stdlib resolver,
-  Gradle variants, project dependencies, association, and friend paths all use only the DLL.
-  Standalone Kotlin/.NET KLIBs are rejected. Consumers call implementations in the selected DLL,
-  with no injected implementation source. The embedded manifest binds the complete unsigned
-  assembly identity, file, selected library TFM, and self implementation; an arbitrary metadata KLIB never becomes a CLR
-  reference. The POC-only `-Xdotnet-produce-stdlib -d <directory>` route now follows JS/Wasm's
-  explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: it accepts either
-  the exact complete product-owned source set or no source inputs for the packaged fallback. An
-  incomplete, duplicate, or unrelated set is a compiler-arguments error. One resolved frontend/IR
-  run serializes the stdlib declarations and emits the self-describing profile-specific
-  `Kotlin.Stdlib.dll` together with its
-  `Kotlin.Runtime.dll`. It is never an executable-build
-  side effect. The artifact boundary follows JVM's single native library product while the
-  embedded payload reuses the common KLIB serialization used by JS/Wasm/Native. Every assembled
-  executable still receives both platform DLLs;
-  same-run stdlib production remains bootstrap compatibility machinery. Repeated standalone builds
-  must produce byte-identical embedded Kotlin metadata payloads, compiler-owned IL, and
-  deterministic PE for each profile; variants are not required to be byte-identical to one
-  another. Once a distribution-owned default pair is populated in Kotlin home, same-run production
-  must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
-  Ordinary compilation prefers the selected-profile runtime/stdlib pair, then the pair under
-  `<kotlin-home>/lib/dotnet/netstandard2.0` for either executable profile. A discovered stdlib
-  without its sibling runtime is an invalid partial installation, not a fallback trigger. The
-  compiler authenticates the runtime's physical Assembly row and public profile manifest without
-  loading it as code, then executable packaging copies both selected DLLs byte-for-byte. Absence
-  of every installed pair still falls back to injected stdlib sources and a same-run runtime.
-  Repository production is deliberately
-  opt-in: `:kotlin-compiler:produceDotNetStdlib` runs the compiler from the assembled distribution
-  and writes all three bound pairs plus diagnostic stdlib IL under
-  `prepare/compiler/build/dotnet-stdlib/<profile>`, while
-  `:kotlin-compiler:installDotNetStdlib` installs each DLL pair into its Kotlin-home profile
-  directory. Neither task is a dependency of ordinary `dist`/`distKotlinc`, so a normal build does
-  not acquire either ILAsm requirement. Because `distKotlinc` is a whole-home `Sync`, a later
-  standalone invocation intentionally removes the optional variants; run the install task afterward
-  to restore them.
-  The netstandard physical declaration index is an executable ABI floor for both runtime stdlib
-  variants. `DotNetLibraryAbiCodec.portablePhysicalAbiDifferences` permits additional profile-owned
-  entries but reports every missing portable logical key or changed CLR owner/member binding in
-  deterministic key order. Integration production compares all three generated variants together
-  with the logical-identity scheme, physical-name grammar, and runtime-surface floor. This is the
-  structured logical/physical binding audit; do not approximate it by diffing rendered IL text.
-  The same integration test independently loads the assembled runtime/stdlib pairs in isolated
-  CoreCLR contexts and compares their externally consumable reflection surfaces. Both executable
-  variants must retain every portable public/protected type, base/interface edge, generic
-  constraint, method, field, property, and event with compatible access and overridability. The
-  verifier also compares normalized custom-attribute identities and constructor/named payloads on
-  assemblies and the exposed surface; `TargetFrameworkAttribute` alone is excluded because its
-  value is profile-specific. The same verifier reads raw ManifestResource rows from the PEs:
-  portable public resources cannot disappear, narrow, or become external files, and the embedded
-  C# authoring manifest must retain its schema, assembly identity, logical-identity scheme, and
-  every portable logical declaration while profile-specific slot records may differ. It is
-  isolated C# test data, not a compiler sidecar. A negative fixture rewrites one embedded logical
-  declaration and its envelope digest in a copied platform PE; the verifier must report the
-  missing portable declaration. Manifest-addressable MethodImpl obligations are compared by the
-  existing Kotlin logical identity, physical view, and normalized CLR signature. The verifier
-  resolves exact manifest locators and accepts explicit mappings, natural class implementations,
-  selected DIMs, or recorded interface promotions; it never requires identical raw rows. Public
-  concrete mappings form the cross-profile floor, while non-public implementation maps are
-  validated only within their own variant. A generic default fixture and a corrupted name-only
-  locator pin both rules. The fixture includes a mutable property: every physical accessor which
-  owns its Property row, including a modern typed DIM, must retain CLR `specialname`. For an
-  assembly which declares `InternalsVisibleTo`, the verifier also treats its additional
-  friend-accessible CLR surface as a profile contract: internal types and their non-private
-  members, plus internal or private-protected members on otherwise exposed types, must retain
-  their shape in each executable variant. Public surface is not duplicated in that comparison,
-  private declarations stay outside it, and a narrowed modern fixture proves that a missing
-  portable internal is rejected. Ordinary custom attributes are an ABI multiset of decoded
-  attribute identity, constructor arguments, and named field/property arguments; equivalent
-  ECMA-335 blob encodings are not required to be byte-identical across profiles or PE writers.
-  Exact blob bytes are frozen only by an explicitly documented compiler protocol whose ADR names
-  that representation. The C# authoring matrix does so for `InternalsVisibleTo`,
-  `KotlinCompilerAbiAttribute`, and `EditorBrowsable(Never)`. Non-manifest public/compiler-ABI and
-  authorized friend interface obligations are independently compared by the real implementing CLR
-  type plus complete constructed slot signature and effective interface map. The target MethodDef
-  is deliberately excluded so a portable class forwarder and selected modern DIM remain equivalent.
-  This physical locator is not a second Kotlin identity. A metadata-public generic fixture stays
-  absent from the C# authoring manifest but participates in the audit, and a reassembled modern PE
-  missing its canonical `.override` is rejected. See
-  `docs/decisions/adr-semantic-interface-mapping-audit.md`.
-  `Kotlin.Runtime` and `Kotlin.Stdlib` use the selected core-library profile and exact
-  TargetFrameworkAttribute metadata. The portable variant has an exact `netstandard` AssemblyRef
-  and no `mscorlib` MemberRefs. The complete
-  profile was audited against the 2.0 reference assembly: 27 BCL types and 55 members, zero
-  misses. Applications retain their executable profile. The POC
-  `-Xdotnet-produce-library -d <directory>` mode now emits an ordinary source module as a bound
-  self-describing `<module>.dll` plus a transitional `<module>.klib` under the selected profile,
-  with no entry point or
-  runtimeconfig. `netstandard2.0` uses the portable modern PE writer; the runtime profiles use
-  their corresponding assembler. Explicit CLR exports are callable across the resulting assembly
-  edge. Kotlin cross-module calls now follow JS/Native's public `IdSignature` as their logical key;
-  a versioned POC KLIB index adds only the CLR owner path, method name, and dispatch shape needed
-  to bind that declaration to its owning assembly. Signatures remain metadata-derived, arbitrary
-  standalone metadata KLIBs are not Kotlin/.NET dependencies, and consumers never reconstruct a facade from a source
-  filename. Executables copy directly referenced implementation DLLs beside their output. The
-  manifest-property encoding is provisional pending a real KLIB component and signature-version
-  compatibility policy. .NET Standard is a library target, never an executable runtime. See
-  `docs/decisions/draft-adr-dotnet-library-target-profile.md`.
-  The broad stdlib generator has Common/JVM/JS/WASM/Native targets but no complete .NET target.
-  The bounded .NET bootstrap generator invokes the authoritative Common `Elements.f_first`,
-  `f_firstOrNull`, `f_last`, and `f_lastOrNull` templates for their Iterable/List variants. It
-  mechanically extracts the complete Common `List.lastIndex` declaration and fails if that unique
-  source marker changes or disappears. Generic extension properties emit ordinary static generic
-  CLR accessors and no CLR `.property` row. Do not add a generator target that emits an
-  uncompilable broad corpus. The durable endpoint is compiling generated Common sources plus narrow
-  .NET actuals once the backend can compile the required generated collection surface; the
-  standalone producer already emits both metadata carriers from one source compilation and one
-  physical declaration index.
- - CLR importer boundary (argumentation:
-   `docs/decisions/draft-adr-clr-importer-boundary.md`; follows the JVM split between physical
-   Java classfile models and Kotlin-facing FIR enhancement, while retaining a CLR-specific
-   metadata graph): ordinary foreign DLLs are not Kotlin libraries and must not be assigned KLIB
-   declaration identities. Classify each DLL exactly once at the frontend boundary. Presence of
-   the reserved `Kotlin.Metadata` managed resource selects the self-describing Kotlin-produced
-   path and its authoritative embedded KLIB; absence selects the ordinary foreign path and its
-   authoritative physical CLR metadata. Never fall back from a present non-private or malformed
-   Kotlin resource to foreign import, and never import a Kotlin-produced assembly's physical rows
-   beside its KLIB. Retain canonical resource-free assemblies and their exact decoded metadata in
-   classpath order for the future lazy FIR provider, but do not manufacture FIR declarations,
-   runtime references, or copied artifacts before that provider selects an actual use. Invalid PE
-   input remains a classpath error. A single bounded, JVM-hosted PE/ECMA-335 reader feeds both managed
-   resource loading and an immutable physical CLR model. It exposes Assembly, AssemblyRef,
-   TypeRef, TypeDef, TypeDefOrRef base handles, NestedClass ownership, and raw flags. The lossless
-   signature layer additionally decodes TypeSpec and MethodDef signatures into structural CLR
-   types, preserving class/value kind, handle identity, generic positions/instantiations,
-   by-reference forms, arrays and signed bounds, legal custom-modifier placement, function-pointer
-   calling convention, and original diagnostic bytes. Method ownership comes from the TypeDef
-   MethodList partition. The decoder enforces ECMA-335 plus the official .NET augmentations and
-   canonical compressed integers: custom modifiers are legal at the extra CLR-supported type
-   positions and may retain an unresolved TypeSpec handle, while named/generic type constructors
-   remain TypeDef/TypeRef and a later resolver must reject modifier cycles. MethodDef signatures
-   never admit a call-site vararg sentinel. Param rows retain their own token, MethodDef owner
-   derived from the MethodDef ParamList partition, raw flags, zero-based return versus one-based
-   value-parameter sequence, and nullable metadata name. They are optional descriptive metadata:
-   the MethodDef signature remains authoritative for parameter count and types, and the physical
-   reader never synthesizes a missing Param row. Sequence 0 attaches to the return type; sequence
-   `n + 1` attaches to value parameter `n`, including custom attributes whose parent is that exact
-   Param handle. Reject invalid ownership/list bounds, reserved flags, and sequences outside the
-   signature. Preserve gaps, duplicate or decreasing sequences, and a non-null empty name in row
-   order because ECMA classifies those shapes as warnings; the later import-policy layer must
-   diagnose any ambiguous Kotlin projection rather than the physical reader dropping data.
-   Decode the Constant table as a separate physical row model before any FIR projection.
-   Preserve each Constant token, exact Field/Param/Property parent, decoded scalar, and raw value
-   blob. The Type byte admits only Boolean, Char, signed/unsigned 8/16/32/64-bit integer,
-   Float32, Float64, String, and Class-as-nullref; its reserved padding byte is zero. Decode
-   little-endian scalar bits losslessly, including floating NaN payloads and signed zero.
-   Follow `System.Reflection.Metadata.BlobReader`: any non-zero Boolean byte is true, String is
-   the complete UTF-16LE code-unit pairs in the blob, scalar readers require their value width
-   but do not discard or reinterpret retained trailing bytes, and nullref requires a four-byte
-   zero prefix. Reject a truncated value, non-zero nullref prefix, invalid Type/padding/parent,
-   duplicate parent, or oversized blob. Enforce ECMA's physical flag relationships exactly:
-   Field.HasDefault requires one Constant row; Param.HasDefault requires one and an unset
-   Param.HasDefault forbids one. ECMA does not impose the corresponding Property-table
-   validation rule, so retain Property.HasDefault without inventing one. Constant.Type versus
-   the declared parent type is a CLS/selected-graph check, especially for enums, and must not be
-   guessed in the profile-neutral reader. A Param constant is CLR metadata, not permission to
-   manufacture a Kotlin default argument; a Field constant is not runtime storage. JVM binary
-   loading likewise retains `ConstantValue` data in the Java model before FIR decides Kotlin
-   constant semantics, while Kotlin metadata/KLIB serializes compile-time values separately from
-   declarations.
-   Preserve the FieldMarshal table as a separate lossless physical row model before any CLR
-   interop or FIR policy. Each row keeps its token, exact Field/Param parent, and a present raw
-   NativeType blob. Reject a nil/unread parent, duplicate parent, nil blob index, or oversized
-   blob. Enforce ECMA's one-way physical flag implications: Field.HasFieldMarshal and
-   Param.HasFieldMarshal each require one row, but a row does not require the corresponding flag.
-   Do not validate or normalize the MarshalSpec grammar in this profile-neutral reader.
-   `System.Reflection.Metadata` exposes the descriptor as a raw `BlobHandle`, and .NET
-   `UnmanagedType` values extend the narrow ECMA-335 grammar; a present empty or unknown blob
-   therefore remains distinguishable evidence for a later selected-profile interop decoder and
-   structured diagnostic. This is a CLR-specific physical difference, not permission to change
-   Kotlin Common types or modifiers. JVM has no equivalent unmanaged descriptor, while
-   Kotlin/Native C interop adds explicit Native-only stub annotations after Common semantics are
-   fixed. Kotlin-produced DLLs remain KLIB-authoritative, and no FieldMarshal row may manufacture
-   a Kotlin annotation, string type, by-reference mode, default, or storage rule.
-   Roslyn nullable-reference metadata is decoded only after this attachment model can distinguish
-   method, return, and value-parameter targets. Recognize the
-   three compiler conventions by exact top-level
-   `System.Runtime.CompilerServices.NullableAttribute`,
-   `NullableContextAttribute`, or `NullablePublicOnlyAttribute` identity plus their exact
-   `byte`/`byte[]`, `byte`, or `bool` constructor signature after ordinary `System.Attribute`
-   ancestry resolution. Do not require one defining assembly: Roslyn may embed private
-   definitions in each producer. Preserve scalar nullable transforms as a uniform tree flag and
-   array transforms as Roslyn-preorder sequences; retain context and module public-only values as
-   separate facts. Flags are only 0 oblivious, 1 not-annotated, and 2 annotated. Duplicate
-   recognized attributes, malformed payloads, null arrays, named arguments, or other flag values
-   are explicit invalid metadata, never first-wins input. This decoder must not create FIR/Kotlin
-   types. A later layer must apply local transforms, enclosing contexts, public-only
-   accessibility, physical type-tree shape, generic constraints, and Kotlin enhancement policy
-   together. Align a selected local/context transform only against the resolved physical
-   signature tree and the selected-profile physical classifier. The flat component order follows
-   Roslyn preorder. Reference primitives, nominal references, generic parameters, pointers,
-   arrays, generic instances other than `System.Nullable<T>`, and function pointers consume one
-   flag before their children. Non-generic value types, `void`, typed references, and
-   `System.Nullable<T>` itself consume none; generic non-nullable value types consume an
-   oblivious position before their arguments. By-reference and custom-modifier wrappers consume
-   none and delegate to their element. Function-pointer children are return then parameters.
-   A sequence must cover the consuming component count exactly; never partially apply or shift
-   excess flags. Retain a uniform transform as repeated evidence and report count mismatch or
-   invalid nominal physical classification structurally. The resulting NOT_ANNOTATED evidence is
-   still not a Kotlin definitely-non-null type. Select the declaration's evidence before applying
-   that transform. An absent module `NullablePublicOnly` marker includes all declarations;
-   `false` includes effective public/protected declarations, while `true` additionally includes
-   effective internal/private-protected declarations. Fold MethodDef and Field visibility through
-   every containing TypeDef; parameters and generic parameters inherit their method/type owner's
-   category. Property rows have no CLR accessibility: matching Roslyn's emitter and PE importer,
-   use the containing TypeDef for nullable-public-only filtering, never an accessor MethodDef. A
-   private property in a public type is therefore included even when its private accessors are
-   independently suppressed as methods. Apply this module filter before decoding local/context
-   evidence. Then prefer an exact Param/Field/Property/GenericParam/GenericParamConstraint
-   `NullableAttribute`, followed by the nearest MethodDef and containing-TypeDef
-   `NullableContextAttribute`. Keep selected,
-   oblivious, suppressed, and invalid outcomes distinct; missing or suppressed evidence never
-   becomes definitely non-null. Ownership ambiguity, invalid visibility, malformed attributes,
-   containing-type cycles, and limits remain structured failures below FIR. When composing this
-   declaration evidence with the physical preorder applicator, selected valid evidence yields
-   applied components. Oblivious and accessibility-suppressed evidence retain the exact unchanged
-   resolved CLR signature as distinct non-diagnostic outcomes. Invalid declaration evidence or
-   invalid transform/type alignment also retains that runtime signature, matching JVM/Roslyn
-   foreign-type fallback, but must carry a distinct structured diagnostic cause. Never collapse
-   malformed metadata into ordinary obliviousness, drop the CLR declaration, or infer a Kotlin
-   type at this layer. Generic-parameter declaration evidence and GenericParamConstraint type
-   evidence are independent: retain the former as a single declaration-level marker and resolve
-   and apply the latter once per physical constraint row. Use only an identity,
-   declaration-qualified generic-parameter context for constraint alignment; applying a
-   parameter marker to every constraint or aligning against an already-substituted constraint
-   tree is forbidden. Kotlin bound propagation and definitely-non-null decisions remain FIR
-   policy after every bound has been enhanced. Project valid aligned components through Kotlin's
-   established foreign-type qualifier vocabulary: nullable flags 0, 1, and 2 become
-   `FORCE_FLEXIBILITY`, `NOT_NULL`, and `NULLABLE` respectively. Do not weaken explicit C#
-   nonnullable evidence to a platform type or invent a C#-specific Kotlin nullability category.
-   The mandatory leading 0 on a generic non-nullable value type is structural preorder padding,
-   not Kotlin nullability: tag and require it as oblivious physical evidence, omit it from the
-   Kotlin qualifier list, and continue projecting its semantic type arguments.
-   The projector retains the exact evidence application, and oblivious, public-only-suppressed,
-   invalid-declaration, and invalid-alignment outcomes remain distinct unchanged-type projections.
-   Valid Roslyn compiler evidence has no warning-only migration mode. This policy still constructs
-   no FIR type and does not choose malformed-metadata diagnostic severity; those require the
-   later declaration provider and reporting boundary.
-   Property, PropertyMap, and MethodSemantics rows now
-   retain the physical property token, declaring TypeDef, metadata name/flags, structural
-   property/index signature, raw blob, and accessor MethodDef handles. Association comes only from
-   MethodSemantics, never from `get_`/`set_` spelling; CTS structural invariants are enforced while
-   optional CLS naming and shape rules remain input for later Kotlin import-policy diagnostics.
-   The property decoder follows the official .NET by-reference signature augmentation.
-   GenericParam and GenericParamConstraint rows preserve parameter token/number/owner/name, raw
-   flags, variance, reference/value/default-constructor constraints, modern `AllowByRefLike`, and
-   every TypeDef/TypeRef/TypeSpec constraint handle. Method signature arity must agree with its
-   parameter rows; numbers are zero-based and contiguous, owner/name/number and constraints are
-   unique, and constraint rows remain contiguous by owner. Do not reinterpret
-   ReferenceTypeConstraint as Kotlin non-nullability, DefaultConstructorConstraint as Kotlin
-   syntax, or AllowByRefLike as ordinary Kotlin generics. TypeSpec constraints remain unresolved
-   until the cycle-safe, profile-aware import resolver. InterfaceImpl rows separately preserve
-   their own token, exact
-   implementing TypeDef, and TypeDef/TypeRef/TypeSpec interface token; never infer them from
-   members or erase a TypeSpec interface to its open TypeDef. Resolve an immediate imported
-   hierarchy only as assembly-context-bearing type views: substitute the current owner's
-   arguments through base/interface TypeSpecs, retain each InterfaceImpl row beside its resolved
-   view, and reject arity, resolution, non-nominal shape, method-parameter scope, and
-   class/interface mismatches structurally. This physical hierarchy operation is profile-neutral;
-   DIM body placement does not alter nominal interface identity. Transitive assignability and CLR
-   variance are a shared selected-graph operation, not reuse of the module-local
-   `DotNetIlClassInfo` codegen graph and not FIR projection. The current imported assignability
-   resolver implements only bounded exact nominal reachability through resolved class/interface
-   views. It compares selected assembly identity plus every reified argument, deduplicates
-   diamonds, and reports unresolved hierarchy, cycles, and limits structurally when no exact path
-   proves the relation. A positive path does not replace whole-import malformed-graph validation.
-   Do not add optimistic CLR variance, array, boxing, `Nullable<T>`, or generic-parameter
-   conversions to this exact-nominal walker; the separate physical classifiers and policy
-   validators own those dimensions.
-   Nominal GenericParamConstraint validation is a separately named partial operation. Validate
-   each resolved row through the shared assignability resolver and preserve satisfied, violated,
-   unsupported non-nominal, and invalid-assignability outcomes distinctly. Retain the parameter
-   binding and its special flags, but never turn “all nominal rows satisfied” into a complete
-   constraint-satisfaction boolean. If the exact hierarchy reaches the same variant definition
-   with different arguments, pass the candidate to shared variant assignability; do not call every
-   use of a variant expected definition unsupported, and do not report a false violation. For a
-   generic interface or delegate, require complete contiguous variance rows and reference-type
-   arguments. Recognize a delegate only as a sealed TypeDef whose direct resolved base is the
-   selected `System.MulticastDelegate`; never use `Func`/`Action` names or an `Invoke` convention.
-   A variant class or non-sealed delegate-shaped type is invalid metadata. Covariance checks
-   actual-to-expected, contravariance expected-to-actual, invariance identity; recurse through the
-   same signature resolver under explicit bounds. Never use boxing to make a value argument
-   variant. Retain every reachable same-definition candidate, not merely the first; any successful
-   candidate proves assignability. For array-to-array conversion, require vector
-   against vector or general array against the same rank. Recurse for reference elements; for value
-   elements accept identity or the CLR reduced signed/unsigned integer kind, including validated
-   enum storage, but never `bool`/`byte` or `char`/`ushort`. This is foreign physical
-   assignability, not Kotlin `Array` covariance. Resolve every array through the selected
-   `System.Array` identity and its ordinary hierarchy; never recognize that base by name. A general
-   array outside that hierarchy is not assignable. Resolve `IList<T>`, `ICollection<T>`,
-   `IEnumerable<T>`, `IReadOnlyList<T>`, and `IReadOnlyCollection<T>` as one complete selected
-   identity catalog. Only vectors implement that catalog, and they use array-element compatibility
-   rather than ordinary generic variance; this includes reduced integer/enum storage. An unrelated
-   unary interface is not assignable. Open-parameter and custom-modified candidates remain
-   structured unsupported boundaries. Signature assignability never inserts boxing; use the
-   distinct nominal-view relation when generic constraints intentionally compare selected type
-   definitions.
-   An open generic argument has meaning only through a
-   `DotNetClrResolvedGenericParameterContext` selected from its exact TypeDef view and optional
-   MethodDef. `!n` and `!!n` are distinct owner-relative spaces, never global `(kind, index)`
-   identities. Validate owner, numbering, arity, and every referenced parameter before exposing
-   the context. Expose TypeDef-owned `!n` bindings only for the complete identity view
-   `Owner<!0, !1, ...>`; a substituted view requires its outer declaration context and must not
-   relabel a coincidentally equal parameter index. Nominal constraint validation may follow naked
-   parameter and concrete declared bounds transitively under its own cycle guard because the VES
-   tests boxed generic arguments against those constraints. Keep that proof local to constructed
-   generic-argument validation: ordinary signature assignability still treats an unboxed open
-   parameter as assignable only to itself. Special validation proves only implications carried by
-   the source parameter: own `class` or a concrete non-root class bound, own `struct`, own `new()`
-   or `struct`, and profile-aware `AllowByRefLike`. Without a selected context the outcome remains
-   structured unsupported. Never infer new Kotlin bounds or stronger public CLR constraints from
-   a use site. Special flags and by-ref-like eligibility use the physical classification and
-   selected-profile policy below. Resolve compact CLR primitive
-   signatures through one complete selected-core catalog (`mscorlib`, the selected portable
-   facade graph, or `System.Runtime`/CoreLib), then use that TypeDef's boxed hierarchy view for
-   nominal constraint assignability. Never consult host reflection or treat this physical catalog
-   as Kotlin built-in identity. A missing primitive definition is a structured selected-graph
-   failure, not an unsupported/fallback primitive.
-   The shared physical signature classifier distinguishes reference, non-nullable value, and
-   exact `System.Nullable<T>` categories using an explicit selected-core catalog. Validate a
-   nominal signature's encoded `class`/`valuetype` bit against its selected
-   `System.ValueType` hierarchy; remember that `System.ValueType` and `System.Enum` themselves are
-   reference classes. Primitives and arrays use their intrinsic CLR categories. Never turn
-   physical `Nullable<T>` into Kotlin nullability or trust a display name/host runtime. By-ref-like
-   is a separate exact decoded `IsByRefLikeAttribute` dimension: resolve the selected marker
-   identity through the ordinary custom-attribute constructor/value layer, require an empty
-   semantic payload, preserve multiplicity, and reject duplicate markers or a marker on a
-   non-value target. A same-short-name foreign attribute is unrelated. If the selected profile
-   lacks the marker identity, retain `MARKER_UNAVAILABLE`; never infer ordinary-struct status.
-   Classification still does not authorize Kotlin capture, boxing, heap storage, or generic use;
-   selected-profile generic eligibility is a separate shared constraint-policy gate. Validate
-   `ReferenceTypeConstraint` against the physical reference category and
-   `NotNullableValueTypeConstraint` against the non-nullable-value category. Treat
-   `AllowByRefLike` as permission, not a requirement: a by-ref-like argument additionally requires
-   that flag and the `net10.0` target; `net48` and `netstandard2.0` do not gain that runtime
-   capability. Preserve missing marker and invalid classification as non-boolean outcomes; even a
-   fully satisfied CLR construction does not decide later Kotlin ref-safety/FIR policy. Validate
-   the CLR
-   `DefaultConstructorConstraint` as the CLI rule, never as Kotlin syntax: any physical value type
-   (including `Nullable<T>` under the standalone flag) satisfies it; a reference type must be
-   concrete and own an exact public parameterless instance `.ctor`. Constructors are not inherited.
-   Require the selected MethodDef's `SpecialName`/`RTSpecialName`, default instance calling
-   convention, zero generic/value parameters, and `void` return; a method merely named `.ctor`
-   is not evidence. Resolve primitive `System.Object`/`System.String` through the selected core
-   catalog. This rule is uniform across `net48`, `netstandard2.0`, and `net10.0`; by-ref-like
-   eligibility remains orthogonal.
-   Combine nominal and special validations only through the sealed constructed-type status.
-   Precedence is invalid selected metadata, then unsupported semantics, then proven violations,
-   then wholly supported satisfaction. Preserve issue coordinates and both complete
-   sub-validations. Never expose a Boolean or let a later importer/FIR/codegen consumer proceed on
-   `Unsupported`; only `Satisfied` is a supported constraint proof.
-   MemberRef rows preserve their exact
-   TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and closed
-   method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely
-   allow call-site vararg sentinels; FieldRef signatures use the reusable FieldSig model and
-   retain modern by-reference and typed-reference forms. Never substitute a constructed TypeSpec
-   owner or resolve a same-named definition in this physical layer. FieldDef rows reuse that
-   FieldSig and preserve TypeDef FieldList ownership, exact names, flags, and raw blobs.
-   `value__` supplies physical enum storage only after resolved `System.Enum` ancestry confirms
-   the owner; its spelling alone is not enum identity. Profile and byref-like legality stay in the
-   selected-graph import policy. ExportedType rows preserve their attributes, TypeDefId hint,
-   names, and File/AssemblyRef/ExportedType implementation handle. The bounded type resolver
-   follows Module/current-assembly, AssemblyRef, nested TypeRef, nominal TypeSpec, and type-forwarder
-   edges, returning structured missing/ambiguous/cycle/non-nominal/multi-module failures. It
-   consumes exact AssemblyRef bindings selected by the build frontend; never implement a second
-   name/version/probing binder in the importer. Roslyn forwarder roots use `Forwarder` with
-   NotPublic visibility and their automatically emitted nested ExportedTypes use flags zero; accept
-   that nested shape only through a marked forwarding ancestor. File/ModuleRef multi-module
-   resolution remains explicitly unsupported until the selected module graph exists. A CLR enum
-   is a direct resolved child of the selected core-library `System.Enum` and has one valid
-   runtime-special integral `value__` field; neither spelling is sufficient by itself.
-   CustomAttribute rows preserve their token, exact HasCustomAttribute parent,
-   MethodDef-or-MemberRef constructor handle, multiplicity, and nullable raw blob. Nil and present
-   empty blobs are different physical states. Never group attributes, infer attachment, validate
-   constructor shape by name alone, or use raw bytes as ordinary semantic equality. Constructor
-   resolution belongs immediately above this row layer and precedes value decoding. Resolve an
-   exact local MethodDef or external MemberRef owner, require the real instance `.ctor` signature,
-   and prove ancestry against the selected profile graph's exact `System.Attribute` TypeDef with
-   the bounded cycle-safe type resolver. Never infer attribute identity from a suffix, a display
-   name, or a host-runtime type. Semantic fixed/named argument decoding is the next layer and must
-   not create Kotlin annotations before import policy. A closed generic attribute constructor is
-   represented by its resolved TypeSpec owner view plus a resolved method signature after owner-
-   argument substitution; never approximate it as its open generic TypeDef. Reject an open,
-   wrong-arity, non-generic-instance, or value-type owner, unresolved signature, failed
-   substitution, or residual method type parameter before reading its value blob. Preserve this
-   physical metadata on every profile, but do not project or emit a generic attribute as a
-   portable/net48 Kotlin feature until runtime capability is proven; current supported semantic
-   projection is `net10.0`. Resolve every constructed owner's GenericParam contract before
-   consuming it: retain special-constraint flags on the parameter binding, keep direct
-   TypeDef/TypeRef targets as nominal identities, resolve TypeSpec targets structurally, and
-   substitute owner arguments through the general resolved-signature algebra. Invalid numbering,
-   arity, type resolution, signature structure, or substitution is a structured failure and must
-   stop custom-attribute value decoding. CLR generic-constraint satisfaction and assignability
-   still belong in one shared selected-graph constructed-type validator, not an attribute-local
-   approximation, and remain required before stable generic-attribute projection. In particular,
-   do not reinterpret special constraints or `AllowByRefLike` as Kotlin nullability or constructor
-   bounds, and do not make a modern-profile satisfaction rule a portable-profile promise. Scalar
-   fixed arguments are decoded from the
-   resolved constructor signature into typed values, never inferred from blob width. Preserve
-   exact integral and
-   IEEE-754 bits, strict nullable UTF-8 SerString semantics, and the assembly qualification of the
-   constructor token. Nil is valid only for a no-argument constructor. One-dimensional arrays and
-   tagged object values use the same typed decoder; arrays retain their element type when null or
-   empty, heterogeneous object arrays retain each element's encoded type, and jagged arrays fail.
-   Keep the element-count and tagged-depth resource bounds as diagnostics, not ABI semantics.
-   A fixed enum type comes only from the resolved constructor signature and selected
-   `System.Enum`/`value__` storage proof; retain its exact resolved type plus underlying bits and
-   reject a false `class` signature. System.Type values retain the complete selected-graph
-   serialized-type algebra (or explicit null), including inside arrays and tagged objects.
-   Boxed enum values resolve their serialized name to a named TypeDef or constructed nominal view,
-   retain that complete identity (including a generic enclosing type), repeat the exact
-   `System.Enum`/`value__` proof on the definition, and then reuse the fixed-enum value model.
-   Invalid serialized type edges remain structured resolution failures; do not erase, stringify,
-   probe, fall back by simple name, or partially skip them. Named arguments retain their ordered
-   field/property kind, exact non-empty CLR name, declared serialized type, semantic value, and
-   duplicates. The blob has no member token: selected-graph member validation is a separate layer
-   and never replaces that encoded identity with a currently resolved FieldDef or Property. Raw
-   TypeSig handles are assembly-relative, so resolve them to the assembly-context-bearing
-   structural signature algebra before comparison or substitution; never move a raw substituted
-   handle into a different assembly context. Named-member validation follows the ordinary CLR
-   attribute contract, not malformed-metadata reflection quirks: use the encoded field/property
-   species, stop at its nearest declaring level, require an exact substituted value type, and
-   accept only public writable instance fields or non-indexed properties with public instance
-   get and set/init accessors. Preserve custom modifiers in the resolved signature; ignore them
-   only for accessor shape equality, including the net10 init-only setter marker. Repeated
-   assignment to the same resolved member, ambiguous rows/accessors, invalid arity, unresolved
-   edges, cycles, and traversal limits are structured invalid results. Generic base TypeSpecs and
-   closed generic attribute owners are substituted through the same general resolved signature
-   model. Named-member lookup starts from the constructor's closed attribute view, so a field or
-   property of owner type `T` must match the exact substituted encoded value type. Constructor-
-   typed fixed enums may also be closed generic instances: retain complete constructed identity
-   and storage. Do not erase either path to the open TypeDef or add decoder-local substitution.
-   Serialized CLR type names are parsed structurally before binding: retain escaped top-level and
-   nested metadata names, per-component arity, recursive generic arguments, normalized
-   pointer/byref/array modifiers, and the AssemblyName display-name tail. Do not call host
-   `Type.GetType`, probe, or bind by simple name. AssemblyName property parsing and resolution
-   against the build frontend's selected graph are separate layers. Parse AssemblyName with the
-   CLR lexer rules: case-insensitive known properties, exclusive full key/token, exact version
-   components, quoted/escaped values, and retained Desktop-compatible unknown properties. Parsing
-   still never selects an assembly; pass the result to the selected-graph binder. That binder
-   receives both the original attribute-owning assembly and current unqualified-name context,
-   then returns an assembly already selected for the profile. Resolve top-level/nested TypeDefs,
-   verify physical GenericParam arity, recursively resolve arguments, and preserve pointer/byref/
-   array modifiers. Never add probing or a simple-name fallback.
-   Assembly definitions retain their full public key and computed eight-byte public-key token;
-   `hasPublicKey` is derived, not the resolved identity. An AssemblyRef may legitimately omit a
-   key/token, so this still does not authorize exact-match binding inside the physical resolver.
-   The selected build graph owns binding/unification; the resolved producer identity owns later
-   diagnostics and semantic type keys.
-   It does not load target code,
-   apply C# display rules, or manufacture FIR declarations. Future mapping is layered physical
-   model -> CLR-to-Kotlin import policy -> lazy
-   target FIR symbol provider -> IR retaining the original physical owner/member linkage.
-   Kotlin-produced DLLs remain KLIB-authoritative. CLR Property rows remain first-class input and
-   their MethodDef accessors retain physical identity. Ordinary custom attributes compare by
-   decoded semantic content and multiplicity, not raw blob bytes. Profile resolution uses the
-   selected `net48`, `netstandard2.0`, or `net10.0` reference graph; the reader itself is
-   profile-neutral. Never map raw CLR rows directly to Kotlin IR or infer a foreign member again
-   from a Kotlin/C# display name.
-   Standard CLR tables and established .NET/Roslyn attributes are the shared foreign-language
-   vocabulary whenever they express a fact exactly. A valid foreign nullable contract changes the
-   enhanced Kotlin type, following JVM Java-type enhancement; missing, suppressed, invalid, or
-   unbound evidence remains flexible and never silently strengthens a reference. Conditional
-   CodeAnalysis attributes are flow contracts and must not be flattened into declaration
-   nullability. Exact standard overlap may become a common FIR contract:
-   `NotNullWhen(true|false)` on a reference parameter of a Boolean-returning method maps only to
-   `returns(true|false) implies (parameter != null)`; parameter-target `NotNull` maps only to
-   `returns() implies (parameter != null)`; return-target
-   `NotNullIfNotNull("parameter")` maps only to
-   `(parameter != null) implies returnsNotNull()`. Meaningful multiple dependent-return
-   attributes become separate common effects and identical parameter names normalize; malformed
-   or unbound evidence prevents partial strengthening. None changes the declaration type.
-   `DoesNotReturnIf(true)` on a Boolean value parameter maps only to
-   `returns() implies (!parameter)`; constructor value `false` maps only to
-   `returns() implies parameter`. Keep the ordinary Kotlin return type and physical CLR return
-   signature; use common FIR contract data-flow rather than a .NET-only reachability rule.
-   Method-target `DoesNotReturn` maps the logical Kotlin return view to `Nothing` while retaining
-   the original MethodDef return signature for physical binding. Common FIR does not currently
-   turn an always-false conditional contract into unreachable continuation; do not invent a
-   .NET-only substitute. A future physical call must invoke and discard according to the retained
-   CLR signature before the ordinary common `KotlinNothingValueException` guard.
-   `MemberNotNull`/`MemberNotNullWhen` must never bypass ordinary Kotlin `SmartcastStability`:
-   mutable, delegated, getter-backed, public/open, and cross-module public property reads remain
-   unstable where Common says so, even when Roslyn would update their null-state. `MaybeNull` and
-   `MaybeNullWhen` are state weakening, not positive Kotlin contracts. On one physical return
-   Param, apply exact `NotNull`/`MaybeNull` after ordinary declaration nullability to form the
-   logical call-result type. Exact `NotNull` wins exact `MaybeNull`, matching Roslyn's result-state
-   order; invalid `NotNull` cannot strengthen, while invalid `MaybeNull` forces flexibility so
-   broken weakening evidence cannot leave a rigid non-null result. `DoesNotReturn` still selects
-   `Nothing` before result nullability, and `NotNullIfNotNull` remains a separate conditional
-   effect. For one ordinary by-value reference Param, apply exact `AllowNull`/`DisallowNull` after
-   declaration nullability to form the logical input type. Exact `DisallowNull` wins exact
-   `AllowNull`, matching Roslyn's call-boundary order; invalid `DisallowNull` cannot strengthen,
-   while invalid `AllowNull` forces flexibility. Do not apply this flattened view to properties
-   or `ref`/`out`: they require distinct read/write or pre/post states. Elsewhere, absent,
-   duplicate, malformed, wrong-signature, named-payload, wrong-target,
-   and inapplicable shapes contribute no effect. Kotlin-produced DLLs still take the embedded-KLIB
-   path, so their nullable attributes are a derived C# view rather than a second Kotlin authority.
-   The first FIR provider slice may
-   expose only complete public top-level non-generic abstract-interface contracts over the
-   documented primitive/string/object grammar; if any public declared method is outside that
-   grammar, withhold the classifier instead of silently dropping members. Exact details and the
-   mature-target comparison are in `docs/review/clr-annotation-interoperability.md`. Public
-   Kotlin/.NET export-annotation names are a separate language/API decision and must not be
-   invented inside the importer.
-   The same decoder plumbing reconstructs these exact effects for a foreign DLL, but
-   Kotlin-produced DLLs do not split one logical contract between KLIB and CLR attributes. KLIB is
-   a self-contained authority; attributes are derived projections. Redefining KLIB as a remainder
-   that must be merged with physical metadata is a separate metadata/ABI decision, not an importer
-   optimization.
-   Closed foreign-interface calls retain the already-selected assembly, TypeDef, MethodDef, and
-   physical signature on a target-owned `DeserializedContainerSource`. FIR2IR preserves that
-   carrier on the lazy external IR function; codegen consumes it directly and never resolves a
-   ClassId or display name against the classpath again. The complete-interface provider invariant
-   guarantees at least one such member carrier for exact class-owner mapping. Logical enhanced
-   IR remains authoritative for Kotlin resolution and control flow, while the MethodDef signature
-   owns the emitted MemberRef: in particular a value-returning `DoesNotReturn` call is invoked
-   with that value return, popped, and followed by the common `KotlinNothingValueException` guard.
-   Textual IL cannot encode the retained MethodDef token cross-assembly, so it emits the selected
-   assembly scope, TypeDef name, method name, calling convention, and exact physical signature.
-   Emit one exact version/token AssemblyRef and deploy only a foreign producer referenced by
-   surviving code. Reject non-neutral culture and ambiguous same-simple-name producers in this
-   first slice rather than approximating identity. The two-profile C# execution pin covers exact
-   overloads, string/void results, dishonest void/value non-return contracts, AssemblyRef version,
-   dependency copying, and the absence of an annotation-only deployment copy.
-   The first property continuation follows JVM synthetic-property compatibility and Native
-   selector retention while using the CLR Property row as the stronger grouping authority. One
-   instance, non-indexed Property on a closed imported interface becomes a Kotlin `val` or `var`
-   only when MethodSemantics supplies one exact public abstract getter and an optional exact
-   public abstract setter whose physical signatures agree with the Property signature. Never
-   infer accessors from `get_`/`set_` spelling. One property carrier preserves the selected
-   assembly, TypeDef, Property, getter, and setter through FIR2IR; codegen selects the physical
-   accessor by declaration identity. Kotlin Common permits only one property type, so recognized
-   `AllowNull`/`DisallowNull`/`NotNull`/`MaybeNull` split-state evidence on the Property,
-   getter-return Param, or setter-value Param withholds the complete classifier rather than
-   flattening different read/write states. This includes malformed recognized evidence and both
-   Roslyn layouts observed in the two-profile C# pin: Framework leaves `AllowNull` on Property,
-   while modern Roslyn moves it to the setter Param. Indexers and distinct accessor views remain
-   separate decisions.
-   CLR deprecation follows JVM's foreign-marker synthesis and Kotlin Common diagnostics for the
-   supported method, top-level public interface TypeDef, Property, and property-accessor MethodDef
-   parents. Recognize exactly one
-   selected core-library `System.ObsoleteAttribute`, using TypeDef identity from the same physical
-   core assembly as `System.Attribute`, and accept only `()`, `(string)`, or `(string, bool)`.
-   Synthesize resolved `kotlin.Deprecated`: omitted/null messages become `Deprecated in .NET`,
-   default/false `IsError` becomes `WARNING`, and true becomes `ERROR`. Never use `HIDDEN`,
-   because the CLR declaration remains resolvable even when use is an error. Validate the modern
-   `DiagnosticId` and `UrlFormat` named string properties but retain them only in the physical
-   metadata; Kotlin has no dynamic per-declaration diagnostic-ID/URL channel. Duplicates,
-   malformed values, wrong constructors, and namespace/name look-alikes add no best-effort
-   deprecation. The synthesized annotation changes only the logical FIR diagnostic view; evaluate
-   it through Common's foreign-annotation deprecation path so it does not propagate to Kotlin
-   overrides or implementing classes. CLR fixes `ObsoleteAttribute` to `Inherited=false`,
-   whereas a Kotlin-authored `kotlin.Deprecated` normally propagates. A type-level marker is not
-   copied onto its members. A Property-row marker maps to whole-property deprecation; exact getter
-   and setter MethodDef markers map to Common getter- and setter-use-site deprecation without
-   flattening the three channels. Framework C# rejects accessor obsoletion with `CS1667`, but
-   modern Roslyn accepts it and emits the MethodDef attribute, so the importer follows exact
-   metadata rather than the older source restriction. The retained TypeDef/Property/MethodDef
-   still owns physical identity/invocation. Other declaration targets remain separate slices.
-   Foreign CLR parameter arrays follow the JVM foreign-vararg precedent without changing the
-   Kotlin-to-Kotlin export ABI. Admit only one final one-dimensional `string[]` or `object[]`
-   Param carrying exactly one selected-core `System.ParamArrayAttribute()`; expose Common
-   `vararg` logically while retaining the raw MethodDef vector signature for physical binding.
-   Reuse Common expanded/omitted/spread calls and the concrete-reference vararg lowering. Resolve
-   Roslyn array and element nullability independently. Withhold the whole classifier for
-   malformed, duplicate, wrong-identity, non-final, multidimensional, scalar, or unannotated
-   evidence. Primitive CLR params arrays remain excluded because Kotlin/.NET primitive-array
-   wrappers are not the foreign raw vectors. `ParamCollectionAttribute` remains a separate
-   collection-construction decision.
-- Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
-  series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
-  function types and erased
-  executable descriptors, with CLR `object` replacing JVM Object):
-  Kotlin-to-Kotlin callable storage uses the public non-generic runtime interfaces
-  `Kotlin.Function`, `Kotlin.Function0`, `Kotlin.Function1`, `Kotlin.Function2`, and
-  `Kotlin.Function3`; it never uses `System.Func`/`System.Action`. The fixed interfaces expose
-  exactly `object Invoke(...)`, with one `object` parameter per logical argument. Source
-  `kotlin.Function<R>` and `Function<*>` map to the
-  non-invokable `Kotlin.Function` marker without changing identity. Nullable callable references
-  keep the same physical interface. Kotlin's `in`/`out` type arguments remain compiler-level
-  type information rather than CLR-reified interface identity, so every legal variance conversion
-  — including `() -> Int` to `() -> Any` and `(Any) -> String` to `(Int) -> Any` — is an
-  instruction-free copy of the same object and preserves `===`. Invoke entry casts reference
-  arguments and uses `unbox.any` for primitives, nullable primitives, and open `T`; invoke exit
-  boxes values into the canonical object result. A Unit result executes the ordinary CLR-void
-  body and then returns the singleton `Kotlin.Unit.INSTANCE`. As a prototype implementation policy,
-  constructor-empty non-capturing lambda/reference classes cache one instance in their own
-  `INSTANCE` field; stateful callable classes are always freshly constructed. The
-  field is created after initializer cleanup and the normal static-initializer sweep emits its
-  `.cctor`. Extension receivers occupy
-  the first ordinary erased argument, and explicit user classes implementing a function type emit
-  the same erased override. FIR keeps a direct reference expression typed as `KFunctionN` even
-  when consumed through `FunctionN`. The orthogonal reflection view follows the JVM mapping:
-  the runtime exposes non-generic `Kotlin.KCallable` with only `string get_name()` and the
-  memberless `Kotlin.KFunction : KCallable, Function` marker. A direct function-reference object
-  implements that marker AND exactly one erased `Kotlin.FunctionN`; lambdas and adapted references
-  without a KFunction source type remain FunctionN-only. KFunction declares no invocation member.
-  Source `KFunction0`/`KFunction1`/`KFunction2`/`KFunction3` storage maps to the non-generic
-  KFunction view, and invocation or widening to FunctionN performs a checked interface view change
-  on the SAME object before calling the unchanged erased `Invoke`. This is reflection capability,
-  not a second
-  callable execution/identity ABI and never creates a wrapper. Erasure makes overloads differing only in logical
-  function arguments collide; the existing CLR method-identity gate rejects both overloads and
-  lets unrelated declarations survive, matching the JVM platform-clash category. `callableabi_s2`
-  assembled an erased consumer/runtime pair with modern 10.0.9 and Framework 4.8 ILAsm and all
-  four same/cross-runtime pairings ran with identity and boxed-Int invocation intact.
-  Capturing lambda and bound-reference classes keep exactly that callable identity. Immutable
-  captured values and bound receivers are private fields of the generated class, never delegate
-  wrappers or additional callable ABI shapes. `SharedVariablesLowering` runs before local
-  declaration closure conversion and replaces each captured mutable variable with one shared,
-  invariant `[Kotlin.Runtime]Kotlin.Runtime.Internal.MutableRef<T>` cell. Generated callables
-  capture the cell reference, so sibling closures and later outer writes share storage without
-  boxing the cell's primitive, nullable-primitive, reference, or open-`T` element. The cell and
-  generated fields are compiler/runtime layout details, not Kotlin callable identity.
-  Direct function references additionally follow Native's structural `Any` semantics without
-  adding another callable interface. Every rich reference with a real declaration target extends
-  metadata-public, compiler-internal `Kotlin.Runtime.Internal.FunctionReferenceBase`; lambdas
-  still extend System.Object directly. Its constructor and bound-value hook are CLR `family`, so
-  generated subclasses in consumer assemblies can use them without making either hook public. The
-  base compares the target's serialized Kotlin signature (or a deterministic module-local
-  fallback), arity, adaptation flags, and structurally compared bound values, and renders
-  `function <name>`/`constructor`. Equivalent references from different source sites therefore
-  compare equal and hash equally; overloads, different adaptations, and unequal bound receivers do
-  not. The base class is generated implementation machinery, never a field/parameter/return ABI,
-  execution interface, or source API. Explicit user function implementations retain their own Any
-  behavior. Fun-interface constructor references remain rejected with the existing no-SAM-model
-  boundary; their mature identity rule belongs with that future feature.
-  Common closure conversion adds captured type arguments to constructor calls even when their IR
-  class type is bare; codegen reconstructs that generated generic instance from the constructor
-  type arguments. An erased Unit `Invoke` whose lowered block falls through materializes
-  `Kotlin.Unit.INSTANCE` before returning its mandatory object result. `captureabi_s3` assembled
-  compiler-produced capturing consumers/runtimes with modern 10.0.9 and Framework 4.8 ILAsm; all
-  four same/cross-runtime pairings executed immutable, mutable, Unit, generic-cell, and bound
-  receiver cases. `kfunction_s1` assembled a runtime plus a dual-interface reference object under
-  modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings observed the same
-  object through KCallable, KFunction, and Function1 and invoked the erased slot. Pins:
-  `ilText/callableObjects.kt`, `ilText/callableCaptures.kt`, `ilText/callableReferences.kt`,
-  `ilText/callableObjectsRejected.kt`, `box/callableObjects.kt`, and
-  `box/callableReferences.kt`.
-  Generated non-Unit Function0/1/2/3 callables now follow the JVM typed-body-plus-erased-bridge
-  pattern while retaining the sole FunctionN identity. The original typed body is `InvokeExact`;
-  the erased bridge calls it. The CLR-specific discovery mechanism is one optional, variant
-  `[Kotlin.Runtime]Kotlin.Runtime.Internal.ExactFunctionN<P..., R>` interface on that same object.
-  It is metadata-public only because generated modules consume it across the runtime assembly
-  boundary; it is neither a Kotlin source declaration nor a storage/interface identity. A
-  statically shaped FunctionN call evaluates receiver and arguments once, probes the closed exact
-  call-site interface, invokes it without argument/result boxing on a hit, and otherwise uses the
-  stable erased slot. When an immutable local's initializer chain retains a different original
-  FunctionN/KFunctionN shape, codegen may probe that exact interface second and apply only legal
-  argument/result widenings. Thus `(Int) -> Int` stored locally as `(Int) -> Any` invokes
-  `ExactFunction1<Int, Int>` and boxes only its result; a discarded non-Unit invocation uses the
-  same guarded path. The second probe is omitted when CLR reference variance already makes the
-  first probe sufficient. Mutable locals and parameter/field/return boundaries have no such
-  provenance, but a second optional execution capability now covers the measured
-  provenance-free value-argument case without changing storage identity:
-  `[Kotlin.Runtime]Kotlin.Runtime.Internal.TypedArgumentsFunction1<P0>` and
-  `TypedArgumentsFunction2<P0, P1>` expose `object InvokeTyped(P...)`. Generated non-Unit
-  Function1/2 objects with at least one concrete primitive or nullable-primitive parameter
-  implement that interface and box only their result. A call whose logical result is `Any`/`Any?`
-  and which has such a parameter probes the closed typed-arguments view first, then the existing
-  exact shape(s), then erased Invoke. Exact primitive-result calls therefore stay on ExactFunctionN.
-  Explicit user implementations and older modules remain valid because every optional path is
-  guarded by `isinst`. Unit stays erased because void cannot close a generic result slot and the
-  Framework benchmark did not justify an Action-like partial capability.
-  Function3 has the exact capability but deliberately no TypedArgumentsFunction3: the partial
-  interface is a metadata-public runtime contract, and the cross-module allocation/throughput
-  evidence that justified only Function1/2 has not been repeated for arity 3. The CLR export
-  boundary separately remains capped at Function0/1/2 and has no Func/Action3 adapters.
-  `callableexact_s1` assembled and ran identical, erased-only, reference-variant, and value-variant
-  cases with both ILAsm versions and all four runtime pairings. `callable_capability_s1` first
-  proved the partial shape on both runtimes. The separately compiled
-  `typed_arguments_crossmodule_s1` producer/consumer benchmark then measured 2,000,000 widened
-  `(Int) -> Any` calls: erased invocation allocated 96,000,040 bytes and typed-arguments invocation
-  48,000,040 bytes on CoreCLR, exactly one 24-byte argument box saved per call. Stable partial-first
-  timings improved from 40–43 ms to 30–31 ms on CoreCLR and 200–213 ms to 141–142 ms on Framework;
-  each producer bridge was 13–17 IL bytes plus one InterfaceImpl row (PE size stayed within the
-  existing 512-byte alignment). The Unit variant removed allocation but regressed Framework time,
-  which is why Unit remains outside the implemented scope.
-  Repository pins cover ordinary, capturing, bound, KFunction, local, array-initializer, nullable,
-  generic, evaluation-order, explicit-fallback, and immutable-provenance shapes on CoreCLR;
-  `ilText/callableInvocationProvenance.kt` distinguishes exact primitives, primitive-result
-  widening, parameter widening, mutable/boundary capability dispatch, and explicit fallback.
-  This is an execution capability only: never use it in
-  fields, parameters, returns, ordinary Kotlin subtype conversion, or as a CLR delegate identity.
-  The explicit export helper may probe the same-object capability solely to bind a typed Func;
-  the generated facade exposes the delegate, never ExactFunctionN.
-  The explicit CLR export slice gives host-facing naming and delegate projection/adaptation an
-  explicit owner without a Kotlin source annotation or automatic whole-module policy. The
-  unchanged-declaration plus host-wrapper boundary follows JVM naming/default and Wasm/JS export
-  patterns semantically. The textual selector does NOT: it is provisional POC control-plane
-  machinery needed only because no source-bound annotation exists. Repeatable configuration
-  `-Xdotnet-export=<kotlin-selector>=<clr-method-name>` selects exactly one public, non-generic
-  top-level function. A unique name may use the legacy `pkg.name` selector. An overloaded name
-  must use `pkg.name(kotlin.Int,kotlin.String?)`: fully qualified, whitespace-free, expanded Kotlin
-  parameter types; nested types use canonical forms such as
-  `kotlin.Function1<kotlin.Int,kotlin.Int>`, and an extension receiver is the first parameter.
-  Return types are excluded because Kotlin has no return-only overloads. These are Kotlin logical
-  signatures, never CLR/IL tokens or declaration-order indexes; multiple overloads may therefore
-  be exported independently, while a bare overloaded name fails loudly. Do not promote this
-  spelling to a public ABI: a future declaration-bound export mechanism should make the textual
-  disambiguator unnecessary. The canonical Kotlin
-  method remains unchanged; a user-named static method is added to the SAME file facade. Ordinary
-  positions retain their mapped CLR shapes. Only that
-  explicit surface replaces Function0/1/2 positions with typed Func/Action (Unit -> CLR void). An
-  ordinary function with no callable position is valid and gains the same explicit CLR name,
-  nullability metadata, collision policy, and Kotlin-default overloads. The metadata-public
-  `Kotlin.Runtime.Internal.DelegateProjection` helper projects returns and adapts delegate
-  parameters into private runtime-owned classes implementing the canonical FunctionN interface.
-  Func adapters additionally expose the optional ExactFunctionN capability; Func1/2 adapters also
-  expose their TypedArgumentsFunctionN view, while Action adapters stay erased because Unit has no
-  generic void representation. Projecting one of these adapters back to
-  the same closed delegate shape returns its stored ORIGINAL delegate object. Different closed
-  shapes have no identity promise, and Kotlin-callable -> delegate -> Kotlin-callable identity is
-  not promised. Existing Kotlin-to-CLR projection still binds exact Func directly to InvokeExact,
-  falls back through closed generic box/unbox thunks, and uses a void thunk for Action. Repeated
-  projection of the same Kotlin object/shape compares delegate-equal without caching. Adapters and
-  projections add no catches; a null delegate at a non-null exported parameter throws
-  ArgumentNullException, while a nullable callable position maps null in both directions. Every
-  explicit export carries Roslyn-compatible `NullableAttribute` metadata on each non-empty return
-  and parameter type shape. The compiler synthesizes the reserved attribute only when at least one
-  exported shape needs it; a primitive-only export neither emits nor reserves that class. It emits
-  deterministic explicit attributes instead of NullableContext compression and
-  encodes reference/generic/array nesting in preorder (`0` oblivious, `1` non-null, `2` nullable),
-  skipping value types per Roslyn's contract. The metadata comes from source IR, never physically
-  erased FunctionN. A contiguous suffix of source-default parameters creates progressively shorter
-  overloads on this explicit facade only. Each overload supplies physical zero/null placeholders,
-  sets the existing masked-dispatch bits, and calls the Kotlin `$default` helper, so arbitrary and
-  parameter-dependent expressions remain callee-evaluated. Nullable value placeholders use
-  initialized locals. No `[opt]`/constant metadata is emitted: Roslyn otherwise copies constants
-  into callers or substitutes `default(T)`, neither of which is Kotlin's general contract.
-  Non-trailing defaults create no overload; any generated-signature collision fails the requested
-  export as a whole. Missing or ambiguous selectors, facade-name/exported-signature clashes,
-  generic or suspend functions, KFunction/suspend callable positions, and arities above 2 fail
-  loudly. Member functions, member properties, constructors, classes, and automatic whole-module
-  export remain out. No
-  projection or adaptation occurs in ordinary Kotlin fields,
-  parameters, returns, subtyping, or calls. `delegateexport_s1` and `delegateadapter_s1` ran every
-  Func/Action arity under modern and Framework ILAsm; compiler-produced facades plus the landed
-  runtime ran both directions, invocation, and same-shape round-trip identity on both runtimes.
-  `nullableexport_s1` additionally validated explicit scalar/vector metadata blobs and nullable
-  delegate round trips on both runtimes; CoreCLR's NullabilityInfoContext reads the compiler output
-  as the intended nested nullable states. `defaultexport_s1` validated CLR optional-constant
-  behavior, overload preference, generated masked calls, and C# consumers on both runtimes. Pins:
-  `ilText/callableExports.kt`, `ilText/callableParameters.kt`,
-  `ilText/callableExportDefaults.kt`, `ilText/plainFunctionExports.kt`, CLI
-  `dotnet/callableExport.args`, and both reserved-attribute and default-overload collision fixtures.
-  `plainfunctionexport_s1` assembled ordinary aliases with both ILAsm versions and Roslyn consumers
-  executed primitive, reference, default-overload, and extension-receiver calls on both runtimes;
-  the primitive-only reserved-name CLI pin proves nullable metadata is demand-driven.
-  `overloadedexport_s1` assembled signature-selected aliases under both ILAsm versions; Roslyn
-  5.6.0 consumers executed primitive/reference overloads, typed callable adaptation, a defaulted
-  extension, and a nested nullable generic argument on CoreCLR and Framework. The selector is now
-  FROZEN: it remains compiler-only, no later feature may depend on its textual type grammar, and
-  documentation must keep calling it provisional.
-  A separate minimal `-Xdotnet-export-property=<kotlin-fq-name>=<clr-property-name>` path selects
-  one unique public, non-extension, non-const top-level property without adding any type grammar.
-  The durable output is a real static CLR `.property` plus public `specialname` wrapper accessors
-  on the same file facade. `val` and a non-public Kotlin setter produce a getter-only alias; public
-  `var` produces both wrappers. Ordinary types retain their mapped shape, Function0/1/2 uses the
-  established Func/Action projection and adaptation, and nullable metadata is repeated on the
-  property row, getter return, and setter value following Roslyn. Property, accessor, method, and
-  const-field collisions are loud whole-export errors; function exports reciprocally reject an
-  occupied property/const-field name. Extension/indexer policy, const-property wrapping, member
-  properties, and all additional selector grammar remain deferred. `propertyexport_s1` assembled
-  with both ILAsm versions; Roslyn consumers ran mutability, nullability, callable identity and
-  invocation, read-only access, and reflection checks on CoreCLR and Framework. Detailed
-  decisions are in the callable, CLR-default, and CLR-property draft ADRs.
-  STAYS REJECTED, loudly: suspend callables, Kotlin callable arity above 3, explicit CLR callable
-  export arity above 2,
-  KCallable metadata beyond `name`, property-reference reflection beyond direct get/set/invoke,
-  reflective lookup/call APIs,
-  implicit delegate conversion outside an explicit export, Unit exact entry points, and Kotlin
-  metadata serialization. Later .NET-facing export slices must preserve the logical function arguments;
-  the canonical interface encodes none of those arguments, so CLR reflection alone cannot
-  reconstruct the Kotlin type even if later optimization members are visible. Promotion of the
-  candidate requires both a measured exact-shape non-boxing execution path and representative
-  typed CLR exports. Those are mandatory validation layers around the erased identity/fallback,
-  not a reason to split the canonical Kotlin representation in this first POC slice.
-  Final raw library IL declares the exact runtime AssemblyRef whenever an emitted signature or
-  body contains a `[Kotlin.Runtime]` token; it never relies on ILAsm assembly autodetection.
-- Property-reference ABI candidate (argumentation:
-  `docs/decisions/draft-adr-erased-property-reference-abi.md`; follows the Native/Wasm wrapper
-  model): a source property reference becomes one runtime-owned object storing its name and
-  lowered getter/optional setter FunctionN objects. The CLR-specific deviation is physical
-  erasure: public non-generic `Kotlin.KProperty0/1/2` and `KMutableProperty0/1/2` identities expose
-  object-shaped `Get` arguments/results and void `Set`, because CLR generic variance cannot
-  preserve one identity through value-type instantiations. Each KPropertyN inherits the existing
-  erased FunctionN interface; invocation therefore uses the same callable ABI rather than a
-  delegate or second callable shape. Bound receiver storage remains in the generated getter and
-  setter classes, and common property-reference lowering evaluates a non-trivial bound receiver
-  once before sharing it. Private runtime wrappers are created through metadata-public
-  `Kotlin.Runtime.Internal.PropertyReferenceFactory` methods, a compiler/runtime contract rather
-  than source API. Immutable and mutable arities 0..2 are constructed. Mutable arity 2 uses the
-  coherently extended erased Function3 family for its ordinary Unit-returning setter object; it
-  does not introduce a property-specific callable shape. Direct
-  `get`/`set`, FunctionN invocation, primitive result variance, bound mutation, and explicit user
-  implementations use the universal erased slots. Following Native/Wasm, runtime-owned wrappers
-  compare their exact private wrapper kind, name, structurally equal getter, and optional setter;
-  bound receivers participate through those callable references. Equal wrappers hash the same and
-  render `property <name> (Kotlin reflection is not available)`. User implementations keep their
-  own Any behavior. JVM-shaped getter/setter accessor objects are not exposed: the common expect
-  declaration and Native/Wasm/JS actuals omit them, while JVM adds a target-specific surface whose
-  Accessor points back to its property and is also a KFunction. Returning the wrapper's stored
-  FunctionN would be semantically false. Local delegated-property tokens follow Native/Wasm
-  separately: private name-only KProperty0/KMutableProperty0 wrappers expose truthful name,
-  mutability, and rendering, but Get/Invoke/Set throw the exact mapped
-  `UnsupportedOperationException("Not supported for local property reference.")` and retain object
-  identity equality. Two compiler-internal factories construct them; no getter/setter callable or
-  new reflection metadata is invented. Common `LocalDelegatedPropertiesLowering` flattens their
-  declarations before closure conversion, whose eligible local-function set includes delegated
-  accessors. An IR-only throw-helper symbol lets common callable-reference upgrade build temporary
-  unsupported accessor bodies; property-reference lowering discards them, so the helper is never
-  emitted as runtime or module ABI. Full reflection, accessor objects, and exact property-access
-  capabilities remain deferred.
-  Pins: `ilText/propertyReferences.kt` and `box/propertyReferences.kt`.
-- Iteration ABI candidate (argumentation: `docs/decisions/draft-adr-erased-iterator-abi.md`; the
-  CLR-specific application of the general split generic-interface ABI): source `Iterator<T>` uses
-  canonical `[Kotlin.Runtime]Kotlin.Collections.Iterator` (`bool HasNext()`, `object Next()`) for
-  every Kotlin ABI position, plus the optional same-object covariant
-  `[Kotlin.Runtime]Kotlin.Collections.Iterator<T>` capability (`bool HasNext()`, `T Next()`).
-  `ListIterator<T>` follows the same two-view rule and extends both matching Iterator views;
-  canonical `Next`/`Previous` return `object`, while the covariant declared view returns `T`.
-  It has no exact view because its element type occurs only in result positions. Both physical
-  views redeclare `HasNext` and `Next`, matching the common declaration and giving its logical
-  slots real CLR owners. A derived ListIterator whose inherited base supplies those two methods
-  receives ListIterator MethodImpls that still dispatch through the base's virtual source slots.
-  `Iterable<T>` likewise uses canonical `Kotlin.Collections.Iterable` plus covariant
-  `Iterable<T>`; both `GetIterator()` slots return canonical Iterator because a nested typed
-  capability is not universally guaranteed. Kotlin's logical covariance remains IR/metadata, so
-  primitive and reference widening preserves object/cursor identity without CLR generic
-  conversion or adapters. Exact calls probe the closed typed capability and avoid primitive
-  boxing; a miss calls the canonical object slot and casts or `unbox.any`s the result.
-  `DotNetGenericInterfaceBridgeLowering` is the ONLY Iterator/ListIterator/Iterable bridge engine. It emits
-  canonical and declared MethodImpl forwarders for ordinary stdlib and user implementations;
-  the former collection contract table, bridge origins, emitter branch, and generic collection
-  call intrinsics are removed. The stable runtime slot names remain `HasNext`, `Next`,
-  `HasPrevious`, `Previous`, `NextIndex`, `PreviousIndex`, and `GetIterator`. A bridge-owning base supplies the complete set to descendants and forwards
-  through virtual source members; an abstract obligation-only base defers ownership to the first
-  concrete implementation. Generic subinterfaces receive their own canonical/declared views and
-  may redeclare execution members under the same general physical-slot rules. Imported CLR
-  interfaces never enter this representation.
-  The five primitive iterator classes still alias canonical Iterator and retain narrow call
-  intrinsics until the target stdlib produces those ordinary classes. Explicit `iterator()` over
-  supported vectors calls the metadata-public, Kotlin-internal generic factory
-  `[Kotlin.Stdlib]Kotlin.Collections.CollectionsKt.dotNetArrayIterator<T>(T[])`. The factory
-  constructs the private ordinary Kotlin `ArrayIterator<T>` implementation, which stores an exact
-  `T[]`, observes mutations, implements both runtime views, and boxes only in its canonical
-  `object Next()` bridge. Exhaustion throws runtime-owned
-  `Kotlin.NoSuchElementException`; direct array `for` loops remain allocation-free indexed loops.
-  The common stdlib's array `asIterable()` surface calls the corresponding generic
-  `dotNetArrayIterable<T>(T[])` factory for the five established primitive vectors, concrete
-  reference arrays, and open invariant `Array<T>`. Its private `ArrayIterable<T>` view stores the
-  original exact vector, so later mutations are observed, and each `iterator()` constructs a fresh
-  private stdlib `ArrayIterator<T>` through ordinary compiled Kotlin code. The view preserves
-  canonical Iterable covariance identity. Empty generic and supported primitive vectors now take
-  the common `emptyList()` path and return the one target-stdlib EmptyList singleton; non-empty
-  vectors retain the ordinary view object.
-  The common `EmptyIterator : ListIterator<Nothing>` and `EmptyList : List<Nothing>` shapes are
-  compiled as ordinary Kotlin objects in `Kotlin.Stdlib`, through the same object and generic-
-  interface bridge lowerings as user code. All `emptyList<T>()` views are therefore one canonical
-  reference, not `EmptyList<T>` constructions or adapters. EmptyList implements the public inert
-  Kotlin `RandomAccess` marker and the internal inert `kotlin.io.Serializable` target marker; the
-  latter deliberately does not claim the BCL serialization protocol.
-  The first Common-generated top-level collection implementations are the `Iterable<T>` and
-  `List<T>` overloads of `first()`, `last()`, `firstOrNull()`, and `lastOrNull()`, plus the Common
-  `List<T>.lastIndex` accessor, in `Kotlin.Stdlib`. Calls use real generic method instantiations on
-  `Kotlin.Collections.CollectionsKt`, not intrinsic copies of the algorithms in each user
-  assembly. The Iterable overloads retain the common runtime List dispatch; Lists use indexed
-  access without calling `iterator()`, including after primitive widening, while other Iterables
-  use the universal iterator algorithm. Nullable terminal operations return null on empty
-  receivers. Empty Lists throw the exact runtime-owned NoSuchElementException with
-  `List is empty.`; other empty Iterables use `Collection is empty.`
-  The exact Common `Array<out T>.asList()` expect is generator-extracted from `_Arrays.kt`; its
-  ordinary .NET actual returns a private Kotlin-owned `List<T>, RandomAccess` view over the
-  original array. The view and its iterator implement the complete current List behavior directly
-  until the Common AbstractList dependency closure lands. It preserves mutation and sub-list
-  aliasing, structural equality/hash/text, and all iterator/bounds contracts. Empty arrays receive
-  distinct backed views like JVM/JS/Wasm/Native, not the EmptyList singleton. The private classes
-  implement no BCL collection interface; only the public `asList<T>(T[])` facade method is
-  cross-module ABI.
-  The same Common generator now emits the non-inline emptiness/cardinality family:
-  `Iterable.any()`/`none()` and `Iterable`/`List` `single()`/`singleOrNull()`. Collection receivers
-  use Common `isEmpty` fast paths, Iterable `single` dispatches to the List overload, and List
-  overloads use size/indexed access without touching `iterator()`. Predicate overloads remain
-  outside the product because generic inline lowering is still parked; `count` remains out with
-  its separate overflow-helper expect/actual closure.
-  Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector through the generic
-  factory instantiated at `!n`/`!!n`; canonical Next narrows through
-  `unbox.any !n`/`!!n`. That array-iterator slice still rejects `Array<T?>`, projected receiver
-  shapes, concrete primitive-element generic arrays, and nested arrays before its intrinsic runs;
-  those narrower iterator limits do not constrain the `asList` carrier above. The contract is
-  Kotlin-owned: imported CLR generic interfaces,
-  `IEnumerable<T>`/`IEnumerator<T>`, and any future foreign variance views remain a separate interop
-  decision and may not alter these canonical identities. STAYS REJECTED, loudly: interface
-  bodies, primitive-specialized iterator subclasses, collection/sequence iteration, mutable
-  iterators, and CLR enumeration adapters. Pins: `ilText/arrayIterators.kt`, `box/arrayIterators.kt`,
-  `ilText/iterables.kt`, `box/iterables.kt`, `ilText/listIterators.kt`,
-  `box/listIterators.kt`, `box/collectionTerminalOperations.kt`, the generic extension-property
-  accessor pin in `ilText/genericRejected.kt`, and the iterator-family negatives in
-  `ilText/genericArraysRejected.kt`.
-- Read-only Collection ABI candidate (the first stdlib validation of
-  `docs/decisions/draft-adr-variant-interface-abi.md`): source `Collection<out E>` uses canonical
-  `[Kotlin.Runtime]Kotlin.Collections.Collection` for Kotlin identity, covariant
-  `Collection<E>` for the CLR-valid `Size`, `IsEmpty`, `GetIterator`, and `ContainsAll` members,
-  and invariant `Collection__KotlinExact<E>` for typed `Contains(E)`. The exact view inherits the
-  declared view and every newly compiled Kotlin implementation supplies canonical plus exact on
-  the same object. All Kotlin storage and variance conversions remain canonical reference copies.
-  The canonical input slot is deliberately named `ContainsErased(object)`, not
-  `Contains(object)`: an inherited same-named instance member would prevent C# from considering a
-  future typed extension helper. Exact calls probe `Collection__KotlinExact<E>`; declaration-safe
-  calls probe `Collection<E>`; every miss uses the canonical slot.
-  `Collection.contains` uses common `SpecialBridgeMethods` policy. Its canonical bridge tests the
-  implementation parameter's actual runtime shape before narrowing and returns `false` for a
-  mismatch, including primitive, reference, nullable, and open `T` implementations. This is not an
-  `@UnsafeVariance` rule: an ordinary user unsafe member still casts/unboxes and can throw. The
-  generated open-parameter test uses `isinst !n` plus a boxed `default(!n)` nullability test, a
-  shape probed on modern CoreCLR and .NET Framework. `containsAll(Collection<E>)` carries canonical
-  Collection physically because nested Kotlin-owned split interfaces never promise a typed
-  capability. Imported CLR collections remain outside this mapping. Pins: `ilText/collections.kt`,
-  `box/collections.kt`, `DotNetLibraryIntegrationTest.testGenericInterfacesAcrossLibraryBoundary`,
-  and `testForeignGenericInterfaceBarriers`. The latter compiles one ordinary C# exact-view
-  implementor against a portable Kotlin library and executes it with both profile runtimes; it
-  also proves that a user `@UnsafeVariance` interface retains normal CLR cast failure rather than
-  receiving the collection barrier. The foreign lane additionally implements a covariant
-  property, a generic method, and an exact-only input. C# supplies source-named typed members and
-  explicit canonical property/method implementations on the same object; Kotlin executes typed
-  and widened views on Framework CLR 4 and CoreCLR 10. The same lane derives a real canonical
-  method name in a probe compilation, reuses it as a different source member's name, and proves
-  that the implementing class's explicit `MethodImpl` still selects the canonical Kotlin body.
-  Direct class/typed calls select the lookalike source member. Do not reject such names solely for
-  their spelling; reject only a real same-owner physical collision. The publication matrix also
-  rejects `String`/`String?` overload parameters that both map to CLR `string` while retaining
-  different physical returns; CLR return-type-only overloads are not a supported escape hatch.
-  Two same-named inherited overloads whose Kotlin callable parameters both erase to `Function1`
-  are likewise rejected when no Kotlin-selected intersection slot covers both logical members.
-  The check is producer/consumer neutral: a separately compiled producer may own both root
-  interfaces while consumer-owned intermediate branches carry them into the rejected derived
-  declaration; failed publication emits neither consumer artifact.
-  Consumer substitution is a separate rule. If closing a generic child makes two otherwise
-  distinct inherited source signatures identical, one C# source body may satisfy both CLR slots
-  when Kotlin permits one implementation and Roslyn reports matching effective signatures.
-  The parent `IdSignature`s remain distinct and the producer must not invent an open-declaration
-  intersection. The DLL-only production-generator matrix closes `T = String` through both parent
-  Kotlin views on every profile combination. Incompatible returns, constraints, ref kinds, or
-  selected defaults must not be merged by source name.
-  Real generated-TypeDef collisions are owner-relative. A source nested
-  `__KotlinDefaultImpls` inside an interface with a default body collides with the compiler helper
-  on every profile, including `net10.0` where the compatibility helper remains ABI. Reject the
-  complete producer before DLL publication; do not rename the helper according to encounter
-  order. The current emitter-time report is temporary diagnostic placement, not permission to
-  emit a partial interface. Reserved-looking names at another owner or arity stay legal.
-  Masked `$default` dispatchers follow the same physical-owner rule. Kotlin backtick functions
-  can deliberately occupy a generated dispatcher identity on a class or file facade; data-class
-  `copy$default` is the compiler-generated-source-member variant. All three cases reject
-  publication on `net48`, `netstandard2.0`, and `net10.0`. Never drop or encounter-order-rename
-  the dispatcher: cross-module omitted-argument calls require its recorded identity and
-  callee-owned default evaluation. This follows the JVM `CONFLICTING_JVM_DECLARATIONS` precedent.
-- Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
-  Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
-  `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and
-  `SubList` results, and the members List redeclares from Collection. Covariant `List<E>` owns
-  typed `Get(int): E` plus the declaration-variance-safe members. Invariant
-  `List__KotlinExact<E>` extends both `List<E>` and `Collection__KotlinExact<E>` and owns typed
-  `Contains(E)`, `IndexOf(E)`, and `LastIndexOf(E)`. Every view is the same object; `List<Int>` to
-  `List<Any?>` is an instruction-free canonical reference copy. A widened primitive call may miss
-  the closed capability and use the canonical bridge, but it never allocates an adapter.
-  The erased search names deliberately leave `Contains`, `IndexOf`, and `LastIndexOf` available
-  for typed capabilities and future C# helpers. Common `SpecialBridgeMethods` policy returns
-  `false` for a wrong-shaped canonical Contains argument and `-1` for wrong-shaped IndexOf or
-  LastIndexOf; this policy does not apply to arbitrary user `@UnsafeVariance` members. Nested
-  ListIterator/List returns remain canonical because capability presence is not universal. Pins:
-  `ilText/lists.kt`, `box/lists.kt`, and
-  `DotNetLibraryIntegrationTest.testGenericInterfacesAcrossLibraryBoundary` (separate DLL
-  consumer plus raw CLR calls).
-- Bottom-type carrier: both `Nothing` and `Nothing?` map physically to the public sealed,
-  private-constructor reference class `[Kotlin.Runtime]Kotlin.Nothing`, the CLR counterpart of
-  JVM `java.lang.Void` and Native/Wasm's uninstantiable class. Nullability remains Kotlin
-  metadata; legal `Nothing?` widening is an explicit codegen coercion and never a claim that the
-  carrier is CLR-assignable to every reference/value type. Plain `Nothing` calls are followed by
-  the shared mature-backend `KotlinNothingValueException` guard, emitted as an inline throw of the
-  runtime-owned exception if foreign or malformed code returns. This carrier is what permits
-  ordinary `ListIterator<Nothing>`/`List<Nothing>` typed capabilities without using `System.Void`
-  or collapsing them to `object`.
-- Kotlin `Unit` is not an IL value type. CLR `void` is only a return encoding; Unit-returning
-  functions are emitted as `void`, and `IMPLICIT_COERCION_TO_UNIT` discards values with `pop`.
-  The erased callable `Invoke` boundary is the one exception: it materializes
-  `Kotlin.Unit.INSTANCE` into its mandatory `object` result slot.
-- Local `val`/`var` follows the JVM/WASM model conceptually: the method context maps IR value
-  symbols to slots. CLR keeps argument slots (`ldarg`) separate from `.locals init` slots
-  (`ldloc`/`stloc`).
-- `if`/`when` follows JVM/WASM `IrWhen` handling: evaluate conditions, `brfalse` to next branch,
-  `br` to the end label after a matched branch.
-- Primitive-array model (`docs/decisions/draft-adr-kotlin-primitive-array-wrappers.md`; original
-  probe series `arrprobe_s1`; JVM intrinsic-registry precedent and backend.common
-  `IndexedGetLoopHeader` loop precedent): the five element types already supported as scalar
-  values (`Int`, `Long`, `Double`, `Boolean`, `Char`) use Kotlin-owned sealed reference wrappers
-  (`Kotlin.IntArray`, and peers) around private CLR zero-based vector storage. Canonical Kotlin ABI
-  always names the wrapper, preserving the nominal, overload, reflection, and identity distinction
-  from `Array<Int>`, which naturally specializes to `int32[]` (and likewise for the other scalar
-  types). Nullable and non-null primitive arrays share the wrapper representation; `===`, null
-  checks, and identity-based `==` use `ceq`, while `contentEquals` and related content operations
-  explicitly consume the backing vector. Widening to `Any`/`Any?` preserves wrapper identity.
-  Explicit C# export facades alone project a primitive-array boundary to its natural CLR vector,
-  without copying; the canonical Kotlin declaration remains wrapper-typed. Each wrapper type owns
-  a `ConditionalWeakTable<vector, wrapper>` used only at exported boundaries. Inbound projection
-  retrieves or creates the stable live wrapper for a vector, and outbound projection registers the
-  canonical wrapper before returning storage. Thus duplicate arguments, later calls, and
-  wrapper-vector-wrapper round trips preserve `===` without permanently retaining dead arrays.
-  A monitor protects compound lookup/create/register operations on Framework and CoreCLR; ordinary
-  Kotlin construction bypasses the table. `arrayinternprobe_s1` assembles and executes the exact
-  generic CWT/monitor IL with Framework and modern ILAsm/runtimes. The runtime wrapper
-  constructor/access/storage methods are marked public compiler ABI rather than source API.
-  The registry owns the builtin surface: unary size constructors allocate a guarded vector and
-  wrap it; literal `intArrayOf`/`longArrayOf`/`doubleArrayOf`/`booleanArrayOf`/`charArrayOf`
-  initialize vector storage in source order and wrap once; `size`, `get`, and `set` call the typed
-  wrapper ABI. Both modern and .NET Framework assemblers accept the wrapper/vector signatures and
-  exact element instructions. CoreCLR and Framework both throw `System.IndexOutOfRangeException`
-  for a vector bounds failure, which is already the mapped `IndexOutOfBoundsException`. Both
-  instead throw `System.OverflowException` for a negative `newarr` length; exposing that raw fault
-  would wrongly make `catch (ArithmeticException)` catch a Kotlin negative-array-size failure.
-  Constructors therefore branch on a negative size and throw compiler-owned
-  `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException`. Common Kotlin promises the
-  RuntimeException parent but exposes no portable source class; JVM's exact child is a Java
-  platform type. The CLR child is consequently metadata-public for generated consumers but absent
-  from the fake stdlib and source mapping. It preserves Exception/Throwable, the future exact
-  RuntimeException edge, a null default message, and no arithmetic/argument/state edge.
-  `negativearray_s1` validates both ILAsm implementations and all four runtime pairings.
-  Direct `for (x in array)` iteration is lowered without iterator allocation: evaluate the array
-  expression once into `indexedObject`, initialize `inductionVariable = 0`, cache immutable
-  `last = indexedObject.size`, then `while (inductionVariable < last)` load
-  `indexedObject[inductionVariable]`, increment before the user body, and run the body. Increment
-  before the body preserves `continue`, and the lowering retargets every `break`/`continue` from
-  the removed iterator loop. Explicit escaping iterator values use the erased runtime iterator
-  ABI described above. STAYS REJECTED, loudly: `ByteArray`/`ShortArray`/`FloatArray` (scalar
-  elements are unsupported), and unsigned arrays.
-  The literal/get/set temporaries are mandatory for general expressions: CLR protected
-  regions require an empty stack at entry, so an element/index/value containing `try` cannot be
-  evaluated with vector/index operands left underneath it. Pins: `ilText/primitiveArrays.kt`,
-  `ilText/primitiveArraysRejected.kt`; runtime: `box/primitiveArrays.kt`.
-- Generic-array model (current POC; the primitive-substitution restriction is superseded by
-  `docs/decisions/draft-adr-kotlin-primitive-array-wrappers.md`; probe series `genarrayprobe_s1`;
-  JVM `IrIntrinsicMethods.arrayMethods`
-  registry precedent plus the same backend.common indexed-loop shape as primitive arrays): an
-  invariant Kotlin `Array<E>` maps structurally to a CLR zero-based vector when `E` is a supported
-  reference-shaped type or an open `!n`/`!!n` parameter. Outer nullability is erased because the
-  vector is itself a reference. Kotlin invariance remains authoritative in source and KLIB. An
-  output-projected `Array<out E>` keeps the same `E[]` token; CLR reference-vector covariance
-  admits only the Kotlin-legal reference widening. Value vectors remain physically invariant, so
-  `Array<Int> -> Array<out Any>` is rejected instead of copying or emitting the invalid
-  `int32[] -> object[]`, while exact `Array<Int>.asList()` stays `int32[]`. Input and star
-  projections remain rejected because they do not identify one truthful vector element token.
-  An invalid store supplied through an external covariant reference view still fails with the
-  runtime's store check. Both CoreCLR and Framework throw `ArrayTypeMismatchException` for that
-  probe shape. Concrete supported primitive elements are permitted: `Array<Int>` is `int32[]`
-  while `IntArray` is the nominal `Kotlin.IntArray` wrapper. Concrete nullable value elements such
-  as `Array<Int?>` remain rejected until their representation and boxing semantics are implemented.
-  An OPEN `Array<T>` remains supported because its declaration is `!0[]`/`!!0[]`; CLR generic arity
-  and token identity keep the ABI distinct and reify a value-type instantiation safely.
-  `genarrayprobe_s1` reflection confirms the open element in metadata, and both runtimes execute
-  `newarr`, `ldelem`, and `stelem` with `!n`/`!!n` tokens for reference and value instantiations.
-  Known string/class/instantiated-generic elements use the same typed-token instructions. The
-  registry owns `arrayOf`, `emptyArray`, reference-element `arrayOfNulls`, `size`, `get`, and
-  `set`; allocation/store operands spill exactly like primitive arrays, and dynamic sizes share
-  the negative-size guard. Direct `for` iteration shares the indexed lowering. Array identity
-  equality/null tests use `ceq`, and widening to `Any`/`Any?` is instruction-free. STAYS REJECTED,
-  loudly: input/star projections, output-projected value-array widenings,
-  nullable-primitive elements, `Array<T?>`, nested/jagged arrays
-  including arrays of primitive arrays, array casts/type checks,
-  resized/open-generic copying, and content APIs other than the shallow `contentEquals` slice
-  below. Concrete reference-array iterator values use the erased runtime iterator ABI above.
-  Pins: `ilText/genericArrays.kt`, `ilText/genericArraysRejected.kt`; runtime:
-  `box/genericArrays.kt`.
-- Concrete array initializer constructors reuse the same backend.common
-  `ArrayConstructorLowering` as JVM/JS/Wasm/Native; IL emission has no initializer-specific path.
-  The phase runs while rich direct lambdas/references can still be inlined, before generated
-  callable classes and closure conversion. A non-direct function value or explicit concrete class
-  implementing `(Int) -> E` uses the unchanged erased `Kotlin.Function1.Invoke(object)` ABI. The
-  common indexed fill loop evaluates the size and then any callable/bound-value expression before
-  performing one existing guarded allocation, and invokes/stores in ascending index order. Even a
-  `Nothing`-typed initializer retains the preceding size evaluation. Its inlined returnable blocks
-  go through the mature `ReturnableBlockTransformer`, so local returns become ordinary blocks or
-  `do/while(false)` plus `break`, not a new IL control-flow case. The common loop retains
-  `Int.inc()` for mature built-ins and falls back to the equivalent `Int.plus(1)` only for a minimal
-  built-ins surface without that member; concrete invokable-class arguments derive their result
-  from their actual `invoke` declaration instead of assuming the receiver itself is a parameterized
-  function-interface type.
-  The five supported primitive vectors and concrete reference, nullable-reference, user-class,
-  and instantiated-generic `Array<E>` families preserve zero/negative sizes, size/initializer
-  single evaluation, captures, local returns, and exception timing. `ilText/arrayInitializers.kt`
-  and `box/arrayInitializers.kt` pin direct/local lambdas, direct/local references, function-typed
-  parameters, and explicit callable objects; modern 10.0.9 and Framework 4.8 ILAsm accept the
-  exact output, and both parser boxes execute with both assembler selections. STAYS REJECTED,
-  loudly: initializer constructors for mapper-rejected primitive/element/array families, nested
-  arrays, and open/reified `Array<T>` construction (non-reified source is rejected by the frontend;
-  inline-reified generics remain outside this backend's inlining model). Negative pins remain in
-  `ilText/primitiveArraysRejected.kt` and `ilText/genericArraysRejected.kt`.
-- Concrete array copying (probe series `arraycopyprobe_s1`; JVM stdlib platform-operation
-  precedent plus the DotNet intrinsic registry) is introduced through resolution-only external
-  declarations in the temporary `kotlin.collections` source, because this POC has no real .NET
-  stdlib or IR inliner yet. The registry excludes those declarations from emitted facades.
-  `copyOf()` allocates the exact known vector element type and calls `System.Array.Copy`;
-  `copyOf(newSize)` reuses the guarded negative-size boundary, copies
-  `min(oldSize, newSize)`, and leaves CLR zero/null initialization to supply padding. The five
-  supported primitive vectors and concrete reference/nullable-reference/user/instantiated-generic
-  arrays therefore return fresh, independent arrays for both ordinary and resized copies.
-  `copyInto` evaluates receiver, destination, and explicit arguments once in
-  Kotlin source order, materializes omitted zero/size defaults from the already-spilled receiver,
-  returns the exact destination object, and preserves overlapping self-copies through
-  `System.Array.Copy`.
-  Raw `System.Array.Copy` cannot own `copyInto` validation: both CoreCLR and Framework report
-  negative indexes as `ArgumentOutOfRangeException` and oversized source/destination ranges as
-  `ArgumentException`, which would expose destination failures as Kotlin
-  `IllegalArgumentException`. One metadata-public compiler/runtime helper,
-  `Kotlin.Runtime.Internal.Intrinsics.ArrayCopyInto(System.Array, System.Array, Int, Int, Int)`,
-  validates non-negative/ordered/in-bounds source and destination ranges without overflow and
-  throws `System.IndexOutOfRangeException`, the existing Kotlin `IndexOutOfBoundsException`
-  mapping, before delegating the move. The helper does not erase Kotlin array invariance: the
-  frontend still checks the `Array<out T>`/`Array<T>` source API and generated signatures remain
-  exact vectors. A concrete `Array<String?>`-like result shares its exact reference vector with
-  `Array<String>`; only open `Array<T?>` remains unrepresentable because `T` may be a value type.
-  STAYS REJECTED, loudly: copying an open `Array<T>`, `copyOfRange`, mapper-rejected array families,
-  and content operations other than `contentEquals`/`contentDeepEquals`. Pins: `ilText/arrayCopying.kt`,
-  `box/arrayCopying.kt`, and the negative additions in `ilText/genericArraysRejected.kt`. The exact
-  golden assembles under modern 10.0.9 and Framework 4.8 ILAsm; both parser boxes execute with
-  modern and Framework-selected ILAsm.
-- Shallow array content equality (probe series `arraycontent_s1`; JVM `java.util.Arrays.equals`
-  contract plus the JS target's element-loop precedent) is a registry-owned operation exposed by
-  resolution-only external `kotlin.collections.contentEquals` declarations. Array `==`/`===`
-  remain identity operations. Nullable receivers and arguments compare true only when both are
-  null; non-null vectors require equal lengths and Kotlin-equal elements. One metadata-public
-  runtime helper traverses `System.Array` and passes each boxed element pair through the existing
-  Kotlin-owned `Intrinsics.AreEqual` boundary. That deliberately avoids raw numeric `ceq` and CLR
-  collection helpers: `Double` content equality canonicalizes NaNs and distinguishes signed zero,
-  matching the common stdlib contract. Reference elements retain null-safe virtual Kotlin
-  equality. Nested array elements remain identity-compared because this operation is shallow;
-  recursive traversal belongs only to `contentDeepEquals`.
-  The five supported primitive vectors, concrete/projected reference vectors, and open invariant
-  `Array<T>` consumers all call the same helper without changing their exact CLR storage types.
-  Receiver and argument are evaluated once in source order. The helper is internal by namespace,
-  public only for cross-assembly access, and creates no new Kotlin array ABI shape.
-  `arraycontent_s1` assembled and ran null, primitive, NaN, signed-zero, and nested-identity cases
-  on modern CoreCLR and Framework. Pins: `ilText/arrayContentEquals.kt` and
-  `box/arrayContentEquals.kt`.
-- Recursive array content equality (probe series `arraydeep_s1`; common/JVM `contentDeepEquals`
-  contract) is a separate registry-owned operation exposed only for nullable generic `Array`
-  receivers. It keeps the outer array ABI exact, evaluates both expressions once in source order,
-  and delegates traversal to one runtime-owned `ArrayContentDeepEquals(System.Array,
-  System.Array)` helper. Nested reference vectors recurse; matching supported primitive-vector
-  pairs use the shallow helper; other elements use `Intrinsics.AreEqual`. Mixed primitive kinds
-  fail rather than acquiring CLR numeric coercion. This preserves common-stdlib null, nested-array,
-  reference-equality, NaN, and signed-zero semantics for concrete/projected arrays and open
-  invariant `Array<T>` consumers. Same-reference arrays return before traversal. The common stdlib
-  explicitly leaves behavior undefined for self-containing arrays, so the runtime adds neither a
-  cycle detector nor a stronger cross-target contract. The helper remains public only for
-  cross-assembly access in the reserved internal namespace and creates no new array ABI shape.
-  `arraydeep_s1` assembled and ran nested reference/primitive, mixed-kind, NaN, signed-zero, and
-  null cases on modern CoreCLR and Framework; the exact golden assembles with both ILAsm versions.
-  Pins: `ilText/arrayContentDeepEquals.kt` and `box/arrayContentDeepEquals.kt`.
-- Shallow and recursive content hashing (probe series `arrayhash_s1`; JVM `Arrays.hashCode`/
-  `deepHashCode` and common/Native 31-fold precedent) reuse one Kotlin-owned element-hash
-  boundary. Nullable arrays hash to zero; non-null arrays start at one and fold each element as
-  `31 * result + elementHash`, with normal unchecked Int overflow. `contentHashCode` covers the
-  five supported primitive arrays plus generic arrays and deliberately gives nested arrays their
-  ordinary identity hash. Generic-array `contentDeepHashCode` instead recurses into reference
-  vectors and shallow-hashes each supported nested primitive vector. Both paths use
-  `Intrinsics.HashCode` for scalar elements, preserving Kotlin null, Boolean, Char, Double NaN,
-  and signed-zero hashes rather than CLR `GetHashCode` divergences. Open invariant `Array<T>` and
-  projected/concrete reference vectors keep exact storage and call the same `System.Array` helper;
-  the receiver is evaluated once. Data-class array hashing now delegates to the general shallow
-  helper while its existing cross-assembly entry point stays as a compatibility wrapper. Deep
-  self-containing arrays remain undefined and gain no cycle detector, matching the stdlib
-  contract. `arrayhash_s1` assembled and ran on modern CoreCLR and Framework, and the exact golden
-  assembles with both ILAsm versions. Pins: `ilText/arrayContentHashCode.kt` and
-  `box/arrayContentHashCode.kt`.
-- Shallow and recursive content rendering (probe series `arraystring_s1`; common/JVM
-  `contentToString`/`contentDeepToString` contract) reuse the Kotlin-owned `StringValueOf`
-  boundary so null, Boolean, Char, Double, and user `toString` semantics do not leak raw CLR
-  formatting. Nullable arrays render as `"null"`; non-null arrays use List-compatible brackets
-  and `", "` separators. `contentToString` covers the five supported primitive arrays plus generic
-  arrays and deliberately renders nested arrays through their ordinary identity-based `toString`.
-  Generic-array `contentDeepToString` recursively renders reference vectors and each supported
-  primitive vector. Its Framework-compatible `ArrayList` stores only the active recursion path:
-  encountering an active array appends `"[...]"`, while a shared non-cyclic child is removed after
-  its branch and renders fully again later. Array identity makes `ArrayList.Contains` the correct
-  path predicate; this is not an equality/content lookup. Open invariant `Array<T>` and projected/
-  concrete reference vectors keep exact storage and evaluate the receiver once. Data-class array
-  rendering delegates to the general shallow helper through its existing compatibility wrapper.
-  `arraystring_s1` assembled and ran null, primitive, nested, repeated-child, and cyclic cases on
-  modern CoreCLR and Framework; the exact golden assembles with both ILAsm versions. Pins:
-  `ilText/arrayContentToString.kt` and `box/arrayContentToString.kt`. STAYS REJECTED, loudly:
-  unsigned arrays and mapper-rejected array families.
-- Concrete varargs follow the mature JVM/Native/Wasm lowering boundary rather than a separate
-  delegate or runtime ABI. `DotNetVarargLowering` runs before closure conversion and default
-  stubs, normalizes the source-only `Array<out E>` view of a CONCRETE reference vararg to the
-  invariant vector ABI already used for `Array<E>`, and updates parameter/local aliases and
-  captures consistently. Primitive `Int`/`Long`/`Double`/`Boolean`/`Char` varargs use their exact
-  primitive vectors; supported concrete reference, nullable-reference, object, user-class, and
-  instantiated-generic elements use typed reference vectors. No `ParamArrayAttribute` is emitted:
-  Kotlin permits a non-final vararg and this slice is Kotlin-to-Kotlin ABI/codegen, not a public
-  C# `params` export policy. Omitted non-default varargs allocate an empty vector. Expanded calls
-  allocate a fresh vector; spread and ordinary expressions are evaluated once in source order,
-  spread sizes are cached, and ordinary array `get`/`set` loops copy into the destination without
-  aliasing the source. A vararg with its own default uses the JVM-style physical null placeholder
-  plus the existing default mask. Existing no-spread `arrayOf`/supported `*ArrayOf` calls keep
-  their compact literal intrinsic, while spread-bearing forms go through the general lowering.
-  Top-level, member, extension, constructor, interface, local/captured, non-final, default-adjacent,
-  multiple/empty-spread, evaluation/exception-order, and aliasing shapes are pinned by
-  `ilText/varargs.kt` and `box/varargs.kt`; both modern 10.0.9 and Framework 4.8 ILAsm accept the
-  exact output and both runtimes execute it. STAYS REJECTED, loudly: `vararg T` or an element type
-  containing an open type parameter (output-projected storage is defined, but open vararg
-  construction and spread copying are not), concrete
-  nullable-primitive elements, nested/array elements, and every scalar/array family the mapper
-  already rejects. Negative pins remain in `ilText/genericRejected.kt`,
-  `ilText/genericArraysRejected.kt`, and `ilText/primitiveArraysRejected.kt`.
-- Kotlin `Any` foundation (draft ADR
-  `docs/decisions/draft-adr-system-object-any-foundation.md`; probe series `dotnet-any_s1`; JVM
-  `kotlin.Any -> java.lang.Object` precedent): `kotlin.Any`/`Any?` have no standalone CLR type.
-  Their physical root is `[mscorlib]System.Object`, which already includes generated classes,
-  strings, arrays, boxed primitives, mapped exceptions, and foreign CLR objects in one hierarchy.
-  Generated overrides map Kotlin `equals`/`hashCode`/`toString` to the existing CLR
-  `Equals(object)`/`GetHashCode()`/`ToString()` slots and emit `virtual` without `newslot`;
-  ordinary calls dispatch through those System.Object signatures and `super` stays a non-virtual
-  `call`. The cross-assembly runtime owns metadata-public, compiler-internal
-  `Kotlin.Runtime.Internal.Intrinsics.AreEqual(object, object)` (null-safe, left-biased virtual
-  equality), `HashCode(object)`, and `StringValueOf(object)` (`"null"` or virtual ToString).
-  Primitive-aware branches are required at that boundary: both CLRs equate boxed signed zero,
-  collapse its hashes, render boxed Double/Boolean with CLR text, and give boxed Char a duplicated-
-  bits hash instead of Kotlin's numeric code; Framework also hashes NaN payloads differently. The
-  helpers restore Kotlin/JVM object semantics (canonical Double bits, Boolean hash constants/
-  lowercase text, numeric Char hashes, invariant integer text, shared Double formatting) before
-  virtual fallback. Values and open type parameters box only at that universal object boundary.
-  Both ILAsm implementations accept the exact runtime/library/consumer shapes, and all four
-  modern/Framework consumer-dependency
-  pairings run identically. STAYS REJECTED, loudly: interface redeclarations of Any members,
-  unsupported data-class shapes described below, and `T : Any` generic constraints
-  (CLR `class` would wrongly exclude value instantiations; erasing the constraint would admit
-  null). The declaration-level type-parameter gate owns this rejection before physical capability
-  mapping; an unsupported interface must produce a normal compilation error, never let the live
-  constraint mapper turn it into `INTERNAL_ERROR`. Kotlin-owned exceptions and foreign-object
-  import policy remain later consumers of this
-  foundation. Pins:
-  `ilText/inheritanceAnyOverride.kt`, `ilText/interfaceEqualityWidening.kt`,
-  `ilText/nullableRejected.kt`, `ilText/genericRejected.kt`; runtime: `box/anyMembers.kt`.
-- Data-class slices consume the System.Object Any foundation without adding
-  another object identity or a backend-specific member generator. Fir2ir's shared
-  `DataClassMembersGenerator` already supplies `equals`, `hashCode`, `toString`, `componentN`,
-  and `copy` bodies. For a non-generic top-level or named nested class whose primary-constructor
-  properties have supported mapped types, those bodies compile through ordinary class machinery:
-  `Equals(object)` reuses the existing System.Object virtual slot and uses the checked
-  `isinst`/`castclass` path above; property equality and hash/string conversion reuse the
-  established Any/nullable helpers; `componentN` is a field read; and `copy` calls the primary
-  constructor. No generated member may fail independently: the shape gate rejects excluded data
-  classes before registration, so the class disappears whole rather than exposing a partial
-  generated API.
-  Defaults use the common/JVM masked-default algorithm after local declaration lifting. A generated
-  function helper receives the original values plus one `int32` mask per 32 value parameters,
-  tests bits with the intrinsic-registry `Int.and` -> CLR `and`, resolves omitted values with
-  `starg`, and calls the original function. The same model supports ordinary top-level and
-  non-interface class-member functions, including data-class `copy`. Stated CLR prototype
-  deviation from the JVM's later staticization: a member helper remains a non-virtual instance
-  compiler helper, so its receiver stays the ordinary CLR `this` and the original virtual call
-  still owns dispatch. A default constructor stub likewise repeats the original parameters, then
-  carries the masks and a final nullable runtime-owned `DefaultConstructorMarker`; omitted calls
-  pass typed placeholders, the masks, and null before invoking that synthetic `.ctor`. The marker
-  keeps a valid stub distinct from user constructors whose trailing `Int` parameters resemble
-  masks. CLR constructor identity is still only the mapped parameter list, so the member pre-pass
-  rejects a class whole when two original or generated constructors erase to one identity (for
-  example `String` versus `String?`) instead of letting map insertion or ILAsm choose a survivor.
-  Interface-owned argument defaults use the profile-aware `DefaultImpls` ownership model described
-  in the interface section below. Mask decoding lives in a nested helper on every profile,
-  independently of whether the source slot is a portable abstract slot or a net10 DIM.
-  A named nested data class follows the established JVM-static-nested CLR model unchanged. It
-  captures no outer instance and owns only its own type parameters, so a non-generic data class
-  inside `Outer<T>` remains the independently non-generic metadata type
-  `'Outer`1'/'Entry'`: its generated `isinst`/`castclass`, fields, constructor, members, and
-  `copy$default` tokens carry no outer `!0`. The same shape composes below supported classes,
-  interfaces, objects, companions, data classes, and deeper named metadata parents.
-  A generic data class follows the CLR-specific split recorded in
-  `docs/decisions/draft-adr-generic-data-class-equality.md`. Ordinary class identity, storage,
-  signatures, construction, `componentN`, and copying stay the real reified `C<T>` model. Only
-  compiler-generated equality needs an erased class view: each declaration owns one private,
-  non-generic nested interface with an object-returning slot per primary-constructor property.
-  Every `C<T>` implements those slots through private final methods plus explicit CLR MethodImpl
-  `.override` entries. Generated `Equals(object)` tests that declaration-unique view, reads the
-  other components through it, and compares boxed/widened values via `Intrinsics.AreEqual`.
-  Different instantiations of one class therefore retain Kotlin/JVM's erased equality identity,
-  while different data-class declarations remain distinct and no public runtime protocol is
-  added. A user-written `equals` is left untouched and receives no view. Generic member calls also
-  expose their substituted CLR result to coercion decisions: common default lowering leaves a
-  `copy$default` call's IR result open as `C<T>`, but a receiver `C<Int>` really produces
-  `C<Int>` and must not trigger an invalid `C<!0>`-to-`C<int32>` cast.
-  A local data class composes with the common local-declaration lowering rather than introducing
-  another CLR identity. Closure conversion lifts it to a private generated class and prepends
-  bound receiver/value state to its constructor. Those synthetic capture parameters remain real
-  fields and are propagated by constructor/default/copy paths, but are excluded from
-  `componentN`, equality, hash, and text because they are not source primary-constructor
-  properties. Mutable captures therefore keep their shared reference cell, while two instances
-  from the same lifted declaration compare only their data properties even when their captured
-  state differs. A generic local data class keeps the ordinary reified class plus its private
-  erased equality view; the generic-data lowering filters `BOUND_RECEIVER_PARAMETER` and
-  `BOUND_VALUE_PARAMETER` before constructing that view. Omitted generic arguments use the
-  common/JVM default-injector marker rather than a data-class special case. The injector's
-  `DEFAULT_VALUE` null composite is unobservable whenever its mask bit is set, but an open CLR
-  type parameter cannot always carry the reference-shaped null found in that IR. Call emission
-  therefore materializes the resolved parameter's physical default: zero for a known primitive,
-  null for a reference, an empty `Nullable<V>`, or a synthetic local initialized with
-  `initobj !n`/`!!n` for an open class/method type parameter. This shared call path covers
-  functions, members, constructors, and generated `copy$default` calls while preserving explicit
-  argument evaluation. It does not legalize observable `T?` in a generic declaration; the
-  nullable-open-type rejection below remains unchanged.
-  Array properties preserve the JVM asymmetry deliberately: generated equality remains ordinary
-  array reference identity, while only hashCode/toString inspect content. Fir2ir emits its
-  `dataClassArrayMemberHashCode`/`dataClassArrayMemberToString` builtins; the intrinsic registry
-  maps them to compiler-internal runtime helpers accepting `System.Array`. `GetValue(int32)` boxes
-  each vector element into the established `HashCode(object)`/`StringValueOf(object)` boundary, so
-  all five supported primitive vectors and supported invariant reference-element `Array<E>` share
-  one semantic implementation. Null arrays hash to 0 and render `null`; empty arrays hash to 1 and
-  render `[]`. The same boundary exposed the CLR Char hash difference, now normalized centrally
-  for ordinary Any calls as well as array content.
-  A data object reuses the ordinary CLR singleton representation unchanged: a sealed class with a
-  private constructor, one public static initonly `INSTANCE`, and recursive initialization through
-  its `.cctor`. Fir2ir's shared generated bodies make `Equals(object)` true for every instance of
-  the same declaration after the reference fast path and `isinst`/`castclass`, not merely for
-  `INSTANCE`; this preserves the specified hostile-reflection/serialization behavior without a
-  delegate-like wrapper or another identity ABI. `GetHashCode()` returns the compile-time
-  `FqName.hashCode()` constant and `ToString()` returns the simple declaration name. Named data
-  objects below classes, generic classes, objects, and deeper supported metadata parents use the
-  existing static-nested model and capture no outer instance or type argument. This slice does not
-  broaden the separate object-supertype boundary: a data object with a proper class/interface
-  supertype is rejected by the same owning gate as an ordinary object with that supertype.
-  STAYS REJECTED, whole-class: array shapes rejected by the primitive/generic vector mapper.
-  Pins:
-  `ilText/dataClasses.kt`, `ilText/nestedDataClasses.kt`, `ilText/dataClassArrays.kt`,
-  `ilText/genericDataClasses.kt`, `ilText/genericDataClassDefaults.kt`,
-  `ilText/constructorDefaultArguments.kt`, `ilText/dataObjects.kt`,
-  `ilText/localDataClasses.kt`,
-  `ilText/dataClassesRejected.kt`, and `ilText/defaultArgumentsRejected.kt`; runtime:
-  `box/dataClasses.kt`, `box/nestedDataClasses.kt`, `box/dataClassArrays.kt`,
-  `box/genericDataClasses.kt`, `box/genericDataClassArrays.kt`,
-  `box/genericDataClassShapes.kt`, `box/genericDataClassMultipleTypeParameters.kt`,
-  `box/genericDataClassDefaults.kt`, `box/defaultArguments.kt`,
-  `box/constructorDefaultArguments.kt`, `box/dataObjects.kt`, `box/localDataClasses.kt`, and
-  `box/anyMembers.kt`.
-  `dataclass_s1`, `dataclass_s2`, `dataclass_array_probe_s1`, and `ctor_default_probe_s1`
-  assembled the relevant shapes under modern 10.0.9 and Framework 4.8 ILAsm; the array helper
-  probe ran identically on both runtimes, and all four constructor consumer/runtime ILAsm
-  pairings preserved the default and real-overload paths. `generic_data_probe_s1` assembled both
-  generic equality goldens with both ILAsm versions; Framework-selected boxes executed every new
-  runtime shape on CoreCLR, and reflection found only private view/bridge metadata while the public
-  property remained open `T`. The data-object exact golden assembles under both ILAsm versions;
-  reflection over each assembly confirms the private-constructor singleton surface and that a
-  second reflectively constructed instance has the same equality, declaration hash, and text.
-  Both parsers execute the source pin with modern and Framework-selected ILAsm. The fresh full
-  two-parser matrix is 440/0/0/0 across eight suites. The local-data exact golden likewise
-  assembles under both ILAsm implementations; its runtime pin covers immutable, mutable,
-  receiver, local-function, generic, array, and defaulted capture paths in both parsers and with
-  Framework-selected ILAsm.
-- Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
-  `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
-  and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure
-  reference check that never calls `equals`; JVM precedent: the `Equals` intrinsic's `isNullConst`
-  special case); base/derived-typed operand pairs of the inheritance model widen to the
-  ancestor type — the reference `ceq` is type-agnostic, the user-class analogue of the
-  mapped-exception common-supertype arm; sibling-typed pairs sharing a supertype (a common
-  base class or, since the interface model, a common implemented interface — the shape a
-  positive-identity smartcast routinely produces) widen to the FIRST common supertype of the
-  left operand's breadth-first supertype walk (deterministic:
-  `DotNetIlClassInfo.allSupertypes` — direct base class, then direct interfaces in
-  declaration order, then the same per level, NOT the whole base chain first). Two FINAL
-  sibling classes are not expressible operands — the frontend rejects them with
-  EQUALITY_NOT_APPLICABLE (empty intersection type) — so the user-reachable sibling shape is
-  two sibling INTERFACE views of an object. Pairs with no module-local common supertype (for
-  example two unrelated interface views) widen instruction-free to System.Object. Identity stays
-  `ceq`; structural reference/`Any?` equality calls the runtime's null-safe `AreEqual` helper.
-  Open type parameters use that helper after `box !!n`; identity on open `T` remains rejected
-  because value-type instantiations have no stable reference identity. Exact primitive, string,
-  array, and nullable-primitive paths remain specialized. Pins:
-  `ilText/interfaceEqualityWidening.kt`, `ilText/inheritanceAnyOverride.kt`; runtime:
-  `box/interfaceHierarchy.kt`, `box/anyMembers.kt`.
-- Nullability model (hybrid representation; probe series `boxprobe_s1`–`_s7`, `nullprobe_s8` —
-  a deliberate user-decided design): a concrete nullable CLR VALUE type uses
-  `System.Nullable<T>` in exact typed positions and converts to boxed-underlying-or-null when
-  widened to `Any?`/object-shaped contexts; a nullable REFERENCE type is the same IL type as its
-  non-null flavor (a stated no-op at the type-mapping layer — `String?`/`C?`/`I?`/mapped
-  exceptions all keep their reference type, `ldnull` is the null literal, `== null` is the
-  existing reference `ceq`). Precedents: Roslyn (C# `int?` IS `Nullable<int32>` in typed
-  positions, CLR-collapsed at `object` boundaries) and Kotlin's own inline value classes
-  (context-sensitive representation is established Kotlin policy); the JVM's blanket boxing of
-  `Int?` is a platform limitation, not language policy. Generic `T?` is a SEPARATE future ABI
-  problem and deliberately stays unmapped — it must not force concrete nullable primitives into
-  `object`. Representation table (`DotNetIlValueType.NullableValue`; the five concrete
-  primitives Int/Long/Double/Boolean/Char):
-  - EXACT positions (params, returns, locals, instance/static fields, ctor params):
-    `valuetype [mscorlib]System.Nullable`1<int32|int64|float64|bool|char>` — the
-    `nameInSignature` doubles as the operand spelling of every instruction touching the type
-    (probe-verified in every position, boxprobe_s1). `T -> T?` is
-    `newobj instance void valuetype ...Nullable`1<t>::.ctor(!0)`; the null literal / empty value
-    is `ldloca`+`initobj`+`ldloc` through a synthetic local (also for returns and arguments);
-    null tests are `call instance bool ...::get_HasValue()`, extraction is
-    `GetValueOrDefault()` — never `get_Value`, whose InvalidOperationException would surface as
-    the wrong Kotlin exception, so every extraction branches on HasValue first.
-  - WIDENED positions (`kotlin.Any`/`Any?` maps to CLR `object` as pure STORAGE): `T? -> Any?`
-    is `box valuetype ...Nullable`1<t>`, which the CLR COLLAPSES to boxed-`T`-or-null
-    (boxprobe_s3, all five instantiations nullprobe_s8); `T -> Any?` is a plain
-    `box [mscorlib]System.<Boxed>`; reference types widen to `object` instruction-free
-    (`isDotNetAssignableTo`'s third widening). Conversions are emitted by a widening-coercion
-    layer in `DotNetIlExpressionCodegen.emitExpression` (JVM precedent: StackValue coercion —
-    boxing is never an IR node) plus the IMPLICIT_CAST arms; narrowing exists only as the
-    `T? -> T` smartcast IMPLICIT_CAST / narrowed-slot read, emitted as the CHECKED unwrap
-    (HasValue branch + mapped-NPE throw + GetValueOrDefault — JVM parity: CHECKCAST+`intValue()`
-    NPEs on null there).
-  - MANDATORY SPILL RULE (boxprobe_s2): every instance-member access on a `Nullable<T>` receiver
-    needs a HOME ADDRESS — a freshly computed stack value MUST be spilled `stloc`+`ldloca`; the
-    unspilled call assembles cleanly but is a FATAL, uncatchable CLR error (0x80131506), a
-    poison shape codegen may never emit. Spilling costs a local and zero maxstack.
-  `!!`/IMPLICIT_NOTNULL (JVM precedent: the checkNotNull intrinsic, registered via
-  `checkNotNullSymbol` in the intrinsic registry): references get `dup`/`brtrue` past a
-  `newobj instance void [mscorlib]System.NullReferenceException::.ctor()` + `throw`
-  (boxprobe_s4; message-less, like `Intrinsics.checkNotNull`), Nullable<T> gets the HasValue
-  branch + same throw + extraction — catchable as `catch (e: NullPointerException)` through the
-  existing registry mapping (`box/nullableNotNullThrows.kt`). Null-aware structural `==`
-  (JVM precedent: the `Intrinsics.areEqual` specializations) is the Roslyn lifted-equality
-  shape, NO boxing (boxprobe_s5, incl. the (none, some(0)) corner): `T? == T?` compares
-  GetValueOrDefault values ANDed with HasValue flags; `T? == T`/`T == T?` AND the value `ceq`
-  with the nullable side's HasValue; `T? == null` is a negated HasValue; `Double?` arrives via
-  the ieee754equals symbols and the extracted-`float64` `ceq` IS the JVM's
-  areEqual(Double, Double) semantics (NaN? != NaN?, -0.0? == 0.0? — runtime-pinned). A null-only
-  operand (`Nothing?` maps to the `Kotlin.Nothing` carrier — the frontend narrows known-null
-  when-subjects to it)
-  against a plain primitive is statically false with operands still evaluated. Safe calls and
-  elvis are the frontend's block+when shape — value-position `IrBlock` dispatches through the
-  same statement-scope hook as `try` expressions, and a `?:` whose branches are `Int` and `Int?`
-  unifies through the branch-level coercions; string templates of nullable primitives render
-  through a HasValue branch selecting `"null"` or the existing per-type rendering
-  (boxprobe_s7), nullable strings keep the existing dup/brtrue coalesce. A non-Unit `try`
-  DISCARDED in statement position keeps the statement form when its type maps to `object`:
-  branch types that merely LUB to `Any` (an Int-typed try branch next to a Unit-typed catch
-  branch ending in an assignment — a routine statement shape) mix value- and statement-shaped
-  branch results, and a discarded `Any` value is never materialized, so `emitDiscardedTry`
-  treats `object` like an unmapped type (the exact pre-hybrid behavior; runtime-pinned by
-  `box/tryDiscardedValue.kt`) — mapped NON-`object` types imply every branch result is
-  value-shaped and keep the expression form. GATE INTERACTIONS
-  (pinned by `ilText/nullableOverrides.kt`): `Int?`/`Int` are now DISTINCT IL types, so the
-  Kotlin-covariant `Producer.value(): Int?` overridden by `value(): Int` uses an exact `int32`
-  virtual slot plus a private MethodImpl bridge which wraps the result for the inherited
-  `Nullable<int32>` slot. `f(Int)`/`f(Int?)` overloads become two legal IL methods, while
-  `g(String)`/`g(String?)` still clash (reference nullability erases). The
-  member-clash gate has a FACADE analogue (`ilText/facadeMethodClash.kt`): top-level functions
-  and property accessors of one file render into one facade class, so top-level
-  `g(String)`/`g(String?)` (same IL `string`), `h(Any)`/`h(Any?)` (same IL `object`) and
-  `val x` vs `fun get_x()` (accessor mangling) each produce duplicate IL method declarations
-  ilasm rejects; the facade gate evicts EVERY callable of a clashing identity (keeping one
-  half would be an arbitrary pick between legal Kotlin overloads) at facade granularity — a
-  plain function per-function, an accessor with its whole property, a backing-field-bearing
-  property with the file's whole property group. The System.Object Any foundation now supports
-  Any member calls, Any/string-template conversion, general structural reference equality, and
-  nullable-primitive-to-Any equality by boxing to the CLR boxed-underlying-or-null boundary.
-  Open `T?` is the declaration-stable boxed-or-null `object` carrier fixed by
-  `docs/decisions/adr-hybrid-generic-nullability-and-covariant-returns.md`; concrete nullable
-  primitives remain `Nullable<T>` and non-null `T` remains reified. This ordering precedes the
-  legacy string-bound shortcut: method-level `T : String` maps `T?` to `object`, keeps non-null
-  `T` as `string`, and recovers it after `!!` with `castclass`. STAYS REJECTED, loudly:
-  nested open-nullable arguments of invariant reified carriers without an erased view, identity
-  between two nullable-primitive values (the
-  operands would box; identity of separately boxed values is unrelated to value equality — `ceq`
-  on two boxed equal int32s is False, boxprobe_s6 — and Kotlin deprecates boxed identity; identity
-  against null is supported as a HasValue test). Cross-primitive `Int? == Long?` needs no backend
-  gate: the FRONTEND rejects it with EQUALITY_NOT_APPLICABLE, like `==` between unrelated final
-  classes — not expressible in compilable Kotlin, so not pinnable in an ilText test),
-  `object -> T?` narrowing (`unbox.any` accepts null and boxed T,
-  boxprobe_s3, but no supported IR shape produces the cast — rejected like every downcast),
-  runtime tests/casts of nullable primitive or type-parameter shapes (the canonical split-generic-
-  interface reference exception is described below), `const val` of nullable type (defensive;
-  frontend-rejected anyway). Exhaustive `when` without a source
-  `else` over nullable or plain Boolean subjects is supported by the registered intrinsic
-  described in the exception-model bullets below. Pins: `ilText/nullablePrimitives.kt`
-  (every declaration-position spelling, wrap/initobj/HasValue/extraction incl. the
-  address-taking `ldloca`, elvis/safe-call shapes, BOTH `!!` throw shapes — the Nullable<T>
-  HasValue branch and the reference `dup`/`brtrue`/`newobj NullReferenceException`/`throw`
-  spelling), `ilText/nullableEquality.kt` (every `==` sequence), `ilText/nullableBoxing.kt`
-  (box-collapse widenings, `object` storage positions, templates), `ilText/nullableRejected.kt`
-  (the rejection warnings' source shapes),
-  `ilText/nullableOverrides.kt` (gate interactions), `ilText/facadeMethodClash.kt` (the facade
-  clash gate, all three flavors); runtime: `box/nullableBasic.kt`, `box/nullableEquality.kt`,
-  `box/nullableBoxing.kt`, `box/nullableNotNullThrows.kt`, `box/nullableObjectMembers.kt`
-  (nullable primitives through the object/companion singleton and static-initializer
-  machinery), `box/tryDiscardedValue.kt` (the discarded Any-LUB try statement shape).
-- Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
-  vtable/class lowering machinery): top-level plain classes — final, open, abstract, or sealed;
-  non-generic or, since the generics model (below), with reified type parameters — plus the
-  named nested, inner, and lifted local types described below, and, since the interface/generics
-  models (below), top-level or named nested non-generic/generic all-abstract interfaces pass the shape gate
-  (`DotNetIlEmitter.checkClassShapeSupported` / `checkInterfaceShapeSupported`); objects and
-  companions stay final-only with sole supertype `kotlin.Any`.
-  Rejection granularity is the failing class's metadata subtree — a failing member (signature,
-  body, or IL method- or field-identity clash) removes its owning class and every recursively
-  nested declaration, because CLR nested metadata cannot outlive its parent. A failing ordinary
-  nested class does NOT remove independent enclosing classes or siblings. The live type/function
-  maps then cascade to actual users of the removed class. Companion failures are owner-sensitive:
-  the singleton field and `.cctor` live on the immediate enclosing type, so that owner subtree is
-  the minimum safe eviction boundary.
-- Named nested-type model (probe series `nestedprobe_s1`–`_s4`, `nestedifaceprobe_s1`–`_s3`,
-  `nestedownerprobe_s1`–`_s2`;
-  JVM precedent: a Kotlin named nested declaration is static unless it is an `inner` class,
-  represented by JVM `ACC_STATIC`; the CLR analogue is a real nested metadata type): a final,
-  open, abstract, or sealed plain `ClassKind.CLASS`, an all-abstract interface, or a final named
-  object declared directly inside any supported named class, interface, object, or companion
-  passes the shape gate recursively. Each nested declaration owns no outer instance and only its
-  OWN generic parameters; a named class inside generic `Outer<T>` is therefore
-  referenced as `'Outer`1'/'Nested'` with no outer instantiation, while an independently generic
-  nested class is `'Outer`1'/'Nested`1'<U>`. Arbitrary depth composes by slash-separated quoted
-  simple names. A companion of a non-generic plain class or interface is also supported.
-  `DotNetStaticInitializersLowering`
-  matches the common/JVM `ClassLoweringPass.runOnFilePostfix` recursion: it visits every class
-  child before its metadata parent, moving a named object's `INSTANCE` initializer into the
-  object's own `.cctor` and a companion initializer into its immediate owner's `.cctor`. A
-  companion's immediate class/interface container must be non-generic because its field would be
-  per constructed generic owner. An interface owner may legally carry that static singleton field
-  and `.cctor` while retaining the interface flag rule that omits `beforefieldinit`
-  (`nestedifaceprobe_s2`). Named objects may recursively contain named classes/objects, and a
-  named class below an object/companion may own its own companion. A named object's `INSTANCE`
-  field is owned by the independently
-  non-generic object type, so it stays singular even under an immediately generic metadata parent
-  (`nestedprobe_s4`, `nestedownerprobe_s1`).
-  Registration and type/member resolution use a separate `DotNetIlClassInfo` per declaration, but
-  rendering remains recursive inside the enclosing `.class` block. Public/private/internal/
-  protected source visibility maps to `nested public`/`nested private`/`nested assembly`/
-  `nested family`. Modality follows the top-level class model after that prefix: final carries CLR
-  `sealed`, open omits it, and abstract/sealed Kotlin classes carry CLR `abstract`. A top-level or
-  nested class may extend any module-local top-level or nested class, including a forward sibling,
-  its metadata parent, a deeper family member, an independently generic instantiation under a
-  generic outer, or a class in another top-level family. A class may implement, and an interface
-  may extend, any recursively declared module-local interface. All
-  spellings, construction, member/field references, virtual/interface dispatch, forward links,
-  cross-depth links, singleton initialization, and family shapes assemble and run on CoreCLR and
-  Framework. The CLR grants nested→enclosing private access, but not the reverse; the Kotlin
-  frontend does not allow an enclosing declaration to call a private MEMBER of an ordinary nested
-  class, while a private nested TYPE's public constructor remains callable by its enclosing type
-  (`nestedprobe_s2`, `nestedownerprobe_s2`). Companion-private members retain their established
-  IL-`assembly` widening. A failure OF a companion remains owner-sensitive because its field and
-  `.cctor`
-  live on the immediate owner; a separate failing child below a valid companion is its own
-  metadata subtree. STAYS REJECTED, per rejected metadata subtree: value/enum/annotation classes,
-  data objects and the data-class shapes excluded by the bounded data-class model above, an
-  `inner` class whose immediate outer is generic, and a companion whose immediate class/interface
-  container is generic. Named local classes and anonymous object expressions follow their
-  separate closure-converted model below.
-  Recursive render failures preserve the deepest declaration tag while
-  unwinding, then subtree eviction removes that declaration and its descendants; independent
-  metadata ancestors/siblings survive and live-map re-rendering removes only real dependents.
-  Pins: `ilText/nestedClasses.kt`,
-  `ilText/nestedInheritance.kt`, `ilText/nestedSingletons.kt`,
-  `ilText/nestedInterfaces.kt`, `ilText/nestedInterfacesRejected.kt`,
-  `ilText/nestedObjectDeclarations.kt`, `ilText/nestedObjectDeclarationsRejected.kt`,
-  `ilText/nestedClassesRejected.kt`; runtime: `box/nestedClasses.kt`,
-  `box/nestedInheritance.kt`, `box/nestedSingletons.kt`, `box/nestedInterfaces.kt`,
-  `box/nestedObjectDeclarations.kt`.
-- Inner-class model (probe series `innerprobe_s1`–`_s2`, `genericinner_s1`–`_s3`; common/JVM
-  precedent): a Kotlin `inner` class uses the common backend's explicit-outer representation on
-  real CLR nested metadata. `DotNetInnerClassesLowering` adds one private
-  `this$0` field and replaces each constructor's dispatch receiver with a leading regular outer
-  argument; `DotNetInnerClassesMemberBodyLowering` rewrites outer-`this` reads into field chains;
-  `DotNetInnerClassConstructorCallsLowering` moves the source call's dispatch receiver into that
-  argument. All three run before `DotNetInitializersLowering`, matching the common/JVM pipeline.
-  Both CoreCLR 10.0.9 and Framework 4.8 accept the common lowering's `stfld this$0` before the
-  base `.ctor` call (`innerprobe_s1`); no CLR-specific reorder is needed. Each inner subclass owns
-  its own outer field and forwards the same outer argument to an inner base constructor. Arbitrary
-  inner depth composes through field chains, and an inner class may own independent generic
-  parameters. When the immediate outer is generic, `DotNetInnerClassTypeParametersLowering` first
-  appends copies of its COMPLETE parameter list after the inner's own parameters and remaps the
-  inner subtree: `Outer<T>.First<U>.Second<V>` owns `Second<V, U, T>`. Processing is outer-first,
-  so each deeper level copies an already-complete immediate-outer space. FIR use-site types already
-  carry that `own, outer...` argument order. The retained copy map types the later synthetic outer
-  field/constructor parameter, missing constructor/super-call arguments are expanded before the
-  common call rewrite, and synthetic multi-level field reads substitute through their receiver.
-  Non-generic inners take none of these generic-only repairs. Duplicate copied/own parameter names
-  are legal positional CLR metadata; generic inner inheritance and generic non-inner bases retain
-  their fully substituted links (`genericinner_s2`–`_s3`). Primary constructors, classes with only
-  secondary constructors, and delegating secondary constructors all preserve the outer argument;
-  a delegating constructor lets its target perform the single outer-field store. Source visibility
-  uses the existing nested-type mapping, and an unsupported inner member evicts only that inner
-  metadata subtree and real users. A source property named ``this$0`` does not reject the class:
-  the late JVM-shaped field disambiguator preserves the source backing-field name, reserves an
-  existing suffix such as ``this$0$1``, and moves the synthetic outer field to the first free
-  private spelling while every symbol-based outer read follows it.
-  Pins: `ilText/innerClasses.kt`, `ilText/genericInnerClasses.kt`,
-  `ilText/classShapeRejected.kt`, `ilText/nestedClassesRejected.kt`; runtime:
-  `box/innerClasses.kt` and `box/genericInnerClasses.kt`.
-- Local-class and anonymous-object model (probe series `localprobe_s1`–`_s2` and
-  `anonprobe_s1`–`_s2`; common/JVM precedent): the DotNet wrappers run
-  `InventNamesForLocalClasses`, `DotNetAnonymousObjectSuperConstructorLowering`,
-  `InventNamesForLocalFunctions`, callable-reference lowering, `SharedVariablesLowering`,
-  `LocalDeclarationsLowering`, and
-  `LocalDeclarationPopupLowering` before inner classes and initializer merging. Closure conversion
-  handles named local classes, anonymous objects, explicit named local functions, and lowered
-  lambda/function-reference callable classes in the same phase order used by the common/JVM
-  pipeline. A local in
-  a top-level function or property becomes a module-private top-level CLR type; a local in a member
-  or initializer becomes a private nested CLR type. Constructors are widened to public metadata
-  inside that inaccessible type so the facade/enclosing type can instantiate them
-  (`localprobe_s1`–`_s2`, `anonprobe_s1`); source visibility is unchanged because the type itself is
-  inaccessible.
-  Immutable parameters, locals, and receivers become explicit constructor parameters and private
-  fields when a member body needs storage. Captured type parameters are duplicated on the local
-  type by the common lowering, so a local below `Outer<T>` owns an independent `!n` space and its
-  captured receiver is typed as `Outer<!n>` (`localprobe_s2`). Own and captured type parameters,
-  local inheritance/interface dispatch, initializer-local classes, and multiple same-named locals
-  compose through the existing class/generic model. Invented names use the enclosing JVM-style
-  path plus a per-base-name collision counter (`$1` only when needed); registration gives user
-  metadata names priority and defensively disambiguates a colliding local.
-  Anonymous object expressions use the same metadata and capture model: bare `Any` objects,
-  supported interfaces, and supported module-local class supertypes are valid, including generic
-  bases and recursively nested object expressions. Each expression constructs a fresh instance;
-  it does NOT enter the named-object singleton lowering. Mirroring the JVM phase, complex and
-  named/reordered base-constructor arguments move to temporaries at the expression call site and
-  become explicit constructor parameters before closure conversion. This preserves source
-  evaluation order relative to object initializers while the constructor separately receives
-  immutable captures (`anonprobe_s2`). Captured type parameters are duplicated and substituted in
-  the anonymous base link and lifted parameter types.
-  Explicit local functions become static methods on the nearest CLR metadata owner
-  (`localfunprobe_s1`–`_s3`). A file-facade local is `assembly` because a lifted sibling class/object
-  may call it; a class-owned local is `private`, which CLR nested→enclosing access permits. Value,
-  extension-receiver, and dispatch-receiver captures become ordinary parameters. Captured type
-  parameters are duplicated into the method's independent `!!n` space before its own parameters;
-  a static local under a generic class still uses an INSTANTIATED owner token, derived from a
-  captured owner argument or the caller's open `Owner<!n>` view. Direct/nested recursion,
-  initializer locals, extensions, named-class/anonymous-object callers, and generic function/class
-  scopes compose. Common name invention supplies readable paths; the metadata gates reserve user
-  methods/accessors first and append the smallest `$n` suffix only to a colliding generated local.
-  Shared-variable lowering rewrites captured mutable locals to one invariant runtime cell before
-  closure conversion, preventing value copies from breaking aliasing; a raw mutable capture that
-  somehow survives that phase is still rejected defensively. Crossinline, inline, and suspend
-  locals likewise stay rejected without their respective lowering models. Unsupported anonymous
-  supertypes reject that metadata subtree and real users through
-  the ordinary class gates. Pins: `ilText/localClasses.kt`, `ilText/localClassesRejected.kt`,
-  `ilText/anonymousObjects.kt`, `ilText/anonymousObjectsRejected.kt`, `ilText/localFunctions.kt`,
-  and `ilText/localFunctionCallables.kt`; runtime: `box/localClasses.kt`,
-  `box/anonymousObjects.kt`, and `box/localFunctions.kt`.
-- Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
-  `abstractprobe_s1`–`_s2`, `nestedprobe_s3`; JVM precedent: real CLR classes = real platform
-  inheritance, no vtable lowering — the same argument as the class-model bullet): a top-level,
-  named nested, or lifted local plain class may be `open` (drops `sealed` from the `.class` flags), `abstract`, or
-  `sealed` (both emit ordinary CLR
-  `abstract`, never CLR `sealed`). A sealed class's source-protected constructor is emitted
-  `famandassem`: same-assembly Kotlin subclasses remain legal, while foreign C# subclasses cannot
-  construct the base. A source-private sealed constructor remains CLR private. This enforces the
-  class hierarchy at its only construction boundary without misusing CLR `sealed`, and is pinned
-  by Framework C# positive/negative compilation. Such a class may extend EXACTLY ONE base class when the supertype
-  resolves to another recursively declared class of the compiled module. The gate checks only the
-  structural shape; whether the base itself compiles is
-  re-resolved from the live class map at the top of every render round, so a failing base
-  cascades whole-class down the chain, each derived class warned with a reason carrying the
-  base's reason (the chain analogue of the companion pair warnings) — pinned by
-  `ilText/inheritanceBaseEvicted.kt`. Member flags (order probe-verified; ilasm treats them as
-  an unordered keyword set, the emitter standardizes on the s2 spellings): an `open` member
-  introducing a slot is `hidebysig newslot virtual` (`specialname newslot virtual` for
-  accessors); a new abstract function/accessor is `newslot abstract virtual` with an empty body;
-  an abstract or concrete Kotlin `override` REUSES a base-class slot — `abstract virtual` or
-  `virtual` with NO `newslot`; and a `final override` is `virtual final` (still dispatching under
-  `callvirt`, the Roslyn `sealed override` shape). An abstract member implementing only an
-  interface uses `newslot abstract virtual`. An abstract class may instead carry a pure abstract
-  interface obligation only as a fake override and emit NO method; a concrete descendant then
-  introduces or reuses the implementing slot (`abstractprobe_s2`, accepted and dispatching on
-  both runtimes). An `open` member of a FINAL class stays non-virtual (nothing can override it;
-  `isDotNetVirtual` is the single predicate both the declaration flags and the call sites
-  consult). Constructors, concrete state, companions, generic owners/methods, constraints, and
-  base/interface links reuse their existing machinery unchanged. CALL SITES: virtual callees use
-  `callvirt` — a stated widening of the established
-  call-for-final deviation from Roslyn: final members keep the plain null-check-free `call`,
-  but virtual dispatch has no non-virtual substitute, and `callvirt` with the operand token
-  naming the DECLARING class dispatches correctly even through base-typed values and to final
-  overrides (probe-verified). Calls through fake overrides (inherited members referenced via
-  the derived class) resolve to the real declaration first (`resolveFakeOverride`, the
-  `findSuperDeclaration` analogue), so the operand names the declaring class — valid for both
-  `call` (inherited final member, derived receiver) and `callvirt`. A `super.f()` call
-  (`IrCall.superQualifierSymbol != null`) is a plain non-virtual `call` on the resolved target
-  — the CLR runs the base implementation with the `this` receiver, exactly the JVM's
-  invokevirtual/invokespecial split (probe-verified from inside both plain and final
-  overrides). Constructor chaining to the base reuses the delegating-call shape (`ldarg.0`,
-  args, `call instance void 'Base'::.ctor(...)`) — identical IL for `this(...)` and base
-  delegation. UPCASTS are pure reference widenings needing NO instruction (probe-verified:
-  base-typed locals, parameters, returns): `isDotNetAssignableTo` walks the
-  `DotNetIlClassInfo.baseType` chain (linked in a pre-pass AFTER all registrations — forward
-  references are legal IL and legal Kotlin), and expression-position `IMPLICIT_CAST` that is
-  such an upcast emits just its operand. A runtime type test against a non-generic module class
-  boxes/widens its operand to object, uses `isinst class 'C'`, then compares the returned
-  reference with null (`cgt.un` for `is`, `ceq` for `!is`); the checked IMPLICIT_CAST produced by
-  its positive smartcast is `castclass class 'C'`. A Kotlin-owned split generic interface uses
-  that same classifier-only rule: every concrete argument, use-site projection, and star maps to
-  its non-generic canonical identity for `is`/`!is`, `as`, and `as?`; nullable `is D<*>?` handles
-  null before `isinst`, non-null hard casts add the mapped-NPE guard which CLR `castclass` lacks,
-  and safe casts are one `isinst` yielding canonical-or-null. This follows JVM raw-descriptor,
-  JS interface-symbol, and Native TypeInfo semantics. Declared/exact capability siblings never
-  decide a Kotlin cast. Reified generic classes and foreign CLR generic interfaces are deliberately
-  not broadened to this path: a closed `C<T>` token would strengthen Kotlin's erased check, while
-  foreign interfaces retain CLR construction/variance rules. IMPLICIT_NOTNULL keeps its
-  established checked nullability path. Explicit casts outside the canonical split-interface
-  slice, value-type tests, and every other non-upcast IMPLICIT_CAST stay rejected loudly. STAYS
-  REJECTED, whole-class: exception supertypes (existing message; interface supertypes are
-  SUPPORTED since the interface model, see its bullet), out-of-module bases,
-  objects/companions with any supertype, and data-object plus unsupported data-class generated-
-  member shapes. Covariant-return overrides are supported by the uniform floor-compatible design
-  in `docs/decisions/adr-hybrid-generic-nullability-and-covariant-returns.md`: the precise method
-  is a distinct virtual slot when its direct class slot has a different mapped return, and a
-  private final MethodImpl bridge adapts that immediate wider class slot
-  (`ilText/covariantClassReturns.kt`, `box/covariantReturns.kt`). Inherited bridge chains route
-  transitive class slots; interface slots remain explicit. Same-carrier `String?`-to-`String`
-  covariance reuses the ordinary base slot. Overrides of `kotlin.Any`
-  (`toString`/`equals`/`hashCode`) are supported by mapping to System.Object's reused virtual
-  slots, pinned by `ilText/inheritanceAnyOverride.kt` and `box/anyMembers.kt`; detection walks
-  `allOverridden()` against the TYPE-based `isAny`, because
-  `IrClass.isAny`/`findOverriddenMethodOfAny` compare IdSignatures and this pipeline's symbols
-  carry none. Kotlin `protected` methods render as CLR `family`; this follows the JVM access
-  boundary while allowing compiler/runtime subclasses in other assemblies to reach protected
-  hooks without making them public. End-to-end: `box/inheritanceBasic.kt` (three-level
-  chain: polymorphic dispatch through base-typed values, super chains, final override,
-  inherited state/methods, upcast positions) and `box/inheritanceInitOrder.kt` (base init runs
-  before derived init; `beforefieldinit` semantics unchanged — instance init order is a
-  constructor-chain property, not a `.cctor` one). Abstract metadata, new/reused slots, explicit
-  and fake interface obligations, generic methods/constraints, sealed-class dispatch, companion
-  construction, and constructor state are pinned by `ilText/abstractClasses.kt` and
-  `box/abstractClasses.kt`; `ilText/classShapeRejected.kt` retains the neighboring variance and
-  nested-class rejection boundaries.
-- Interface model (probe series `ifaceprobe_s1`–`_s10`, `genifaceprobe_s1`,
-  `genmemberprobe_s1`, `ifaceredeclareprobe_s1`, `delegationprobe_s1`,
-  `nestedifaceprobe_s1`–`_s3`; JVM precedent: real CLR
-  interface types = no vtable/interface lowering, the same argument as the class and inheritance
-  bullets): a
-  top-level or named nested Kotlin `interface` whose callable members are ALL abstract (abstract
-  functions and abstract `val`/`var` properties; empty interfaces included) is emitted as
-  `.class interface public abstract auto ansi` — no `extends` line, no `sealed`, no
-  `beforefieldinit` (s1), or with the corresponding `nested public/private/assembly/family`
-  accessibility prefix (`nestedifaceprobe_s1`–`_s3`). A `sealed interface` is deliberately
-  ACCEPTED and emitted as the same plain interface. Unlike a class, an interface has no
-  constructor boundary at which `famandassem` can enforce Kotlin sealing, and CLR metadata has no
-  permitted-implementor table. Kotlin compilation still enforces the sealed hierarchy, but C# or
-  other foreign CLR code can implement the interface; exhaustive Kotlin code must retain its
-  ordinary no-branch failure behavior for such a foreign value. This is a deliberate CLR
-  interoperability limitation, not a claim that the metadata is sealed (pinned initially by
-  `ilText/interfaceEqualityWidening.kt`; a foreign-implementor runtime test remains required).
-  Abstract members are
-  `.method public hidebysig [specialname ]newslot abstract virtual instance ... cil managed`
-  with an EMPTY `{ }` block (s1/s2; the emitter keeps its established specialname-first flag
-  order — ilasm treats the flags as an unordered keyword set); abstract accessors are bound by
-  ordinary `.property` blocks targeting the interface's own accessor methods (s2). An abstract
-  redeclaration of an inherited function/accessor deliberately introduces another
-  `newslot abstract virtual` slot; one exact-signature class member implicitly fills the original
-  and every redeclared slot, including diamonds and open/composed generic views
-  (`ifaceredeclareprobe_s1`). Calls name the interface that owns the selected declaration.
-  A mapped covariant-return redeclaration introduces a distinct abstract CLR slot. Each concrete
-  implementing class receives explicit MethodImpl adapters for every wider slot it satisfies, so
-  Kotlin override resolution does not depend on CLR implicit matching. KOTLIN-OWNED
-  GENERIC interfaces use the split ABI in
-  `docs/decisions/draft-adr-variant-interface-abi.md`: non-generic `Producer` is the sole Kotlin
-  storage/cast identity and owns deterministic erased slots; declaration-variant
-  `'Producer`1'<+ 'T'> : Producer` is the same object's C#-friendly typed capability; and an
-  all-invariant exact sibling is emitted only when member placement or a superedge requires it.
-  The emitter reserves the canonical, declared, and optional exact TypeDef identities as one
-  atomic physical-name set. A non-local collision evicts the offending logical declaration; a
-  published library treats any such eviction as fatal. Declared- and exact-view members are
-  independently clash-checked after their physical signature mapping, with return types excluded
-  from CLR overload identity. `testLibraryPublicationFailsWhenADeclarationIsEvicted` pins a
-  property/user-accessor clash on each typed view, a distinct inherited method and local property
-  accessor colliding on the declared view, a distinct inherited method and inherited property
-  accessor colliding on that view, a user TypeDef occupying a generated exact name, and a nested
-  owner-relative generic-method intersection; all six produce
-  diagnostics and no library DLL. The inherited gate follows the emitted physical
-  capability graph and exempts a genuine Kotlin override. An inherited-only pair is rejected when
-  it is a distinct Kotlin member or when no selected derived slot covers both same-name contributor
-  families. Merged property fake overrides are checked against atomic accessor selection on each
-  physical view. A portable
-  same-name intersection executes one Kotlin implementation through both
-  parent canonical/declared bundles and the derived Kotlin view on both runtimes; explicit parent
-  calls also work from C#. The pre-adapter derived call was CS0121. Bodyless intersections of
-  generic parents with one resolved signature now emit a source-named abstract slot on the first
-  common declared/exact typed capability. Ordinary value parameters and
-  method type parameters with owner-independent constraints or a direct owner-relative `<R : T>`
-  constraint are normalized positionally and covered. The logical owner-relative bound remains in
-  KLIB while every split CLR interface view erases it. When its target retains a physical bound, the
-  unconstrained class bridge invokes that implementation at substituted `T`, adapting a direct `R`
-  parameter/result through `object`; an invalid foreign instantiation therefore fails at the
-  generated cast. An already-erased default/helper forwarder keeps the actual `R`, preserving calls
-  made valid by Kotlin variance widening. Restating the stronger bound only on that `MethodImpl` is
-  not valid CLR metadata. Parent-parameter permutations and contributors reached through bodyless
-  intermediate interfaces are normalized through the derived owner and admitted when their
-  signatures converge.
-  At least two direct branches must contribute, and a parent which already contains the complete
-  intersection suppresses a redundant descendant slot/record. Property intersections additionally
-  emit a real derived CLR property row bound to the recorded getter and, only when it exists on that
-  same view, setter slots. One deterministic existing bridge receives the additional `MethodImpl`,
-  so direct C# calls and cross-module covariant refinement retain one Kotlin body on both profiles.
-  Contributors may resolve to different covariant returns when Kotlin selects one result and a
-  contributor has that exact resolved return. That contributor's bridge implements the derived
-  slot; wider parent bridges still adapt the same source body. Kotlin and C# producer/consumer
-  calls pin the strongly typed derived result on both profiles.
-  A split mutable property follows the same surface rule as an ordinary split property: the
-  declared-variance interface owns its legal accessor subset, while the exact interface repeats
-  the safe accessor and owns the complete getter/setter property. Schema 14 records all three
-  accessor/view obligations, and existing bridges receive the corresponding `MethodImpl` rows.
-  Kotlin producer/consumer implementations and direct C# declared reads plus exact writes execute
-  on both profiles without another property body.
-  Selected portable defaults shared by several branches use the profile-aware promotion ABI rather
-  than a schema-14 bodyless slot. Two incomparable generic promotion providers cause the derived
-  interface to emit another canonical/declared/exact resolver bundle targeting the original helper.
-  Kotlin and C# calls through root, branch, derived, exact, method-generic, and widened views prove
-  that this never copies the body or exposes CLR ambiguity. Unrelated default declarations require
-  an explicit Kotlin override and follow the ordinary declared-body path.
-  Physical ABI schema 14 gives that slot a
-  distinct normalized record containing its typed owner/view, method name, and contributing
-  logical-member group; it is not encoded as an already-implemented view bridge. A property needs
-  no second record because KLIB retains the accessor association; each physical view's required
-  accessor set is admitted or removed atomically. Nested/general owner-relative method constraints
-  remain pending and are rejected as complete declarations when
-  they would otherwise leave an ambiguous same-name CLR surface. Logical contributors and their
-  first multi-branch meeting are discovered before those support checks, so every genuine
-  candidate is selected, covered by an existing profile-aware promotion, or rejected rather than
-  silently disappearing from ABI discovery.
-  Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
-  parameters stay unmarked, and direct supported constraints compose as
-  `<+ (class 'Base') 'T'>` (genifaceprobe_s1). All concrete Kotlin implementations receive
-  explicit canonical and typed MethodImpl bridges to one source body. A generic or non-generic
-  class may implement an open or closed typed capability, while Kotlin ABI fields, parameters,
-  returns, projections, and stars use canonical identity. A generic interface member may
-  independently declare method parameters (`!!n`), including supported constraints; generated
-  bridges copy those method parameters and forward their type arguments (`genericMembers`).
-  NESTING uses the JVM static-nested model: an interface may appear inside
-  any supported named class, interface, object, or companion, and may itself contain named
-  classes, interfaces, objects, and a companion. Every child has an independent generic-parameter
-  space; a generic interface's named object is safe because `INSTANCE` lives on the independently
-  non-generic object type. A non-generic interface's companion singleton field and `.cctor` live
-  on the interface owner and assemble/run on both runtimes. A generic interface companion is
-  rejected because CLR statics are per constructed owner (`nestedifaceprobe_s2`/`_s3`). A class
-  lists its DIRECT physical interfaces comma-separated on an `implements` line after `extends`
-  (`extends 'Base'` / `implements 'A', 'B'`, s3). A Kotlin-owned generic logical edge expands to
-  canonical identity plus its most-specific representable declared/exact capability, e.g.
-  `implements 'Producer', class 'Producer`1'<!0>`; a typed capability's owner token is always the
-  full construction (`genifaceprobe_s1`). Interface-extends-interface uses the same physical
-  `implements` list, and transitively implied super-interfaces are never repeated (s6). MEMBER
-  FLAGS: `isDotNetVirtual` widens — every interface member and
-  every member overriding one is virtual even in a FINAL class, because a non-virtual
-  implementation assembles cleanly but load-poisons the type (TypeLoadException at first JIT of
-  a using method, s1b). A Kotlin override of ONLY interface members introduces a fresh class
-  slot: `newslot virtual`, `newslot virtual final` for a Kotlin-`final` member (the Roslyn
-  implicit-implementation shape); an override of a base-class member keeps the slot-reuse
-  spelling `virtual` (no newslot) even when it also implements an interface — CLR interface
-  mapping follows the class vtable slot (s4). Stated deviation from Roslyn: `final` follows
-  Kotlin modality alone, so an implicit implementation in a final class whose member is not
-  `final override` stays `newslot virtual` where Roslyn would seal it — s4 shows the non-final
-  spelling dispatches identically (goldens + box pin it). CALL SITES: interface-typed receivers
-  always use `callvirt` with the operand naming the DECLARING interface — `resolveFakeOverride`
-  handles inherited members, with a maybe-abstract fallback because the plain resolution
-  ignores abstract targets (a fake override whose only real declarations are abstract interface
-  members resolves to null otherwise); naming a sub-interface that merely inherits the member
-  is a runtime MissingMethodException (s6) — NO fake-override leniency, unlike the class-side
-  rule. One class member implicitly fills every same-signature interface slot (the
-  diamond/merge shape, s9). For an ordinary non-generic interface, a base-class member satisfying
-  a derived class's interface works iff the inherited member is VIRTUAL (s5a — Kotlin
-  fake-override semantics for free) AND its mapped IL signature matches the interface slot
-  EXACTLY, return type included: ECMA-335 interface mapping matches the full signature. The
-  non-virtual variant is gated whole-class at compile time with a message citing s5b, while the
-  inherited covariant-return variant (`class Combo : Factory(), Maker` where
-  `Factory.make(): Bottom` fills `Maker.make(): Top`) receives a private final MethodImpl adapter
-  for the wider interface slot. The non-virtual poison shape assembles without an ilasm diagnostic
-  and throws TypeLoadException at first JIT; the covariant shape is executable through both class
-  and interface views (`ilText/interfaceNonVirtualImplRejected.kt`,
-  `ilText/covariantInterfaceReturns.kt`, and `box/covariantReturns.kt`). Same-IL-type Kotlin
-  covariance (`String?` filled by an inherited `String` member) needs no adapter. Split
-  generic interfaces are the exception: their lowering always emits explicit canonical and typed
-  MethodImpl bridges, including the boxing/widening bridge needed for refined returns. UPCASTS:
-  class→interface and
-  interface→super-interface are free reference widenings in every position (field, parameter,
-  return, local — s7); `isDotNetAssignableTo` walks the supertype DAG (`baseType` plus physical
-  `interfaces` links, BFS with substitution/dedup — diamonds are legal). Two logical
-  instantiations of one Kotlin-owned generic interface use the same canonical CLR identity in
-  Kotlin ABI positions. Thus reference, value, open, and use-site-projected conversions—including
-  `Producer<Int> -> Producer<Any>`—are instruction-free copies preserving `===`; only a transient
-  typed call probe depends on a closed declared/exact construction. Imported CLR interfaces keep
-  CLR reference-only variance, and generic classes remain invariant.
-  The reference `ceq` is type-agnostic across interface-typed and class-typed views (s7; sibling
-  widening — see the equality bullet).
-  INTERFACE DELEGATION follows the JVM frontend-owned model: FIR supplies ordinary forwarding
-  functions/accessors with origin `DELEGATED_MEMBER`, and codegen renders their existing bodies
-  through the normal member path. A constructor-property delegate uses that property's private
-  backing field; a plain parameter, expression, bounded type parameter, or `var` delegate gets a
-  separate private instance field with origin `DELEGATE` (`$$delegate_n`). The shared
-  `InitializersLowering` merges its initializer into the constructor after the base-constructor
-  call and before later member initializers, preserving JVM evaluation order and one-time capture
-  (reassigning a `var` property does not retarget forwarding). Calls use the delegate expression's
-  exact static owner — interface, concrete class, generic instantiation, or constrained `!n` — so
-  existing `callvirt`/`constrained.` machinery handles dispatch without a delegation-specific
-  call emitter. Explicit overrides suppress only their corresponding forwarding member; multiple
-  delegates, mutable properties, generic owners/methods, inherited interface redeclarations, and
-  a delegated member overriding an inherited virtual class member compose with the existing slot
-  model. The private-field/forwarding shape and generic method dispatch assemble and run on
-  CoreCLR 10.0.9 and Framework 4.8 (`delegationprobe_s1`); both FIR source spellings, the exact IL,
-  runtime capture/order/dispatch, and an evicted-interface cascade are pinned by
-  `ilText/interfaceDelegation.kt`, `box/interfaceDelegation.kt`, and
-  `ilText/interfaceDelegationRejected.kt`.
-  INTERFACE ARGUMENT DEFAULTS use a producer-owned masked dispatcher in the compiler-reserved
-  nested `__KotlinDefaultImpls` class. The static `$default` dispatcher takes the interface receiver as
-  its first ordinary parameter, evaluates defaults and masks in source order, and calls the
-  interface slot through `callvirt`, so the implementing override still owns dispatch on every
-  profile. Common Kotlin forbids omitted arguments in a super call
-  (`SUPER_CALL_WITH_DEFAULT_PARAMETERS`); .NET does not publish a second dispatcher for that
-  invalid construct, and lowering must not reinterpret escaped malformed IR as an ordinary virtual
-  call. `DotNetExpressionCheckers` registers the existing FIR checker through the metadata session
-  factory's real DotNet platform branch; the target must not impersonate JVM merely to inherit the
-  diagnostic. The helper is not a Kotlin source declaration or independent callable identity;
-  separately compiled consumers bind its physical name from structured ABI metadata. A generic
-  interface's owner parameters become invariant generic METHOD parameters on every helper method
-  (including copied constraints); the non-generic nested helper therefore captures no enclosing
-  CLR construction. Calls derive those arguments from the receiver's instantiated interface view,
-  then append ordinary method arguments. Direct class/interface, inherited, constrained,
-  delegated, variant, bounded, generic-method, member-extension, and nested-interface shapes all
-  share that path. `interfacedefaultprobe_s1` assembled and ran the generic nested-helper shape
-  under modern 10.0.9 and Framework 4.8 ILAsm. Pins: `ilText/interfaceDefaultArguments.kt`,
-  `box/interfaceDefaultArguments.kt`, `ilText/defaultArgumentsRejected.kt`, and
-  `ilText/interfaceDefaultBodiesPortable.kt`.
-  EVICTION: an evicted interface cascades whole-class to every
-  implementing class and every sub-interface — the `implements` list is re-resolved from the
-  LIVE class map at the top of every render round with chained reasons, the interface arm of
-  the base-class cascade (pinned by `ilText/interfaceEvicted.kt`); evicting an implementer never
-  affects the interface. A rejected nested declaration removes only its metadata subtree and real
-  dependents; the interface parent and independent siblings survive.
-  PROFILE-AWARE INTERFACE DEFAULTS follow
-  `docs/decisions/adr-profile-aware-interface-default-implementations.md`. `net48` and
-  `netstandard2.0` emit abstract CLR slots, one marked public compiler-ABI
-  `__KotlinDefaultImpls` body, and physically required hidden class MethodImpl forwarders.
-  `net10.0` emits one canonical DIM body and retains the same helper identity for portable
-  compatibility and exact calls. Qualified `super<I>.f()` always lowers to exactly `I`'s helper:
-  portable helpers own the moved body, while modern helpers use a plain nonvirtual `call` to
-  their owning DIM. Ordinary calls remain virtual. External helper identities, derived-interface
-  promotions, covariant-return MethodImpls, and hidden class MethodImpls are consumed from the
-  structured physical ABI; never
-  infer them from target profile or generated names. A class inherits an existing MethodImpl for
-  the same selected default, but receives a resolver bridge when an ancestor-default MethodImpl
-  would mask a more-specific Kotlin choice.
-  External masked default-argument bindings follow the recorded logical dispatch shape. Instance
-  members copy the selected declaring interface receiver and declaration-level type parameters
-  before method type parameters; physically static companion and top-level declarations copy no
-  false dispatch context. A mismatch between the IR stub receiver and `isInstance` record is an
-  internal compiler error, never a guessed helper signature.
-  GENERIC INTERFACE DEFAULTS preserve one logical member, one canonical semantic body, and one
-  stable helper ABI identity across erased, declared-variance, and exact CLR views. On portable
-  profiles the helper owns the body. On `net10.0` one strongly typed DIM owns it; the exact view
-  is the normal strongly typed C# surface, and less-precise views virtually adapt to that DIM.
-  Helpers select it nonvirtually. No view adapter, promotion, class bridge, or class forwarder owns
-  an independently lowered body. A concrete non-generic net10 interface override owns one complete
-  final canonical/declared/exact adapter bundle whose bodies dispatch virtually to its DIM.
-  Implementors inherit that bundle, including across assemblies: unpublished physical ABI schema
-  13 retains each adapter as a structured `B` entry keyed by owner, inherited logical member, and
-  physical view (the entry was introduced in schema 12). Never rediscover it from generated
-  declarations, method names, or IL text.
-  A generic capability call resolves its canonical fallback name from the bound physical function
-  record before deriving a Kotlin-owned hash. Runtime and external split interfaces may retain
-  established CLR names such as `MoveNext`, `Current`, or `Next`; inventing a hashed fallback for
-  such a member produces valid-looking IL that fails lazily with `MissingMethodException`.
-  Owner-relative method constraints remain logical KLIB constraints
-  but are omitted from executable CLR views: CLR variant types reject them at load time and an
-  invariant exact-DIM constraint rejects valid widened Kotlin calls. Exact arguments/results remain
-  typed, all other representable constraints remain physical, and any future constrained C# facade
-  is an export adapter rather than a Kotlin dispatch slot.
-  C# SOURCE AUTHORING follows
-  `docs/decisions/adr-csharp-interface-source-authoring.md`. Every compiler-produced Kotlin library
-  DLL carries a versioned implementation manifest whose records plus ordinary CLR metadata are
-  sufficient without parsing the private Kotlin metadata resource. The supported convenience is a Roslyn generator/analyzer
-  for a user-authored partial C# type, not a universal CLR implementation mechanism. The C# author
-  opts in with the real base list (`partial class C<T> : Shape<T>`): canonical for a non-generic
-  Kotlin interface and the declared Kotlin view for a split generic interface. Attributes,
-  generated base classes, marker interfaces, exact-view base lists, and separate tooling
-  identities are not authoring contracts. A real C# class base remains untouched, and multiple
-  unrelated Kotlin roots compose in the same generated partial; a DLL-only class executes both
-  ordinary and generic Kotlin contracts while retaining its base constructor and state. The
-  `netstandard2.0` Roslyn component under
-  `csharp-authoring` parses the authoritative DLL manifest with explicit limits and diagnoses
-  missing `partial`, inaccessible friendship, conflicting explicit ABI members, unsupported
-  substitutions, malformed manifests, and schema/version mismatch. Generated canonical/exact
-  views remain compiler ABI rather than user-authored API. Base-list substitution validation is
-  recursive, following the complete Roslyn type tree. Nested named constructions, type parameters,
-  nullable value types, and single-dimensional zero-based CLR vectors are preserved exactly when
-  every child is representable. Nested `dynamic`, pointers/function pointers, unresolved or
-  unbound types, and rectangular/non-vector arrays are `KDNCS004`; never erase one of those leaves
-  to `object` or reinterpret a rectangular CLR array as nested Kotlin `Array`. C# nullable-reference
-  annotations remain foreign flow metadata rather than Kotlin declaration nullability. The
-  production fixture executes `List<Nullable<int>[]>` through the erased canonical slot with both
-  list and vector identity intact, and hostile nested-dynamic and rectangular-array substitutions
-  each produce one diagnostic. Nested reference-class and record-class
-  implementors are generated inside a reconstructed partial containing-type chain; every
-  container must be partial, and file-local types cannot participate across the generated syntax
-  tree. C# struct and record-struct implementors are an accepted deferred shape: `KDNCS010`
-  remains the deliberate boundary until a separate interop decision gives portable helper
-  boxing and modern DIM/constrained dispatch one profile-uniform identity, copy, mutation, and
-  default-dispatch contract. Do not generate an implicit reference wrapper or remove that
-  diagnostic without the cross-profile value-type matrix recorded in the source-authoring ADR.
-  Generated-source hint names use a SHA-256 digest of the fully qualified C# type solely to avoid
-  Roslyn filename collisions; they are not declaration identities or persisted ABI. Every emitted
-  analyzer diagnostic, including the containing-type
-  `KDNCS011` rule, must appear in `SupportedDiagnostics`; release-table documentation alone is not
-  registration. Diagnostic ownership is per C# type: the analyzer reports semantically analyzable
-  shapes, while the generator reports only when a blocking C# error inside that same type would
-  suppress analyzer output. Both still perform validation to decide whether generation is safe;
-  unrelated compiler errors never transfer ownership, and representative IDs are pinned to one
-  occurrence. Its ordinary non-generic slice binds
-  Kotlin-named or PascalCase source methods/properties to explicit recorded CLR slots. Portable
-  defaults call the recorded helper, while native and child-promoted `net10.0` DIMs suppress the
-  class forwarder. A direct Kotlin reabstraction remains abstract in the manifest and requires one
-  C# source body even when its parent exposes a portable helper or modern DIM; all inherited and
-  redeclared CLR slots adapt to that body, and omission is `KDNCS008`. This includes covariant
-  generic reabstraction: the declared typed slot is authored and canonical/inherited views adapt
-  without copying a body. Schema 7 also carries each member's sorted Kotlin logical override keys.
-  For a Kotlin-resolved default conflict, parent slots follow the most-derived selected member:
-  portable adapters call the selected child helper from its declaring assembly and modern
-  adapters inherit the selected DIM. Never generate independent parent-helper semantics. Roslyn
-  validates each edge against physical interface ancestry and the resolved override-compatible
-  signature; a stale or unrelated edge is `KDNCS006`. Unrelated C#-authored roots without a Kotlin
-  resolver require one C# source body instead of an invented parent preference. Covariant generic
-  conflict coverage additionally runs child, both typed parents, and a widened parent through the
-  selected child helper/DIM; the rejected parent helper is never generated. The DLL-only matrix
-  executes public and authorized-internal
-  implementations through Kotlin on every profile. Split generic authoring names only the
-  declared interface;
-  generated partials add the exact view with the identical closed or open substitution and adapt
-  declared/exact/canonical slots to one typed source body. Exact adapters stay typed; canonical
-  adapters alone cast, box, or widen for their erased ABI. Generic method constraints come from
-  CLR metadata. Erased `R : T` guidance stays diagnostic-only. Portable helpers receive the
-  recorded owner/method substitutions, while native and promoted DIMs remain method-free.
-  Production erased adapters also consume the declaration-specific schema barrier: they check the
-  typed authoring parameter before casting and return the recorded `false`, `null`, `-1`, or
-  argument fallback. Exact and declared adapters stay direct, and a member without a policy keeps
-  ordinary cast/unbox failure. Real collection/list and synthetic null/argument fixtures execute
-  all four policies; no behavior is inferred from CLR names or `@UnsafeVariance`. Production
-  intersection adapters use the schema contributor logical keys, not coincident source names, to
-  converge parent canonical and derived typed slots on one source body. Property accessors are
-  grouped by resolved CLR Property row before emission, preserving a single exact mutable
-  property. Method, mutable-property, and erased owner-relative generic intersections execute
-  through derived and both parent views on every DLL-only lane; intersection-relative `R : T`
-  remains `KDNCS009` guidance only. Schema 7
-  explicitly names the existing `kotlin-public-id-signature-legacy-v1` scheme; every interface
-  and member key is the ordinary `PublicIdSignatureComputer(DotNetIrMangler)` identity used by
-  the physical index embedded in the DLL. Runtime, Roslyn, and tooling-specific declaration-key namespaces are
-  rejected. It records direct public interfaces, canonical/declared/exact owner paths where split
-  generic views exist, typed authoring views, read-only/mutable property and generic-method associations,
-  exact-only inputs, and portable-helper versus `net10.0` DIM obligations. One parent from the
-  same DLL or a
-  referenced compiler-produced Kotlin library composes through its own manifest contract and the
-  CLR-authored interface TypeSpec; the manifest does not duplicate that physical edge. A
-  `net10.0` child consuming a portable parent discovers a selected promoted DIM from the child's
-  concrete CLR MethodImpl bundle, resolved against the parent manifest's MethodDef locators.
-  The raw MethodImpl declaration must match assembly, owner, method, generic arity, return type,
-  and every parameter type; owner/name/count matching is forbidden. Promotion is never inferred
-  from profile and is not copied into a second manifest record.
-  Multiple generic parents compose through that same manifest/CLR graph split, including a
-  shared-root diamond whose logical root is deduplicated. Schema 7 associates a physical derived
-  declared/exact intersection slot with its sorted contributing logical members because CLR
-  metadata cannot express that Kotlin selection. C# adapters converge those slots and the parent
-  canonical identities on one source body. Split mutable intersections record the declared getter
-  and exact getter/setter; the exact accessors name the same getter-selected CLR Property row.
-  An ordinary non-generic interface has one canonical owner and uses distinct canonical member
-  locators; it does not acquire a fake declared owner or an inaccurately named erased slot.
-  Roslyn resolves every MethodDef locator against the open owner using its complete physical
-  return and parameter signature before applying a consumer substitution. Owner, name, generic
-  arity, return, and parameters must select exactly one definition; name/arity/count matching is
-  forbidden. IL identifier quoting and an optional declaring-assembly self-qualification are
-  normalized, while external assembly qualifiers remain significant. Roslyn's standard
-  `mscorlib`/`netstandard`/`System.Runtime`/`System.Private.CoreLib` forwarding identities are
-  normalized only for `System.*` types. A stale, absent, or ambiguous locator is `KDNCS006`.
-  Representable method constraints come only from the located CLR GenericParam metadata; the
-  manifest does not duplicate them. The no-KLIB fixture resolves a public marker constraint and
-  generates matching C# `where` clauses for typed and canonical slots. Owner-relative constraints
-  erased because CLR variant metadata cannot carry them stay erased and are never guessed by C#
-  tooling. Schema 7 records only normalized method-parameter/owner-parameter index pairs as
-  analyzer guidance on direct and derived-intersection slots. Those pairs explain the weakened
-  foreign boundary and can drive a runtime adapter; they must never become reconstructed CLR or
-  C# constraints. The DLL-only matrix proves the corresponding GenericParamConstraint rows remain
-  absent on every profile and rejects invalid positional records.
-  Declaration-specific wrong-shape behavior comes from common `SpecialBridgeMethods`, never from
-  a name or `@UnsafeVariance` heuristic. Schema 7 records the checked parameter count and
-  `false`, `null`, `-1`, or argument fallback. No record means ordinary cast/unbox failure. The
-  no-KLIB fixture pins `Collection.contains`, `List.indexOf`, and an ordinary unsafe member.
-  `Kotlin.Runtime.dll` publishes built-in-derived manifests for `Iterator`, `ListIterator`,
-  `Iterable`, `Collection`, and `List`. A structured runtime registry supplies only their CLR
-  owners, methods, and Property rows (`size` maps deliberately to CLR `Size`); logical keys come
-  from the actual common built-ins. Generated C# implementations of the two collection children
-  execute through exact and widened Kotlin views on all three profiles.
-  One idiomatic C# property body may use a C#-facing PascalCase name; generated explicit
-  properties bind it to every recorded Kotlin physical name. Kotlin ABI names stay unchanged.
-  `init`, `required`, indexers, events, and consumer aliases require explicit export policy rather
-  than being inferred from Kotlin `val`/`var`.
-  Friend-accessible ordinary internal interfaces use the same declaration identities and records
-  as public contracts, while CLR TypeDef accessibility and producer-emitted
-  `InternalsVisibleTo` remain the sole access authority. The manifest never grants friendship or
-  widens the type. Effective public/internal owner chains are included; private/protected chains
-  and `@PublishedApi internal` compiler-ABI interfaces are excluded. DLL-only tests implement
-  top-level, nested, and nested generic internal contracts through the production generator from
-  an authorized C# assembly on every profile and pin `CS0122` separately for top-level and nested
-  unauthorized identities. Nested generic canonical/declared/exact views remain NestedPublic
-  inside the internal owner and adapt one typed C# property body.
-  Nested owner paths use `+` for Roslyn metadata lookup and `.` only for source-name matching;
-  accessibility walks every public/internal owner and applies producer friendship to internal
-  components. The metadata reader also pins the exact
-  `InternalsVisibleTo("GeneratedShape")` blob and the non-public, NestedPublic, NestedPrivate, and
-  public-compiler-ABI TypeDef visibility rows. It additionally compares the exact
-  `KotlinCompilerAbiAttribute` and `EditorBrowsable(Never)` blobs on `@PublishedApi internal` and
-  proves an ordinary internal interface has no compiler-ABI marker; this evidence does not come
-  from IL text.
-  Generated adapters must reach the one typed body;
-  portable defaults call the recorded nameable
-  `__KotlinDefaultImpls`, while modern implementations inherit the recorded DIM. A
-  child-selected property DIM still needs generated explicit parent Property adapters when
-  Roslyn's C# base-list validation does not accept the interface-owned MethodImpl mapping; those
-  adapters dispatch virtually through the selected child property and never call the helper.
-  Mutable-property getter and setter declarations retain separate Kotlin identities, override
-  edges, helpers, and qualified-super choices. The generator may batch them into one explicit C#
-  Property only after selecting each accessor independently; never choose one semantic parent for
-  the complete property.
-  A covariant generic property's declared typed view owns its DIM body. Roslyn does not treat the
-  interface-owned MethodImpl adapter as satisfying the inherited erased canonical Property on a
-  C# class, so the generator emits an explicit canonical Property adapter which dispatches
-  virtually through that typed DIM. Exact and declared results must not route through an erased
-  cast.
-  For a covariant mutable default, the declared getter and exact setter each own their typed DIM
-  body. Other typed accessors already contain interface DIM adapters and must not receive a class
-  adapter back to their own slot. The erased canonical Property does require a class adapter.
-  Portable erased setters cast from their physical `object` value to the constructed helper
-  parameter; modern erased setters perform the same conversion before virtual exact-DIM dispatch.
-  Ordinary `@UnsafeVariance` wrong-shape values retain cast failure.
-  Property helpers alone use the physical-name-grammar-3 reserved
-  `get_/set_...__KotlinDefault__<logical-identity-digest>` form so generated C# can name them
-  without changing the ordinary CLR Property row or accessor names. Consumers use manifest
-  locators and never derive this name.
-  The carrier-independent payload is embedded under the stable managed-resource name
-  `Kotlin.CSharpImplementationManifest`. A 48-byte envelope records magic, schema, payload length,
-  and the raw SHA-256 digest before the bounded UTF-8 record payload. Both selected ILAsm
-  implementations embed a same-directory `.mresource` source file into the PE; the assembler
-  stages both the IL and payload in an isolated temporary directory and removes them after
-  assembly, so the DLL is self-contained. Production Roslyn tooling reads the ManifestResource
-  row and CLR resource section directly from the referenced PE without loading target code or
-  consulting a sidecar.
-  STAYS REJECTED, loudly, whole-interface/whole-class: private callable interface members,
-  companions on generic interfaces, `fun interface` (no SAM-conversion model),
-  interfaces imported from arbitrary CLR metadata without a bound Kotlin KLIB/physical-ABI index,
-  and local/anonymous interfaces,
-  explicit `as`/`as?` on non-generic interfaces and on foreign/reified CLR generic interface
-  constructions (Kotlin-owned split generic interfaces instead cast only their canonical identity
-  as described above), and interface members redeclaring `kotlin.Any` members (the System.Object
-  class slots exist, but the exact CLR interface contract/MethodImpl policy is not yet audited).
-  Failure-mode calibration: every interface-mapping mistake (missing virtual, wrong operand
-  interface) assembles CLEAN and fails only lazily at runtime, so box coverage is mandatory per
-  dispatch shape — `box/interfaceBasic.kt` (dispatch through interface-typed values, abstract property
-  access, multiple interfaces + base class, final override, derived override via interface
-  dispatch, the s5a inherited-member shape, interface-typed fields/returns, identity and
-  null checks) and `box/interfaceHierarchy.kt` (inherited members through sub-interface
-  receivers, the diamond, super-interface widening, sibling-interface identity); goldens
-  `ilText/interfaces.kt` (including the `newslot virtual final` / `specialname newslot virtual
-  final` spellings of a Kotlin `final override` implementing only interface members) and
-  `ilText/interfaceHierarchy.kt` pin every new spelling,
-  `ilText/interfaceNonVirtualImplRejected.kt` pins the s5b gate,
-  `ilText/interfaceCovariantImplRejected.kt` the s10 gate; nested metadata, visibility, generic
-  independence, interface-owned singleton initialization, dispatch, forward references, and
-  narrow rejection are pinned by `ilText/nestedInterfaces.kt`,
-  `ilText/nestedInterfacesRejected.kt`, and `box/nestedInterfaces.kt`.
-  Sibling widening, System.Object fallback for unrelated interface views, and sealed-interface
-  acceptance are pinned by `ilText/interfaceEqualityWidening.kt`. Abstract redeclaration metadata,
-  owner-token dispatch, mutable properties, generic composition, diamonds, and mapped-covariance
-  rejection are pinned by `ilText/interfaceRedeclarations.kt`,
-  `ilText/interfaceRedeclarationsRejected.kt`, and `box/interfaceRedeclarations.kt`. Generic
-  metadata, open/closed/permuted edges,
-  owner-token dispatch, reference/value variance, canonical erased casts/type tests, nullable
-  cast semantics, and same-object identity are pinned by `ilText/genericInterfaces.kt` and
-  `box/genericInterfaces.kt`; `ilText/genericInterfacesRejected.kt` pins the remaining open-`T?`
-  slot boundary, unsupported instantiated interface bounds, capability edges involving an evicted
-  argument type, and the rejection of a strengthened closed generic-class cast.
-- Properties use the CLR's first-class property model: private backing fields, `get_x`/`set_x`
-  `specialname` accessor methods, and a `.property` metadata block binding them (spellings
-  ilasm-probe-verified) — a stated deviation from the JVM's `PropertiesLowering`, which the CLR
-  makes unnecessary. Because of the accessor mangling, the member pre-pass rejects (whole-class)
-  IL method-identity clashes such as `val x` vs a user-declared `fun get_x(): Int` — ilasm fails
-  on the duplicate method declaration (probed on 10.0.9); the JVM analogue is the frontend
-  `PLATFORM_DECLARATION_CLASH` diagnostic for `val x` vs `fun getX()`. The same identity gate
-  runs over each file facade's top-level callables, at facade granularity (see the nullability
-  bullet's facade analogue; pinned by `ilText/facadeMethodClash.kt`).
-- Instance members of the final-class model are invoked with plain non-virtual `call`
-  (probe-verified) — a stated deviation from Roslyn, which emits `callvirt` purely for its
-  implicit null check.
-- Top-level properties follow the JVM facade-statics shape (`StaticInitializersLowering`'s
-  `<clinit>`): `DotNetStaticInitializersLowering` moves the backing-field initializers of each
-  file into one synthetic file-parented `<clinit>` function, in declaration order, which the
-  emitter renders as the facade's `.cctor`; the fields become `private static` facade fields
-  (accessed with `ldsfld`/`stsfld`) with static `get_x`/`set_x` accessors and static `.property`
-  blocks — all spellings probe-verified (`statprobe_s1`/`_s2`, including a user-class-typed
-  static field). Stated deviation from the JVM lowering: it is a `ClassLoweringPass` over the
-  facade class `FileClassLowering` created earlier, while this backend builds facades at
-  emission time, so the pass is per-`IrFile` and the `<clinit>` is file-parented. The `.cctor`
-  is lowered IR (not emission-time text) so initializer bodies pass through the later
-  `for`-loop/string-concat phases like any other body.
-- `beforefieldinit` is omitted exactly on classes that receive a `.cctor` and kept everywhere
-  else. Decider (probe): with the flag the CLR defers the `.cctor` past static method calls, so
-  calling only a top-level *function* of a facade would silently skip the file's
-  property-initializer side effects; without it the `.cctor` runs before the first active use
-  (`statprobe_s1`: `cctor-start` prints before `main-start`) = Kotlin/JVM first-active-use
-  class-initialization parity, pinned end-to-end by `box/topLevelPropertyInitOrder.kt`.
-  Accepted JVM-shared delta: a re-entrant initialization cycle observes default field values
-  (CLR `.cctor` re-entrancy = JVM `<clinit>` behavior) — documented, not enforced.
-- `const val` is a CLR `literal` field (`.field public static literal <t> 'C' = <literal>`) —
-  the ConstantValue-attribute analogue of the JVM's `constantValue()` exclusion from `<clinit>`
-  and `JvmPropertiesLowering`'s `!isConst` accessor suppression: no accessors, no `.property`
-  block, no `.cctor` entry; every read is inlined by the frontend (golden-verified), and an
-  exotic surviving accessor call fails loudly via the `availableFunctions` miss. All literal
-  spellings probe-verified (`statprobe_s1`/`_s3`: int32, string incl. the `bytearray` fallback,
-  bool, char, int64 incl. MIN_VALUE, float64 decimal and raw-bit forms). A `literal` field has
-  no storage, so codegen rejects any direct backing-field access.
-- Failing-initializer granularity is the whole per-file property group: declaration-order init
-  interleaving cannot be partially preserved, so a failure anywhere in a file's `<clinit>` (or
-  in any backing-field-bearing property) removes ALL backing-field-bearing top-level properties
-  of that file together — fields, accessors, `.property` blocks and the `.cctor` — each warned
-  with a shared reason carrying the original one. This is the facade-stateful analogue of the
-  whole-class rejection granularity. Accessor-only (custom-getter) properties fail per-function;
-  const `literal` fields are independent of the group.
-- Plain top-level `object` declarations and named objects inside plain classes follow
-  the JVM singleton model: `DotNetObjectClassLowering` synthesizes a static `INSTANCE` field on
-  every supported module-declared non-companion object (origin
-  `FIELD_FOR_OBJECT_INSTANCE`, the object's own type, initializer = a call to the primary
-  constructor, which is private from the frontend) and rewrites every `IrGetObjectValue`
-  targeting a module-declared object into an `IrGetField(INSTANCE)`; `kotlin.Unit` is guarded
-  FIRST (the existing no-op/rejection paths stay authoritative) and out-of-module objects stay
-  untouched for the existing loud failures. Stated packaging deviation: the JVM's three
-  cooperating pieces (`ObjectClassLowering`, `SingletonReferencesLowering`, and the
-  field-creation slice of `CachedFieldsForObjectInstances`) are merged into this one module pass
-  — no intermediate producers of singleton references exist in this backend.
-  `DotNetStaticInitializersLowering` recursively sweeps static class fields (today exactly
-  `INSTANCE`) into a class-parented `<clinit>` rendered as the class's `.cctor` — that slice
-  matches the JVM `ClassLoweringPass` postfix precedent even more directly than the facade slice.
-  The IL shape is
-  probe-verified (objprobe_s1): `.field public static initonly class 'C' 'INSTANCE'`, a private
-  `.ctor` (`.ctor` visibility now follows the Kotlin declaration; a public one would let other
-  .NET code mint second instances) `newobj`'d from the same class's own `.cctor`, and use sites
-  are a bare `ldsfld` + the existing plain `call instance`. A bare object reference in statement
-  position is `ldsfld` + `pop`, never a no-op — Kotlin makes it a first-active-use trigger, and
-  the `.cctor` fires on a bare cross-class `ldsfld` (objprobe_s2). `beforefieldinit` is dropped
-  on object classes by the existing decider, and the parity argument is exact here: every object
-  use is an `ldsfld`, so CLR first-active-use semantics equal Kotlin/JVM object initialization
-  (`box/objectInitOrder.kt` pins laziness + declaration order end-to-end). Non-const object
-  state stays on the instance, initialized by the merged private constructor — a stated
-  deviation from the JVM's static-state hoist (`MoveOrCopyCompanionObjectFieldsLowering` makes
-  every object-parented property field static), which the CLR-side real singleton makes
-  unnecessary. Rejections ride the existing gates, whole-class: `data object` (its generated
-  singleton equality/hash/string contract remains unaudited), local named objects, named
-  objects inside an object/companion/interface, and IL accessor-identity clashes; `==` between
-  objects stays rejected while `===` works via
-  the existing reference `ceq`. A final JVM-shaped `DotNetRenameFieldsLowering` runs after every
-  field-producing target pass. Public/protected ABI fields reserve their names, static
-  implementation storage has the next stable priority, and later private fields receive `$n`
-  suffixes. Consequently a user property named `INSTANCE`, including one whose type maps to the
-  object's own class after nullability erasure, coexists with the public singleton field. A
-  differently-typed private `INSTANCE` is suffixed too: raw CLR metadata can distinguish it, but
-  C# cannot naturally author that shape and common reflection/tooling is name-oriented. The
-  emitter's mapped-type + name gate remains a whole-class safety check for public ABI fields the
-  lowering may not rename. `ilText/objectInstanceFieldClash.kt` and the object semantic box pin
-  both exact and type-distinguished cases.
-- `const val` in an `object` is the same CLR `literal` field as on a facade, emitted on the
-  object class (coexistence of `literal` fields with a `.cctor` and an `initonly` field on one
-  class is probe-verified, objprobe_s9a): no accessors, no `.property` block, no `.cctor` entry,
-  reads inlined by the frontend, exotic surviving accessor calls fail via the availableFunctions
-  miss. One JVM-precedented slice of the static-state hoist IS needed for this:
-  `DotNetInitializersLowering` marks object-parented const backing fields static before the
-  shared initializer merge (the JVM does it in `MoveOrCopyCompanionObjectFieldsLowering` /
-  `JvmCachedDeclarations.getStaticBackingField`), because the shared merge's `!isStatic` filter
-  would otherwise copy the const initializer into the constructor as a write to a storage-less
-  `literal` field.
-- Object probe deltas, documented not enforced: CoreCLR 10 did NOT enforce `initonly` — an
-  outside `stsfld` to the INSTANCE field succeeded at runtime (objprobe_s3), so `initonly` is
-  declarative metadata only, kept for JVM-`final` parity of intent; self-reference during
-  initialization observes a null INSTANCE (objprobe_s4 — the same `.cctor` re-entrancy delta the
-  JVM shares, see the `beforefieldinit` bullet); a mutual A↔B object cycle resolves without
-  deadlock, the first-touched object's constructor sees the other fully initialized while the
-  other sees null (objprobe_s5 — exact JVM parity; only the acyclic shape is box-tested,
-  `box/objectCrossReference.kt`).
-- `companion object`s are real CLR nested types: `.class nested public auto ansi sealed` inside
-  the enclosing class's body (spelling probe-verified in every operand position — field type,
-  `newobj`, `ldsfld`/`stsfld`, `call`, method param/return signatures, `.locals` — as
-  `'demo.Outer'/'Companion'`, slash OUTSIDE the quoted identifiers, enclosing name first;
-  objprobe_s6; the spelling lives in exactly one place, `DotNetIlClassInfo.ilTypeRef`). The
-  singleton field lives on the ENCLOSING class, named after the companion (default `Companion`;
-  NAMED companions keep their own name — JVM precedent:
-  `CachedFieldsForObjectInstances.getFieldForObjectInstance`'s not-mapped-companion branch
-  parents the field to `singleton.parent`), and the enclosing class's `.cctor` does the
-  `newobj`/`stsfld` — so the enclosing class drops `beforefieldinit` while the companion itself
-  has NO `.cctor` and keeps it. Init-order parity is preserved: every companion access goes
-  through the field on the enclosing class and triggers ITS `.cctor` (touching a companion
-  initializes the enclosing class, like the JVM), and the enclosing `.cctor` runs exactly once
-  before the first `newobj` of the enclosing class or first companion access (objprobe_s8,
-  pinned end-to-end by `box/companionInitOrder.kt`). Stated deviation from the JVM's
-  `MoveOrCopyCompanionObjectFieldsLowering`: companion backing fields and `init {}` blocks are
-  NOT hoisted to the enclosing class — they stay on the companion instance, compiled by the
-  unchanged existing machinery (`DotNetInitializersLowering` merges them into the companion's
-  constructor), and no `RemapObjectFieldAccesses` analogue exists; the JVM hoist serves
-  JVM-ABI/interop needs that the CLR's real nested type makes moot. Accepted delta (documented,
-  not enforced): companion state initializes in the companion constructor invoked FROM the
-  enclosing `.cctor` rather than as enclosing-class statics — indistinguishable except under
-  initialization re-entrancy, the already-documented delta. VISIBILITY (probe-decided): the CLR
-  grants nested→enclosing private access (objprobe_s7a) but NOT enclosing→nested — an IL-private
-  companion `.ctor` `newobj`'d from the enclosing `.cctor` throws TypeInitializationException
-  wrapping MethodAccessException, and a throwing `.cctor` permanently poisons the type
-  (objprobe_s7b); an isolated enclosing→nested private field read throws FieldAccessException
-  (objprobe_s7c). Kotlin-private companion constructors, methods, and property accessors therefore
-  remain IL `private`; after object lowering, `DotNetPrivateNestedAccessLowering` uses the
-  common KLIB synthetic-accessor generator to redirect only calls that cross out of the
-  companion's CLR nesting subtree. The same phase redirects an enclosing read of a private nested
-  object's private `INSTANCE` field through a generated getter; this includes compiler-generated
-  callable/delegate singletons. The source field stays private. The generated `access$...` method,
-  field getter, or constructor overload is
-  narrowed from common-public to Kotlin `internal`, hence IL `assembly`. Constructor accessors
-  carry a final nullable `SyntheticConstructorMarker`, distinct from the default-argument marker.
-  This preserves source reflection and minimizes physical exposure while accommodating the CLR's
-  asymmetric nesting rule (pinned end-to-end by `box/companionPrivateAccess.kt`, both directions
-  and every member-kind slice; the exact private-source/assembly-bridge shape is pinned by
-  `ilText/companionObject.kt`). `const val` in a companion is a `literal` field on the NESTED class (literal
-  fields on a nested class probe-verified, objprobe_s9b), the same no-copy-to-enclosing
-  deviation as objects. The enclosing type and its companion are separate `availableClasses`
-  entries (the companion needs its own identity for type mapping and member resolution), but a
-  companion failure removes its immediate owner subtree — the singleton field on the enclosing
-  type is typed as the companion and the enclosing `.cctor` news it. Metadata ancestors and
-  siblings outside that owner remain independent. The warnings attribute a
-  failure to the declaration that actually failed: a
-  companion failure surfaces out of the enclosing type's render (the companion renders only
-  recursively inside it), so the render fixpoint re-tags it with the companion
-  (`DotNetIlUnsupportedClassException`) before evicting. This raw CLR failure behavior remains
-  useful physical probe evidence, but no longer defines a Kotlin-owned initializer. The
-  generalized static-initialization failure lowering catches the original exception inside the
-  compiler-generated `.cctor`, records private logical state, and makes every Kotlin active use
-  call `<EnsureInitialized>`. The first Kotlin `Error` preserves its object, another first failure
-  becomes `ExceptionInInitializerError(cause)`, and later logical access becomes
-  `NoClassDefFoundError`. Foreign CLR initializer exceptions remain untouched.
-  `box/nestedSingletons.kt` and
-  `box/propertyReferences.kt` execute the two singleton-field cases on CoreCLR; their IL goldens
-  pin the private field plus assembly bridge. A separate invalid declaration nested
-  below an otherwise valid companion is not companion state and is therefore omitted as its own
-  subtree while the companion and owner survive. Companion eviction is pinned in both
-  phases: the member pre-pass by `ilText/companionMemberClash.kt`, the render fixpoint (a
-  companion member body failing only after its callee's round-one eviction, plus the extra
-  round that re-fails an already-rendered user of the evicted companion owner) by
-  `ilText/companionFixpointEviction.kt`. The companion gate accepts the direct companion of any
-  non-generic plain class or interface, including an ordinary named nested class, recursively
-  validated with the same constraint chain (sole supertype `Any`, final, non-generic, not data).
-  A companion may contain static-style named classes, interfaces, and objects; each is validated
-  and evicted independently. The recursive postfix static-initializer sweep puts the companion
-  field initialization on that actual owner (`nestedprobe_s4`, pinned by
-  `ilText/nestedSingletons.kt` and
-  `box/nestedSingletons.kt`). For an interface companion, that field and `.cctor` live on the
-  interface owner (`nestedifaceprobe_s2`, `ilText/nestedInterfaces.kt`). A companion whose
-  immediate owner is generic remains rejected, and a companion inside an `object` cannot reach
-  the gate (frontend-rejected).
-  The companion singleton field participates in the ENCLOSING type's field-identity gate, but
-  the colliding source shape (a user property named after the companion) is itself a frontend
-  REDECLARATION — a companion also occupies the value namespace — so that slice is
-  defense-in-depth; a same-named FIELD legally coexists with the nested TYPE (objprobe_s6,
-  pinned by `ilText/companionObject.kt`). Companions are nested, not top-level, so they reserve
-  no file-facade name (`buildFileClassNames` only seeds top-level classes — verified unchanged).
-- Top-level extension properties emit their accessors as plain static methods with the receiver
-  as a regular parameter but NO `.property` block: a CLR property with parameters is an indexer,
-  which is out of scope.
-- No top-level declaration is dropped silently: after gathering (classes, functions, properties
-  — delegated and lateinit properties are rejected with specific messages), a closing sweep
-  warns about any remaining top-level declaration kind. Typealiases are deliberately ignored
-  WITHOUT a warning (the JVM backend emits no bytecode for typealiases either). The injected
-  stdlib declarations stay exempt: `println`/`val Char.code` are intrinsic-excluded
-  (`excludesDeclarationFromCodegen`, now also honored for property accessors) and the exception
-  classes are registry-excluded.
-- Initializer merging is `DotNetInitializersLowering`/`DotNetInitializersCleanupLowering`, the
-  same one-line subclasses of the shared backend.common lowerings the JVM uses, plus a
-  .NET-specific guard that turns the shared lowering's local-class `AssertionError` into the
-  fail-loud diagnostic. The guard covers exactly what the shared lowering merges — non-static,
-  class-parented fields and `init {}` blocks — never top-level property initializers, which no
-  constructor merge can reach. The pair runs BEFORE `DotNetForLoopLowering` — a stated deviation
-  from the JVM phase order, because the loop rewrite's builder only exists inside functions, so a
-  `for` inside `init {}` must already have been inlined into a constructor.
-- User-class type mapping is emission-scoped: one `DotNetIlTypeMapper` over the emitter's live
-  `availableClasses` map per `DotNetIlEmitter.emit` call, no global class registry — removing a
-  class during the render fixpoint automatically fails every declaration whose types mention it.
-- File facade names are precomputed pre-gate (`DotNetIlEmitter.buildFileClassNames`): every
-  declared top-level class reserves its IL name even when it is later skipped, so facade naming
-  depends only on what the module declares, never on which classes survive support gates.
-  Injected resolution-only stdlib declarations and the executable stdlib implementation are
-  excepted — they are not user-module declarations and reserve no user facade name. The combined
-  `isDotNetResolutionOnlyStdlibDeclaration` predicate covers mapped/rejected exception stubs and
-  the authoritative Common internal-annotation source; the emitter ownership scope covers
-  executable stdlib declarations. Resolution-only declarations remain available to frontend/KLIB
-  serialization but must not enter the IL shape gate or physical declaration index.
-- The bootstrap stdlib's canonical platform implementation is ordinary Kotlin source under
-  `libraries/stdlib/dotnet/src`. Its first real Common/actual partition compiles the authoritative
-  `libraries/stdlib/src/kotlin/internal/Annotations.kt` and
-  `throwNoWhenBranchMatchedException.kt` as Common sources, plus the .NET helper body as an
-  `actual`; the deleted target annotation mirror must not return. The next partition compiles the
-  complete authoritative Common `ExceptionsH.kt` plus the shared
-  `common-non-jvm/src/kotlin/Exceptions.kt` actual class implementations. The .NET target owns
-  only the remaining platform actuals and bodies in `DotNetExceptions.kt`. Do not restore the
-  deleted target exception hierarchy: Common owns declarations and the shared non-JVM source owns
-  every constructor body that does not require CLR-specific treatment.
-  The following partition compiles the complete Common `ioH.kt`. `DotNetStdlibIo.kt` contains
-  only actuals plus the existing target primitive `println` overloads. `readln` and
-  `readlnOrNull` are ordinary methods on the stable `Kotlin.Io.ConsoleKt` stdlib facade;
-  their private external helper alone is intrinsic to `System.Console.ReadLine()`.
-  `ReadAfterEOFException` is a real CLR-non-public stdlib class. Its physical binding remains in
-  the private KLIB index because authorized friend compilations may link Kotlin `internal`
-  declarations. `Serializable` stays an inert actual interface; do not map it to a foreign CLR
-  serialization protocol.
-  The frontend enables multiplatform semantics only when the source product or explicit Common
-  inputs require them and asks the shared FIR session construction to create distinct Common and
-  .NET source sessions. KLIB metadata serialization runs after FIR2IR actualisation through
-  `Fir2KlibMetadataSerializer`, matching JS/Wasm/Native; serializing before actualisation or
-  flattening Common and actual declarations into one metadata session is forbidden. The
-  compiler-owned fallback and explicit stdlib product mute the expect/actual-class Beta warning,
-  matching mature stdlib builds; an ordinary user MPP compilation does not silently acquire that
-  flag.
-  `DotNetStdlibSource` only loads the backend-JAR resource copy for same-run bootstrap
-  compatibility. Tests require every packaged file to be text-identical to its authoritative
-  repository file, reject a complete set whose Common files are misclassified as platform
-  sources, and require direct-source/fallback products to have identical packed KLIB entries, IL,
-  and DLL bytes. The packaged catalog is sorted by repository-relative path and the fallback
-  injector preserves those paths; FIR orders actual source paths,
-  so a flat temp directory would change emitted declaration order. The physical declaration index contains only
-  cross-module declarations: private/private-to-this/local `IdSignature`s must not be exported,
-  because file-local signatures may contain checkout paths and private implementations are not
-  bindable ABI.
-  Resolution-only declarations such as `print`/`println`, `Char.code`, array operations, and mapped
-  exception classes are filtered through the intrinsic/exception registries and never emitted
-  into a facade. Output intrinsics must apply Kotlin rendering before
-  `Console.Write(string)`/`WriteLine(string)`; CLR object/numeric/Boolean overloads are not Kotlin
-  semantics. The Common input and Throwable operations are different: input's `readln`/
-  `readlnOrNull` actual bodies are emitted once on `Kotlin.Io.ConsoleKt`, and their private
-  `dotNetReadLine` helper is the only direct CLR input operation. Throwable actual Kotlin bodies and
-  private immutable snapshot-list implementations are emitted once in
-  `Kotlin.DotNetExceptionsKt`/`Kotlin.Stdlib`, while private external calls cross the intrinsic
-  registry to the runtime state service. The ordinary Kotlin
-  `ArrayIterator<T>`/`ArrayIterable<T>` declarations, Common-generated Iterable/List terminal
-  operations, and Common `List.lastIndex` accessor are different: STDLIB-scoped emission owns them
-  and USER-scoped emission excludes them, yielding the classes and one stable
-  `Kotlin.Collections.CollectionsKt` facade only in `Kotlin.Stdlib.dll`. Compiler-owned stdlib
-  source shards that explicitly select that same facade are aggregated; an automatic suffixed file
-  class would break the KLIB-to-physical binding. USER codegen's stdlib operation intrinsics select
-  those external generic methods; they do not inline the bodies. Injected declarations must
-  compile without any diagnostics, including warnings: the
-  FIR test infrastructure maps every reported diagnostic back to a test file and crashes on
-  diagnostics in injected files (suppress e.g. deprecations locally).
-  Metadata-only KLIB dependencies use the existing FIR metadata-library path. Imported built-in
-  collection classifiers may have minimal external IR owners whose declaration-side type-parameter
-  list is unpopulated, so runtime identity recognition uses the stable FqName and validates arity
-  on the actual `IrSimpleType` use site. The target stdlib is accepted as executable only when its
-  manifest binds the assembly name, version, neutral culture, null public-key token, file, and
-  runtime target to the reserved artifact. An installed selection additionally requires the
-  same-profile sibling `Kotlin.Runtime.dll`; its physical Assembly row and public
-  `Kotlin.CSharpImplementationManifest` profile contract are validated before both selected DLLs
-  are packaged unchanged for an executable consumer. This is not yet general physical-member
-  metadata for arbitrary libraries.
-- Classified CLR exception model (decision:
-  `docs/decisions/draft-adr-classified-clr-exception-model.md`; the hybrid ADR is superseded):
-  every catchable value remains its original `System.Exception` object. The mapping registry owns
-  separate physical-carrier, construction/subclass-base, exact-catch, and logical-classifier roles;
-  do not collapse those roles back into one CLR type map.
-  `Throwable`, `Exception`, and broad logical categories use `System.Exception` at physical
-  boundaries. Narrow logical catches and type tests use the single runtime-owned, side-effect-free
-  `Kotlin.Runtime.Internal.ExceptionClassifier.IsKotlinExceptionInstance` predicate. Catch filters
-  preserve Kotlin source order and classification without wrapping foreign objects. Unknown C#
-  exception subclasses classify as Kotlin `Exception`; mapped CLR program faults additionally
-  classify under their Kotlin categories, and fatal CLR faults classify as `Error` without becoming
-  Kotlin `Exception`.
-  Exact Kotlin-owned classes remain ordinary CLR exception classes where physical identity is part
-  of the contract. `Kotlin.RuntimeException : System.Exception` and `Kotlin.Error :
-  System.Exception` are truthful roots for Kotlin-owned subclasses; exact mapped children such as
-  `Kotlin.NumberFormatException : System.ArgumentException` retain the required Kotlin parent edge.
-  User exception inheritance, reflection ancestry, typed exact catches, and cross-module
-  subclassing follow those physical chains. Exact roots supplement the foreign exception universe;
-  they never replace it.
-  Curated BCL mappings keep native CLR division, null, bounds, cast, state, cancellation, and
-  argument faults catchable under the corresponding Kotlin types: `IllegalArgumentException` ->
-  `ArgumentException`; `IllegalStateException` uses the shared `System.Exception` carrier,
-  constructs `InvalidOperationException`, and classifies both that type and cancellation children;
-  `UnsupportedOperationException` -> `NotSupportedException`, `ArithmeticException` ->
-  `ArithmeticException`, `IndexOutOfBoundsException` -> `IndexOutOfRangeException`,
-  `NullPointerException` -> `NullReferenceException`, and `ClassCastException` ->
-  `InvalidCastException`. Kotlin metadata retains the logical signature type where the physical
-  carrier is broader. A callable with a non-dispatch parameter that directly or transitively
-  contains `Throwable`, `Exception`, `RuntimeException`, or `Error` receives the proactive stable
-  physical name `<ordinary-name>__KotlinException__<logical-signature-digest>`. The digest uses
-  the owner-independent Kotlin signature and an override's selected logical slot declaration, so
-  overloads remain distinct after CLR erasure, a `Base<T>.f(T)` override at `T = Throwable` stays
-  on the unmangled generic base slot, and adding a later overload cannot rename an existing
-  method. One override satisfying differently named physical views requires an explicit
-  `MethodImpl`, plus an adapter only when signatures differ; never choose a slot arbitrarily.
-  Producers record ordinary physical names in the KLIB index; generic-interface typed views apply
-  the same deterministic rule. Explicit export facades own C#-facing names. CLR constructors
-  cannot use this mechanism and colliding exception-category constructors remain unsupported
-  pending a recorded compiler-ABI factory design. Physical-name grammar version 2 introduced this
-  rule. Version 3 retains it and adds C#-expressible, logical-identity-suffixed interface-default
-  property helper names; stale prototype libraries are rejected rather than bridged.
-  `kotlin.coroutines.cancellation.CancellationException` is exactly
-  `System.OperationCanceledException`; `TaskCanceledException` and other CLR subclasses retain
-  identity and classify under Cancellation/IllegalState/Runtime/Exception/Throwable, never Error.
-  This exact cancellation root plus the classified `IllegalStateException` carrier resolves the
-  CLR sibling-root conflict without a wrapper. Classifier id 14, runtime surface level 7, and
-  physical ABI schema 13 own the change on all three profiles.
-  The complete Common exception source product adds exact runtime identities for
-  `ConcurrentModificationException`, `AssertionError`,
-  `UninitializedPropertyAccessException`, and `KotlinNothingValueException` as append-only
-  classifier ids 18 through 21. Physical modality follows Common: the first two are open and the
-  uninitialized-property class is final. Runtime surface level 9 and physical ABI schema 16 own
-  this expanded surface on all three profiles.
-  Common throwable state absent from `System.Exception` is attached to the original object by one
-  runtime-owned `ConditionalWeakTable<System.Exception, ThrowableState>`. The value never retains
-  its key; a monitor makes compound lookup, ordered append, and snapshot creation race-free; state
-  lookup uses reference identity even for hostile `Equals` overrides. `addSuppressed` ignores
-  self-suppression, retains duplicates and insertion order, and never mutates `Exception.Data`.
-  Each non-empty `suppressedExceptions` read wraps a fresh CLR vector in a private immutable
-  Kotlin `List`; an empty read returns `emptyList()`. `stackTraceToString` begins with the exact
-  CLR `Exception.ToString()` diagnostic and composes suppressed graphs from both roots and cause
-  chains with reference-identity cycle detection. `printStackTrace` writes that composed text to
-  `Console.Error`. This follows
-  the JVM/JS/Wasm Common behavior while the weak side table is the CLR-required deviation that
-  preserves arbitrary foreign exception identity.
-  C# admission to a broad `Throwable`/`Exception`
-  boundary accepts any `System.Exception`; narrower export admission remains an explicit deferred
-  classifier-guard design rather than a fabricated CLR hierarchy.
-  `IrThrow` evaluates and throws the original reference. Kotlin source `throw e`, including from a
-  catch variable, emits CLR `throw`, never bare `rethrow`; object identity, exact type, message,
-  `InnerException`, and `Data` survive, while the CLR stack trace truthfully exposes the new throw
-  site. `IrTry` uses CLR protected regions plus generated filters where logical classification is
-  required. Raw C# integration executes classification, catch/return, and catch/rethrow on both
-  application profiles. It also directly invokes the runtime predicate for null, foreign, mapped,
-  exact Kotlin, and fatal values across every assigned numeric id plus hostile ids; every call
-  returns `bool` without throwing on both runtimes. A separately compiled `netstandard2.0` library also catches exact,
-  mapped-runtime, broad-Exception, and Error objects supplied by both application profiles through
-  the same classifier. Portable direct and nested-generic exception overloads, ordinary and
-  generic-base class overrides, interface implementations, and a differently named class/
-  interface multi-slot override execute cross-module on both application profiles. Portable
-  exception returns and mutable properties preserve logical classification and reference identity;
-  a nested generic return retains its logical runtime category. Exception arrays and function
-  types preserve overload selection and callback identity across the same portable boundary.
-  Narrow/foreign export admission, constructor collisions, remaining foreign/generic boundary
-  coverage, the complete built-in mapping table, and any non-physical hierarchy metadata remain
-  open before Gate B.
-- Kotlin-owned static-initialization failures (decision:
-  `docs/decisions/adr-kotlin-static-initialization-failures.md`; follows JVM observable semantics
-  and the JS/Wasm declaration-plus-usage lowering split, with CLR-specific synchronization):
-  retain CLR `.cctor` for once-only execution, re-entrancy, and publication, but never let a
-  Kotlin throwable escape it. Compiler-generated class and file initializers catch the original
-  physical `System.Exception` and store a private object-typed failure state. The stable
-  `<EnsureInitialized>` barrier asks `Kotlin.Runtime.Internal.StaticInitialization.Observe` for
-  the original reason once and null on later use. It then invokes the existing Common non-JVM
-  `kotlin.internal.staticInitializationFailure(reason, className)` contract through the runtime's
-  target implementation: the first Kotlin `Error` is the same object, the first other failure is
-  an exact `Kotlin.ExceptionInInitializerError` with that object as cause, and later observers
-  receive an exact `Kotlin.NoClassDefFoundError`. `Interlocked.Exchange` selects one first
-  observer under concurrency. Foreign CLR `.cctor` methods are never rewritten.
-  The graph and failure lowerings are deliberately general rather than companion-only.
-  Constructors, static functions/accessors, top-level functions/accessors, singleton-field reads,
-  generated static machinery, and cross-module dependencies enter the logical barrier before user
-  code. Producer methods carry their own file-facade prologue; public/friend-reachable classifier
-  events record the exact barrier owner and name in physical ABI schema 15. Existing companion
-  storage uses `<CompanionStatics>`, while a generic classifier or interface which only needs an
-  initialization event uses a separate non-generic `<StaticInitialization>` holder. No closed CLR
-  generic construction owns a distinct Kotlin failure state.
-  Runtime surface level 8 adds the exact internal Kotlin error identities and two marked public
-  compiler/runtime helper methods; the concrete state type stays runtime-internal. PSI and
-  LightTree boxes execute companions, inherited generic/non-generic events, ordinary objects,
-  exact `Error` identity, and top-level files on Framework CLR 4 and CoreCLR 10. A
-  `netstandard2.0` producer is consumed separately by both runtime profiles, preserving original
-  cause identity and producer-recorded singleton barriers. A direct C# read of a raw public
-  singleton field can still bypass the logical barrier after the caught `.cctor` completes.
-  Before ABI stability, deliberate C# singleton exports/generator adapters must expose a
-  barrier-calling property or method; do not solve that interop item by weakening Kotlin
-  semantics or restoring `TypeInitializationException`.
-- Exhaustive `when` without a source `else` follows the Kotlin 2.5 Common stdlib model. When the
-  language feature is enabled, fir2ir calls
-  `kotlin.internal.throwNoWhenBranchMatchedException(subject: Any)`; the .NET target stdlib owns
-  that ordinary Kotlin helper and uses the exact JVM/Native/Wasm message body. Its internal,
-  error-deprecated `NoWhenBranchMatchedException` declaration has the four Common constructor
-  forms and maps to the exact runtime-owned
-  `[Kotlin.Runtime]Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException`. The
-  `Kotlin.Stdlib` ownership catalog must include the helper source and facade: explicit stdlib
-  products emit it once, separately compiled consumers bind to it, and the bootstrap path builds
-  and packages the same physical stdlib method. The legacy language-feature-off path deliberately
-  retains fir2ir's old inline parameterless construction. Do not reintroduce a .NET message or
-  throw intrinsic: Common owns the function contract and Kotlin source owns its implementation.
-  Exception choice deliberately deviates from Roslyn: C# uses
-  `System.Runtime.CompilerServices.SwitchExpressionException`, but `whenprobe_s1` proved that the
-  type requires the `[System.Runtime]` scope on CoreCLR 10.0.9 (`[mscorlib]` assembles but fails
-  with `TypeLoadException`), and the .NET Framework `System.Runtime` facade does not contain it.
-  Emitted IL must stay target-independent. The Kotlin-owned exception preserves
-  the supported `Throwable`/`Exception` catch edges without falsely making the exception a mapped
-  `IllegalStateException`. The open runtime class follows JVM/Native and exposes the same four
-  constructor forms as its root. `exceptionabi_s1` assembled the hierarchy and consumers with
-  modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings preserved the exact
-  catch, the RuntimeException parent edge, null default message, cause identity, and the boundary
-  from a foreign `InvalidOperationException`. `ilText/exhaustiveWhen.kt` pins both emission
-  positions, current subject-aware helper call, exact message construction, and the
-  feature-disabled legacy throw; `box/exhaustiveWhen.kt` runs all reachable Boolean/Boolean? arms
-  on CoreCLR. `testNet48AssemblerMatrix` passes the noncanonical CLR `bool` value `2` to force the
-  otherwise unreachable fallthrough, then runtime-pins the exact type and
-  `No branch matched for subject: true` message across Framework/CoreCLR hosts, both ILAsm
-  implementations, bootstrap production, and separately produced stdlib consumption.
-- try/catch follows the JVM model: `IrTry` maps 1:1 onto the CLR exception table — one `.try`
-  block plus consecutive typed `catch` handlers in Kotlin source order (the CLR matches strictly
-  first-to-last, probe-verified; the frontend owns unreachable-catch diagnostics) — with no
-  lowering machinery. Regions are exited only via `leave` (a `ret` or `br` crossing a region
-  boundary assembles but fails at runtime), and `leave` discards the evaluation stack, so a
-  `try` expression drains its branch values into a synthetic result local reloaded at the join
-  label; returns crossing protected regions drain into a synthetic return local and `leave` to a
-  shared return-join epilogue (the Roslyn shape), and `break`/`continue` crossing regions emit
-  `leave` straight to the loop labels — legal toward any enclosing-scope label, forward or
-  backward, crossing nested regions in one hop (all probe-verified, `excprobe_s2`). One stated
-  deviation from the JVM backend: the CLR requires an empty evaluation stack at `.try` entry
-  (ECMA-335 I.12.4.2), so a `try` expression with operands already on the evaluation stack
-  (e.g. a non-first call argument) is rejected rather than spilled.
-- `finally` uses real CLR `leave`-driven finally handlers with NO JVM-style finally
-  inlining/duplication — a CLR-forced deviation from the JVM backend: the CLR runs the finally
-  automatically on every `leave` out of the region (normal completion, `break`/`continue`,
-  return-join leaves) and on the exceptional path, inner-then-outer for nested regions
-  (probe-verified, `excprobe_s3`). A `.try` carries either catch handlers or ONE `finally`,
-  never both — combining them assembles silently but throws `InvalidProgramException` at
-  runtime — so Kotlin `try`/`catch`/`finally` nests the try/catch construct inside an outer
-  `.try { } finally { }`; catch-less `try`/`finally` is a single region. The finally body is
-  emitted as void and exits only through `endfinally`, so `return`/`break`/`continue` crossing
-  OUT of a finally body are rejected (`dotNetUnsupported`) — even `leave` may not exit a
-  finally handler; exits within it (a loop or try/catch declared inside the finally body) work
-  normally.
-- Generics stance: generic classes and generic methods stay structural and target real CLR
-  reified generics (Roslyn shape). Kotlin-owned generic interfaces are the deliberate exception:
-  their Kotlin storage/cast identity is a non-generic canonical interface, while reified declared
-  and exact siblings are same-object execution/C# capabilities. This follows Kotlin's erased
-  interface cast/projection semantics and is not a fallback erasure for unsupported generic
-  classes. Unsupported shapes outside that selected interface ABI are rejected, never silently
-  erased.
-- Generics model (stages 1-6) (probe series `genprobe_s1`–`_s9`, `genconstraintprobe_s1`–`_s2`,
-  `genarrayprobe_s1`, `genifaceprobe_s1`, `genmemberprobe_s1`, `geninheritprobe_s1`; precedent:
-  Roslyn — the CLR has REAL reified generics,
-  so generic classes and methods use no erasure or monomorphization machinery: the type mapper and
-  emitters learn generic declarations, type-parameter references and instantiation tokens, and
-  the frontend owns all type checking. Kotlin-owned generic interfaces additionally use the
-  canonical/declared/exact split in
-  `docs/decisions/draft-adr-variant-interface-abi.md`):
-  - SUPPORTED: generic FUNCTIONS (top-level, or members of any otherwise-supported class, object,
-    companion, or all-abstract interface; non-inline; invariant method parameters, either
-    unconstrained or directly constrained by non-null, non-generic, module-local classes and
-    all-abstract interfaces), plus the pre-existing `T : String`/`String?` erosion of the
-    string-concat lowering, kept for compatibility and pinned by the borrowed
-    `box/strings/kt50140.kt`: such a `T` still declares its real arity but its SLOTS map to
-    `string`); generic TOP-LEVEL OR NAMED NESTED PLAIN CLASSES (final, open, abstract, or sealed;
-    the same direct module-local constraint rule without the String exception), with nested
-    classes owning an independent `!n` space even inside generic outers (the outer's parameters are
-    not captured); generic TOP-LEVEL ALL-ABSTRACT
-    INTERFACES with invariant, `out`, or `in` parameters under that same constraint rule, emitted
-    as one non-generic canonical Kotlin identity plus a declaration-variant generic sibling and,
-    where required by member placement or superedges, an invariant exact sibling; generic and non-generic
-    classes implementing open or closed generic-interface instantiations; generic-interface
-    inheritance with composed arguments; any supported class extending a module-local plain or
-    generic base through a mapped closed/open instantiation — including permuted, nested,
-    generic-array, concrete nullable-value and constrained arguments — across arbitrary chains,
-    optionally ALSO implementing interfaces (`ilText/genericInheritance.kt`,
-    `ilText/genericInheritanceChains.kt` and their box tests); what an
-    unconstrained `T`-typed value supports exactly store/load (locals, params, returns, fields of
-    the declaring class) and passing to another `T` position. A constrained `T` additionally
-    supports calls to members exposed by any direct/transitive bound and widening to a bound or
-    `Any`/`Any?` through `box !n`/`box !!n`. Invariant `Array<T>` composes as a real CLR
-    `!n[]`/`!!n[]` in those same positions, with typed element access and indexed iteration.
-  - SPELLING CANON (all probe-verified): a generic class is ONE quoted identifier with the CLS
-    backtick-arity suffix INSIDE the quotes (`.class ... 'demo.Box`1'<'T'>` — suffix outside the
-    quotes is an ilasm syntax error, genprobe_s2c; the suffix is CLS convention, not CLR-required,
-    genprobe_s2b — emitted for Roslyn/interop parity, which also makes plain-`Box`/generic-`Box`
-    IL collisions impossible); quoted type-parameter NAMES assemble and run (genprobe_s8) and are
-    decorative — CLR identity is positional (`!n` class / `!!n` method vars). A generic method is
-    `.method ... !!0 'id'<'T'>(!!0 'x')`; on a generic owner its `!!n` method space remains
-    independent from the owner's `!n` class space, and both tokens compose on member references
-    (`class 'Picker`1'<string>::'pick'<int32>(!0, !!0)`, `genmemberprobe_s1`).
-    constrained formal stays inline in that same list: one base constraint first, then interface
-    constraints, e.g. `<(class 'Base', class 'Mark') 'T'>`; reflection confirms both constraints
-    are present in metadata (`genconstraintprobe_s1`). On an interface, `+`/`-` precedes the
-    constraint list (`<+ (class 'Base') 'T'>`); the full direct edge is retained on `implements`
-    (`class 'Producer`1'<!0>`), and both spellings assemble and execute on CoreCLR and Framework
-    (`genifaceprobe_s1`). EVERY member reference on a generic class or interface carries an
-    instantiation on the OWNER token while its
-    signature slots stay OPEN (`!0`/`!!0` verbatim): closed externally
-    (`newobj instance void class 'Box`1'<string>::.ctor(!0)`,
-    `call instance !0 class 'Box`1'<string>::'get'()`, `ldfld !0 class 'Box`1'<string>::'value'`),
-    the OPEN self-instantiation `class 'Box`1'<!0>` inside the class's own bodies (genprobe_s2/_s7);
-    generic-method call sites substitute only the `<inst>` list (`call !!0 ...::'id'<string>(!!0)`;
-    `!!0` is itself a legal instantiation argument at generic→generic pass-through sites, and
-    `class 'Box`1'<!!0>` composes inside generic methods, genprobe_s9). EXCEPTION: `.property`
-    accessor references use the bare class name with NO type-args list (genprobe_s2). The `extends`
-    line of an instantiated generic base is closed `extends class 'Box`1'<int32>` (genprobe_s5)
-    or open/permuted `extends class 'Base`2'<!1, !0>`; its base-ctor operand carries that same
-    owner token while keeping the base's formal parameter slots open (`geninheritprobe_s1`).
-    Nullable composes verbatim as an argument
-    (`class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>`) in every operand position, and
-    the mandatory home-address spill rule extends to `!0`-returning calls — spill to a local typed
-    with the CLOSED substituted type, then `ldloca` (genprobe_s4). Reification is real:
-    `Box`1<int32>` stores a raw int32, zero box/unbox, instantiations coexist and nest (genprobe_s3).
-    Generic arrays likewise keep the element token open (`!!0[]`; `newarr !!0`; `ldelem !!0`;
-    `stelem !!0`) and substitute structurally at call sites (`genarrayprobe_s1`).
-  - CODEGEN MODEL: mapped signatures stay OPEN (`TypeParameter`/`GenericInstance` arms of
-    `DotNetIlValueType`); call sites derive the owner token from the RECEIVER's mapped type walked
-    to the declaring class (`dotNetViewAsGenericOwner` — inherited members and super-calls through a
-    derived receiver name the instantiated BASE, genprobe_s5) and emit argument VALUES against the
-    IL-level SUBSTITUTED types (`substituteDotNetTypeParameters`). Base/interface edges substitute
-    recursively at every hop, so a chain such as `Leaf<P,Q> : Mid<Q,P> : Base<P,Q>` recovers the
-    exact open declaring-owner view (`geninheritprobe_s1`). Generic-class assignability stays
-    structural and invariant. Ordinary Kotlin-owned interface storage, projections, and casts use
-    the canonical non-generic identity, so value/open/reference variance conversions preserve the
-    same object without asking CLR generic variance to implement Kotlin variance. A call may probe
-    the structurally mapped declared/exact sibling transiently; imported CLR interfaces instead
-    retain CLR reference-only generic assignability. The supertype walk carries the base
-    instantiation plus the physical interface views needed for calls and overrides, substituting
-    at every edge. CLR method identity includes
-    generic ARITY, so the member/facade identity gates key on it (`fun <T> pick(x: String)` and
-    `fun pick(x: String)` are legal coexisting overloads, pinned by `ilText/genericArity.kt`).
-    OVERRIDES in a class with a generic base MUST be spelled with the SUBSTITUTED types — that
-    spelling reuses the base slot for returns (genprobe_s5) AND parameters (genprobe_s8), and falls
-    out of mapping the derived member's own concrete Kotlin types; the OPEN `!0` spelling in a
-    non-generic derived class is a POISON SHAPE (assembles warning-free, silently splits the slot,
-    base-typed `callvirt` runs the BASE body — the covariant-return failure family; genprobe_s5b)
-    that this codegen can never emit implicitly. The covariant-return lowering compares the
-    overridden return under the receiver's structural owner view and emits an exact new slot plus
-    explicit MethodImpl adapters, so substituted base/interface overrides reuse matching slots and
-    real covariance dispatches through generated bridges. Eviction rides
-    the existing fixpoint: instantiations
-    map arguments through the LIVE class map, so an instantiation mentioning an evicted class fails
-    its USE, and the `extends` re-resolution carries a type-argument-eviction reason down the chain
-    (pinned by `ilText/genericEvicted.kt` — the generics analogue of `inheritanceBaseEvicted.kt`:
-    an evicted class used as a function's instantiation argument evicts per-function, used as a
-    generic-base argument evicts the derived class whole-class, while a sibling instantiation of
-    the same base survives untouched). Stage 2 carries mapped upper bounds on each structural
-    `TypeParameter`: a virtual/interface call evaluates and spills the receiver and every
-    argument, reloads the receiver's home address plus those arguments, then emits
-    `constrained. !n`/`!!n` immediately before `callvirt`; this is the CLR
-    reified counterpart of JVM erasing to the first bound and inserting `checkcast` for secondary
-    interface bounds. A non-virtual class-bound call and a widening from `T` to a bound or
-    `object` instead emit `box !n`/`!!n`; CoreCLR and Framework both preserve reference values
-    without allocation while remaining valid for an external value-type implementation of an
-    interface constraint (`genconstraintprobe_s2`). The spills also keep the CLR stack empty when
-    an argument contains `try`. Constraint types re-resolve through the LIVE
-    class map while rendering, so an evicted bound cascades to a top-level function individually
-    or to a constrained class whole-class.
-  - STAYS REJECTED, loudly (each with a specific message; pinned by `ilText/genericRejected.kt`
-    and `ilText/genericInterfacesRejected.kt`): declaration-site variance on CLASSES
-    (`out`/`in` — ECMA-335 II.10.1.7 allows variance only on interfaces and delegates; emitting
-    invariant would silently change assignability). Kotlin-owned generic-interface value/open
-    variance is supported through the canonical identity, never by treating a closed CLR
-    `castclass D<T>` operation as a variance conversion.
-    Imported CLR generic interfaces remain at the foreign CLR boundary: reference variance is
-    accepted only when the CLR proves reference-shaped arguments; value-shaped and conservatively
-    open cases require an explicit identity-changing adapter. Also rejected: constraints whose bounds are nullable,
-    generic instantiations, other type
-    parameters, builtins/mapped types, or anything outside the module-local supported class and
-    interface model, `T?` ANYWHERE in a generic declaration (NO uniform CLR representation for
-    the supported interface-bound case: a CLR caller can instantiate it with a value type needing
-    `Nullable<T>` or a reference type needing nothing; the declaration is rejected, never given an
-    ad-hoc representation), identity `===` on `T` operands (a value-type instantiation has no
-    stable reference identity, and boxing would manufacture unrelated references), other member
-    calls on an unconstrained `T` or outside its declared bounds, `is`/`as` on `T` or reified
-    generic classes (Kotlin-owned split generic interfaces are the canonical-erased exception
-    described above), inline/reified generic functions (no inlining model), declared
-    varargs of `T` (their projected-array ABI and general vararg lowering remain unsupported),
-    generic (extension) properties (the property metadata/accessor binding model does not cover
-    generic accessors), and a companion declared directly in a generic class (its field would be
-    per constructed owner; a named object owns its `INSTANCE` on its independent non-generic type
-    and is supported below a generic metadata parent). Structural `==`/`== null`, string
-    templates/`toString`, and widening an unconstrained `T` to `Any?` are supported by boxing at
-    the System.Object boundary and using the Any runtime helpers. A
-    generic base instantiation whose argument does not map (`T?`, an unsupported external
-    generic/primitive/array shape, or an evicted class) rejects the whole derived chain;
-    an unrelated valid instantiation of the same base survives.
-  - Pins: `ilText/genericFunctions.kt` (declaration + call-site spellings for every mapped
-    type-arg kind incl. `<!!0>` pass-through, a nested instantiation as a generic-method type
-    argument — `id<Box<String>>` carries `class 'Box`1'<string>` in the `<inst>` list — and the
-    genprobe_s9 composition: `wrap` returning `class 'Box`1'<!!0>` with the
-    `newobj instance void class 'Box`1'<!!0>::.ctor(!0)` body spelling), `ilText/genericClasses.kt`
-    (full class shape, open
-    self-instantiation, closed external operands, nested instantiation, `.property` bare-name
-    accessor refs), `ilText/genericInheritance.kt` (instantiated-base extends/ctor-chain/override/
-    super-call spellings + generic-extends-plain + the instantiated-base-with-`implements`
-    combination), `ilText/genericArity.kt` (arity overloads +
-    suffix coexistence), `ilText/genericRejected.kt` (every rejection above),
-    `ilText/genericEvicted.kt` (the eviction cascade), `ilText/genericConstraints.kt` (formal
-    constraint spelling plus virtual/interface/non-virtual calls and bound widening),
-    `ilText/genericConstraintsRejected.kt` (constraint shapes outside the stage-2 boundary),
-    `ilText/genericArrays.kt` (open/concrete vector signatures, construction and typed element
-    access), `ilText/genericArraysRejected.kt` (array shapes outside the invariant reference/open
-    element boundary), `ilText/genericInterfaces.kt` (variance metadata, constrained formals,
-    open/closed/permuted interface edges, owner tokens, reference conversions, and canonical-only
-    `isinst`/`castclass` spellings),
-    `ilText/genericInterfacesRejected.kt` (open-`T?` slots, unsupported instantiated interface
-    bounds, and evicted interface arguments),
-    `ilText/genericMembers.kt` (independent owner/method parameter spaces, nested generic owners,
-    constrained members, generic interface slots and implementations, instantiated-base
-    overrides/super calls, object/companion owners, member extensions and arity overloads),
-    `ilText/genericMembersRejected.kt` (inline/reified methods, nullable method slots and
-    unsupported method bounds),
-    `ilText/genericInheritanceChains.kt` (open/permuted multi-hop extends and ctor tokens,
-    substituted generic/non-generic overrides and super calls, inherited interface/member owner
-    views, open upcasts, nested/array/nullable/constrained arguments),
-    `ilText/genericInheritanceChainsRejected.kt` (invalid argument and base-eviction cascades with
-    an unrelated surviving open instantiation),
-    `ilText/classShapeRejected.kt` (the
-    variance flavor in the class-shape gate); runtime:
-    `box/genericFunctions.kt` (every type-arg kind incl. both `Int?` flavors through `!!0`,
-    multi-param, T pass-through, `wrap(x).v` round-trips of the `Box<!!0>` composition, the
-    nested-instantiation type-arg), `box/genericClasses.kt` (state, coexisting instantiations,
-    nesting, permuted self-instantiation `Pair2<B, A>`), `box/genericInheritance.kt` (dispatch
-    through instantiated-base views, substituted overrides, super chains, inherited mutation,
-    cross-view identity, generic-extends-plain dispatch, and the combined
-    generic-base-plus-interface flavor: interface-view dispatch, inherited state and mutation
-    through all views — interface-mapping mistakes fail only at JIT time, so the dispatch shape
-    carries its own runtime pin), `box/genericConstraints.kt` (multiple bounds, virtual override
-    dispatch, interface properties/methods, non-virtual class members, bound/Any widening, class
-    type parameters and multiple generic instantiations), `box/genericArrays.kt` (construction,
-    fields, open and constrained element access, indexed iteration, identity/null behavior and
-    multiple reference element shapes), `box/genericInterfaces.kt` (reference/value covariance
-    and contravariance, transitive/permuted interface inheritance, nested variance, generic
-    implementers, exact value-type instantiations, canonical hard/safe casts, erased logical
-    arguments, nullable type tests, failure categories, and single operand evaluation), plus a
-    separate `netstandard2.0` 65-parameter interface consumed by Kotlin and C# on both application
-    profiles (canonical/declared/exact arity, high-index variance, exact-capability metadata,
-    identity-preserving widening, canonical fallback, and wrong-shape failure). The same portable
-    producer completes the one-through-four matrix with a four-parameter `in`/`out`/invariant/`out`
-    interface, a primitive result, a separately widened concrete `Int?` result, an exact-only
-    unsafe member, and open generic pass-through. A raw canonical-only provider executes a
-    producer-recorded erased slot from one portable Kotlin reader on both Framework CLR 4 and
-    CoreCLR 10 without declared/exact capabilities. Remaining pins: `box/genericMembers.kt` (method
-    pass-through, nullable method instantiations, inherited interface implementation, generic
-    virtual/super dispatch, constrained interface calls, arity overloads, objects, companions and
-    member extensions), `box/genericInheritanceChains.kt` (multi-hop constructor/state flow,
-    generic virtual/super dispatch, inherited generic-interface mapping, open base/interface
-    upcasts, cross-view identity and every supported composite base-argument family).
-- Shared compiler support (currently Kotlin-parity `Double.toString` rendering) is hand-written IL
-  in `Kotlin.Runtime`. Generated modules call the public CLR member
-  `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; metadata visibility must be public for
-  cross-assembly access, while the reserved namespace keeps it outside the Kotlin-facing API.
-  `runtimehelper_s1` assembled the runtime and a calling consumer with modern 10.0.9 and Framework
-  4.8 ILAsm; all four same-target/cross-runtime pairings printed identical Kotlin-shaped values.
-  Generated modules contain neither the helper body nor a synthetic `<KotlinIl>` type, and the old
-  per-method/per-class helper-requirement bookkeeping no longer exists. Every mscorlib member
-  signature used in helper IL must still be verified by assembling and running an ILAsm probe
-  before it lands in codegen.
+- preserve unrelated worktree changes and do not modify another branch;
+- work directly on `dotnet`; do not create worktrees;
+- never edit `*Generated.java`, generated configuration keys, or API baselines
+  by hand—run the owning scoped generator and critically review its output;
+- the Kotlin 2.5 bootstrap uses name-based destructuring `[a, b]` for
+  data-like carriers; do not introduce positional `(a, b)` destructuring that
+  the bootstrap cannot compile;
+- do not pin a frontend-rejected source shape in an IL-text test; use the
+  frontend diagnostic suite;
+- do not broaden a feature to an adjacent parked programme merely because it
+  becomes visible during implementation; and
+- keep temporary probes, playgrounds, and IDE projects outside the repository.
+
+Enums, annotation classes, value classes, reflection, broad inline/reified
+support, coroutines, concurrency primitives, and broad KMP/Gradle product
+integration remain separate programmes until `STATUS.md` or the way forward
+selects one.
+
+## Verification contract
+
+The strict semantic commit gate is:
+
+```text
+./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
+```
+
+Do not trust quiet Gradle success alone. Audit every JUnit XML file under:
+
+```text
+compiler/fir/fir2ir/build/test-results/dotNetTest/
+compiler/tests-integration/build/test-results/dn/
+```
+
+`STATUS.md` owns the expected current file/test totals. Strict mode turns a
+missing required toolchain or Smart App Control refusal into failure. The
+short internal `dn` task name preserves Framework CLR/ILAsm path-length
+budget; invoke the backend aggregate rather than treating `dn` as public API.
+
+A Markdown-only ownership, history, rename, or index change does not require
+the compiler gate. It does require a repository-reference audit, local-link
+validation, whitespace/diff review, and confirmation that no semantic file is
+staged.
+
+Generate FIR-to-IR runners with:
+
+```text
+./gradlew :compiler:fir:fir2ir:generateTests
+```
+
+Do not use the repository-wide aggregate merely for this target. Generated
+runners live under `build/tests-gen` and are not committed. To update an
+IL-text golden, change the `.kt`, run the scoped test with
+`-Pkotlin.test.update.test.data=true`, then read and assemble the resulting
+`.txt`; generated goldens can faithfully preserve broken IL.
+
+Focused compilation/tests are useful while iterating but never replace the
+strict gate for a completed semantic feature. Before committing, verify that
+status shows only intended files.
 
 ## Box tests
 
-- Like every mature target, box tests execute on real runtimes (JVM in-process, JS under Node,
-  Native via its runner). Both FIR parsers run the same corpus through two generated lanes in
-  `AbstractDotNetIlTextTest.kt`: `net10.0` emits a dll plus its runtime config and uses signed
-  `dotnet exec`; `net48` emits an exe, which the signed Windows PowerShell CLR 4 host loads before
-  invoking its exact managed entry point. Neither lane directly activates an unsigned executable.
-- The inherited JUnit 5 resource lock `kotlin-dotnet-framework-toolchain` covers both net48 box
-  bases and both IL-text bases. Framework ILAsm and the Windows PowerShell CLR 4 host become
-  nondeterministic under unbounded process fan-out (observed as changing tests with an absent PE
-  or an empty non-zero host exit), while each affected test passes alone. Keep this one physical
-  external-toolchain lane exclusive; do not serialize net10 or ordinary compiler work.
-- A signed host only avoids SAC for direct `.exe` *execution*; it does NOT stop SAC from blocking
-  the CLR from *loading* the freshly assembled unsigned assembly. On a machine with Smart App
-  Control ON, SAC makes a per-file cloud-reputation call the first time each unsigned file is loaded
-  and fails-closed on a negative verdict (`FileLoadException`, HRESULT `0x800711C7`, Code Integrity
-  policy `VerifiedAndReputableDesktop`). Measured behavior (2026-07, SAC-enforced Win 11 host): the
-  SmartScreen verdict is derived from the assembly CONTENT, not just its hash. At measurement
-  time, reassembling identical IL produced differing hashes yet the affected programs were blocked
-  again; current writers use `/det`, but that does not weaken the content-derived conclusion. The
-  block is effectively permanent per affected program on that machine, and re-running the suite
-  does NOT clear it (an earlier "transient burst" theory is disproved).
-  Concretely, of the 11 dotnet box programs existing at measurement time, 2 (`booleanShortCircuit`,
-  `forLoopEdges`) were always blocked; the other 9 usually loaded but were occasionally blocked
-  transiently too when a whole-suite run loads many fresh dlls in a burst (e.g. `charOperations`
-  blocked in one parser variant and loaded in the other within the same run). The corpus has since
-  grown well past those 11 programs; the newer programs have no measured SAC verdicts. The trigger
-  is an opaque whole-file ML threshold, not a specific instruction pattern: each half of the
-  flagged `booleanShortCircuit` assembly (helpers with the Int.MIN_VALUE-guarded `div` pattern
-  alone, or the string-comparison half alone) passes when assembled separately; only the
-  complete program is flagged, and the equally div-guard-heavy
-  `intMinValueDivision` program passes.
-- The shared profile-aware box runner retries a blocked load with a short delay to absorb a genuinely
-  in-flight verdict, then normally aborts the test as SKIPPED (JUnit `TestAbortedException`) with a
-  diagnostic that names SAC (any other non-zero exit fails immediately). Rationale (user decision,
-  2026-07): a host whose OS refuses to load the assembly cannot execute the test — the same
-  environmental-inability contract as a missing toolchain — and the test still executes on hosts
-  without SAC. A block is never a silent pass. In a strict required-toolchain lane
-  (`KOTLIN_DOTNET_REQUIRE_TOOLCHAIN=1` or `true`) it is a test failure, so CI cannot report a green
-  semantic-execution gate which the host refused to execute. Do NOT work around SAC by
-  perturbing the artifact's hash — and do NOT rewrite or restructure a test program's content to
-  dodge the classifier's false positive; both are reputation bypasses and out of bounds. SAC has no
-  per-file or per-directory exclusion mechanism (Defender exclusions do not apply to it) and can
-  only be turned off wholesale by the user, irreversibly. To execute the affected tests, the
-  legitimate options are: run the gate on a host without Smart App Control, sign the test
-  assemblies with a certificate SAC trusts, or have the user turn SAC off.
-- When a lane's toolchain is missing (modern ILAsm + dotnet host, or Framework ILAsm + Windows
-  PowerShell CLR 4 host), its box tests normally SKIP via a JUnit 5 assumption before compiling. With
-  `KOTLIN_DOTNET_REQUIRE_TOOLCHAIN=1` (or `true`) missing tooling fails instead; use that setting
-  for mandatory runtime-execution lanes. Provision the toolchain with
-  `compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1`. The ilText suite always keeps
-  its text-comparison coverage and stays on the `NET48` default so its goldens' `.module`
-  directives are unchanged. It additionally assembles every emitted executable or library with
-  each available Framework and modern ILAsm. The modern pass is a compatibility oracle over the
-  net48 IL, not net10 profile validation. Strict toolchain runs require both assemblers.
-- The dotnet-owned box corpus lives in `compiler/testData/codegen/dotnet/box/`; a few borrowed JVM
-  box files are additionally registered by pattern in `TestGeneratorForFir2IrTests.kt`.
+Like mature targets, Kotlin/.NET box tests execute on real runtimes. PSI and
+LightTree compile the same target-owned corpus:
 
-## Target selection (`-Xdotnet-target`)
+- `net10.0` produces a DLL and runs it with the signed `dotnet exec` host;
+- `net48` produces an executable assembly loaded and invoked by the signed
+  Windows PowerShell CLR 4 host; and
+- no lane directly launches a fresh unsigned executable.
 
-- `K2DotNetCompilerArguments` is generated from the shared `compiler/arguments` description and
-  descends from `CommonKlibBasedCompilerArguments`; its configurator likewise descends from the
-  common KLIB configurator. Do not restore a handwritten argument class or duplicate common
-  KLIB/freezing/copy behavior in the .NET backend. Every current .NET invocation emits a CLR
-  assembly, but the frontend has not registered the common partial-linkage diagnostic names, so
-  `isSecondStage` must remain false until that diagnostic contract is implemented; setting it
-  prematurely makes every compilation fail during warning-level configuration. Operational
-  options such as destination, product kind, classpath, and friend authorization remain
-  compiler/task inputs rather than automatically becoming public Gradle compiler options. See
-  `docs/decisions/adr-generated-dotnet-compiler-arguments.md`.
-- `KotlinDotNetCompilerOptions`, its default implementation, and its argument-fill helper are
-  generated by `GenerateGradleOptions`. The experimental public interface extends common Kotlin
-  compiler options and adds only `moduleName`, matching Native's conservative KLIB-target
-  surface. Target framework, destination, product kind, dependencies, stdlib policy, friend
-  authorization, and raw export-selector encodings are not public compiler options. The first six
-  are target/task/association inputs; exports require a later dedicated DSL. See
-  `docs/decisions/adr-generated-dotnet-gradle-compiler-options.md`.
-- Kotlin/.NET has one logical compiler/Gradle platform identity independent of its framework
-  profile. Metadata compilation uses `-Xtarget-platform=DotNet` and Gradle module metadata uses
-  `KotlinPlatformType.dotnet`. Do not map it to JVM or Common and do not add cross-platform
-  compatibility; the existing Common metadata fallback applies as it does for every leaf target.
-  Profile selection uses the separate typed
-  `org.jetbrains.kotlin.dotnet.targetFramework` attribute. Exact variants win; `net48` and
-  `net10.0` may consume `netstandard2.0`, while `net48` and `net10.0` never consume one another and
-  a consumer with no profile remains ambiguous. The built-in Gradle target applies this attribute
-  to every profile-specific resolvable and consumable configuration. Its API and runtime variants
-  publish only the self-describing DLL; project dependencies and `associateWith` dependency/friend
-  paths likewise pass that DLL. Compiler tasks emit no standalone Kotlin/.NET KLIB.
-  See `docs/decisions/adr-gradle-dotnet-platform-identity.md` and
-  `docs/decisions/adr-gradle-dotnet-target-framework-attribute.md`.
-- `-Xdotnet-target={net48|netstandard2.0|net10.0}` (default `net48`) selects the target-framework/API
-  profile, carried as the `DotNetTarget` enum from `:core:language.targets.dotnet` by the generated
-  `DotNetConfigurationKeys.TARGET` in `:compiler:config.dotnet`. Product kind is independent:
-  `net48` and `net10.0` produce applications or libraries; `netstandard2.0` is library-only.
-  Invalid values and executable Standard products are a `COMPILER_ARGUMENTS_ERROR` from
-  `DotNetConfigurationUpdater` before FIR/code generation.
-- The profile is selected before IR lowerings and controls core/member references, target metadata,
-  runtime/stdlib generation and selection, dependency compatibility, assembly writing, and
-  packaging. Kotlin common semantics remain invariant; emitted code may differ when CLR
-  capabilities differ. Exact IL tests default to `net48`; profile-specific integration pins own
-  the Standard and modern headers and behavior.
-- `net48`: `-d foo.exe` → Framework ilasm (`ILASM` env, PATH, then
-  `C:\Windows\Microsoft.NET\Framework*\v4.0.30319\ilasm.exe`) assembles a directly runnable `.exe`.
-- `netstandard2.0`: only `-Xdotnet-produce-library`/`-Xdotnet-produce-stdlib` are valid. Modern
-  ILAsm writes the portable DLL with the exact `netstandard, Version=2.0.0.0` reference and
-  `.NETStandard,Version=v2.0` target metadata.
-- `net10.0`: both `-d foo.exe` and `-d foo.dll` are executable requests; the artifact is always
-  `foo.dll` plus `foo.runtimeconfig.json` (an `.exe` request is remapped to `.dll` with an INFO
-  diagnostic naming the actual artifact — modern ilasm-produced exes have no self-hosting story,
-  the runnable form is `dotnet exec foo.dll`). The modern ilasm is discovered per the contract
-  below; when it is missing, a single ERROR names the provisioning script. The runtimeconfig
-  framework version is the `<major>.<minor>.0` family of the newest runtime under the discovered
-  dotnet root's `shared/Microsoft.NETCore.App` with `rollForward: LatestMinor` (fallback
-  `net10.0`/`10.0.0` when no host is found — the dll may be run on another machine).
-- Both ilasm flavors are invoked deterministically with the same legacy flag spelling
-  (`/nologo /quiet /det /exe|/dll /output:...`); the modern ilasm accepts it (probed on 10.0.9).
-- Integration tests pin the compatibility matrix, exact manifest/header metadata, repeat-build
-  determinism, target-specific stdlib variants, and real execution of one portable stdlib pair on
-  both runtime profiles. A net48 assembler-pairing matrix also writes the same compiler-produced
-  application, stdlib, and runtime IL with Framework and modern ILAsm, then executes all eight
-  artifact-writer combinations on both runtimes. The Framework lane uses the signed Windows
-  PowerShell CLR 4 host to load and invoke the exact managed entry point rather than directly
-  launching an unsigned exe. A separate net10 boundary test proves that Framework ILAsm rejects a
-  real DIM body while the profile-selected modern writer executes it on CoreCLR. The modern profile
-  therefore has no artificial cross-writer requirement. Explicit-writer hooks are test-only;
-  production always selects its writer from the profile. Any failed ILAsm invocation removes its
-  partial PE and runtimeconfig before the compiler reports failure.
+The shared `kotlin-dotnet-framework-toolchain` JUnit resource lock serializes
+the physical Framework ILAsm/CLR4 lane because those external tools are
+nondeterministic under unbounded fan-out. Do not serialize ordinary compiler
+or modern-runtime work.
+
+The IL-text suite compares text even without a toolchain and assembles every
+supported golden with each available compatible ILAsm. Text equality does not
+replace execution: add real runtime coverage for dispatch, exception,
+initialization, reflection-map, cross-assembly, or profile behavior.
+
+Adversarial coverage should include nullable/value/reference and widened
+forms, hostile user implementations, empty/singleton/multiple boundaries,
+separate producers/consumers, direct/fallback/installed products, malformed or
+inapplicable foreign metadata, both parsers, and every supported runtime/profile
+that can observe the feature.
 
 ## Modern .NET toolchain
 
-- A durable, per-user (no admin) modern toolchain lives at `%LOCALAPPDATA%\kotlinc-dotnet\toolchain\`:
-  `dotnet\dotnet.exe` hosts the pinned 10.0.9 runtime and 10.0.100 SDK; the SDK supplies
-  `Roslyn\bincore\csc.dll` plus the net10 reference pack for C# integration tests.
-  `ilasm\ilasm.exe` is the self-contained modern CoreCLR assembler from the NuGet package
-  `runtime.win-x64.microsoft.netcore.ilasm`, pinned 10.0.9. Production Kotlin IL assembly does not
-  depend on Roslyn. Provision or repair the toolchain with the idempotent script
-  `compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1` (parameters: `-InstallDir`,
-  `-RuntimeVersion`, `-SdkVersion`, `-IlasmVersion`).
-- Discovery contract (for the assembler/test runner; implement lookups in this order):
-  1. `KOTLIN_DOTNET_ILASM` — full path to an `ilasm.exe`; takes precedence for the assembler.
-  2. `KOTLIN_DOTNET_ROOT` — a toolchain root containing `dotnet\` and `ilasm\` subdirs
-     (i.e. `<root>\ilasm\ilasm.exe`, `<root>\dotnet\dotnet.exe`).
-  3. The default durable location above.
-  4. Legacy .NET Framework ilasm (`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ilasm.exe`).
-  Modern C# tests discover `csc.dll` and `packs\Microsoft.NETCore.App.Ref\...\ref\net10.0` from
-  the same toolchain root (or a system-wide SDK root). They invoke Roslyn through the discovered
-  `dotnet` host with `/nostdlib+` and the complete reference pack.
-- The modern ilasm accepts both the legacy flag spelling (`/nologo /quiet /exe /output:x.exe`) and
-  the modern one (`-DLL -OUTPUT=x.dll`; quote `-OUTPUT=...` when calling from PowerShell, which
-  otherwise mangles the `=`). It reads UTF-8 IL with or without BOM, so existing emitter output
-  assembles unchanged.
-- Running an assembled dll on CoreCLR requires `x.runtimeconfig.json` next to it:
-  `{"runtimeOptions":{"tfm":"net10.0","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}`
-  then `<toolchain>\dotnet\dotnet.exe exec x.dll`. Without the runtimeconfig, `dotnet exec` fails
-  with a hostpolicy.dll error. Prefer dll + `dotnet exec` over direct `.exe` execution: the signed
-  `dotnet.exe` host avoids the Smart App Control blocking of freshly assembled unsigned exes.
-- Known semantic delta vs. .NET Framework: raw .NET formatting renders `-0.0` as `"-0"` on CoreCLR
-  but `"0"` on Framework. The backend's own `DoubleToString` helper makes this moot for compiled
-  Kotlin programs, but raw formatting probes differ.
+The durable per-user toolchain lives under:
+
+```text
+%LOCALAPPDATA%\kotlinc-dotnet\toolchain\
+```
+
+It contains the pinned .NET 10 host/SDK/reference pack and modern CoreCLR
+ILAsm. Provision or repair it with
+`compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1`.
+Production CIL assembly does not depend on Roslyn.
+
+Modern assembler discovery order is:
+
+1. `KOTLIN_DOTNET_ILASM` for an exact `ilasm.exe`;
+2. `KOTLIN_DOTNET_ROOT` containing `ilasm/` and `dotnet/`;
+3. the durable per-user location above; and
+4. legacy Framework ILAsm only where the selected profile permits it.
+
+Modern C# integration discovers `csc.dll` and the reference pack from the same
+toolchain root and invokes Roslyn through the discovered `dotnet` host.
+
+A CoreCLR DLL needs a sibling runtime configuration and runs through
+`dotnet.exe exec`. Prefer the signed host over direct execution of unsigned
+test binaries.
+
+Smart App Control can refuse to load freshly assembled unsigned content. A
+normal optional lane reports that environmental inability as a visible skip;
+the strict required-toolchain lane fails. Never perturb hashes, restructure a
+program, weaken a test, or otherwise attempt to bypass the classifier. Valid
+options are a host without SAC, a trusted signature, or a user-controlled OS
+policy change.
+
+## Documentation maintenance
+
+- `AGENTS.md` owns only this bootstrap contract.
+- `STATUS.md` owns current state and verification.
+- `docs/review/way-forward.md` owns future gates and ordering.
+- active programme files own one current workstream.
+- ADRs own durable decisions, invariants, consequences, and rejected
+  alternatives.
+- Git owns chronological implementation history.
+- tests/CI own executable evidence.
+- `docs/archive` owns immutable snapshots and superseded history.
+
+An ADR contains no current test count or commit log. A `draft-` filename must
+agree with `Status: Draft`; accepted pre-ABI decisions are renamed and state
+their freeze conditions. A semantic or ABI change updates its owning ADR in
+the same feature commit.
+
+When finishing a feature, update `STATUS.md` with the semantic head, fresh
+gate, remaining blockers, and next bounded work. Keep `HANDOVER.md` as a
+compatibility pointer only.
