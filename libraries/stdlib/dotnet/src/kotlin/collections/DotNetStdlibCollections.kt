@@ -13,6 +13,15 @@ public interface RandomAccess
 
 @IgnorableReturnValue
 @PublishedApi
+internal actual fun checkIndexOverflow(index: Int): Int {
+    if (index < 0) {
+        throwIndexOverflow()
+    }
+    return index
+}
+
+@IgnorableReturnValue
+@PublishedApi
 internal actual fun checkCountOverflow(count: Int): Int {
     if (count < 0) {
         throwCountOverflow()
