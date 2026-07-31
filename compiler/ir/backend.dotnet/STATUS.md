@@ -85,8 +85,8 @@ in `AGENTS.md`.
 
 - Current sequencing and release gates:
   [`docs/review/way-forward.md`](docs/review/way-forward.md)
-- Review-evidence index:
-  [`docs/review/README.md`](docs/review/README.md)
+- Documentation and evidence index:
+  [`docs/README.md`](docs/README.md)
 - Collections programme:
   [`docs/review/common-collections-program.md`](docs/review/common-collections-program.md)
 - Architecture ownership audit:
