@@ -13,10 +13,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 810 FIR/IL/semantic tests, 21 generated-CLI tests, and 66
+toolchain enforcement and owns 814 FIR/IL/semantic tests, 21 generated-CLI tests, and 66
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 897 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 901 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -1078,6 +1078,12 @@ landed shape as a compatibility constraint.
   distinct backed views like JVM/JS/Wasm/Native, not the EmptyList singleton. The private classes
   implement no BCL collection interface; only the public `asList<T>(T[])` facade method is
   cross-module ABI.
+  The same Common generator now emits the non-inline emptiness/cardinality family:
+  `Iterable.any()`/`none()` and `Iterable`/`List` `single()`/`singleOrNull()`. Collection receivers
+  use Common `isEmpty` fast paths, Iterable `single` dispatches to the List overload, and List
+  overloads use size/indexed access without touching `iterator()`. Predicate overloads remain
+  outside the product because generic inline lowering is still parked; `count` remains out with
+  its separate overflow-helper expect/actual closure.
   Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector through the generic
   factory instantiated at `!n`/`!!n`; canonical Next narrows through
   `unbox.any !n`/`!!n`. That array-iterator slice still rejects `Array<T?>`, projected receiver
