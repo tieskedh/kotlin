@@ -237,7 +237,7 @@ See the
 - `System.Object` is the physical foundation for Kotlin `Any`; Kotlin-facing
   `equals`, `hashCode`, and `toString` semantics remain explicit compiler or
   runtime behavior. See
-  [`draft-adr-system-object-any-foundation.md`](docs/decisions/draft-adr-system-object-any-foundation.md).
+  [the `Any` foundation ADR](docs/decisions/system-object-any.md).
 - Kotlin primitive arrays use Kotlin-owned wrapper identity around CLR
   storage. Do not expose raw CLR vectors as Kotlin array identity. See
   [the primitive-array ADR](docs/decisions/primitive-arrays.md).
