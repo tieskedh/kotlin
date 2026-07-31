@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last semantic feature: `927df9114` (`[DotNet] Add Common collection search`)
+- Last semantic feature: `734fcf98a` (`[DotNet] Add signed narrow scalars`)
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -17,21 +17,21 @@ verification, and work state.
 The last semantic head passed:
 
 ```text
-.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
+.\gradlew.bat :compiler:backend.dotnet:dotNetTest --console=plain
 ```
 
-The fresh JUnit audit covered 16 XML files and 910 tests:
+The JUnit audit covered 16 XML files and 917 tests:
 
-- 822 FIR, IL-text, and box tests
+- 828 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 67 library-integration tests
+- 68 library-integration tests
 - zero failures, errors, or skips
 
-The equality-search slice additionally passed focused execution in all four
-PSI/LightTree and Framework/CoreCLR box lanes, plus direct, installed,
-separate-consumer, and portable stdlib product checks. Its internal index- and
-count-overflow compiler ABI executed at zero, `Int.MAX_VALUE`, and overflow on
-both CLR hosts.
+The signed-narrow slice additionally passed focused execution in all four
+PSI/LightTree and Framework/CoreCLR box lanes. Its portable product gate proved
+exact `int8`/`int16` overloads, nullable and generic carriers, Kotlin library
+round trips, direct C# consumption, and foreign CLR `sbyte`/`short` calls on
+both supported runtime profiles.
 
 ## Current architecture
 
@@ -53,13 +53,12 @@ both CLR hosts.
 
 ## Active state
 
-No implementation slice is half-landed. The authoritative Common
-`Iterable.contains`/`indexOf`/`lastIndexOf` and both Common List search
-extensions are now part of every .NET stdlib product together with their exact
-index-overflow contract. Collection and List receivers take the Common member
-fast paths; ordinary Iterables retain Common equality direction and traversal.
-The next work is selection of another exact non-inline Common dependency
-closure rather than extending this family with blocked inline variants.
+No implementation slice is half-landed. Kotlin `Byte` and `Short` now use exact
+CLR `int8`/`System.SByte` and `int16`/`System.Int16` carriers across operations,
+nullability, generics, boxing, libraries, and the closed foreign primitive
+import slice. Common arithmetic, overflow, equality, hash, and rendering remain
+authoritative. `Float` is the remaining scalar prerequisite before the complete
+Common `Iterable.sum()` overload family can land without a target-owned fork.
 
 ## Open architectural blockers
 
@@ -72,17 +71,21 @@ closure rather than extending this family with blocked inline variants.
   before frontend, tooling, or packaging gains another consumer.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
   collection-shaped params each require separate Kotlin-stability decisions.
+- Foreign C# `Nullable<T>` signatures are nominal generic instantiations and
+  remain outside the closed primitive importer until constructed-type identity
+  is retained from the selected assembly graph through backend binding.
 - Gate A and ABI-freeze work remain open; current prototype identities may be
   corrected rather than compatibility-shimmed.
 
 ## Next bounded work
 
-1. Audit the remaining generated collection families and select the next exact
-   non-inline closure only after proving all helper, type, and product
-   dependencies.
-2. Create the shared retained-declaration carrier seam, then split FIR policy
+1. Close Kotlin `Float` as exact CLR `float32`/`System.Single`, including Common
+   equality, hash, conversion, and shortest-roundtrip rendering semantics.
+2. Once all six scalar prerequisites are green, adopt the complete generated
+   Common `Iterable.sum()` overload family without copying its algorithms.
+3. Create the shared retained-declaration carrier seam, then split FIR policy
    from backend binding without moving physical CLR loading into either.
-3. Continue CLR annotation/import interoperability only through exact standard
+4. Continue CLR annotation/import interoperability only through exact standard
    metadata mappings that preserve Kotlin smart-cast and mutability rules.
 
 ## Navigation
