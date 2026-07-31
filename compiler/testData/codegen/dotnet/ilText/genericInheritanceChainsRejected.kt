@@ -9,17 +9,17 @@ class NullableBaseArgument<T>(value: T?) : RejectBase<T?>(value)
 
 class ExternalGenericArgument<T>(value: List<T>) : RejectBase<List<T>>(value)
 
-class UnsupportedPrimitiveArgument<T>(value: Float) : RejectBase<Float>(value)
+class UnsupportedPrimitiveArgument<T>(value: FloatArray) : RejectBase<FloatArray>(value)
 
 class UnsupportedArrayArgument<T>(value: Array<Int>) : RejectBase<Array<Int>>(value)
 
-open class EvictedBase<T>(val unsupported: Float)
+open class EvictedBase<T>(val unsupported: FloatArray)
 
-open class EvictedDerived<T>(unsupported: Float) : EvictedBase<T>(unsupported)
+open class EvictedDerived<T>(unsupported: FloatArray) : EvictedBase<T>(unsupported)
 
-class EvictedLeaf<T>(unsupported: Float) : EvictedDerived<T>(unsupported)
+class EvictedLeaf<T>(unsupported: FloatArray) : EvictedDerived<T>(unsupported)
 
-class EvictedArgument(val unsupported: Float)
+class EvictedArgument(val unsupported: FloatArray)
 
 class EvictedArgumentDerived<T>(value: EvictedArgument) : RejectBase<EvictedArgument>(value)
 

@@ -1,0 +1,194 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'floatScalars' {}
+.module 'main-floatScalars.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.floatScalarsKt'
+       extends [mscorlib]System.Object
+{
+  .field public static literal float32 'FLOAT_CONST' = float32(-1.25)
+  .method public hidebysig static float32 'add'(float32 'left', float32 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    add
+    ret
+  }
+  .method public hidebysig static float32 'mixed'(int64 'left', float32 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    conv.r4
+    ldarg.1
+    add
+    ret
+  }
+  .method public hidebysig static float64 'widen'(float32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    conv.r8
+    ret
+  }
+  .method public hidebysig static float32 'narrow'(float64 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    conv.r4
+    ret
+  }
+  .method public hidebysig static int32 'toInt'(float32 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    conv.r8
+    dup
+    dup
+    bne.un IL_fp2iNaN_0
+    dup
+    ldc.r8 2147483647.0
+    cgt
+    brtrue IL_fp2iMax_1
+    dup
+    ldc.r8 -2147483648.0
+    clt
+    brtrue IL_fp2iMin_2
+    conv.i4
+    br IL_fp2iEnd_3
+IL_fp2iMax_1:
+    pop
+    ldc.i4 2147483647
+    br IL_fp2iEnd_3
+IL_fp2iMin_2:
+    pop
+    ldc.i4 -2147483648
+    br IL_fp2iEnd_3
+IL_fp2iNaN_0:
+    pop
+    ldc.i4.0
+IL_fp2iEnd_3:
+    ret
+  }
+  .method public hidebysig static float32 'nullable'(valuetype [mscorlib]System.Nullable`1<float32> 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<float32> 'tmp0_elvis_lhs',
+      [1] valuetype [mscorlib]System.Nullable`1<float32> '<eq>',
+      [2] valuetype [mscorlib]System.Nullable`1<float32> '<notNull>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<float32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.r4 2.5
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    stloc.2
+    ldloca 2
+    call instance bool valuetype [mscorlib]System.Nullable`1<float32>::get_HasValue()
+    brtrue IL_notNull_2
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    ldloca 2
+    call instance !0 valuetype [mscorlib]System.Nullable`1<float32>::GetValueOrDefault()
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static float32 'generic'(float32[] 'values') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] float32[] '<arrayGet>',
+      [1] int32 '<arrayIndex>'
+    )
+    ldarg.0
+    stloc.0
+    ldc.i4 0
+    stloc.1
+    ldloc.0
+    ldloc.1
+    ldelem float32
+    ret
+  }
+  .method public hidebysig static string 'render'(float32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.DoubleFormatting'::'FloatToString'(float32)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<float32> '<null>',
+      [1] float32[] '<arrayOfStorage>',
+      [2] float32 '<arrayElement>'
+    )
+    ldc.r4 -1.25
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.DoubleFormatting'::'FloatToString'(float32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r4 1.25
+    ldc.r4 2.5
+    call float32 'test.floatScalarsKt'::'add'(float32, float32)
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.DoubleFormatting'::'FloatToString'(float32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i8 16777216
+    ldc.r4 1.0
+    call float32 'test.floatScalarsKt'::'mixed'(int64, float32)
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.DoubleFormatting'::'FloatToString'(float32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r4 0.1
+    call float64 'test.floatScalarsKt'::'widen'(float32)
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.DoubleFormatting'::'DoubleToString'(float64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 0.1
+    call float32 'test.floatScalarsKt'::'narrow'(float64)
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.DoubleFormatting'::'FloatToString'(float32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r4 12.75
+    call int32 'test.floatScalarsKt'::'toInt'(float32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloca 0
+    initobj valuetype [mscorlib]System.Nullable`1<float32>
+    ldloc.0
+    call float32 'test.floatScalarsKt'::'nullable'(valuetype [mscorlib]System.Nullable`1<float32>)
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.DoubleFormatting'::'FloatToString'(float32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    newarr float32
+    stloc.1
+    ldc.r4 3.5
+    stloc.2
+    ldloc.1
+    ldc.i4 0
+    ldloc.2
+    stelem float32
+    ldloc.1
+    call float32 'test.floatScalarsKt'::'generic'(float32[])
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.DoubleFormatting'::'FloatToString'(float32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r4 0.0
+    neg
+    call string 'test.floatScalarsKt'::'render'(float32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

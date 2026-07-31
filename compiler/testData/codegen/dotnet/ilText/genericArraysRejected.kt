@@ -6,7 +6,7 @@ package test.genericarrays.rejected
 open class Base
 
 class Broken {
-    fun unsupported(): Float = 1.0f
+    fun unsupported(): FloatArray = floatArrayOf()
 }
 
 class NullableElements<T>(val values: Array<T?>)

@@ -13,11 +13,11 @@ class Impl : Able {
 class GoodDelegate(delegate: Able) : Able by delegate
 
 interface UnsupportedDelegate {
-    fun convert(value: Float): Float
+    fun convert(value: FloatArray): FloatArray
 }
 
 class UnsupportedImpl : UnsupportedDelegate {
-    override fun convert(value: Float): Float = value
+    override fun convert(value: FloatArray): FloatArray = value
 }
 
 class BadDelegate(delegate: UnsupportedDelegate) : UnsupportedDelegate by delegate

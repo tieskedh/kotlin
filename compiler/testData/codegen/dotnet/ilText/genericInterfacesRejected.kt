@@ -6,12 +6,12 @@ interface UnsupportedInterfaceBound<T : List<String>> {
     fun value(): T
 }
 
-class EvictedArgument(val unsupported: Float)
+class EvictedArgument(val unsupported: FloatArray)
 
 interface EvictedArgumentView : RejectProducer<EvictedArgument>
 
 class EvictedArgumentImplementation : EvictedArgumentView {
-    override fun produce(): EvictedArgument = EvictedArgument(1.0f)
+    override fun produce(): EvictedArgument = EvictedArgument(floatArrayOf())
 }
 
 class ReifiedBox<T>(val value: T)

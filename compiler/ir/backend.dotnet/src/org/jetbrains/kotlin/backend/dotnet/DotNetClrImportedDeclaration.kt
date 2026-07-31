@@ -257,6 +257,7 @@ private fun DotNetClrTypeSignature.toSupportedImportedIlTypeOrNull(): DotNetIlVa
             DotNetClrPrimitiveType.INT16 -> DotNetIlValueType.Int16
             DotNetClrPrimitiveType.INT32 -> DotNetIlValueType.Int32
             DotNetClrPrimitiveType.INT64 -> DotNetIlValueType.Int64
+            DotNetClrPrimitiveType.FLOAT32 -> DotNetIlValueType.Float32
             DotNetClrPrimitiveType.FLOAT64 -> DotNetIlValueType.Float64
             DotNetClrPrimitiveType.STRING -> DotNetIlValueType.String
             DotNetClrPrimitiveType.OBJECT -> DotNetIlValueType.Object
@@ -264,7 +265,6 @@ private fun DotNetClrTypeSignature.toSupportedImportedIlTypeOrNull(): DotNetIlVa
             DotNetClrPrimitiveType.UINT16,
             DotNetClrPrimitiveType.UINT32,
             DotNetClrPrimitiveType.UINT64,
-            DotNetClrPrimitiveType.FLOAT32,
             DotNetClrPrimitiveType.NATIVE_INT,
             DotNetClrPrimitiveType.NATIVE_UINT,
                 -> null

@@ -69,6 +69,7 @@ internal object DotNetNullableMetadata {
         DotNetIlValueType.Int16,
         DotNetIlValueType.Int32,
         DotNetIlValueType.Int64,
+        DotNetIlValueType.Float32,
         DotNetIlValueType.Float64,
         DotNetIlValueType.Char,
         is DotNetIlValueType.NullableValue,
