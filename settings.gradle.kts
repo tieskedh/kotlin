@@ -516,6 +516,7 @@ include(
     ":compiler:fir:raw-fir:psi2fir",
     ":compiler:fir:raw-fir:light-tree2fir",
     ":compiler:fir:fir2ir",
+    ":compiler:fir:fir2ir:dotnet-backend",
     ":compiler:fir:fir2ir:jvm-backend",
     ":compiler:fir:providers",
     ":compiler:fir:semantics",

@@ -60,7 +60,9 @@ it does not declare the complete foreign importer finished.
 | return `NotNull` / `MaybeNull` | enhanced call-result type |
 | by-value `DisallowNull` / `AllowNull` | enhanced call-input type |
 | exact `ObsoleteAttribute` | Common deprecation on admitted type/member/property/accessor targets |
+| ordinary `SZARRAY` over admitted signed primitives, `string`, or `object` | JVM-shaped flexible `Array<E>` foreign view with exact CLR-vector binding |
 | exact final `ParamArrayAttribute` on `string[]`/`object[]` | Common `vararg` call view with raw vector binding |
+| Kotlin implementation of an admitted CLR interface | direct implementation of the retained foreign TypeDef/MethodDef slots |
 
 Closed interface properties are formed only from coherent Property and MethodSemantics metadata.
 Split read/write null-state evidence is deliberately not flattened into the property's one Common
@@ -75,7 +77,8 @@ type.
 | Conditional weakening | Deferred | Model caller-state invalidation for `MaybeNullWhen` and `ref`/`out` |
 | Member null-state | Retained only | Preserve Kotlin smart-cast stability; no importer-only exception |
 | Properties/indexers | Non-indexed interface properties admitted | Define read/write views and indexer collisions |
-| Parameter arrays | Reference vectors admitted | Resolve primitive wrappers and parameter collections |
+| Ordinary vectors | Admitted across methods and non-indexed properties | Add element grammars only with exact physical binding |
+| Parameter arrays | Reference vectors admitted | Add primitive call and implementation bridges; resolve parameter collections separately |
 | Optional/default arguments | Flags and constants retained | Define calls without inventing Kotlin defaults |
 | Extension methods | Raw attributes retained | Prove receiver, owner, accessibility, overload, and collisions |
 | Deprecation | Exact admitted targets closed | Extend alongside each new declaration family |
@@ -94,9 +97,20 @@ and exact backend binding before successful calls are admitted.
 Candidate bounded continuations are:
 
 1. additional ordinary class/interface member shapes already expressible in Common;
-2. arrays and generics whose physical classification/assignability is already proven;
+2. generics whose physical classification/assignability is already proven;
 3. declaration families needed by common collection and stdlib consumers; and
 4. exact Obsolete/nullability projection for those newly admitted targets.
+
+The first ordinary `SZARRAY` slice is closed across parameter, return, and non-indexed property
+positions. Like JVM reference-array import, it exposes a flexible invariant-to-out `Array<E>`
+view. Unlike JVM primitive-array import, a CLR primitive vector remains `Array<E>` because this
+target's Kotlin primitive arrays are nominal runtime wrappers. This is an exact platform
+constraint, not a relaxation of Common array semantics.
+
+The implementation direction stays symmetric for the admitted grammar: Kotlin classes may
+implement these exact native CLR interfaces, and foreign callers dispatch through the original
+MethodDefs. This is deliberately not routed through the Kotlin-owned split-interface ABI or its
+C# authoring manifest.
 
 A classifier with one unsupported public obligation remains withheld. Classpath order never chooses
 between duplicate logical classifier identities.
