@@ -6,7 +6,7 @@ copying a snapshot review into binding design law.
 
 ## Sources and authority
 
-1. [`../review-2026-07-17.md`](../review-2026-07-17.md) is the full consolidated architectural
+1. [`../archive/review-2026-07-17.md`](../archive/review-2026-07-17.md) is the full consolidated architectural
    review of branch commit `8dd89907d`. It includes the dimension reviews, red-team analyses,
    verification corrections, evidence, and file/line anchors. Preserve it as snapshot evidence.
 2. An earlier classified review was supplied in the review conversation. It is supplemental. Its
@@ -22,9 +22,9 @@ copying a snapshot review into binding design law.
    reviews and may promote, downgrade, or split a review item. Every normative
    representation or ABI decision still belongs in an ADR under
    [`../decisions`](../decisions).
-6. [`upstream-sync-2026-07-28.md`](upstream-sync-2026-07-28.md) records the six-step impact review
+6. [`../archive/upstream-sync-2026-07-28.md`](../archive/upstream-sync-2026-07-28.md) records the six-step impact review
    and adaptations for the rebase from `0349ed5cd` to `6fb64e0c0`.
-7. [`upstream-sync-2026-07-30.md`](upstream-sync-2026-07-30.md) records the 161-commit impact
+7. [`../archive/upstream-sync-2026-07-30.md`](../archive/upstream-sync-2026-07-30.md) records the 161-commit impact
    review, exact rebase verification, immediate Common/IR adaptations, and longer-term KLIB,
    Analysis API, and BTA direction for the rebase to `733a49b39`.
 8. [`common-io-source-partition.md`](common-io-source-partition.md) records the mature-target I/O
