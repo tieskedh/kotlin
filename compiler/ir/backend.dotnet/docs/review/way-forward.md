@@ -936,6 +936,18 @@ XML suites (806 FIR/IL/box, 21 generated CLI, and 66 library integration tests).
 adapters remain a separate interoperability feature. The reviewed programme and attacked
 alternatives are in `common-collections-program.md`.
 
+**Architecture responsibility correction (implemented 2026-07-31):** mature target module and
+package ownership is now the default for the .NET compiler too. The first bounded correction moved
+objective PE/ECMA-335 loading, CLR resolution, and validated metadata evidence out of the IR backend
+into `frontend.common.dotnet` under `org.jetbrains.kotlin.load.dotnet`; the module's only declared
+API dependency is Kotlin stdlib and it has no compiler-project dependency. Kotlin
+nullability/contract projection remains FIR policy; configuration, FIR provider ownership,
+KLIB/ABI serialization, interop manifests, and packaging remain separately ordered slices. IR
+context, lowerings, intrinsics, CIL generation, and physical runtime/stdlib construction stay in
+`backend.dotnet`. The complete 93-file backend inventory,
+nine-file CLI classification, forbidden dependencies, mature-target evidence, and attacked
+alternatives are recorded in `architecture-responsibility-audit.md`.
+
 **CLR-importer progress (2026-07-28):** the first importer slice follows the JVM foreign
 classfile/provider split without pretending that CLR metadata is Java metadata. A single bounded,
 JVM-hosted PE/ECMA-335 engine now serves both embedded-resource loading and an immutable physical

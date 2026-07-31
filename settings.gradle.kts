@@ -176,6 +176,7 @@ include(
     ":compiler:multiplatform-parsing",
     ":compiler:frontend",
     ":compiler:frontend.common",
+    ":compiler:frontend.common.dotnet",
     ":compiler:frontend.common-psi",
     ":compiler:frontend.common-psi:feature-to-flag-map-generator",
     ":compiler:frontend.java",

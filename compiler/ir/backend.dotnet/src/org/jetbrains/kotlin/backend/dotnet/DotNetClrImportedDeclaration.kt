@@ -13,10 +13,16 @@ import org.jetbrains.kotlin.serialization.deserialization.IncompatibleVersionErr
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedContainerAbiStability
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedContainerSource
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.PreReleaseInfo
+import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPropertyDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
 import java.util.IdentityHashMap
 
 sealed class DotNetClrImportedDeclarationSource(
-    val assembly: DotNetClrClasspathAssembly.Foreign,
+    val assembly: DotNetClrClasspathAssembly.WithoutCarrier,
     val declaringType: DotNetClrTypeDefinition,
 ) : DeserializedContainerSource {
     init {
@@ -43,7 +49,7 @@ sealed class DotNetClrImportedDeclarationSource(
  * display-name lookup after Kotlin type enhancement has produced the logical declaration view.
  */
 class DotNetClrImportedMethodSource(
-    assembly: DotNetClrClasspathAssembly.Foreign,
+    assembly: DotNetClrClasspathAssembly.WithoutCarrier,
     declaringType: DotNetClrTypeDefinition,
     val method: DotNetClrMethodDefinition,
 ) : DotNetClrImportedDeclarationSource(assembly, declaringType) {
@@ -69,7 +75,7 @@ class DotNetClrImportedMethodSource(
  * from [property].
  */
 class DotNetClrImportedPropertySource(
-    assembly: DotNetClrClasspathAssembly.Foreign,
+    assembly: DotNetClrClasspathAssembly.WithoutCarrier,
     declaringType: DotNetClrTypeDefinition,
     val property: DotNetClrPropertyDefinition,
     val getter: DotNetClrMethodDefinition,
@@ -101,7 +107,7 @@ class DotNetClrImportedPropertySource(
                 "Property 0x${property.handle.token.toUInt().toString(16)}"
 }
 
-private fun DotNetClrClasspathAssembly.Foreign.identityDisplayName(): String =
+private fun DotNetClrClasspathAssembly.WithoutCarrier.identityDisplayName(): String =
     "${metadata.identity.name}, Version=${metadata.identity.version}, Culture=${metadata.identity.culture}"
 
 /**
@@ -113,7 +119,7 @@ private fun DotNetClrClasspathAssembly.Foreign.identityDisplayName(): String =
  * resolves a ClassId, namespace, method name, or signature against the classpath.
  */
 internal class DotNetClrImportedDeclarations(
-    private val assemblyReferenceSink: (DotNetClrClasspathAssembly.Foreign) -> Unit,
+    private val assemblyReferenceSink: (DotNetClrClasspathAssembly.WithoutCarrier) -> Unit,
 ) {
     private val classInfos = IdentityHashMap<IrClass, DotNetIlClassInfo>()
 
@@ -226,7 +232,7 @@ internal class DotNetClrImportedDeclarations(
         return first
     }
 
-    private fun validateAssemblyIdentity(assembly: DotNetClrClasspathAssembly.Foreign) {
+    private fun validateAssemblyIdentity(assembly: DotNetClrClasspathAssembly.WithoutCarrier) {
         val identity = assembly.metadata.identity
         if (!identity.culture.equals("neutral", ignoreCase = true)) {
             dotNetUnsupported(
