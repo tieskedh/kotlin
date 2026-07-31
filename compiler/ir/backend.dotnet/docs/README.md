@@ -52,7 +52,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Generic and variant interface ABI](decisions/draft-adr-variant-interface-abi.md)
 - [Callable ABI](decisions/draft-adr-erased-callable-abi.md)
 - [Runtime and stdlib product ownership](decisions/draft-adr-target-stdlib-bootstrap.md)
-- [CIL and PE production direction](decisions/draft-adr-il-assembly-pipeline.md)
+- [CIL and PE production direction](decisions/cil-and-pe-production.md)
 
 ## Interop, integration, and supporting decisions
 
