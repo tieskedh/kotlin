@@ -3391,6 +3391,10 @@ internal class DotNetIlEmitter(
             DotNetIlValueType.Int32 -> "int32(${constant.value as? Int ?: unsupportedValue()})"
             DotNetIlValueType.Int64 -> "int64(${constant.value as? Long ?: unsupportedValue()})"
             DotNetIlValueType.Char -> "char(0x%04X)".format((constant.value as? Char ?: unsupportedValue()).code)
+            DotNetIlValueType.Float32 -> {
+                val literal = (constant.value as? Float ?: unsupportedValue()).toIlFloat32Literal()
+                if (literal.startsWith("float32(")) literal else "float32($literal)"
+            }
             DotNetIlValueType.Float64 -> {
                 // toIlFloat64Literal yields either a bare decimal (wrapped here) or the raw-bit
                 // `float64(0x...)` form, which doubles as a field-initializer spelling.
@@ -3989,6 +3993,7 @@ internal class DotNetIlEmitter(
                 -> "ldc.i4 0"
 
             DotNetIlValueType.Int64 -> "ldc.i8 0"
+            DotNetIlValueType.Float32 -> "ldc.r4 0.0"
             DotNetIlValueType.Float64 -> "ldc.r8 0.0"
             is DotNetIlValueType.NullableValue -> {
                 checkNotNull(initializedLocalIndex) { "nullable default placeholder needs an initialized local" }
