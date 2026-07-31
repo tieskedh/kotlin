@@ -53,10 +53,10 @@ test.
 
 ## Active state
 
-No implementation slice is half-landed. Documentation ownership is being
-normalized independently of compiler behavior. The next semantic slice must
-still follow the compare, document, implement, and adversarially test workflow
-in `AGENTS.md`.
+No implementation slice is half-landed. Documentation ownership has been
+normalized without changing compiler behavior. The next work is selection of
+one bounded semantic slice through the compare, document, implement, and
+adversarially test workflow in `AGENTS.md`.
 
 ## Open architectural blockers
 
