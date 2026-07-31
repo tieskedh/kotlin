@@ -65,12 +65,10 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Compiler and Gradle integration](decisions/compiler-and-gradle-integration.md)
 - [Explicit C# export surface](decisions/draft-adr-explicit-csharp-export-surface.md)
 
-Three current files document implementation or verification mechanisms and
-will move out of `decisions` when their active links are migrated:
+## Implementation and verification
 
-- [Private CLR field disambiguation](decisions/adr-private-clr-field-disambiguation.md)
-- [Generic data-class equality](decisions/draft-adr-generic-data-class-equality.md)
-- [Semantic interface-map verification](decisions/adr-semantic-interface-mapping-audit.md)
+- [Backend codegen conventions](implementation/backend-codegen-conventions.md)
+- [Interface ABI conformance](verification/interface-abi-conformance.md)
 
 ## Historical evidence
 

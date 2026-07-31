@@ -292,7 +292,7 @@ Mappings outside the C# authoring manifest are compared separately by the implem
 and complete constructed interface signature. This is a physical slot locator, not a second
 Kotlin identity namespace; Kotlin logical identity remains in KLIB and
 `DotNetPhysicalDeclaration`. See
-[`adr-semantic-interface-mapping-audit.md`](adr-semantic-interface-mapping-audit.md).
+[`../verification/interface-abi-conformance.md`](../verification/interface-abi-conformance.md).
 
 Physical provider selection is set-based and uses only the most-specific DIM providers for the
 selected logical Kotlin default:
