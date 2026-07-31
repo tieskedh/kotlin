@@ -5,64 +5,64 @@
 
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrAllowNullMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrAllowNullMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyMetadata
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReference
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReferenceBinder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrClasspathAssembly
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeCoreTypes
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnIfMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDoesNotReturnIfMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDisallowNullMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDisallowNullMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrInputNullabilityEnhancer
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReference
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReferenceBinder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeCoreTypes
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDoesNotReturnMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDoesNotReturnMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDoesNotReturnIfMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDoesNotReturnIfMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDisallowNullMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDisallowNullMetadataResolution
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrInputNullabilityEnhancer
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrImportedPropertySource
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjection
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjector
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityQualifier
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemanticsKind
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataHandle
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationTarget
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplicator
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeTransformApplicator
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullIfNotNullMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullIfNotNullMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullWhenMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullWhenMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrObsoleteMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrObsoleteMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrParamArrayMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrParamArrayMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrParameterDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertyDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedMethodSignatureResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeSignature
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrReturnNullabilityEnhancer
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyBinder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyName
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeSignature
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityProjection
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityProjector
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityQualifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSemanticsKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodVisibility
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMaybeNullMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMaybeNullMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableDeclarationResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableDeclarationTarget
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableEvidenceApplicator
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableTypeTransformApplicator
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNotNullIfNotNullMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNotNullIfNotNullMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNotNullMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNotNullMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNotNullWhenMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNotNullWhenMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrObsoleteMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrObsoleteMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrParamArrayMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrParamArrayMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrParameterDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPropertyDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedMethodSignatureResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrReturnNullabilityEnhancer
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyBinder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyName
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedTypeResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureCallingConvention
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.EffectiveVisibility
 import org.jetbrains.kotlin.descriptors.Modality
@@ -127,6 +127,8 @@ import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.name.StandardClassIds
 import org.jetbrains.kotlin.types.ConstantValueKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeCoreTypes
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -140,10 +142,10 @@ internal class DotNetClrFirSymbolProvider(
     session: FirSession,
     private val moduleData: FirModuleData,
     private val scopeProvider: FirScopeProvider,
-    assemblies: List<DotNetClrClasspathAssembly.Foreign>,
+    assemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>,
 ) : FirSymbolProvider(session) {
     private data class Candidate(
-        val assembly: DotNetClrClasspathAssembly.Foreign,
+        val assembly: DotNetClrClasspathAssembly.WithoutCarrier,
         val type: DotNetClrTypeDefinition,
         val methods: List<DotNetClrMethodDefinition>,
         val properties: List<PropertyCandidate>,
@@ -171,7 +173,7 @@ internal class DotNetClrFirSymbolProvider(
     )
 
     private val foreignAssemblies = assemblies
-    private val metadata = foreignAssemblies.map(DotNetClrClasspathAssembly.Foreign::metadata)
+    private val metadata = foreignAssemblies.map(DotNetClrClasspathAssembly.WithoutCarrier::metadata)
     private val annotationServices = ForeignAnnotationServices.create(metadata)
     private val candidates: Map<ClassId, Candidate> = buildCandidates()
     private val symbols = ConcurrentHashMap<ClassId, FirRegularClassSymbol>()
@@ -1329,9 +1331,9 @@ internal class DotNetClrFirSymbolProvider(
                     signatureResolver = signatureResolver,
                     evidenceApplicator = DotNetClrNullableEvidenceApplicator(
                         DotNetClrNullableTypeTransformApplicator(
-                            org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassifier(
+                            DotNetClrPhysicalTypeClassifier(
                                 typeResolver,
-                                org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeCoreTypes(
+                                DotNetClrPhysicalTypeCoreTypes(
                                     systemValueType = systemValueType,
                                     systemEnum = coreTypes.systemEnum,
                                     systemNullable = systemNullable,
