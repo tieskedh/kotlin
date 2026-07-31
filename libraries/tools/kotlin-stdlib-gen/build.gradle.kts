@@ -48,6 +48,9 @@ tasks {
         inputs.file(
             rootProject.file("libraries/stdlib/src/kotlin/collections/Collections.kt")
         )
+        inputs.file(
+            rootProject.file("libraries/stdlib/common/src/generated/_Arrays.kt")
+        )
     }
 
     register<JavaExec>("generateStdlibTests") {

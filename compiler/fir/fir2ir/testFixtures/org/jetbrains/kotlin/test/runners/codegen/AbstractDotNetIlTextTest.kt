@@ -560,12 +560,16 @@ private abstract class AbstractDotNetBoxRunner(
             "System.Runtime.Versioning.TargetFrameworkAttribute",
             ".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterator`1'<'T'>",
             ".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterable`1'<'T'>",
+            ".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayAsList`1'<'T'>",
+            ".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayAsListIterator`1'<'T'>",
             ".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'",
             "'Kotlin.Collections.EmptyIterator'",
             "'Kotlin.Collections.EmptyList'",
             ".class interface public abstract auto ansi 'Kotlin.Collections.RandomAccess'",
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
                     "'emptyList'<'T'>()",
+            ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
+                    "'asList'<'T'>(!!0[] '<this>')",
             ".method public hidebysig specialname static int32 'get_lastIndex'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
             ".method public hidebysig static object 'firstOrNull'<'T'>(" +

@@ -68,8 +68,9 @@ import org.jetbrains.kotlin.util.OperatorNameConventions
  * argument and spread expressions are evaluated once in source order, and every expanded call
  * receives a fresh array. Spread copies use the existing array `size`/`get`/`set` surface rather
  * than adding a second codegen-only copying path. Open element types deliberately remain
- * untouched: `vararg T` keeps its projected `Array<out T>` ABI on the unsupported path until that
- * ABI is decided.
+ * untouched. The read-only `Array<out T>` carrier is now defined, but construction and spread
+ * copying for an open `vararg T` are not; the declaration gate therefore keeps generic varargs
+ * unsupported instead of publishing a function whose source calls cannot be lowered.
  */
 internal class DotNetVarargLowering(
     context: DotNetBackendContext,

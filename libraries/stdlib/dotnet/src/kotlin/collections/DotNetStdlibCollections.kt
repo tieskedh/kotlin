@@ -55,6 +55,159 @@ internal object EmptyList : List<Nothing>, Serializable, RandomAccess {
 
 public fun <T> emptyList(): List<T> = EmptyList
 
+/**
+ * Returns a [List] that wraps the original array.
+ *
+ * Like the JVM, JS, Native, and Wasm actuals, this view retains the array instead of copying it.
+ * The private direct implementation is temporary until the Common AbstractList dependency closure
+ * is part of the .NET stdlib product.
+ */
+public actual fun <T> Array<out T>.asList(): List<T> = ArrayAsList(this)
+
+private class ArrayAsList<T> private constructor(
+    private val array: Array<out T>,
+    private val fromIndex: Int,
+    override val size: Int,
+) : List<T>, RandomAccess {
+    constructor(array: Array<out T>) : this(array, 0, array.size)
+
+    override fun isEmpty(): Boolean = size == 0
+
+    override fun contains(element: T): Boolean = indexOfAny(element) >= 0
+
+    override fun containsAll(elements: Collection<T>): Boolean {
+        val widenedElements: Collection<Any?> = elements
+        val iterator = widenedElements.iterator()
+        while (iterator.hasNext()) {
+            if (indexOfAny(iterator.next()) < 0) return false
+        }
+        return true
+    }
+
+    override fun get(index: Int): T {
+        checkElementIndex(index)
+        return array[fromIndex + index]
+    }
+
+    override fun indexOf(element: T): Int = indexOfAny(element)
+
+    private fun indexOfAny(element: Any?): Int {
+        var index = 0
+        while (index < size) {
+            val candidate: Any? = get(index)
+            if (candidate == element) return index
+            index++
+        }
+        return -1
+    }
+
+    override fun lastIndexOf(element: T): Int = lastIndexOfAny(element)
+
+    private fun lastIndexOfAny(element: Any?): Int {
+        var index = size - 1
+        while (index >= 0) {
+            val candidate: Any? = get(index)
+            if (candidate == element) return index
+            index--
+        }
+        return -1
+    }
+
+    override fun iterator(): Iterator<T> = ArrayAsListIterator(this, 0)
+
+    override fun listIterator(): ListIterator<T> = ArrayAsListIterator(this, 0)
+
+    override fun listIterator(index: Int): ListIterator<T> {
+        checkPositionIndex(index)
+        return ArrayAsListIterator(this, index)
+    }
+
+    override fun subList(fromIndex: Int, toIndex: Int): List<T> {
+        checkRangeIndexes(fromIndex, toIndex)
+        return ArrayAsList(array, this.fromIndex + fromIndex, toIndex - fromIndex)
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (other === this) return true
+        if (other !is List<*> || size != other.size) return false
+
+        val thisIterator = iterator()
+        val otherIterator = other.iterator()
+        while (thisIterator.hasNext()) {
+            if (thisIterator.next() != otherIterator.next()) return false
+        }
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var hashCode = 1
+        val iterator = iterator()
+        while (iterator.hasNext()) {
+            val element = iterator.next()
+            hashCode = 31 * hashCode + (element?.hashCode() ?: 0)
+        }
+        return hashCode
+    }
+
+    override fun toString(): String {
+        var result = "["
+        var index = 0
+        while (index < size) {
+            if (index > 0) result += ", "
+            val element: Any? = get(index)
+            result += if (element === this) "(this Collection)" else element.toString()
+            index++
+        }
+        return result + "]"
+    }
+
+    private fun checkElementIndex(index: Int) {
+        if (index < 0 || index >= size) {
+            throw IndexOutOfBoundsException("index: $index, size: $size")
+        }
+    }
+
+    private fun checkPositionIndex(index: Int) {
+        if (index < 0 || index > size) {
+            throw IndexOutOfBoundsException("index: $index, size: $size")
+        }
+    }
+
+    private fun checkRangeIndexes(fromIndex: Int, toIndex: Int) {
+        if (fromIndex < 0 || toIndex > size) {
+            throw IndexOutOfBoundsException(
+                "fromIndex: $fromIndex, toIndex: $toIndex, size: $size",
+            )
+        }
+        if (fromIndex > toIndex) {
+            throw IllegalArgumentException("fromIndex: $fromIndex > toIndex: $toIndex")
+        }
+    }
+}
+
+private class ArrayAsListIterator<T>(
+    private val list: ArrayAsList<T>,
+    private var position: Int,
+) : ListIterator<T> {
+    override fun hasNext(): Boolean = position < list.size
+
+    override fun next(): T {
+        if (!hasNext()) throw NoSuchElementException()
+        return list[position++]
+    }
+
+    override fun hasPrevious(): Boolean = position > 0
+
+    override fun previous(): T {
+        if (!hasPrevious()) throw NoSuchElementException()
+        return list[--position]
+    }
+
+    override fun nextIndex(): Int = position
+
+    override fun previousIndex(): Int = position - 1
+}
+
 // Resolution-only declarations for the first array-operation slices. The backend intercepts every
 // call through DotNetIlIntrinsicMethods and excludes these declarations from emitted facades.
 // Keeping them external also leaves omitted defaults visible on the original call, so the

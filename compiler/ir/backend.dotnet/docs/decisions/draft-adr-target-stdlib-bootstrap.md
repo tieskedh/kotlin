@@ -61,8 +61,9 @@ Ownership is split as follows:
 - the user assembly owns only user declarations and calls into those platform assemblies.
 
 The first stdlib implementations are generic Kotlin `ArrayIterator<T>` and `ArrayIterable<T>`,
+an array-backed read-only `List<T>` view for Common `Array<out T>.asList()`,
 the common-shaped `EmptyIterator`/`EmptyList` singleton pair, `emptyList<T>()`, the top-level
-`Iterable<T>`/`List<T>` `first()` and `last()` operations, and the Kotlin 2.5
+`Iterable<T>`/`List<T>` terminal operations, and the Kotlin 2.5
 `kotlin.internal.throwNoWhenBranchMatchedException(subject)` compiler helper. The classes,
 objects, and helpers are compiled through the ordinary pipeline; collection implementations
 receive the same compiler-generated canonical and typed MethodImpl bridges as user
@@ -130,6 +131,23 @@ The generic `lastIndex` extension getter is emitted as a static generic CLR meth
 JVM accessor-method representation. Like every extension property it has no CLR `.property` row:
 its receiver is a method parameter, not a CLR property owner. This is ordinary Kotlin declaration
 support rather than a collection intrinsic.
+
+The next bounded generator selection extracts the exact Common
+`Array<out T>.asList(): List<T>` expect from generated `_Arrays.kt`. Its .NET actual follows the
+Native/Wasm representation precedent: a private ordinary Kotlin `List<T>, RandomAccess` view owns
+the original array, so element replacement remains visible through the list and through nested
+sub-list views. JVM and JS use platform list implementations with the same no-copy contract.
+Common `AbstractList` remains outside the current dependency closure, so this temporary private
+view implements the complete List behavior directly and is replaced when the Common abstract-list
+slice lands.
+
+The view is not `System.Array.AsReadOnly`, `System.Collections.Generic.List<T>`, or an
+`IReadOnlyList<T>` adapter. No BCL collection type can provide the target's canonical, declared,
+and exact Kotlin List capabilities, and wrapping one would introduce an extra implementation
+identity without solving that mismatch. Even an empty array receives a distinct backed view,
+matching all mature targets; `asList()` is not the `emptyList()` singleton operation. The public
+actual is an ordinary generic method on `Kotlin.Collections.CollectionsKt`, not an intrinsic or a
+compiler-facing factory.
 
 The generated Common file and the target collection-support file are separate source-product
 shards but one CLR API owner. In `STDLIB` emission, files which the compiler-owned source catalog
@@ -529,6 +547,19 @@ accessors and no CLR property row. Separate and installed consumers call that fa
 adversarial execution proves empty, singleton, widened, nullable, primitive/reference, one-shot
 Iterable, and non-iterating List behavior on Framework CLR 4 and CoreCLR 10. The physical index
 grammar and runtime surface do not change. The fresh strict gate is 893/0/0/0 across 16 XML suites.
+
+The array-backed-list continuation extracts the complete Common `Array<out T>.asList()` expect
+from generated `_Arrays.kt` and emits one ordinary actual on the existing collection facade. The
+private view and iterator implement only Kotlin List/Iterator capabilities and the inert
+RandomAccess marker; an IL audit rejects any `System.Collections` interface on the view. The
+embedded physical index contains the facade function and excludes both private class identities.
+Separate and installed consumers call the public method and never name either implementation
+class. The portable `netstandard2.0` product executes an alias-preserving `Array<Int>` view on
+Framework CLR 4 and CoreCLR 10. Parser/runtime boxes additionally cover reference covariance,
+nullable and value elements, hostile widened arguments, sub-views, structural methods, and every
+iterator/range boundary. The physical ABI grammar and runtime surface remain unchanged.
+The fresh strict gate is 897/0/0/0 across 16 XML suites (810 FIR/IL/box, 21 generated CLI, and
+66 library integration tests).
 
 The exhaustive-when matrix additionally verifies that the internal subject-aware helper is emitted
 once in `Kotlin.Stdlib`, that a separately compiled application calls that physical facade, and

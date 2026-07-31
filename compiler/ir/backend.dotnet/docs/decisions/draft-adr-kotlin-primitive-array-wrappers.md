@@ -33,6 +33,15 @@ reference elements. The importer must not infer Kotlin covariance from the CLR c
 stores can still trigger CLR `ArrayTypeMismatchException`; that is an interop-boundary hazard to
 document and test, not a reason to change Kotlin variance.
 
+An output-projected `Array<out T>` retains the same `T[]` carrier and records the projection only
+in Kotlin metadata. At a closed reference boundary, CLR's own vector covariance truthfully
+implements the Kotlin widening (`Derived[] -> Base[]`). At a value boundary it cannot:
+`Array<Int>` is `int32[]`, which is not assignable to the `object[]` carrier of
+`Array<out Any>`. The backend rejects that widening until an identity-preserving boxed carrier is
+designed; it never copies or silently changes the vector. Exact value instantiations such as
+`Array<Int>.asList()` remain `int32[]` end to end. `in` and star projections remain rejected
+because they do not provide one truthful CLR element token.
+
 ### Specialized primitive arrays
 
 Every specialized primitive-array type (`IntArray`, `LongArray`, `BooleanArray`, and the remaining

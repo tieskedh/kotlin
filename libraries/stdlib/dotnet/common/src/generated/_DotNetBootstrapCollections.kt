@@ -10,6 +10,11 @@ package kotlin.collections
 // See: https://github.com/JetBrains/kotlin/tree/master/libraries/stdlib
 //
 /**
+ * Returns a [List] that wraps the original array.
+ */
+public expect fun <T> Array<out T>.asList(): List<T>
+
+/**
  * Returns the index of the last item in the list or -1 if the list is empty.
  *
  * @sample samples.collections.Collections.Lists.lastIndexOfList

@@ -1,6 +1,7 @@
 # Common collections programme review
 
-Status: selected direction; first generator-owned slice implemented and validated.
+Status: selected direction; first generator-owned and second
+array-backed-list slices implemented and validated.
 
 ## Question
 
@@ -167,6 +168,68 @@ portable self-describing stdlib, preserve canonical fallback behavior, and
 test empty, singleton, widened, nullable, primitive, reference, and hostile
 implementation shapes.
 
+## Second-slice selected design
+
+The next bounded product is the exact Common
+`Array<out T>.asList(): List<T>` expect/actual pair. It is selected before
+`listOf` because it has a closed non-inline Common declaration and one narrow
+platform body. The complete `listOf` family also includes the Common
+`@InlineOnly` zero-argument overload and separate vararg and singleton
+contracts. Publishing only a convenient subset, or replacing the missing
+cross-module inline model with a target intrinsic, would create a temporary
+.NET semantic surface rather than complete one Common slice.
+
+The bootstrap generator extracts the complete `Array.asList` expect
+declaration from authoritative Common `_Arrays.kt`, with the same fail-closed
+unique-marker rule already used for `List.lastIndex`. The .NET actual is
+ordinary target stdlib Kotlin. Its representation follows Native and Wasm:
+one Kotlin-owned `List<T>, RandomAccess` view retains the original array and
+observes later element replacement. JVM and JS use their existing platform
+list implementations for the same backed-view contract; none copies the
+elements.
+
+The current .NET product deliberately does not compile Common `AbstractList`
+yet because its helper closure is programme step 3. The target actual
+therefore implements the complete current Common `List` surface directly,
+including structural equality/hash/text, forward and reverse iterators, and
+backed sub-list views. This is bounded representation code, not a copied
+Common algorithm family. It may be deleted in favor of the Common abstract
+base once that base and its exact closure become supported.
+
+The CLR gives a concrete reason not to reuse `System.Array.AsReadOnly`,
+`List<T>`, or `IReadOnlyList<T>` as the implementation identity: those types
+do not implement the target's canonical, declared, and exact Kotlin `List`
+interfaces. Wrapping a BCL list again would add a second owner without
+removing that mismatch. The Kotlin view therefore implements no BCL
+collection interface in this slice. Explicit C# adapters remain programme
+step 5.
+
+Empty arrays are not redirected to `EmptyList`. JVM, JS, Wasm, and Native all
+return an array-backed view for `asList`, including the empty case. Keeping a
+distinct view also avoids silently changing identity and leaves the factory
+contract uniform.
+
+The Common signature also closes the first general output-projected generic
+array boundary. `Array<out E>` keeps the same physical `E[]` vector token and
+the projection remains in KLIB metadata, matching JVM's separation of source
+projection from its array carrier. CLR reference-vector covariance can
+therefore service `Array<Derived> -> Array<out Base>` without a wrapper.
+CLR value vectors are not covariant: `int32[]` is not an `object[]`. The
+backend must reject `Array<Int> -> Array<out Any>` rather than box, copy, or
+emit invalid IL. Direct `Array<Int>.asList()` still instantiates the method at
+`Int`, retains the original `int32[]`, and is fully supported. Input and star
+projections remain outside this slice because neither identifies a truthful
+CLR vector element token.
+
+Adversarial validation must prove mutation and sub-view aliasing, empty and
+singleton behavior, nullable/reference/value elements, covariant widening
+without identity changes, wrong-type search barriers, duplicate search,
+iterator boundaries, structural equality/hash/text, and the absence of a BCL
+collection contract. Separate-product tests must prove that the Common expect
+is preserved in the embedded KLIB while consumers call the single
+`Kotlin.Collections.CollectionsKt` implementation on `net48`,
+`netstandard2.0`, and `net10.0`.
+
 ## First-slice outcome
 
 The first slice implements exactly the selected operations and Common
@@ -186,3 +249,30 @@ The strict aggregate gate completes 893 tests across 16 JUnit XML suites:
 806 FIR/IL/box, 21 generated CLI, and 66 library integration tests, with zero
 failures, errors, or skips. Physical ABI schema 16 and runtime surface level 9
 remain unchanged.
+
+## Second-slice outcome
+
+The generator now extracts the complete Common `Array<out T>.asList()` expect,
+and the ordinary .NET actual is emitted once on
+`Kotlin.Collections.CollectionsKt`. The self-describing KLIB retains the
+Common projection; its physical index contains the facade method but no
+private view or iterator identity. Direct and fallback products are
+byte-identical, installed consumers call the same facade, and the portable
+`netstandard2.0` product executes its `Array<Int>` backed view on Framework
+CLR 4 and CoreCLR 10.
+
+The adversarial box executes for PSI and LightTree on both runtimes. It proves
+array and nested-sub-list aliasing, reference projection, value/reference/
+nullable elements, List covariance without identity change, wrong-type
+`contains`/search/`containsAll` barriers, duplicate search, iterator and range
+failures, structural equality/hash/text including NaN, signed zero, and
+direct self rendering, plus distinct empty and singleton views. Product IL
+proves that the private view implements Kotlin List/RandomAccess capabilities
+and no `System.Collections` interface. A positive IL pin admits
+`Derived[] -> Base[]`; the negative corpus withholds the unrepresentable
+`int32[] -> object[]` value widening.
+
+The fresh strict aggregate gate completes 897 tests across 16 JUnit XML
+suites: 810 FIR/IL/box, 21 generated CLI, and 66 library integration tests,
+with zero failures, errors, or skips. Physical ABI schema 16 and runtime
+surface level 9 remain unchanged.

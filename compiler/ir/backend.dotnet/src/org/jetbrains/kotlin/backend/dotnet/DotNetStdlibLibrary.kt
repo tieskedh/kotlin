@@ -25,6 +25,8 @@ internal object DotNetStdlibLibrary {
     const val ASSEMBLY_IL_FILE_NAME = "$ASSEMBLY_NAME.il"
     const val ASSEMBLY_VERSION = DotNetStdlibArtifact.ASSEMBLY_VERSION
     const val ASSEMBLY_VERSION_IL = "1:0:0:0"
+    const val ARRAY_AS_LIST_IL_NAME = "Kotlin.Collections.ArrayAsList`1"
+    const val ARRAY_AS_LIST_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayAsListIterator`1"
     const val ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayIterator`1"
     const val ARRAY_ITERABLE_IL_NAME = "Kotlin.Collections.ArrayIterable`1"
     const val EMPTY_ITERATOR_IL_NAME = "Kotlin.Collections.EmptyIterator"
@@ -41,6 +43,8 @@ internal object DotNetStdlibLibrary {
     const val ARRAY_ITERABLE_FACTORY_NAME = "dotNetArrayIterable"
 
     private val implementationClassIlNames = mapOf(
+        "kotlin.collections.ArrayAsList" to ARRAY_AS_LIST_IL_NAME,
+        "kotlin.collections.ArrayAsListIterator" to ARRAY_AS_LIST_ITERATOR_IL_NAME,
         "kotlin.collections.ArrayIterator" to ARRAY_ITERATOR_IL_NAME,
         "kotlin.collections.ArrayIterable" to ARRAY_ITERABLE_IL_NAME,
         "kotlin.collections.EmptyIterator" to EMPTY_ITERATOR_IL_NAME,
@@ -52,6 +56,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.SuppressedExceptionIterator" to "Kotlin.SuppressedExceptionIterator",
     )
     private val implementationFunctionFacadeIlNames = mapOf(
+        "kotlin.collections.asList" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.emptyList" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.first" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.firstOrNull" to COLLECTIONS_FACADE_IL_NAME,

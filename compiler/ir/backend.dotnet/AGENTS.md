@@ -13,10 +13,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 806 FIR/IL/semantic tests, 21 generated-CLI tests, and 66
+toolchain enforcement and owns 810 FIR/IL/semantic tests, 21 generated-CLI tests, and 66
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 893 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 897 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -174,7 +174,8 @@ landed shape as a compatibility constraint.
   generic `Kotlin.Collections.ArrayIterator<T>` and `ArrayIterable<T>`, compiled through the same
   class and split generic-interface bridge pipeline as user code, followed by the Common-generated
   `Iterable<T>`/`List<T>` `first()`, `last()`, `firstOrNull()`, and `lastOrNull()` overloads plus
-  Common `List<T>.lastIndex` on the compiler/stdlib physical
+  Common `List<T>.lastIndex` and the Common/actual `Array<out T>.asList()` array-backed view on the
+  compiler/stdlib physical
   `Kotlin.Collections.CollectionsKt` facade. User calls cross the assembly edge; the function
   bodies run in the stdlib and use split Iterable/Iterator/List capabilities with canonical
   fallback for every implementation.
@@ -1069,10 +1070,19 @@ landed shape as a compatibility constraint.
   use the universal iterator algorithm. Nullable terminal operations return null on empty
   receivers. Empty Lists throw the exact runtime-owned NoSuchElementException with
   `List is empty.`; other empty Iterables use `Collection is empty.`
+  The exact Common `Array<out T>.asList()` expect is generator-extracted from `_Arrays.kt`; its
+  ordinary .NET actual returns a private Kotlin-owned `List<T>, RandomAccess` view over the
+  original array. The view and its iterator implement the complete current List behavior directly
+  until the Common AbstractList dependency closure lands. It preserves mutation and sub-list
+  aliasing, structural equality/hash/text, and all iterator/bounds contracts. Empty arrays receive
+  distinct backed views like JVM/JS/Wasm/Native, not the EmptyList singleton. The private classes
+  implement no BCL collection interface; only the public `asList<T>(T[])` facade method is
+  cross-module ABI.
   Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector through the generic
   factory instantiated at `!n`/`!!n`; canonical Next narrows through
-  `unbox.any !n`/`!!n`. The array mapper still rejects `Array<T?>`, projections, concrete
-  primitive-element generic arrays, and nested arrays before the intrinsic runs. The contract is
+  `unbox.any !n`/`!!n`. That array-iterator slice still rejects `Array<T?>`, projected receiver
+  shapes, concrete primitive-element generic arrays, and nested arrays before its intrinsic runs;
+  those narrower iterator limits do not constrain the `asList` carrier above. The contract is
   Kotlin-owned: imported CLR generic interfaces,
   `IEnumerable<T>`/`IEnumerator<T>`, and any future foreign variance views remain a separate interop
   decision and may not alter these canonical identities. STAYS REJECTED, loudly: interface
@@ -1227,10 +1237,14 @@ landed shape as a compatibility constraint.
   registry precedent plus the same backend.common indexed-loop shape as primitive arrays): an
   invariant Kotlin `Array<E>` maps structurally to a CLR zero-based vector when `E` is a supported
   reference-shaped type or an open `!n`/`!!n` parameter. Outer nullability is erased because the
-  vector is itself a reference. Backend assignability remains EXACT and invariant even though CLR
-  arrays are covariant; this follows the JVM precedent (Kotlin's type checker prevents source
-  widening, while an invalid store supplied through an external covariant view fails with the
-  runtime's store check). Both CoreCLR and Framework throw `ArrayTypeMismatchException` for that
+  vector is itself a reference. Kotlin invariance remains authoritative in source and KLIB. An
+  output-projected `Array<out E>` keeps the same `E[]` token; CLR reference-vector covariance
+  admits only the Kotlin-legal reference widening. Value vectors remain physically invariant, so
+  `Array<Int> -> Array<out Any>` is rejected instead of copying or emitting the invalid
+  `int32[] -> object[]`, while exact `Array<Int>.asList()` stays `int32[]`. Input and star
+  projections remain rejected because they do not identify one truthful vector element token.
+  An invalid store supplied through an external covariant reference view still fails with the
+  runtime's store check. Both CoreCLR and Framework throw `ArrayTypeMismatchException` for that
   probe shape. Concrete supported primitive elements are permitted: `Array<Int>` is `int32[]`
   while `IntArray` is the nominal `Kotlin.IntArray` wrapper. Concrete nullable value elements such
   as `Array<Int?>` remain rejected until their representation and boxing semantics are implemented.
@@ -1243,9 +1257,8 @@ landed shape as a compatibility constraint.
   `set`; allocation/store operands spill exactly like primitive arrays, and dynamic sizes share
   the negative-size guard. Direct `for` iteration shares the indexed lowering. Array identity
   equality/null tests use `ceq`, and widening to `Any`/`Any?` is instruction-free. STAYS REJECTED,
-  loudly: ordinary use-site projections/star projections (the concrete vararg-only normalization
-  below is the sole exception; never erase Kotlin invariance into CLR covariance), concrete
-  primitive/nullable-primitive elements, `Array<T?>`, nested/jagged arrays
+  loudly: input/star projections, output-projected value-array widenings,
+  nullable-primitive elements, `Array<T?>`, nested/jagged arrays
   including arrays of primitive arrays, array casts/type checks,
   resized/open-generic copying, and content APIs other than the shallow `contentEquals` slice
   below. Concrete reference-array iterator values use the erased runtime iterator ABI above.
@@ -1388,7 +1401,8 @@ landed shape as a compatibility constraint.
   multiple/empty-spread, evaluation/exception-order, and aliasing shapes are pinned by
   `ilText/varargs.kt` and `box/varargs.kt`; both modern 10.0.9 and Framework 4.8 ILAsm accept the
   exact output and both runtimes execute it. STAYS REJECTED, loudly: `vararg T` or an element type
-  containing an open type parameter (the projected generic-array ABI remains undecided), concrete
+  containing an open type parameter (output-projected storage is defined, but open vararg
+  construction and spread copying are not), concrete
   nullable-primitive elements, nested/array elements, and every scalar/array family the mapper
   already rejects. Negative pins remain in `ilText/genericRejected.kt`,
   `ilText/genericArraysRejected.kt`, and `ilText/primitiveArraysRejected.kt`.
