@@ -30,6 +30,10 @@ fun <T> replace(values: Array<T>, value: T) {
 
 fun <T : Base> bounded(values: Array<T>): Int = values[0].value()
 
+fun projected(values: Array<out Base>): Base = values[0]
+
+fun projectedCall(values: Array<Derived>): Base = projected(values)
+
 fun stringLiteral(): Array<String> = arrayOf(
     "a",
     try {
@@ -92,6 +96,7 @@ fun main(args: Array<String>) {
     first(values)
     replace(values, "c")
     bounded(arrayOf(Derived(1)))
+    projectedCall(arrayOf(Derived(1)))
     nullableLiteral()
     emptyStrings()
     nullableStrings(2)
