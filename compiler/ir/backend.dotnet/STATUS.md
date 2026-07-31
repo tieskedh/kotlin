@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: shared retained foreign-CLR carrier and FIR-owned importer boundary
+- Last completed feature: ordinary foreign CLR vectors with symmetric Kotlin implementation
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -44,6 +44,8 @@ wrong owners plus copied physical rows.
   carrier for one already-selected foreign CLR declaration.
 - `:compiler:fir:fir-dotnet` owns foreign Kotlin projection and lazy FIR symbol
   construction without depending on backend or CLI implementation packages.
+- `:compiler:fir:fir2ir:dotnet-backend` owns the narrow target-specific IR
+  overridability rule for retained flexible CLR array declarations.
 - `:compiler:ir:backend.dotnet` owns IR lowering, CIL mapping/emission, and
   backend product construction.
 - `cli-base` owns the .NET content-root carrier; .NET compilation no longer
@@ -56,21 +58,28 @@ wrong owners plus copied physical rows.
 
 ## Active state
 
-No implementation slice is half-landed. The foreign CLR FIR provider and its
-Kotlin nullability/contract projection now live in `fir-dotnet`; CLI only
-supplies the selected assemblies. FIR attaches a V1 carrier containing direct
-references to the selected assembly and objective metadata rows. Backend
-matches that version exhaustively and binds those exact references without a
-second classpath or display-name lookup. The admitted declaration grammar,
-Kotlin semantics, and physical ABI are unchanged.
+No implementation slice is half-landed. The closed foreign interface grammar
+now admits ordinary one-dimensional zero-based vectors over the supported
+signed primitive, `string`, and `object` elements in parameters, returns, and
+non-indexed properties. Kotlin sees `Array<E>` with JVM-shaped foreign
+flexibility while physical binding remains the exact CLR `E[]`; Kotlin
+primitive-array wrappers are not conflated with native vectors. Kotlin classes
+can implement the same retained foreign TypeDef/MethodDef slots, and C# reverse
+dispatch is verified on every supported runtime profile. Primitive
+`ParamArray`, unsigned vectors, rectangular arrays, and unsupported element
+grammars remain withheld atomically.
 
 ## Open architectural blockers
 
 - Exact Common `AbstractCollection`/`AbstractList` production needs generic
   inline support, `CharSequence`/`Appendable`/`StringBuilder`, and typed
   collection-to-array support; do not fork their algorithms into .NET.
-- KLIB-in-DLL and physical ABI codecs still need a neutral serialization owner
-  before frontend, tooling, or packaging gains another consumer.
+- Inline support needs component-complete embedded KLIB loading, target IR
+  serialization, the shared pre-serialization/inlining phases, and Common's
+  `SharedVariableBox`; the current metadata-only embedded loader deliberately
+  discards serialized IR.
+- KLIB-in-DLL and physical ABI codecs still need neutral serialization owners
+  as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
   collection-shaped params each require separate Kotlin-stability decisions.
 - Foreign C# `Nullable<T>` signatures are nominal generic instantiations and
@@ -81,12 +90,14 @@ Kotlin semantics, and physical ABI are unchanged.
 
 ## Next bounded work
 
-1. Continue CLR annotation/import interoperability only through exact standard
-   metadata mappings that preserve Kotlin smart-cast and mutability rules.
-2. Extract a neutral KLIB-in-DLL and physical ABI serialization owner before a
-   second frontend, tooling, or packaging consumer appears.
-3. Select another exact non-inline Common collection family only after its full
-   type/helper closure and cross-profile product behavior are documented.
+1. Complete the embedded KLIB component seam and add target IR serialization
+   without moving logical identity out of KLIB.
+2. Integrate the shared two-stage IR inliner and Common shared-variable box,
+   preserving supported `-Xklib-ir-inliner` modes rather than implementing an
+   intra-module-only shortcut.
+3. Admit the first non-reified Common inline collection helpers only with
+   same-module, separate-DLL, non-local-return, capture, compiler-ABI, and
+   cross-profile adversarial evidence.
 
 ## Navigation
 

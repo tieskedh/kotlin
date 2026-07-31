@@ -23086,6 +23086,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val nullableDirective: String,
             val nullableStringType: String,
             val nullableObjectArrayType: String,
+            val nullableStringArrayType: String,
+            val nullableIntArrayType: String,
             val compileFixture: (File, File) -> CSharpCompilerResult,
             val systemReference: File,
             val compileVerifier: (File, File, File) -> CSharpCompilerResult,
@@ -23113,6 +23115,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 nullableDirective = "",
                 nullableStringType = "string",
                 nullableObjectArrayType = "object[]",
+                nullableStringArrayType = "string[]",
+                nullableIntArrayType = "int[]",
                 compileFixture = { source, output ->
                     runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
                 },
@@ -23137,6 +23141,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 nullableDirective = "#nullable enable",
                 nullableStringType = "string?",
                 nullableObjectArrayType = "object?[]",
+                nullableStringArrayType = "string?[]?",
+                nullableIntArrayType = "int[]?",
                 compileFixture = { source, output ->
                     runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
                 },
@@ -23236,12 +23242,68 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                         public interface OrdinaryArrayApi
                         {
-                            string Join(string[] values);
+                            bool[] Booleans(bool[] values);
+                            char[] Chars(char[] values);
+                            sbyte[] Bytes(sbyte[] values);
+                            short[] Shorts(short[] values);
+                            int[] Ints(int[] values);
+                            long[] Longs(long[] values);
+                            float[] Floats(float[] values);
+                            double[] Doubles(double[] values);
+                            string[] Strings(string[] values);
+                            object[] Objects(object[] values);
+                            ${profile.nullableStringArrayType} MaybeStrings(
+                                ${profile.nullableStringArrayType} values);
+                            ${profile.nullableIntArrayType} MaybeInts(
+                                ${profile.nullableIntArrayType} values);
+                            int[] Numbers { get; set; }
+                            string[] Labels { get; set; }
+                        }
+
+                        public sealed class OrdinaryArrayApiImpl : OrdinaryArrayApi
+                        {
+                            private int[] numbers = new int[] { 1 };
+                            private string[] labels = new string[] { "initial" };
+
+                            public bool[] Booleans(bool[] values) { return values; }
+                            public char[] Chars(char[] values) { return values; }
+                            public sbyte[] Bytes(sbyte[] values) { return values; }
+                            public short[] Shorts(short[] values) { return values; }
+                            public int[] Ints(int[] values) { return values; }
+                            public long[] Longs(long[] values) { return values; }
+                            public float[] Floats(float[] values) { return values; }
+                            public double[] Doubles(double[] values) { return values; }
+                            public string[] Strings(string[] values) { return values; }
+                            public object[] Objects(object[] values) { return values; }
+                            public ${profile.nullableStringArrayType} MaybeStrings(
+                                ${profile.nullableStringArrayType} values) { return values; }
+                            public ${profile.nullableIntArrayType} MaybeInts(
+                                ${profile.nullableIntArrayType} values) { return values; }
+                            public int[] Numbers
+                            {
+                                get { return numbers; }
+                                set { numbers = value; }
+                            }
+                            public string[] Labels
+                            {
+                                get { return labels; }
+                                set { labels = value; }
+                            }
                         }
 
                         public interface PrimitiveParamArrayApi
                         {
                             int Sum(params int[] values);
+                        }
+
+                        public interface UnsignedArrayApi
+                        {
+                            byte[] Bytes(byte[] values);
+                        }
+
+                        public interface RectangularArrayApi
+                        {
+                            int[,] Matrix(int[,] values);
                         }
                     }
                     """.trimIndent()
@@ -23302,6 +23364,75 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         api.Optional = null
                     }
 
+                    public fun verifyBooleanArray(api: ForeignCallContracts.OrdinaryArrayApi): Boolean =
+                        api.Booleans(arrayOf(true))[0]
+
+                    public fun verifyCharArray(api: ForeignCallContracts.OrdinaryArrayApi): Char =
+                        api.Chars(arrayOf('K'))[0]
+
+                    public fun verifyByteArray(api: ForeignCallContracts.OrdinaryArrayApi): Byte =
+                        api.Bytes(arrayOf<Byte>(-3))[0]
+
+                    public fun verifyShortArray(api: ForeignCallContracts.OrdinaryArrayApi): Short =
+                        api.Shorts(arrayOf<Short>(1200))[0]
+
+                    public fun verifyIntArray(api: ForeignCallContracts.OrdinaryArrayApi): Int =
+                        api.Ints(arrayOf(17))[0]
+
+                    public fun verifyLongArray(api: ForeignCallContracts.OrdinaryArrayApi): Long =
+                        api.Longs(arrayOf(19L))[0]
+
+                    public fun verifyFloatArray(api: ForeignCallContracts.OrdinaryArrayApi): Float =
+                        api.Floats(arrayOf(1.25f))[0]
+
+                    public fun verifyDoubleArray(api: ForeignCallContracts.OrdinaryArrayApi): Double =
+                        api.Doubles(arrayOf(2.5))[0]
+
+                    public fun verifyStringArray(api: ForeignCallContracts.OrdinaryArrayApi): String =
+                        api.Strings(arrayOf("s"))[0]
+
+                    public fun verifyObjectArray(api: ForeignCallContracts.OrdinaryArrayApi): Any =
+                        api.Objects(arrayOf<Any>("o"))[0]
+
+                    public fun verifyArrayProperties(api: ForeignCallContracts.OrdinaryArrayApi): Int {
+                        api.Numbers = arrayOf(4, 5)
+                        return api.Numbers[0] + api.Numbers[1]
+                    }
+
+                    public fun verifyArrayReferenceProperty(
+                        api: ForeignCallContracts.OrdinaryArrayApi,
+                    ): String {
+                        api.Labels = arrayOf("changed")
+                        return api.Labels[0]
+                    }
+
+                    public fun verifyNullableOrdinaryArray(
+                        api: ForeignCallContracts.OrdinaryArrayApi,
+                        values: Array<String?>?,
+                    ): Array<String?>? = api.MaybeStrings(values)
+
+                    public fun verifyNullableOrdinaryValueArray(
+                        api: ForeignCallContracts.OrdinaryArrayApi,
+                        values: Array<Int>?,
+                    ): Array<Int>? = api.MaybeInts(values)
+
+                    public class KotlinOrdinaryArrayApi : ForeignCallContracts.OrdinaryArrayApi {
+                        override fun Booleans(values: Array<Boolean>): Array<Boolean> = values
+                        override fun Chars(values: Array<Char>): Array<Char> = values
+                        override fun Bytes(values: Array<Byte>): Array<Byte> = values
+                        override fun Shorts(values: Array<Short>): Array<Short> = values
+                        override fun Ints(values: Array<Int>): Array<Int> = values
+                        override fun Longs(values: Array<Long>): Array<Long> = values
+                        override fun Floats(values: Array<Float>): Array<Float> = values
+                        override fun Doubles(values: Array<Double>): Array<Double> = values
+                        override fun Strings(values: Array<String>): Array<String> = values
+                        override fun Objects(values: Array<Any>): Array<Any> = values
+                        override fun MaybeStrings(values: Array<String?>?): Array<String?>? = values
+                        override fun MaybeInts(values: Array<Int>?): Array<Int>? = values
+                        override var Numbers: Array<Int> = arrayOf(7)
+                        override var Labels: Array<String> = arrayOf("kotlin")
+                    }
+
                     public fun dishonestValue(api: Api): String =
                         api.ReturnsValue()
 
@@ -23313,7 +23444,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 )
             }
             val application = applicationDirectory.resolve(profile.applicationFileName)
-            compileInProcess(
+            val applicationDiagnostics = compileInProcess(
                 K2DotNetCompiler(),
                 kotlinSource.path,
                 K2DotNetCompilerArguments::classpath.cliArgument,
@@ -23323,6 +23454,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 K2DotNetCompilerArguments::moduleName.cliArgument, "ForeignCallConsumer",
                 K2DotNetCompilerArguments::destination.cliArgument, application.path,
             )
+            assertFalse("not supported by the .NET backend" in applicationDiagnostics) {
+                applicationDiagnostics
+            }
             val packagedFixture = applicationDirectory.resolve("Foreign.CallContracts.dll")
             assertTrue(packagedFixture.isFile) {
                 "The referenced foreign assembly was not packaged for ${profile.target}"
@@ -23352,6 +23486,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ) { il }
             assertTrue(
                 "callvirt instance string [Foreign.CallContracts]'ForeignCallContracts.Api'::'Describe'(object[])" in il
+            ) { il }
+            for (signature in listOf(
+                "bool[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'Booleans'(bool[])",
+                "char[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'Chars'(char[])",
+                "int8[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'Bytes'(int8[])",
+                "int16[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'Shorts'(int16[])",
+                "int32[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'Ints'(int32[])",
+                "int64[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'Longs'(int64[])",
+                "float32[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'Floats'(float32[])",
+                "float64[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'Doubles'(float64[])",
+                "string[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'Strings'(string[])",
+                "object[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'Objects'(object[])",
+                "int32[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'MaybeInts'(int32[])",
+            )) {
+                assertTrue("callvirt instance $signature" in il) { il }
+            }
+            assertTrue(
+                "callvirt instance int32[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'get_Numbers'()" in il
+            ) { il }
+            assertTrue(
+                "callvirt instance void [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'set_Numbers'(int32[])" in il
+            ) { il }
+            assertTrue(
+                "callvirt instance string[] [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'get_Labels'()" in il
+            ) { il }
+            assertTrue(
+                "callvirt instance void [Foreign.CallContracts]'ForeignCallContracts.OrdinaryArrayApi'::'set_Labels'(string[])" in il
             ) { il }
             assertTrue(
                 "callvirt instance void [Foreign.CallContracts]'ForeignCallContracts.Api'::'ReturnsVoid'()" in il
@@ -23411,6 +23572,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Assembly kotlin = Assembly.LoadFrom("${application.name}");
                             Type facade = kotlin.GetType("consumer.foreignCallKt", true);
                             Api api = new ApiImpl();
+                            OrdinaryArrayApi arrays = new OrdinaryArrayApiImpl();
                             Require((int)Method(facade, "verifyInt").Invoke(
                                 null, new object[] { api }) == 41,
                                 "foreign int overload binding failed");
@@ -23450,6 +23612,53 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require(Method(facade, "verifyOptional").Invoke(
                                 null, new object[] { api }) == null,
                                 "foreign nullable property round trip failed");
+                            Require((bool)Method(facade, "verifyBooleanArray").Invoke(
+                                null, new object[] { arrays }), "foreign bool[] round trip failed");
+                            Require((char)Method(facade, "verifyCharArray").Invoke(
+                                null, new object[] { arrays }) == 'K', "foreign char[] round trip failed");
+                            Require((sbyte)Method(facade, "verifyByteArray").Invoke(
+                                null, new object[] { arrays }) == -3, "foreign int8[] round trip failed");
+                            Require((short)Method(facade, "verifyShortArray").Invoke(
+                                null, new object[] { arrays }) == 1200, "foreign int16[] round trip failed");
+                            Require((int)Method(facade, "verifyIntArray").Invoke(
+                                null, new object[] { arrays }) == 17, "foreign int32[] round trip failed");
+                            Require((long)Method(facade, "verifyLongArray").Invoke(
+                                null, new object[] { arrays }) == 19L, "foreign int64[] round trip failed");
+                            Require((float)Method(facade, "verifyFloatArray").Invoke(
+                                null, new object[] { arrays }) == 1.25f, "foreign float32[] round trip failed");
+                            Require((double)Method(facade, "verifyDoubleArray").Invoke(
+                                null, new object[] { arrays }) == 2.5, "foreign float64[] round trip failed");
+                            Require((string)Method(facade, "verifyStringArray").Invoke(
+                                null, new object[] { arrays }) == "s", "foreign string[] round trip failed");
+                            Require((string)Method(facade, "verifyObjectArray").Invoke(
+                                null, new object[] { arrays }) == "o", "foreign object[] round trip failed");
+                            Require((int)Method(facade, "verifyArrayProperties").Invoke(
+                                null, new object[] { arrays }) == 9,
+                                "foreign value-vector property round trip failed");
+                            Require((string)Method(facade, "verifyArrayReferenceProperty").Invoke(
+                                null, new object[] { arrays }) == "changed",
+                                "foreign reference-vector property round trip failed");
+                            object nullableRoundTrip = Method(
+                                facade, "verifyNullableOrdinaryArray").Invoke(
+                                    null, new object[] { arrays, null });
+                            Require(nullableRoundTrip == null,
+                                "foreign nullable ordinary vector failed");
+                            object nullableValueRoundTrip = Method(
+                                facade, "verifyNullableOrdinaryValueArray").Invoke(
+                                    null, new object[] { arrays, null });
+                            Require(nullableValueRoundTrip == null,
+                                "foreign nullable value vector failed");
+                            OrdinaryArrayApi kotlinArrays = (OrdinaryArrayApi)Activator.CreateInstance(
+                                kotlin.GetType("consumer.KotlinOrdinaryArrayApi", true));
+                            Require(kotlinArrays.Ints(new int[] { 31 })[0] == 31,
+                                "Kotlin ordinary value-vector implementation dispatch failed");
+                            Require(kotlinArrays.Strings(new string[] { "reverse" })[0] == "reverse",
+                                "Kotlin ordinary reference-vector implementation dispatch failed");
+                            kotlinArrays.Numbers = new int[] { 8, 9 };
+                            Require(kotlinArrays.Numbers[0] + kotlinArrays.Numbers[1] == 17,
+                                "Kotlin ordinary vector property implementation dispatch failed");
+                            Require(kotlinArrays.MaybeStrings(null) == null && kotlinArrays.MaybeInts(null) == null,
+                                "Kotlin nullable ordinary vector implementation dispatch failed");
                             RequireNothingGuard(Method(facade, "dishonestValue"), api);
                             RequireNothingGuard(Method(facade, "dishonestVoid"), api);
                             Console.WriteLine("OK");
@@ -23511,12 +23720,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     import ForeignCallContracts.OrdinaryArrayApi
                     import ForeignCallContracts.PrimitiveParamArrayApi
-
-                    public fun ordinary(api: OrdinaryArrayApi, values: Array<String>): String =
-                        api.Join(values)
+                    import ForeignCallContracts.RectangularArrayApi
+                    import ForeignCallContracts.UnsignedArrayApi
 
                     public fun primitive(api: PrimitiveParamArrayApi): Int =
                         api.Sum(1, 2, 3)
+
+                    public fun unsigned(api: UnsignedArrayApi, values: Array<UByte>): Array<UByte> =
+                        api.Bytes(values)
+
+                    public fun rectangular(api: RectangularArrayApi): Int = 0
                     """.trimIndent()
                 )
             }
@@ -23535,8 +23748,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 )
             )
             assertEquals(ExitCode.COMPILATION_ERROR, arrayExitCode, arrayDiagnostics)
-            assertTrue("OrdinaryArrayApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("PrimitiveParamArrayApi" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("UnsignedArrayApi" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("RectangularArrayApi" in arrayDiagnostics) { arrayDiagnostics }
         }
     }
 
