@@ -53,6 +53,7 @@ internal class DotNetIlIntrinsicMethods(
     private val shortFqn = StandardNames.FqNames._short.toSafe()
     private val intFqn = StandardNames.FqNames._int.toSafe()
     private val longFqn = StandardNames.FqNames._long.toSafe()
+    private val floatFqn = StandardNames.FqNames._float.toSafe()
     private val doubleFqn = StandardNames.FqNames._double.toSafe()
     private val charFqn = StandardNames.FqNames._char.toSafe()
     private val booleanFqn = StandardNames.FqNames._boolean.toSafe()
@@ -91,7 +92,7 @@ internal class DotNetIlIntrinsicMethods(
     /**
      * The numeric types binary operators and conversions are generated over, keyed by builtin
      * FqName. Byte/Short computations promote to Int32; above that the order is
-     * Int32 < Int64 < Float64 (see [promoteNumeric]), matching the Kotlin stdlib operator
+     * Int32 < Int64 < Float32 < Float64 (see [promoteNumeric]), matching the Kotlin stdlib operator
      * signatures (`Byte.plus(Byte): Int`, `Int.plus(Long): Long`, ...).
      */
     private val numericTypes: Map<FqName, DotNetIlValueType> = mapOf(
@@ -99,6 +100,7 @@ internal class DotNetIlIntrinsicMethods(
         shortFqn to DotNetIlValueType.Int16,
         intFqn to DotNetIlValueType.Int32,
         longFqn to DotNetIlValueType.Int64,
+        floatFqn to DotNetIlValueType.Float32,
         doubleFqn to DotNetIlValueType.Float64,
     )
 
@@ -161,6 +163,7 @@ internal class DotNetIlIntrinsicMethods(
         Key(kotlinIoFqn, null, "println", listOf(stringFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(intFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(longFqn)) to DotNetIlPrintlnIntrinsic,
+        Key(kotlinIoFqn, null, "println", listOf(floatFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(doubleFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(charFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(booleanFqn)) to DotNetIlPrintlnIntrinsic,
@@ -171,6 +174,7 @@ internal class DotNetIlIntrinsicMethods(
         Key(anyFqn, null, "toString", emptyList()) to DotNetIlAnyToStringIntrinsic,
         Key(intFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(longFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
+        Key(floatFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(doubleFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(charFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(booleanFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
@@ -433,11 +437,13 @@ internal class DotNetIlIntrinsicMethods(
             irBuiltIns.shortClass to DotNetIlValueType.Int16,
             irBuiltIns.intClass to DotNetIlValueType.Int32,
             irBuiltIns.longClass to DotNetIlValueType.Int64,
+            irBuiltIns.floatClass to DotNetIlValueType.Float32,
             irBuiltIns.doubleClass to DotNetIlValueType.Float64,
             irBuiltIns.charClass to DotNetIlValueType.Char,
         )
         for ([classSymbol, operandType] in comparableTypes) {
-            val isFloatingPoint = operandType == DotNetIlValueType.Float64
+            val isFloatingPoint = operandType == DotNetIlValueType.Float32 ||
+                    operandType == DotNetIlValueType.Float64
             add(
                 irBuiltIns.lessFunByOperandType.getValue(classSymbol).toKey()!!
                         to DotNetIlComparisonIntrinsic("clt", negated = false, operandType)
@@ -467,6 +473,10 @@ internal class DotNetIlIntrinsicMethods(
         for ([receiverFqn, receiverType] in numericTypes) {
             for ([argumentFqn, argumentType] in numericTypes) {
                 val resultType = promoteNumeric(receiverType, argumentType)
+                add(
+                    Key(receiverFqn, null, "compareTo", listOf(argumentFqn))
+                            to DotNetIlNumericCompareToIntrinsic(receiverType, argumentType, resultType)
+                )
                 for ([name, instruction] in listOf("plus" to "add", "minus" to "sub", "times" to "mul")) {
                     add(
                         Key(receiverFqn, null, name, listOf(argumentFqn))
@@ -540,6 +550,7 @@ internal class DotNetIlIntrinsicMethods(
             "toShort" to DotNetIlValueType.Int16,
             "toInt" to DotNetIlValueType.Int32,
             "toLong" to DotNetIlValueType.Int64,
+            "toFloat" to DotNetIlValueType.Float32,
             "toDouble" to DotNetIlValueType.Float64,
         )
         val sourceTypes = numericTypes + (charFqn to DotNetIlValueType.Char)
@@ -559,6 +570,10 @@ internal class DotNetIlIntrinsicMethods(
         add(
             Key(longFqn, null, "toChar", emptyList())
                     to DotNetIlUnsupportedIntrinsic("'Long.toChar()' is deprecated in Kotlin; use 'toInt().toChar()'")
+        )
+        add(
+            Key(floatFqn, null, "toChar", emptyList())
+                    to DotNetIlUnsupportedIntrinsic("'Float.toChar()' is deprecated in Kotlin; use 'toInt().toChar()'")
         )
         add(
             Key(doubleFqn, null, "toChar", emptyList())
@@ -582,10 +597,17 @@ internal class DotNetIlIntrinsicMethods(
             // Identity conversions (`Int.toInt()` etc.) and Char -> Int (the char is already a
             // zero-extended int32 on the evaluation stack, like on the JVM).
             fromType == toType || (fromType == DotNetIlValueType.Char && toType == DotNetIlValueType.Int32) -> emptyList()
-            fromType == DotNetIlValueType.Float64 -> return DotNetIlDoubleToIntegralIntrinsic(toType)
+            fromType in setOf(DotNetIlValueType.Float32, DotNetIlValueType.Float64) &&
+                    toType in setOf(
+                        DotNetIlValueType.Int8,
+                        DotNetIlValueType.Int16,
+                        DotNetIlValueType.Int32,
+                        DotNetIlValueType.Int64,
+                    ) -> return DotNetIlFloatingToIntegralIntrinsic(fromType, toType)
             toType == DotNetIlValueType.Int8 -> listOf("conv.i1")
             toType == DotNetIlValueType.Int16 -> listOf("conv.i2")
-            toType == DotNetIlValueType.Int64 && fromType != DotNetIlValueType.Float64 -> listOf("conv.i8")
+            toType == DotNetIlValueType.Int64 -> listOf("conv.i8")
+            toType == DotNetIlValueType.Float32 -> listOf("conv.r4")
             toType == DotNetIlValueType.Float64 -> listOf("conv.r8")
             toType == DotNetIlValueType.Int32 && fromType == DotNetIlValueType.Int64 -> listOf("conv.i4")
             toType == DotNetIlValueType.Int32 &&
@@ -1625,9 +1647,10 @@ private object DotNetIlArrayContentDeepToStringIntrinsic : DotNetIlIntrinsicMeth
     }
 }
 
-/** Numeric promotion: Byte/Short -> Int32, then Int32 < Int64 < Float64, like Kotlin/JVM. */
+/** Numeric promotion: Byte/Short -> Int32, then Int32 < Int64 < Float32 < Float64, like Kotlin/JVM. */
 private fun promoteNumeric(left: DotNetIlValueType, right: DotNetIlValueType): DotNetIlValueType = when {
     left == DotNetIlValueType.Float64 || right == DotNetIlValueType.Float64 -> DotNetIlValueType.Float64
+    left == DotNetIlValueType.Float32 || right == DotNetIlValueType.Float32 -> DotNetIlValueType.Float32
     left == DotNetIlValueType.Int64 || right == DotNetIlValueType.Int64 -> DotNetIlValueType.Int64
     else -> DotNetIlValueType.Int32
 }
@@ -1652,12 +1675,21 @@ private fun DotNetIlExpressionCodegen.emitWidenedOperand(
         computationType == DotNetIlValueType.Int64 &&
                 operandType in setOf(DotNetIlValueType.Int8, DotNetIlValueType.Int16, DotNetIlValueType.Int32) ->
             emit("conv.i8", pops = 1, pushes = 1)
+        computationType == DotNetIlValueType.Float32 &&
+                operandType in setOf(
+                    DotNetIlValueType.Int8,
+                    DotNetIlValueType.Int16,
+                    DotNetIlValueType.Int32,
+                    DotNetIlValueType.Int64,
+                ) ->
+            emit("conv.r4", pops = 1, pushes = 1)
         computationType == DotNetIlValueType.Float64 &&
                 operandType in setOf(
                     DotNetIlValueType.Int8,
                     DotNetIlValueType.Int16,
                     DotNetIlValueType.Int32,
                     DotNetIlValueType.Int64,
+                    DotNetIlValueType.Float32,
                 ) ->
             emit("conv.r8", pops = 1, pushes = 1)
         else -> error(
@@ -1947,6 +1979,7 @@ private class DotNetIlEqualityIntrinsic(
             DotNetIlValueType.Int16,
             DotNetIlValueType.Int32,
             DotNetIlValueType.Int64,
+            DotNetIlValueType.Float32,
             DotNetIlValueType.Float64,
             DotNetIlValueType.Char,
                 -> codegen.emit("ceq", pops = 2, pushes = 1)
@@ -2115,11 +2148,14 @@ private class DotNetIlEqualityIntrinsic(
 private fun IrExpression.isDotNetNullLike(): Boolean =
     isNullConst() || type.isNullableNothing()
 
-/** The five plain primitive value types of the supported subset. */
+/** The plain primitive value types of the supported subset. */
 private fun DotNetIlValueType?.isDotNetPrimitiveValue(): Boolean = when (this) {
     DotNetIlValueType.Boolean,
+    DotNetIlValueType.Int8,
+    DotNetIlValueType.Int16,
     DotNetIlValueType.Int32,
     DotNetIlValueType.Int64,
+    DotNetIlValueType.Float32,
     DotNetIlValueType.Float64,
     DotNetIlValueType.Char,
         -> true
@@ -2207,6 +2243,72 @@ private object DotNetIlCheckNotNullIntrinsic : DotNetIlIntrinsicMethod() {
 }
 
 /**
+ * Numeric `compareTo` across every Common primitive overload. Integer comparisons return
+ * normalized -1/0/1 without subtraction overflow. Floating comparisons delegate to the runtime
+ * bit-aware total ordering, distinct from relational IEEE comparison around NaN and signed zero.
+ */
+private class DotNetIlNumericCompareToIntrinsic(
+    private val receiverType: DotNetIlValueType,
+    private val argumentType: DotNetIlValueType,
+    private val computationType: DotNetIlValueType,
+) : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Int32 || call.arguments.size != 2) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing receiver of numeric 'compareTo'")
+        val argument = call.arguments[1]
+            ?: dotNetUnsupported("missing argument of numeric 'compareTo'")
+
+        codegen.emitWidenedOperand(receiver, receiverType, computationType)
+        codegen.emitWidenedOperand(argument, argumentType, computationType)
+        when (computationType) {
+            DotNetIlValueType.Float32 -> codegen.emit(
+                DotNetRuntimeLibraryHelpers.compareFloatCallInstruction,
+                pops = 2,
+                pushes = 1,
+            )
+            DotNetIlValueType.Float64 -> codegen.emit(
+                DotNetRuntimeLibraryHelpers.compareDoubleCallInstruction,
+                pops = 2,
+                pushes = 1,
+            )
+            DotNetIlValueType.Int32, DotNetIlValueType.Int64 -> {
+                val rightSlot = codegen.spillToSyntheticLocal(computationType, "<cmpRight>")
+                val leftSlot = codegen.spillToSyntheticLocal(computationType, "<cmpLeft>")
+                val lessLabel = codegen.nextLabel("compareLess")
+                val greaterLabel = codegen.nextLabel("compareGreater")
+                val endLabel = codegen.nextLabel("compareEnd")
+                codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
+                codegen.emit(loadLocalInstruction(rightSlot.index), pushes = 1)
+                codegen.emit("clt", pops = 2, pushes = 1)
+                codegen.emitBranch("brtrue", lessLabel, pops = 1)
+                codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
+                codegen.emit(loadLocalInstruction(rightSlot.index), pushes = 1)
+                codegen.emit("cgt", pops = 2, pushes = 1)
+                codegen.emitBranch("brtrue", greaterLabel, pops = 1)
+                codegen.emit("ldc.i4.0", pushes = 1)
+                codegen.emitGoto(endLabel)
+                codegen.emitLabel(lessLabel)
+                codegen.emit("ldc.i4.m1", pushes = 1)
+                codegen.emitGoto(endLabel)
+                codegen.emitLabel(greaterLabel)
+                codegen.emit("ldc.i4.1", pushes = 1)
+                codegen.emitLabel(endLabel)
+            }
+            else -> error(
+                "Internal .NET backend error: unsupported compareTo computation type " +
+                        computationType.nameInSignature
+            )
+        }
+        return true
+    }
+}
+
+/**
  * A binary numeric member operator (`plus`, `minus`, `times`) mapped to a single IL instruction,
  * with both operands widened to the promoted computation type first.
  */
@@ -2278,7 +2380,7 @@ private class DotNetIlNumericDivRemIntrinsic(
 
         codegen.emitWidenedOperand(receiver, receiverType, resultType)
 
-        if (resultType == DotNetIlValueType.Float64) {
+        if (resultType == DotNetIlValueType.Float32 || resultType == DotNetIlValueType.Float64) {
             codegen.emitWidenedOperand(argument, argumentType, resultType)
             codegen.emit(operatorName, pops = 2, pushes = 1)
             return true
@@ -2369,6 +2471,7 @@ private class DotNetIlNumericIncrementIntrinsic(
         codegen.emitExpression(receiver, operandType)
         val oneLoad = when (operandType) {
             DotNetIlValueType.Int64 -> "ldc.i8 1"
+            DotNetIlValueType.Float32 -> "ldc.r4 1.0"
             DotNetIlValueType.Float64 -> "ldc.r8 1.0"
             is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass ->
                 dotNetUnsupported("numeric increment of a class instance is not supported")
@@ -2498,8 +2601,8 @@ private class DotNetIlComparisonIntrinsic(
  *   no instruction, the char already sits on the evaluation stack as a zero-extended int32
  * - identity conversions (`Int.toInt()` etc.): no instruction
  *
- * Double -> Byte/Short/Int/Long saturating-then-narrowing conversions live in
- * [DotNetIlDoubleToIntegralIntrinsic].
+ * Float/Double -> Byte/Short/Int/Long saturating-then-narrowing conversions live in
+ * [DotNetIlFloatingToIntegralIntrinsic].
  */
 private class DotNetIlNumberConversionIntrinsic(
     private val fromType: DotNetIlValueType,
@@ -2524,8 +2627,8 @@ private class DotNetIlNumberConversionIntrinsic(
 }
 
 /**
- * `Double.toByte()`/`toShort()`/`toInt()`/`toLong()` with JVM semantics: narrow targets first
- * use the `d2i` result and then wrap exactly like `toInt().toByte()/toShort()`; NaN -> 0, above the target
+ * `Float`/`Double` integral conversions with Common/JVM semantics: narrow targets first
+ * use the Int result and then wrap exactly like `toInt().toByte()/toShort()`; NaN -> 0, above the target
  * MAX (including +Inf) -> MAX, below MIN (including -Inf) -> MIN, otherwise truncation toward
  * zero. A bare `conv.i4`/`conv.i8` must NOT be used: ECMA-335 III leaves float->int conversion
  * of out-of-range values undefined (runtimes differ: legacy CLR wraps, .NET Core saturates or
@@ -2541,7 +2644,8 @@ private class DotNetIlNumberConversionIntrinsic(
  *   representable double below 2^63 converts in range. `-2^63` (`float64(0xC3E0000000000000)`)
  *   is exact, so only `d < -2^63` underflows.
  */
-private class DotNetIlDoubleToIntegralIntrinsic(
+private class DotNetIlFloatingToIntegralIntrinsic(
+    private val sourceType: DotNetIlValueType,
     private val targetType: DotNetIlValueType,
 ) : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(
@@ -2551,8 +2655,16 @@ private class DotNetIlDoubleToIntegralIntrinsic(
     ): Boolean {
         if (expectedType != targetType || call.arguments.size != 1) return false
         val receiver = call.arguments.single()
-            ?: dotNetUnsupported("missing receiver of a Double to ${targetType.nameInSignature} conversion")
-        codegen.emitExpression(receiver, DotNetIlValueType.Float64)
+            ?: dotNetUnsupported(
+                "missing receiver of a ${sourceType.nameInSignature} to ${targetType.nameInSignature} conversion"
+            )
+        check(sourceType == DotNetIlValueType.Float32 || sourceType == DotNetIlValueType.Float64)
+        codegen.emitExpression(receiver, sourceType)
+        // A Float promotes exactly to Double; sharing one guarded conversion path keeps the
+        // profile-independent saturation boundaries literal and avoids rounded float32 bounds.
+        if (sourceType == DotNetIlValueType.Float32) {
+            codegen.emit("conv.r8", pops = 1, pushes = 1)
+        }
 
         val isLongTarget = targetType == DotNetIlValueType.Int64
         check(
@@ -2561,11 +2673,14 @@ private class DotNetIlDoubleToIntegralIntrinsic(
                 DotNetIlValueType.Int16,
                 DotNetIlValueType.Int32,
             )
-        ) { "unsupported Double integral conversion target ${targetType.nameInSignature}" }
-        val nanLabel = codegen.nextLabel("d2iNaN")
-        val maxLabel = codegen.nextLabel("d2iMax")
-        val minLabel = codegen.nextLabel("d2iMin")
-        val endLabel = codegen.nextLabel("d2iEnd")
+        ) { "unsupported floating integral conversion target ${targetType.nameInSignature}" }
+        // Preserve the established Double label stem so adding Float does not churn unrelated
+        // IL goldens; the new Float path gets its own descriptive local-label namespace.
+        val labelStem = if (sourceType == DotNetIlValueType.Float32) "fp2i" else "d2i"
+        val nanLabel = codegen.nextLabel("${labelStem}NaN")
+        val maxLabel = codegen.nextLabel("${labelStem}Max")
+        val minLabel = codegen.nextLabel("${labelStem}Min")
+        val endLabel = codegen.nextLabel("${labelStem}End")
 
         // NaN check: `bne.un` branches when the operands are unordered, and `d != d` only for NaN.
         codegen.emit("dup", pops = 1, pushes = 2)

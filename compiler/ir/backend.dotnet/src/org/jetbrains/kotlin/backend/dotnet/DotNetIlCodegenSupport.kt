@@ -25,6 +25,7 @@ import org.jetbrains.kotlin.ir.types.isBoolean
 import org.jetbrains.kotlin.ir.types.isByte
 import org.jetbrains.kotlin.ir.types.isChar
 import org.jetbrains.kotlin.ir.types.isDouble
+import org.jetbrains.kotlin.ir.types.isFloat
 import org.jetbrains.kotlin.ir.types.isInt
 import org.jetbrains.kotlin.ir.types.isLong
 import org.jetbrains.kotlin.ir.types.isShort
@@ -538,6 +539,7 @@ internal class DotNetIlTypeMapper private constructor(
             type.isShort() -> DotNetIlValueType.Int16
             type.isInt() -> DotNetIlValueType.Int32
             type.isLong() -> DotNetIlValueType.Int64
+            type.isFloat() -> DotNetIlValueType.Float32
             type.isDouble() -> DotNetIlValueType.Float64
             type.isChar() -> DotNetIlValueType.Char
             // An outer nullable occurrence of every open parameter uses one declaration-stable
@@ -621,6 +623,7 @@ internal class DotNetIlTypeMapper private constructor(
             StandardNames.FqNames._short.toSafe() -> DotNetIlValueType.Int16
             StandardNames.FqNames._int.toSafe() -> DotNetIlValueType.Int32
             StandardNames.FqNames._long.toSafe() -> DotNetIlValueType.Int64
+            StandardNames.FqNames._float.toSafe() -> DotNetIlValueType.Float32
             StandardNames.FqNames._double.toSafe() -> DotNetIlValueType.Float64
             StandardNames.FqNames._char.toSafe() -> DotNetIlValueType.Char
             else -> return null
@@ -788,6 +791,7 @@ internal class DotNetIlTypeMapper private constructor(
             is DotNetIlValueType.TypeParameter -> type.upperBounds.forEach(::recordAssemblyReferences)
             DotNetIlValueType.Boolean,
             DotNetIlValueType.Char,
+            DotNetIlValueType.Float32,
             DotNetIlValueType.Float64,
             DotNetIlValueType.Int8,
             DotNetIlValueType.Int16,
@@ -1108,6 +1112,19 @@ internal fun Double.toIlFloat64Literal(): String {
     if (isNaN() || isInfinite() || (this == 0.0 && toRawBits() != 0L)) return rawBitsLiteral
     val decimalLiteral = toString().lowercase()
     return if (decimalLiteral.toDouble().toRawBits() == toRawBits()) decimalLiteral else rawBitsLiteral
+}
+
+/**
+ * Renders a `kotlin.Float` constant as an `ldc.r4` operand. Decimal finite values use the host
+ * Kotlin/JVM shortest representation and fall back to ILAsm's exact raw-bit spelling when the
+ * host parser does not reproduce the same `float32`. NaN, infinities, and negative zero are
+ * always raw so their payload/sign never depends on ILAsm decimal parsing.
+ */
+internal fun Float.toIlFloat32Literal(): String {
+    val rawBitsLiteral = "float32(0x%08X)".format(toRawBits())
+    if (isNaN() || isInfinite() || (this == 0.0f && toRawBits() != 0)) return rawBitsLiteral
+    val decimalLiteral = toString().lowercase()
+    return if (decimalLiteral.toFloat().toRawBits() == toRawBits()) decimalLiteral else rawBitsLiteral
 }
 
 /**

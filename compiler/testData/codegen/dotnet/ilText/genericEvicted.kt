@@ -1,5 +1,5 @@
 // Generic eviction rides the existing fixpoint (the generics analogue of
-// inheritanceBaseEvicted.kt): `Bad` fails the member pre-pass (a `Float` parameter has no IL
+// inheritanceBaseEvicted.kt): `Bad` fails the member pre-pass (a `FloatArray` has no IL
 // mapping), and because instantiations map their arguments through the LIVE class map, every
 // USE of an instantiation naming `Bad` fails too — `useBad`'s `GB<Bad>` parameter evicts the
 // function per-function, and `DBad`, whose `extends` re-resolution maps the base
@@ -8,7 +8,7 @@
 // instantiated `extends class 'GB`1'<int32>` line and base-ctor chain untouched; no emitted
 // token may ever name an evicted class.
 open class Bad {
-    fun f(x: Float): Float = x
+    fun f(x: FloatArray): FloatArray = x
 }
 
 open class GB<T>(val v: T)
