@@ -33,6 +33,26 @@ public fun <T> Iterable<T>.any(): Boolean {
 }
 
 /**
+ * Returns an element at the given [index] or `null` if the [index] is out of bounds of this collection.
+ *
+ * @sample samples.collections.Collections.Elements.elementAtOrNull
+ */
+public fun <T> Iterable<T>.elementAtOrNull(index: Int): T? {
+    if (this is List)
+        return this.getOrNull(index)
+    if (index < 0)
+        return null
+    val iterator = iterator()
+    var count = 0
+    while (iterator.hasNext()) {
+        val element = iterator.next()
+        if (index == count++)
+            return element
+    }
+    return null
+}
+
+/**
  * Returns the first element.
  *
  * @throws NoSuchElementException if the collection is empty.
@@ -85,6 +105,15 @@ public fun <T> Iterable<T>.firstOrNull(): T? {
  */
 public fun <T> List<T>.firstOrNull(): T? {
     return if (isEmpty()) null else this[0]
+}
+
+/**
+ * Returns an element at the given [index] or `null` if the [index] is out of bounds of this list.
+ *
+ * @sample samples.collections.Collections.Elements.getOrNull
+ */
+public fun <T> List<T>.getOrNull(index: Int): T? {
+    return if (index in 0..<size) get(index) else null
 }
 
 /**
