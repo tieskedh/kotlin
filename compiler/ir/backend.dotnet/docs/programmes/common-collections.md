@@ -145,6 +145,39 @@ ABI. The logical operation, overflow condition, exception, and message remain ex
 `Kotlin.Collections.CollectionsKt`. The two helpers remain Kotlin-internal compiler ABI rather than
 ordinary C# API. No BCL count property participates in Kotlin dispatch.
 
+### Equality search and index overflow
+
+The admitted closure is the exact `Elements` family comprising:
+
+- `Iterable<T>.contains(element)`;
+- `Iterable<T>.indexOf(element)` and `Iterable<T>.lastIndexOf(element)`; and
+- the non-inline `List<T>.indexOf(element)` and `List<T>.lastIndexOf(element)` overloads.
+
+The List overloads are intentionally present even though List declares matching members. Common
+marks them `EXTENSION_SHADOWED_BY_MEMBER` because the extension takes precedence for some generic
+calls; omitting them would change overload resolution rather than merely remove duplicate code.
+Common's `OnlyInputTypes` type-parameter annotation is preserved by the generator.
+
+The generated bodies determine both traversal and equality direction. `contains` uses
+`Collection.contains` when that capability exists and otherwise delegates to the admitted
+Iterable `indexOf`. Iterable `indexOf`/`lastIndexOf` use the corresponding List member fast path;
+ordinary iterables compare `element == item`, returning the first match or retaining the last
+match respectively. They call Common `checkIndexOverflow` before comparing each visited element.
+The paired `throwIndexOverflow` helper owns the `ArithmeticException` and exact message.
+
+JVM and Native/Wasm use an `@InlineOnly` index-overflow actual; JS uses an ordinary callable actual
+with the same body. As with count overflow, .NET selects the JS-shaped actual because the Common
+expect declaration is not inline and the target cannot truthfully promise cross-module Kotlin
+inlining. This changes no logical behavior and leaves CLR JIT inlining free.
+
+All five public overloads and both internal helpers share
+`Kotlin.Collections.CollectionsKt`; the helpers are marked compiler ABI. Using LINQ or BCL
+collection search was rejected: it would substitute CLR comparer and enumeration policy, miss
+Common's exact fast-path and overflow boundaries, and conflate optional BCL adapters with Kotlin
+collection identity. This closure also does not remove the Common abstract-base blocker:
+`AbstractCollection` and `AbstractList` depend on the separate inline-lambda `any`, `all`,
+`indexOfFirst`, and `indexOfLast` variants.
+
 ## Next selection rule
 
 Select the next exact non-inline Common/generated family only when all of these are closed:

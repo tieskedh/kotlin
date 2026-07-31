@@ -24647,8 +24647,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         consumeInstalledStdlib(stdlibDirectory, "net10.0", installedProfile = "netstandard2.0")
         executeSelfDescribingStdlib(stdlibDirectory, "net48", dotnetHost = null)
         executeSelfDescribingStdlib(stdlibDirectory, "net10.0", dotnetHost)
-        executeCountOverflowCompilerAbi(stdlibDirectory, "net48", dotnetHost = null)
-        executeCountOverflowCompilerAbi(stdlibDirectory, "net10.0", dotnetHost)
+        executeCollectionOverflowCompilerAbi(stdlibDirectory, "net48", dotnetHost = null)
+        executeCollectionOverflowCompilerAbi(stdlibDirectory, "net10.0", dotnetHost)
     }
 
     @Test
@@ -28211,9 +28211,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(
             mapOf(
                 "any" to 1,
+                "contains" to 1,
                 "count" to 1,
                 "elementAtOrNull" to 1,
                 "getOrNull" to 1,
+                "indexOf" to 2,
+                "lastIndexOf" to 2,
                 "none" to 1,
                 "single" to 2,
                 "singleOrNull" to 2,
@@ -28222,9 +28225,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 .filter { declaration ->
                     declaration.methodName in setOf(
                         "any",
+                        "contains",
                         "count",
                         "elementAtOrNull",
                         "getOrNull",
+                        "indexOf",
+                        "lastIndexOf",
                         "none",
                         "single",
                         "singleOrNull",
@@ -28236,9 +28242,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(collectionFunctions.none { declaration ->
             declaration.methodName in setOf(
                 "any",
+                "contains",
                 "count",
                 "elementAtOrNull",
                 "getOrNull",
+                "indexOf",
+                "lastIndexOf",
                 "none",
                 "single",
                 "singleOrNull",
@@ -28246,17 +28255,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     declaration.isInstance
         })
         assertEquals(
-            setOf("checkCountOverflow", "throwCountOverflow"),
+            setOf(
+                "checkCountOverflow",
+                "checkIndexOverflow",
+                "throwCountOverflow",
+                "throwIndexOverflow",
+            ),
             collectionFunctions
                 .filter { declaration ->
                     declaration.methodName == "checkCountOverflow" ||
-                            declaration.methodName == "throwCountOverflow"
+                            declaration.methodName == "checkIndexOverflow" ||
+                            declaration.methodName == "throwCountOverflow" ||
+                            declaration.methodName == "throwIndexOverflow"
                 }
                 .mapTo(linkedSetOf(), DotNetPhysicalDeclaration.Function::methodName),
         )
         assertTrue(collectionFunctions.none { declaration ->
             (declaration.methodName == "checkCountOverflow" ||
-                    declaration.methodName == "throwCountOverflow") &&
+                    declaration.methodName == "checkIndexOverflow" ||
+                    declaration.methodName == "throwCountOverflow" ||
+                    declaration.methodName == "throwIndexOverflow") &&
                     declaration.isInstance
         })
         assertTrue(physicalDeclarations.values.none { declaration ->
@@ -28345,6 +28363,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
         )
         assertTrue(
+            ".method public hidebysig static bool 'contains'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', !!0 'element')" in il
+        )
+        assertTrue(
             ".method public hidebysig static int32 'count'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
         )
@@ -28368,6 +28390,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("KotlinCompilerAbiAttribute" in throwCountOverflowIl) { throwCountOverflowIl }
         assertTrue("EditorBrowsableAttribute" in throwCountOverflowIl) { throwCountOverflowIl }
         assertTrue("Count overflow has happened." in throwCountOverflowIl) { throwCountOverflowIl }
+        val indexOverflowStart = il.indexOf(
+            ".method public hidebysig static int32 'checkIndexOverflow'(int32 'index')"
+        )
+        assertTrue(indexOverflowStart >= 0)
+        val indexOverflowEnd = il.indexOf("  .method", indexOverflowStart + 1)
+            .takeIf { index -> index >= 0 } ?: il.length
+        val indexOverflowIl = il.substring(indexOverflowStart, indexOverflowEnd)
+        assertTrue("KotlinCompilerAbiAttribute" in indexOverflowIl) { indexOverflowIl }
+        assertTrue("EditorBrowsableAttribute" in indexOverflowIl) { indexOverflowIl }
+        assertTrue("::'throwIndexOverflow'()" in indexOverflowIl) { indexOverflowIl }
+        val throwIndexOverflowStart = il.indexOf(
+            ".method public hidebysig static void 'throwIndexOverflow'()"
+        )
+        assertTrue(throwIndexOverflowStart >= 0)
+        val throwIndexOverflowEnd = il.indexOf("  .method", throwIndexOverflowStart + 1)
+            .takeIf { index -> index >= 0 } ?: il.length
+        val throwIndexOverflowIl = il.substring(throwIndexOverflowStart, throwIndexOverflowEnd)
+        assertTrue("KotlinCompilerAbiAttribute" in throwIndexOverflowIl) { throwIndexOverflowIl }
+        assertTrue("EditorBrowsableAttribute" in throwIndexOverflowIl) { throwIndexOverflowIl }
+        assertTrue("Index overflow has happened." in throwIndexOverflowIl) { throwIndexOverflowIl }
         assertTrue(
             ".method public hidebysig static !!0 'first'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')" in il
@@ -28389,8 +28431,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', int32 'index')" in il
         )
         assertTrue(
+            ".method public hidebysig static int32 'indexOf'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', !!0 'element')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'indexOf'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', !!0 'element')" in il
+        )
+        assertTrue(
             ".method public hidebysig static object 'lastOrNull'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'lastIndexOf'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', !!0 'element')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'lastIndexOf'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', !!0 'element')" in il
         )
         assertTrue(
             ".method public hidebysig static bool 'none'<'T'>(" +
@@ -28560,6 +28618,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun <T> elementCount(values: Iterable<T>): Int = values.count()
 
+                public fun <T> containsElement(values: Iterable<T>, element: T): Boolean =
+                    values.contains(element)
+
+                public fun <T> firstElementIndex(values: Iterable<T>, element: T): Int =
+                    values.indexOf(element)
+
+                public fun <T> lastElementIndex(values: Iterable<T>, element: T): Int =
+                    values.lastIndexOf(element)
+
+                public fun listFirstElementIndex(values: List<String>, element: Any?): Int =
+                    values.indexOf(element)
+
+                public fun listLastElementIndex(values: List<String>, element: Any?): Int =
+                    values.lastIndexOf(element)
+
                 public fun <T> cardinality(values: Iterable<T>): T? {
                     values.any()
                     values.none()
@@ -28633,7 +28706,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il
         )
         assertTrue("::'any'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue(
+            "::'contains'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
+        )
         assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue(
+            "::'indexOf'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
+        )
+        assertTrue(
+            "::'indexOf'<object>(class [Kotlin.Runtime]'Kotlin.Collections.List', !!0)" in il
+        )
+        assertTrue(
+            "::'lastIndexOf'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
+        )
+        assertTrue(
+            "::'lastIndexOf'<object>(class [Kotlin.Runtime]'Kotlin.Collections.List', !!0)" in il
+        )
         assertTrue("::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
@@ -28723,6 +28811,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun <T> installedElementCount(values: Iterable<T>): Int = values.count()
 
+                public fun <T> installedContainsElement(values: Iterable<T>, element: T): Boolean =
+                    values.contains(element)
+
+                public fun <T> installedFirstElementIndex(values: Iterable<T>, element: T): Int =
+                    values.indexOf(element)
+
+                public fun <T> installedLastElementIndex(values: Iterable<T>, element: T): Int =
+                    values.lastIndexOf(element)
+
+                public fun installedListFirstElementIndex(values: List<String>, element: Any?): Int =
+                    values.indexOf(element)
+
+                public fun installedListLastElementIndex(values: List<String>, element: Any?): Int =
+                    values.lastIndexOf(element)
+
                 public fun <T> installedCardinality(values: Iterable<T>): T? {
                     values.any()
                     values.none()
@@ -28765,6 +28868,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             view.elementAtOrNull(2) == null &&
                             values.asIterable().elementAtOrNull(0) == "changed" &&
                             view.count() == 2 &&
+                            values.asIterable().contains("K") &&
+                            values.asIterable().indexOf("K") == 1 &&
+                            values.asIterable().lastIndexOf("changed") == 0 &&
                             view.any() &&
                             !view.none() &&
                             arrayOf("only").asIterable().single() == "only" &&
@@ -28803,7 +28909,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'getOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List', int32)" in il)
         assertTrue("::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("::'any'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue(
+            "::'contains'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
+        )
         assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue(
+            "::'indexOf'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
+        )
+        assertTrue(
+            "::'indexOf'<object>(class [Kotlin.Runtime]'Kotlin.Collections.List', !!0)" in il
+        )
+        assertTrue(
+            "::'lastIndexOf'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
+        )
+        assertTrue(
+            "::'lastIndexOf'<object>(class [Kotlin.Runtime]'Kotlin.Collections.List', !!0)" in il
+        )
         assertTrue("::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
@@ -28954,6 +29075,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val cardinalityOk =
                         view.count() == 2 &&
                             emptyList<Int>().count() == 0 &&
+                            values.asIterable().contains(3) &&
+                            values.asIterable().indexOf(3) == 1 &&
+                            values.asIterable().lastIndexOf(1) == 0 &&
                             view.any() &&
                             !view.none() &&
                             view.singleOrNull() == null &&
@@ -29014,23 +29138,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
     }
 
-    private fun executeCountOverflowCompilerAbi(
+    private fun executeCollectionOverflowCompilerAbi(
         stdlibDirectory: File,
         target: String,
         dotnetHost: File?,
     ) {
-        val directory = File(tmpdir, "count-overflow-compiler-abi-$target").apply { mkdirs() }
+        val directory = File(tmpdir, "collection-overflow-compiler-abi-$target").apply { mkdirs() }
         stdlibDirectory.resolve("Kotlin.Stdlib.dll")
             .copyTo(directory.resolve("Kotlin.Stdlib.dll"), overwrite = true)
         stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
             .copyTo(directory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME), overwrite = true)
-        val ilFile = directory.resolve("CountOverflowProbe.il").apply {
+        val ilFile = directory.resolve("CollectionOverflowProbe.il").apply {
             writeText(
                 """
                 .assembly extern mscorlib {}
                 .assembly extern Kotlin.Stdlib {}
-                .assembly CountOverflowProbe {}
-                .module CountOverflowProbe.exe
+                .assembly CollectionOverflowProbe {}
+                .module CollectionOverflowProbe.exe
 
                 .class public auto ansi sealed beforefieldinit Program
                        extends [mscorlib]System.Object
@@ -29051,17 +29175,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     ldc.i4.0
                     call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'checkCountOverflow'(int32)
-                    brfalse.s ZERO_OK
-                    ldstr "zero changed"
+                    brfalse.s COUNT_ZERO_OK
+                    ldstr "count zero changed"
                     call void Program::Fail(string)
-                ZERO_OK:
+                COUNT_ZERO_OK:
                     ldc.i4 2147483647
                     call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'checkCountOverflow'(int32)
                     ldc.i4 2147483647
-                    beq.s MAX_OK
-                    ldstr "maximum changed"
+                    beq.s COUNT_MAX_OK
+                    ldstr "count maximum changed"
                     call void Program::Fail(string)
-                MAX_OK:
+                COUNT_MAX_OK:
                     .try
                     {
                       ldc.i4.m1
@@ -29069,7 +29193,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                       pop
                       ldstr "negative count returned"
                       call void Program::Fail(string)
-                      leave.s DONE
+                      leave.s COUNT_DONE
                     }
                     catch [mscorlib]System.ArithmeticException
                     {
@@ -29078,10 +29202,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                       callvirt instance string [mscorlib]System.Exception::get_Message()
                       ldstr "Count overflow has happened."
                       call bool [mscorlib]System.String::op_Equality(string, string)
-                      brtrue.s MESSAGE_OK
-                      ldstr "overflow message changed"
+                      brtrue.s COUNT_MESSAGE_OK
+                      ldstr "count overflow message changed"
                       call void Program::Fail(string)
-                MESSAGE_OK:
+                COUNT_MESSAGE_OK:
+                      leave.s COUNT_DONE
+                    }
+                COUNT_DONE:
+                    ldc.i4.0
+                    call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'checkIndexOverflow'(int32)
+                    brfalse.s INDEX_ZERO_OK
+                    ldstr "index zero changed"
+                    call void Program::Fail(string)
+                INDEX_ZERO_OK:
+                    ldc.i4 2147483647
+                    call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'checkIndexOverflow'(int32)
+                    ldc.i4 2147483647
+                    beq.s INDEX_MAX_OK
+                    ldstr "index maximum changed"
+                    call void Program::Fail(string)
+                INDEX_MAX_OK:
+                    .try
+                    {
+                      ldc.i4.m1
+                      call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'checkIndexOverflow'(int32)
+                      pop
+                      ldstr "negative index returned"
+                      call void Program::Fail(string)
+                      leave.s DONE
+                    }
+                    catch [mscorlib]System.ArithmeticException
+                    {
+                      stloc.0
+                      ldloc.0
+                      callvirt instance string [mscorlib]System.Exception::get_Message()
+                      ldstr "Index overflow has happened."
+                      call bool [mscorlib]System.String::op_Equality(string, string)
+                      brtrue.s INDEX_MESSAGE_OK
+                      ldstr "index overflow message changed"
+                      call void Program::Fail(string)
+                INDEX_MESSAGE_OK:
                       leave.s DONE
                     }
                 DONE:
@@ -29093,11 +29253,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         val profile = checkNotNull(DotNetTarget.fromString(target))
         val executable = directory.resolve(
-            if (profile == DotNetTarget.NET48) "CountOverflowProbe.exe" else "CountOverflowProbe.dll"
+            if (profile == DotNetTarget.NET48) "CollectionOverflowProbe.exe" else "CollectionOverflowProbe.dll"
         )
         assertTrue(
             DotNetIlAssembler.assembleExecutable(ilFile, executable, profile, MessageCollector.NONE),
-            "Could not assemble count-overflow compiler-ABI probe for $target",
+            "Could not assemble collection-overflow compiler-ABI probe for $target",
         )
         val command = if (profile == DotNetTarget.NET48) {
             listOf(executable.path)
@@ -29109,7 +29269,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .redirectErrorStream(true)
             .start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
-        assertEquals(0, process.waitFor(), "Count-overflow compiler-ABI probe failed for $target:\n$output")
+        assertEquals(0, process.waitFor(), "Collection-overflow compiler-ABI probe failed for $target:\n$output")
     }
 
     @Test

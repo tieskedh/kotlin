@@ -46,9 +46,17 @@ fun main(args: Array<String>) {
         commonCollectionsFile,
         "public val <T> List<T>.lastIndex: Int",
     )
+    val checkIndexOverflowDeclaration = extractCommonUndocumentedDeclaration(
+        commonCollectionsFile,
+        "internal expect fun checkIndexOverflow(index: Int): Int",
+    )
     val checkCountOverflowDeclaration = extractCommonUndocumentedDeclaration(
         commonCollectionsFile,
         "internal expect fun checkCountOverflow(count: Int): Int",
+    )
+    val throwIndexOverflowDeclaration = extractCommonUndocumentedDeclaration(
+        commonCollectionsFile,
+        "internal fun throwIndexOverflow()",
     )
     val throwCountOverflowDeclaration = extractCommonUndocumentedDeclaration(
         commonCollectionsFile,
@@ -58,11 +66,14 @@ fun main(args: Array<String>) {
         Aggregates.f_any selectedFor setOf(Family.Iterables),
         Aggregates.f_count selectedFor setOf(Family.Iterables),
         Aggregates.f_none selectedFor setOf(Family.Iterables),
+        Elements.f_contains selectedFor setOf(Family.Iterables),
         Elements.f_elementAtOrNull selectedFor setOf(Family.Iterables),
         Elements.f_first selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_firstOrNull selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_getOrNull selectedFor setOf(Family.Lists),
+        Elements.f_indexOf selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_last selectedFor setOf(Family.Iterables, Family.Lists),
+        Elements.f_lastIndexOf selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_lastOrNull selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_single selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_singleOrNull selectedFor setOf(Family.Iterables, Family.Lists),
@@ -85,7 +96,11 @@ fun main(args: Array<String>) {
     generatedSource.appendLine()
     generatedSource.appendLine(lastIndexDeclaration)
     generatedSource.appendLine()
+    generatedSource.appendLine(checkIndexOverflowDeclaration)
+    generatedSource.appendLine()
     generatedSource.appendLine(checkCountOverflowDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(throwIndexOverflowDeclaration)
     generatedSource.appendLine()
     generatedSource.appendLine(throwCountOverflowDeclaration)
     generatedSource.appendLine()

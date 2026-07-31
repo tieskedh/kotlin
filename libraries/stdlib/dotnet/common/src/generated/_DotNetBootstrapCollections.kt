@@ -25,7 +25,16 @@ public val <T> List<T>.lastIndex: Int
 @PublishedApi
 @SinceKotlin("1.3")
 @IgnorableReturnValue
+internal expect fun checkIndexOverflow(index: Int): Int
+
+@PublishedApi
+@SinceKotlin("1.3")
+@IgnorableReturnValue
 internal expect fun checkCountOverflow(count: Int): Int
+
+@PublishedApi
+@SinceKotlin("1.3")
+internal fun throwIndexOverflow() { throw ArithmeticException("Index overflow has happened.") }
 
 @PublishedApi
 @SinceKotlin("1.3")
@@ -39,6 +48,15 @@ internal fun throwCountOverflow() { throw ArithmeticException("Count overflow ha
 public fun <T> Iterable<T>.any(): Boolean {
     if (this is Collection) return !isEmpty()
     return iterator().hasNext()
+}
+
+/**
+ * Returns `true` if [element] is found in the collection.
+ */
+public operator fun <@kotlin.internal.OnlyInputTypes T> Iterable<T>.contains(element: T): Boolean {
+    if (this is Collection)
+        return contains(element)
+    return indexOf(element) >= 0
 }
 
 /**
@@ -136,6 +154,29 @@ public fun <T> List<T>.getOrNull(index: Int): T? {
 }
 
 /**
+ * Returns first index of [element], or -1 if the collection does not contain element.
+ */
+public fun <@kotlin.internal.OnlyInputTypes T> Iterable<T>.indexOf(element: T): Int {
+    if (this is List) return this.indexOf(element)
+    var index = 0
+    for (item in this) {
+        checkIndexOverflow(index)
+        if (element == item)
+            return index
+        index++
+    }
+    return -1
+}
+
+/**
+ * Returns first index of [element], or -1 if the list does not contain element.
+ */
+@Suppress("EXTENSION_SHADOWED_BY_MEMBER") // false warning, extension takes precedence in some cases
+public fun <@kotlin.internal.OnlyInputTypes T> List<T>.indexOf(element: T): Int {
+    return indexOf(element)
+}
+
+/**
  * Returns the last element.
  *
  * @throws NoSuchElementException if the collection is empty.
@@ -168,6 +209,30 @@ public fun <T> List<T>.last(): T {
     if (isEmpty())
         throw NoSuchElementException("List is empty.")
     return this[lastIndex]
+}
+
+/**
+ * Returns last index of [element], or -1 if the collection does not contain element.
+ */
+public fun <@kotlin.internal.OnlyInputTypes T> Iterable<T>.lastIndexOf(element: T): Int {
+    if (this is List) return this.lastIndexOf(element)
+    var lastIndex = -1
+    var index = 0
+    for (item in this) {
+        checkIndexOverflow(index)
+        if (element == item)
+            lastIndex = index
+        index++
+    }
+    return lastIndex
+}
+
+/**
+ * Returns last index of [element], or -1 if the list does not contain element.
+ */
+@Suppress("EXTENSION_SHADOWED_BY_MEMBER") // false warning, extension takes precedence in some cases
+public fun <@kotlin.internal.OnlyInputTypes T> List<T>.lastIndexOf(element: T): Int {
+    return lastIndexOf(element)
 }
 
 /**
