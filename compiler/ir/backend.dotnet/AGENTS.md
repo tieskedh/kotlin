@@ -336,6 +336,33 @@ For every bounded semantic feature:
    boundaries.
 8. Commit and push the completed feature with its ADR and status update.
 
+## Decision escalation and locks
+
+Exhaust authoritative Common source, shared compiler machinery, mature-target
+precedent, CLR facts, and accepted Kotlin/.NET decisions before escalating a
+question. If those sources still do not determine a material choice and the
+alternatives would be difficult to change after more stdlib or ABI work lands,
+stop at that boundary and ask the user. Continue reversible work and features
+outside the affected area; an unanswered question does not stop the whole
+target.
+
+If the user has not answered within one hour, add a focused
+`docs/decisions/open-question-<topic>.md`. It must contain the exact root
+question, verified facts, every viable answer, the target authors' best answer,
+the consequences of each answer, and the complete follow-on question tree.
+Answer each follow-on question as far as the evidence permits and recurse when
+an answer creates another choice. Do not implement the hard-to-reverse portion
+while its question remains open.
+
+Every active open-question document must also have a row in the table below.
+The row identifies exactly which stdlib features, representation, metadata,
+or ABI work is locked and what work remains safe. Remove the row only when the
+answer has been incorporated into the owning ADR and implementation plan.
+
+| Open question | Hard-to-reverse work locked | Work that may continue |
+| --- | --- | --- |
+| None | None | Every currently selected bounded feature |
+
 Also:
 
 - preserve unrelated worktree changes and do not modify another branch;
