@@ -570,12 +570,20 @@ private abstract class AbstractDotNetBoxRunner(
                     "'emptyList'<'T'>()",
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
                     "'asList'<'T'>(!!0[] '<this>')",
+            ".method public hidebysig static bool 'any'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
             ".method public hidebysig specialname static int32 'get_lastIndex'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
             ".method public hidebysig static object 'firstOrNull'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
             ".method public hidebysig static object 'lastOrNull'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
+            ".method public hidebysig static bool 'none'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
+            ".method public hidebysig static !!0 'single'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
+            ".method public hidebysig static object 'singleOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
         )
         requiredStdlibIl.firstOrNull { it !in stdlibIlText }?.let { missing ->
             assertions.fail { "Expected Kotlin.Stdlib IL to contain '$missing': ${stdlibIlFile.path}" }
