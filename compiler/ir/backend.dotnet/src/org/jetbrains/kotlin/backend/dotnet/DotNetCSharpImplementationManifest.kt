@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeDefaultValueKind
 import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceDefaultPhysicalMethod
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
@@ -334,7 +335,7 @@ object DotNetCSharpImplementationManifestCodec {
         val targetProfile = requireNotNull(header.second[2]) {
             "C# implementation manifest has no target profile"
         }
-        require(targetProfile in DotNetTarget.entries.map(DotNetTarget::flagValue)) {
+        require(targetProfile in DotNetTarget.entries.map(DotNetTarget::description)) {
             "C# implementation manifest has unknown target profile '$targetProfile'"
         }
         val logicalIdentityScheme = requireNotNull(header.second[3]) {
@@ -761,7 +762,7 @@ object DotNetCSharpImplementationManifestCodec {
                 }
             }
             DotNetCSharpDefaultKind.PORTABLE_HELPER -> {
-                require(targetProfile != DotNetTarget.NET10_0.flagValue && semanticBodyView == null) {
+                require(targetProfile != DotNetTarget.NET10_0.description && semanticBodyView == null) {
                     "Portable C# implementation member '$memberKey' has inconsistent profile/body metadata"
                 }
                 require(slots.any { it.role == DotNetCSharpSlotRole.HELPER }) {
@@ -769,7 +770,7 @@ object DotNetCSharpImplementationManifestCodec {
                 }
             }
             DotNetCSharpDefaultKind.DIM_WITH_HELPER -> {
-                require(targetProfile == DotNetTarget.NET10_0.flagValue && semanticBodyView != null) {
+                require(targetProfile == DotNetTarget.NET10_0.description && semanticBodyView != null) {
                     "DIM C# implementation member '$memberKey' has inconsistent profile/body metadata"
                 }
                 require(slots.any { it.role == DotNetCSharpSlotRole.HELPER }) {
@@ -1284,7 +1285,7 @@ internal fun collectDotNetCSharpImplementationManifest(
     return DotNetCSharpImplementationManifest(
         schemaVersion = DotNetCSharpImplementationManifestCodec.CURRENT_SCHEMA_VERSION,
         assemblyName = assemblyName,
-        targetProfile = target.flagValue,
+        targetProfile = target.description,
         logicalIdentityScheme = DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
         interfaces = interfaces,
     )
@@ -1451,7 +1452,7 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
     return DotNetCSharpImplementationManifest(
         schemaVersion = DotNetCSharpImplementationManifestCodec.CURRENT_SCHEMA_VERSION,
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
-        targetProfile = target.flagValue,
+        targetProfile = target.description,
         logicalIdentityScheme = DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
         interfaces = contracts,
     )

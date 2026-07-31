@@ -1,0 +1,42 @@
+public final class org/jetbrains/kotlin/config/DotNetTarget : java/lang/Enum, org/jetbrains/kotlin/platform/TargetPlatformVersion {
+	public static final field Companion Lorg/jetbrains/kotlin/config/DotNetTarget$Companion;
+	public static final field DEFAULT Lorg/jetbrains/kotlin/config/DotNetTarget;
+	public static final field NET10_0 Lorg/jetbrains/kotlin/config/DotNetTarget;
+	public static final field NET48 Lorg/jetbrains/kotlin/config/DotNetTarget;
+	public static final field NETSTANDARD_2_0 Lorg/jetbrains/kotlin/config/DotNetTarget;
+	public static final fun fromString (Ljava/lang/String;)Lorg/jetbrains/kotlin/config/DotNetTarget;
+	public fun getDescription ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public fun toString ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lorg/jetbrains/kotlin/config/DotNetTarget;
+	public static fun values ()[Lorg/jetbrains/kotlin/config/DotNetTarget;
+}
+
+public final class org/jetbrains/kotlin/config/DotNetTarget$Companion {
+	public final fun fromString (Ljava/lang/String;)Lorg/jetbrains/kotlin/config/DotNetTarget;
+}
+
+public final class org/jetbrains/kotlin/config/DotNetTargetKt {
+	public static final fun getSupportsByRefLikeGenericArguments (Lorg/jetbrains/kotlin/config/DotNetTarget;)Z
+}
+
+public abstract class org/jetbrains/kotlin/platform/dotnet/DotNetPlatform : org/jetbrains/kotlin/platform/SimplePlatform {
+	public fun <init> ()V
+}
+
+public final class org/jetbrains/kotlin/platform/dotnet/DotNetPlatformKt {
+	public static final fun isDotNet (Lorg/jetbrains/kotlin/platform/TargetPlatform;)Z
+}
+
+public final class org/jetbrains/kotlin/platform/dotnet/DotNetPlatforms {
+	public static final field INSTANCE Lorg/jetbrains/kotlin/platform/dotnet/DotNetPlatforms;
+	public final fun getAllDotNetPlatforms ()Ljava/util/List;
+	public final fun getDefaultDotNetPlatform ()Lorg/jetbrains/kotlin/platform/TargetPlatform;
+}
+
+public final class org/jetbrains/kotlin/platform/dotnet/DotNetPlatforms$DefaultSimpleDotNetPlatform : org/jetbrains/kotlin/platform/dotnet/DotNetPlatform {
+	public static final field INSTANCE Lorg/jetbrains/kotlin/platform/dotnet/DotNetPlatforms$DefaultSimpleDotNetPlatform;
+	public fun getOldFashionedDescription ()Ljava/lang/String;
+	public fun getTargetName ()Ljava/lang/String;
+}
+

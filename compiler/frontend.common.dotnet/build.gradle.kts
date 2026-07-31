@@ -5,9 +5,11 @@ plugins {
     kotlin("jvm")
 }
 
-// Deliberately no compiler-project dependencies: this module models and resolves objective CLR
-// metadata and may not depend on FIR, IR, a backend, a CLI pipeline, Gradle, or Roslyn tooling.
+// This module models and resolves objective CLR metadata. Its sole compiler-project dependency is
+// the pure .NET language-target vocabulary; it may not depend on compiler configuration, FIR, IR,
+// a backend, a CLI pipeline, Gradle, or Roslyn tooling.
 dependencies {
+    api(project(":core:language.targets.dotnet"))
     api(kotlinStdlib())
 }
 

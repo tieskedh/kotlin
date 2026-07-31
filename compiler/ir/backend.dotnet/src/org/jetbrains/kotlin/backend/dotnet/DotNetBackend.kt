@@ -2,7 +2,13 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.config.MessageCollectorAccess
+import org.jetbrains.kotlin.config.dotNetAssemblyName
+import org.jetbrains.kotlin.config.dotNetOutput
+import org.jetbrains.kotlin.config.dotNetProducesLibrary
+import org.jetbrains.kotlin.config.dotNetProducesStdlib
+import org.jetbrains.kotlin.config.dotNetTarget
 import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.ir.IrBuiltIns

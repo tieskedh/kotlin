@@ -21,10 +21,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalClrAssemblies
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
-import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
-import org.jetbrains.kotlin.backend.dotnet.dotNetProducesStdlib
-import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.collectSources
 import org.jetbrains.kotlin.cli.common.contentRoots
@@ -38,7 +35,7 @@ import org.jetbrains.kotlin.cli.common.prepareMetadataSessions
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.cli.jvm.compiler.toVfsBasedProjectEnvironment
-import org.jetbrains.kotlin.cli.jvm.config.JvmClasspathRoot
+import org.jetbrains.kotlin.cli.dotnet.config.DotNetClasspathRoot
 import org.jetbrains.kotlin.cli.pipeline.CheckCompilationErrors
 import org.jetbrains.kotlin.cli.pipeline.ConfigurationPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.PerformanceNotifications
@@ -47,6 +44,10 @@ import org.jetbrains.kotlin.cli.report
 import org.jetbrains.kotlin.compiler.plugin.getCompilerExtensions
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.LanguageFeature
+import org.jetbrains.kotlin.config.canConsumeLibrary
+import org.jetbrains.kotlin.config.dotNetAssemblyName
+import org.jetbrains.kotlin.config.dotNetProducesStdlib
+import org.jetbrains.kotlin.config.dotNetTarget
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.moduleName
 import org.jetbrains.kotlin.config.perfManager
@@ -236,10 +237,10 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLi
     val classificationByAssembly = linkedMapOf<File, DotNetClrClasspathAssembly>()
     val originalContentRoots = contentRoots
     val classpathOrder = originalContentRoots.mapNotNull { root ->
-        (root as? JvmClasspathRoot)?.file?.canonicalFile
+        (root as? DotNetClasspathRoot)?.file?.canonicalFile
     }
     val ordinaryLibraryPaths = originalContentRoots.mapNotNull { root ->
-        val classpathRoot = root as? JvmClasspathRoot ?: return@mapNotNull null
+        val classpathRoot = root as? DotNetClasspathRoot ?: return@mapNotNull null
         classpathRoot.file.path.takeUnless { classpathRoot.file.extension.equals("dll", ignoreCase = true) }
     }
 
@@ -283,7 +284,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLi
     }
 
     contentRoots = originalContentRoots.filterNot { root ->
-        val classpathRoot = root as? JvmClasspathRoot ?: return@filterNot false
+        val classpathRoot = root as? DotNetClasspathRoot ?: return@filterNot false
         classpathRoot.file.extension.equals("dll", ignoreCase = true)
     }
     classpathOrder
@@ -602,7 +603,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             report(
                 COMPILER_ARGUMENTS_ERROR,
                 "Kotlin/.NET library '$displayPath' targets '$targetFramework', which is not " +
-                        "compatible with Kotlin/.NET target '${dotNetTarget.flagValue}'.",
+                        "compatible with Kotlin/.NET target '${dotNetTarget.description}'.",
             )
             return
         }
