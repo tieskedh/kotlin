@@ -1000,8 +1000,8 @@ library-compatibility policy stays in configuration, while textual core-library 
 an exhaustive backend mapping. The complete backend/CLI inventory, forbidden dependencies,
 mature-target package evidence, and attacked alternatives are recorded in
 `architecture-responsibility-audit.md`. The physical ABI codec and runtime surface remain schema
-16 / level 9. The fresh strict gate is 902/0/0/0 across 16 XML suites (814 FIR/IL/box,
-21 generated CLI, and 67 library integration tests).
+16 / level 9. Current aggregate verification is recorded only in
+[`../../STATUS.md`](../../STATUS.md).
 
 **CLR-importer progress (2026-07-28):** the first importer slice follows the JVM foreign
 classfile/provider split without pretending that CLR metadata is Java metadata. A single bounded,
