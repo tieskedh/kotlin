@@ -240,7 +240,7 @@ See the
   [`draft-adr-system-object-any-foundation.md`](docs/decisions/draft-adr-system-object-any-foundation.md).
 - Kotlin primitive arrays use Kotlin-owned wrapper identity around CLR
   storage. Do not expose raw CLR vectors as Kotlin array identity. See
-  [`draft-adr-kotlin-primitive-array-wrappers.md`](docs/decisions/draft-adr-kotlin-primitive-array-wrappers.md).
+  [the primitive-array ADR](docs/decisions/primitive-arrays.md).
 - Variant/generic interfaces use the versioned split-interface/bridge model
   where one CLR interface cannot truthfully carry all Kotlin views. MethodImpl
   and effective interface maps are semantic ABI, not IL spelling trivia. See
