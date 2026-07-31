@@ -56,12 +56,16 @@ internal object DotNetStdlibLibrary {
         "kotlin.SuppressedExceptionIterator" to "Kotlin.SuppressedExceptionIterator",
     )
     private val implementationFunctionFacadeIlNames = mapOf(
+        "kotlin.collections.any" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.asList" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.emptyList" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.first" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.firstOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.last" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.lastOrNull" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.none" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.single" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.singleOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERATOR_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERABLE_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.io.readln" to IO_FACADE_IL_NAME,

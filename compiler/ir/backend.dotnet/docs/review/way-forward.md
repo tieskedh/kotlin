@@ -962,6 +962,24 @@ The physical ABI codec and runtime surface remain schema 16 / level 9. The fresh
 897/0/0/0 across 16 XML suites (810 FIR/IL/box, 21 generated CLI, and 66 library integration
 tests).
 
+**Common collections programme (non-inline query slice implemented 2026-07-31):** the Common
+generator now emits `Iterable.any()`/`none()` and `Iterable`/`List`
+`single()`/`singleOrNull()` from the authoritative `Aggregates` and `Elements` templates. Common
+Collection and List fast paths are preserved; hostile List implementations are queried and
+cardinality-checked without touching their iterators. Direct, fallback, separate, installed, and
+portable consumers bind the six overloads on the existing
+`Kotlin.Collections.CollectionsKt` facade. Adversarial execution covers empty/singleton/multiple,
+nullable, widened, value/reference, exact traversal, and exact failure-message behavior in all
+four parser/runtime lanes.
+
+The attempted next-step audit does not admit `AbstractCollection`/`AbstractList` prematurely. All
+mature targets compile those exact shared sources, whose complete closure includes generic inline
+helpers, `CharSequence`/`Appendable`/`StringBuilder`, and typed collection-to-array operations.
+Those programmes remain parked; the CLR provides no semantic reason for a target algorithm copy or
+intrinsic substitute. Physical ABI schema 16 and runtime surface level 9 remain current. The fresh
+strict gate is 901/0/0/0 across 16 XML suites (814 FIR/IL/box, 21 generated CLI, and 66 library
+integration tests).
+
 **Architecture responsibility correction (implemented 2026-07-31):** mature target module and
 package ownership is now the default for the .NET compiler too. The first bounded correction moved
 objective PE/ECMA-335 loading, CLR resolution, and validated metadata evidence out of the IR backend

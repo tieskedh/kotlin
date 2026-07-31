@@ -23,6 +23,16 @@ public val <T> List<T>.lastIndex: Int
     get() = this.size - 1
 
 /**
+ * Returns `true` if collection has at least one element.
+ *
+ * @sample samples.collections.Collections.Aggregates.any
+ */
+public fun <T> Iterable<T>.any(): Boolean {
+    if (this is Collection) return !isEmpty()
+    return iterator().hasNext()
+}
+
+/**
  * Returns the first element.
  *
  * @throws NoSuchElementException if the collection is empty.
@@ -139,4 +149,68 @@ public fun <T> Iterable<T>.lastOrNull(): T? {
  */
 public fun <T> List<T>.lastOrNull(): T? {
     return if (isEmpty()) null else this[size - 1]
+}
+
+/**
+ * Returns `true` if the collection has no elements.
+ *
+ * @sample samples.collections.Collections.Aggregates.none
+ */
+public fun <T> Iterable<T>.none(): Boolean {
+    if (this is Collection) return isEmpty()
+    return !iterator().hasNext()
+}
+
+/**
+ * Returns the single element, or throws an exception if the collection is empty or has more than one element.
+ */
+public fun <T> Iterable<T>.single(): T {
+    when (this) {
+        is List -> return this.single()
+        else -> {
+            val iterator = iterator()
+            if (!iterator.hasNext())
+                throw NoSuchElementException("Collection is empty.")
+            val single = iterator.next()
+            if (iterator.hasNext())
+                throw IllegalArgumentException("Collection has more than one element.")
+            return single
+        }
+    }
+}
+
+/**
+ * Returns the single element, or throws an exception if the list is empty or has more than one element.
+ */
+public fun <T> List<T>.single(): T {
+    return when (size) {
+        0 -> throw NoSuchElementException("List is empty.")
+        1 -> this[0]
+        else -> throw IllegalArgumentException("List has more than one element.")
+    }
+}
+
+/**
+ * Returns single element, or `null` if the collection is empty or has more than one element.
+ */
+public fun <T> Iterable<T>.singleOrNull(): T? {
+    when (this) {
+        is List -> return if (size == 1) this[0] else null
+        else -> {
+            val iterator = iterator()
+            if (!iterator.hasNext())
+                return null
+            val single = iterator.next()
+            if (iterator.hasNext())
+                return null
+            return single
+        }
+    }
+}
+
+/**
+ * Returns single element, or `null` if the list is empty or has more than one element.
+ */
+public fun <T> List<T>.singleOrNull(): T? {
+    return if (size == 1) this[0] else null
 }

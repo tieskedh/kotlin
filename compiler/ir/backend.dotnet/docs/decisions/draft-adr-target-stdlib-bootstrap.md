@@ -149,6 +149,21 @@ matching all mature targets; `asList()` is not the `emptyList()` singleton opera
 actual is an ordinary generic method on `Kotlin.Collections.CollectionsKt`, not an intrinsic or a
 compiler-facing factory.
 
+The following abstract-base audit retains the same mature-target rule. JVM, JS, Wasm, and Native
+compile the exact shared `AbstractCollection`/`AbstractList` sources. Kotlin/.NET must do so too,
+but only after their complete generic-inline, `CharSequence`/`StringBuilder`, and typed
+collection-to-array closure is supported. The CLR gives no semantic reason to copy their
+algorithms or replace them with target intrinsics. CLR runtime array types do require the eventual
+`collectionToArray(collection, T[])` actual to preserve the caller's `T[]`, following JVM rather
+than the erased Native/Wasm cast.
+
+Until that closure lands, the next generator continuation is the complete non-inline Common
+emptiness/cardinality family already supported by the target:
+`Iterable.any()`/`none()` and `Iterable`/`List` `single()`/`singleOrNull()`. They come from the
+authoritative `Aggregates` and `Elements` templates, retain Common Collection/List fast paths, and
+add no predicate-inline or overflow-helper dependency. Predicate overloads, `count`, and the
+abstract bases remain outside this slice.
+
 The generated Common file and the target collection-support file are separate source-product
 shards but one CLR API owner. In `STDLIB` emission, files which the compiler-owned source catalog
 explicitly assigns the same facade name are aggregated into one physical class. This follows the
@@ -560,6 +575,16 @@ nullable and value elements, hostile widened arguments, sub-views, structural me
 iterator/range boundary. The physical ABI grammar and runtime surface remain unchanged.
 The fresh strict gate is 897/0/0/0 across 16 XML suites (810 FIR/IL/box, 21 generated CLI, and
 66 library integration tests).
+
+The non-inline query continuation emits `Iterable.any()`/`none()` and
+`Iterable`/`List` `single()`/`singleOrNull()` from the authoritative Common templates. The
+physical index records all six static overloads on `Kotlin.Collections.CollectionsKt`; direct,
+fallback, separate, installed, and portable consumers name no alternate owner. Adversarial
+execution proves Common Collection/List fast paths, traversal counts, empty/singleton/multiple and
+nullable/widened behavior, and exact exception types/messages on Framework CLR 4 and CoreCLR 10.
+The physical ABI grammar and runtime surface remain unchanged. The fresh strict gate is
+901/0/0/0 across 16 XML suites (814 FIR/IL/box, 21 generated CLI, and 66 library integration
+tests).
 
 The exhaustive-when matrix additionally verifies that the internal subject-aware helper is emitted
 once in `Kotlin.Stdlib`, that a separately compiled application calls that physical facade, and

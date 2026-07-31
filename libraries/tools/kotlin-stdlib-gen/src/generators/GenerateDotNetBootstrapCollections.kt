@@ -5,6 +5,7 @@
 
 package generators
 
+import templates.Aggregates
 import templates.COPYRIGHT_NOTICE
 import templates.Elements
 import templates.Family
@@ -46,10 +47,14 @@ fun main(args: Array<String>) {
         "public val <T> List<T>.lastIndex: Int",
     )
     val selectedTemplates = sequenceOf(
+        Aggregates.f_any selectedFor setOf(Family.Iterables),
+        Aggregates.f_none selectedFor setOf(Family.Iterables),
         Elements.f_first selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_firstOrNull selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_last selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_lastOrNull selectedFor setOf(Family.Iterables, Family.Lists),
+        Elements.f_single selectedFor setOf(Family.Iterables, Family.Lists),
+        Elements.f_singleOrNull selectedFor setOf(Family.Iterables, Family.Lists),
     )
     val members = selectedTemplates
         .flatMap { [template, families] ->

@@ -25,12 +25,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   implements the audited `frontend.common.dotnet` CLR load boundary without changing artifact or
   semantic contracts. Its complete inventory and rationale are in
   `docs/review/architecture-responsibility-audit.md`.
-- The current feature adds the exact Common `Array<out T>.asList()` expect/actual pair as a backed
-  Kotlin `List<T>, RandomAccess` view, together with the first general output-projected generic
-  array carrier. Reference-vector covariance is supported, while unrepresentable value-vector
-  widening remains rejected. Fresh verification is **897 tests, 0 failures, 0 errors, 0 skips**
-  across all 16 JUnit XML suites (810 FIR/IL/box, 21 generated CLI, and 66 library integration
-  tests).
+- The exact Common `Array<out T>.asList()` backed-view slice is committed and pushed as
+  `9a683e89d`.
+- The current feature adds the exact non-inline Common `Iterable.any()`/`none()` and
+  `Iterable`/`List` `single()`/`singleOrNull()` query family from the authoritative generator
+  templates. Fresh verification is **901 tests, 0 failures, 0 errors, 0 skips** across all 16 JUnit
+  XML suites (814 FIR/IL/box, 21 generated CLI, and 66 library integration tests).
 - Branch `dotnet`; latest committed functional work comprises runtime-helper ownership
   (`b54578fab`), capturing-callable state (`131161ca5`), callable-reference metadata
   (`fb6d43448`), the System.Object Any foundation (`4a78533ad`), and the hybrid Kotlin/CLR
@@ -2839,6 +2839,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and every iterator/range boundary are pinned. The physical ABI codec and runtime surface remain
   schema 16 / level 9. The fresh strict gate is 897/0/0/0 across 16 XML suites (810 FIR/IL/box,
   21 generated CLI, and 66 library integration tests).
+- The third Common collections slice adds the exact non-inline emptiness/cardinality family from
+  the Common `Aggregates` and `Elements` templates: `Iterable.any()`/`none()` and
+  `Iterable`/`List` `single()`/`singleOrNull()`. Common Collection and List fast paths are
+  preserved, including no iterator creation for hostile List implementations. Empty/singleton/
+  multiple, nullable, widened, value, reference, traversal-count, and exact exception-message
+  behavior execute in all four parser/runtime lanes. Direct, fallback, installed, and portable
+  consumers bind the six overloads on the existing collection facade. Physical ABI schema 16 and
+  runtime surface level 9 remain unchanged. The fresh strict gate is 901/0/0/0 across 16 XML
+  suites (814 FIR/IL/box, 21 generated CLI, and 66 library integration tests).
 - Exact CodeAnalysis effects need no KLIB in a foreign DLL, but Kotlin-produced DLLs still keep a
   complete KLIB contract and derive the CLR view. The shared decoder plumbing does not merge two
   authorities for one declaration. Treating KLIB as only the unrepresentable remainder would be
@@ -2898,7 +2907,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 897 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 901 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2922,13 +2931,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Continue the Common collections programme with its abstract-list closure.** The exact Common
-   `Array<out T>.asList()` declaration and its temporary direct List implementation are complete.
-   Review and admit the smallest authoritative Common `AbstractCollection`/`AbstractList`
-   dependency closure, then replace duplicated private view mechanics only when that closure is
-   supported as ordinary Kotlin source. Keep `listOf` separate until its complete InlineOnly and
-   generic-vararg production path has been designed; do not use it to smuggle in an incomplete
-   vararg family. Grow the generator allowlist only as backend support proves each dependency.
+1. **Choose the next Common collections prerequisite deliberately.** The abstract-base audit is
+   complete: exact `AbstractCollection`/`AbstractList` production requires generic inline
+   functions, `CharSequence`/`Appendable`/`StringBuilder`, and typed collection-to-array support.
+   All are currently parked and none is a CLR-semantic reason to fork Common algorithms. Do not
+   import partial base classes or replace their helpers with .NET intrinsics. If those broader
+   programmes remain parked, admit another complete non-inline generated family only after
+   documenting its exact closure. Keep `listOf` separate until its InlineOnly and generic-vararg
+   production path is designed.
 2. **Continue the CLR importer above its physical declaration and type-resolution foundation.**
    The attribute-carrier review is now recorded in
    `docs/review/clr-annotation-interoperability.md`. Standard CLR/Roslyn metadata is the shared
