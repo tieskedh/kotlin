@@ -27,10 +27,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `docs/review/architecture-responsibility-audit.md`.
 - The exact Common `Array<out T>.asList()` backed-view slice is committed and pushed as
   `9a683e89d`.
-- The current feature adds the exact non-inline Common `Iterable.any()`/`none()` and
-  `Iterable`/`List` `single()`/`singleOrNull()` query family from the authoritative generator
-  templates. Fresh verification is **901 tests, 0 failures, 0 errors, 0 skips** across all 16 JUnit
-  XML suites (814 FIR/IL/box, 21 generated CLI, and 66 library integration tests).
+- The exact non-inline Common `Iterable.any()`/`none()` and `Iterable`/`List`
+  `single()`/`singleOrNull()` query family is committed and pushed as `9b42b2e2d`. Its fresh
+  strict verification is **901 tests, 0 failures, 0 errors, 0 skips** across all 16 JUnit XML
+  suites (814 FIR/IL/box, 21 generated CLI, and 66 library integration tests).
+- The current feature completes the second bounded architecture correction:
+  `core:language.targets.dotnet` owns neutral target/platform vocabulary,
+  `compiler:config.dotnet` owns generated primitive keys and profile policy, `cli-base` owns
+  `DotNetClasspathRoot`, and the remaining target-coupled physical CLR validators now live in
+  `frontend.common.dotnet`. Target/config packages mirror JVM; product, packaging, artifact, and
+  textual CIL concerns remain out of the foundational target enum. Fresh strict verification is
+  **902 tests, 0 failures, 0 errors, 0 skips** across all 16 JUnit XML suites (814 FIR/IL/box,
+  21 generated CLI, and 67 library integration tests).
 - Branch `dotnet`; latest committed functional work comprises runtime-helper ownership
   (`b54578fab`), capturing-callable state (`131161ca5`), callable-reference metadata
   (`fb6d43448`), the System.Object Any foundation (`4a78533ad`), and the hybrid Kotlin/CLR
@@ -2907,7 +2915,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 901 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 902 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2931,7 +2939,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Choose the next Common collections prerequisite deliberately.** The abstract-base audit is
+1. **Normalize documentation ownership in a separate non-semantic slice.** Add `STATUS.md` as the
+   canonical owner of current branch/gate/task state, reduce `HANDOVER.md` to a compatibility
+   pointer only after a repository-wide reference audit, and keep `AGENTS.md` as a self-contained
+   bootstrap contract rather than an ADR encyclopedia. Move immutable reviews/sync reports to an
+   archive and consolidate ADRs only with link/reference validation; do not combine the history
+   cleanup with a compiler feature or rerun the .NET gate for Markdown-only changes.
+2. **Choose the next Common collections prerequisite deliberately.** The abstract-base audit is
    complete: exact `AbstractCollection`/`AbstractList` production requires generic inline
    functions, `CharSequence`/`Appendable`/`StringBuilder`, and typed collection-to-array support.
    All are currently parked and none is a CLR-semantic reason to fork Common algorithms. Do not
@@ -2939,7 +2953,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
    programmes remain parked, admit another complete non-inline generated family only after
    documenting its exact closure. Keep `listOf` separate until its InlineOnly and generic-vararg
    production path is designed.
-2. **Continue the CLR importer above its physical declaration and type-resolution foundation.**
+3. **Continue the CLR importer above its physical declaration and type-resolution foundation.**
    The attribute-carrier review is now recorded in
    `docs/review/clr-annotation-interoperability.md`. Standard CLR/Roslyn metadata is the shared
    vocabulary; KLIB is the exact Kotlin remainder. The closed nullable-aware abstract-interface
@@ -2966,12 +2980,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
    each require their own documented contract. Preserve Kotlin declaration identity and Common
    semantics; do not teach the Kotlin-owned backend surface to infer C# conventions. Keep
    structured metadata-table auditing; do not substitute IL substring checks.
-3. **Extract target-profile/configuration ownership when the next consumer requires it.** This is
-   the next coherent architecture boundary identified by the audit and is the prerequisite for
-   moving the two remaining target-coupled CLR constraint validators. Mirror mature target config
-   packages; do not replace `DotNetTarget` with ad-hoc Booleans or mix textual IL rendering into
-   the shared profile model.
-4. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
+4. **Create the shared retained-declaration carrier seam before moving the foreign provider.**
+   Mirror JVM's deserialization dependency role: FIR and backend may both consume the neutral
+   carrier without depending on one another. Then give the foreign CLR symbol provider a real
+   FIR-owned .NET module; leave physical metadata loading in `frontend.common.dotnet` and IR
+   binding in `backend.dotnet`.
+5. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
    should become emitted Kotlin code only when its implementation is supported and tested; keep
    platform operations in the intrinsic registry where the mature JVM stdlib does so.
 

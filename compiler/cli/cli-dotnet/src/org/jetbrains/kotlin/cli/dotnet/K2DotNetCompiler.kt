@@ -8,7 +8,7 @@ import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetCliPipeline
 import org.jetbrains.kotlin.config.Services
 import org.jetbrains.kotlin.metadata.deserialization.BinaryVersion
 import org.jetbrains.kotlin.metadata.deserialization.MetadataVersion
-import org.jetbrains.kotlin.platform.DotNetPlatforms
+import org.jetbrains.kotlin.platform.dotnet.DotNetPlatforms
 import org.jetbrains.kotlin.platform.TargetPlatform
 
 class K2DotNetCompiler : CLICompiler<K2DotNetCompilerArguments>() {

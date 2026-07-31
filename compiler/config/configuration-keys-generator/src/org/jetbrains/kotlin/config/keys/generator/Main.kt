@@ -14,6 +14,7 @@ val allContainers: List<KeysContainer> = listOf(
     CLIConfigurationKeysContainer,
     KlibConfigurationKeysContainer,
     JvmConfigurationKeysContainer,
+    DotNetConfigurationKeysContainer,
     JsConfigurationKeysContainer,
     FrontendConfigurationKeysContainer,
     WasmConfigurationKeysContainer,

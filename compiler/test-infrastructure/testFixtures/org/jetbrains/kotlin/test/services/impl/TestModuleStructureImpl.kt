@@ -5,7 +5,7 @@
 
 package org.jetbrains.kotlin.test.services.impl
 
-import org.jetbrains.kotlin.platform.DotNetPlatforms
+import org.jetbrains.kotlin.platform.dotnet.DotNetPlatforms
 import org.jetbrains.kotlin.platform.TargetPlatform
 import org.jetbrains.kotlin.platform.js.JsPlatforms
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms

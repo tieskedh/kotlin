@@ -58,8 +58,8 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeValueUnsupported
 import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeConstraintResolutionFailure
 import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeConstraintResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeConstraintResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintStatus
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintValidator
+import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeConstraintStatus
+import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeConstraintValidator
 import org.jetbrains.kotlin.load.dotnet.DotNetClrConstantDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrConstantValue
 import org.jetbrains.kotlin.load.dotnet.DotNetClrDelegateRuntimeTypesResolution
@@ -135,12 +135,12 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveTypeCatalogResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveTypeCatalogResolver
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPropertyDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPropertySignature
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintKind
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintSatisfaction
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintUnsupported
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintValidator
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintViolation
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialGenericParameterValidation
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSpecialConstraintKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSpecialConstraintSatisfaction
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSpecialConstraintUnsupported
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSpecialConstraintValidator
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSpecialConstraintViolation
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSpecialGenericParameterValidation
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureCallingConvention
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureTypeAssignabilityResolver
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyContentType
@@ -204,7 +204,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetObjectInstance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetPortablePhysicalAbiDifference
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
-import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
+import org.jetbrains.kotlin.config.DotNetTarget
+import org.jetbrains.kotlin.config.canConsumeLibrary
+import org.jetbrains.kotlin.config.supportsByRefLikeGenericArguments
+import org.jetbrains.kotlin.config.supportsExecutables
 import org.jetbrains.kotlin.cli.common.CLICompiler
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.common.arguments.K2DotNetCompilerArguments
@@ -217,7 +220,7 @@ import org.jetbrains.kotlin.cli.pipeline.metadata.MetadataConfigurationUpdater
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_MANUALLY_ALTERED_LANGUAGE_FEATURES
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_METADATA_FLAGS
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_NEW_COMPANION_INITIALIZATION
-import org.jetbrains.kotlin.platform.isDotNet
+import org.jetbrains.kotlin.platform.dotnet.isDotNet
 import org.jetbrains.kotlin.test.TestCaseWithTmpdir
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -725,7 +728,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
         }
         for (target in listOf(DotNetTarget.NET48, DotNetTarget.NET10_0)) {
-            val assembly = File(tmpdir, "clr-metadata/${target.flagValue}/ImporterFixture.dll")
+            val assembly = File(tmpdir, "clr-metadata/${target.description}/ImporterFixture.dll")
             assertTrue(
                 DotNetIlAssembler.assembleLibrary(
                     ilFile,
@@ -10966,12 +10969,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 runtimeAssembly
             } else {
                 val profileDirectory =
-                    File(tmpdir, "runtime-manifest-${target.flagValue}").apply { mkdirs() }
+                    File(tmpdir, "runtime-manifest-${target.description}").apply { mkdirs() }
                 checkNotNull(
                     DotNetIlAssembler.assembleRuntimeWithManifestForTests(
                         profileDirectory,
                         target,
-                        runtimeManifest.copy(targetProfile = target.flagValue),
+                        runtimeManifest.copy(targetProfile = target.description),
                         MessageCollector.NONE,
                     )
                 )
@@ -10996,7 +10999,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 profileReaderDirectory,
                 assembly,
             ).also { manifest ->
-                assertEquals(target.flagValue, manifest.targetProfile)
+                assertEquals(target.description, manifest.targetProfile)
                 assertEquals(
                     DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
                     manifest.logicalIdentityScheme,
@@ -17015,7 +17018,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
 
         for (target in listOf(DotNetTarget.NET48, DotNetTarget.NET10_0)) {
-            val executionDirectory = File(tmpdir, "canonical-only-provider-${target.flagValue}").apply { mkdirs() }
+            val executionDirectory = File(tmpdir, "canonical-only-provider-${target.description}").apply { mkdirs() }
             producerDirectory.resolve("Canonical.Provider.dll")
                 .copyTo(executionDirectory.resolve("Canonical.Provider.dll"))
             val runtime = DotNetIlAssembler.assembleRuntimeForTests(
@@ -17023,7 +17026,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 target,
                 MessageCollector.NONE,
             )
-            assertTrue(runtime?.isFile == true) { "Failed to produce ${target.flagValue} Kotlin.Runtime.dll" }
+            assertTrue(runtime?.isFile == true) { "Failed to produce ${target.description} Kotlin.Runtime.dll" }
 
             val application = executionDirectory.resolve(
                 if (target == DotNetTarget.NET48) "CanonicalOnlyProvider.exe" else "CanonicalOnlyProvider.dll"
@@ -17035,7 +17038,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     target,
                     MessageCollector.NONE,
                 )
-            ) { "Failed to assemble canonical-only provider for ${target.flagValue}" }
+            ) { "Failed to assemble canonical-only provider for ${target.description}" }
 
             if (target == DotNetTarget.NET48) {
                 runAssemblerPairing(
@@ -23723,6 +23726,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testDotNetTargetVocabularyKeepsIndependentPoliciesExplicit() {
+        assertSame(DotNetTarget.NET48, DotNetTarget.DEFAULT)
+        for (target in DotNetTarget.entries) {
+            assertSame(target, DotNetTarget.fromString(target.description))
+            assertEquals(target.description, target.toString())
+        }
+        assertEquals(null, DotNetTarget.fromString("NET10.0"))
+        assertEquals(null, DotNetTarget.fromString("net11.0"))
+
+        assertTrue(DotNetTarget.NET48.supportsExecutables)
+        assertFalse(DotNetTarget.NETSTANDARD_2_0.supportsExecutables)
+        assertTrue(DotNetTarget.NET10_0.supportsExecutables)
+
+        assertTrue(DotNetTarget.NET48.canConsumeLibrary("net48"))
+        assertTrue(DotNetTarget.NET48.canConsumeLibrary("netstandard2.0"))
+        assertFalse(DotNetTarget.NET48.canConsumeLibrary("net10.0"))
+        assertFalse(DotNetTarget.NETSTANDARD_2_0.canConsumeLibrary("net48"))
+        assertTrue(DotNetTarget.NETSTANDARD_2_0.canConsumeLibrary("netstandard2.0"))
+        assertFalse(DotNetTarget.NETSTANDARD_2_0.canConsumeLibrary("net10.0"))
+        assertFalse(DotNetTarget.NET10_0.canConsumeLibrary("net48"))
+        assertTrue(DotNetTarget.NET10_0.canConsumeLibrary("netstandard2.0"))
+        assertTrue(DotNetTarget.NET10_0.canConsumeLibrary("net10.0"))
+
+        assertFalse(DotNetTarget.NET48.supportsByRefLikeGenericArguments)
+        assertFalse(DotNetTarget.NETSTANDARD_2_0.supportsByRefLikeGenericArguments)
+        assertTrue(DotNetTarget.NET10_0.supportsByRefLikeGenericArguments)
+    }
+
+    @Test
     fun testTargetProfilesAreExplicitAndDependencyCompatible() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
@@ -23892,14 +23924,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
         }
         val runtimeAssemblies = DotNetTarget.entries.associateWith { target ->
-            val outputDirectory = File(tmpdir, "portable-surface-runtime-${target.flagValue}")
+            val outputDirectory = File(tmpdir, "portable-surface-runtime-${target.description}")
             val runtime = DotNetIlAssembler.assembleRuntimeWithManifestForTests(
                 outputDirectory,
                 target,
-                runtimeCSharpManifest.copy(targetProfile = target.flagValue),
+                runtimeCSharpManifest.copy(targetProfile = target.description),
                 MessageCollector.NONE,
             )
-            assertTrue(runtime?.isFile == true) { "Failed to produce ${target.flagValue} Kotlin.Runtime.dll" }
+            assertTrue(runtime?.isFile == true) { "Failed to produce ${target.description} Kotlin.Runtime.dll" }
             checkNotNull(runtime)
         }
         val methodImplSource = File(tmpdir, "portable-methodimpl.kt").apply {
@@ -24117,7 +24149,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "exec",
                 surfaceVerifier.path,
                 runtimeAssemblies.getValue(DotNetTarget.NETSTANDARD_2_0).path,
-                runtimeAssemblies.getValue(checkNotNull(DotNetTarget.fromFlagValue(target))).path,
+                runtimeAssemblies.getValue(checkNotNull(DotNetTarget.fromString(target))).path,
                 portableDirectory.resolve("Kotlin.Stdlib.dll").path,
                 platformDirectory.resolve("Kotlin.Stdlib.dll").path,
             ).directory(surfaceVerifierDirectory).redirectErrorStream(true).start()
@@ -24140,7 +24172,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "exec",
                 surfaceVerifier.path,
                 runtimeAssemblies.getValue(DotNetTarget.NETSTANDARD_2_0).path,
-                runtimeAssemblies.getValue(checkNotNull(DotNetTarget.fromFlagValue(target))).path,
+                runtimeAssemblies.getValue(checkNotNull(DotNetTarget.fromString(target))).path,
                 methodImplLibraries.getValue("netstandard2.0").path,
                 methodImplLibraries.getValue(target).path,
             ).directory(surfaceVerifierDirectory).redirectErrorStream(true).start()
@@ -28737,7 +28769,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 DotNetTarget.NETSTANDARD_2_0,
                 readCSharpImplementationManifestEnvelope(
                     stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
-                ).copy(targetProfile = DotNetTarget.NETSTANDARD_2_0.flagValue),
+                ).copy(targetProfile = DotNetTarget.NETSTANDARD_2_0.description),
                 MessageCollector.NONE,
             )
             assertTrue(portableRuntime?.isFile == true)

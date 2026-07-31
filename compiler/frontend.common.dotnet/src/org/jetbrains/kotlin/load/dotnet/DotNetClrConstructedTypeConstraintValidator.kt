@@ -1,11 +1,9 @@
-package org.jetbrains.kotlin.backend.dotnet
+/*
+ * Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
 
-import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeNominalConstraintValidation
-import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintSatisfaction
-import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintValidation
-import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintValidator
-import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedConstructedTypeConstraints
-import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterContext
+package org.jetbrains.kotlin.load.dotnet
 
 data class DotNetClrNominalConstraintIssue(
     val parameterIndex: Int,

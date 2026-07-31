@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.annotations.TestOnly
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
+import org.jetbrains.kotlin.config.DotNetTarget
 import java.io.File
 
 /**
@@ -169,9 +170,9 @@ internal object DotNetRuntimeLibrary {
             require(manifest.assemblyName == ASSEMBLY_NAME) {
                 "Kotlin.Runtime C# implementation manifest names '${manifest.assemblyName}'"
             }
-            require(manifest.targetProfile == target.flagValue) {
+            require(manifest.targetProfile == target.description) {
                 "Kotlin.Runtime C# implementation manifest targets '${manifest.targetProfile}', " +
-                        "not '${target.flagValue}'"
+                        "not '${target.description}'"
             }
             require(manifest.logicalIdentityScheme == DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME)
             mapOf(

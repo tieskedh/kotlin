@@ -3,6 +3,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.annotations.TestOnly
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
+import org.jetbrains.kotlin.config.DotNetTarget
 import java.io.File
 import java.nio.file.Files
 

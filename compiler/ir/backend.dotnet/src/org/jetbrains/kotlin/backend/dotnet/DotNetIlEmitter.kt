@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.dotNetLocalCaptureRejectionReas
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetCallableObject
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality

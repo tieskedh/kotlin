@@ -13,10 +13,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 814 FIR/IL/semantic tests, 21 generated-CLI tests, and 66
+toolchain enforcement and owns 814 FIR/IL/semantic tests, 21 generated-CLI tests, and 67
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 901 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 902 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -69,13 +69,27 @@ landed shape as a compatibility constraint.
 
 - CLR load ownership follows the JVM foreign-metadata dependency direction:
   `:compiler:frontend.common.dotnet` owns objective PE/ECMA-335 facts, resolution, and validated
-  CLR attribute evidence under `org.jetbrains.kotlin.load.dotnet`. It has no compiler-project
-  dependencies. It never converts that evidence into Kotlin types, contracts, symbols, or
-  diagnostics; those are FIR policy under `org.jetbrains.kotlin.fir.dotnet`. Kotlin KLIB carrier
-  identity is likewise caller-owned: the physical classpath reader receives the selected managed
-  resource name and reports only `WithCarrier`/`WithoutCarrier`, without inferring a producer
-  language or importing the Kotlin library/ABI codec. Backend and CLI consume the loader, never
-  the reverse. See `docs/review/architecture-responsibility-audit.md`.
+  CLR attribute evidence under `org.jetbrains.kotlin.load.dotnet`. Its sole compiler-project
+  dependency is `:core:language.targets.dotnet`; it never depends on compiler configuration, FIR,
+  IR, a backend, a CLI pipeline, Gradle, or Roslyn tooling. It never converts that evidence into
+  Kotlin types, contracts, symbols, or diagnostics; those are FIR policy under
+  `org.jetbrains.kotlin.fir.dotnet`. Physical constructed-type constraint validation lives with
+  the CLR model and consumes only the neutral target identity/capability vocabulary. Kotlin KLIB
+  carrier identity is likewise caller-owned: the physical classpath reader receives the selected
+  managed resource name and reports only `WithCarrier`/`WithoutCarrier`, without inferring a
+  producer language or importing the Kotlin library/ABI codec. Backend and CLI consume the
+  loader, never the reverse. See `docs/review/architecture-responsibility-audit.md`.
+- Target/configuration ownership mirrors the mature JVM dependency direction:
+  `:core:language.targets.dotnet` owns `DotNetTarget`, parsing, the .NET platform marker, and only
+  focused capabilities shared across compiler layers; `:compiler:config.dotnet` owns generated
+  primitive compiler keys plus product and library-compatibility policy; `cli-base` owns
+  `DotNetClasspathRoot`. `DotNetTarget` and configuration keys use
+  `org.jetbrains.kotlin.config`; platform types use `org.jetbrains.kotlin.platform.dotnet`.
+  The three target frameworks remain one Kotlin/.NET platform rather than separate Analysis API
+  platform identities. Product kind, future runtime identifiers, packaging/NuGet selection,
+  artifact identities, interop selectors, and textual CIL rendering do not belong on
+  `DotNetTarget`. The backend owns the exhaustive `DotNetTarget` to
+  `DotNetCoreLibraryProfile` mapping.
 - IL codegen split: `DotNetIlEmitter` (module orchestration), `DotNetIlClassCodegen` (class shell,
   method dispatch), `DotNetIlMethodCodegen` (bodies/statements), `DotNetIlExpressionCodegen`
   (expressions), `DotNetIlMethodContext` (slots/labels/maxstack/stack verification),
@@ -3132,10 +3146,11 @@ landed shape as a compatibility constraint.
   See `docs/decisions/adr-gradle-dotnet-platform-identity.md` and
   `docs/decisions/adr-gradle-dotnet-target-framework-attribute.md`.
 - `-Xdotnet-target={net48|netstandard2.0|net10.0}` (default `net48`) selects the target-framework/API
-  profile, carried as the `DotNetTarget` enum in `DotNetConfigurationKeys.TARGET`. Product kind is
-  independent: `net48` and `net10.0` produce applications or libraries; `netstandard2.0` is
-  library-only. Invalid values and executable Standard products are a `COMPILER_ARGUMENTS_ERROR`
-  from `DotNetConfigurationUpdater` before FIR/code generation.
+  profile, carried as the `DotNetTarget` enum from `:core:language.targets.dotnet` by the generated
+  `DotNetConfigurationKeys.TARGET` in `:compiler:config.dotnet`. Product kind is independent:
+  `net48` and `net10.0` produce applications or libraries; `netstandard2.0` is library-only.
+  Invalid values and executable Standard products are a `COMPILER_ARGUMENTS_ERROR` from
+  `DotNetConfigurationUpdater` before FIR/code generation.
 - The profile is selected before IR lowerings and controls core/member references, target metadata,
   runtime/stdlib generation and selection, dependency compatibility, assembly writing, and
   packaging. Kotlin common semantics remain invariant; emitted code may differ when CLR

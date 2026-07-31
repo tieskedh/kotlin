@@ -23,14 +23,14 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredGenericInterfaceDefaultS
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultClassForwarder
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultPromotion
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
-import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberView
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
-import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
+import org.jetbrains.kotlin.config.DotNetTarget
+import org.jetbrains.kotlin.config.dotNetTarget
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality

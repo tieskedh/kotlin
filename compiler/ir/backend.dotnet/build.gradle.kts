@@ -6,6 +6,8 @@ plugins {
 }
 
 dependencies {
+    api(project(":core:language.targets.dotnet"))
+    api(project(":compiler:config.dotnet"))
     api(project(":compiler:frontend.common.dotnet"))
     api(project(":compiler:cli-base"))
     api(project(":compiler:ir.tree"))

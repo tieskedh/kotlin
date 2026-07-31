@@ -1,0 +1,22 @@
+plugins {
+    id("common-configuration")
+    id("test-federation-convention")
+    id("com.autonomousapps.dependency-analysis")
+    kotlin("jvm")
+    id("gradle-plugin-compiler-dependency-configuration")
+    id("generated-sources")
+}
+
+dependencies {
+    api(kotlinStdlib())
+    api(project(":compiler:config"))
+    api(project(":core:language.targets.dotnet"))
+    compileOnly(intellijCore())
+}
+
+sourceSets {
+    "main" { projectDefault() }
+    "test" {}
+}
+
+generatedConfigurationKeys("DotNetConfigurationKeys")

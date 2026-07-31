@@ -5,6 +5,8 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.config.DotNetTarget
+
 /**
  * The CLR contract against which one emitted assembly's BCL references are compiled.
  *
@@ -125,6 +127,14 @@ internal enum class DotNetCoreLibraryProfile(
         )
     }
 }
+
+/** Backend-owned mapping from a target-framework contract to textual CIL/BCL rendering. */
+internal val DotNetTarget.coreLibrary: DotNetCoreLibraryProfile
+    get() = when (this) {
+        DotNetTarget.NET48 -> DotNetCoreLibraryProfile.NET48
+        DotNetTarget.NETSTANDARD_2_0 -> DotNetCoreLibraryProfile.NETSTANDARD_2_0
+        DotNetTarget.NET10_0 -> DotNetCoreLibraryProfile.NET10_0
+    }
 
 /** ECMA-335 SerString length prefix, including the multi-byte form needed by strong-name keys. */
 private fun serializedCustomAttributeString(value: String): List<Int> {

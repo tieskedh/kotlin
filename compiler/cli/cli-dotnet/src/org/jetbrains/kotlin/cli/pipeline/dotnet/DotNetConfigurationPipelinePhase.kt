@@ -9,23 +9,17 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
-import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
-import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetFriendAssemblies
 import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
-import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
-import org.jetbrains.kotlin.backend.dotnet.dotNetProducesLibrary
-import org.jetbrains.kotlin.backend.dotnet.dotNetProducesStdlib
-import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.arguments.K2DotNetCompilerArguments
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
 import org.jetbrains.kotlin.cli.common.kotlinPaths
 import org.jetbrains.kotlin.cli.common.setupCommonKlibArguments
-import org.jetbrains.kotlin.cli.jvm.config.JvmClasspathRoot
+import org.jetbrains.kotlin.cli.dotnet.config.addDotNetClasspathRoot
 import org.jetbrains.kotlin.cli.pipeline.AbstractConfigurationPhase
 import org.jetbrains.kotlin.cli.pipeline.ArgumentsPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.CheckCompilationErrors
@@ -35,8 +29,15 @@ import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.AnalysisFlag
 import org.jetbrains.kotlin.config.AnalysisFlags
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.LanguageVersionSettings
+import org.jetbrains.kotlin.config.dotNetAssemblyName
+import org.jetbrains.kotlin.config.dotNetOutput
+import org.jetbrains.kotlin.config.dotNetProducesLibrary
+import org.jetbrains.kotlin.config.dotNetProducesStdlib
+import org.jetbrains.kotlin.config.dotNetTarget
+import org.jetbrains.kotlin.config.supportsExecutables
 import org.jetbrains.kotlin.config.getModuleNameForSource
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.moduleName
@@ -44,7 +45,7 @@ import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.config.targetPlatform
 import org.jetbrains.kotlin.metadata.deserialization.BinaryVersion
 import org.jetbrains.kotlin.metadata.deserialization.MetadataVersion
-import org.jetbrains.kotlin.platform.DotNetPlatforms
+import org.jetbrains.kotlin.platform.dotnet.DotNetPlatforms
 import java.io.File
 
 object DotNetConfigurationPipelinePhase : AbstractConfigurationPhase<K2DotNetCompilerArguments>(
@@ -141,12 +142,12 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
 
         val requestedTarget = arguments.dotNetTarget
         if (requestedTarget != null) {
-            val target = DotNetTarget.fromFlagValue(requestedTarget)
+            val target = DotNetTarget.fromString(requestedTarget)
             if (target == null) {
                 configuration.report(
                     COMPILER_ARGUMENTS_ERROR,
                     "Unknown value '$requestedTarget' for -Xdotnet-target. " +
-                            "Supported values: ${DotNetTarget.entries.joinToString(", ") { it.flagValue }}"
+                            "Supported values: ${DotNetTarget.entries.joinToString(", ") { it.description }}"
                 )
             } else {
                 configuration.dotNetTarget = target
@@ -157,7 +158,7 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         ) {
             configuration.report(
                 COMPILER_ARGUMENTS_ERROR,
-                "Target profile '${configuration.dotNetTarget.flagValue}' is library-only; " +
+                "Target profile '${configuration.dotNetTarget.description}' is library-only; " +
                         "use -Xdotnet-produce-library or -Xdotnet-produce-stdlib."
             )
         }
@@ -294,7 +295,7 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         val friendPaths = arguments.friendPaths.map { File(it).canonicalFile }
         configuration.dotNetFriendPaths = friendPaths.map(File::getPath)
         classpathFiles += friendPaths
-        classpathFiles.forEach { configuration.add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(it)) }
+        classpathFiles.forEach(configuration::addDotNetClasspathRoot)
 
         configuration.perfManager?.apply {
             outputKind =
@@ -346,8 +347,8 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(
 private fun CompilerConfiguration.addInstalledDotNetStdlib(): Boolean {
     val kotlinLibDirectory = kotlinPaths?.libPath ?: return false
     val targetFrameworks = buildList {
-        add(dotNetTarget.flagValue)
-        if (dotNetTarget != DotNetTarget.NETSTANDARD_2_0) add(DotNetTarget.NETSTANDARD_2_0.flagValue)
+        add(dotNetTarget.description)
+        if (dotNetTarget != DotNetTarget.NETSTANDARD_2_0) add(DotNetTarget.NETSTANDARD_2_0.description)
     }
     for (targetFramework in targetFrameworks) {
         val directory = DotNetStdlibArtifact.distributionDirectory(kotlinLibDirectory, targetFramework)
@@ -362,7 +363,7 @@ private fun CompilerConfiguration.addInstalledDotNetStdlib(): Boolean {
             )
             return true
         }
-        add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(implementationFile))
+        addDotNetClasspathRoot(implementationFile)
         return true
     }
     return false
