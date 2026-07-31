@@ -1383,7 +1383,9 @@ message body, is physically owned once by `Kotlin.Stdlib`, and maps its internal
 error-deprecated exception declaration onto the exact runtime-owned Kotlin identity. The legacy
 language-feature-off path remains pinned separately. Seven target-created IR classes now record
 explicit `Any` supertypes for upstream's new `IrClassSuperTypesChecker`. The complete rebase and
-compatibility argument is in `upstream-sync-2026-07-30.md`; the focused four-way IL test and
+compatibility argument is in
+[`../archive/upstream-sync-2026-07-30.md`](../archive/upstream-sync-2026-07-30.md);
+the focused four-way IL test and
 assembler/runtime matrix pass. The fresh strict gate is 884/0/0/0 across 16 XML suites (798
 FIR/IL/box, 21 generated CLI, and 65 library integration tests).
 
