@@ -42,7 +42,7 @@ internal enum class DotNetKotlinExceptionTypeId(val abiValue: Int) {
 
 /**
  * The compiler side of the classified CLR exception model selected by
- * `draft-adr-classified-clr-exception-model.md`.
+ * `classified-clr-exceptions.md`.
  *
  * One Kotlin exception type can have three deliberately different CLR representations:
  *
