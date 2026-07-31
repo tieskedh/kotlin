@@ -11,6 +11,15 @@ import kotlin.io.Serializable
 // CLR collection interface; algorithms use it only as a Kotlin-owned capability marker.
 public interface RandomAccess
 
+@IgnorableReturnValue
+@PublishedApi
+internal actual fun checkCountOverflow(count: Int): Int {
+    if (count < 0) {
+        throwCountOverflow()
+    }
+    return count
+}
+
 internal object EmptyIterator : ListIterator<Nothing> {
     override fun hasNext(): Boolean = false
     override fun hasPrevious(): Boolean = false
