@@ -1,4 +1,4 @@
-# .NET compiler responsibility audit
+# .NET compiler architecture programme
 
 Status: first bounded correction implemented on 2026-07-31; behavior and
 artifact formats are unchanged.

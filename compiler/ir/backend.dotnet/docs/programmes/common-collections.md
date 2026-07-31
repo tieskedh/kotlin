@@ -1,4 +1,4 @@
-# Common collections programme review
+# Common collections programme
 
 Status: selected direction; first generator-owned, second array-backed-list,
 and third non-inline query slices implemented and validated.
