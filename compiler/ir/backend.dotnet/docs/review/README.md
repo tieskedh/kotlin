@@ -27,9 +27,8 @@ copying a snapshot review into binding design law.
 7. [`../archive/upstream-sync-2026-07-30.md`](../archive/upstream-sync-2026-07-30.md) records the 161-commit impact
    review, exact rebase verification, immediate Common/IR adaptations, and longer-term KLIB,
    Analysis API, and BTA direction for the rebase to `733a49b39`.
-8. [`common-io-source-partition.md`](common-io-source-partition.md) records the mature-target I/O
-   comparison, the exception dependency proved by compilation, its completed classified-carrier
-   prerequisite, and the implemented Common/actual source-product partition.
+8. [`../archive/common-io-source-partition.md`](../archive/common-io-source-partition.md) preserves
+   the completed Common I/O source-partition review and implementation evidence.
 9. [`common-collections-program.md`](common-collections-program.md) selects collections as a
    first-class feature programme, keeps Common and the stdlib generator authoritative, and
    separates Kotlin identity from later explicit BCL adapters.
