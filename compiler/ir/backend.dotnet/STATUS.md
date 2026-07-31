@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last semantic feature: `78c1c910b` (`[DotNet] Add Common iterable count`)
+- Last semantic feature: `927df9114` (`[DotNet] Add Common collection search`)
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,17 +20,18 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The fresh JUnit audit covered 16 XML files and 906 tests:
+The fresh JUnit audit covered 16 XML files and 910 tests:
 
-- 818 FIR, IL-text, and box tests
+- 822 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 67 library-integration tests
 - zero failures, errors, or skips
 
-The iterable-count slice additionally passed focused execution in all four
+The equality-search slice additionally passed focused execution in all four
 PSI/LightTree and Framework/CoreCLR box lanes, plus direct, installed,
-separate-consumer, and portable stdlib product checks. Its internal overflow
-compiler ABI executed at zero, `Int.MAX_VALUE`, and overflow on both CLR hosts.
+separate-consumer, and portable stdlib product checks. Its internal index- and
+count-overflow compiler ABI executed at zero, `Int.MAX_VALUE`, and overflow on
+both CLR hosts.
 
 ## Current architecture
 
@@ -53,10 +54,12 @@ compiler ABI executed at zero, `Int.MAX_VALUE`, and overflow on both CLR hosts.
 ## Active state
 
 No implementation slice is half-landed. The authoritative Common
-`Iterable.count` body is now part of every .NET stdlib product together with
-its exact overflow contract. Collection receivers take the Common size fast
-path; other Iterables traverse once. The next candidate is the bounded Common
-`contains`/`indexOf`/`lastIndexOf` family and its index-overflow helper.
+`Iterable.contains`/`indexOf`/`lastIndexOf` and both Common List search
+extensions are now part of every .NET stdlib product together with their exact
+index-overflow contract. Collection and List receivers take the Common member
+fast paths; ordinary Iterables retain Common equality direction and traversal.
+The next work is selection of another exact non-inline Common dependency
+closure rather than extending this family with blocked inline variants.
 
 ## Open architectural blockers
 
@@ -74,9 +77,9 @@ path; other Iterables traverse once. The next candidate is the bounded Common
 
 ## Next bounded work
 
-1. Complete the documented dependency and adversarial review for Common
-   `contains`/`indexOf`/`lastIndexOf`, then admit it only if the exact
-   non-inline source closure remains supportable.
+1. Audit the remaining generated collection families and select the next exact
+   non-inline closure only after proving all helper, type, and product
+   dependencies.
 2. Create the shared retained-declaration carrier seam, then split FIR policy
    from backend binding without moving physical CLR loading into either.
 3. Continue CLR annotation/import interoperability only through exact standard
