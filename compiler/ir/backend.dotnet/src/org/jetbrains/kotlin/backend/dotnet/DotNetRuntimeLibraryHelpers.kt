@@ -11,6 +11,16 @@ package org.jetbrains.kotlin.backend.dotnet
  */
 internal object DotNetRuntimeLibraryHelpers {
     /**
+     * `static string FloatToString(float32)` — deterministic Kotlin-shaped `Float.toString()`.
+     *
+     * `System.Single.ToString("R", InvariantCulture)` is not stable across the supported
+     * Framework and CoreCLR profiles for the same bits. This helper instead tries invariant `G7`,
+     * accepts it only when parsing reproduces the canonical input bits, and otherwise uses the
+     * guaranteed-roundtrip `G9` representation. Special values, signed zero, exponent spelling,
+     * the decimal/scientific threshold, and integral `.0` are normalized explicitly. This keeps
+     * culture, runtime profile, primitive rendering, and boxed-Any rendering aligned; it does not
+     * claim the JVM's minimum distinguishing digit sequence where `G9` is required.
+     *
      * `static string DoubleToString(float64)` — Kotlin-parity `Double.toString()`.
      *
      * The JVM target renders a `Double` with `java.lang.Double.toString`: `"1.0"`, `"100.0"`,
@@ -70,7 +80,7 @@ internal object DotNetRuntimeLibraryHelpers {
      * the same `Double` must print identically, so both are routed through this helper.
      */
     /**
-     * Besides mutable capture storage and Double formatting, this text owns escaping array
+     * Besides mutable capture storage and Float/Double formatting, this text owns escaping array
      * iterator storage, the universal Any operations, and the explicit-export delegate
      * projection thunks. Those thunks are called only by generated CLR facade methods; their
      * metadata visibility is cross-assembly compiler/runtime access, not Kotlin callable identity.
@@ -78,9 +88,9 @@ internal object DotNetRuntimeLibraryHelpers {
      * `System.Array` and returns object: Kotlin's logical element type remains compiler metadata,
      * while one erased object preserves identity across Kotlin's legal covariant iterator views.
      * The Any primitive branches are semantic, not optimizations: CLR boxed Boolean hashes/string
-     * text, boxed Char hashes, and boxed Double signed-zero/hash/string behavior differ from
-     * Kotlin's JVM-backed object contract, and Framework also preserves NaN payloads in
-     * Double.GetHashCode.
+     * text, boxed Char hashes, and boxed Float/Double signed-zero/hash/string behavior differ from
+     * Kotlin's JVM-backed object contract; Framework also preserves NaN payloads in floating
+     * `GetHashCode` implementations.
      */
     fun ilText(coreLibraryReference: String, editorBrowsableReference: String): String {
         val compilerAbiTypeAttributesIl = listOf(
@@ -2057,6 +2067,15 @@ $throwableSupportTypesIl
             |    }
             |  }
             |
+            |  .class private explicit ansi sealed beforefieldinit FloatIntBits
+            |         extends ${coreLibraryReference}System.ValueType
+            |  {
+            |    .pack 1
+            |    .size 4
+            |    .field [0] public float32 FloatValue
+            |    .field [0] public int32 IntValue
+            |  }
+            |
             |  .class public abstract sealed auto ansi beforefieldinit Intrinsics
             |         extends ${coreLibraryReference}System.Object
             |  {
@@ -2066,7 +2085,9 @@ $throwableSupportTypesIl
             |      .maxstack 2
             |      .locals init (
             |        [0] float64 'leftDouble',
-            |        [1] float64 'rightDouble'
+            |        [1] float64 'rightDouble',
+            |        [2] float32 'leftFloat',
+            |        [3] float32 'rightFloat'
             |      )
             |      ldarg.0
             |      brtrue.s IL_leftNotNull
@@ -2075,6 +2096,25 @@ $throwableSupportTypesIl
             |      ceq
             |      ret
             |IL_leftNotNull:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Single
+            |      brfalse.s IL_leftNotFloat
+            |      ldarg.1
+            |      isinst ${coreLibraryReference}System.Single
+            |      brfalse.s IL_notEqual
+            |      ldarg.0
+            |      unbox.any ${coreLibraryReference}System.Single
+            |      stloc.2
+            |      ldarg.1
+            |      unbox.any ${coreLibraryReference}System.Single
+            |      stloc.3
+            |      ldloc.2
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'FloatToIntBits'(float32)
+            |      ldloc.3
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'FloatToIntBits'(float32)
+            |      ceq
+            |      ret
+            |IL_leftNotFloat:
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.Double
             |      brfalse.s IL_objectEquals
@@ -2112,6 +2152,14 @@ $throwableSupportTypesIl
             |      ldc.i4.0
             |      ret
             |IL_hashNotNull:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Single
+            |      brfalse.s IL_hashDouble
+            |      ldarg.0
+            |      unbox.any ${coreLibraryReference}System.Single
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'FloatToIntBits'(float32)
+            |      ret
+            |IL_hashDouble:
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.Double
             |      brfalse.s IL_hashBoolean
@@ -2179,7 +2227,7 @@ $throwableSupportTypesIl
             |IL_valueNotNull:
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.Boolean
-            |      brfalse.s IL_stringDouble
+            |      brfalse.s IL_stringFloat
             |      ldarg.0
             |      unbox.any ${coreLibraryReference}System.Boolean
             |      brtrue.s IL_stringTrue
@@ -2187,6 +2235,14 @@ $throwableSupportTypesIl
             |      ret
             |IL_stringTrue:
             |      ldstr "true"
+            |      ret
+            |IL_stringFloat:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Single
+            |      brfalse.s IL_stringDouble
+            |      ldarg.0
+            |      unbox.any ${coreLibraryReference}System.Single
+            |      call string 'Kotlin.Runtime.Internal.DoubleFormatting'::'FloatToString'(float32)
             |      ret
             |IL_stringDouble:
             |      ldarg.0
@@ -2744,6 +2800,91 @@ $throwableSupportTypesIl
             |      throw
             |    }
             |
+            |    .method assembly hidebysig static int32 'FloatToIntBits'(float32 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      .locals init ([0] valuetype Kotlin.Runtime.Internal.FloatIntBits 'bits')
+            |      ldarg.0
+            |      ldarg.0
+            |      ceq
+            |      brtrue.s IL_floatBitsNotNaN
+            |      ldc.i4 2143289344
+            |      ret
+            |IL_floatBitsNotNaN:
+            |      ldloca.s 0
+            |      ldarg.0
+            |      stfld float32 Kotlin.Runtime.Internal.FloatIntBits::FloatValue
+            |      ldloca.s 0
+            |      ldfld int32 Kotlin.Runtime.Internal.FloatIntBits::IntValue
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int32 'CompareFloat'(float32 'left', float32 'right') cil managed
+            |    {
+            |      .maxstack 2
+            |      .locals init ([0] int32 'leftBits', [1] int32 'rightBits')
+            |      ldarg.0
+            |      ldarg.1
+            |      blt.s IL_compareFloatLess
+            |      ldarg.0
+            |      ldarg.1
+            |      bgt.s IL_compareFloatGreater
+            |      ldarg.0
+            |      call int32 Kotlin.Runtime.Internal.Intrinsics::FloatToIntBits(float32)
+            |      stloc.0
+            |      ldarg.1
+            |      call int32 Kotlin.Runtime.Internal.Intrinsics::FloatToIntBits(float32)
+            |      stloc.1
+            |      ldloc.0
+            |      ldloc.1
+            |      beq.s IL_compareFloatEqual
+            |      ldloc.0
+            |      ldloc.1
+            |      blt.s IL_compareFloatLess
+            |IL_compareFloatGreater:
+            |      ldc.i4.1
+            |      ret
+            |IL_compareFloatLess:
+            |      ldc.i4.m1
+            |      ret
+            |IL_compareFloatEqual:
+            |      ldc.i4.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int32 'CompareDouble'(float64 'left', float64 'right') cil managed
+            |    {
+            |      .maxstack 2
+            |      .locals init ([0] int64 'leftBits', [1] int64 'rightBits')
+            |      ldarg.0
+            |      ldarg.1
+            |      blt.s IL_compareDoubleLess
+            |      ldarg.0
+            |      ldarg.1
+            |      bgt.s IL_compareDoubleGreater
+            |      ldarg.0
+            |      call int64 Kotlin.Runtime.Internal.Intrinsics::DoubleToLongBits(float64)
+            |      stloc.0
+            |      ldarg.1
+            |      call int64 Kotlin.Runtime.Internal.Intrinsics::DoubleToLongBits(float64)
+            |      stloc.1
+            |      ldloc.0
+            |      ldloc.1
+            |      beq.s IL_compareDoubleEqual
+            |      ldloc.0
+            |      ldloc.1
+            |      blt.s IL_compareDoubleLess
+            |IL_compareDoubleGreater:
+            |      ldc.i4.1
+            |      ret
+            |IL_compareDoubleLess:
+            |      ldc.i4.m1
+            |      ret
+            |IL_compareDoubleEqual:
+            |      ldc.i4.0
+            |      ret
+            |    }
+            |
             |    .method private hidebysig static int64 'DoubleToLongBits'(float64) cil managed
             |    {
             |      .maxstack 2
@@ -2764,6 +2905,239 @@ $throwableSupportTypesIl
             |         extends ${coreLibraryReference}System.Object
             |  {
             |    $compilerAbiTypeAttributesIl
+            |  .method public hidebysig static string 'FloatToString'(float32 'value') cil managed
+            |  {
+            |    .maxstack 5
+            |    .locals init (
+            |      [0] string 's',
+            |      [1] int32 'e',
+            |      [2] string 'digits',
+            |      [3] int32 'decExp',
+            |      [4] bool 'neg',
+            |      [5] int32 'i'
+            |    )
+            |    ldarg.0
+            |    call bool ${coreLibraryReference}System.Single::IsNaN(float32)
+            |    brfalse IL_floatNotNaN
+            |    ldstr "NaN"
+            |    ret
+            |IL_floatNotNaN:
+            |    ldarg.0
+            |    call bool ${coreLibraryReference}System.Single::IsPositiveInfinity(float32)
+            |    brfalse IL_floatNotPositiveInfinity
+            |    ldstr "Infinity"
+            |    ret
+            |IL_floatNotPositiveInfinity:
+            |    ldarg.0
+            |    call bool ${coreLibraryReference}System.Single::IsNegativeInfinity(float32)
+            |    brfalse IL_floatNotNegativeInfinity
+            |    ldstr "-Infinity"
+            |    ret
+            |IL_floatNotNegativeInfinity:
+            |    ldarg.0
+            |    call int32 'Kotlin.Runtime.Internal.Intrinsics'::'FloatToIntBits'(float32)
+            |    ldc.i4 -2147483648
+            |    bne.un IL_floatFinite
+            |    ldstr "-0.0"
+            |    ret
+            |IL_floatFinite:
+            |    ldarga.s 0
+            |    ldstr "G7"
+            |    call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    call instance string ${coreLibraryReference}System.Single::ToString(string, class ${coreLibraryReference}System.IFormatProvider)
+            |    stloc.0
+            |    ldloc.0
+            |    call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    call float32 ${coreLibraryReference}System.Single::Parse(string, class ${coreLibraryReference}System.IFormatProvider)
+            |    call int32 'Kotlin.Runtime.Internal.Intrinsics'::'FloatToIntBits'(float32)
+            |    ldarg.0
+            |    call int32 'Kotlin.Runtime.Internal.Intrinsics'::'FloatToIntBits'(float32)
+            |    beq.s IL_floatDigitsReady
+            |    ldarga.s 0
+            |    ldstr "G9"
+            |    call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    call instance string ${coreLibraryReference}System.Single::ToString(string, class ${coreLibraryReference}System.IFormatProvider)
+            |    stloc.0
+            |IL_floatDigitsReady:
+            |    ldarg.0
+            |    ldc.r4 0.0
+            |    beq IL_floatDecimal
+            |    ldarg.0
+            |    conv.r8
+            |    call float64 ${coreLibraryReference}System.Math::Abs(float64)
+            |    ldc.r8 10000000.
+            |    bge IL_floatScientific
+            |    ldarg.0
+            |    conv.r8
+            |    call float64 ${coreLibraryReference}System.Math::Abs(float64)
+            |    ldc.r8 0.001
+            |    blt IL_floatScientific
+            |IL_floatDecimal:
+            |    ldloc.0
+            |    ldc.i4.s 46
+            |    callvirt instance int32 ${coreLibraryReference}System.String::IndexOf(char)
+            |    ldc.i4.0
+            |    bge IL_floatDecimalHasDot
+            |    ldloc.0
+            |    ldstr ".0"
+            |    call string ${coreLibraryReference}System.String::Concat(string, string)
+            |    ret
+            |IL_floatDecimalHasDot:
+            |    ldloc.0
+            |    ret
+            |IL_floatScientific:
+            |    ldloc.0
+            |    ldc.i4.s 69
+            |    callvirt instance int32 ${coreLibraryReference}System.String::IndexOf(char)
+            |    stloc.1
+            |    ldloc.1
+            |    ldc.i4.0
+            |    bge IL_floatScientificFromE
+            |    ldloc.0
+            |    ldc.i4.0
+            |    callvirt instance char ${coreLibraryReference}System.String::get_Chars(int32)
+            |    ldc.i4.s 45
+            |    ceq
+            |    stloc.s 'neg'
+            |    ldloc.s 'neg'
+            |    brfalse IL_floatSignStripped
+            |    ldloc.0
+            |    ldc.i4.1
+            |    callvirt instance string ${coreLibraryReference}System.String::Substring(int32)
+            |    stloc.0
+            |IL_floatSignStripped:
+            |    ldloc.0
+            |    ldc.i4.s 46
+            |    callvirt instance int32 ${coreLibraryReference}System.String::IndexOf(char)
+            |    stloc.1
+            |    ldloc.1
+            |    ldc.i4.0
+            |    bge IL_floatRemoveDot
+            |    ldloc.0
+            |    stloc.2
+            |    ldloc.0
+            |    callvirt instance int32 ${coreLibraryReference}System.String::get_Length()
+            |    stloc.3
+            |    br IL_floatDotRemoved
+            |IL_floatRemoveDot:
+            |    ldloc.0
+            |    ldloc.1
+            |    ldc.i4.1
+            |    callvirt instance string ${coreLibraryReference}System.String::Remove(int32, int32)
+            |    stloc.2
+            |    ldloc.1
+            |    stloc.3
+            |IL_floatDotRemoved:
+            |    ldloc.3
+            |    ldc.i4.1
+            |    sub
+            |    stloc.3
+            |    ldc.i4.0
+            |    stloc.s 'i'
+            |IL_floatLeadingZeroLoop:
+            |    ldloc.2
+            |    ldloc.s 'i'
+            |    callvirt instance char ${coreLibraryReference}System.String::get_Chars(int32)
+            |    ldc.i4.s 48
+            |    bne.un IL_floatLeadingZerosSkipped
+            |    ldloc.s 'i'
+            |    ldc.i4.1
+            |    add
+            |    stloc.s 'i'
+            |    ldloc.3
+            |    ldc.i4.1
+            |    sub
+            |    stloc.3
+            |    br IL_floatLeadingZeroLoop
+            |IL_floatLeadingZerosSkipped:
+            |    ldloc.2
+            |    ldloc.s 'i'
+            |    callvirt instance string ${coreLibraryReference}System.String::Substring(int32)
+            |    stloc.2
+            |    ldloc.2
+            |    callvirt instance int32 ${coreLibraryReference}System.String::get_Length()
+            |    stloc.s 'i'
+            |IL_floatTrailingZeroLoop:
+            |    ldloc.s 'i'
+            |    ldc.i4.1
+            |    ble IL_floatTrailingZerosTrimmed
+            |    ldloc.2
+            |    ldloc.s 'i'
+            |    ldc.i4.1
+            |    sub
+            |    callvirt instance char ${coreLibraryReference}System.String::get_Chars(int32)
+            |    ldc.i4.s 48
+            |    bne.un IL_floatTrailingZerosTrimmed
+            |    ldloc.s 'i'
+            |    ldc.i4.1
+            |    sub
+            |    stloc.s 'i'
+            |    br IL_floatTrailingZeroLoop
+            |IL_floatTrailingZerosTrimmed:
+            |    ldloc.2
+            |    ldc.i4.0
+            |    ldloc.s 'i'
+            |    callvirt instance string ${coreLibraryReference}System.String::Substring(int32, int32)
+            |    stloc.2
+            |    ldloc.2
+            |    callvirt instance int32 ${coreLibraryReference}System.String::get_Length()
+            |    ldc.i4.1
+            |    bne.un IL_floatInsertDot
+            |    ldloc.2
+            |    ldstr "0"
+            |    call string ${coreLibraryReference}System.String::Concat(string, string)
+            |    stloc.2
+            |IL_floatInsertDot:
+            |    ldloc.2
+            |    ldc.i4.1
+            |    ldstr "."
+            |    callvirt instance string ${coreLibraryReference}System.String::Insert(int32, string)
+            |    stloc.2
+            |    ldloc.s 'neg'
+            |    brfalse IL_floatMantissaSigned
+            |    ldstr "-"
+            |    ldloc.2
+            |    call string ${coreLibraryReference}System.String::Concat(string, string)
+            |    stloc.2
+            |IL_floatMantissaSigned:
+            |    ldloc.2
+            |    ldstr "E"
+            |    ldloc.3
+            |    box ${coreLibraryReference}System.Int32
+            |    ldnull
+            |    call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    callvirt instance string ${coreLibraryReference}System.IFormattable::ToString(string, class ${coreLibraryReference}System.IFormatProvider)
+            |    call string ${coreLibraryReference}System.String::Concat(string, string, string)
+            |    ret
+            |IL_floatScientificFromE:
+            |    ldloc.0
+            |    ldc.i4.0
+            |    ldloc.1
+            |    callvirt instance string ${coreLibraryReference}System.String::Substring(int32, int32)
+            |    dup
+            |    ldc.i4.s 46
+            |    callvirt instance int32 ${coreLibraryReference}System.String::IndexOf(char)
+            |    ldc.i4.0
+            |    bge IL_floatMantissaHasDot
+            |    ldstr ".0"
+            |    call string ${coreLibraryReference}System.String::Concat(string, string)
+            |IL_floatMantissaHasDot:
+            |    ldstr "E"
+            |    ldloc.0
+            |    ldloc.1
+            |    ldc.i4.1
+            |    add
+            |    callvirt instance string ${coreLibraryReference}System.String::Substring(int32)
+            |    call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    call int32 ${coreLibraryReference}System.Int32::Parse(string, class ${coreLibraryReference}System.IFormatProvider)
+            |    box ${coreLibraryReference}System.Int32
+            |    ldnull
+            |    call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    callvirt instance string ${coreLibraryReference}System.IFormattable::ToString(string, class ${coreLibraryReference}System.IFormatProvider)
+            |    call string ${coreLibraryReference}System.String::Concat(string, string, string)
+            |    ret
+            |  }
+            |
             |  .method public hidebysig static string 'DoubleToString'(float64 'value') cil managed
             |  {
             |    .maxstack 5
@@ -2986,6 +3360,24 @@ $throwableSupportTypesIl
             |
         """.trimMargin()
     }
+
+    /** The cross-assembly call emitted by compiled Kotlin code; one float32 in, one string out. */
+    val floatToStringCallInstruction: String =
+        "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.DoubleFormatting".toIlIdentifier()}::" +
+                "${"FloatToString".toIlIdentifier()}(float32)"
+
+    /** Kotlin total ordering for a pair of float32 values. */
+    val compareFloatCallInstruction: String =
+        "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"CompareFloat".toIlIdentifier()}(float32, float32)"
+
+    /** Kotlin total ordering for a pair of float64 values. */
+    val compareDoubleCallInstruction: String =
+        "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"CompareDouble".toIlIdentifier()}(float64, float64)"
 
     /** The cross-assembly call emitted by compiled Kotlin code; one float64 in, one string out. */
     val doubleToStringCallInstruction: String =

@@ -21,10 +21,10 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     /** `kotlin.Long`. Mirrors the JVM backend's `long`; CLR `int64` occupies one stack slot. */
     object Int64 : DotNetIlValueType("int64")
 
-    /**
-     * `kotlin.Double`. Mirrors the JVM backend's `double` (CLR `float64`). `Float`/`float32` is
-     * deliberately deferred together with `Byte`/`Short`.
-     */
+    /** `kotlin.Float`: exact CLR `float32`/`System.Single`. */
+    object Float32 : DotNetIlValueType("float32")
+
+    /** `kotlin.Double`. Mirrors the JVM backend's `double` (CLR `float64`). */
     object Float64 : DotNetIlValueType("float64")
 
     /**
@@ -107,7 +107,7 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     }
 
     /**
-     * A concrete nullable Kotlin primitive (`Byte?`, `Short?`, `Int?`, `Long?`, `Double?`,
+     * A concrete nullable Kotlin primitive (`Byte?`, `Short?`, `Int?`, `Long?`, `Float?`, `Double?`,
      * `Boolean?`, `Char?`) in
      * an EXACT typed position: CLR `System.Nullable<T>` — the hybrid-representation decision
      * (see AGENTS.md "Nullability model"). Roslyn precedent: C# `int?` is
@@ -342,6 +342,7 @@ internal fun DotNetIlValueType.dotNetBoxedCorelibRefOrNull(coreLibraryReference:
     DotNetIlValueType.Int16 -> "${coreLibraryReference}System.Int16"
     DotNetIlValueType.Int32 -> "${coreLibraryReference}System.Int32"
     DotNetIlValueType.Int64 -> "${coreLibraryReference}System.Int64"
+    DotNetIlValueType.Float32 -> "${coreLibraryReference}System.Single"
     DotNetIlValueType.Float64 -> "${coreLibraryReference}System.Double"
     DotNetIlValueType.Char -> "${coreLibraryReference}System.Char"
     else -> null

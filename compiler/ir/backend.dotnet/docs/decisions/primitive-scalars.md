@@ -10,9 +10,11 @@ official Kotlin target commitment.
 ## Context and authority
 
 Common Kotlin owns each primitive's range, conversions, operator result types, overflow, equality,
-hashing, and rendering. Mature targets preserve those rules while using their native machine
-carriers: JVM and Wasm normalize narrow integers on an `int`/`i32` evaluation stack, Native uses
-native-width values, and JS inserts Kotlin narrowing semantics over its numeric carrier.
+hashing, and observable string contract. Mature targets preserve those rules while using their
+native machine carriers: JVM uses JVM `float` and `double`, Wasm uses `f32` and `f64`, Native uses
+the corresponding native IEEE-754 types, and JS inserts Kotlin numeric semantics over its host
+number carrier. Their finite digit-generation algorithms are not identical, so a particular
+JVM-minimal decimal spelling is not cross-target Kotlin identity.
 
 CLR already has exact signed `System.SByte` and `System.Int16` value types, spelled `int8` and
 `int16` in CIL. Like JVM and Wasm, its evaluation stack represents their loaded values as `int32`.
@@ -34,10 +36,10 @@ Kotlin primitive values use the natural CLR value carrier in every profile:
 | `Double` | `float64` | `System.Double` |
 | `Char` | `char` | `System.Char` |
 
-The current implementation slice closes `Byte` and `Short`; `Float` remains a separate gate
-because Kotlin floating equality, hashing, and shortest-roundtrip rendering require their own
-adversarial closure. The table is the selected physical direction, not a claim that every row is
-already implemented.
+`Byte` and `Short` landed first. `Float` is a separate implementation gate because IEEE equality,
+boxed equality, total ordering, hashing, conversion, and rendering are different contracts that
+must not be inherited accidentally from `System.Single`. The table is the selected physical
+direction; each row freezes only after its adversarial gate passes.
 
 Fields, parameters, returns, generic arguments, generic-array elements, overloads, locals, and
 nullable instantiations retain the exact carrier. `Byte?` and `Short?` are
@@ -59,6 +61,46 @@ identity and signed value hashes. Kotlin string conversion uses invariant format
 the current CLR culture. CLR imports map exact `sbyte`/`short` metadata to these Kotlin builtins;
 they do not synthesize user classes or silently widen the foreign signature to `Int`.
 
+### Float semantic closure
+
+Kotlin `Float` is an exact CLR `float32`/`System.Single` in signatures, fields, locals, generic
+arguments, generic arrays, nullable positions, and boxes. CIL's floating evaluation-stack kind is
+a physical execution detail: `float32` declaration and storage boundaries retain the public
+32-bit identity, and `conv.r4` is used for Common conversions and mixed-operation promotion that
+produce a `Float`. `FloatArray` remains a separately gated Kotlin-owned specialized-array wrapper;
+landing the scalar does not silently publish it as `System.Single[]`.
+
+Common's distinct floating contracts are implemented explicitly:
+
+- primitive `==` and relational operators use IEEE-754 comparison: NaN is unequal/unordered and
+  negative zero equals positive zero;
+- `Float.equals`, object-boundary equality, and `hashCode` use canonical `Float.toBits` semantics:
+  all NaNs compare equal, negative zero differs from positive zero, and the signed 32-bit bits are
+  the hash;
+- `compareTo` uses Kotlin's total ordering, matching the JVM/Wasm ordering in which negative zero
+  precedes positive zero and canonical NaN follows every non-NaN value;
+- `Float.toInt`/`toLong` truncate toward zero, map NaN to zero, and saturate infinities and
+  out-of-range values. Explicit guards precede CIL `conv.i4`/`conv.i8`, whose out-of-range result
+  ECMA-335 does not define uniformly. Deprecated direct `toByte`/`toShort` retain Common's
+  `toInt()`-then-narrow definition when such calls survive frontend compatibility settings; and
+- integer-to-Float and Double-to-Float conversion use `conv.r4`; Float-to-Double uses `conv.r8`.
+
+String conversion cannot delegate to either `System.Single.ToString()` or its `"R"` format. The
+former is culture-sensitive and has CLR notation; the latter is observably profile-dependent
+(`Float.MIN_VALUE` and `Float.MAX_VALUE` produce different digit strings on the supported
+Framework and CoreCLR hosts). The runtime therefore tries invariant `G7`, retains it only when
+parsing reproduces the exact canonical `float32` bits, and otherwise falls back to invariant `G9`.
+It then applies Kotlin/JVM lexical conventions: literal NaN/infinities,
+preserved `-0.0`, a decimal point for integral finite values, uppercase `E`, a normalized exponent,
+and the `[1e-3, 1e7)` plain-decimal window. The fallback's nine significant digits guarantee a
+`float32` round-trip on both hosts. Digits can be longer than the JVM's minimum distinguishing string;
+that bounded display difference is preferred to culture-, profile-, or bit-dependent output and
+is documented rather than mislabeled as shortest formatting.
+
+Exact foreign CLR `float32` metadata imports as Kotlin `Float`; no wrapper or widening to `Double`
+is introduced. Kotlin metadata remains authoritative for Kotlin declarations, while the truthful
+physical signature is directly usable as C# `float`.
+
 ## Rejected alternatives
 
 - **Spell Byte and Short as `int32` everywhere.** This collapses legal overloads, changes generic
@@ -69,6 +111,17 @@ they do not synthesize user classes or silently widen the foreign signature to `
   semantics.
 - **Use checked arithmetic because CLR offers it.** Kotlin integer arithmetic wraps unless a
   library contract explicitly performs a checked operation.
+- **Represent Float as `float64`.** This changes overload identity, generic reification,
+  nullability, rounding, boxing, C# signatures, and every value whose 32-bit rounding is
+  observable.
+- **Delegate all Float object behavior to `System.Single`.** CLR `Equals` treats signed zeros as
+  equal, profile hash behavior is not the Kotlin ABI, and native formatting is culture/profile
+  dependent. The carrier is reusable; these language contracts are not.
+- **Use profile-native `Single.ToString("R")`.** It is not reproducible across the two supported
+  runtime profiles, even for boundary constants.
+- **Land FloatArray together with Float.** A specialized Kotlin array has nominal collection and
+  iterator contracts beyond its scalar element carrier and remains governed by the primitive
+  array ADR.
 - **Publish only the scalar overloads needed by one collection function.** Primitive support is a
   language/ABI capability. Collection generators may consume it only after the complete scalar
   boundary is green.
@@ -98,6 +151,11 @@ Before these carriers freeze, tests must cover:
   widening cases (general explicit `as` lowering remains a separate backend gate);
 - exact C# production/consumption and imported CLR `sbyte`/`short` declarations; and
 - identical behavior on Framework CLR and CoreCLR, including portable libraries.
+
+The Float gate additionally covers subnormal/minimum/maximum values, infinities, NaN payload
+canonicalization, both zeros, 32-bit rounding after mixed operations, saturating integral
+conversions, total `compareTo`, deterministic guarded-`G7`/`G9` rendering, `float32` constants, and direct C#
+`float` consumption/import on both profiles.
 
 The current foreign-CLR FIR provider still admits only its deliberately closed primitive,
 string/object, and reference-param-array grammar. A C# `Nullable<SByte>` or `Nullable<Int16>` is a

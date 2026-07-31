@@ -373,6 +373,7 @@ internal class DotNetIlExpressionCodegen(
             DotNetIlValueType.Char,
             -> methodContext.emit("ldc.i4 0", pushes = 1)
             DotNetIlValueType.Int64 -> methodContext.emit("ldc.i8 0", pushes = 1)
+            DotNetIlValueType.Float32 -> methodContext.emit("ldc.r4 0.0", pushes = 1)
             DotNetIlValueType.Float64 -> methodContext.emit("ldc.r8 0.0", pushes = 1)
             is DotNetIlValueType.NullableValue -> emitEmptyNullable(type)
             is DotNetIlValueType.TypeParameter -> {
@@ -670,6 +671,7 @@ internal class DotNetIlExpressionCodegen(
                 DotNetIlValueType.Int16,
                 DotNetIlValueType.Int32,
                 DotNetIlValueType.Int64,
+                DotNetIlValueType.Float32,
                 DotNetIlValueType.Float64,
                 DotNetIlValueType.Char,
                     -> {
@@ -742,6 +744,7 @@ internal class DotNetIlExpressionCodegen(
             DotNetIlValueType.Int16 -> emitBoxedInvariantToString("${coreLibraryReference}System.Int16")
             DotNetIlValueType.Int32 -> emitBoxedInvariantToString("${coreLibraryReference}System.Int32")
             DotNetIlValueType.Int64 -> emitBoxedInvariantToString("${coreLibraryReference}System.Int64")
+            DotNetIlValueType.Float32 -> emitFloatValueToString()
             DotNetIlValueType.Float64 -> emitDoubleValueToString()
             DotNetIlValueType.Char ->
                 methodContext.emit(
@@ -804,6 +807,11 @@ internal class DotNetIlExpressionCodegen(
      */
     private fun emitDoubleValueToString() {
         methodContext.emit(DotNetRuntimeLibraryHelpers.doubleToStringCallInstruction, pops = 1, pushes = 1)
+    }
+
+    /** Converts `float32` through the profile-stable Kotlin runtime formatter. */
+    private fun emitFloatValueToString() {
+        methodContext.emit(DotNetRuntimeLibraryHelpers.floatToStringCallInstruction, pops = 1, pushes = 1)
     }
 
     /**
@@ -1947,6 +1955,11 @@ internal class DotNetIlExpressionCodegen(
                     ?: dotNetUnsupported("unsupported int64 constant: ${expression.value}")
                 // ilasm accepts the full signed range directly, including Long.MIN_VALUE.
                 methodContext.emit("ldc.i8 $value", pushes = 1)
+            }
+            DotNetIlValueType.Float32 -> {
+                val value = expression.value as? Float
+                    ?: dotNetUnsupported("unsupported float32 constant: ${expression.value}")
+                methodContext.emit("ldc.r4 ${value.toIlFloat32Literal()}", pushes = 1)
             }
             DotNetIlValueType.Float64 -> {
                 val value = expression.value as? Double

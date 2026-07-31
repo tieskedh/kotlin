@@ -25167,7 +25167,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             """
             package sample
 
-            public fun unsupported(value: Float): Float = value
+            public fun unsupported(value: FloatArray): FloatArray = value
             """,
         )
         assertPublicationFails(
@@ -26080,6 +26080,307 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 profile.executionCommand(verifier),
                 profileDirectory,
                 "Signed narrow scalar Kotlin/C# round trip for ${profile.target}",
+            )
+        }
+    }
+
+    @Test
+    fun testFloatScalarAcrossKotlinAndClrBoundaries() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(
+            frameworkCSharp != null,
+            ".NET Framework C# compiler is not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(
+            frameworkHost != null,
+            "Windows PowerShell CLR 4 host is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val frameworkCoreLibrary = checkNotNull(frameworkCSharp).parentFile.resolve("mscorlib.dll")
+        assertTrue(frameworkCoreLibrary.isFile) {
+            "Framework compiler has no adjacent mscorlib reference: $frameworkCoreLibrary"
+        }
+        val modernSystemRuntime =
+            checkNotNull(modernCSharp).referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(modernSystemRuntime.isFile) {
+            "Modern reference pack has no System.Runtime reference: $modernSystemRuntime"
+        }
+
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard 2.0 facade is not available",
+        )
+
+        val libraryDirectory = File(tmpdir, "float-scalar-library")
+        val librarySource = File(tmpdir, "floatScalarLibrary.kt").apply {
+            writeText(
+                """
+                package floatscalarabi
+
+                public fun echo(value: Float): Float = value
+
+                public fun nullable(value: Float?): Float? = value
+
+                public fun add(left: Float, right: Float): Float = left + right
+
+                public fun primitiveEquals(left: Float, right: Float): Boolean = left == right
+
+                public fun boxedEquals(left: Any?, right: Any?): Boolean = left == right
+
+                public fun boxedHash(value: Any?): Int = value?.hashCode() ?: 0
+
+                public fun render(value: Float): String = value.toString()
+
+                public class FloatBox<T>(public val value: T)
+
+                public fun boxed(value: Float): FloatBox<Float> = FloatBox(value)
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "FloatScalar.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val library = libraryDirectory.resolve("FloatScalar.Library.dll")
+        val libraryIl = libraryDirectory.resolve("FloatScalar.Library.il").readText()
+        assertTrue("float32 'echo'(float32 'value')" in libraryIl) { libraryIl }
+        assertTrue(
+            "valuetype [netstandard]System.Nullable`1<float32> 'nullable'" in libraryIl
+        ) { libraryIl }
+        assertTrue("float32 'add'(float32 'left', float32 'right')" in libraryIl) { libraryIl }
+        assertTrue("class 'floatscalarabi.FloatBox`1'<float32> 'boxed'" in libraryIl) { libraryIl }
+
+        data class Profile(
+            val target: String,
+            val applicationFileName: String,
+            val compileForeign: (File, File) -> CSharpCompilerResult,
+            val systemReference: File,
+            val verifierProfileReferences: List<File>,
+            val compileVerifier: (File, File, List<File>) -> CSharpCompilerResult,
+            val executionCommand: (File) -> List<String>,
+        )
+
+        val profiles = listOf(
+            Profile(
+                target = "net48",
+                applicationFileName = "FloatScalarConsumer.exe",
+                compileForeign = { source, output ->
+                    runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
+                },
+                systemReference = frameworkCoreLibrary,
+                verifierProfileReferences = listOf(checkNotNull(frameworkNetStandardFacade)),
+                compileVerifier = { source, output, references ->
+                    runCSharpCompiler(
+                        checkNotNull(frameworkCSharp),
+                        source,
+                        output,
+                        *references.toTypedArray(),
+                        target = "exe",
+                    )
+                },
+                executionCommand = { executable ->
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), executable)
+                },
+            ),
+            Profile(
+                target = "net10.0",
+                applicationFileName = "FloatScalarConsumer.dll",
+                compileForeign = { source, output ->
+                    runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
+                },
+                systemReference = modernSystemRuntime,
+                verifierProfileReferences = emptyList(),
+                compileVerifier = { source, output, references ->
+                    runModernCSharpCompiler(
+                        checkNotNull(modernCSharp),
+                        source,
+                        output,
+                        *references.toTypedArray(),
+                        target = "exe",
+                    )
+                },
+                executionCommand = { executable ->
+                    listOf(dotnetHost.path, "exec", executable.path)
+                },
+            ),
+        )
+
+        for (profile in profiles) {
+            val profileDirectory =
+                libraryDirectory.resolve("consumer-${profile.target.replace('.', '-')}").apply { mkdirs() }
+            val foreignSource = profileDirectory.resolve("ForeignFloatScalar.cs").apply {
+                writeText(
+                    """
+                    using System;
+
+                    namespace ForeignFloatScalar
+                    {
+                        public interface FloatApi
+                        {
+                            float Echo(float value);
+                            float NegativeZero();
+                            float PayloadNaN();
+                        }
+
+                        public sealed class FloatApiImpl : FloatApi
+                        {
+                            private static float FromBits(byte b0, byte b1, byte b2, byte b3)
+                            {
+                                return BitConverter.ToSingle(new byte[] { b0, b1, b2, b3 }, 0);
+                            }
+
+                            public float Echo(float value) { return value; }
+                            public float NegativeZero() { return FromBits(0, 0, 0, 128); }
+                            public float PayloadNaN() { return FromBits(1, 0, 192, 127); }
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val foreignAssembly = profileDirectory.resolve("Foreign.FloatScalar.dll")
+            val foreignCompile = profile.compileForeign(foreignSource, foreignAssembly)
+            assertEquals(0, foreignCompile.exitCode, foreignCompile.output)
+
+            val consumerSource = profileDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package floatscalarconsumer
+
+                    import ForeignFloatScalar.FloatApi
+                    import floatscalarabi.*
+
+                    public fun verifyKotlinLibrary(): Int {
+                        if (echo(0.1f) != 0.1f) return 1
+                        if (add(16_777_216f, 1f) != 16_777_216f) return 2
+                        if (nullable(-1.25f) != -1.25f || nullable(null) != null) return 3
+                        if (primitiveEquals(Float.NaN, Float.NaN)) return 4
+                        if (!boxedEquals(Float.NaN, 0f / 0f)) return 5
+                        if (boxedEquals(-0.0f, 0.0f)) return 6
+                        if (boxed(-2.5f).value != -2.5f) return 7
+                        return 42
+                    }
+
+                    public fun verifyForeign(api: FloatApi): Int {
+                        if (api.Echo(0.1f) != 0.1f) return 11
+                        val negativeZero = api.NegativeZero()
+                        if (negativeZero != 0f || boxedEquals(negativeZero, 0f)) return 12
+                        val payloadNaN = api.PayloadNaN()
+                        if (payloadNaN == payloadNaN) return 13
+                        if (!boxedEquals(payloadNaN, Float.NaN)) return 14
+                        if (boxedHash(payloadNaN) != boxedHash(Float.NaN)) return 15
+                        return 42
+                    }
+
+                    fun main() {}
+                    """.trimIndent()
+                )
+            }
+            val application = profileDirectory.resolve(profile.applicationFileName)
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument,
+                listOf(library, foreignAssembly, profile.systemReference)
+                    .joinToString(File.pathSeparator, transform = File::getPath),
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "FloatScalarConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+
+            val consumerIl = profileDirectory.resolve("FloatScalarConsumer.il").readText()
+            assertTrue(
+                "call float32 [FloatScalar.Library]'floatscalarabi.floatScalarLibraryKt'::'echo'(float32)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                "callvirt instance float32 [Foreign.FloatScalar]'ForeignFloatScalar.FloatApi'::'Echo'(float32)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                "callvirt instance float32 [Foreign.FloatScalar]'ForeignFloatScalar.FloatApi'::'PayloadNaN'()" in consumerIl
+            ) { consumerIl }
+
+            val verifierSource = profileDirectory.resolve("FloatScalarVerifier.cs").apply {
+                writeText(
+                    """
+                    using System;
+                    using ForeignFloatScalar;
+
+                    public static class FloatScalarVerifier
+                    {
+                        private static int Bits(float value)
+                        {
+                            return BitConverter.ToInt32(BitConverter.GetBytes(value), 0);
+                        }
+
+                        private static float PayloadNaN()
+                        {
+                            return BitConverter.ToSingle(new byte[] { 1, 0, 192, 127 }, 0);
+                        }
+
+                        public static int Main()
+                        {
+                            if (Bits(floatscalarabi.floatScalarLibraryKt.echo(0.1f)) != Bits(0.1f)) return 1;
+                            if (floatscalarabi.floatScalarLibraryKt.add(16777216f, 1f) != 16777216f) return 2;
+                            if (floatscalarabi.floatScalarLibraryKt.nullable((float?)-1.25f) != -1.25f) return 3;
+                            if (floatscalarabi.floatScalarLibraryKt.nullable((float?)null) != null) return 4;
+                            if (floatscalarabi.floatScalarLibraryKt.primitiveEquals(float.NaN, float.NaN)) return 5;
+                            if (!floatscalarabi.floatScalarLibraryKt.boxedEquals((object)float.NaN, (object)PayloadNaN())) return 6;
+                            if (floatscalarabi.floatScalarLibraryKt.boxedEquals((object)-0.0f, (object)0.0f)) return 7;
+                            if (floatscalarabi.floatScalarLibraryKt.boxedHash((object)float.NaN) !=
+                                floatscalarabi.floatScalarLibraryKt.boxedHash((object)PayloadNaN())) return 8;
+                            if (floatscalarabi.floatScalarLibraryKt.render(-0.0f) != "-0.0") return 9;
+                            if (floatscalarconsumer.consumerKt.verifyKotlinLibrary() != 42) return 10;
+                            if (floatscalarconsumer.consumerKt.verifyForeign(new FloatApiImpl()) != 42) return 11;
+                            Console.WriteLine("OK");
+                            return 0;
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val verifier = profileDirectory.resolve("FloatScalarVerifier.exe")
+            val verifierReferences =
+                listOf(
+                    application,
+                    profileDirectory.resolve(library.name),
+                    profileDirectory.resolve(foreignAssembly.name),
+                    profileDirectory.resolve("Kotlin.Runtime.dll"),
+                ) + profile.verifierProfileReferences
+            val verifierCompile = profile.compileVerifier(
+                verifierSource,
+                verifier,
+                verifierReferences,
+            )
+            assertEquals(0, verifierCompile.exitCode, verifierCompile.output)
+            if (profile.target == "net10.0") {
+                profileDirectory.resolve("FloatScalarConsumer.runtimeconfig.json").copyTo(
+                    profileDirectory.resolve("FloatScalarVerifier.runtimeconfig.json"),
+                    overwrite = true,
+                )
+            }
+            runAssemblerPairing(
+                profile.executionCommand(verifier),
+                profileDirectory,
+                "Float scalar Kotlin/C# round trip for ${profile.target}",
             )
         }
     }
