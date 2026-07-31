@@ -28166,6 +28166,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .filter { declaration -> declaration.ownerPath == listOf("Kotlin.Io.ConsoleKt") }
         assertEquals(setOf("readln", "readlnOrNull"), ioFunctions.mapTo(linkedSetOf()) { it.methodName })
         assertTrue(ioFunctions.none { declaration -> declaration.isInstance })
+        val collectionFunctions = physicalDeclarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .filter { declaration ->
+                declaration.ownerPath == listOf("Kotlin.Collections.CollectionsKt")
+            }
+        assertTrue(collectionFunctions.any { declaration ->
+            declaration.methodName == "asList" && !declaration.isInstance
+        })
+        assertTrue(physicalDeclarations.values.none { declaration ->
+            declaration.ownerPath.any { owner ->
+                owner == "Kotlin.Collections.ArrayAsList`1" ||
+                        owner == "Kotlin.Collections.ArrayAsListIterator`1"
+            }
+        }) {
+            "Private array-list implementation identities must not enter the physical ABI index"
+        }
         val eofExceptionBindings = physicalDeclarations.values.filter { declaration ->
             declaration.ownerPath == listOf("Kotlin.Io.ReadAfterEOFException")
         }
@@ -28198,6 +28214,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.Iterable-iterator-" in il)
         assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterable-iterator-" in il)
+        val arrayAsListStart = il.indexOf(
+            ".class private auto ansi sealed beforefieldinit " +
+                    "'Kotlin.Collections.ArrayAsList`1'<'T'>"
+        )
+        assertTrue(arrayAsListStart >= 0)
+        val arrayAsListEnd = il.indexOf("\n.class ", arrayAsListStart + 1)
+            .takeIf { index -> index >= 0 } ?: il.length
+        val arrayAsListIl = il.substring(arrayAsListStart, arrayAsListEnd)
+        assertTrue(
+            "implements [Kotlin.Runtime]'Kotlin.Collections.List', " +
+                    "'Kotlin.Collections.RandomAccess', class [Kotlin.Runtime]" +
+                    "'Kotlin.Collections.List__KotlinExact`1'<!0>" in arrayAsListIl
+        )
+        assertTrue("System.Collections" !in arrayAsListIl) {
+            "The Kotlin array view must not acquire a BCL collection identity:\n$arrayAsListIl"
+        }
+        assertTrue(
+            ".class private auto ansi sealed beforefieldinit " +
+                    "'Kotlin.Collections.ArrayAsListIterator`1'<'T'>" in il
+        )
         assertTrue(".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterator`1'" in il)
         assertTrue(".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterable`1'" in il)
         assertTrue(
@@ -28214,6 +28250,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterable' " +
                     "'dotNetArrayIterable'<'T'>(!!0[] 'array')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
+                    "'asList'<'T'>(!!0[] '<this>')" in il
         )
         assertTrue(
             ".method public hidebysig static !!0 'first'<'T'>(" +
@@ -28374,6 +28414,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun firstArrayIterable(values: Array<String>): String = values.asIterable().first()
 
+                public fun <T> arrayView(values: Array<out T>): List<T> = values.asList()
+
+                public fun intArrayView(values: Array<Int>): List<Int> = values.asList()
+
                 public fun emptyInts(): List<Int> = emptyList()
 
                 public fun emptyStrings(): List<String> = emptyList()
@@ -28425,8 +28469,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterator'<string>" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<string>" in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<!!0>(!!0[])" in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(!!0[])" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayIterator`1'" !in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayIterable`1'" !in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayAsList`1'" !in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayAsListIterator`1'" !in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<string>" in il)
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
@@ -28489,6 +28537,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
+                public fun <T> installedArrayView(values: Array<out T>): List<T> = values.asList()
+
                 public fun installedEmptyInts(): List<Int> = emptyList()
 
                 public fun installedRandomAccess(values: List<Int>): Boolean = values is RandomAccess
@@ -28501,9 +28551,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val suppressed = IllegalStateException("suppressed")
                     owner.addSuppressed(suppressed)
                     val snapshot = owner.suppressedExceptions
+                    val view = values.asList()
+                    values[0] = "changed"
                     val collectionsOk =
-                        values.asIterable().first() + values.asIterable().last() == "OK" &&
-                            values.asIterable().firstOrNull() == "O" &&
+                        view[0] == "changed" &&
+                            view[1] == "K" &&
+                            values.asIterable().firstOrNull() == "changed" &&
                             values.asIterable().lastOrNull() == "K" &&
                             emptyArray<String>().asIterable().firstOrNull() == null &&
                             emptyList<String>().lastOrNull() == null &&
@@ -28536,6 +28589,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue("::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<!!0>(!!0[])" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>" in il)
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Io.ConsoleKt'::'readlnOrNull'()" in il)
@@ -28665,6 +28719,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val first = readln()
                     val second = readlnOrNull()
                     val atEof = readlnOrNull()
+                    val values = arrayOf(1, 2)
+                    val view = values.asList()
+                    values[1] = 3
+                    val arrayViewOk =
+                        view.size == 2 &&
+                            view[0] == 1 &&
+                            view[1] == 3 &&
+                            view is RandomAccess
                     var readlnEofIsCommon = false
                     try {
                         readln()
@@ -28674,7 +28736,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                     println(
                         first + "|" + second + "|" + (atEof == null) + "|" +
-                            readlnEofIsCommon
+                            readlnEofIsCommon + "|" + arrayViewOk
                     )
                 }
                 """.trimIndent()
@@ -28708,7 +28770,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true\n",
+            "false|null|alpha|beta|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }

@@ -936,6 +936,32 @@ XML suites (806 FIR/IL/box, 21 generated CLI, and 66 library integration tests).
 adapters remain a separate interoperability feature. The reviewed programme and attacked
 alternatives are in `common-collections-program.md`.
 
+**Common collections programme (array-backed list slice implemented 2026-07-31):** the bootstrap
+generator now fail-closed extracts the exact Common `Array<out T>.asList()` expect from generated
+`_Arrays.kt`. Its .NET actual follows Native/Wasm representation and JVM/JS aliasing behavior: a
+private ordinary Kotlin `List<T>, RandomAccess` view retains the exact original vector, including
+`int32[]` for `Array<Int>`, and nested sub-lists remain backed by it. The temporary view implements
+the complete List surface directly because Common `AbstractList` is the next programme closure,
+not a hidden dependency of this slice. Empty arrays remain distinct backed views, and the private
+types acquire no BCL collection interfaces. Only the ordinary generic `asList<T>(T[])` method on
+the existing `Kotlin.Collections.CollectionsKt` facade is cross-module ABI.
+
+This slice also defines the first general output-projected generic-array carrier. `Array<out E>`
+retains `E[]` plus authoritative KLIB projection metadata. CLR reference-vector covariance
+supports reference widening; value vectors remain invariant, so `Array<Int> -> Array<out Any>` is
+diagnosed instead of boxed, copied, or emitted as invalid IL. Exact `Array<Int>.asList()` remains
+supported and alias-preserving. Input/star projections and open generic vararg construction remain
+separate work. Adversarial execution covers mutation/sub-view aliasing, value/reference/nullable
+elements, reference projection, widened List identity and type barriers (including
+`containsAll`), duplicate search, all iterator and range boundaries, Common equality/hash/text
+including NaN/signed zero and direct self rendering, and empty/singleton behavior. Direct,
+fallback, installed, and portable products bind through the self-describing stdlib and execute on
+Framework CLR 4 and CoreCLR 10.
+
+The physical ABI codec and runtime surface remain schema 16 / level 9. The fresh strict gate is
+897/0/0/0 across 16 XML suites (810 FIR/IL/box, 21 generated CLI, and 66 library integration
+tests).
+
 **Architecture responsibility correction (implemented 2026-07-31):** mature target module and
 package ownership is now the default for the .NET compiler too. The first bounded correction moved
 objective PE/ECMA-335 loading, CLR resolution, and validated metadata evidence out of the IR backend
