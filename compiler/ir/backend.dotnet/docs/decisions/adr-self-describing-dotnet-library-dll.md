@@ -124,10 +124,10 @@ stdlib variants. Gradle dependencies, compilation association, and friend paths 
 The compiler rejects a standalone KLIB carrying the Kotlin/.NET ABI marker with a diagnostic that
 requires the self-describing assembly instead.
 
-### Migration state
+### Dependency-loading boundary
 
-The CLI compiler now accepts a compiler-produced DLL directly on both the ordinary classpath and
-the friend path. A bounded, JVM-hosted PE/ECMA-335 reader:
+The CLI compiler accepts a compiler-produced DLL directly on both the ordinary classpath and the
+friend path. A bounded, JVM-hosted PE/ECMA-335 reader:
 
 - locates the private embedded `Kotlin.Metadata` `ManifestResource` without loading target code or
   starting a .NET process;
@@ -140,39 +140,14 @@ the friend path. A bounded, JVM-hosted PE/ECMA-335 reader:
   and unsigned status to match the containing DLL;
 - requires the embedded carrier and `self` binding, and rejects a recursive implementation hash.
 
-This split follows the other KLIB targets at the semantic boundary: FIR consumes the same
-`KotlinLibrary` and `KlibMetadataComponent` contracts. The CLR-specific code is limited to locating
-and authenticating the resource in PE metadata. The reusable byte-array loader belongs to common
-KLIB infrastructure because packed metadata is not a CLR concept. No temporary file participates
-in dependency loading, and no synthetic KLIB path, second declaration model, or .NET runtime
-process is introduced.
+FIR consumes the same `KotlinLibrary` and `KlibMetadataComponent` contracts as other KLIB targets.
+CLR-specific code is limited to locating and authenticating the resource in PE metadata. The
+reusable byte-array loader belongs to common KLIB infrastructure because packed metadata is not a
+CLR concept. No temporary file, synthetic KLIB path, second declaration model, or .NET runtime
+process participates in dependency loading.
 
 All target profiles use this JVM-hosted loading path. `net48`, `netstandard2.0`, and `net10.0`
 differ in emitted CLR capabilities, not in the meaning or deserialization of Kotlin declarations.
-
-The migration is complete. The compiler producer writes only the DLL (plus diagnostic IL where
-requested), installed-stdlib tasks copy only the DLL, and Gradle API/runtime variants publish only
-the profile-attributed DLL. Project dependencies, ordinary compilation association, and friend
-paths pass that DLL to the compiler, whose embedded-metadata loader recovers the Kotlin library
-view. Tests cover ordinary cross-module calls, generic and interface ABI records, friends,
-installed stdlib selection, all target profiles, hostile embedded manifests, and real execution
-without any sibling KLIB.
-
-Classifications:
-
-- one self-describing DLL per profile: **Correct direction**;
-- complete packed KLIB as the initial private managed-resource payload:
-  **Correct temporary implementation, but not necessarily a final encoding**;
-- reuse of Kotlin KLIB metadata and `DotNetIrMangler` identities: **Correct direction**;
-- separate public C# authoring manifest: **Reasonable platform-specific divergence**;
-- common packed-metadata loader plus a DLL-backed `KotlinLibrary` path:
-  **Correct direction**;
-- independently publishing or resolving sibling KLIB and DLL artifacts:
-  **Architecturally wrong and should be changed**;
-- accepting a standalone Kotlin/.NET KLIB as a compiler dependency:
-  **Architecturally wrong and should be changed**;
-- embedding a self-hash or accepting two independently generated metadata carriers:
-  **Architecturally wrong and should be changed**.
 
 ## Consequences
 
@@ -180,6 +155,5 @@ Gradle, Maven, NuGet, MSBuild, Roslyn, reflection, and deployment can converge o
 DLL asset. Future signing covers executable and Kotlin metadata together. The compiler retains
 the common Kotlin metadata model instead of reconstructing Kotlin semantics from CLR signatures.
 
-The bounded ECMA-335 reader, direct DLL-backed Kotlin-library view, CLI DLL-only path,
-installed-stdlib DLL selection, compiler producer/installation flow, and Gradle DLL-only variant
-publication have landed.
+The private packed-KLIB encoding remains replaceable behind a versioned container format; the
+self-describing DLL and its Kotlin identity are the stable decision.
