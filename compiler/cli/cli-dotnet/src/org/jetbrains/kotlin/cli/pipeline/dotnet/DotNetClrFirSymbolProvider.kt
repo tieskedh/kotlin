@@ -136,7 +136,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Only complete public, top-level, non-generic abstract-interface contracts over the supported
  * primitive/string/object grammar enter [candidates]. Classifier construction stays lazy. See
- * `docs/review/clr-annotation-interoperability.md`.
+ * `docs/programmes/clr-annotations.md`.
  */
 internal class DotNetClrFirSymbolProvider(
     session: FirSession,

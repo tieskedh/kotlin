@@ -11,7 +11,7 @@ do not turn it into another architecture summary.
 | [`../AGENTS.md`](../AGENTS.md) | Self-contained bootstrap contract and non-negotiable contribution rules |
 | [`../STATUS.md`](../STATUS.md) | Current branch, latest full verification, active work, blockers, and next bounded items |
 | [`decisions`](decisions) | Durable representation and ABI decisions, invariants, consequences, and rejected alternatives |
-| [`review/way-forward.md`](review/way-forward.md) | Future gates, ordering, and open work packages |
+| [`programmes/way-forward.md`](programmes/way-forward.md) | Future gates, ordering, and open work packages |
 | Active programme documents | Current scope, prerequisites, and exit conditions for one workstream |
 | Git | Chronological implementation history |
 | Tests and CI | Executable evidence |
@@ -30,15 +30,15 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 
 ## Active programmes
 
-- [`review/way-forward.md`](review/way-forward.md) owns release gates and the
+- [`programmes/way-forward.md`](programmes/way-forward.md) owns release gates and the
   ordered pre-ABI programme.
-- [`review/common-collections-program.md`](review/common-collections-program.md)
+- [`programmes/common-collections.md`](programmes/common-collections.md)
   keeps Common and the stdlib generator authoritative while expanding the
   collection product in bounded dependency closures.
-- [`review/clr-annotation-interoperability.md`](review/clr-annotation-interoperability.md)
+- [`programmes/clr-annotations.md`](programmes/clr-annotations.md)
   tracks the still-open standard CLR metadata mappings. Durable importer
   authority rules belong in the importer ADR.
-- [`review/architecture-responsibility-audit.md`](review/architecture-responsibility-audit.md)
+- [`programmes/compiler-architecture.md`](programmes/compiler-architecture.md)
   tracks the remaining module/package ownership corrections.
 
 ## Foundational decisions

@@ -8,7 +8,7 @@ Use:
 
 - [`../../STATUS.md`](../../STATUS.md) for current branch, verification, and
   work state;
-- [`../review/way-forward.md`](../review/way-forward.md) for future gates and
+- [`../programmes/way-forward.md`](../programmes/way-forward.md) for future gates and
   ordering; and
 - [`../decisions`](../decisions) for active draft and accepted decisions.
 

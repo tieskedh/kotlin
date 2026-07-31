@@ -2108,7 +2108,7 @@ Roslyn can move a source property attribute to its semantically relevant accesso
 Indexers and distinct input/output property views remain separate decisions.
 
 The detailed mature-target comparison, carrier matrix, attacks, and deferred public-annotation
-decision are recorded in `docs/review/clr-annotation-interoperability.md`.
+decision are recorded in `docs/programmes/clr-annotations.md`.
 
 The first non-nullability semantic marker maps exact method-level
 `System.ObsoleteAttribute` to Common `kotlin.Deprecated`. Recognition uses the selected core

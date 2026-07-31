@@ -1,4 +1,4 @@
-# Kotlin/.NET backend way forward
+# Kotlin/.NET execution programme
 
 > **Baseline:** branch `dotnet`, rebased on `origin/master` at `733a49b39`, upstream impact
 > re-audited on 2026-07-30
@@ -934,7 +934,7 @@ fallback, installed, portable, Framework CLR 4, and CoreCLR 10 product paths. Th
 codec and runtime surface remain schema 16 / level 9. The fresh strict gate is 893/0/0/0 across 16
 XML suites (806 FIR/IL/box, 21 generated CLI, and 66 library integration tests). Explicit BCL
 adapters remain a separate interoperability feature. The reviewed programme and attacked
-alternatives are in `common-collections-program.md`.
+alternatives are in `common-collections.md`.
 
 **Common collections programme (array-backed list slice implemented 2026-07-31):** the bootstrap
 generator now fail-closed extracts the exact Common `Array<out T>.asList()` expect from generated
@@ -999,7 +999,7 @@ Only the by-ref-like generic capability crosses into the physical CLR validator;
 library-compatibility policy stays in configuration, while textual core-library rendering remains
 an exhaustive backend mapping. The complete backend/CLI inventory, forbidden dependencies,
 mature-target package evidence, and attacked alternatives are recorded in
-`architecture-responsibility-audit.md`. The physical ABI codec and runtime surface remain schema
+`compiler-architecture.md`. The physical ABI codec and runtime surface remain schema
 16 / level 9. Current aggregate verification is recorded only in
 [`../../STATUS.md`](../../STATUS.md).
 
@@ -1252,7 +1252,7 @@ are the C# projection. Conditional flow attributes are not declaration nullabili
 lazy FIR provider slice is deliberately closed to complete public non-generic abstract-interface
 contracts over primitive/string/object signatures; it withholds a classifier rather than expose a
 partial contract. Public Kotlin/.NET export-annotation names remain a separate language/API
-decision. See `docs/review/clr-annotation-interoperability.md`.
+decision. See `docs/programmes/clr-annotations.md`.
 
 **First annotation-aware foreign FIR slice (2026-07-29):** the .NET metadata session now installs
 a target-owned provider for resource-free foreign assemblies after the Kotlin-produced/KLIB path
@@ -1291,7 +1291,7 @@ gate is 874/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 57
 integration tests).
 
 The broader CodeAnalysis family is now classified per target in
-`docs/review/clr-annotation-interoperability.md`. `MemberNotNull`/`MemberNotNullWhen` remains
+`docs/programmes/clr-annotations.md`. `MemberNotNull`/`MemberNotNullWhen` remains
 retained metadata but cannot make mutable, getter-backed, public/open, or cross-module member
 access stable merely because Roslyn updates its null-state. `MaybeNull`/`MaybeNullWhen` is
 state-weakening; ordinary by-value `AllowNull`/`DisallowNull` is implemented, while properties
