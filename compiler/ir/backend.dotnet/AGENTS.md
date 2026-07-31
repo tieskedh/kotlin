@@ -206,7 +206,7 @@ and rendering semantics; `.NET` supplies only narrow actuals and the
 `Console.ReadLine` host operation.
 
 See
-[`docs/decisions/draft-adr-target-stdlib-bootstrap.md`](docs/decisions/draft-adr-target-stdlib-bootstrap.md)
+[runtime/stdlib ownership ADR](docs/decisions/runtime-and-stdlib-ownership.md)
 and
 [`docs/review/common-collections-program.md`](docs/review/common-collections-program.md).
 
