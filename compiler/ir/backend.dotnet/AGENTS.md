@@ -275,7 +275,7 @@ diagnostic facts and compose Kotlin suppressed-state semantics with
 reference-identity cycle handling.
 
 See the
-[classified-exception ADR](docs/decisions/draft-adr-classified-clr-exception-model.md).
+[classified-exception ADR](docs/decisions/classified-clr-exceptions.md).
 
 ## Static placement and initialization
 
