@@ -80,6 +80,37 @@ private class IteratorTrapList<T>(private val values: Array<T>) : List<T> {
         throw Error("cardinality operation used List.subList()")
 }
 
+private class CountFastPathCollection<T>(private val reportedSize: Int) : Collection<T> {
+    var sizeCalls: Int = 0
+
+    override val size: Int
+        get() {
+            sizeCalls++
+            return reportedSize
+        }
+
+    override fun isEmpty(): Boolean = throw Error("count used Collection.isEmpty()")
+
+    override fun contains(element: T): Boolean = throw Error("count used Collection.contains()")
+
+    override fun containsAll(elements: Collection<T>): Boolean =
+        throw Error("count used Collection.containsAll()")
+
+    override fun iterator(): Iterator<T> = throw Error("count used Collection.iterator()")
+}
+
+private class FailingCountIterable<T>(private val failure: Throwable) : Iterable<T> {
+    override fun iterator(): Iterator<T> = FailingCountIterator(failure)
+}
+
+private class FailingCountIterator<T>(private val failure: Throwable) : Iterator<T> {
+    override fun hasNext(): Boolean = true
+
+    override fun next(): T = throw failure
+}
+
+private fun <T> genericCount(values: Iterable<T>): Int = values.count()
+
 private fun <T> genericSingle(values: Iterable<T>): T = values.single()
 
 private fun <T> genericSingleOrNull(values: Iterable<T>): T? = values.singleOrNull()
@@ -87,6 +118,46 @@ private fun <T> genericSingleOrNull(values: Iterable<T>): T? = values.singleOrNu
 private fun fail(message: String): String = "fail: $message"
 
 fun box(): String {
+    val countedEmpty = CountingIterable(emptyArray<String>())
+    if (genericCount(countedEmpty) != 0) return fail("empty count")
+    if (countedEmpty.iteratorCalls != 1 || countedEmpty.hasNextCalls != 1 || countedEmpty.nextCalls != 0) {
+        return fail("empty count traversal")
+    }
+
+    val countedSingleton = CountingIterable(arrayOf<String?>(null))
+    if (genericCount(countedSingleton) != 1) return fail("nullable singleton count")
+    if (
+        countedSingleton.iteratorCalls != 1 ||
+        countedSingleton.hasNextCalls != 2 ||
+        countedSingleton.nextCalls != 1
+    ) {
+        return fail("singleton count traversal")
+    }
+
+    val countedMultiple = CountingIterable(arrayOf(2, 3, 5))
+    val countedWidened: Iterable<Any?> = countedMultiple
+    if (genericCount(countedWidened) != 3) return fail("widened multiple count")
+    if (
+        countedMultiple.iteratorCalls != 1 ||
+        countedMultiple.hasNextCalls != 4 ||
+        countedMultiple.nextCalls != 3
+    ) {
+        return fail("multiple count traversal")
+    }
+
+    val countFastPath = CountFastPathCollection<String>(Int.MAX_VALUE)
+    val collectionAsIterable: Iterable<String> = countFastPath
+    if (genericCount(collectionAsIterable) != Int.MAX_VALUE) return fail("Collection count fast path")
+    if (countFastPath.sizeCalls != 1) return fail("Collection count size reads ${countFastPath.sizeCalls}")
+
+    val countFailure = IllegalStateException("count next failure")
+    try {
+        genericCount(FailingCountIterable<Int>(countFailure))
+        return fail("count next failure result")
+    } catch (caught: Throwable) {
+        if (caught !== countFailure) return fail("count next failure identity")
+    }
+
     val nonEmpty = CountingIterable(arrayOf(3, 5))
     if (!nonEmpty.any() || nonEmpty.none()) return fail("non-empty query")
     if (

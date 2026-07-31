@@ -59,6 +59,8 @@ internal object DotNetStdlibLibrary {
     private val implementationFunctionFacadeIlNames = mapOf(
         "kotlin.collections.any" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.asList" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.checkCountOverflow" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.count" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.elementAtOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.emptyList" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.first" to COLLECTIONS_FACADE_IL_NAME,
@@ -69,6 +71,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.none" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.single" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.singleOrNull" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.throwCountOverflow" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERATOR_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERABLE_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.io.readln" to IO_FACADE_IL_NAME,

@@ -22,6 +22,15 @@ public expect fun <T> Array<out T>.asList(): List<T>
 public val <T> List<T>.lastIndex: Int
     get() = this.size - 1
 
+@PublishedApi
+@SinceKotlin("1.3")
+@IgnorableReturnValue
+internal expect fun checkCountOverflow(count: Int): Int
+
+@PublishedApi
+@SinceKotlin("1.3")
+internal fun throwCountOverflow() { throw ArithmeticException("Count overflow has happened.") }
+
 /**
  * Returns `true` if collection has at least one element.
  *
@@ -30,6 +39,16 @@ public val <T> List<T>.lastIndex: Int
 public fun <T> Iterable<T>.any(): Boolean {
     if (this is Collection) return !isEmpty()
     return iterator().hasNext()
+}
+
+/**
+ * Returns the number of elements in this collection.
+ */
+public fun <T> Iterable<T>.count(): Int {
+    if (this is Collection) return size
+    var count = 0
+    for (element in this) checkCountOverflow(++count)
+    return count
 }
 
 /**

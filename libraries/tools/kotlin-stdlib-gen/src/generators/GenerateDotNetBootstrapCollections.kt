@@ -46,8 +46,17 @@ fun main(args: Array<String>) {
         commonCollectionsFile,
         "public val <T> List<T>.lastIndex: Int",
     )
+    val checkCountOverflowDeclaration = extractCommonUndocumentedDeclaration(
+        commonCollectionsFile,
+        "internal expect fun checkCountOverflow(count: Int): Int",
+    )
+    val throwCountOverflowDeclaration = extractCommonUndocumentedDeclaration(
+        commonCollectionsFile,
+        "internal fun throwCountOverflow()",
+    )
     val selectedTemplates = sequenceOf(
         Aggregates.f_any selectedFor setOf(Family.Iterables),
+        Aggregates.f_count selectedFor setOf(Family.Iterables),
         Aggregates.f_none selectedFor setOf(Family.Iterables),
         Elements.f_elementAtOrNull selectedFor setOf(Family.Iterables),
         Elements.f_first selectedFor setOf(Family.Iterables, Family.Lists),
@@ -75,6 +84,10 @@ fun main(args: Array<String>) {
     generatedSource.appendLine(arrayAsListDeclaration)
     generatedSource.appendLine()
     generatedSource.appendLine(lastIndexDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(checkCountOverflowDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(throwCountOverflowDeclaration)
     generatedSource.appendLine()
     for (member in members) {
         member.build(generatedSource)
@@ -114,4 +127,28 @@ private fun extractCommonDeclaration(sourceFile: File, declarationHeader: String
         "Cannot find the end of Common declaration '$declarationHeader' in ${sourceFile.path}"
     }
     return source.substring(documentationIndex, nextDocumentationIndex).trimEnd()
+}
+
+/**
+ * Copies one annotation-led declaration that intentionally has no KDoc. Blank declaration
+ * boundaries are part of the fail-closed contract, so an upstream regrouping requires review.
+ */
+private fun extractCommonUndocumentedDeclaration(sourceFile: File, declarationHeader: String): String {
+    val source = sourceFile.readText().replace("\r\n", "\n")
+    val declarationIndex = source.indexOf(declarationHeader)
+    check(declarationIndex >= 0) {
+        "Cannot find Common declaration '$declarationHeader' in ${sourceFile.path}"
+    }
+    check(source.indexOf(declarationHeader, declarationIndex + declarationHeader.length) < 0) {
+        "Common declaration header '$declarationHeader' is not unique in ${sourceFile.path}"
+    }
+    val declarationStart = source.lastIndexOf("\n\n", declarationIndex)
+    check(declarationStart >= 0) {
+        "Cannot find the start of Common declaration '$declarationHeader' in ${sourceFile.path}"
+    }
+    val declarationEnd = source.indexOf("\n\n", declarationIndex)
+    check(declarationEnd >= 0) {
+        "Cannot find the end of Common declaration '$declarationHeader' in ${sourceFile.path}"
+    }
+    return source.substring(declarationStart + 2, declarationEnd).trimEnd()
 }

@@ -124,6 +124,27 @@ Both admitted functions are ordinary static generic methods on
 `Kotlin.Collections.CollectionsKt`. The CLR creates no representation difference and supplies no
 reason for an intrinsic or BCL implementation.
 
+### Iterable count and overflow
+
+The admitted closure is Common `Iterable<T>.count()`. Its `Aggregates` body returns a
+`Collection.size` directly and otherwise consumes the iterator once, calling the Common
+`checkCountOverflow` expect declaration after every increment. The paired Common
+`throwCountOverflow` helper owns the `ArithmeticException` type and exact message.
+
+The generated `Collection<T>.count()` overload remains excluded because it is `@InlineOnly`; a
+statically known Collection still resolves to the admitted Iterable overload and reaches the same
+size fast path. Publishing a non-inline substitute overload would fork the Common source surface.
+
+JVM and Native/Wasm make the internal `checkCountOverflow` actual `@InlineOnly`; JS uses an
+ordinary actual with the same body. The Common expect declaration itself is not inline. .NET uses
+the JS-shaped callable actual: the CLR JIT may inline the tiny static method independently, while
+claiming a Kotlin inline contract without an IR inliner would create a false cross-module compiler
+ABI. The logical operation, overflow condition, exception, and message remain exactly Common.
+
+`count`, `checkCountOverflow`, and `throwCountOverflow` share
+`Kotlin.Collections.CollectionsKt`. The two helpers remain Kotlin-internal compiler ABI rather than
+ordinary C# API. No BCL count property participates in Kotlin dispatch.
+
 ## Next selection rule
 
 Select the next exact non-inline Common/generated family only when all of these are closed:

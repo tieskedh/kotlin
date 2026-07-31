@@ -24647,6 +24647,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         consumeInstalledStdlib(stdlibDirectory, "net10.0", installedProfile = "netstandard2.0")
         executeSelfDescribingStdlib(stdlibDirectory, "net48", dotnetHost = null)
         executeSelfDescribingStdlib(stdlibDirectory, "net10.0", dotnetHost)
+        executeCountOverflowCompilerAbi(stdlibDirectory, "net48", dotnetHost = null)
+        executeCountOverflowCompilerAbi(stdlibDirectory, "net10.0", dotnetHost)
     }
 
     @Test
@@ -28209,6 +28211,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(
             mapOf(
                 "any" to 1,
+                "count" to 1,
                 "elementAtOrNull" to 1,
                 "getOrNull" to 1,
                 "none" to 1,
@@ -28219,6 +28222,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 .filter { declaration ->
                     declaration.methodName in setOf(
                         "any",
+                        "count",
                         "elementAtOrNull",
                         "getOrNull",
                         "none",
@@ -28232,12 +28236,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(collectionFunctions.none { declaration ->
             declaration.methodName in setOf(
                 "any",
+                "count",
                 "elementAtOrNull",
                 "getOrNull",
                 "none",
                 "single",
                 "singleOrNull",
             ) &&
+                    declaration.isInstance
+        })
+        assertEquals(
+            setOf("checkCountOverflow", "throwCountOverflow"),
+            collectionFunctions
+                .filter { declaration ->
+                    declaration.methodName == "checkCountOverflow" ||
+                            declaration.methodName == "throwCountOverflow"
+                }
+                .mapTo(linkedSetOf(), DotNetPhysicalDeclaration.Function::methodName),
+        )
+        assertTrue(collectionFunctions.none { declaration ->
+            (declaration.methodName == "checkCountOverflow" ||
+                    declaration.methodName == "throwCountOverflow") &&
                     declaration.isInstance
         })
         assertTrue(physicalDeclarations.values.none { declaration ->
@@ -28325,6 +28344,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".method public hidebysig static bool 'any'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
         )
+        assertTrue(
+            ".method public hidebysig static int32 'count'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        val countOverflowStart = il.indexOf(
+            ".method public hidebysig static int32 'checkCountOverflow'(int32 'count')"
+        )
+        assertTrue(countOverflowStart >= 0)
+        val countOverflowEnd = il.indexOf("  .method", countOverflowStart + 1)
+            .takeIf { index -> index >= 0 } ?: il.length
+        val countOverflowIl = il.substring(countOverflowStart, countOverflowEnd)
+        assertTrue("KotlinCompilerAbiAttribute" in countOverflowIl) { countOverflowIl }
+        assertTrue("EditorBrowsableAttribute" in countOverflowIl) { countOverflowIl }
+        assertTrue("::'throwCountOverflow'()" in countOverflowIl) { countOverflowIl }
+        val throwCountOverflowStart = il.indexOf(
+            ".method public hidebysig static void 'throwCountOverflow'()"
+        )
+        assertTrue(throwCountOverflowStart >= 0)
+        val throwCountOverflowEnd = il.indexOf("  .method", throwCountOverflowStart + 1)
+            .takeIf { index -> index >= 0 } ?: il.length
+        val throwCountOverflowIl = il.substring(throwCountOverflowStart, throwCountOverflowEnd)
+        assertTrue("KotlinCompilerAbiAttribute" in throwCountOverflowIl) { throwCountOverflowIl }
+        assertTrue("EditorBrowsableAttribute" in throwCountOverflowIl) { throwCountOverflowIl }
+        assertTrue("Count overflow has happened." in throwCountOverflowIl) { throwCountOverflowIl }
         assertTrue(
             ".method public hidebysig static !!0 'first'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')" in il
@@ -28515,6 +28558,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun <T> optionalListAt(values: List<T>, index: Int): T? =
                     values.elementAtOrNull(index)
 
+                public fun <T> elementCount(values: Iterable<T>): Int = values.count()
+
                 public fun <T> cardinality(values: Iterable<T>): T? {
                     values.any()
                     values.none()
@@ -28588,6 +28633,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il
         )
         assertTrue("::'any'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
@@ -28675,6 +28721,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun <T> installedOptionalListAt(values: List<T>, index: Int): T? =
                     values.elementAtOrNull(index)
 
+                public fun <T> installedElementCount(values: Iterable<T>): Int = values.count()
+
                 public fun <T> installedCardinality(values: Iterable<T>): T? {
                     values.any()
                     values.none()
@@ -28716,6 +28764,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             view.getOrNull(1) == "K" &&
                             view.elementAtOrNull(2) == null &&
                             values.asIterable().elementAtOrNull(0) == "changed" &&
+                            view.count() == 2 &&
                             view.any() &&
                             !view.none() &&
                             arrayOf("only").asIterable().single() == "only" &&
@@ -28754,6 +28803,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'getOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List', int32)" in il)
         assertTrue("::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("::'any'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
@@ -28902,7 +28952,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             view is RandomAccess
                     val singleton = arrayOf(4).asList()
                     val cardinalityOk =
-                        view.any() &&
+                        view.count() == 2 &&
+                            emptyList<Int>().count() == 0 &&
+                            view.any() &&
                             !view.none() &&
                             view.singleOrNull() == null &&
                             singleton.single() == 4 &&
@@ -28960,6 +29012,104 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "false|null|alpha|beta|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
+    }
+
+    private fun executeCountOverflowCompilerAbi(
+        stdlibDirectory: File,
+        target: String,
+        dotnetHost: File?,
+    ) {
+        val directory = File(tmpdir, "count-overflow-compiler-abi-$target").apply { mkdirs() }
+        stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+            .copyTo(directory.resolve("Kotlin.Stdlib.dll"), overwrite = true)
+        stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+            .copyTo(directory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME), overwrite = true)
+        val ilFile = directory.resolve("CountOverflowProbe.il").apply {
+            writeText(
+                """
+                .assembly extern mscorlib {}
+                .assembly extern Kotlin.Stdlib {}
+                .assembly CountOverflowProbe {}
+                .module CountOverflowProbe.exe
+
+                .class public auto ansi sealed beforefieldinit Program
+                       extends [mscorlib]System.Object
+                {
+                  .method private hidebysig static void Fail(string message) cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    newobj instance void [mscorlib]System.Exception::.ctor(string)
+                    throw
+                  }
+
+                  .method public hidebysig static void Main() cil managed
+                  {
+                    .entrypoint
+                    .maxstack 2
+                    .locals init ([0] class [mscorlib]System.ArithmeticException failure)
+
+                    ldc.i4.0
+                    call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'checkCountOverflow'(int32)
+                    brfalse.s ZERO_OK
+                    ldstr "zero changed"
+                    call void Program::Fail(string)
+                ZERO_OK:
+                    ldc.i4 2147483647
+                    call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'checkCountOverflow'(int32)
+                    ldc.i4 2147483647
+                    beq.s MAX_OK
+                    ldstr "maximum changed"
+                    call void Program::Fail(string)
+                MAX_OK:
+                    .try
+                    {
+                      ldc.i4.m1
+                      call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'checkCountOverflow'(int32)
+                      pop
+                      ldstr "negative count returned"
+                      call void Program::Fail(string)
+                      leave.s DONE
+                    }
+                    catch [mscorlib]System.ArithmeticException
+                    {
+                      stloc.0
+                      ldloc.0
+                      callvirt instance string [mscorlib]System.Exception::get_Message()
+                      ldstr "Count overflow has happened."
+                      call bool [mscorlib]System.String::op_Equality(string, string)
+                      brtrue.s MESSAGE_OK
+                      ldstr "overflow message changed"
+                      call void Program::Fail(string)
+                MESSAGE_OK:
+                      leave.s DONE
+                    }
+                DONE:
+                    ret
+                  }
+                }
+                """.trimIndent()
+            )
+        }
+        val profile = checkNotNull(DotNetTarget.fromString(target))
+        val executable = directory.resolve(
+            if (profile == DotNetTarget.NET48) "CountOverflowProbe.exe" else "CountOverflowProbe.dll"
+        )
+        assertTrue(
+            DotNetIlAssembler.assembleExecutable(ilFile, executable, profile, MessageCollector.NONE),
+            "Could not assemble count-overflow compiler-ABI probe for $target",
+        )
+        val command = if (profile == DotNetTarget.NET48) {
+            listOf(executable.path)
+        } else {
+            listOf(checkNotNull(dotnetHost).path, "exec", executable.path)
+        }
+        val process = ProcessBuilder(command)
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, process.waitFor(), "Count-overflow compiler-ABI probe failed for $target:\n$output")
     }
 
     @Test
