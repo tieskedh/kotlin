@@ -30,6 +30,9 @@ copying a snapshot review into binding design law.
 8. [`common-collections-program.md`](common-collections-program.md) selects collections as a
    first-class feature programme, keeps Common and the stdlib generator authoritative, and
    separates Kotlin identity from later explicit BCL adapters.
+9. [`architecture-responsibility-audit.md`](architecture-responsibility-audit.md) classifies every
+   backend production file, compares mature-target module and package ownership, and selects a
+   bounded CLR load-layer correction with enforced dependency direction.
 
 Authority order for implementation work:
 

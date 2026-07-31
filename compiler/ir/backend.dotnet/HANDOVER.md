@@ -1,6 +1,6 @@
 # Handover — Kotlin/.NET backend, interim development
 
-Written 2026-07-14 and updated 2026-07-30 for the next agent working on the `dotnet` branch
+Written 2026-07-14 and updated 2026-07-31 for the next agent working on the `dotnet` branch
 (array content operations complete; explicit CLR function/property boundaries, nullability,
 defaults, overload-aware function selection, immutable callable-provenance invocation, and the
 bounded typed-argument callable capability implemented; bounded Kotlin property-reference values,
@@ -20,6 +20,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
+- The generated Common collection terminal-operation slice is committed and pushed as
+  `e0b835402`. The following bounded architecture slice implements the audited
+  `frontend.common.dotnet` CLR load boundary without changing artifact or semantic contracts.
+  Its complete inventory and rationale are in
+  `docs/review/architecture-responsibility-audit.md`.
+- Fresh verification for the architecture slice is **893 tests, 0 failures, 0 errors, 0 skips**
+  across all 16 JUnit XML suites. The exact aggregate gate succeeded; an explicit FIR child rerun
+  with `--rerun-tasks` then refreshed the FIR XML that Gradle had legitimately reused after the
+  integration-only fixture correction. The adversarial carrier pin declares `Architecture.Probe`
+  with an IL `.mresource` row: `DotNetIlAssembler`'s resource map stages payload files but does not
+  invent physical resource metadata.
 - Branch `dotnet`; latest committed functional work comprises runtime-helper ownership
   (`b54578fab`), capturing-callable state (`131161ca5`), callable-reference metadata
   (`fb6d43448`), the System.Object Any foundation (`4a78533ad`), and the hybrid Kotlin/CLR
@@ -2900,16 +2911,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit backend responsibilities before another broad feature expansion.** Classify every
-   production file as configuration, CLR metadata/import, Kotlin library/ABI, FIR integration, IR
-   lowering, CIL codegen, product construction, interop tooling, or packaging. Compare placement
-   with JVM, JS, Wasm, and Native. Preserve behavior and ABI in this slice: first record the
-   producer/consumer graph, then move only a coherent cluster whose frontend, CLI, Gradle, or
-   Roslyn consumers currently depend conceptually on backend implementation details. Keep backend
-   context, lowerings, intrinsics, type mapping, runtime IL construction, and CIL emission in
-   `backend.dotnet`; do not split large coordinators merely to reduce file or constructor size.
-   Package boundaries are useful preparation but are not an endpoint unless dependency direction
-   is enforceable.
+1. **Continue the Common collections programme with a concrete list product.** The complete
+   responsibility audit and its first bounded correction are implemented: objective CLR metadata
+   loading is now a compiler-dependency-free `frontend.common.dotnet` module, while Kotlin
+   projection remains FIR policy. Do not continue extracting architecture mechanically. The next
+   feature slice should use the exact Common/actual dependency closure for `listOf` or an
+   array-backed read-only view; grow the generator allowlist only as backend support proves each
+   dependency.
 2. **Continue the CLR importer above its physical declaration and type-resolution foundation.**
    The attribute-carrier review is now recorded in
    `docs/review/clr-annotation-interoperability.md`. Standard CLR/Roslyn metadata is the shared
@@ -2937,13 +2945,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
    each require their own documented contract. Preserve Kotlin declaration identity and Common
    semantics; do not teach the Kotlin-owned backend surface to infer C# conventions. Keep
    structured metadata-table auditing; do not substitute IL substring checks.
-3. **Continue the Common collections programme with a concrete list product.** Use the exact
-   Common/actual dependency closure for `listOf` or an array-backed read-only view. Grow the bounded
-   generator allowlist only as backend support proves each dependency; do not restore target
-   algorithm copies or pretend that the complete generated corpus is supported. Reuse the
-   table-driven erased-interface bridge policy for the next ordinary collection implementation;
-   do not add a runtime interface speculatively or map imported CLR collection interfaces as part
-   of Kotlin-owned stdlib bootstrapping.
+3. **Extract target-profile/configuration ownership when the next consumer requires it.** This is
+   the next coherent architecture boundary identified by the audit and is the prerequisite for
+   moving the two remaining target-coupled CLR constraint validators. Mirror mature target config
+   packages; do not replace `DotNetTarget` with ad-hoc Booleans or mix textual IL rendering into
+   the shared profile model.
 4. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
    should become emitted Kotlin code only when its implementation is supported and tested; keep
    platform operations in the intrinsic registry where the mature JVM stdlib does so.

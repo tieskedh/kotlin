@@ -1,8 +1,9 @@
 # DotNet (CIL) backend — design rules and working notes
 
-Prototype Kotlin → .NET CIL target. Code lives in `compiler/ir/backend.dotnet/` (backend) and
-`compiler/cli/cli-dotnet/` (CLI, K2 phased pipeline only). IL-text golden tests are the primary
-layout validation: test data in `compiler/testData/codegen/dotnet/ilText/`, runners generated from
+Prototype Kotlin → .NET CIL target. Objective CLR loading lives in
+`compiler/frontend.common.dotnet/`, IR/CIL work in `compiler/ir/backend.dotnet/`, and pipeline/FIR
+composition in `compiler/cli/cli-dotnet/` (K2 phased pipeline only). IL-text golden tests are the
+primary layout validation: test data in `compiler/testData/codegen/dotnet/ilText/`, runners generated from
 `compiler/fir/fir2ir/testFixtures/.../codegen/AbstractDotNetIlTextTest.kt` (`./gradlew generateTests`).
 When either supported ILAsm is available, every emitted golden module is also assembled by it;
 the strict toolchain lane requires both Framework and modern ILAsm. CLI tests live in
@@ -66,6 +67,15 @@ The bullets below also record landed prototype behavior. Where an accepted ADR s
 must be replaced, the ADR is authoritative even before implementation catches up; do not treat the
 landed shape as a compatibility constraint.
 
+- CLR load ownership follows the JVM foreign-metadata dependency direction:
+  `:compiler:frontend.common.dotnet` owns objective PE/ECMA-335 facts, resolution, and validated
+  CLR attribute evidence under `org.jetbrains.kotlin.load.dotnet`. It has no compiler-project
+  dependencies. It never converts that evidence into Kotlin types, contracts, symbols, or
+  diagnostics; those are FIR policy under `org.jetbrains.kotlin.fir.dotnet`. Kotlin KLIB carrier
+  identity is likewise caller-owned: the physical classpath reader receives the selected managed
+  resource name and reports only `WithCarrier`/`WithoutCarrier`, without inferring a producer
+  language or importing the Kotlin library/ABI codec. Backend and CLI consume the loader, never
+  the reverse. See `docs/review/architecture-responsibility-audit.md`.
 - IL codegen split: `DotNetIlEmitter` (module orchestration), `DotNetIlClassCodegen` (class shell,
   method dispatch), `DotNetIlMethodCodegen` (bodies/statements), `DotNetIlExpressionCodegen`
   (expressions), `DotNetIlMethodContext` (slots/labels/maxstack/stack verification),

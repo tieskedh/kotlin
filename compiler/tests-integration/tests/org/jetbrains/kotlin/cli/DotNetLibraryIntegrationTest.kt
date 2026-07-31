@@ -7,8 +7,8 @@ package org.jetbrains.kotlin.cli
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_COMMON_SOURCE_NAMES
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrAllowNullMetadataFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrAllowNullMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
 import org.jetbrains.kotlin.backend.dotnet.DotNetStaticInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
@@ -26,169 +26,169 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameter
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
-import org.jetbrains.kotlin.backend.dotnet.DotNetBadImageFormatException
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeClassification
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeClassificationFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeClassifier
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrByRefLikeStatus
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayRuntimeTypesResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayRuntimeTypesResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrClasspathAssembly
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrClasspathAssemblyReader
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReference
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyMetadata
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReferenceBinder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrBlob
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttribute
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeCoreTypes
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeConstructorFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeConstructorResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgument
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgumentKind
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgumentValidation
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgumentValidationFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgumentValidator
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValue
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueDecoding
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueType
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueUnsupported
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolutionFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetBadImageFormatException
+import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeClassification
+import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeClassificationFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeClassifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeStatus
+import org.jetbrains.kotlin.load.dotnet.DotNetClrArrayShape
+import org.jetbrains.kotlin.load.dotnet.DotNetClrArrayRuntimeTypesResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrArrayRuntimeTypesResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
+import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssemblyReader
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReference
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReferenceBinder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrBlob
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttribute
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeCoreTypes
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeConstructorFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeConstructorResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeNamedArgument
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeNamedArgumentKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeNamedArgumentValidation
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeNamedArgumentValidationFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeNamedArgumentValidator
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeValue
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeValueDecoding
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeValueFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeValueType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeValueUnsupported
+import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeConstraintResolutionFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeConstraintResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeConstraintResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintStatus
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstructedTypeConstraintValidator
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstantDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrConstantValue
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDelegateRuntimeTypesResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDelegateRuntimeTypesResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrEffectiveAccessibility
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrEffectiveAccessibilityResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDisallowNullMetadataFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrDisallowNullMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEffectiveAccessibilityResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedConstructedTypeConstraints
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldMarshalDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldSignature
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldVisibility
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterConstraint
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterContextResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterContextResolutionFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterContextResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterKind
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterVariance
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrInputNullabilityEnhancer
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjection
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityProjector
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrKotlinNullabilityQualifier
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataReader
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataHandle
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMemberReferenceSignature
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMaybeNullMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemantics
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemanticsKind
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintSatisfaction
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintUnsupported
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintValidator
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNotNullMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableAnnotation
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationEvidence
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableDeclarationTarget
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplication
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceApplicator
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableEvidenceSource
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableGenericParameterEvidence
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableGenericParameterDeclarationEvidence
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableGenericParameterEvidenceFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableGenericParameterEvidenceResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableGenericParameterEvidenceResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataDecoder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableMetadataResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullablePublicPolicy
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTransform
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeApplication
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeApplicationFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeComponentKind
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrNullableTypeTransformApplicator
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrParameterDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassification
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationUnsupported
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassifier
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeCoreTypes
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeKind
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveTypeCatalogResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveTypeCatalogResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertyDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrConstantDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrConstantValue
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDelegateRuntimeTypesResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDelegateRuntimeTypesResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrEffectiveAccessibility
+import org.jetbrains.kotlin.load.dotnet.DotNetClrEffectiveAccessibilityResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDisallowNullMetadataFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrDisallowNullMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableEffectiveAccessibilityResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedConstructedTypeConstraints
+import org.jetbrains.kotlin.load.dotnet.DotNetClrEnumStorageResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrExportedType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrFieldDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrFieldMarshalDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrFieldSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrFieldVisibility
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterConstraint
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterContextResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterContextResolutionFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterContextResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrInputNullabilityEnhancer
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityProjection
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityProjector
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityQualifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataReader
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataHandle
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMemberReferenceSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMaybeNullMetadataFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMaybeNullMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSemantics
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSemanticsKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodVisibility
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintSatisfaction
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintUnsupported
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintValidator
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNotNullMetadataFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNotNullMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableAnnotation
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableDeclarationEvidence
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableDeclarationFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableDeclarationResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableDeclarationTarget
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableEvidenceApplication
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableEvidenceApplicator
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableEvidenceSource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableGenericParameterEvidence
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableGenericParameterDeclarationEvidence
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableGenericParameterEvidenceFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableGenericParameterEvidenceResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableGenericParameterEvidenceResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableMetadataDecoder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableMetadataFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableMetadataResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullablePublicPolicy
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableTransform
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableTypeApplication
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableTypeApplicationFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableTypeComponentKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNullableTypeTransformApplicator
+import org.jetbrains.kotlin.load.dotnet.DotNetClrParameterDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassification
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassificationFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassificationUnsupported
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeCoreTypes
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveTypeCatalogResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveTypeCatalogResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPropertyDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintSatisfaction
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintUnsupported
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintValidator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialConstraintViolation
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSpecialGenericParameterValidation
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureTypeAssignabilityResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyContentType
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyBinder
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameParser
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameParsing
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyProperty
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyVersion
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedProcessorArchitecture
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomAttributeNamedMember
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomModifier
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericConstraintType
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericParameterConstraint
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedGenericParameterContext
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedMethodSignature
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureSubstitutionFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedMethodSignatureResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeSignature
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeView
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrReturnNullabilityEnhancer
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeModifier
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameParser
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameParsing
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameUnsupported
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeDefinition
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeHierarchyResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeHierarchyViewResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeHierarchyViewResolutionFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeHierarchyViewResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeReference
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolution
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolutionFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeSignature
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeAssignability
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeAssignabilityResolver
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeViewResolutionFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrVarianceFailure
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrVectorGenericInterface
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureCallingConvention
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureTypeAssignabilityResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyContentType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyBinder
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyNameFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyNameParser
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyNameParsing
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyProperty
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyVersion
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedProcessorArchitecture
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedCustomAttributeNamedMember
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedCustomModifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericConstraintType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterConstraint
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterContext
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedMethodSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedSerializedType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedSignatureFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedSignatureSubstitutionFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedMethodSignatureResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeView
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrReturnNullabilityEnhancer
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedTypeResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedTypeResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedTypeModifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedTypeNameFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedTypeNameParser
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedTypeNameParsing
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedTypeNameUnsupported
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeHierarchyResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeHierarchyViewResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeHierarchyViewResolutionFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeHierarchyViewResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeReference
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeResolutionFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeAssignability
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeAssignabilityResolver
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeViewResolutionFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
+import org.jetbrains.kotlin.load.dotnet.DotNetClrVarianceFailure
+import org.jetbrains.kotlin.load.dotnet.DotNetClrVectorGenericInterface
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
@@ -197,8 +197,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultImplementation
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
-import org.jetbrains.kotlin.backend.dotnet.DotNetManagedResourceReader
-import org.jetbrains.kotlin.backend.dotnet.DotNetManagedAssemblyIdentity
+import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
+import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetModernCSharpToolchain
 import org.jetbrains.kotlin.backend.dotnet.DotNetObjectInstance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
@@ -4304,13 +4304,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetClrTypeResolutionFailure.TYPE_NOT_FOUND,
             unresolvedPrimitiveCatalog.resolution.failure,
         )
+        val physicalTypeCoreTypes = DotNetClrPhysicalTypeCoreTypes(
+            systemValueType,
+            systemEnum,
+            systemNullableType,
+        )
         val physicalTypeClassifier = DotNetClrPhysicalTypeClassifier(
             resolver,
-            DotNetClrPhysicalTypeCoreTypes(
-                systemValueType,
-                systemEnum,
-                systemNullableType,
-            ),
+            physicalTypeCoreTypes,
         )
         val arrayRuntimeTypes = (
                 DotNetClrArrayRuntimeTypesResolver(resolver).resolve(
@@ -6424,6 +6425,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ) = DotNetClrSpecialConstraintValidator(
             target,
             classifier,
+            physicalTypeCoreTypes,
             primitiveTypeCatalog,
         )
 
@@ -8353,13 +8355,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         )
                     ) as DotNetClrConstructedTypeConstraintResolution.Resolved
                     ).constraints
+            val selectedPhysicalTypeCoreTypes = DotNetClrPhysicalTypeCoreTypes(
+                systemValueType,
+                systemEnum,
+                systemNullableType,
+            )
             val selectedPhysicalClassifier = DotNetClrPhysicalTypeClassifier(
                 selectedResolver,
-                DotNetClrPhysicalTypeCoreTypes(
-                    systemValueType,
-                    systemEnum,
-                    systemNullableType,
-                ),
+                selectedPhysicalTypeCoreTypes,
             )
             return DotNetClrSpecialConstraintValidator(
                 DotNetTarget.NET10_0,
@@ -8368,6 +8371,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     decoderForSelectedMetadata(selectedMetadata),
                     isByRefLikeAttributeType,
                 ),
+                selectedPhysicalTypeCoreTypes,
                 primitiveTypeCatalog,
             ).validate(constraints)
                 .parameters
@@ -19645,16 +19649,58 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 MessageCollector.NONE,
             )
         )
-        val foreignClassification = DotNetClrClasspathAssemblyReader.read(foreignDll)
-        assertTrue(foreignClassification is DotNetClrClasspathAssembly.Foreign) {
+        val foreignClassification = DotNetClrClasspathAssemblyReader.read(
+            foreignDll,
+            DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME,
+        )
+        assertTrue(foreignClassification is DotNetClrClasspathAssembly.WithoutCarrier) {
             "A resource-free managed assembly must be retained as foreign CLR metadata"
         }
-        foreignClassification as DotNetClrClasspathAssembly.Foreign
+        foreignClassification as DotNetClrClasspathAssembly.WithoutCarrier
         assertEquals(foreignDll.canonicalFile, foreignClassification.assemblyFile)
         assertEquals("Foreign.Library", foreignClassification.metadata.identity.name)
         assertEquals("0.0.0.0", foreignClassification.metadata.identity.version)
         assertEquals("neutral", foreignClassification.metadata.identity.culture)
         assertFalse(foreignClassification.metadata.identity.hasPublicKey)
+
+        val alternateCarrierName = "Architecture.Probe"
+        val alternateCarrierIl = File(tmpdir, "Alternate.Carrier.il").apply {
+            writeText(
+                """
+                .assembly Alternate.Carrier {}
+                .module Alternate.Carrier.dll
+                .mresource private $alternateCarrierName
+                {
+                }
+                """.trimIndent()
+            )
+        }
+        val alternateCarrierDll = File(tmpdir, "Alternate.Carrier.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleLibrary(
+                alternateCarrierIl,
+                alternateCarrierDll,
+                DotNetTarget.NETSTANDARD_2_0,
+                MessageCollector.NONE,
+                mapOf(alternateCarrierName to byteArrayOf(1)),
+            )
+        )
+        assertTrue(
+            DotNetClrClasspathAssemblyReader.read(
+                alternateCarrierDll,
+                DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME,
+            ) is DotNetClrClasspathAssembly.WithoutCarrier
+        ) {
+            "The objective CLR reader must not infer a Kotlin carrier from an unrelated resource"
+        }
+        assertTrue(
+            DotNetClrClasspathAssemblyReader.read(
+                alternateCarrierDll,
+                alternateCarrierName,
+            ) is DotNetClrClasspathAssembly.WithCarrier
+        ) {
+            "The CLR reader must classify only the carrier identity supplied by its caller"
+        }
 
         val [foreignDiagnostics, foreignExitCode] = AbstractCliTest.executeCompilerGrabOutput(
             K2DotNetCompiler(),
@@ -19693,8 +19739,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assemblyName = "Malformed.Embedded.Metadata",
             transform = { byteArrayOf(0x50, 0x4b, 0x03, 0x04) },
         )
-        val malformedCarrierClassification = DotNetClrClasspathAssemblyReader.read(malformedMetadataDll)
-        assertTrue(malformedCarrierClassification is DotNetClrClasspathAssembly.KotlinProduced) {
+        val malformedCarrierClassification = DotNetClrClasspathAssemblyReader.read(
+            malformedMetadataDll,
+            DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME,
+        )
+        assertTrue(malformedCarrierClassification is DotNetClrClasspathAssembly.WithCarrier) {
             "A present reserved resource must stay on the Kotlin-produced path even when its payload is malformed"
         }
         val malformedMetadataDiagnostics = compileAgainstRejectedDll(malformedMetadataDll)

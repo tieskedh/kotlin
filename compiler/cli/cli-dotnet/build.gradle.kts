@@ -7,6 +7,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":compiler:frontend.common.dotnet"))
     implementation(project(":compiler:util"))
     implementation(project(":compiler:cli"))
     implementation(project(":compiler:frontend"))

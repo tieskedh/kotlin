@@ -70,6 +70,7 @@ import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.Variance
+import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 
 internal class DotNetIlEmitter(
     private val messageCollector: MessageCollector,
@@ -462,7 +463,7 @@ internal class DotNetIlEmitter(
         val referencedAssemblies = linkedSetOf<String>()
         val referencedForeignAssemblies =
             java.util.Collections.newSetFromMap(
-                java.util.IdentityHashMap<DotNetClrClasspathAssembly.Foreign, Boolean>()
+                java.util.IdentityHashMap<DotNetClrClasspathAssembly.WithoutCarrier, Boolean>()
             )
         val typeMapper = DotNetIlTypeMapper(
             availableClasses,
@@ -4050,7 +4051,7 @@ internal class DotNetIlEmitter(
         referencesStdlibAssembly: Boolean,
         referencesEditorBrowsableAssembly: Boolean,
         referencedExternalLibraries: List<DotNetExternalLibrary>,
-        referencedForeignAssemblies: List<DotNetClrClasspathAssembly.Foreign>,
+        referencedForeignAssemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>,
         friendAssemblies: List<DotNetFriendAssemblyIdentity>,
         hasCSharpImplementationManifest: Boolean,
         hasKotlinMetadataResource: Boolean,
@@ -4136,6 +4137,6 @@ internal data class DotNetIlEmissionResult(
     val ilText: String,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val referencedAssemblies: Set<String>,
-    val referencedForeignAssemblies: List<DotNetClrClasspathAssembly.Foreign>,
+    val referencedForeignAssemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>,
     val managedResources: Map<String, ByteArray>,
 )

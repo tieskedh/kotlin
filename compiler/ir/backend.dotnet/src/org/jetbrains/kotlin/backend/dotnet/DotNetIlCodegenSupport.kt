@@ -36,6 +36,7 @@ import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.render
+import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 
 /** Whether this is one of the primitive-array classifiers whose scalar element type is supported. */
 internal fun IrType.isSupportedDotNetPrimitiveArray(): Boolean = when (classFqName?.asString()) {
@@ -305,7 +306,7 @@ internal class DotNetIlTypeMapper private constructor(
         externalDeclarations: DotNetExternalDeclarations = DotNetExternalDeclarations(emptyList()),
         genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
         assemblyReferenceSink: (String) -> Unit = {},
-        foreignAssemblyReferenceSink: (DotNetClrClasspathAssembly.Foreign) -> Unit = {},
+        foreignAssemblyReferenceSink: (DotNetClrClasspathAssembly.WithoutCarrier) -> Unit = {},
     ) : this(
         availableClasses,
         coreLibrary,

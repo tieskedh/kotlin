@@ -1,5 +1,26 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeClassification
+import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeClassifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrByRefLikeStatus
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodVisibility
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassification
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeClassificationUnsupported
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeCoreTypes
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPhysicalTypeKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveTypeCatalog
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedConstructedTypeConstraints
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterBinding
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterContext
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterContextBinding
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureCallingConvention
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
+import org.jetbrains.kotlin.load.dotnet.asResolvedSignature
+
 enum class DotNetClrSpecialConstraintKind {
     REFERENCE_TYPE,
     NON_NULLABLE_VALUE_TYPE,
@@ -65,6 +86,7 @@ data class DotNetClrConstructedTypeSpecialConstraintValidation(
 class DotNetClrSpecialConstraintValidator(
     private val target: DotNetTarget,
     private val byRefLikeClassifier: DotNetClrByRefLikeClassifier,
+    private val physicalTypeCoreTypes: DotNetClrPhysicalTypeCoreTypes,
     private val primitiveTypes: DotNetClrPrimitiveTypeCatalog,
 ) {
     fun validate(
@@ -267,10 +289,10 @@ class DotNetClrSpecialConstraintValidator(
                     primitiveTypes[DotNetClrPrimitiveType.OBJECT]
                 ) == true ||
                 definition?.hasSameIdentityAs(
-                    byRefLikeClassifier.systemValueType
+                    physicalTypeCoreTypes.systemValueType
                 ) == true ||
                 definition?.hasSameIdentityAs(
-                    byRefLikeClassifier.systemEnum
+                    physicalTypeCoreTypes.systemEnum
                 ) == true
             ) {
                 continue
