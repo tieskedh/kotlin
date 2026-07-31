@@ -244,7 +244,7 @@ See the
 - Variant/generic interfaces use the versioned split-interface/bridge model
   where one CLR interface cannot truthfully carry all Kotlin views. MethodImpl
   and effective interface maps are semantic ABI, not IL spelling trivia. See
-  [`draft-adr-variant-interface-abi.md`](docs/decisions/draft-adr-variant-interface-abi.md).
+  [the generic-interface draft](docs/decisions/draft-adr-generic-interface-abi.md).
 - Interface default bodies are profile-aware. Do not simulate modern DIM into
   the Framework ABI or reject a Kotlin body without applying the accepted
   fallback policy. See
