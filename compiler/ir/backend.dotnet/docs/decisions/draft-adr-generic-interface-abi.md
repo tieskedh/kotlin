@@ -62,6 +62,36 @@ callable signature rather than declaration order or the current overload set.
 Exact physical spellings are compiler ABI pinned by metadata/tests, not source
 API.
 
+### Top-level overloads over a canonical carrier
+
+Ordinary fields, parameters, and returns use canonical identity. Consequently,
+top-level overloads that differ only in a Kotlin-owned interface's logical type
+argument can share one CLR signature. Substituting a constructed declared or
+exact capability solely to preserve the overload would violate canonical
+identity, reject value/open covariance, and exclude canonical-only providers.
+
+The physical name must instead be deterministic from authoritative declaration
+metadata and independent of the current overload set. When an admitted Common
+stdlib template already supplies an explicit platform name, the .NET stdlib
+projection pins that spelling and records it in the self-describing library's
+physical binding. `Iterable<Byte>.sum()` through `Iterable<Double>.sum()` are
+the first case: their logical names remain `sum`, while the existing Common
+template names their erased physical methods `sumOfByte` through
+`sumOfDouble`.
+
+The current source generator renders that platform-name record as `@JvmName`
+because JVM was the only mature target with this collision when the template
+was designed. On a non-JVM target `@JvmName` is an optional expectation and is
+erased before IR, so Kotlin/.NET cannot truthfully consume it as retained
+metadata. Instead, the backend owns one exact projection table keyed by the
+logical `Iterable` element type and pinned to the six spellings from the Common
+template. It applies only to compiler-owned generated stdlib implementations.
+It does not assign general .NET semantics to user `@JvmName`, infer logical
+identity from an annotation, or replace the KLIB/manifest binding. A
+declaration with no entry in this bounded authoritative projection remains
+subject to atomic collision rejection until a general versioned naming codec
+is designed.
+
 ### Declared generic view
 
 The compiler also emits a generic sibling carrying the declaration's legal CLR

@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: exact Kotlin `Float` scalar support
+- Last completed feature: complete generated Common signed `Iterable.sum()` family
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -17,7 +17,7 @@ verification, and work state.
 The last semantic head passed:
 
 ```text
-.\gradlew.bat :compiler:backend.dotnet:dotNetTest --console=plain
+.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
 The JUnit audit covered 16 XML files and 924 tests:
@@ -27,11 +27,12 @@ The JUnit audit covered 16 XML files and 924 tests:
 - 69 library-integration tests
 - zero failures, errors, or skips
 
-The Float slice additionally passed focused execution in all four PSI/LightTree
-and Framework/CoreCLR box lanes. Its portable product gate proved exact
-`float32` overloads, nullable and generic carriers, Kotlin library round trips,
-direct C# consumption, foreign CLR `float` calls, NaN canonicalization, and
-signed-zero behavior on both supported runtime profiles.
+The numeric-sum slice additionally passed focused `net10.0`, `net48`, and
+portable `netstandard2.0` product tests. They proved direct, packaged-fallback,
+installed, and separate-consumer binding for all six logical overloads; exact
+`sumOfByte` through `sumOfDouble` physical names; integer wraparound; Float
+encounter-order rounding, NaN, and empty positive zero; and one-iterator
+traversal on both supported runtimes.
 
 ## Current architecture
 
@@ -53,13 +54,13 @@ signed-zero behavior on both supported runtime profiles.
 
 ## Active state
 
-No implementation slice is half-landed. Kotlin `Byte`, `Short`, and `Float` now
-use exact CLR `int8`/`System.SByte`, `int16`/`System.Int16`, and
-`float32`/`System.Single` carriers across operations, nullability, generics,
-boxing, libraries, and the closed foreign primitive import slice. Common
-arithmetic, overflow, equality, ordering, hash, and observable rendering remain
-authoritative. All six signed scalar prerequisites are now available for the
-complete generated Common `Iterable.sum()` overload family.
+No implementation slice is half-landed. The complete signed generated Common
+`Iterable.sum()` family now lives in `Kotlin.Stdlib`: Common owns the six source
+bodies and logical `sum` declarations, while the self-describing physical
+binding records the exact erased CLR names `sumOfByte` through `sumOfDouble`.
+The canonical Kotlin collection carrier remains unchanged; no LINQ/BCL
+algorithm or target-authored body was introduced. Kotlin `Byte`, `Short`, and
+`Float` retain their exact CLR scalar carriers across this new library boundary.
 
 ## Open architectural blockers
 
@@ -80,12 +81,12 @@ complete generated Common `Iterable.sum()` overload family.
 
 ## Next bounded work
 
-1. Adopt the complete generated Common `Iterable.sum()` overload family without
-   copying its algorithms or replacing canonical Kotlin collection identity.
-2. Create the shared retained-declaration carrier seam, then split FIR policy
+1. Create the shared retained-declaration carrier seam, then split FIR policy
    from backend binding without moving physical CLR loading into either.
-3. Continue CLR annotation/import interoperability only through exact standard
+2. Continue CLR annotation/import interoperability only through exact standard
    metadata mappings that preserve Kotlin smart-cast and mutability rules.
+3. Select another exact non-inline Common collection family only after its full
+   type/helper closure and cross-profile product behavior are documented.
 
 ## Navigation
 

@@ -282,6 +282,8 @@ private class DotNetEnvironmentConfigurator(
      * star imports (`kotlin.*`, `kotlin.io.*`) look at source-declared symbols, so `println` and
      * `Char.code` resolve without an explicit import. Mirrors
      * `K2DotNetCompilerArgumentsConfigurator` on the CLI side.
+     * The compiler-owned Common stdlib headers additionally opt in through the wrapped language
+     * settings below, preserving any test-declared opt-ins rather than replacing their list.
      * (TODO: this also allows test code in `kotlin.*`.)
      */
     override fun provideAdditionalAnalysisFlags(
@@ -353,6 +355,15 @@ private fun LanguageVersionSettings.withDotNetMultiplatformSources(): LanguageVe
         override fun getCustomizedLanguageFeatures(): Map<LanguageFeature, LanguageFeature.State> =
             delegate.getCustomizedLanguageFeatures() +
                     (LanguageFeature.MultiPlatformProjects to LanguageFeature.State.ENABLED)
+
+        override fun <T> getFlag(flag: AnalysisFlag<T>): T {
+            @Suppress("UNCHECKED_CAST")
+            if (flag == AnalysisFlags.optIn) {
+                return (delegate.getFlag(AnalysisFlags.optIn) + "kotlin.ExperimentalMultiplatform")
+                    .distinct() as T
+            }
+            return delegate.getFlag(flag)
+        }
     }
 }
 

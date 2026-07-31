@@ -178,6 +178,55 @@ collection identity. This closure also does not remove the Common abstract-base 
 `AbstractCollection` and `AbstractList` depend on the separate inline-lambda `any`, `all`,
 `indexOfFirst`, and `indexOfLast` variants.
 
+### Signed numeric sum
+
+The admitted numeric closure is the complete signed Common `Numeric.f_sum` family for `Iterable`:
+
+- `Iterable<Byte>.sum()` and `Iterable<Short>.sum()` return `Int`;
+- `Iterable<Int>.sum()` returns `Int`;
+- `Iterable<Long>.sum()` returns `Long`;
+- `Iterable<Float>.sum()` returns `Float`; and
+- `Iterable<Double>.sum()` returns `Double`.
+
+The bootstrap generator selects these six `PrimitiveType.numericPrimitives` variants from the
+same template object that generates `_Collections.kt`. Unsigned variants remain excluded because
+unsigned value classes are not a supported scalar family; `Sequence`, object-array,
+primitive-array, `sumOf`, and `average` variants are separate dependency closures. No body is
+copied or rewritten for .NET.
+
+Each Common body initializes the result type's zero, requests one iterator, and performs
+`sum += element` in encounter order. Consequently empty identity, `Byte`/`Short` promotion to
+`Int`, signed integer wraparound, Float rounding after every addition, Double IEEE behavior, and
+exception/side-effect order come directly from Common plus the already completed scalar
+semantics. There is no Collection/List or BCL fast path. LINQ `Sum`, `IEnumerable<T>`, checked
+addition, pairwise/vector reduction, and target intrinsics are rejected because each would change
+identity, overflow, rounding, traversal, or exception policy without a CLR representation need.
+
+The canonical CLR receiver of all six logical declarations is deliberately the same non-generic
+`Kotlin.Collections.Iterable`. Replacing it with `Iterable<T>` would break Kotlin value/open
+covariance and canonical-only providers. The CLR therefore has the same overload-erasure problem
+that the Common generator already records through its platform names. The physical stdlib methods
+use the generator-supplied `sumOfByte`, `sumOfShort`, `sumOfInt`, `sumOfLong`, `sumOfFloat`, and
+`sumOfDouble` spellings, while KLIB continues to expose six logical functions named `sum` and the
+self-describing library manifest binds each logical declaration to its physical method. This
+bounded projection is an exact backend table keyed by the six logical element types and pinned to
+the Common generator's platform-name intent. It applies only to compiler-owned stdlib
+implementations; it does not reinterpret arbitrary user `@JvmName` annotations as a .NET API.
+
+The bootstrap source product includes the authoritative `Multiplatform.kt` and
+`JvmAnnotationsH.kt` Common headers needed to resolve that optional expectation. As on mature
+non-JVM targets, an optional JVM annotation with no platform actual is erased rather than emitted
+as a runtime annotation class. Compiler-owned stdlib source products opt in to
+`ExperimentalMultiplatform`, matching the Common stdlib build contract, without granting the
+opt-in to ordinary user compilations. These headers are resolution-only compiler input; admitting
+them does not claim general annotation-class or reflection support.
+
+JVM uses these same spellings because its erased receiver signatures also collide. JS, Wasm, and
+Native compile the same generated bodies but their symbol/overload representations do not require
+the CLR/JVM physical method-name projection. A hash suffix, overload-set-dependent renaming,
+duplicated C# wrapper, or a target-authored `sum` implementation would be less stable or less
+interoperable than consuming the authoritative explicit platform names.
+
 ## Next selection rule
 
 Select the next exact non-inline Common/generated family only when all of these are closed:
@@ -227,6 +276,16 @@ these prerequisites are genuinely supported.
 - **Add `IEnumerable<T>` while adding Common functions.** That is a separate ABI/export decision.
 - **Use target intrinsics for blocked Common helpers.** The CLR supplies no semantic need to fork
   those algorithms.
+- **Map numeric sum to LINQ or a BCL collection interface.** That changes Kotlin collection
+  identity and can change overflow, Float rounding, traversal, and exception order.
+- **Give each sum receiver an exact generic CLR interface.** Ordinary Kotlin parameters must retain
+  canonical identity so value/open covariance and canonical-only implementations keep working.
+- **Give general .NET meaning to `@JvmName`.** The admitted sum names are a bounded consumption of
+  the Common generator's explicit platform-name records for compiler-owned stdlib declarations,
+  not a new user annotation contract.
+- **Retain or invent an annotation solely to tunnel the sum names into IR.** `@JvmName` is
+  correctly erased on non-JVM targets; a target annotation would broaden the parked annotation
+  programme for information that one exact compiler-owned projection can represent.
 
 ## Adversarial completion gates
 

@@ -1005,7 +1005,7 @@ internal class DotNetIlEmitter(
                     availableFunctions[function] = DotNetIlFunctionInfo(
                         facadeClassInfo,
                         function.dotNetSignature(typeMapper),
-                        function.dotNetExceptionCarrierMethodNameOrNull(),
+                        function.dotNetAbiMethodNameOrNull(),
                     )
                 } catch (e: DotNetIlUnsupportedException) {
                     skipReasons[function] = e.reason
@@ -1044,7 +1044,7 @@ internal class DotNetIlEmitter(
                             availableFunctions[accessor] = DotNetIlFunctionInfo(
                                 facadeClassInfo,
                                 accessor.dotNetSignature(typeMapper),
-                                accessor.dotNetExceptionCarrierMethodNameOrNull(),
+                                accessor.dotNetAbiMethodNameOrNull(),
                             )
                         }
                     } catch (e: DotNetIlUnsupportedException) {
