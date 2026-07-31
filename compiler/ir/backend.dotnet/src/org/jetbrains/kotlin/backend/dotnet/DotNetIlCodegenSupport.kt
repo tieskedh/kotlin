@@ -177,10 +177,24 @@ internal fun IrSimpleFunction.dotNetExceptionCarrierMethodNameOrNull(
     return "${baseMethodName}__KotlinException__${DotNetLibraryAbiCodec.logicalIdentityDigest(logicalSignature)}"
 }
 
-/** The ordinary CLR name, or the stable logical-exception ABI name when representation requires it. */
+/**
+ * The selected physical CLR name, including a bounded Common-stdlib platform name or the stable
+ * logical-exception ABI name when representation requires it. An explicit [baseMethodName] is a
+ * caller-owned slot/capability spelling and therefore bypasses stdlib top-level name selection.
+ */
 internal fun IrSimpleFunction.dotNetAbiMethodName(
-    baseMethodName: String = dotNetIlMethodName(),
-): String = dotNetExceptionCarrierMethodNameOrNull(baseMethodName) ?: baseMethodName
+    baseMethodName: String? = null,
+): String = dotNetAbiMethodNameOrNull(baseMethodName) ?: dotNetIlMethodName()
+
+/** A non-default ABI spelling, or null when the ordinary Kotlin/CLR method name is sufficient. */
+internal fun IrSimpleFunction.dotNetAbiMethodNameOrNull(
+    baseMethodName: String? = null,
+): String? {
+    val selectedBaseMethodName = baseMethodName
+        ?: DotNetStdlibLibrary.implementationPlatformMethodNameOrNull(this)
+    val physicalBaseMethodName = selectedBaseMethodName ?: dotNetIlMethodName()
+    return dotNetExceptionCarrierMethodNameOrNull(physicalBaseMethodName) ?: selectedBaseMethodName
+}
 
 /** The Kotlin Any member and the CLR System.Object virtual slot that physically represents it. */
 internal enum class DotNetAnyMethod(

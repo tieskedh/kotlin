@@ -6,9 +6,14 @@ import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.render
 import java.io.File
 
 /**
@@ -75,6 +80,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.none" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.single" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.singleOrNull" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.sum" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.throwCountOverflow" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.throwIndexOverflow" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERATOR_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
@@ -179,6 +185,34 @@ internal object DotNetStdlibLibrary {
         return property.fqNameWhenAvailable?.asString()?.let(implementationPropertyFacadeIlNames::get)
     }
 
+    /** Selects the pinned Common-generator spelling for the one erased stdlib overload family. */
+    fun implementationPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
+        if (function.fqNameWhenAvailable?.asString() != "kotlin.collections.sum") return null
+        if (implementationFunctionFacadeIlName(function) == null) return null
+        val receiverType = function.parameters
+            .singleOrNull { parameter -> parameter.kind == IrParameterKind.ExtensionReceiver }
+            ?.type as? IrSimpleType
+            ?: dotNetUnsupported(
+                "Common Iterable.sum has no single simple extension receiver: " +
+                        function.parameters.joinToString { parameter ->
+                            "${parameter.kind}:${parameter.type.render()}"
+                        }
+            )
+        val receiverFqName = receiverType.classFqName?.asString()
+        if (receiverFqName != "kotlin.collections.Iterable") {
+            dotNetUnsupported("Common Iterable.sum has unexpected receiver '${receiverType.render()}'")
+        }
+        val elementType = (receiverType.arguments.singleOrNull() as? IrTypeProjection)?.type
+            ?: dotNetUnsupported(
+                "Common Iterable.sum receiver '${receiverType.render()}' has no exact element type"
+            )
+        val elementFqName = elementType.classFqName?.asString()
+        return signedIterableSumPlatformNames[elementFqName]
+            ?: dotNetUnsupported(
+                "Common Iterable.sum element '${elementType.render()}' has no pinned CLR method name"
+            )
+    }
+
     /** Crosses from a bootstrap user assembly to an ordinary function emitted in Kotlin.Stdlib. */
     fun implementationFunctionInfoOrNull(
         function: IrSimpleFunction,
@@ -235,6 +269,14 @@ internal object DotNetStdlibLibrary {
     )
     private val ARRAY_ITERATOR_FACTORY_INFO = arrayFactoryInfo(DotNetRuntimeTypes.iteratorType)
     private val ARRAY_ITERABLE_FACTORY_INFO = arrayFactoryInfo(DotNetRuntimeTypes.iterableType)
+    private val signedIterableSumPlatformNames = mapOf(
+        "kotlin.Byte" to "sumOfByte",
+        "kotlin.Short" to "sumOfShort",
+        "kotlin.Int" to "sumOfInt",
+        "kotlin.Long" to "sumOfLong",
+        "kotlin.Float" to "sumOfFloat",
+        "kotlin.Double" to "sumOfDouble",
+    )
 
     private fun arrayFactoryInfo(returnType: DotNetIlValueType): DotNetIlFunctionInfo =
         DotNetIlFunctionInfo(
@@ -296,6 +338,8 @@ internal object DotNetStdlibLibrary {
     )
     private val resolutionOnlySources = mapOf(
         "Annotations.kt" to "kotlin.internal",
+        "JvmAnnotationsH.kt" to "kotlin.jvm",
+        "Multiplatform.kt" to "kotlin",
     )
 
     internal fun isImplementationSource(file: IrFile): Boolean =

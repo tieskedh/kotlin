@@ -284,6 +284,8 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
                 enableMultiplatform = usesBootstrapStdlibSources || commonSources.isNotEmpty(),
                 muteExpectActualClassesWarning =
                     arguments.dotNetProduceStdlib || usesBootstrapStdlibSources,
+                optInExperimentalMultiplatform =
+                    arguments.dotNetProduceStdlib || usesBootstrapStdlibSources,
             )
 
         val classpathFiles = linkedSetOf<File>()
@@ -309,6 +311,7 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(
     allowKotlinPackage: Boolean,
     enableMultiplatform: Boolean,
     muteExpectActualClassesWarning: Boolean,
+    optInExperimentalMultiplatform: Boolean,
 ): LanguageVersionSettings {
     val delegate = this
     return object : LanguageVersionSettings by delegate {
@@ -337,6 +340,11 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(
             if (flag == AnalysisFlags.muteExpectActualClassesWarning) {
                 return (muteExpectActualClassesWarning ||
                         delegate.getFlag(AnalysisFlags.muteExpectActualClassesWarning)) as T
+            }
+            @Suppress("UNCHECKED_CAST")
+            if (flag == AnalysisFlags.optIn && optInExperimentalMultiplatform) {
+                return (delegate.getFlag(AnalysisFlags.optIn) + "kotlin.ExperimentalMultiplatform")
+                    .distinct() as T
             }
             return delegate.getFlag(flag)
         }

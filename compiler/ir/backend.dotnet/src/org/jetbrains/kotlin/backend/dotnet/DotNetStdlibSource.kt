@@ -53,6 +53,16 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "JvmAnnotationsH.kt",
+        "common/src/kotlin/JvmAnnotationsH.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Multiplatform.kt",
+        "src/kotlin/annotations/Multiplatform.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "Annotations.kt",
         "src/kotlin/internal/Annotations.kt",
         isCommon = true,
