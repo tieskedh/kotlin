@@ -51,7 +51,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
 - [Generic and variant interface ABI](decisions/draft-adr-variant-interface-abi.md)
 - [Callable ABI](decisions/draft-adr-erased-callable-abi.md)
-- [Runtime and stdlib product ownership](decisions/draft-adr-target-stdlib-bootstrap.md)
+- [Runtime and stdlib product ownership](decisions/runtime-and-stdlib-ownership.md)
 - [CIL and PE production direction](decisions/cil-and-pe-production.md)
 
 ## Interop, integration, and supporting decisions
