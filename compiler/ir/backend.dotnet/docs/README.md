@@ -50,7 +50,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Kotlin-owned primitive-array wrappers](decisions/primitive-arrays.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
 - [Generic and variant interface ABI](decisions/draft-adr-variant-interface-abi.md)
-- [Callable ABI](decisions/draft-adr-erased-callable-abi.md)
+- [Callable and callable-reference ABI](decisions/draft-adr-callable-and-reference-abi.md)
 - [Runtime and stdlib product ownership](decisions/runtime-and-stdlib-ownership.md)
 - [CIL and PE production direction](decisions/cil-and-pe-production.md)
 
@@ -63,9 +63,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Friend assemblies and compiler ABI](decisions/adr-friend-assemblies-and-compiler-abi.md)
 - [.NET platform and target frameworks](decisions/dotnet-platform-and-target-frameworks.md)
 - [Compiler and Gradle integration](decisions/compiler-and-gradle-integration.md)
-- [Explicit C# property exports](decisions/draft-adr-clr-property-exports.md)
-- [Explicit C# default-argument exports](decisions/draft-adr-clr-default-argument-exports.md)
-- [Property-reference ABI](decisions/draft-adr-erased-property-reference-abi.md)
+- [Explicit C# export surface](decisions/draft-adr-explicit-csharp-export-surface.md)
 - [Iterator ABI](decisions/draft-adr-erased-iterator-abi.md)
 
 Three current files document implementation or verification mechanisms and
