@@ -45,6 +45,7 @@ object CompilerModules {
         ":core:language.targets.jvm",
         ":core:language.version-settings",
         ":core:reflection.common.jvm",
+        ":compiler:frontend.common.dotnet",
         ":compiler:frontend.common.jvm",
         ":kotlin-util-io",
         ":kotlin-util-klib",

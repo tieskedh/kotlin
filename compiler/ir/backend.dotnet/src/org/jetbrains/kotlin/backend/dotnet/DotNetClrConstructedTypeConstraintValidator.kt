@@ -1,5 +1,12 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.load.dotnet.DotNetClrConstructedTypeNominalConstraintValidation
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintSatisfaction
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintValidation
+import org.jetbrains.kotlin.load.dotnet.DotNetClrNominalConstraintValidator
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedConstructedTypeConstraints
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedGenericParameterContext
+
 data class DotNetClrNominalConstraintIssue(
     val parameterIndex: Int,
     val constraintIndex: Int,

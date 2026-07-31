@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.CompilerConfigurationKey
+import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 import java.io.File
 
 object DotNetConfigurationKeys {
@@ -20,7 +21,7 @@ object DotNetConfigurationKeys {
         CompilerConfigurationKey.create("external Kotlin/.NET stdlib assembly")
     val EXTERNAL_LIBRARIES: CompilerConfigurationKey<List<DotNetExternalLibrary>> =
         CompilerConfigurationKey.create("external Kotlin/.NET library assemblies")
-    val EXTERNAL_CLR_ASSEMBLIES: CompilerConfigurationKey<List<DotNetClrClasspathAssembly.Foreign>> =
+    val EXTERNAL_CLR_ASSEMBLIES: CompilerConfigurationKey<List<DotNetClrClasspathAssembly.WithoutCarrier>> =
         CompilerConfigurationKey.create("external foreign CLR assemblies")
     val FRIEND_PATHS: CompilerConfigurationKey<List<String>> =
         CompilerConfigurationKey.create("Kotlin/.NET friend assembly paths")
@@ -313,7 +314,7 @@ var CompilerConfiguration.dotNetExternalLibraries: List<DotNetExternalLibrary>
         put(DotNetConfigurationKeys.EXTERNAL_LIBRARIES, value)
     }
 
-var CompilerConfiguration.dotNetExternalClrAssemblies: List<DotNetClrClasspathAssembly.Foreign>
+var CompilerConfiguration.dotNetExternalClrAssemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>
     get() = get(DotNetConfigurationKeys.EXTERNAL_CLR_ASSEMBLIES, emptyList())
     set(value) {
         put(DotNetConfigurationKeys.EXTERNAL_CLR_ASSEMBLIES, value)
