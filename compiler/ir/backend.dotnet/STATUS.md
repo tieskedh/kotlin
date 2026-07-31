@@ -8,8 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last semantic feature: `bbf8ee876` (`[DotNet] Add Common indexed optional
-  collection access`)
+- Last semantic feature: `78c1c910b` (`[DotNet] Add Common iterable count`)
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -28,10 +27,10 @@ The fresh JUnit audit covered 16 XML files and 906 tests:
 - 67 library-integration tests
 - zero failures, errors, or skips
 
-The indexed optional collection slice additionally passed focused execution in
-all four PSI/LightTree and Framework/CoreCLR box lanes, plus direct, installed,
-separate-consumer, and portable stdlib product checks on every compatible
-runtime profile.
+The iterable-count slice additionally passed focused execution in all four
+PSI/LightTree and Framework/CoreCLR box lanes, plus direct, installed,
+separate-consumer, and portable stdlib product checks. Its internal overflow
+compiler ABI executed at zero, `Int.MAX_VALUE`, and overflow on both CLR hosts.
 
 ## Current architecture
 
@@ -54,12 +53,10 @@ runtime profile.
 ## Active state
 
 No implementation slice is half-landed. The authoritative Common
-`Iterable.elementAtOrNull` and `List.getOrNull` bodies are now part of every
-.NET stdlib product. The shared `RangeContainsLowering` removes their
-`0..<size` membership check before .NET for-loop lowering, matching the mature
-targets without copying the algorithm. The next work is selection of one
-bounded semantic slice through the compare, document, implement, and
-adversarially test workflow in `AGENTS.md`.
+`Iterable.count` body is now part of every .NET stdlib product together with
+its exact overflow contract. Collection receivers take the Common size fast
+path; other Iterables traverse once. The next candidate is the bounded Common
+`contains`/`indexOf`/`lastIndexOf` family and its index-overflow helper.
 
 ## Open architectural blockers
 
@@ -77,8 +74,9 @@ adversarially test workflow in `AGENTS.md`.
 
 ## Next bounded work
 
-1. Select the next exact non-inline Common collections family only after
-   proving its complete generator/source dependency closure.
+1. Complete the documented dependency and adversarial review for Common
+   `contains`/`indexOf`/`lastIndexOf`, then admit it only if the exact
+   non-inline source closure remains supportable.
 2. Create the shared retained-declaration carrier seam, then split FIR policy
    from backend binding without moving physical CLR loading into either.
 3. Continue CLR annotation/import interoperability only through exact standard
