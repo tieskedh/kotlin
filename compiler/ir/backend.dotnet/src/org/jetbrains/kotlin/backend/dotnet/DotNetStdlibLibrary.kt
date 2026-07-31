@@ -59,9 +59,11 @@ internal object DotNetStdlibLibrary {
     private val implementationFunctionFacadeIlNames = mapOf(
         "kotlin.collections.any" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.asList" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.elementAtOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.emptyList" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.first" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.firstOrNull" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.getOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.last" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.lastOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.none" to COLLECTIONS_FACADE_IL_NAME,

@@ -3,6 +3,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.common.lower.ArrayConstructorLowering
 import org.jetbrains.kotlin.backend.common.lower.KotlinNothingValueExceptionLowering
 import org.jetbrains.kotlin.backend.common.lower.LocalDelegatedPropertiesLowering
+import org.jetbrains.kotlin.backend.common.lower.RangeContainsLowering
 import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
@@ -162,6 +163,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetStaticInitializationFailureLowering,
     // For-loops next: the rewrite produces plain calls/whens the later phases treat like any
     // other code (string concatenations inside loop bodies are still ahead of their lowerings).
+    // JVM, JS, Wasm, and Native first erase supported range-membership expressions into primitive
+    // comparisons. Keep that shared order so generated Common bodies such as List.getOrNull do not
+    // require a materialized IntRange or a target-specific source rewrite.
+    ::RangeContainsLowering,
     ::DotNetForLoopLowering,
     // The DotNet subclass keeps floating-point constants unfolded; see
     // DotNetFlattenStringConcatenationLowering for the CLR rendering reason.

@@ -95,6 +95,35 @@ invalid IL. `Array<Int>.asList()` remains supported at exact element type and re
 Input and star projections need their own truthful carrier rules and remain outside this product
 boundary.
 
+### Indexed optional access
+
+The admitted Common template closure pairs:
+
+- `List<T>.getOrNull(index)`; and
+- `Iterable<T>.elementAtOrNull(index)`.
+
+All mature targets take both bodies from `Elements`. The Iterable body uses the List operation for
+its indexed fast path and otherwise traverses only as far as the requested element. A negative
+index returns `null` without constructing an iterator. The List operation checks bounds before one
+indexed access.
+
+The List body spells that bounds check as `index in 0..<size`. JVM, JS, Wasm, and Native all run
+the shared `RangeContainsLowering`; it removes the temporary range and `contains` call in favor of
+primitive comparisons. Kotlin/.NET must admit that same Common lowering immediately before its
+for-loop lowering. Rewriting the generated body as target source would only hide a missing shared
+compiler phase, while materializing an `IntRange` solely for this check would retain work the mature
+targets deliberately eliminate.
+
+The Common `List.elementAtOrNull` overload is deliberately excluded: upstream marks that special
+overload `@InlineOnly`, while cross-module generic inline production remains parked. Publishing a
+target copy or non-inline substitute would make the .NET surface differ from Common. Including only
+the Iterable overload is sound because ordinary overload resolution still chooses it for a List;
+its body then reaches the admitted non-inline List fast path.
+
+Both admitted functions are ordinary static generic methods on
+`Kotlin.Collections.CollectionsKt`. The CLR creates no representation difference and supplies no
+reason for an intrinsic or BCL implementation.
+
 ## Next selection rule
 
 Select the next exact non-inline Common/generated family only when all of these are closed:

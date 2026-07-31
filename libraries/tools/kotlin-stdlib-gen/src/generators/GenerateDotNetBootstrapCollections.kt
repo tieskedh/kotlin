@@ -49,8 +49,10 @@ fun main(args: Array<String>) {
     val selectedTemplates = sequenceOf(
         Aggregates.f_any selectedFor setOf(Family.Iterables),
         Aggregates.f_none selectedFor setOf(Family.Iterables),
+        Elements.f_elementAtOrNull selectedFor setOf(Family.Iterables),
         Elements.f_first selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_firstOrNull selectedFor setOf(Family.Iterables, Family.Lists),
+        Elements.f_getOrNull selectedFor setOf(Family.Lists),
         Elements.f_last selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_lastOrNull selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_single selectedFor setOf(Family.Iterables, Family.Lists),
