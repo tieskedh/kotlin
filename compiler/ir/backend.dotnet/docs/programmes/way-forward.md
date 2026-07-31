@@ -91,15 +91,15 @@ known. Do not fork Common algorithms to make a slice look smaller.
 The collection work provides ordinary user value and foundations for enums, while exercising
 generic interfaces, arrays, separate products, and profile-compatible stdlib publication.
 
-### 2. Create the retained-declaration architecture seam
+### 2. Retain and enforce the completed declaration architecture seam
 
-Use [`compiler-architecture.md`](compiler-architecture.md). Introduce one neutral carrier shared by
-the foreign FIR provider and backend binding. Then move Kotlin-facing provider policy into a
-FIR-owned .NET module while objective CLR loading stays below FIR and IR binding stays in the
-backend.
+Use [`compiler-architecture.md`](compiler-architecture.md). The versioned neutral carrier is now
+shared by the foreign FIR provider and backend binding, and Kotlin-facing provider policy lives in
+the FIR-owned .NET module while objective CLR loading stays below FIR and IR binding stays in the
+backend. Preserve and validate that dependency direction as the importer grows.
 
-This is the next architecture correction because it has concrete independent consumers. It is not
-a request to split large classes or create layers for their own sake.
+Further extraction still requires concrete independent consumers. It is not a request to split
+large classes or create layers for their own sake.
 
 ### 3. Broaden foreign CLR interoperability only through exact mappings
 
