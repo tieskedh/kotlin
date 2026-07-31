@@ -327,3 +327,75 @@ public fun <T> Iterable<T>.singleOrNull(): T? {
 public fun <T> List<T>.singleOrNull(): T? {
     return if (size == 1) this[0] else null
 }
+
+/**
+ * Returns the sum of all elements in the collection.
+ */
+@kotlin.jvm.JvmName("sumOfByte")
+public fun Iterable<Byte>.sum(): Int {
+    var sum: Int = 0
+    for (element in this) {
+        sum += element
+    }
+    return sum
+}
+
+/**
+ * Returns the sum of all elements in the collection.
+ */
+@kotlin.jvm.JvmName("sumOfShort")
+public fun Iterable<Short>.sum(): Int {
+    var sum: Int = 0
+    for (element in this) {
+        sum += element
+    }
+    return sum
+}
+
+/**
+ * Returns the sum of all elements in the collection.
+ */
+@kotlin.jvm.JvmName("sumOfInt")
+public fun Iterable<Int>.sum(): Int {
+    var sum: Int = 0
+    for (element in this) {
+        sum += element
+    }
+    return sum
+}
+
+/**
+ * Returns the sum of all elements in the collection.
+ */
+@kotlin.jvm.JvmName("sumOfLong")
+public fun Iterable<Long>.sum(): Long {
+    var sum: Long = 0L
+    for (element in this) {
+        sum += element
+    }
+    return sum
+}
+
+/**
+ * Returns the sum of all elements in the collection.
+ */
+@kotlin.jvm.JvmName("sumOfFloat")
+public fun Iterable<Float>.sum(): Float {
+    var sum: Float = 0.0f
+    for (element in this) {
+        sum += element
+    }
+    return sum
+}
+
+/**
+ * Returns the sum of all elements in the collection.
+ */
+@kotlin.jvm.JvmName("sumOfDouble")
+public fun Iterable<Double>.sum(): Double {
+    var sum: Double = 0.0
+    for (element in this) {
+        sum += element
+    }
+    return sum
+}

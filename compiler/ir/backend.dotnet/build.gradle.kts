@@ -39,7 +39,13 @@ tasks.named<ProcessResources>("processResources") {
     )) {
         into("kotlin-dotnet-stdlib/src/kotlin/internal")
     }
-    from(rootProject.file("libraries/stdlib/common/src/kotlin/ExceptionsH.kt")) {
+    from(rootProject.file("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt")) {
+        into("kotlin-dotnet-stdlib/src/kotlin/annotations")
+    }
+    from(files(
+        rootProject.file("libraries/stdlib/common/src/kotlin/ExceptionsH.kt"),
+        rootProject.file("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt"),
+    )) {
         into("kotlin-dotnet-stdlib/common/src/kotlin")
     }
     from(rootProject.file("libraries/stdlib/common/src/kotlin/ioH.kt")) {
