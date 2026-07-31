@@ -28207,16 +28207,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             declaration.methodName == "asList" && !declaration.isInstance
         })
         assertEquals(
-            mapOf("any" to 1, "none" to 1, "single" to 2, "singleOrNull" to 2),
+            mapOf(
+                "any" to 1,
+                "elementAtOrNull" to 1,
+                "getOrNull" to 1,
+                "none" to 1,
+                "single" to 2,
+                "singleOrNull" to 2,
+            ),
             collectionFunctions
                 .filter { declaration ->
-                    declaration.methodName in setOf("any", "none", "single", "singleOrNull")
+                    declaration.methodName in setOf(
+                        "any",
+                        "elementAtOrNull",
+                        "getOrNull",
+                        "none",
+                        "single",
+                        "singleOrNull",
+                    )
                 }
                 .groupingBy(DotNetPhysicalDeclaration.Function::methodName)
                 .eachCount(),
         )
         assertTrue(collectionFunctions.none { declaration ->
-            declaration.methodName in setOf("any", "none", "single", "singleOrNull") &&
+            declaration.methodName in setOf(
+                "any",
+                "elementAtOrNull",
+                "getOrNull",
+                "none",
+                "single",
+                "singleOrNull",
+            ) &&
                     declaration.isInstance
         })
         assertTrue(physicalDeclarations.values.none { declaration ->
@@ -28315,6 +28336,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             ".method public hidebysig static object 'firstOrNull'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static object 'elementAtOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', int32 'index')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static object 'getOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', int32 'index')" in il
         )
         assertTrue(
             ".method public hidebysig static object 'lastOrNull'<'T'>(" +
@@ -28477,6 +28506,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return values.lastOrNull()
                 }
 
+                public fun <T> optionalAt(values: Iterable<T>, index: Int): T? =
+                    values.elementAtOrNull(index)
+
+                public fun <T> optionalListGet(values: List<T>, index: Int): T? =
+                    values.getOrNull(index)
+
+                public fun <T> optionalListAt(values: List<T>, index: Int): T? =
+                    values.elementAtOrNull(index)
+
                 public fun <T> cardinality(values: Iterable<T>): T? {
                     values.any()
                     values.none()
@@ -28542,6 +28580,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             "::'firstOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
         )
+        assertTrue(
+            "::'elementAtOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32)" in il
+        )
+        assertTrue("::'getOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List', int32)" in il)
         assertTrue(
             "::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il
         )
@@ -28624,6 +28666,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return values.lastOrNull()
                 }
 
+                public fun <T> installedOptionalAt(values: Iterable<T>, index: Int): T? =
+                    values.elementAtOrNull(index)
+
+                public fun <T> installedOptionalListGet(values: List<T>, index: Int): T? =
+                    values.getOrNull(index)
+
+                public fun <T> installedOptionalListAt(values: List<T>, index: Int): T? =
+                    values.elementAtOrNull(index)
+
                 public fun <T> installedCardinality(values: Iterable<T>): T? {
                     values.any()
                     values.none()
@@ -28661,6 +28712,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             values.asIterable().lastOrNull() == "K" &&
                             emptyArray<String>().asIterable().firstOrNull() == null &&
                             emptyList<String>().lastOrNull() == null &&
+                            view.getOrNull(-1) == null &&
+                            view.getOrNull(1) == "K" &&
+                            view.elementAtOrNull(2) == null &&
+                            values.asIterable().elementAtOrNull(0) == "changed" &&
                             view.any() &&
                             !view.none() &&
                             arrayOf("only").asIterable().single() == "only" &&
@@ -28693,6 +28748,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             "::'firstOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
         )
+        assertTrue(
+            "::'elementAtOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32)" in il
+        )
+        assertTrue("::'getOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List', int32)" in il)
         assertTrue("::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("::'any'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
@@ -28848,6 +28907,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             view.singleOrNull() == null &&
                             singleton.single() == 4 &&
                             singleton.singleOrNull() == 4
+                    val indexedOptionalOk =
+                        view.getOrNull(-1) == null &&
+                            view.getOrNull(0) == 1 &&
+                            view.getOrNull(2) == null &&
+                            values.asIterable().elementAtOrNull(1) == 3 &&
+                            values.asIterable().elementAtOrNull(2) == null
                     var readlnEofIsCommon = false
                     try {
                         readln()
@@ -28857,7 +28922,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                     println(
                         first + "|" + second + "|" + (atEof == null) + "|" +
-                            readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk
+                            readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk + "|" +
+                            indexedOptionalOk
                     )
                 }
                 """.trimIndent()
@@ -28891,7 +28957,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }
