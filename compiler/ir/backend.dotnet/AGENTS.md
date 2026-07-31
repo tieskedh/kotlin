@@ -27,7 +27,8 @@ Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which
 - [`STATUS.md`](STATUS.md) owns the current branch, verification, active-work,
   blocker, and next-task state. Do not add commit history or changing test
   totals to this bootstrap contract or to ADRs.
-- `docs/review/README.md` indexes the review evidence and the current way forward. Read it before
+- `docs/README.md` indexes decisions, active programmes, historical evidence,
+  and the current way forward. Read it before
   adding an ABI-bearing feature, runtime type, interface member/view, exception mapping, public CLR
   name, or cross-module binding.
 - `docs/archive/review-2026-07-17.md` is a snapshot review of commit `8dd89907d`, not normative design law.
