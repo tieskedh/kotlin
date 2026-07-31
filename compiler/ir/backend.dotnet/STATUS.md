@@ -8,8 +8,8 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last semantic feature: `a3037d031` (`[DotNet] Extract target configuration
-  ownership`)
+- Last semantic feature: `bbf8ee876` (`[DotNet] Add Common indexed optional
+  collection access`)
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -21,17 +21,17 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The fresh JUnit audit covered 16 XML files and 902 tests:
+The fresh JUnit audit covered 16 XML files and 906 tests:
 
-- 814 FIR, IL-text, and box tests
+- 818 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 67 library-integration tests
 - zero failures, errors, or skips
 
-The target/configuration extraction additionally passed focused compilation,
-generated configuration-key validation, ABI and foreign-API checks, dependency
-health, static dependency-boundary checks, and its adversarial target-policy
-test.
+The indexed optional collection slice additionally passed focused execution in
+all four PSI/LightTree and Framework/CoreCLR box lanes, plus direct, installed,
+separate-consumer, and portable stdlib product checks on every compatible
+runtime profile.
 
 ## Current architecture
 
@@ -53,9 +53,12 @@ test.
 
 ## Active state
 
-No implementation slice is half-landed. Documentation ownership has been
-normalized without changing compiler behavior. The next work is selection of
-one bounded semantic slice through the compare, document, implement, and
+No implementation slice is half-landed. The authoritative Common
+`Iterable.elementAtOrNull` and `List.getOrNull` bodies are now part of every
+.NET stdlib product. The shared `RangeContainsLowering` removes their
+`0..<size` membership check before .NET for-loop lowering, matching the mature
+targets without copying the algorithm. The next work is selection of one
+bounded semantic slice through the compare, document, implement, and
 adversarially test workflow in `AGENTS.md`.
 
 ## Open architectural blockers
