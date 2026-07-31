@@ -84,7 +84,7 @@ domain/application/infrastructure packages or new Gradle modules solely to
 shorten files or constructors.
 
 See
-[`docs/review/architecture-responsibility-audit.md`](docs/review/architecture-responsibility-audit.md).
+[`docs/programmes/compiler-architecture.md`](docs/programmes/compiler-architecture.md).
 
 ## Target and product model
 
@@ -208,7 +208,7 @@ and rendering semantics; `.NET` supplies only narrow actuals and the
 See
 [runtime/stdlib ownership ADR](docs/decisions/runtime-and-stdlib-ownership.md)
 and
-[`docs/review/common-collections-program.md`](docs/review/common-collections-program.md).
+[`docs/programmes/common-collections.md`](docs/programmes/common-collections.md).
 
 ## Nullability model
 
@@ -461,7 +461,7 @@ policy change.
 
 - `AGENTS.md` owns only this bootstrap contract.
 - `STATUS.md` owns current state and verification.
-- `docs/review/way-forward.md` owns future gates and ordering.
+- `docs/programmes/way-forward.md` owns future gates and ordering.
 - active programme files own one current workstream.
 - ADRs own durable decisions, invariants, consequences, and rejected
   alternatives.

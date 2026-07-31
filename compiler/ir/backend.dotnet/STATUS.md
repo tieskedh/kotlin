@@ -84,13 +84,13 @@ in `AGENTS.md`.
 ## Navigation
 
 - Current sequencing and release gates:
-  [`docs/review/way-forward.md`](docs/review/way-forward.md)
+  [`docs/programmes/way-forward.md`](docs/programmes/way-forward.md)
 - Documentation and evidence index:
   [`docs/README.md`](docs/README.md)
 - Collections programme:
-  [`docs/review/common-collections-program.md`](docs/review/common-collections-program.md)
+  [`docs/programmes/common-collections.md`](docs/programmes/common-collections.md)
 - Architecture ownership audit:
-  [`docs/review/architecture-responsibility-audit.md`](docs/review/architecture-responsibility-audit.md)
+  [`docs/programmes/compiler-architecture.md`](docs/programmes/compiler-architecture.md)
 - Durable representation decisions: [`docs/decisions`](docs/decisions)
 
 Update this file when branch state, the latest full gate, active work, blockers,
