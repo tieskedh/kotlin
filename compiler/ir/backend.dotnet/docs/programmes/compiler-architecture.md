@@ -1,482 +1,208 @@
 # .NET compiler architecture programme
 
-Status: first bounded correction implemented on 2026-07-31; behavior and
-artifact formats are unchanged.
-
-## Question
-
-Which responsibilities currently placed in `backend.dotnet` actually belong
-to the IR backend, and which are there only because the prototype was first
-implemented in one module?
-
-The default is to mirror the ownership and dependency direction of mature
-Kotlin targets, including packages inside a module. A CLR-specific deviation
-requires a concrete CLR constraint; prototype history, file size, or
-constructor size is not such a constraint.
-
-## Mature-target evidence
-
-The mature targets do not put every target concern in their IR backend:
-
-- JVM foreign-binary contracts and finders live in modules such as
-  `core:compiler.common.jvm`, `core:deserialization.common.jvm`, and
-  `compiler:frontend.common.jvm`, predominantly under
-  `org.jetbrains.kotlin.load.java` and `org.jetbrains.kotlin.load.kotlin`.
-  Kotlin projection and Java enhancement live under
-  `org.jetbrains.kotlin.fir.java`; configuration uses
-  `org.jetbrains.kotlin.config`; IR lowering and class generation use
-  `org.jetbrains.kotlin.backend.jvm`.
-- JS and Wasm keep target configuration in `js.config` and `wasm.config`,
-  KLIB loading and serialization in `ir.serialization.js`, FIR/frontend
-  concerns outside the code generator, and lowering/output in their backend
-  modules.
-- Native keeps target configuration in `native.config`, KLIB loading in
-  `ir.serialization.native`, and IR/code generation in `backend.native`.
-- The web and Native serialization modules retain some historical
-  `backend.*` package names. They are evidence for dependency direction, not
-  a reason to introduce the same package ambiguity in a new target.
-
-CLI modules do import backend entry points because the CLI composes the
-pipeline. That does not make PE parsing, foreign declaration loading, or
-KLIB serialization code-generation responsibilities.
-
-## Current dependency problem
-
-There are 93 production Kotlin files in `backend.dotnet` and nine in
-`cli-dotnet`. `cli-dotnet` currently imports backend types for four unrelated
-reasons:
-
-1. invoke the IR backend;
-2. read target configuration and product descriptions;
-3. parse and resolve existing CLR assemblies; and
-4. load or write Kotlin library and interop ABI carriers.
-
-The clearest inversion is `DotNetClrFirSymbolProvider`: all 58 of its current
-`backend.dotnet` imports are CLR load or enhancement types. The frontend
-pipeline separately imports the PE/classpath reader, managed-resource reader,
-artifact descriptions, embedded-KLIB codec, and C# implementation manifest
-codec. A frontend consumer therefore cannot select the foreign declaration
-model without depending on the IR backend module.
-
-## Complete backend production-file classification
-
-This classification assigns every current production file once. A “mixed”
-label is a request to split ownership before moving the file, not a proposed
-generic layer.
-
-### Objective CLR load and metadata model: 29
-
-- `DotNetClrArrayRuntimeTypes.kt`
-- `DotNetClrByRefLikeClassifier.kt`
-- `DotNetClrConstructedTypeConstraintValidator.kt`
-- `DotNetClrCustomAttributeDecoder.kt`
-- `DotNetClrCustomAttributeNamedArgumentValidator.kt`
-- `DotNetClrDelegateRuntimeTypes.kt`
-- `DotNetClrMetadata.kt`
-- `DotNetClrNominalConstraintValidator.kt`
-- `DotNetClrNullableDeclarationResolver.kt`
-- `DotNetClrNullableEffectiveAccessibility.kt`
-- `DotNetClrNullableEvidenceApplicator.kt`
-- `DotNetClrNullableGenericParameterEvidence.kt`
-- `DotNetClrNullableMetadata.kt`
-- `DotNetClrNullableTypeTransformApplicator.kt`
-- `DotNetClrObsoleteMetadata.kt`
-- `DotNetClrParamArrayMetadata.kt`
-- `DotNetClrPhysicalTypeClassifier.kt`
-- `DotNetClrPrimitiveTypeCatalog.kt`
-- `DotNetClrResolvedConstraints.kt`
-- `DotNetClrResolvedHierarchy.kt`
-- `DotNetClrResolvedSignatures.kt`
-- `DotNetClrSerializedAssemblyName.kt`
-- `DotNetClrSerializedTypeName.kt`
-- `DotNetClrSerializedTypeResolver.kt`
-- `DotNetClrSignatureTypeAssignability.kt`
-- `DotNetClrSpecialConstraintValidator.kt`
-- `DotNetClrTypeAssignability.kt`
-- `DotNetClrTypeResolver.kt`
-- `DotNetManagedResourceReader.kt`
-
-These files model or validate physical CLR facts. Two could not move in the
-first correction unchanged:
-
-- `DotNetClrSpecialConstraintValidator.kt` read `DotNetTarget`, whose
-  then-current definition also owned a backend-only core-library renderer; and
-- `DotNetClrConstructedTypeConstraintValidator.kt` composes that validator.
-
-The target-configuration correction below gives them a non-backend profile
-dependency. They move into the load module as part of that correction.
-Replacing the target with an ad-hoc Boolean merely to enable the move remains
-rejected.
-
-### Mixed CLR evidence and Kotlin/FIR policy: 3
-
-- `DotNetClrFlowNullabilityMetadata.kt`
-- `DotNetClrImportedDeclaration.kt`
-- `DotNetClrKotlinNullabilityProjection.kt`
-
-`DotNetClrFlowNullabilityMetadata.kt` contains both objective decoders and
-Kotlin-facing input/return qualifier selection. It must be split.
-`DotNetClrKotlinNullabilityProjection.kt` explicitly owns Kotlin qualifier
-policy and belongs with the FIR importer. `DotNetClrImportedDeclaration.kt`
-combines retained frontend source records with IR/backend binding and must
-not move as one file.
-
-### Configuration and product descriptions: 3
-
-- `DotNetConfigurationKeys.kt`
-- `DotNetCoreLibraryProfile.kt`
-- `DotNetStdlibSource.kt`
-
-These are currently mixed too. `DotNetConfigurationKeys.kt` combines
-configuration keys, target profiles, artifact identities, exports, and
-configuration extensions. `DotNetCoreLibraryProfile.kt` combines target
-facts with textual IL rendering. `DotNetStdlibSource.kt` is a compiler
-product resource catalog consumed before code generation.
-
-### Kotlin library, ABI, and interop carriers: 3
-
-- `DotNetCSharpImplementationManifest.kt`
-- `DotNetKotlinMetadataResource.kt`
-- `DotNetLibraryAbi.kt`
-
-Both large codec files combine reusable carrier models/codecs with IR
-collection and backend binding. Their model/codec portions belong in later
-.NET library/serialization or interop ownership; their IR producers remain
-backend consumers of those models. The C# manifest is not part of PE loading
-merely because it uses CLR signature vocabulary.
-
-### IR backend context and lowerings: 36
-
-- `DotNetBackendContext.kt`
-- `DotNetExactCallableSymbols.kt`
-- `DotNetFunctionReferenceSymbols.kt`
-- `DotNetGenericInterfaceAbi.kt`
-- `DotNetIrMangler.kt`
-- `DotNetMainFunctionDetector.kt`
-- `DotNetPropertyReferenceSymbols.kt`
-- `DotNetRuntimeTypes.kt`
-- `DotNetSharedVariablesManager.kt`
-- `DotNetTypedArgumentsCallableSymbols.kt`
-- `DotNetLoweringPhases.kt`
-- every 25 production files under `backend.dotnet/.../lower`
-
-These stay in `backend.dotnet`. Their types and state are defined in terms of
-Kotlin IR, lowering order, or backend-only runtime capabilities.
-
-### CIL generation and backend-owned platform construction: 18
-
-- `DotNetCompilerAbi.kt`
-- `DotNetIlAccessibility.kt`
-- `DotNetIlAssembler.kt`
-- `DotNetIlClassCodegen.kt`
-- `DotNetIlCodegenSupport.kt`
-- `DotNetIlEmitter.kt`
-- `DotNetIlExpressionCodegen.kt`
-- `DotNetIlIntrinsicMethods.kt`
-- `DotNetIlMethodCodegen.kt`
-- `DotNetIlMethodContext.kt`
-- `DotNetIlType.kt`
-- `DotNetMappedExceptions.kt`
-- `DotNetNullableMetadata.kt`
-- `DotNetPrimitiveArrays.kt`
-- `DotNetRuntimeLibrary.kt`
-- `DotNetRuntimeLibraryHelpers.kt`
-- `DotNetStdlibLibrary.kt`
-- `DotNetThrowableRuntime.kt`
-
-These stay in `backend.dotnet` for this correction. Runtime and stdlib
-artifact descriptions may later move, but construction of their physical IL
-is code generation. `DotNetIlAssembler` remains adjacent to assembly
-production until the CLI/backend product seam is separately designed.
-
-### Mixed orchestration and packaging: 1
-
-- `DotNetBackend.kt`
-
-`DotNetBackend.compile` currently composes lowering, runtime/stdlib
-construction, IL emission, assembly, cleanup, dependency copying,
-runtimeconfig generation, and output selection. It remains in place during
-the load-layer correction. Future extraction must follow a real producer and
-consumer boundary; splitting the method only to reduce its length is
-rejected.
-
-## CLI production-file classification
-
-- CLI entry and sequencing: `K2DotNetCompiler.kt`, `DotNetCliPipeline.kt`,
-  `DotNetBackendPipelinePhase.kt`, and `DotNetPipelineArtifacts.kt`.
-- Configuration: `DotNetConfigurationPipelinePhase.kt`.
-- FIR integration: `DotNetClrFirSymbolProvider.kt`,
-  `DotNetFrontendPipelinePhase.kt`, and `DotNetFir2IrPipelinePhase.kt`.
-- Kotlin library serialization: `DotNetLibraryMetadataPipelinePhase.kt`.
-
-The CLI remains the pipeline composer. The FIR provider should eventually
-move to a FIR-owned .NET module, while the library metadata phase should
-consume a .NET serialization/library module. Neither move is bundled into
-the first load-layer correction.
-
-## CLR evidence versus Kotlin policy
-
-The load boundary ends at validated CLR evidence. For example, it may report:
-
-- an attribute is exactly
-  `System.Diagnostics.CodeAnalysis.NotNullWhenAttribute`;
-- its constructor Boolean is `true`;
-- it targets parameter zero;
-- its blob and constructor are valid; and
-- duplicate or ambiguous metadata was rejected.
-
-It may not decide that this evidence creates the Kotlin contract
-`returns(true) implies (parameter != null)`. Likewise, Roslyn nullable flags
-may be decoded, selected by physical scope, and aligned with a signature in
-the loader, but conversion to Kotlin nullable/not-null/flexible qualifiers is
-FIR enhancement policy.
-
-This distinction applies to `NotNullWhen`, `NotNullIfNotNull`,
-`DoesNotReturn`, `DoesNotReturnIf`, `AllowNull`, `DisallowNull`,
-`NotNull`, `MaybeNull`, `ParamArray`, `Obsolete`, generic constraints, and
-`IsByRefLike`: objective identity/value/shape belongs below FIR; Kotlin type,
-contract, symbol, and diagnostic effects belong at or above FIR.
-
-## Implemented first correction
-
-Create `:compiler:frontend.common.dotnet`, mirroring the dependency role of
-`frontend.common.jvm` without copying its historical contents. Put the
-objective CLR load model under `org.jetbrains.kotlin.load.dotnet`.
-
-The first move includes the 27 objective files above which do not depend on
-the current target-profile coupling, plus the objective decoder portion of
-`DotNetClrFlowNullabilityMetadata.kt`. Kotlin nullability projection and its
-input/return qualifier policy move under `org.jetbrains.kotlin.fir.dotnet`
-inside the current CLI module as a package boundary; a separate FIR module is
-later work. `DotNetClrImportedDeclaration.kt` stays mixed and documented for
-the subsequent FIR slice.
-
-`DotNetManagedResourceReader` must not import the Kotlin KLIB carrier
-constant. Its classpath discriminator accepts the managed-resource name from
-the library-loading caller. This preserves one physical PE read path without
-making the loader own Kotlin library identity.
-
-The new module initially had no compiler-project dependencies. The subsequent
-target-configuration correction added only
-`core:language.targets.dotnet`, which contains neutral target identity and
-capability vocabulary. Its compilation still enforces the forbidden-dependency
-rule:
-
-- no FIR;
-- no IR;
-- no `backend.dotnet`;
-- no CLI pipeline;
-- no Gradle or packaging implementation; and
-- no Roslyn tooling.
-
-Java/JDK and Kotlin-stdlib facilities are sufficient for the selected slice.
-`cli-dotnet` and `backend.dotnet` depend on the loader; the loader never
-depends on either consumer.
-
-The implemented move contains 28 source files: the 27 dependency-free
-objective files from the inventory plus the objective decoder portion of the
-mixed flow-nullability file. The Kotlin input/return enhancer was moved beside
-the Kotlin nullability projector under `org.jetbrains.kotlin.fir.dotnet`.
-`DotNetClrSpecialConstraintValidator` now receives the physical core-type
-catalog it actually consumes instead of reaching through an internal
-by-ref-like-classifier detail.
-
-The classpath reader now requires its caller to provide the carrier resource
-name. Its result is correspondingly `WithCarrier` or `WithoutCarrier`, not a
-claim that the assembly was Kotlin-produced or is foreign. An adversarial
-integration case embeds a differently named managed resource and proves that
-the reader classifies it as carrier-free under the Kotlin carrier name and as
-carrier-bearing only under the explicitly supplied name. This prevents both
-`Kotlin.Metadata` identity and producer-language policy from leaking back into
-the objective load layer.
-
-## Attacked alternatives
-
-### Move every non-emitter file into one target-common module
-
-Rejected. It would reproduce the current grab bag under a new name and mix
-configuration, FIR policy, KLIB serialization, interop manifests, and
-packaging.
-
-### Copy `frontend.common.jvm` literally
-
-Rejected. JVM is the mature precedent for foreign-metadata ownership and
-dependency direction, not a requirement to copy historical module contents
-or Java-specific classfile abstractions.
-
-### Move Kotlin nullability and contract policy with the attribute decoder
-
-Rejected. A valid CLR attribute is evidence; the Kotlin type or contract
-effect is a frontend policy choice. Combining them would make the new loader
-own Kotlin semantics.
-
-### Split `DotNetIlEmitter` or `DotNetBackend.compile` because they are large
-
-Rejected for this correction. Size identifies review pressure, not a
-responsibility boundary. An extracted component must own validation and have
-a clear producer and consumer.
-
-### Introduce package boundaries without a module boundary
-
-Rejected for the first load slice. Packages improve navigation but do not
-prevent the loader from importing backend code. The selected coherent slice
-has a dependency-free closure, so a real module provides enforceable value
-without gratuitous build complexity.
-
-## Second correction: target configuration and dependency roots
-
-The next concrete consumer of a non-backend target profile is the objective
-CLR special-constraint validator. The target-profile/configuration boundary
-is therefore no longer speculative.
-
-The mature-target comparison is:
-
-- JVM keeps `JvmTarget` and platform identity in
-  `core:language.targets.jvm`, makes `compiler:config.jvm` consume that
-  vocabulary, and keeps CLI content-root carriers in `cli-base`;
-- JS keeps generated compiler keys and target configuration in `js.config`;
-- Native keeps generated compiler keys and target configuration in
-  `native.config`; and
-- all three keep physical code-generation rendering outside their shared
-  configuration models.
-
-Kotlin/.NET already has independent target-identity consumers in CLI
-configuration, CLR validation, FIR composition, backend lowering, runtime and
-stdlib construction, physical ABI production, and Gradle target-framework
-selection. That is enough to justify the JVM-shaped language-target seam,
-rather than making target identity configuration machinery.
-
-Kotlin/.NET follows that dependency direction with three deliberately
-distinct owners:
-
-- `core:language.targets.dotnet` owns `DotNetTarget`, parsing, the .NET
-  platform marker, and only narrowly defined target capabilities that are
-  consumed across compiler layers;
-- `compiler:config.dotnet` owns executable eligibility, library-profile
-  compatibility, and generated primitive compiler keys/accessors for output,
-  assembly name, product kind, and target; and
-- `cli-base` owns `DotNetClasspathRoot`, because content roots are CLI
-  composition carriers rather than target-profile facts.
-
-Package placement mirrors the same mature-target boundary:
-`DotNetTarget` is beside `JvmTarget` in `org.jetbrains.kotlin.config`,
-`DotNetPlatform`/`DotNetPlatforms` live in
-`org.jetbrains.kotlin.platform.dotnet`, and generated configuration keys and
-policy extensions stay in `org.jetbrains.kotlin.config`. There is no CLR
-constraint that justifies a backend or extra nested configuration package.
-
-The platform marker deliberately remains one unversioned Kotlin/.NET
-platform. `net48`, `netstandard2.0`, and `net10.0` are target-framework/API
-contracts selected through compiler configuration; they do not become three
-Kotlin language or Analysis API platform identities. This preserves the
-accepted single-platform Gradle model while keeping the target value
-independently consumable.
-
-The language-target module depends only on the shared language-target model.
-The new configuration module depends on it and `compiler:config`. The CLR
-load module depends only on the language-target module so that the
-constructed-type special-constraint validators can consume the exact profile
-and its focused by-ref-like capability rather than a backend renderer or an
-ad-hoc caller-supplied Boolean. `cli-dotnet` and `backend.dotnet` consume both
-target vocabulary and configuration directly.
-
-`DotNetTarget` no longer exposes a backend core-library renderer. The backend
-owns the exhaustive mapping from `DotNetTarget` to
-`DotNetCoreLibraryProfile`; textual `.assembly extern`, target-framework
-attribute, and custom-attribute rendering therefore remain code generation.
-Product kind, runtime identifier, deployment packaging, and future NuGet
-asset selection remain separate axes rather than accumulating on the target
-enum.
-
-`DotNetConfigurationKeys.kt` is split rather than moved wholesale. Runtime
-and stdlib identities, library artifact descriptions, export selectors,
-external-library/friend models, their keys, and the produced-artifact
-projection remain with their current backend consumers until the
-serialization, interop, and product seams are designed.
-
-The content-root correction replaces the accidental use of
-`JvmClasspathRoot` for CLR DLLs and .NET metadata inputs. Its placement mirrors
-`JvmContentRoots.kt`: `DotNetClasspathRoot` and its configuration helper live
-under `org.jetbrains.kotlin.cli.dotnet.config` in `cli-base`, while the .NET
-pipeline alone interprets those roots as managed assemblies or ordinary
-Kotlin libraries.
-
-The correction exits only when:
-
-- target identity, platform identity, target/profile parsing, and primitive
-  keys use the mature-target packages and import no backend type;
-- the CLR load module imports neither FIR, IR, backend, nor CLI code;
-- the two target-coupled CLR constraint validators live with the physical CLR
-  models they validate;
-- `cli-dotnet` contains no `JvmClasspathRoot` reference; and
-- the existing profile, constraint, CLI, assembly, and runtime tests remain
-  behaviorally unchanged.
-
-### Attacked alternatives for the second correction
-
-#### Move the whole backend configuration file
-
-Rejected. It would make a foundational configuration module own
-serialization artifacts, interop selectors, foreign-library state, and
-compiler/runtime distribution identities merely because they currently share
-one file.
-
-#### Put textual core-library facts on `DotNetTarget`
-
-Rejected. Target compatibility and executable capability are pre-FIR facts;
-IL assembly references and custom-attribute blobs are backend rendering. An
-exhaustive backend mapping preserves type safety without reversing ownership.
-
-#### Pass `supportsByRefLikeGenerics` as a Boolean
-
-Rejected. That would erase which API/runtime contract is being validated and
-would make later profile additions silently inherit an arbitrary capability.
-The validator consumes the authoritative profile enum and a focused
-target-capability extension owned beside it.
-
-#### Put `DotNetClasspathRoot` in `config.dotnet`
-
-Rejected. That would force target configuration to depend on CLI content-root
-infrastructure. Mature JVM placement shows that a target-specific root can
-live in `cli-base` without making it a target-profile model.
-
-#### Keep `DotNetTarget` inside `config.dotnet`
-
-Rejected. The target identity already has independent consumers above and
-below configuration. Owning it in `config.dotnet` would make the objective CLR
-loader transitively depend on compiler-configuration machinery and would
-understate the target value's role.
-
-#### Encode product, runtime, and packaging policy on `DotNetTarget`
-
-Rejected. The current enum selects a target-framework/API contract. Library
-versus executable, future runtime identifiers, and package asset selection are
-orthogonal decisions. Only capabilities that genuinely alter multiple
-compiler layers belong beside target identity.
-
-## Subsequent architecture extraction order
-
-This is the order for later ownership corrections when a concrete consumer
-requires them. It is not a mandate to exhaust every extraction before
-continuing bounded feature work; package or module movement without a new
-producer/consumer boundary would be mechanical churn.
-
-1. Create a shared retained-declaration carrier seam, then move the foreign
-   CLR provider into a FIR-owned .NET module while leaving IR binding in the
-   backend. The carrier must not be owned solely by the FIR implementation
-   module: mirror JVM's `deserialization.common.jvm` dependency role so FIR
-   and backend can consume it without depending on one another.
-2. Split KLIB-in-DLL and physical ABI models/codecs from their IR producers
-   into .NET library/serialization ownership.
-3. Split the C# implementation manifest codec/model from its backend IR
-   collector into a shared interop/ABI owner.
-4. Separate backend transformation/emission from CLI/Gradle application
-   layout only when their artifact handoff owns validation.
-
-The Common collections programme may proceed between these corrections. Its
-next bounded slice is the exact Common/actual dependency closure for a
-concrete list product; it must consume the load/FIR boundary established here
-rather than pulling foreign metadata ownership back into the backend.
-
-Structured CIL/direct PE emission remains a later programme. It is not a
-prerequisite for correcting who owns already-existing CLR metadata.
+- Status: **Active — retained foreign-declaration carrier is the next extraction seam**
+- Current ownership: [`../../STATUS.md`](../../STATUS.md)
+
+## Governing rule
+
+Mirror the ownership, dependency direction, and package conventions of mature Kotlin targets until
+a concrete CLR constraint requires a deviation. Prototype history, file size, constructor size, or
+the fact that two concerns were first implemented together is not such a constraint.
+
+This programme does not seek fewer files or generic domain/application/infrastructure layers. A
+new boundary must have a clear producer and consumer, own validation, and enforce a useful
+dependency direction.
+
+## Mature-target precedent
+
+- JVM keeps foreign binary facts and finders below FIR, Kotlin/Java enhancement in FIR, target
+  identity/configuration in dedicated core/config modules, and IR lowering/codegen in the backend.
+- JS and Wasm keep configuration, KLIB serialization/loading, frontend integration, and backend
+  production in distinct dependency roles.
+- Native keeps target configuration, KLIB ownership, IR lowering, and native code generation
+  separate even when historical packages do not perfectly reflect module ownership.
+- CLI modules compose pipelines and may call backend entry points. That does not make foreign
+  metadata, serialization, product descriptions, or packaging code-generation responsibilities.
+
+Historical `backend.*` package names in mature modules are evidence to interpret, not conventions
+to copy into a new target.
+
+## Settled ownership map
+
+- Logical target/platform vocabulary: `core:language.targets.dotnet`, in
+  `org.jetbrains.kotlin.config` and `org.jetbrains.kotlin.platform.dotnet`.
+- Compiler keys and target/profile policy: `compiler:config.dotnet`, in
+  `org.jetbrains.kotlin.config`.
+- CLR content-root carrier: `cli-base`, in `org.jetbrains.kotlin.cli.dotnet.config`.
+- PE/ECMA-335 reading and objective evidence: `compiler:frontend.common.dotnet`, in
+  `org.jetbrains.kotlin.load.dotnet`.
+- Kotlin interpretation of foreign evidence: FIR-owned .NET integration, in
+  `org.jetbrains.kotlin.fir.dotnet`.
+- IR context, lowerings, intrinsics, type mapping, CIL generation, and backend product
+  construction: `compiler:ir:backend.dotnet`, in `org.jetbrains.kotlin.backend.dotnet`.
+- CLI pipeline sequencing: `compiler:cli:cli-dotnet`, in
+  `org.jetbrains.kotlin.cli.pipeline.dotnet`.
+- Kotlin stdlib declarations/algorithms: `libraries:stdlib` and its generators, in ordinary
+  Common and .NET library packages.
+
+`DotNetTarget` represents the target-framework/API contract. Product kind, runtime identifier,
+deployment layout, NuGet selection, and textual IL rendering are separate axes and must not
+accumulate on that enum.
+
+The .NET platform marker is one unversioned Kotlin platform identity. `net48`,
+`netstandard2.0`, and `net10.0` are target-framework contracts, not three Analysis API platforms.
+
+## Objective CLR evidence versus Kotlin policy
+
+The loader may establish facts such as:
+
+- the exact selected TypeDef and constructor identity of a CodeAnalysis attribute;
+- its target row, decoded value, multiplicity, and malformed state;
+- a Roslyn nullable flag aligned to a resolved physical signature component;
+- physical assignability, variance, constraints, array, delegate, or by-ref-like classification;
+  and
+- exact Property/MethodSemantics/Param attachment.
+
+It may not decide the resulting Kotlin type, contract, smart cast, diagnostic, declaration, or
+call convenience. Those are FIR/import-policy decisions constrained by Common.
+
+Conversely, FIR policy must not parse PE files, bind assemblies, or rediscover physical members.
+It consumes immutable selected evidence. The backend consumes retained physical linkage, not FIR
+implementation internals.
+
+## Dependency invariants
+
+### Objective CLR load module
+
+`compiler:frontend.common.dotnet` may depend on neutral target vocabulary but not on:
+
+- FIR or IR;
+- `backend.dotnet`;
+- CLI pipeline code;
+- Gradle or packaging implementations; or
+- Roslyn tooling.
+
+The managed-resource reader accepts a carrier resource name from its caller. It reports physical
+presence/absence and does not decide that an assembly is Kotlin-produced or foreign.
+
+### FIR integration
+
+FIR owns Kotlin projection and lazy symbol policy. It may consume the loader and a neutral retained
+declaration carrier. It must not import backend-only CIL, lowering, runtime construction, or
+physical emitter state.
+
+### Backend
+
+The backend owns transformations and emission that begin with Kotlin IR or retained physical
+bindings. It does not own selected dependency discovery, foreign declaration semantics, KLIB
+library identity, or C# source-tooling policy merely because it currently produces related bytes.
+
+### Configuration and CLI
+
+Configuration owns target/profile/product validation, not rendered core-library declarations or
+application layout. CLI owns orchestration and content roots; Gradle/packaging owns copying and
+deployment only after compiler product validation.
+
+## Remaining extraction order
+
+### 1. Retained foreign-declaration carrier
+
+Create a neutral carrier for the selected assembly, TypeDef, member, structural signature, and
+other physical facts that must survive FIR2IR. It must be consumable by FIR and backend without
+either depending on the other's implementation module.
+
+Then move the foreign CLR provider into a FIR-owned .NET module. Keep objective loading in
+`frontend.common.dotnet` and IR binding in `backend.dotnet`.
+
+Exit conditions:
+
+- no FIR provider imports backend implementation types;
+- no backend binder imports FIR symbol-provider internals;
+- every imported callable/property carries exact producer-owned physical linkage;
+- unsupported or stale carrier forms fail structurally; and
+- cross-module foreign calls remain independent of display names.
+
+### 2. Kotlin library and physical ABI serialization
+
+Move KLIB-in-DLL resource handling and physical ABI models/codecs behind a neutral .NET
+library/serialization owner when frontend, tooling, or packaging needs the second consumer. IR
+collectors may produce records but do not own the reusable format merely because they produce it.
+
+### 3. C# implementation manifest
+
+Separate the manifest model/codec from the backend IR collector into a shared interop/ABI owner.
+Roslyn tooling, compiler production, and validators must consume one versioned schema without a
+frontend or tool importing backend implementation packages.
+
+### 4. Runtime and stdlib product descriptions
+
+Move neutral artifact descriptions and product resource catalogs toward distribution/shared target
+configuration when Gradle, CLI, or packaging becomes an independent consumer. Keep target-profile
+policy distinct from backend textual rendering and from deployment layout. Follow
+[`../decisions/runtime-and-stdlib-ownership.md`](../decisions/runtime-and-stdlib-ownership.md).
+
+### 5. Product handoff and application layout
+
+Separate backend transformation/emission from CLI/Gradle layout only when the handoff has a typed
+artifact and owns validation. Do not create a packaging abstraction just to relocate file-copying
+code.
+
+These extractions may interleave with bounded feature work. Module movement without a real new
+consumer or enforceable direction is mechanical churn.
+
+## Responsibilities that remain in the IR backend
+
+- backend context and IR-to-CLR type mapping;
+- target lowerings and synthetic compiler ABI construction;
+- intrinsics and runtime-call selection;
+- CIL instruction, stack, control-flow, metadata, and textual diagnostic production;
+- MethodImpl and physical slot emission;
+- backend-owned runtime/stdlib assembly construction; and
+- compilation orchestration from lowered IR to validated backend products.
+
+Large coordinators such as `DotNetBackend.compile` or `DotNetIlEmitter` are reviewed for mixed
+ownership, but size alone does not authorize extraction. A split component must own a coherent
+state transition or validation boundary.
+
+## Responsibilities that must not drift back into the backend
+
+- selected assembly graph and objective PE parsing;
+- foreign Kotlin type/contract/nullability policy;
+- generated compiler configuration and language-target identity;
+- general KLIB library loading/serialization;
+- reusable C# manifest decoding;
+- CLI content-root identity;
+- Gradle variant/product publication; and
+- Common stdlib source algorithms.
+
+## Alternatives rejected
+
+- **Move every non-emitter file into one shared module.** This recreates the same grab bag.
+- **Copy `frontend.common.jvm` literally.** Its dependency role is precedent; Java abstractions are
+  not the CLR model.
+- **Move Kotlin policy with attribute decoders.** Valid evidence and Kotlin meaning have different
+  owners.
+- **Introduce package boundaries without dependency enforcement.** Useful for navigation, but not
+  a substitute when a coherent module seam exists.
+- **Split large constructors/classes to reduce size.** This creates abstractions without
+  responsibility.
+- **Pass anonymous Booleans instead of target identity.** This erases which platform contract
+  justifies a capability.
+- **Move a mixed configuration file wholesale.** Shared file history does not give all contained
+  concerns one owner.
+
+## Architecture completion gates
+
+- every production concern has one named owner and package consistent with that owner;
+- frontend consumers have no conceptual dependency on backend implementation details;
+- objective metadata, Kotlin policy, physical binding, serialization, interop tooling, and
+  packaging remain separate dependency roles;
+- static dependency checks enforce the loader and configuration boundaries;
+- extracted carriers validate themselves and have explicit producer/consumer versioning;
+- behavior and artifact formats remain unchanged unless a separately accepted ADR changes them;
+  and
+- compilation and test performance are measured when a module split could change classpath or
+  configuration costs.
+
+The programme is complete when the open shared carriers have real owners, not when every large
+file has been split or every target concern has received its own Gradle module.
