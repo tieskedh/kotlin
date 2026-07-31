@@ -252,7 +252,7 @@ See the
 - Function values use the selected erased `FunctionN` identity plus exact
   execution capabilities; callable and property-reference identity is a
   separate physical contract. See
-  [`draft-adr-erased-callable-abi.md`](docs/decisions/draft-adr-erased-callable-abi.md).
+  [the callable/reference draft](docs/decisions/draft-adr-callable-and-reference-abi.md).
 
 Exact private lowering machinery is not automatically public ABI. Tests own
 private field disambiguation, nested equality views, and conformance
