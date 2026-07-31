@@ -28805,6 +28805,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(collectionFunctions.any { declaration ->
             declaration.methodName == "asList" && !declaration.isInstance
         })
+        val sumPhysicalMethodNames = setOf(
+            "sumOfByte",
+            "sumOfShort",
+            "sumOfInt",
+            "sumOfLong",
+            "sumOfFloat",
+            "sumOfDouble",
+        )
+        assertEquals(
+            sumPhysicalMethodNames,
+            collectionFunctions
+                .filter { declaration -> declaration.methodName in sumPhysicalMethodNames }
+                .mapTo(linkedSetOf(), DotNetPhysicalDeclaration.Function::methodName),
+        )
+        assertTrue(collectionFunctions.none { declaration ->
+            declaration.methodName == "sum" ||
+                    (declaration.methodName in sumPhysicalMethodNames && declaration.isInstance)
+        }) {
+            "Logical sum overloads must bind to six distinct static Common platform names"
+        }
         assertEquals(
             mapOf(
                 "any" to 1,
@@ -28965,6 +28985,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(
             ".method public hidebysig static int32 'count'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'sumOfByte'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'sumOfShort'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'sumOfInt'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int64 'sumOfLong'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static float32 'sumOfFloat'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static float64 'sumOfDouble'(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
         )
         val countOverflowStart = il.indexOf(
@@ -29145,6 +29189,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ExceptionsH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ioH.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt").absoluteFile
         sourceFiles.sortBy(File::invariantSeparatorsPath)
         assertEquals(DOTNET_STDLIB_SOURCES.keys.sorted(), sourceFiles.map(File::getName).sorted())
@@ -29214,6 +29260,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     values.elementAtOrNull(index)
 
                 public fun <T> elementCount(values: Iterable<T>): Int = values.count()
+
+                public fun sumBytes(values: Iterable<Byte>): Int = values.sum()
+
+                public fun sumShorts(values: Iterable<Short>): Int = values.sum()
+
+                public fun sumInts(values: Iterable<Int>): Int = values.sum()
+
+                public fun sumLongs(values: Iterable<Long>): Long = values.sum()
+
+                public fun sumFloats(values: Iterable<Float>): Float = values.sum()
+
+                public fun sumDoubles(values: Iterable<Double>): Double = values.sum()
 
                 public fun <T> containsElement(values: Iterable<T>, element: T): Boolean =
                     values.contains(element)
@@ -29307,6 +29365,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "::'contains'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
         )
         assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue(
+            "::'sumOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'sumOfShort'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'sumOfInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'sumOfLong'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'sumOfFloat'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'sumOfDouble'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
         assertTrue(
             "::'indexOf'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
         )
@@ -29408,6 +29484,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun <T> installedElementCount(values: Iterable<T>): Int = values.count()
 
+                public fun installedSumBytes(values: Iterable<Byte>): Int = values.sum()
+
+                public fun installedSumShorts(values: Iterable<Short>): Int = values.sum()
+
+                public fun installedSumInts(values: Iterable<Int>): Int = values.sum()
+
+                public fun installedSumLongs(values: Iterable<Long>): Long = values.sum()
+
+                public fun installedSumFloats(values: Iterable<Float>): Float = values.sum()
+
+                public fun installedSumDoubles(values: Iterable<Double>): Double = values.sum()
+
                 public fun <T> installedContainsElement(values: Iterable<T>, element: T): Boolean =
                     values.contains(element)
 
@@ -29474,11 +29562,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             arrayOf("only").asList().singleOrNull() == "only" &&
                             view.singleOrNull() == null &&
                             emptyList<String>().lastIndex == -1
+                    val sumsOk =
+                        emptyArray<Byte>().asIterable().sum() == 0 &&
+                            arrayOf(120.toByte(), 120.toByte()).asIterable().sum() == 240 &&
+                            arrayOf(30_000.toShort(), 30_000.toShort()).asIterable().sum() == 60_000 &&
+                            arrayOf(Int.MAX_VALUE, 1).asIterable().sum() == Int.MIN_VALUE &&
+                            arrayOf(Long.MAX_VALUE, 1L).asIterable().sum() == Long.MIN_VALUE &&
+                            arrayOf(16_777_216f, 1f, -16_777_216f).asIterable().sum() == 0f &&
+                            arrayOf(1.5, 2.5).asIterable().sum() == 4.0
                     val throwableOk =
                         snapshot.size == 1 &&
                             snapshot[0] === suppressed &&
                             owner.stackTraceToString() != owner.toString()
-                    println(if (collectionsOk && throwableOk) "OK" else "FAIL")
+                    println(if (collectionsOk && sumsOk && throwableOk) "OK" else "FAIL")
                 }
                 """.trimIndent()
             )
@@ -29510,6 +29606,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "::'contains'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
         )
         assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'sumOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'sumOfShort'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'sumOfInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'sumOfLong'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'sumOfFloat'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'sumOfDouble'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue(
             "::'indexOf'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
         )
@@ -29651,6 +29753,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val source = directory.resolve("main.kt").apply {
             writeText(
                 """
+                class CountingInts(public val values: Array<Int>) : Iterable<Int> {
+                    public var iteratorCalls: Int = 0
+                    public var nextCalls: Int = 0
+
+                    override fun iterator(): Iterator<Int> {
+                        iteratorCalls++
+                        return CountingIntIterator(this)
+                    }
+                }
+
+                class CountingIntIterator(public val owner: CountingInts) : Iterator<Int> {
+                    public var index: Int = 0
+
+                    override fun hasNext(): Boolean = index < owner.values.size
+
+                    override fun next(): Int {
+                        owner.nextCalls++
+                        return owner.values[index++]
+                    }
+                }
+
                 fun main() {
                     print(false)
                     print("|")
@@ -29686,6 +29809,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             view.getOrNull(2) == null &&
                             values.asIterable().elementAtOrNull(1) == 3 &&
                             values.asIterable().elementAtOrNull(2) == null
+                    val counting = CountingInts(arrayOf(1, 2, 3))
+                    val countedSum = counting.sum()
+                    val floatNaN = arrayOf(Float.NaN).asIterable().sum()
+                    val numericSumOk =
+                        emptyArray<Byte>().asIterable().sum() == 0 &&
+                            arrayOf(120.toByte(), 120.toByte()).asIterable().sum() == 240 &&
+                            arrayOf(30_000.toShort(), 30_000.toShort()).asIterable().sum() == 60_000 &&
+                            arrayOf(Int.MAX_VALUE, 1).asIterable().sum() == Int.MIN_VALUE &&
+                            arrayOf(Long.MAX_VALUE, 1L).asIterable().sum() == Long.MIN_VALUE &&
+                            arrayOf(16_777_216f, 1f, -16_777_216f).asIterable().sum() == 0f &&
+                            emptyArray<Float>().asIterable().sum().toString() == "0.0" &&
+                            floatNaN != floatNaN &&
+                            arrayOf(1.5, 2.5).asIterable().sum() == 4.0 &&
+                            countedSum == 6 &&
+                            counting.iteratorCalls == 1 &&
+                            counting.nextCalls == 3
                     var readlnEofIsCommon = false
                     try {
                         readln()
@@ -29696,7 +29835,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     println(
                         first + "|" + second + "|" + (atEof == null) + "|" +
                             readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk + "|" +
-                            indexedOptionalOk
+                            indexedOptionalOk + "|" + numericSumOk
                     )
                 }
                 """.trimIndent()
@@ -29730,7 +29869,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }
