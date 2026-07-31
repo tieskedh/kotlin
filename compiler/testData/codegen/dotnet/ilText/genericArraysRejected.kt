@@ -17,13 +17,13 @@ fun evictedElement(values: Array<Broken>): Array<Broken> = values
 
 fun nullablePrimitiveElements(values: Array<Int?>): Int? = values[0]
 
-fun projected(values: Array<out Base>): Base = values[0]
-
 fun contravariant(values: Array<in Base>) {
     values[0] = Base()
 }
 
 fun star(values: Array<*>): Any? = values[0]
+
+fun valueProjection(values: Array<Int>): Array<out Any> = values
 
 fun <T> nullableTypeParameter(values: Array<T?>): T? = values[0]
 

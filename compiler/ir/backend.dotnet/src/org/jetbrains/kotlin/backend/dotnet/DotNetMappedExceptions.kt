@@ -484,6 +484,11 @@ internal object DotNetMappedExceptions {
  *   instantiations. The JVM backend never
  *   performs this check itself — the JVM verifier's assignability subsumes it — while this
  *   backend verifies emitted stack types structurally, so the widening is spelled out here;
+ * - CLR vectors are covariant only when both element tokens are reference-shaped. This physical
+ *   rule serves Kotlin `Array<out E>` call boundaries while Kotlin metadata remains authoritative
+ *   for projection legality. Value-element vectors stay invariant, so a legal Kotlin widening
+ *   such as `Array<Int> -> Array<out Any>` is rejected until an identity-preserving boxed carrier
+ *   exists rather than emitted as the invalid `int32[] -> object[]`;
  * - every [reference-shaped][isDotNetReferenceShaped] type is assignable to
  *   [DotNetIlValueType.Object] (`kotlin.Any`/`Any?` storage): CLR `object` is the root
  *   reference type and the widening is instruction-free in every position (probe-verified,
@@ -496,6 +501,10 @@ internal object DotNetMappedExceptions {
 internal fun DotNetIlValueType.isDotNetAssignableTo(expected: DotNetIlValueType): Boolean = when {
     this == expected -> true
     expected == DotNetIlValueType.Object -> isDotNetReferenceShaped()
+    this is DotNetIlValueType.GenericArray && expected is DotNetIlValueType.GenericArray &&
+            elementType.isDotNetReferenceShaped() &&
+            expected.elementType.isDotNetReferenceShaped() ->
+        elementType.isDotNetAssignableTo(expected.elementType)
     this is DotNetIlValueType.MappedClass && expected is DotNetIlValueType.MappedClass ->
         DotNetMappedExceptions.isMappedTypeAssignableTo(ilTypeRef, expected.ilTypeRef)
     this is DotNetIlValueType.GenericInstance && expected is DotNetIlValueType.GenericInstance &&

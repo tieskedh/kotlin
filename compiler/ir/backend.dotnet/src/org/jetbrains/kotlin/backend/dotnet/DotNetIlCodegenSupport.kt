@@ -269,9 +269,23 @@ internal fun IrConstructor.dotNetSignature(typeMapper: DotNetIlTypeMapper): DotN
 
 private fun List<IrValueParameter>.dotNetParameterTypes(typeMapper: DotNetIlTypeMapper): List<DotNetIlValueType> =
     map { parameter ->
+        if (parameter.varargElementType?.containsDotNetTypeParameter() == true) {
+            dotNetUnsupported(
+                "vararg parameter '${parameter.name.asString()}' has an open element type; " +
+                        "generic vararg argument construction is not supported"
+            )
+        }
         typeMapper.toDotNetIlValueType(parameter.type)
             ?: dotNetUnsupported("parameter '${parameter.name.asString()}' has unsupported type ${parameter.type.render()}")
     }
+
+private fun IrType.containsDotNetTypeParameter(): Boolean {
+    val simpleType = this as? IrSimpleType ?: return true
+    if (simpleType.classifier is IrTypeParameterSymbol) return true
+    return simpleType.arguments.any { argument ->
+        (argument as? IrTypeProjection)?.type?.containsDotNetTypeParameter() != false
+    }
+}
 
 /**
  * Emission-scoped IR-to-IL type mapping. One instance is created per [DotNetIlEmitter.emit] call
@@ -549,12 +563,14 @@ internal class DotNetIlTypeMapper private constructor(
     }
 
     /**
-     * Maps invariant Kotlin `Array<E>` to a CLR vector while preserving it as the distinct
+     * Maps Kotlin `Array<E>` to a CLR vector while preserving it as the distinct
      * [DotNetIlValueType.GenericArray] structural kind. Concrete primitive elements are legal and
      * retain the natural CLR vector (`Array<Int>` -> `int32[]`) because specialized primitive
      * arrays now have distinct Kotlin.Runtime wrapper types. An OPEN type parameter remains valid
-     * (`!n[]`/`!!n[]`) and substitutes reified CLR element types. Projections are never mapped to
-     * CLR covariance.
+     * (`!n[]`/`!!n[]`) and substitutes reified CLR element types. A Kotlin `out` projection keeps
+     * the same element token: the projection remains authoritative KLIB metadata, while CLR
+     * reference-array covariance is admitted only by the physical assignability check. `in` and
+     * star projections have no truthful vector element token and remain rejected.
      */
     private fun toGenericArrayTypeOrNull(type: IrType): DotNetIlValueType.GenericArray? {
         val simpleType = type as? IrSimpleType
@@ -563,10 +579,10 @@ internal class DotNetIlTypeMapper private constructor(
             ?: dotNetUnsupported("generic array type ${type.render()} must have exactly one element type")
         val projection = argument as? IrTypeProjection
             ?: dotNetUnsupported("star-projected generic array type ${type.render()} is not supported")
-        if (projection.variance != Variance.INVARIANT) {
+        if (projection.variance == Variance.IN_VARIANCE) {
             dotNetUnsupported(
-                "generic array type ${type.render()} has a use-site projection; " +
-                        "generic arrays are invariant in the supported .NET model"
+                "generic array type ${type.render()} has an input projection; " +
+                        "a CLR vector cannot represent its read-as-Any/write-as-element contract"
             )
         }
         val elementIrType = projection.type
