@@ -49,7 +49,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Classified CLR exception model](decisions/classified-clr-exceptions.md)
 - [Kotlin-owned primitive-array wrappers](decisions/primitive-arrays.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
-- [Generic and variant interface ABI](decisions/draft-adr-variant-interface-abi.md)
+- [Generic and variant interface ABI](decisions/draft-adr-generic-interface-abi.md)
 - [Callable and callable-reference ABI](decisions/draft-adr-callable-and-reference-abi.md)
 - [Runtime and stdlib product ownership](decisions/runtime-and-stdlib-ownership.md)
 - [CIL and PE production direction](decisions/cil-and-pe-production.md)
@@ -64,7 +64,6 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [.NET platform and target frameworks](decisions/dotnet-platform-and-target-frameworks.md)
 - [Compiler and Gradle integration](decisions/compiler-and-gradle-integration.md)
 - [Explicit C# export surface](decisions/draft-adr-explicit-csharp-export-surface.md)
-- [Iterator ABI](decisions/draft-adr-erased-iterator-abi.md)
 
 Three current files document implementation or verification mechanisms and
 will move out of `decisions` when their active links are migrated:
