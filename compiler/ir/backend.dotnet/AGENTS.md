@@ -4,7 +4,8 @@ Prototype Kotlin → .NET CIL target. Objective CLR loading lives in
 `compiler/frontend.common.dotnet/`, IR/CIL work in `compiler/ir/backend.dotnet/`, and pipeline/FIR
 composition in `compiler/cli/cli-dotnet/` (K2 phased pipeline only). IL-text golden tests are the
 primary layout validation: test data in `compiler/testData/codegen/dotnet/ilText/`, runners generated from
-`compiler/fir/fir2ir/testFixtures/.../codegen/AbstractDotNetIlTextTest.kt` (`./gradlew generateTests`).
+`compiler/fir/fir2ir/testFixtures/.../codegen/AbstractDotNetIlTextTest.kt`
+(`./gradlew :compiler:fir:fir2ir:generateTests`).
 When either supported ILAsm is available, every emitted golden module is also assembled by it;
 the strict toolchain lane requires both Framework and modern ILAsm. CLI tests live in
 `compiler/testData/cli/dotnet/`. The same box corpus compiles for `net10.0` and `net48` and
@@ -13,21 +14,24 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns 814 FIR/IL/semantic tests, 21 generated-CLI tests, and 67
-library-integration tests. Audit all 16 JUnit XML files under
+toolchain enforcement. Audit every JUnit XML file under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 902 tests with zero
-failures, errors, or skips. `dn` is an intentionally short private child-task name because the
+`compiler/tests-integration/build/test-results/dn/`; the expected current file
+and test totals are owned only by [`STATUS.md`](STATUS.md). `dn` is an
+intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
 
 ## Architectural review and work ordering
 
+- [`STATUS.md`](STATUS.md) owns the current branch, verification, active-work,
+  blocker, and next-task state. Do not add commit history or changing test
+  totals to this bootstrap contract or to ADRs.
 - `docs/review/README.md` indexes the review evidence and the current way forward. Read it before
   adding an ABI-bearing feature, runtime type, interface member/view, exception mapping, public CLR
   name, or cross-module binding.
 - `docs/review-2026-07-17.md` is a snapshot review of commit `8dd89907d`, not normative design law.
-  Draft and accepted ADRs own decisions; `docs/review/way-forward.md` owns current sequencing and
+  Draft and accepted ADRs own decisions; `docs/review/way-forward.md` owns future sequencing and
   release gates. When they disagree, reverify the code and amend the relevant ADR rather than
   silently choosing a review conclusion.
 - Any implementation change to a documented semantic, representation, or ABI rule must amend the
@@ -60,6 +64,34 @@ Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which
   fixpoint (callers of skipped functions are skipped too). This is developer diagnostics, not a
   library-publication model: any eviction must make library and stdlib production fail, and the
   endpoint is a located FIR diagnostic before backend codegen.
+
+## Contribution workflow
+
+1. Treat Common Kotlin and its stdlib generators as authoritative for Kotlin
+   behavior and declarations.
+2. Compare JVM, JS, Wasm, and Native before designing a feature. Record how
+   each relevant mature target handles it, attack the preferred design, and
+   deviate only for a concrete CLR constraint.
+3. Amend the owning ADR or active programme before implementing a semantic,
+   representation, or ABI choice. Do not attribute the target authors'
+   position to the Kotlin core team.
+4. Verify any new IL spelling with a temporary assemble-and-run probe before
+   codegen emits it. Keep probes outside the repository.
+5. Build one bounded feature, fail unsupported shapes diagnostically, and
+   test adversarial source, metadata, dispatch, profile, and runtime
+   boundaries rather than only the happy path.
+6. Never edit generated test runners or configuration/API outputs by hand.
+   Use the owning scoped generator and review its output critically.
+7. For a semantic feature, run the strict aggregate gate above and inspect
+   every XML result; quiet Gradle success is insufficient. A Markdown-only
+   ownership or history change does not require the compiler gate, but it
+   does require repository-reference, local-link, and whitespace/diff checks.
+8. Never bypass Smart App Control or weaken a test to avoid it. Missing or
+   blocked required tooling must not become a silent pass.
+9. Keep each completed feature in one intentional commit, including affected
+   ADR and status updates. Preserve unrelated worktree changes. The repository
+   owner has requested direct commits and pushes on `dotnet`; do not create
+   worktrees or modify another branch.
 
 ## Established decisions
 

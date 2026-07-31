@@ -15,22 +15,25 @@ copying a snapshot review into binding design law.
    digest, but it is not a third independent review and is not the repository source of truth. The
    supplied text contains the digest twice and omits a durable repository link to source 1, so it
    should not be checked in verbatim.
-4. [`way-forward.md`](way-forward.md) is the living execution order and release-gate document. It
-   records re-verification performed after the two reviews and may promote, downgrade, or split a
-   review item. Every normative representation or ABI decision still belongs in an ADR under
+4. [`../../STATUS.md`](../../STATUS.md) is the canonical owner of current
+   branch, verification, active-work, blocker, and next-task state.
+5. [`way-forward.md`](way-forward.md) is the living future execution order and
+   release-gate document. It records re-verification performed after the two
+   reviews and may promote, downgrade, or split a review item. Every normative
+   representation or ABI decision still belongs in an ADR under
    [`../decisions`](../decisions).
-5. [`upstream-sync-2026-07-28.md`](upstream-sync-2026-07-28.md) records the six-step impact review
+6. [`upstream-sync-2026-07-28.md`](upstream-sync-2026-07-28.md) records the six-step impact review
    and adaptations for the rebase from `0349ed5cd` to `6fb64e0c0`.
-6. [`upstream-sync-2026-07-30.md`](upstream-sync-2026-07-30.md) records the 161-commit impact
+7. [`upstream-sync-2026-07-30.md`](upstream-sync-2026-07-30.md) records the 161-commit impact
    review, exact rebase verification, immediate Common/IR adaptations, and longer-term KLIB,
    Analysis API, and BTA direction for the rebase to `733a49b39`.
-7. [`common-io-source-partition.md`](common-io-source-partition.md) records the mature-target I/O
+8. [`common-io-source-partition.md`](common-io-source-partition.md) records the mature-target I/O
    comparison, the exception dependency proved by compilation, its completed classified-carrier
    prerequisite, and the implemented Common/actual source-product partition.
-8. [`common-collections-program.md`](common-collections-program.md) selects collections as a
+9. [`common-collections-program.md`](common-collections-program.md) selects collections as a
    first-class feature programme, keeps Common and the stdlib generator authoritative, and
    separates Kotlin identity from later explicit BCL adapters.
-9. [`architecture-responsibility-audit.md`](architecture-responsibility-audit.md) classifies every
+10. [`architecture-responsibility-audit.md`](architecture-responsibility-audit.md) classifies every
    backend production file, compares mature-target module and package ownership, and selects a
    bounded CLR load-layer correction with enforced dependency direction.
 
@@ -38,7 +41,7 @@ Authority order for implementation work:
 
 1. accepted Kotlin language semantics and repository-wide compiler contracts;
 2. accepted target ADRs;
-3. the current way forward and its release gates;
+3. current status, then the way forward and its release gates;
 4. verified findings in the consolidated review;
 5. supplemental or unverified review claims.
 
@@ -48,21 +51,11 @@ choice.
 
 ## Current status
 
-- Snapshot review: `8dd89907d`. The branch is based on `origin/master` at `733a49b39`; do not
-  read the snapshot commit as the current implementation state.
-- Maturity: high-quality prototype; credible trajectory; not open for third-party binary ABI.
-- Immediate objective: Gate A in [`way-forward.md`](way-forward.md).
-- Required profiles: `net48` applications/libraries, `netstandard2.0` portable libraries, and
-  `net10.0` applications/libraries. Profile-specific code generation is intentional.
-- Selected semantic direction: Kotlin-owned primitive-array wrappers and classified, identity-
-  preserving CLR exceptions, including Kotlin-owned static-initialization failure state above CLR
-  `.cctor`. The accepted pre-ABI ADRs own the details.
-- Nothing has shipped. Existing prototype artifacts have no compatibility standing until an
-  explicit freeze is recorded.
-- No new public runtime capability, generic-interface surface, exception mapping, array-bearing
-  ABI, or interface body should be added while its P0 dependency remains open.
+Read [`../../STATUS.md`](../../STATUS.md). This index deliberately does not
+duplicate changing branch, test, blocker, or task state.
 
 ## Maintenance rule
 
-Keep this index short. Update issue status and sequencing in `way-forward.md`; put rationale and
-alternatives in ADRs; put executable evidence in tests. Do not grow another all-in-one review.
+Keep this index short. Update current state in `STATUS.md`, future issue
+sequencing in `way-forward.md`, rationale and alternatives in ADRs, and
+executable evidence in tests. Do not grow another all-in-one review.
