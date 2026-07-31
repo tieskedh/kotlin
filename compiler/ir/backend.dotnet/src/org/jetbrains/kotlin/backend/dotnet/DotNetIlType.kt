@@ -9,6 +9,13 @@ import org.jetbrains.kotlin.types.Variance
  */
 internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     object Boolean : DotNetIlValueType("bool")
+
+    /** `kotlin.Byte`: exact signed CLR `int8`, evaluated on the stack as an `int32`. */
+    object Int8 : DotNetIlValueType("int8")
+
+    /** `kotlin.Short`: exact signed CLR `int16`, evaluated on the stack as an `int32`. */
+    object Int16 : DotNetIlValueType("int16")
+
     object Int32 : DotNetIlValueType("int32")
 
     /** `kotlin.Long`. Mirrors the JVM backend's `long`; CLR `int64` occupies one stack slot. */
@@ -100,7 +107,8 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     }
 
     /**
-     * A concrete nullable Kotlin primitive (`Int?`, `Long?`, `Double?`, `Boolean?`, `Char?`) in
+     * A concrete nullable Kotlin primitive (`Byte?`, `Short?`, `Int?`, `Long?`, `Double?`,
+     * `Boolean?`, `Char?`) in
      * an EXACT typed position: CLR `System.Nullable<T>` — the hybrid-representation decision
      * (see AGENTS.md "Nullability model"). Roslyn precedent: C# `int?` is
      * `valuetype System.Nullable`1<int32>` (corelib-qualified) in typed positions and collapses to
@@ -143,7 +151,7 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
 
         /**
          * The `T? -> Any?` boundary widening: the CLR collapses `box Nullable<T>` to
-         * boxed-`T`-or-null (probe-verified for all five instantiations, `boxprobe_s3`,
+         * boxed-`T`-or-null (probe-verified for the scalar instantiations, `boxprobe_s3`,
          * `nullprobe_s8`).
          */
         val boxInstruction: kotlin.String
@@ -323,13 +331,15 @@ internal fun DotNetIlValueType.dotNetViewAsGenericOwner(
 
 /**
  * The corelib reference of the boxed form of a primitive value type, the operand of the
- * `T -> Any?` `box` instruction (all five spellings probe-verified: Int32/Int64 in landed code
- * and `boxprobe_s7`; Boolean/Char/Double in `nullprobe_s8`, runtime types confirmed). Null for
+ * `T -> Any?` `box` instruction (the established spellings are probe-verified by
+ * `boxprobe_s7`/`nullprobe_s8`; Byte/Short are frozen by the narrow-scalar product gate). Null for
  * every non-primitive type (reference types widen to `object` without an instruction; a
  * [DotNetIlValueType.NullableValue] boxes through its own [boxInstruction][DotNetIlValueType.NullableValue.boxInstruction]).
  */
 internal fun DotNetIlValueType.dotNetBoxedCorelibRefOrNull(coreLibraryReference: String): String? = when (this) {
     DotNetIlValueType.Boolean -> "${coreLibraryReference}System.Boolean"
+    DotNetIlValueType.Int8 -> "${coreLibraryReference}System.SByte"
+    DotNetIlValueType.Int16 -> "${coreLibraryReference}System.Int16"
     DotNetIlValueType.Int32 -> "${coreLibraryReference}System.Int32"
     DotNetIlValueType.Int64 -> "${coreLibraryReference}System.Int64"
     DotNetIlValueType.Float64 -> "${coreLibraryReference}System.Double"

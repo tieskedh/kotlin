@@ -367,6 +367,8 @@ internal class DotNetIlExpressionCodegen(
     private fun emitDefaultArgumentPlaceholder(type: DotNetIlValueType) {
         when (type) {
             DotNetIlValueType.Boolean,
+            DotNetIlValueType.Int8,
+            DotNetIlValueType.Int16,
             DotNetIlValueType.Int32,
             DotNetIlValueType.Char,
             -> methodContext.emit("ldc.i4 0", pushes = 1)
@@ -664,6 +666,8 @@ internal class DotNetIlExpressionCodegen(
                 methodContext.emit("ldstr ${expression.value.toString().toIlStringLiteral()}", pushes = 1)
             else -> when (val valueType = typeMapper.toDotNetIlValueType(expression.type)) {
                 DotNetIlValueType.Boolean,
+                DotNetIlValueType.Int8,
+                DotNetIlValueType.Int16,
                 DotNetIlValueType.Int32,
                 DotNetIlValueType.Int64,
                 DotNetIlValueType.Float64,
@@ -734,6 +738,8 @@ internal class DotNetIlExpressionCodegen(
     private fun emitPrimitiveValueToString(valueType: DotNetIlValueType) {
         when (valueType) {
             DotNetIlValueType.Boolean -> emitBooleanToString()
+            DotNetIlValueType.Int8 -> emitBoxedInvariantToString("${coreLibraryReference}System.SByte")
+            DotNetIlValueType.Int16 -> emitBoxedInvariantToString("${coreLibraryReference}System.Int16")
             DotNetIlValueType.Int32 -> emitBoxedInvariantToString("${coreLibraryReference}System.Int32")
             DotNetIlValueType.Int64 -> emitBoxedInvariantToString("${coreLibraryReference}System.Int64")
             DotNetIlValueType.Float64 -> emitDoubleValueToString()
@@ -1920,6 +1926,16 @@ internal class DotNetIlExpressionCodegen(
                 val value = expression.value as? Boolean
                     ?: dotNetUnsupported("unsupported bool constant: ${expression.value}")
                 methodContext.emit("ldc.i4.${if (value) "1" else "0"}", pushes = 1)
+            }
+            DotNetIlValueType.Int8 -> {
+                val value = expression.value as? Byte
+                    ?: dotNetUnsupported("unsupported int8 constant: ${expression.value}")
+                methodContext.emit("ldc.i4 ${value.toInt()}", pushes = 1)
+            }
+            DotNetIlValueType.Int16 -> {
+                val value = expression.value as? Short
+                    ?: dotNetUnsupported("unsupported int16 constant: ${expression.value}")
+                methodContext.emit("ldc.i4 ${value.toInt()}", pushes = 1)
             }
             DotNetIlValueType.Int32 -> {
                 val value = expression.value as? Int
