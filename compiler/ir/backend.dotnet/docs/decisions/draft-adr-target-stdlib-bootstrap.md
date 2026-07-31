@@ -309,7 +309,7 @@ across repeated builds of each profile. Different profiles are not expected to b
 The self-bound KLIB inside the DLL has no recursive self-hash; containment and physical
 Assembly-row validation bind it to the implementation. Executable/test assembly
 remains outside this publication reproducibility contract. The direct PE writer described in
-`draft-adr-il-assembly-pipeline.md` must eventually own deterministic PE construction rather than
+`cil-and-pe-production.md` must eventually own deterministic PE construction rather than
 depending on the external assembler flag.
 
 The explicit ordinary-source route and packaged-fallback route must also produce identical packed

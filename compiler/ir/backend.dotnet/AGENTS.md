@@ -312,7 +312,7 @@ Textual IL plus ILAsm is the accepted prototype production path. The endpoint
 is a structured compiler-owned CIL/metadata model with deterministic text and
 direct-PE sinks; do not add a sidecar merely to exchange one external process
 for another. See
-[`docs/decisions/draft-adr-il-assembly-pipeline.md`](docs/decisions/draft-adr-il-assembly-pipeline.md).
+[CIL/PE production ADR](docs/decisions/cil-and-pe-production.md).
 
 Any IL spelling not already golden-pinned must first be assembled and executed
 in a temporary probe outside the repository. Verify physical metadata through
