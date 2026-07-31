@@ -10,6 +10,7 @@ dependencies {
     implementation(project(":core:language.targets.dotnet"))
     implementation(project(":compiler:config.dotnet"))
     implementation(project(":compiler:frontend.common.dotnet"))
+    implementation(project(":compiler:fir:fir-dotnet"))
     implementation(project(":compiler:util"))
     implementation(project(":compiler:cli"))
     implementation(project(":compiler:frontend"))

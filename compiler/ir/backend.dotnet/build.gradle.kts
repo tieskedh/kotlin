@@ -9,6 +9,7 @@ dependencies {
     api(project(":core:language.targets.dotnet"))
     api(project(":compiler:config.dotnet"))
     api(project(":compiler:frontend.common.dotnet"))
+    implementation(project(":compiler:dotnet.imports"))
     api(project(":compiler:cli-base"))
     api(project(":compiler:ir.tree"))
     api(project(":compiler:ir.backend.common"))

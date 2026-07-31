@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: complete generated Common signed `Iterable.sum()` family
+- Last completed feature: shared retained foreign-CLR carrier and FIR-owned importer boundary
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,19 +20,17 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 XML files and 924 tests:
+The JUnit audit covered 16 fresh XML files and 925 tests:
 
 - 834 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 69 library-integration tests
+- 70 library-integration tests
 - zero failures, errors, or skips
 
-The numeric-sum slice additionally passed focused `net10.0`, `net48`, and
-portable `netstandard2.0` product tests. They proved direct, packaged-fallback,
-installed, and separate-consumer binding for all six logical overloads; exact
-`sumOfByte` through `sumOfDouble` physical names; integer wraparound; Float
-encounter-order rounding, NaN, and empty positive zero; and one-iterator
-traversal on both supported runtimes.
+The architecture slice additionally passed focused compilation and dependency
+analysis for both new modules. Its adversarial carrier test proves exact
+assembly, TypeDef, MethodDef, Property, getter, and setter identity and rejects
+wrong owners plus copied physical rows.
 
 ## Current architecture
 
@@ -42,6 +40,10 @@ traversal on both supported runtimes.
   validation without depending on FIR, IR, backend, or CLI code.
 - `:compiler:frontend.common.dotnet` owns objective PE/ECMA-335 facts and
   physical CLR validation; FIR owns Kotlin interpretation.
+- `:compiler:dotnet.imports` owns the versioned, self-validating in-process
+  carrier for one already-selected foreign CLR declaration.
+- `:compiler:fir:fir-dotnet` owns foreign Kotlin projection and lazy FIR symbol
+  construction without depending on backend or CLI implementation packages.
 - `:compiler:ir:backend.dotnet` owns IR lowering, CIL mapping/emission, and
   backend product construction.
 - `cli-base` owns the .NET content-root carrier; .NET compilation no longer
@@ -54,21 +56,19 @@ traversal on both supported runtimes.
 
 ## Active state
 
-No implementation slice is half-landed. The complete signed generated Common
-`Iterable.sum()` family now lives in `Kotlin.Stdlib`: Common owns the six source
-bodies and logical `sum` declarations, while the self-describing physical
-binding records the exact erased CLR names `sumOfByte` through `sumOfDouble`.
-The canonical Kotlin collection carrier remains unchanged; no LINQ/BCL
-algorithm or target-authored body was introduced. Kotlin `Byte`, `Short`, and
-`Float` retain their exact CLR scalar carriers across this new library boundary.
+No implementation slice is half-landed. The foreign CLR FIR provider and its
+Kotlin nullability/contract projection now live in `fir-dotnet`; CLI only
+supplies the selected assemblies. FIR attaches a V1 carrier containing direct
+references to the selected assembly and objective metadata rows. Backend
+matches that version exhaustively and binds those exact references without a
+second classpath or display-name lookup. The admitted declaration grammar,
+Kotlin semantics, and physical ABI are unchanged.
 
 ## Open architectural blockers
 
 - Exact Common `AbstractCollection`/`AbstractList` production needs generic
   inline support, `CharSequence`/`Appendable`/`StringBuilder`, and typed
   collection-to-array support; do not fork their algorithms into .NET.
-- The foreign CLR provider still needs a shared retained-declaration carrier
-  seam before it can move into a FIR-owned .NET module.
 - KLIB-in-DLL and physical ABI codecs still need a neutral serialization owner
   before frontend, tooling, or packaging gains another consumer.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
@@ -81,10 +81,10 @@ algorithm or target-authored body was introduced. Kotlin `Byte`, `Short`, and
 
 ## Next bounded work
 
-1. Create the shared retained-declaration carrier seam, then split FIR policy
-   from backend binding without moving physical CLR loading into either.
-2. Continue CLR annotation/import interoperability only through exact standard
+1. Continue CLR annotation/import interoperability only through exact standard
    metadata mappings that preserve Kotlin smart-cast and mutability rules.
+2. Extract a neutral KLIB-in-DLL and physical ABI serialization owner before a
+   second frontend, tooling, or packaging consumer appears.
 3. Select another exact non-inline Common collection family only after its full
    type/helper closure and cross-profile product behavior are documented.
 

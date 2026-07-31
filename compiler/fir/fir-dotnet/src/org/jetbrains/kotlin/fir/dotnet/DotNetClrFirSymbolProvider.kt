@@ -3,7 +3,7 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
-package org.jetbrains.kotlin.cli.pipeline.dotnet
+package org.jetbrains.kotlin.fir.dotnet
 
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataDecoder
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataResolution
@@ -19,12 +19,8 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrDoesNotReturnIfMetadataDecoder
 import org.jetbrains.kotlin.load.dotnet.DotNetClrDoesNotReturnIfMetadataResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrDisallowNullMetadataDecoder
 import org.jetbrains.kotlin.load.dotnet.DotNetClrDisallowNullMetadataResolution
-import org.jetbrains.kotlin.fir.dotnet.DotNetClrInputNullabilityEnhancer
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrImportedMethodSource
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrImportedPropertySource
-import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityProjection
-import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityProjector
-import org.jetbrains.kotlin.fir.dotnet.DotNetClrKotlinNullabilityQualifier
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodSemanticsKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodVisibility
@@ -52,7 +48,6 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrPropertyDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedMethodSignatureResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
-import org.jetbrains.kotlin.fir.dotnet.DotNetClrReturnNullabilityEnhancer
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyBinder
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyName
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedTypeResolver
@@ -136,9 +131,9 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Only complete public, top-level, non-generic abstract-interface contracts over the supported
  * primitive/string/object grammar enter [candidates]. Classifier construction stays lazy. See
- * `docs/programmes/clr-annotations.md`.
+ * `compiler/ir/backend.dotnet/docs/programmes/clr-annotations.md`.
  */
-internal class DotNetClrFirSymbolProvider(
+class DotNetClrFirSymbolProvider(
     session: FirSession,
     private val moduleData: FirModuleData,
     private val scopeProvider: FirScopeProvider,
@@ -955,7 +950,6 @@ internal class DotNetClrFirSymbolProvider(
                         target.index,
                         declarationQualifier,
                     )
-                else -> declarationQualifier
             }
         }
 

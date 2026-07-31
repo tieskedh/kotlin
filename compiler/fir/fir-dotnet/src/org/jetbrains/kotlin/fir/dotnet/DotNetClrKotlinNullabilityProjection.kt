@@ -19,7 +19,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
  * Kotlin's policy vocabulary for one enhanced foreign-type component.
  *
  * This mirrors the mature JVM foreign-type enhancement states without coupling the CLR importer
- * to the Java classfile model.
+ * to the Java classfile model or CLI session composition.
  */
 enum class DotNetClrKotlinNullabilityQualifier {
     FORCE_FLEXIBILITY,
