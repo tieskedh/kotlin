@@ -30,7 +30,7 @@ Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which
 - `docs/review/README.md` indexes the review evidence and the current way forward. Read it before
   adding an ABI-bearing feature, runtime type, interface member/view, exception mapping, public CLR
   name, or cross-module binding.
-- `docs/review-2026-07-17.md` is a snapshot review of commit `8dd89907d`, not normative design law.
+- `docs/archive/review-2026-07-17.md` is a snapshot review of commit `8dd89907d`, not normative design law.
   Draft and accepted ADRs own decisions; `docs/review/way-forward.md` owns future sequencing and
   release gates. When they disagree, reverify the code and amend the relevant ADR rather than
   silently choosing a review conclusion.
