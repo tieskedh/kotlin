@@ -46,6 +46,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrParameterDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPropertyDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedMethodSignatureResolution
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedSignatureResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyBinder
@@ -157,7 +158,7 @@ class DotNetClrFirSymbolProvider(
         val properties: List<PropertyCandidate>,
     )
 
-    private data class ReferenceArrayQualifiers(
+    private data class ArrayQualifiers(
         val array: DotNetClrKotlinNullabilityQualifier,
         val element: DotNetClrKotlinNullabilityQualifier,
     )
@@ -342,12 +343,24 @@ class DotNetClrFirSymbolProvider(
                             }
                 is DotNetClrTypeSignature.SzArray -> {
                     val element = type.elementType as? DotNetClrTypeSignature.Primitive
-                    index == signature.parameterTypes.lastIndex &&
-                            element?.type in REFERENCE_PRIMITIVES &&
-                            parameterRows.singleOrNull()?.let { parameter ->
-                                annotationServices.paramArray(assembly, parameter.handle) is
-                                        DotNetClrParamArrayMetadataResolution.Decoded
-                            } == true
+                    val elementType = element?.type
+                    if (elementType !in ARRAY_ELEMENT_PRIMITIVES) {
+                        false
+                    } else {
+                        val paramArrayRows = parameterRows.map { parameter ->
+                            annotationServices.paramArray(assembly, parameter.handle)
+                        }
+                        when {
+                            paramArrayRows.all { resolution ->
+                                resolution === DotNetClrParamArrayMetadataResolution.Absent
+                            } -> true
+                            index == signature.parameterTypes.lastIndex &&
+                                    elementType in REFERENCE_PRIMITIVES &&
+                                    paramArrayRows.singleOrNull() is
+                                    DotNetClrParamArrayMetadataResolution.Decoded -> true
+                            else -> false
+                        }
+                    }
                 }
                 else -> false
             }
@@ -434,6 +447,9 @@ class DotNetClrFirSymbolProvider(
         when (this) {
             DotNetClrTypeSignature.Void -> allowVoid
             is DotNetClrTypeSignature.Primitive -> type in SUPPORTED_PRIMITIVES
+            is DotNetClrTypeSignature.SzArray ->
+                (elementType as? DotNetClrTypeSignature.Primitive)?.type in
+                        ARRAY_ELEMENT_PRIMITIVES
             else -> false
         }
 
@@ -490,10 +506,9 @@ class DotNetClrFirSymbolProvider(
         val propertyName = Name.identifier(physicalProperty.name)
         val propertySymbol = FirRegularPropertySymbol(CallableId(classId, propertyName))
         val propertyType = physicalProperty.signature.propertyType.toKotlinType(
-            annotationServices.propertyQualifier(
-                assembly,
-                physicalProperty,
-            )
+            annotationServices,
+            assembly,
+            DotNetClrNullableDeclarationTarget.Property(physicalProperty),
         )
         resolvePhase = FirResolvePhase.ANALYZED_DEPENDENCIES
         origin = FirDeclarationOrigin.Library
@@ -623,11 +638,9 @@ class DotNetClrFirSymbolProvider(
                     session.builtinTypes.nothingType.coneType
                 } else {
                     method.signature.returnType.toKotlinType(
-                        annotationServices.qualifier(
-                            assembly,
-                            method,
-                            DotNetClrNullableDeclarationTarget.MethodReturn(method),
-                        )
+                        annotationServices,
+                        assembly,
+                        DotNetClrNullableDeclarationTarget.MethodReturn(method),
                     )
                 }
         }
@@ -670,16 +683,24 @@ class DotNetClrFirSymbolProvider(
             is DotNetClrTypeSignature.SzArray -> {
                 val element = type.elementType as? DotNetClrTypeSignature.Primitive
                     ?: error("Unsupported parameter array entered the closed foreign CLR FIR slice")
-                val qualifiers =
-                    annotationServices.referenceArrayQualifiers(assembly, method, index)
-                val elementType = element.toKotlinType(qualifiers.element)
-                val arrayType = ConeKotlinTypeProjectionOut(elementType)
-                    .createArrayType(
-                        nullable = false,
-                        createPrimitiveArrayTypeIfPossible = false,
-                    )
-                    .withQualifier(qualifiers.array)
-                MethodParameterView(arrayType, isVararg = true)
+                val target = DotNetClrNullableDeclarationTarget.MethodParameter(method, index)
+                val qualifiers = annotationServices.arrayQualifiers(
+                    assembly,
+                    type,
+                    target,
+                )
+                val isVararg = assembly.parameterDefinitions.singleOrNull { parameter ->
+                    parameter.declaringMethod == method.handle &&
+                            !parameter.isReturn &&
+                            parameter.parameterIndex == index
+                }?.let { parameter ->
+                    annotationServices.paramArray(assembly, parameter.handle) is
+                            DotNetClrParamArrayMetadataResolution.Decoded
+                } == true
+                MethodParameterView(
+                    element.toKotlinArrayType(qualifiers, isVararg),
+                    isVararg,
+                )
             }
             else -> MethodParameterView(
                 type.toKotlinType(
@@ -692,6 +713,66 @@ class DotNetClrFirSymbolProvider(
                 isVararg = false,
             )
         }
+
+    private fun DotNetClrTypeSignature.toKotlinType(
+        annotationServices: ForeignAnnotationServices,
+        assembly: DotNetClrAssemblyMetadata,
+        target: DotNetClrNullableDeclarationTarget,
+    ): ConeKotlinType =
+        when (this) {
+            is DotNetClrTypeSignature.SzArray -> {
+                val element = elementType as? DotNetClrTypeSignature.Primitive
+                    ?: error("Unsupported vector entered the closed foreign CLR FIR slice")
+                element.toKotlinArrayType(
+                    annotationServices.arrayQualifiers(assembly, this, target),
+                    isVararg = false,
+                )
+            }
+            else -> {
+                val qualifier = when (target) {
+                    is DotNetClrNullableDeclarationTarget.Property ->
+                        annotationServices.propertyQualifier(assembly, target.property)
+                    is DotNetClrNullableDeclarationTarget.MethodReturn ->
+                        annotationServices.qualifier(
+                            assembly,
+                            target.method,
+                            target,
+                        )
+                    is DotNetClrNullableDeclarationTarget.MethodParameter ->
+                        annotationServices.qualifier(
+                            assembly,
+                            target.method,
+                            target,
+                        )
+                    else -> error("Unsupported foreign declaration target $target")
+                }
+                toKotlinType(qualifier)
+            }
+        }
+
+    private fun DotNetClrTypeSignature.Primitive.toKotlinArrayType(
+        qualifiers: ArrayQualifiers,
+        isVararg: Boolean,
+    ): ConeKotlinType {
+        val elementType = toKotlinType(qualifiers.element)
+        val outArray = ConeKotlinTypeProjectionOut(elementType).createArrayType(
+            nullable = false,
+            createPrimitiveArrayTypeIfPossible = false,
+        )
+        if (isVararg) return outArray.withQualifier(qualifiers.array)
+
+        val invariantArray = elementType.createArrayType(
+            nullable = false,
+            createPrimitiveArrayTypeIfPossible = false,
+        )
+        val lowerNullable = qualifiers.array == DotNetClrKotlinNullabilityQualifier.NULLABLE
+        val upperNullable = qualifiers.array != DotNetClrKotlinNullabilityQualifier.NOT_NULL
+        return ConeFlexibleType(
+            invariantArray.withNullability(lowerNullable, session.typeContext),
+            outArray.withNullability(upperNullable, session.typeContext),
+            isTrivial = false,
+        )
+    }
 
     private fun buildDeprecatedAnnotation(
         obsolete: DotNetClrObsoleteMetadataResolution.Decoded,
@@ -953,68 +1034,87 @@ class DotNetClrFirSymbolProvider(
             }
         }
 
-        fun referenceArrayQualifiers(
+        fun arrayQualifiers(
             assembly: DotNetClrAssemblyMetadata,
-            method: DotNetClrMethodDefinition,
-            index: Int,
-        ): ReferenceArrayQualifiers {
-            val fallback = ReferenceArrayQualifiers(
+            signature: DotNetClrTypeSignature.SzArray,
+            target: DotNetClrNullableDeclarationTarget,
+        ): ArrayQualifiers {
+            val resolved = when (val resolution = signatureResolver.resolve(assembly, signature)) {
+                is DotNetClrResolvedSignatureResolution.Resolved ->
+                    resolution.signature as? DotNetClrResolvedTypeSignature.SzArray
+                is DotNetClrResolvedSignatureResolution.Invalid,
+                is DotNetClrResolvedSignatureResolution.UnresolvedType,
+                -> null
+            }
+            val referenceElement =
+                (resolved?.elementType as? DotNetClrResolvedTypeSignature.Primitive)
+                    ?.isReferencePrimitive() == true
+            val fallback = ArrayQualifiers(
                 array = DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY,
-                element = DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY,
+                element = if (referenceElement) {
+                    DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY
+                } else {
+                    DotNetClrKotlinNullabilityQualifier.NOT_NULL
+                },
             )
-            val type = when (
-                val resolution = signatureResolver.resolve(assembly, method.signature)
-            ) {
-                is DotNetClrResolvedMethodSignatureResolution.Resolved ->
-                    resolution.signature.parameterTypes.getOrNull(index)
-                        as? DotNetClrResolvedTypeSignature.SzArray
-                        ?: return fallback
-                is DotNetClrResolvedMethodSignatureResolution.Invalid,
-                is DotNetClrResolvedMethodSignatureResolution.UnresolvedType,
-                -> return fallback
-            }
-            if (!type.elementType.isReferencePrimitive()) {
-                return fallback
-            }
+            val type = resolved ?: return enhanceArrayInput(assembly, target, fallback)
             val resolver = declarationResolver
-                ?: return fallback.copy(
-                    array = inputQualifier(assembly, method, index, fallback.array)
-                )
+                ?: return enhanceArrayInput(assembly, target, fallback)
             val applicator = evidenceApplicator
-                ?: return fallback.copy(
-                    array = inputQualifier(assembly, method, index, fallback.array)
-                )
+                ?: return enhanceArrayInput(assembly, target, fallback)
             val projection = projector.project(
                 applicator.apply(
                     type,
-                    resolver.resolve(
-                        assembly,
-                        DotNetClrNullableDeclarationTarget.MethodParameter(method, index),
-                    ),
+                    resolver.resolve(assembly, target),
                 )
             )
+            val expectedComponents = if (referenceElement) 2 else 1
             val declarationQualifiers =
                 if (
                     projection is DotNetClrKotlinNullabilityProjection.Projected &&
-                    projection.components.size == 2 &&
-                    projection.components[0].type == type &&
-                    projection.components[1].type == type.elementType
+                    projection.components.size == expectedComponents &&
+                    projection.components.firstOrNull()?.type == type &&
+                    (!referenceElement || projection.components[1].type == type.elementType)
                 ) {
-                    ReferenceArrayQualifiers(
+                    ArrayQualifiers(
                         array = projection.components[0].qualifier,
-                        element = projection.components[1].qualifier,
+                        element = if (referenceElement) {
+                            projection.components[1].qualifier
+                        } else {
+                            DotNetClrKotlinNullabilityQualifier.NOT_NULL
+                        },
                     )
                 } else {
                     fallback
                 }
-            return declarationQualifiers.copy(
-                array = inputQualifier(
-                    assembly,
-                    method,
-                    index,
-                    declarationQualifiers.array,
-                )
-            )
+            return enhanceArrayInput(assembly, target, declarationQualifiers)
+        }
+
+        private fun enhanceArrayInput(
+            assembly: DotNetClrAssemblyMetadata,
+            target: DotNetClrNullableDeclarationTarget,
+            qualifiers: ArrayQualifiers,
+        ): ArrayQualifiers =
+            when (target) {
+                is DotNetClrNullableDeclarationTarget.MethodParameter ->
+                    qualifiers.copy(
+                        array = inputQualifier(
+                            assembly,
+                            target.method,
+                            target.index,
+                            qualifiers.array,
+                        )
+                    )
+                is DotNetClrNullableDeclarationTarget.MethodReturn ->
+                    qualifiers.copy(
+                        array = returnQualifier(
+                            assembly,
+                            target.method,
+                            qualifiers.array,
+                        )
+                    )
+                is DotNetClrNullableDeclarationTarget.Property -> qualifiers
+                else -> error("Unsupported array declaration target $target")
         }
 
         private fun inputQualifier(
@@ -1477,6 +1577,19 @@ class DotNetClrFirSymbolProvider(
 
     private companion object {
         val REFERENCE_PRIMITIVES = setOf(
+            DotNetClrPrimitiveType.STRING,
+            DotNetClrPrimitiveType.OBJECT,
+        )
+
+        val ARRAY_ELEMENT_PRIMITIVES = setOf(
+            DotNetClrPrimitiveType.BOOLEAN,
+            DotNetClrPrimitiveType.CHAR,
+            DotNetClrPrimitiveType.INT8,
+            DotNetClrPrimitiveType.INT16,
+            DotNetClrPrimitiveType.INT32,
+            DotNetClrPrimitiveType.INT64,
+            DotNetClrPrimitiveType.FLOAT32,
+            DotNetClrPrimitiveType.FLOAT64,
             DotNetClrPrimitiveType.STRING,
             DotNetClrPrimitiveType.OBJECT,
         )

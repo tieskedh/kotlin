@@ -9,8 +9,8 @@ import org.jetbrains.kotlin.cli.pipeline.PerformanceNotifications
 import org.jetbrains.kotlin.cli.pipeline.PipelinePhase
 import org.jetbrains.kotlin.compiler.plugin.getCompilerExtensions
 import org.jetbrains.kotlin.fir.backend.Fir2IrConfiguration
-import org.jetbrains.kotlin.fir.backend.Fir2IrExtensions
 import org.jetbrains.kotlin.fir.backend.Fir2IrVisibilityConverter
+import org.jetbrains.kotlin.fir.backend.dotnet.DotNetFir2IrExtensions
 import org.jetbrains.kotlin.fir.pipeline.convertToIrAndActualize
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
 
@@ -23,7 +23,7 @@ object DotNetFir2IrPipelinePhase : PipelinePhase<DotNetFrontendPipelineArtifact,
         val configuration = input.configuration
         val diagnosticsReporter = configuration.diagnosticsCollector
         val fir2IrResult = input.frontendOutput.convertToIrAndActualize(
-            Fir2IrExtensions.Default,
+            DotNetFir2IrExtensions,
             Fir2IrConfiguration.forKlibCompilation(configuration, diagnosticsReporter),
             configuration.getCompilerExtensions(IrGenerationExtension),
             irMangler = DotNetIrMangler,

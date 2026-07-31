@@ -24,6 +24,13 @@ Kotlin/JVM separates class-file parsing, the Java declaration model, signature e
 FIR symbols, and backend linkage. Java annotations may enhance a foreign Kotlin view, while
 Kotlin-produced class files retain Kotlin metadata as their semantic authority.
 
+JVM array import also supplies the closest type-shape precedent: a Java reference array has a
+flexible Kotlin `Array<E>..Array<out E>?` view, while a Java primitive array uses the matching
+Kotlin primitive-array classifier because that classifier and the JVM vector have the same
+physical representation. The reusable rule is to preserve Common array operations and foreign
+variance without inventing a conversion. It does not require two target types with different
+physical ABIs to be identified.
+
 JS, Wasm, and Native likewise keep foreign declarations separate from KLIB-backed Kotlin
 declarations. Their importers preserve target identity first and apply Kotlin-facing policy later.
 
@@ -298,10 +305,36 @@ constructor, target, multiplicity, and payload validation. Message and warning/e
 preserved; error does not mean `HIDDEN`. Type, property, getter, setter, and method channels remain
 distinct, and foreign deprecation does not propagate to Kotlin overrides.
 
+An ordinary CLR `SZARRAY` over an admitted signed primitive scalar, `string`, or `object` maps to
+the target's established `Array<E>` vector representation in method parameter, method return, and
+non-indexed property positions. Reference arrays follow JVM's flexible invariant-to-out array
+view and retain independent vector/element nullability. Value-type elements are non-null and only
+the vector consumes nullable metadata. The retained physical signature remains the exact CLR
+vector; no Kotlin primitive-array wrapper is introduced.
+
+The closed imported interface is also a legal Kotlin superinterface. A Kotlin implementation binds
+directly to the retained CLR TypeDef and its exact abstract MethodDef slots, including array
+accessors; it does not acquire a Kotlin split-interface family or a C# implementation-manifest
+record. Those mechanisms describe Kotlin-owned logical contracts. Inventing them for a native CLR
+interface would replace, rather than preserve, the foreign declaration's authoritative identity.
+The target FIR2IR extension retains FIR's accepted override relationship when a rigid Kotlin
+implementation parameter overrides the interface's flexible array view; backend emission consumes
+that IR edge and does not rediscover source override intent.
+
+This means an ordinary foreign `int32[]` is `Array<Int>`, not `IntArray`. That distinction is a
+CLR-specific consequence of the target's canonical primitive-array ABI: `Array<Int>` is naturally
+`int32[]`, while `IntArray` is a Kotlin-owned wrapper around vector storage. Collapsing the two
+would make foreign ABI identity depend on a Kotlin runtime class and would break Common's nominal
+distinction between `Array<Int>` and `IntArray`.
+
 One exact final Param carrying selected-core `System.ParamArrayAttribute()` maps to Common
 `vararg` only for the admitted `string[]` and `object[]` vector shapes. FIR retains independent
 vector/element nullability, while physical linkage retains the original vector signature.
-Primitive parameter arrays and `ParamCollectionAttribute` require separate representations.
+Primitive parameter arrays remain separate: a Common-correct `vararg Int` has `IntArray` as its
+declaration carrier, so a complete foreign mapping needs both call and implementation bridges
+between that wrapper and `int32[]`. Relabelling `Array<Int>` as primitive `vararg` would make calls
+appear to work while leaving overrides and callable references dishonest. `ParamCollectionAttribute`
+also requires a separate representation.
 
 Extension, optional/default, indexer, required/init/read-only, event, marshalling, and broader
 attribute projections land only after their complete physical and Common semantics are specified.
@@ -310,8 +343,9 @@ No marker name alone creates a Kotlin declaration role.
 ### 12. FIR exposure is complete within an admitted grammar
 
 The first admitted classifier family is a public, top-level, non-generic CLR interface with a
-closed method/property grammar over `void`, supported primitive scalars, `string`, `object`, and
-the explicitly admitted reference-vector vararg forms.
+closed method/property grammar over `void`, supported primitive scalars, `string`, `object`,
+ordinary one-dimensional zero-based vectors over backend-supported scalar elements, and the
+explicitly admitted reference-vector vararg forms.
 
 A classifier is withheld when a public declared member, signature, property association,
 attribute-dependent call view, or selected identity lies outside that grammar. It is never exposed

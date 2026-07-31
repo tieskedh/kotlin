@@ -93,6 +93,13 @@ presence/absence and does not decide that an assembly is Kotlin-produced or fore
 and `compiler:dotnet.imports`. It must not import backend-only CIL, lowering, runtime construction,
 physical emitter state, or CLI pipeline code.
 
+`compiler:fir:fir2ir:dotnet-backend` owns only target-specific FIR-to-IR integration, mirroring the
+existing JVM backend module at that repository seam. In particular, a retained foreign CLR
+`SZARRAY` has a flexible Kotlin call view whose rigid source implementation is already accepted by
+FIR; the .NET FIR2IR overridability condition preserves that accepted override edge using the exact
+physical declaration carrier. CIL codegen must not reconstruct it by names or signatures after
+the edge has been lost.
+
 ### Retained import linkage
 
 `compiler:dotnet.imports` owns only the compiler carrier that preserves one already-selected
@@ -129,7 +136,8 @@ deployment only after compiler product validation.
 
 Completed on `dotnet`: `compiler:dotnet.imports` now owns the versioned exact-row carrier,
 `compiler:fir:fir-dotnet` owns foreign Kotlin projection and lazy FIR symbols, `cli-dotnet`
-only installs the provider, and `backend.dotnet` only consumes the retained linkage.
+only installs the provider and target FIR2IR extensions, and `backend.dotnet` only consumes the
+retained linkage.
 
 Extract the existing self-validating carrier from `backend.dotnet` into
 `compiler:dotnet.imports`. Preserve direct references to the selected objective assembly and rows:

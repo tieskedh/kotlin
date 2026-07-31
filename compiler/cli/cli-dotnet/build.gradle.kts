@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":compiler:config.dotnet"))
     implementation(project(":compiler:frontend.common.dotnet"))
     implementation(project(":compiler:fir:fir-dotnet"))
+    implementation(project(":compiler:fir:fir2ir:dotnet-backend"))
     implementation(project(":compiler:util"))
     implementation(project(":compiler:cli"))
     implementation(project(":compiler:frontend"))

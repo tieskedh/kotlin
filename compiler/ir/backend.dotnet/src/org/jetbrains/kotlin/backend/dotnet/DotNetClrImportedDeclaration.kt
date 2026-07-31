@@ -188,11 +188,26 @@ private fun DotNetClrTypeSignature.toSupportedImportedIlTypeOrNull(): DotNetIlVa
         is DotNetClrTypeSignature.SzArray -> {
             val elementType = elementType as? DotNetClrTypeSignature.Primitive
                 ?: return null
-            when (elementType.type) {
-                DotNetClrPrimitiveType.STRING -> DotNetIlValueType.GenericArray(DotNetIlValueType.String)
-                DotNetClrPrimitiveType.OBJECT -> DotNetIlValueType.GenericArray(DotNetIlValueType.Object)
-                else -> null
+            val physicalElement = when (elementType.type) {
+                DotNetClrPrimitiveType.BOOLEAN -> DotNetIlValueType.Boolean
+                DotNetClrPrimitiveType.CHAR -> DotNetIlValueType.Char
+                DotNetClrPrimitiveType.INT8 -> DotNetIlValueType.Int8
+                DotNetClrPrimitiveType.INT16 -> DotNetIlValueType.Int16
+                DotNetClrPrimitiveType.INT32 -> DotNetIlValueType.Int32
+                DotNetClrPrimitiveType.INT64 -> DotNetIlValueType.Int64
+                DotNetClrPrimitiveType.FLOAT32 -> DotNetIlValueType.Float32
+                DotNetClrPrimitiveType.FLOAT64 -> DotNetIlValueType.Float64
+                DotNetClrPrimitiveType.STRING -> DotNetIlValueType.String
+                DotNetClrPrimitiveType.OBJECT -> DotNetIlValueType.Object
+                DotNetClrPrimitiveType.UINT8,
+                DotNetClrPrimitiveType.UINT16,
+                DotNetClrPrimitiveType.UINT32,
+                DotNetClrPrimitiveType.UINT64,
+                DotNetClrPrimitiveType.NATIVE_INT,
+                DotNetClrPrimitiveType.NATIVE_UINT,
+                -> return null
             }
+            DotNetIlValueType.GenericArray(physicalElement)
         }
         else -> null
     }

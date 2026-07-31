@@ -317,6 +317,12 @@ internal class DotNetIlEmitter(
         }
         val moduleInterfaces = moduleClasses.filterTo(hashSetOf()) { it.isInterface }
         val externalDeclarations = DotNetExternalDeclarations(externalLibraries)
+        // Foreign CLR interfaces carry their exact TypeDef/MethodDef identities on the imported
+        // declarations themselves. They are not Kotlin-library interfaces and therefore never
+        // enter [externalDeclarations] or the split-interface manifest. Keep shape admission on
+        // that carrier-backed path too: a Kotlin class may implement the same closed abstract
+        // interface that Kotlin code is allowed to call.
+        val importedClrDeclarationsForShapeValidation = DotNetClrImportedDeclarations {}
         fun isKotlinOwnedSplitGenericInterface(candidate: IrClass): Boolean =
             candidate.isDotNetGenericInterfaceDeclaration &&
                     (candidate in moduleInterfaces ||
@@ -338,7 +344,13 @@ internal class DotNetIlEmitter(
         // dependencies are removed later by the live-map render fixpoint.
         fun registerClassTree(irClass: IrClass, enclosingClassInfo: DotNetIlClassInfo? = null) {
             try {
-                checkClassShapeSupported(irClass, moduleClasses, moduleInterfaces, externalDeclarations)
+                checkClassShapeSupported(
+                    irClass,
+                    moduleClasses,
+                    moduleInterfaces,
+                    externalDeclarations,
+                    importedClrDeclarationsForShapeValidation,
+                )
             } catch (e: DotNetIlUnsupportedException) {
                 // A gate failure OF a companion invalidates its logical owner: the singleton
                 // field and `.cctor` belong to that owner's physical static subtree. A separate
@@ -1971,6 +1983,7 @@ internal class DotNetIlEmitter(
         moduleClasses: Set<IrClass>,
         moduleInterfaces: Set<IrClass>,
         externalDeclarations: DotNetExternalDeclarations,
+        importedClrDeclarations: DotNetClrImportedDeclarations,
     ) {
         val name = irClass.diagnosticName()
         val staticHolder = if (irClass.origin == DOTNET_STATIC_HOLDER) {
@@ -2153,6 +2166,7 @@ internal class DotNetIlEmitter(
                 if (superInterface !in moduleInterfaces &&
                     DotNetRuntimeTypes.genericInterfaceInfoFor(superInterface) == null &&
                     !externalDeclarations.hasClass(superInterface) &&
+                    importedClrDeclarations.classInfoOrNull(superInterface) == null &&
                     superInterface.dotNetFixedFunctionArityOrNull() == null &&
                     superInterface.dotNetFixedKFunctionArityOrNull() == null &&
                     superInterface.dotNetFixedKPropertyArityOrNull() == null &&
