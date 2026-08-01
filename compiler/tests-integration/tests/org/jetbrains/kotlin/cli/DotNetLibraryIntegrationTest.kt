@@ -23927,6 +23927,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public fun safeForeignApi(value: Any?): Api? =
                         value as? Api
 
+                    public fun isForeignApi(value: Any?): Boolean =
+                        value is Api
+
+                    public fun isNullableForeignApi(value: Any?): Boolean =
+                        value is Api?
+
                     public fun verifyString(api: Api): Int =
                         api.Compute("abcd")
 
@@ -24197,6 +24203,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require(Method(facade, "safeForeignApi").Invoke(
                                 null, new object[] { new object() }) == null,
                                 "foreign safe cast admitted an unrelated object");
+                            Require((bool)Method(facade, "isForeignApi").Invoke(
+                                null, new object[] { api }),
+                                "foreign type test rejected its interface implementation");
+                            Require(!(bool)Method(facade, "isForeignApi").Invoke(
+                                null, new object[] { new object() }),
+                                "foreign type test admitted an unrelated object");
+                            Require(!(bool)Method(facade, "isForeignApi").Invoke(
+                                null, new object[] { null }),
+                                "foreign non-null type test admitted null");
+                            Require((bool)Method(facade, "isNullableForeignApi").Invoke(
+                                null, new object[] { api }) &&
+                                (bool)Method(facade, "isNullableForeignApi").Invoke(
+                                null, new object[] { null }),
+                                "foreign nullable type test rejected a valid value");
+                            Require(!(bool)Method(facade, "isNullableForeignApi").Invoke(
+                                null, new object[] { new object() }),
+                                "foreign nullable type test admitted an unrelated object");
                             try
                             {
                                 Method(facade, "castForeignApi").Invoke(

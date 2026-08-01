@@ -266,6 +266,17 @@ See the
   `Nullable<T>`; safe casts test the exact underlying box and materialize the
   existing `Nullable<T>` result. Do not infer value-class identity from the
   same storage shape.
+- Ordinary runtime type tests evaluate their operand once at the erased object
+  boundary, implement Kotlin nullable-target semantics before the non-null
+  check, and then use either an existing Kotlin classifier or one physically
+  exact CLR carrier. Exact carriers currently include the eight boxed Common
+  scalars, `Any`, `String`, non-generic classes/interfaces, supported
+  primitive-array wrappers, and fully known CLR vectors. Never admit a
+  `GenericInstance` as Kotlin runtime identity: Kotlin-owned generic classes
+  are declaration-erased on mature targets even though their current CLR
+  storage is closed. Star-projected `Array<*>` likewise remains unsupported
+  until its successful typed-use carrier is selected; do not equate it with
+  `object[]` or silently admit every `System.Array`.
 - Variant/generic interfaces use the versioned split-interface/bridge model
   where one CLR interface cannot truthfully carry all Kotlin views. MethodImpl
   and effective interface maps are semantic ABI, not IL spelling trivia. See
