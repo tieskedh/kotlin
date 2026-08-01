@@ -1305,6 +1305,7 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
 ): DotNetCSharpImplementationManifest {
     val irBuiltIns = context.irBuiltIns
     val runtimeInterfaces = listOf(
+        irBuiltIns.charSequenceClass.owner,
         irBuiltIns.iteratorClass.owner,
         irBuiltIns.listIteratorClass.owner,
         irBuiltIns.iterableClass.owner,
@@ -1344,17 +1345,14 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
         owner: DotNetIlClassInfo,
         signatureMapper: DotNetIlTypeMapper,
         physicalMethodName: String,
+        physicalPropertyName: String?,
     ): DotNetCSharpMethodLocator {
         val signature = source.dotNetSignature(signatureMapper)
         return DotNetCSharpMethodLocator(
             role = role,
             ownerPath = owner.physicalPathComponents(),
             methodName = physicalMethodName,
-            propertyName = source.correspondingPropertySymbol?.owner?.let {
-                checkNotNull(DotNetRuntimeTypes.genericInterfacePropertyNameOrNull(source)) {
-                    "Runtime C# property accessor '${source.name}' has no physical Property name"
-                }
-            },
+            propertyName = physicalPropertyName,
             genericArity = source.typeParameters.size,
             returnType = signature.returnType.nameInSignature,
             parameterTypes = signature.parameterTypes
@@ -1364,9 +1362,12 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
     }
 
     val contracts = runtimeInterfaces.map { irClass ->
-        val interfaceInfo = checkNotNull(DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)) {
-            "Runtime C# interface contract has no physical interface registry entry"
-        }
+        val interfaceInfo = DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)
+        val charSequenceInfo = DotNetRuntimeTypes.charSequenceImplementationClassInfo(irClass)
+        val canonicalClassInfo = interfaceInfo?.canonicalClassInfo
+            ?: checkNotNull(charSequenceInfo) {
+                "Runtime C# interface contract has no physical interface registry entry"
+            }
         val interfaceKey = checkNotNull(irClass.dotNetLibraryAbiKeyOrNull("C")) {
             "Runtime C# interface contract has no Kotlin public identity"
         }
@@ -1374,39 +1375,66 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
             val memberKey = checkNotNull(source.dotNetLibraryAbiKeyOrNull("F")) {
                 "Runtime C# interface member has no Kotlin public identity"
             }
-            val canonicalMethodName = checkNotNull(
-                DotNetRuntimeTypes.genericInterfaceCanonicalMethodNameOrNull(source)
-            ) {
-                "Runtime C# interface member '${source.name}' has no canonical physical name"
-            }
-            val memberViews = typeMapper.genericInterfaceMemberViews(source, irClass)
-            val authoringMemberView = typeMapper.genericInterfaceMemberView(source, irClass)
-            val slots = buildList {
-                add(
+            val slots: List<DotNetCSharpMethodLocator>
+            val authoringView: DotNetCSharpInterfaceView
+            if (charSequenceInfo != null) {
+                authoringView = DotNetCSharpInterfaceView.CANONICAL
+                slots = listOf(
                     locator(
-                        DotNetCSharpSlotRole.ERASED,
+                        DotNetCSharpSlotRole.CANONICAL,
                         source,
-                        interfaceInfo.canonicalClassInfo,
+                        charSequenceInfo,
                         typeMapper,
-                        canonicalMethodName,
+                        source.dotNetIlMethodName(),
+                        source.correspondingPropertySymbol?.owner?.name?.asString(),
                     )
                 )
-                for (memberView in memberViews) {
-                    val owner = checkNotNull(interfaceInfo.classInfo(memberView.physicalView))
-                    val typedMethodName = checkNotNull(
-                        DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(source)
-                    ) {
-                        "Runtime C# interface member '${source.name}' has no typed physical name"
-                    }
+            } else {
+                checkNotNull(interfaceInfo)
+                val canonicalMethodName = checkNotNull(
+                    DotNetRuntimeTypes.genericInterfaceCanonicalMethodNameOrNull(source)
+                ) {
+                    "Runtime C# interface member '${source.name}' has no canonical physical name"
+                }
+                val memberViews = typeMapper.genericInterfaceMemberViews(source, irClass)
+                authoringView = typeMapper.genericInterfaceMemberView(source, irClass).toManifestView()
+                slots = buildList {
                     add(
                         locator(
-                            memberView.toManifestSlotRole(),
+                            DotNetCSharpSlotRole.ERASED,
                             source,
-                            owner,
-                            typeMapper.genericInterfaceSignatureView(memberView),
-                            typedMethodName,
+                            interfaceInfo.canonicalClassInfo,
+                            typeMapper,
+                            canonicalMethodName,
+                            source.correspondingPropertySymbol?.owner?.let {
+                                checkNotNull(DotNetRuntimeTypes.genericInterfacePropertyNameOrNull(source)) {
+                                    "Runtime C# property accessor '${source.name}' has no physical Property name"
+                                }
+                            },
                         )
                     )
+                    for (memberView in memberViews) {
+                        val owner = checkNotNull(interfaceInfo.classInfo(memberView.physicalView))
+                        val typedMethodName = checkNotNull(
+                            DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(source)
+                        ) {
+                            "Runtime C# interface member '${source.name}' has no typed physical name"
+                        }
+                        add(
+                            locator(
+                                memberView.toManifestSlotRole(),
+                                source,
+                                owner,
+                                typeMapper.genericInterfaceSignatureView(memberView),
+                                typedMethodName,
+                                source.correspondingPropertySymbol?.owner?.let {
+                                    checkNotNull(DotNetRuntimeTypes.genericInterfacePropertyNameOrNull(source)) {
+                                        "Runtime C# property accessor '${source.name}' has no physical Property name"
+                                    }
+                                },
+                            )
+                        )
+                    }
                 }
             }
             DotNetCSharpMemberContract(
@@ -1414,7 +1442,7 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
                 kind = source.memberKind(),
                 sourceName = source.correspondingPropertySymbol?.owner?.name?.asString()
                     ?: source.name.asString(),
-                authoringView = authoringMemberView.toManifestView(),
+                authoringView = authoringView,
                 defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
                 semanticBodyView = null,
                 wrongShapePolicy = wrongShapePolicies[source],
@@ -1430,9 +1458,9 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
         }.sortedBy(DotNetCSharpMemberContract::logicalKey)
         DotNetCSharpInterfaceContract(
             logicalKey = interfaceKey,
-            canonicalOwnerPath = interfaceInfo.canonicalClassInfo.physicalPathComponents(),
-            declaredOwnerPath = interfaceInfo.declaredClassInfo.physicalPathComponents(),
-            exactOwnerPath = interfaceInfo.exactClassInfo?.physicalPathComponents(),
+            canonicalOwnerPath = canonicalClassInfo.physicalPathComponents(),
+            declaredOwnerPath = interfaceInfo?.declaredClassInfo?.physicalPathComponents(),
+            exactOwnerPath = interfaceInfo?.exactClassInfo?.physicalPathComponents(),
             typeParameters = irClass.typeParameters.map { parameter ->
                 DotNetCSharpTypeParameter(
                     parameter.name.asString(),

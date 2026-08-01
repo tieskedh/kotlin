@@ -1,0 +1,262 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'charSequences' {}
+.module 'main-charSequences.il'
+
+.class interface public abstract auto ansi 'test.charsequences.LocalSequence'
+       implements [Kotlin.Runtime]'Kotlin.CharSequence'
+{
+}
+.class public auto ansi sealed beforefieldinit 'test.charsequences.LocalSequenceImpl'
+       extends [mscorlib]System.Object
+       implements 'test.charsequences.LocalSequence'
+{
+  .field private string 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'test.charsequences.LocalSequenceImpl'::'value'
+    ret
+  }
+  .method private hidebysig specialname instance string 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'test.charsequences.LocalSequenceImpl'::'value'
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_length'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance string 'test.charsequences.LocalSequenceImpl'::'get_value'()
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CharSequenceLength'(object)
+    ret
+  }
+  .method public hidebysig newslot virtual instance char 'get'(int32 'index') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance string 'test.charsequences.LocalSequenceImpl'::'get_value'()
+    ldarg.1
+    call char [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CharSequenceGet'(object, int32)
+    ret
+  }
+  .method public hidebysig newslot virtual instance object 'subSequence'(int32 'startIndex', int32 'endIndex') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    call instance string 'test.charsequences.LocalSequenceImpl'::'get_value'()
+    ldarg.1
+    ldarg.2
+    call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CharSequenceSubSequence'(object, int32, int32)
+    ret
+  }
+  .property instance string 'value'()
+  {
+    .get instance string 'test.charsequences.LocalSequenceImpl'::'get_value'()
+  }
+  .property instance int32 'length'()
+  {
+    .get instance int32 'test.charsequences.LocalSequenceImpl'::'get_length'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.charsequences.SequenceHolder`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'test.charsequences.SequenceHolder`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'test.charsequences.SequenceHolder`1'<!0>::'value'
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'test.charsequences.SequenceHolder`1'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'test.charsequences.charSequencesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'lengthOf'(object 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CharSequenceLength'(object)
+    ret
+  }
+  .method public hidebysig static char 'getAt'(object 'value', int32 'index') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call char [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CharSequenceGet'(object, int32)
+    ret
+  }
+  .method public hidebysig static object 'slice'(object 'value', int32 'startIndex', int32 'endIndex') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CharSequenceSubSequence'(object, int32, int32)
+    ret
+  }
+  .method public hidebysig static bool 'isSequence'(object 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'IsCharSequence'(object)
+    ret
+  }
+  .method public hidebysig static bool 'isNullableSequence'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    dup
+    brtrue IL_nullableTypeTestNonNull_0
+    pop
+    ldc.i4.1
+    br IL_nullableTypeTestJoin_1
+IL_nullableTypeTestNonNull_0:
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'IsCharSequence'(object)
+IL_nullableTypeTestJoin_1:
+    ret
+  }
+  .method public hidebysig static object 'checkedSequence'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CheckCharSequenceCast'(object)
+    dup
+    brtrue IL_notNull_0
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_0:
+    ret
+  }
+  .method public hidebysig static object 'safeSequence'(object 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'SafeCharSequenceCast'(object)
+    ret
+  }
+  .method public hidebysig static int32 'genericLength'<'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    box !!0
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CharSequenceLength'(object)
+    ret
+  }
+  .method public hidebysig static !!0 'genericIdentity'<'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] object 'string',
+      [1] object 'local'
+    )
+    ldstr "abcd"
+    stloc.0
+    ldstr "wxyz"
+    newobj instance void 'test.charsequences.LocalSequenceImpl'::.ctor(string)
+    stloc.1
+    ldloc.0
+    call int32 'test.charsequences.charSequencesKt'::'lengthOf'(object)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    ldc.i4 1
+    call char 'test.charsequences.charSequencesKt'::'getAt'(object, int32)
+    call void [mscorlib]System.Console::WriteLine(char)
+    ldloc.0
+    ldc.i4 1
+    ldc.i4 3
+    call object 'test.charsequences.charSequencesKt'::'slice'(object, int32, int32)
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call bool 'test.charsequences.charSequencesKt'::'isSequence'(object)
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldnull
+    call bool 'test.charsequences.charSequencesKt'::'isNullableSequence'(object)
+    brtrue IL_boolStrTrue_2
+    ldstr "false"
+    br IL_boolStrEnd_3
+IL_boolStrTrue_2:
+    ldstr "true"
+IL_boolStrEnd_3:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    call object 'test.charsequences.charSequencesKt'::'checkedSequence'(object)
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CharSequenceLength'(object)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 42
+    box [mscorlib]System.Int32
+    call object 'test.charsequences.charSequencesKt'::'safeSequence'(object)
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "generic"
+    call int32 'test.charsequences.charSequencesKt'::'genericLength'<string>(!!0)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "id"
+    newobj instance void 'test.charsequences.LocalSequenceImpl'::.ctor(string)
+    call !!0 'test.charsequences.charSequencesKt'::'genericIdentity'<class 'test.charsequences.LocalSequenceImpl'>(!!0)
+    callvirt instance int32 'test.charsequences.LocalSequenceImpl'::'get_length'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "holder"
+    newobj instance void class 'test.charsequences.SequenceHolder`1'<string>::.ctor(!0)
+    call instance !0 class 'test.charsequences.SequenceHolder`1'<string>::'get_value'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
