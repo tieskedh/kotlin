@@ -73,6 +73,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.internal.SyntheticConstructorMarker" to "Kotlin.Internal.SyntheticConstructorMarker",
     )
     private val implementationFunctionFacadeIlNames = mapOf(
+        "kotlin.collections.all" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.any" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.asList" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.checkCountOverflow" to COLLECTIONS_FACADE_IL_NAME,
@@ -85,6 +86,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.firstOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.getOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.indexOf" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.indexOfFirst" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.indexOfLast" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.last" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.lastIndexOf" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.lastOrNull" to COLLECTIONS_FACADE_IL_NAME,
