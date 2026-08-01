@@ -313,6 +313,15 @@ Complete enum and annotation-class representation decisions therefore precede bu
 actualization. The independent typed collection-to-array prerequisite has now landed while that
 language foundation remains parked.
 
+Modern enum support cannot be used as a small cycle breaker. Every enum publishes `entries`, whose
+authoritative `EnumEntriesList` extends Common `AbstractList`; that abstract base needs this same
+builder closure. Conversely, the builder's contract source publishes the `InvocationKind` enum.
+The target must therefore admit enums, annotation classes, contracts, the builder, the abstract
+bases, and `EnumEntries` as one coherent bootstrap cluster unless upstream Common creates a smaller
+truthful closure. A one-enum exception, target-authored `EnumEntries` implementation, disabled
+`entries` member, or temporarily broader KLIB is rejected. Reversible compiler work should proceed
+while this atomic cluster is being designed.
+
 ### Typed collection-to-array prerequisite
 
 The completed [runtime-typed allocation decision](../decisions/collection-to-array.md) keeps both

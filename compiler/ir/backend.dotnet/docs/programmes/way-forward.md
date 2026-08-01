@@ -82,7 +82,7 @@ The current bounded work order is intentional. It may interleave small slices, b
 must not pull an earlier responsibility back into the backend or publish a shape whose prerequisites
 are still undecided.
 
-### 1. Preserve the completed ordinary inline foundation
+### 1. Preserve the completed selected-graph ordinary inline foundation
 
 [`inline-functions.md`](inline-functions.md) records the completed component-aware embedded KLIB
 loading, target IR serialization, shared first-/second-stage inliner phases, Common shared-variable
@@ -91,6 +91,11 @@ main/prepared IR, and cross-profile matrix green.
 
 Ordinary non-reified inline is available for exact Common-source adoption. Reified and suspend
 inline functions remain separate programmes and must continue to fail clearly.
+
+The selected-graph breadth is now pinned explicitly: a body from library A binds declarations in an
+explicitly selected library B through the existing non-linking deserializer and frontend-owned IR
+symbol finder. Preserve that boundary without introducing a general IR linker or transitive
+dependency discovery.
 
 ### 2. Expand Common collections by exact dependency closure
 
@@ -101,6 +106,14 @@ make a slice look smaller.
 
 The collection work provides ordinary user value and foundations for enums, while exercising
 generic interfaces, arrays, separate products, and profile-compatible stdlib publication.
+
+The remaining builder/abstract-base closure and modern enum support form a bootstrap cycle:
+builder source needs the public contracts family, that family declares `InvocationKind`, every
+modern enum publishes `entries`, and the authoritative `EnumEntriesList` needs the Common abstract
+collection bases. Break that cycle only by admitting the complete coherent source cluster. Do not
+add a one-enum lowering, a target `EnumEntries` substitute, or a KLIB declaration without its
+physical product. Until that atomic cluster is ready, reversible compiler breadth such as the
+selected-graph inline slice takes precedence.
 
 ### 3. Retain and enforce the completed declaration architecture seam
 
@@ -169,7 +182,7 @@ The current verified count and command belong only in [`../../STATUS.md`](../../
 
 Parking means “fail clearly and do not constrain a future ABI,” not “approximate now.”
 
-- enums, pending their collection and static-initialization prerequisites;
+- enums, pending the atomic contracts/builder/abstract-collections/`EnumEntries` source cluster;
 - general annotation classes, use-site targets, retention, and runtime reflection;
 - `KClass`, class literals, `typeOf`, and broad reflection;
 - value/inline classes;
@@ -177,7 +190,7 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - suspend inline functions until coroutine state machines are supported;
 - coroutine state machines and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;
-- `CharSequence`, `Appendable`, `StringBuilder`, and `lateinit`;
+- `Appendable`, `StringBuilder`, and `lateinit` (`CharSequence` itself is complete);
 - collection/stdlib families outside admitted Common dependency closures; and
 - broad Gradle/KMP distribution integration beyond the current target model.
 
