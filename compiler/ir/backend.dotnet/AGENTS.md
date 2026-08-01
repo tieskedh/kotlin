@@ -249,8 +249,11 @@ See the
   never expose that storage, map the Kotlin class directly to it, or add the
   BCL builder to the `CharSequence` classifier. See
   [the builder ADR](docs/decisions/appendable-string-builder.md).
-- Kotlin primitive arrays use Kotlin-owned wrapper identity around CLR
-  storage. Do not expose raw CLR vectors as Kotlin array identity. See
+- All eight signed Common primitive arrays use Kotlin-owned wrapper identity
+  around exact CLR vector storage (`Boolean`, `SByte`, `Int16`, `Int32`,
+  `Int64`, `Single`, `Double`, and `Char`). Do not expose raw CLR vectors as
+  Kotlin array identity, collapse specialized arrays with `Array<T>`, or infer
+  unsigned-array support from this completed family. See
   [the primitive-array ADR](docs/decisions/primitive-arrays.md).
 - Collection-to-array uses the exact Common loops. A replacement generic
   vector preserves the supplied array's runtime element type; do not erase it

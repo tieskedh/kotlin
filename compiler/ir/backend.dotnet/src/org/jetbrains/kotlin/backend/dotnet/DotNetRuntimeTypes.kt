@@ -658,8 +658,11 @@ internal val IrClass.isDotNetSupportedPrimitiveIterator: Boolean
     get() = fqNameWhenAvailable?.asString() in DOTNET_SUPPORTED_PRIMITIVE_ITERATOR_FQ_NAMES && typeParameters.isEmpty()
 
 private val DOTNET_SUPPORTED_PRIMITIVE_ITERATOR_FQ_NAMES = setOf(
+    "kotlin.collections.ByteIterator",
+    "kotlin.collections.ShortIterator",
     "kotlin.collections.IntIterator",
     "kotlin.collections.LongIterator",
+    "kotlin.collections.FloatIterator",
     "kotlin.collections.DoubleIterator",
     "kotlin.collections.BooleanIterator",
     "kotlin.collections.CharIterator",

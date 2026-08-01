@@ -55,10 +55,13 @@ internal object DotNetPrimitiveArrays {
     }
 
     val entries: List<Entry> = listOf(
+        Entry(FqName("kotlin.BooleanArray"), "BooleanArray", DotNetIlValueType.Boolean),
+        Entry(FqName("kotlin.ByteArray"), "ByteArray", DotNetIlValueType.Int8),
+        Entry(FqName("kotlin.ShortArray"), "ShortArray", DotNetIlValueType.Int16),
         Entry(FqName("kotlin.IntArray"), "IntArray", DotNetIlValueType.Int32),
         Entry(FqName("kotlin.LongArray"), "LongArray", DotNetIlValueType.Int64),
+        Entry(FqName("kotlin.FloatArray"), "FloatArray", DotNetIlValueType.Float32),
         Entry(FqName("kotlin.DoubleArray"), "DoubleArray", DotNetIlValueType.Float64),
-        Entry(FqName("kotlin.BooleanArray"), "BooleanArray", DotNetIlValueType.Boolean),
         Entry(FqName("kotlin.CharArray"), "CharArray", DotNetIlValueType.Char),
     )
 

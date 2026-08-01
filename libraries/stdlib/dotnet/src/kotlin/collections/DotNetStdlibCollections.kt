@@ -258,6 +258,27 @@ public external fun <T> Array<out T>.copyInto(
     endIndex: Int = size,
 ): Array<T>
 
+public external fun BooleanArray.copyInto(
+    destination: BooleanArray,
+    destinationOffset: Int = 0,
+    startIndex: Int = 0,
+    endIndex: Int = size,
+): BooleanArray
+
+public external fun ByteArray.copyInto(
+    destination: ByteArray,
+    destinationOffset: Int = 0,
+    startIndex: Int = 0,
+    endIndex: Int = size,
+): ByteArray
+
+public external fun ShortArray.copyInto(
+    destination: ShortArray,
+    destinationOffset: Int = 0,
+    startIndex: Int = 0,
+    endIndex: Int = size,
+): ShortArray
+
 public external fun IntArray.copyInto(
     destination: IntArray,
     destinationOffset: Int = 0,
@@ -272,19 +293,19 @@ public external fun LongArray.copyInto(
     endIndex: Int = size,
 ): LongArray
 
+public external fun FloatArray.copyInto(
+    destination: FloatArray,
+    destinationOffset: Int = 0,
+    startIndex: Int = 0,
+    endIndex: Int = size,
+): FloatArray
+
 public external fun DoubleArray.copyInto(
     destination: DoubleArray,
     destinationOffset: Int = 0,
     startIndex: Int = 0,
     endIndex: Int = size,
 ): DoubleArray
-
-public external fun BooleanArray.copyInto(
-    destination: BooleanArray,
-    destinationOffset: Int = 0,
-    startIndex: Int = 0,
-    endIndex: Int = size,
-): BooleanArray
 
 public external fun CharArray.copyInto(
     destination: CharArray,
@@ -294,16 +315,22 @@ public external fun CharArray.copyInto(
 ): CharArray
 
 public external fun <T> Array<T>.copyOf(): Array<T>
+public external fun BooleanArray.copyOf(): BooleanArray
+public external fun ByteArray.copyOf(): ByteArray
+public external fun ShortArray.copyOf(): ShortArray
 public external fun IntArray.copyOf(): IntArray
 public external fun LongArray.copyOf(): LongArray
+public external fun FloatArray.copyOf(): FloatArray
 public external fun DoubleArray.copyOf(): DoubleArray
-public external fun BooleanArray.copyOf(): BooleanArray
 public external fun CharArray.copyOf(): CharArray
 
+public external fun BooleanArray.copyOf(newSize: Int): BooleanArray
+public external fun ByteArray.copyOf(newSize: Int): ByteArray
+public external fun ShortArray.copyOf(newSize: Int): ShortArray
 public external fun IntArray.copyOf(newSize: Int): IntArray
 public external fun LongArray.copyOf(newSize: Int): LongArray
+public external fun FloatArray.copyOf(newSize: Int): FloatArray
 public external fun DoubleArray.copyOf(newSize: Int): DoubleArray
-public external fun BooleanArray.copyOf(newSize: Int): BooleanArray
 public external fun CharArray.copyOf(newSize: Int): CharArray
 
 // Concrete reference substitutions map Array<T?> to the same exact CLR reference vector and are
@@ -313,10 +340,13 @@ public external fun <T> Array<T>.copyOf(newSize: Int): Array<T?>
 // Shallow content equality follows the common stdlib contract: nullable arrays compare equal when
 // both are null, elements use Kotlin equality, and nested arrays keep their identity-based equals.
 public external infix fun <T> Array<out T>?.contentEquals(other: Array<out T>?): Boolean
+public external infix fun BooleanArray?.contentEquals(other: BooleanArray?): Boolean
+public external infix fun ByteArray?.contentEquals(other: ByteArray?): Boolean
+public external infix fun ShortArray?.contentEquals(other: ShortArray?): Boolean
 public external infix fun IntArray?.contentEquals(other: IntArray?): Boolean
 public external infix fun LongArray?.contentEquals(other: LongArray?): Boolean
+public external infix fun FloatArray?.contentEquals(other: FloatArray?): Boolean
 public external infix fun DoubleArray?.contentEquals(other: DoubleArray?): Boolean
-public external infix fun BooleanArray?.contentEquals(other: BooleanArray?): Boolean
 public external infix fun CharArray?.contentEquals(other: CharArray?): Boolean
 
 // Deep equality is defined only on generic arrays; nested generic arrays recurse, supported
@@ -326,28 +356,37 @@ public external infix fun <T> Array<out T>?.contentDeepEquals(other: Array<out T
 // Content hashes use the List-compatible 31-fold. The shallow family hashes nested arrays by
 // identity; the deep generic-array operation recursively hashes supported nested array shapes.
 public external fun <T> Array<out T>?.contentHashCode(): Int
+public external fun BooleanArray?.contentHashCode(): Int
+public external fun ByteArray?.contentHashCode(): Int
+public external fun ShortArray?.contentHashCode(): Int
 public external fun IntArray?.contentHashCode(): Int
 public external fun LongArray?.contentHashCode(): Int
+public external fun FloatArray?.contentHashCode(): Int
 public external fun DoubleArray?.contentHashCode(): Int
-public external fun BooleanArray?.contentHashCode(): Int
 public external fun CharArray?.contentHashCode(): Int
 public external fun <T> Array<out T>?.contentDeepHashCode(): Int
 
 // Shallow text keeps nested arrays as ordinary identity-rendered elements. Deep text recursively
 // renders supported nested arrays and replaces only active recursion-path cycles with "[...]".
 public external fun <T> Array<out T>?.contentToString(): String
+public external fun BooleanArray?.contentToString(): String
+public external fun ByteArray?.contentToString(): String
+public external fun ShortArray?.contentToString(): String
 public external fun IntArray?.contentToString(): String
 public external fun LongArray?.contentToString(): String
+public external fun FloatArray?.contentToString(): String
 public external fun DoubleArray?.contentToString(): String
-public external fun BooleanArray?.contentToString(): String
 public external fun CharArray?.contentToString(): String
 public external fun <T> Array<out T>?.contentDeepToString(): String
 
 public external fun <T> Array<out T>.asIterable(): Iterable<T>
+public external fun BooleanArray.asIterable(): Iterable<Boolean>
+public external fun ByteArray.asIterable(): Iterable<Byte>
+public external fun ShortArray.asIterable(): Iterable<Short>
 public external fun IntArray.asIterable(): Iterable<Int>
 public external fun LongArray.asIterable(): Iterable<Long>
+public external fun FloatArray.asIterable(): Iterable<Float>
 public external fun DoubleArray.asIterable(): Iterable<Double>
-public external fun BooleanArray.asIterable(): Iterable<Boolean>
 public external fun CharArray.asIterable(): Iterable<Char>
 
 // Compiler-facing factories are Kotlin-internal but metadata-public: generated user assemblies

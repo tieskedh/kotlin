@@ -65,8 +65,20 @@ internal class DotNetIlIntrinsicMethods(
         val arrayType: DotNetIlValueType.PrimitiveArray,
     )
 
-    /** The currently implemented wrapper subset; scalar support is the gate, not all of PrimitiveType.entries. */
+    /** The complete signed Common primitive-array family, keyed by its exact selected scalar carrier. */
     private val primitiveArrays = listOf(
+        PrimitiveArrayIntrinsicInfo(
+            FqName("kotlin.BooleanArray"), booleanFqn, "booleanArrayOf",
+            DotNetIlValueType.PrimitiveArray(DotNetIlValueType.Boolean),
+        ),
+        PrimitiveArrayIntrinsicInfo(
+            FqName("kotlin.ByteArray"), byteFqn, "byteArrayOf",
+            DotNetIlValueType.PrimitiveArray(DotNetIlValueType.Int8),
+        ),
+        PrimitiveArrayIntrinsicInfo(
+            FqName("kotlin.ShortArray"), shortFqn, "shortArrayOf",
+            DotNetIlValueType.PrimitiveArray(DotNetIlValueType.Int16),
+        ),
         PrimitiveArrayIntrinsicInfo(
             FqName("kotlin.IntArray"), intFqn, "intArrayOf",
             DotNetIlValueType.PrimitiveArray(DotNetIlValueType.Int32),
@@ -76,12 +88,12 @@ internal class DotNetIlIntrinsicMethods(
             DotNetIlValueType.PrimitiveArray(DotNetIlValueType.Int64),
         ),
         PrimitiveArrayIntrinsicInfo(
-            FqName("kotlin.DoubleArray"), doubleFqn, "doubleArrayOf",
-            DotNetIlValueType.PrimitiveArray(DotNetIlValueType.Float64),
+            FqName("kotlin.FloatArray"), floatFqn, "floatArrayOf",
+            DotNetIlValueType.PrimitiveArray(DotNetIlValueType.Float32),
         ),
         PrimitiveArrayIntrinsicInfo(
-            FqName("kotlin.BooleanArray"), booleanFqn, "booleanArrayOf",
-            DotNetIlValueType.PrimitiveArray(DotNetIlValueType.Boolean),
+            FqName("kotlin.DoubleArray"), doubleFqn, "doubleArrayOf",
+            DotNetIlValueType.PrimitiveArray(DotNetIlValueType.Float64),
         ),
         PrimitiveArrayIntrinsicInfo(
             FqName("kotlin.CharArray"), charFqn, "charArrayOf",
@@ -383,8 +395,11 @@ internal class DotNetIlIntrinsicMethods(
      */
     private fun primitiveIteratorIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         for (info in listOf(
+            FqName("kotlin.collections.ByteIterator") to "nextByte",
+            FqName("kotlin.collections.ShortIterator") to "nextShort",
             FqName("kotlin.collections.IntIterator") to "nextInt",
             FqName("kotlin.collections.LongIterator") to "nextLong",
+            FqName("kotlin.collections.FloatIterator") to "nextFloat",
             FqName("kotlin.collections.DoubleIterator") to "nextDouble",
             FqName("kotlin.collections.BooleanIterator") to "nextBoolean",
             FqName("kotlin.collections.CharIterator") to "nextChar",
