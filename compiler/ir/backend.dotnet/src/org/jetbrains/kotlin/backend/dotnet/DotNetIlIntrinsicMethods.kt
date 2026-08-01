@@ -1032,9 +1032,9 @@ private object DotNetIlGenericEmptyArrayIntrinsic : DotNetIlIntrinsicMethod() {
 
 /**
  * `arrayOfNulls<E>(size)` or the array-initializer lowering's private zeroed buffer -> a guarded,
- * zero-initialized reified vector. A source `Array<Int?>` is still rejected by the type mapper
- * because `Nullable<Int>[]` is outside the supported model. `Array<Int>(size) { ... }`, however,
- * uses this builtin as an unobservable fully-filled `int32[]` allocation buffer and is legal.
+ * zero-initialized reified vector. A concrete nullable primitive element uses the exact closed
+ * `Nullable<V>[]` carrier; open `T?` remains rejected by the type mapper. `Array<Int>(size) { ... }`
+ * likewise uses this builtin as an unobservable fully-filled `int32[]` allocation buffer.
  */
 private object DotNetIlGenericArrayOfNullsIntrinsic : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(
@@ -1197,7 +1197,7 @@ private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
  *
  * The generic factory retains the vector element type (`int32`, `string`, `!n`/`!!n`) while
  * keeping the private implementation class and constructor out of the compiler/stdlib ABI.
- * Receiver mapping still rejects nullable type parameters, projections, and nested arrays before
+ * Receiver mapping still rejects open nullable type parameters plus input/star projections before
  * this intrinsic runs, so accepting the producer does not broaden those array families.
  */
 private class DotNetIlArrayIteratorIntrinsic(

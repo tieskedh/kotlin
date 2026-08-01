@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: complete signed Common primitive arrays
+- Last completed feature: concrete nullable-primitive generic arrays
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,11 +20,11 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 955 tests:
+The JUnit audit covered 16 fresh XML files and 960 tests:
 
-- 856 FIR, IL-text, and box tests
+- 860 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 78 library-integration tests
+- 79 library-integration tests
 - zero failures, errors, or skips
 
 Focused evidence additionally covers component-complete packed-KLIB loading,
@@ -62,6 +62,16 @@ RTTI/casts, generic-array separation, bounds failures, portable Kotlin
 libraries, and copy-free exact C# vector adapters execute on both frontends and
 runtime profiles. In particular, Kotlin `ByteArray` projects as signed
 `sbyte[]`/`int8[]`, never C# `byte[]`.
+
+Concrete nullable primitive elements are now complete as ordinary invariant
+generic arrays. `Array<Boolean?>` through `Array<Char?>` use exact closed CLR
+`Nullable<V>[]` vectors and retain identity through literals, constructors,
+generic substitution, nullable varargs, iteration, copies/content operations,
+nested arrays, and exact casts on both frontends and runtimes. A portable
+netstandard2.0 Kotlin library is consumed separately by Kotlin and Roslyn on
+Framework CLR and CoreCLR; all eight natural C# `V?[]` signatures preserve
+aliasing. Backend-reachable sentinels continue to reject open `Array<T?>`,
+star/input projections, and value-vector covariance.
 
 ## Current architecture
 
@@ -132,8 +142,15 @@ runtime registry and the symmetric .NET stdlib declaration surface. The new
 three families retain exact `SByte[]`, `Int16[]`, and `Single[]` private
 storage, remain distinct from `Array<Byte>`, `Array<Short>`, and
 `Array<Float>`, and cross portable Kotlin-library and explicit C# export
-boundaries without copying. Unsigned arrays, nullable primitive elements in
-generic arrays, and `Array<*>` remain deliberately outside this closure.
+boundaries without copying. Unsigned arrays and `Array<*>` remain deliberately
+outside this specialized-wrapper closure.
+
+The separate generic-array closure now admits all eight concrete nullable
+primitive element types as exact `Nullable<V>[]` vectors. It does not change
+the specialized-wrapper identities above and does not admit open nullable
+elements, star/input projections, or value-vector covariance. Those parked
+shapes still require a truthful erased identity and successful typed-use
+carrier rather than `object[]` inference.
 
 ## Open architectural blockers
 
@@ -154,10 +171,12 @@ generic arrays, and `Array<*>` remain deliberately outside this closure.
 
 ## Next bounded work
 
-1. Continue the reversible reified prerequisites by auditing concrete generic-
-   array constructors and intrinsics for already-exact element tokens. Close
-   only the truthful ordinary-source matrix; keep `Array<*>`, nullable/open
-   element carriers, and Kotlin-owned generic-class erased identity parked.
+1. Continue the reversible reified prerequisites with a cross-target audit of
+   `Array<*>`: select neither `object[]` nor `System.Array` until one erased
+   identity also supports Kotlin `size`, indexed reads, iteration, subsequent
+   casts, mutation/aliasing rules, and value-element vectors without copying.
+   Keep open `Array<T?>`, input projections, value-vector covariance, and
+   Kotlin-owned generic-class erased identity parked during that audit.
 2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
    collections/`EnumEntries` bootstrap cluster; do not create builder-only or
    one-enum stubs.

@@ -3,7 +3,7 @@
 // Supported generic classes, arrays, constructor defaults, named nesting, and local closure-
 // converted data classes are covered separately.
 
-data class WithNullablePrimitiveArray(val values: Array<Int?>)
+data class WithOpenNullableArray<T>(val values: Array<T?>)
 
 data class WithPrimitiveGenericArray(val values: Array<Int>)
 

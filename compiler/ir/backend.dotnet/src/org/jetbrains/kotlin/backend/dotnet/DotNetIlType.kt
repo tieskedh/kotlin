@@ -270,8 +270,8 @@ internal fun DotNetIlValueType.substituteDotNetTypeParameters(
         classInfo,
         arguments.map { it.substituteDotNetTypeParameters(classArguments, methodArguments) },
     )
-    // A NullableValue element is always concrete (`T?` is rejected at the type mapper), so this
-    // arm is defensive symmetry.
+    // A NullableValue element is always concrete (open `T?` is rejected at the type mapper).
+    // Substitution still recurses so a containing vector or generic instance remains structural.
     is DotNetIlValueType.NullableValue ->
         DotNetIlValueType.NullableValue(
             elementType.substituteDotNetTypeParameters(classArguments, methodArguments),

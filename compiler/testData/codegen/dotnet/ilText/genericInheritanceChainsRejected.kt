@@ -9,17 +9,21 @@ class NullableBaseArgument<T>(value: T?) : RejectBase<T?>(value)
 
 class ExternalGenericArgument<T>(value: List<T>) : RejectBase<List<T>>(value)
 
-class UnsupportedNullablePrimitiveArgument<T>(value: Array<Int?>) : RejectBase<Array<Int?>>(value)
+class UnsupportedInputProjectionArgument<T>(value: Array<in T>) : RejectBase<Array<in T>>(value)
 
 class UnsupportedArrayArgument<T>(value: Array<Int>) : RejectBase<Array<Int>>(value)
 
-open class EvictedBase<T>(val unsupported: Array<Int?>)
+open class EvictedBase<T> {
+    fun <U> unsupported(values: Array<U?>): Array<U?> = values
+}
 
-open class EvictedDerived<T>(unsupported: Array<Int?>) : EvictedBase<T>(unsupported)
+open class EvictedDerived<T> : EvictedBase<T>()
 
-class EvictedLeaf<T>(unsupported: Array<Int?>) : EvictedDerived<T>(unsupported)
+class EvictedLeaf<T> : EvictedDerived<T>()
 
-class EvictedArgument(val unsupported: Array<Int?>)
+class EvictedArgument {
+    fun <T> unsupported(values: Array<T?>): Array<T?> = values
+}
 
 class EvictedArgumentDerived<T>(value: EvictedArgument) : RejectBase<EvictedArgument>(value)
 

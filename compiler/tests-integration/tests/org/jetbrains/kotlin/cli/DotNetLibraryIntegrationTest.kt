@@ -26161,7 +26161,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             """
             package sample
 
-            public fun unsupported(value: Array<Int?>): Array<Int?> = value
+            public fun <T> unsupported(value: Array<T?>): Array<T?> = value
             """,
         )
         assertPublicationFails(
@@ -27770,6 +27770,232 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 verifierProcess.waitFor(),
                 "Primitive-array C# verifier failed for $target:\n$verifierOutput",
             )
+        }
+    }
+
+    @Test
+    fun testNullablePrimitiveGenericArraysAcrossPortableLibraryBoundary() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard facade is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "nullable-primitive-array-library")
+        val librarySource = File(tmpdir, "nullablePrimitiveArrayLibrary.kt").apply {
+            writeText(
+                """
+                package nullableprimitivearrays
+
+                public fun identityBooleans(values: Array<Boolean?>): Array<Boolean?> = values
+                public fun identityBytes(values: Array<Byte?>): Array<Byte?> = values
+                public fun identityShorts(values: Array<Short?>): Array<Short?> = values
+                public fun identityInts(values: Array<Int?>): Array<Int?> = values
+                public fun identityLongs(values: Array<Long?>): Array<Long?> = values
+                public fun identityFloats(values: Array<Float?>): Array<Float?> = values
+                public fun identityDoubles(values: Array<Double?>): Array<Double?> = values
+                public fun identityChars(values: Array<Char?>): Array<Char?> = values
+
+                public fun <T> genericIdentity(values: Array<T>): Array<T> = values
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "NullablePrimitiveArray.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("NullablePrimitiveArray.Library.dll")
+        val libraryIl = libraryDirectory.resolve("NullablePrimitiveArray.Library.il").readText()
+        for (methodAndElementToken in listOf(
+            "identityBooleans" to "bool",
+            "identityBytes" to "int8",
+            "identityShorts" to "int16",
+            "identityInts" to "int32",
+            "identityLongs" to "int64",
+            "identityFloats" to "float32",
+            "identityDoubles" to "float64",
+            "identityChars" to "char",
+        )) {
+            val methodName = methodAndElementToken.first
+            val elementToken = methodAndElementToken.second
+            assertTrue("System.Nullable`1<$elementToken>[] '$methodName'(" in libraryIl) { libraryIl }
+        }
+        assertTrue("!!0[] 'genericIdentity'<'T'>(!!0[] 'values')" in libraryIl) { libraryIl }
+
+        val frameworkDirectSource = libraryDirectory.resolve("FrameworkDirectNullableArrayConsumer.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Reflection;
+
+                public static class FrameworkDirectNullableArrayConsumer
+                {
+                    private static bool HasExactSignature(Type facade, string name, Type arrayType)
+                    {
+                        MethodInfo method = facade.GetMethod(name, new Type[] { arrayType });
+                        return method != null && method.ReturnType == arrayType;
+                    }
+
+                    public static int Main()
+                    {
+                        Type facade = typeof(nullableprimitivearrays.nullablePrimitiveArrayLibraryKt);
+                        if (!HasExactSignature(facade, "identityBooleans", typeof(bool?[]))) return 11;
+                        if (!HasExactSignature(facade, "identityBytes", typeof(sbyte?[]))) return 12;
+                        if (!HasExactSignature(facade, "identityShorts", typeof(short?[]))) return 13;
+                        if (!HasExactSignature(facade, "identityInts", typeof(int?[]))) return 14;
+                        if (!HasExactSignature(facade, "identityLongs", typeof(long?[]))) return 15;
+                        if (!HasExactSignature(facade, "identityFloats", typeof(float?[]))) return 16;
+                        if (!HasExactSignature(facade, "identityDoubles", typeof(double?[]))) return 17;
+                        if (!HasExactSignature(facade, "identityChars", typeof(char?[]))) return 18;
+                        bool?[] booleans = new bool?[] { true, null };
+                        sbyte?[] bytes = new sbyte?[] { -2, null };
+                        short?[] shorts = new short?[] { -200, null };
+                        int?[] ints = new int?[] { 40, null, 2 };
+                        long?[] longs = new long?[] { 42L, null };
+                        float?[] floats = new float?[] { 1.25f, null };
+                        double?[] doubles = new double?[] { 2.5, null };
+                        char?[] chars = new char?[] { 'K', null };
+                        if (!Object.ReferenceEquals(booleans,
+                            nullableprimitivearrays.nullablePrimitiveArrayLibraryKt.identityBooleans(booleans))) return 1;
+                        if (!Object.ReferenceEquals(bytes,
+                            nullableprimitivearrays.nullablePrimitiveArrayLibraryKt.identityBytes(bytes))) return 2;
+                        if (!Object.ReferenceEquals(shorts,
+                            nullableprimitivearrays.nullablePrimitiveArrayLibraryKt.identityShorts(shorts))) return 3;
+                        if (!Object.ReferenceEquals(ints,
+                            nullableprimitivearrays.nullablePrimitiveArrayLibraryKt.identityInts(ints))) return 4;
+                        if (!Object.ReferenceEquals(longs,
+                            nullableprimitivearrays.nullablePrimitiveArrayLibraryKt.identityLongs(longs))) return 5;
+                        if (!Object.ReferenceEquals(floats,
+                            nullableprimitivearrays.nullablePrimitiveArrayLibraryKt.identityFloats(floats))) return 6;
+                        if (!Object.ReferenceEquals(doubles,
+                            nullableprimitivearrays.nullablePrimitiveArrayLibraryKt.identityDoubles(doubles))) return 7;
+                        if (!Object.ReferenceEquals(chars,
+                            nullableprimitivearrays.nullablePrimitiveArrayLibraryKt.identityChars(chars))) return 8;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val frameworkDirectConsumer = libraryDirectory.resolve("FrameworkDirectNullableArrayConsumer.exe")
+        val frameworkDirectCompile = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            frameworkDirectSource,
+            frameworkDirectConsumer,
+            metadataLibrary,
+            checkNotNull(frameworkNetStandardFacade),
+            target = "exe",
+        )
+        assertEquals(0, frameworkDirectCompile.exitCode, frameworkDirectCompile.output)
+        val frameworkDirectProcess = ProcessBuilder(
+            frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkDirectConsumer)
+        )
+            .directory(libraryDirectory)
+            .redirectErrorStream(true)
+            .start()
+        val frameworkDirectOutput = frameworkDirectProcess.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(
+            0,
+            frameworkDirectProcess.waitFor(),
+            "Roslyn direct nullable-array consumer failed on net48:\n$frameworkDirectOutput",
+        )
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package nullableprimitivearrayconsumer
+
+                    import nullableprimitivearrays.*
+
+                    fun main() {
+                        val booleans = arrayOf<Boolean?>(true, null)
+                        val bytes = arrayOf<Byte?>((-2).toByte(), null)
+                        val shorts = arrayOf<Short?>((-200).toShort(), null)
+                        val ints = arrayOf<Int?>(40, null, 2)
+                        val longs = arrayOf<Long?>(42L, null)
+                        val floats = arrayOf<Float?>(1.25f, null)
+                        val doubles = arrayOf<Double?>(2.5, null)
+                        val chars = arrayOf<Char?>('K', null)
+                        if (identityBooleans(booleans) !== booleans || identityBytes(bytes) !== bytes ||
+                            identityShorts(shorts) !== shorts || identityInts(ints) !== ints ||
+                            identityLongs(longs) !== longs || identityFloats(floats) !== floats ||
+                            identityDoubles(doubles) !== doubles || identityChars(chars) !== chars
+                        ) throw Error("closed nullable primitive array identity")
+                        if (genericIdentity(ints) !== ints || genericIdentity(chars) !== chars) {
+                            throw Error("generic nullable primitive array identity")
+                        }
+                        if (ints[0] != 40 || ints[1] != null || ints[2] != 2) {
+                            throw Error("closed nullable primitive array contents")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "NullablePrimitiveArrayConsumer.exe" else "NullablePrimitiveArrayConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "NullablePrimitiveArrayConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            if (target == "net10.0") {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    consumerDirectory,
+                    "Nullable primitive-array Kotlin consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), application)
+                )
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(
+                    0,
+                    process.waitFor(),
+                    "Nullable primitive-array Kotlin consumer failed for $target:\n$output",
+                )
+            }
+            if (target == "net10.0") {
+                val modernCSharpConsumer = consumerDirectory.resolve(frameworkDirectConsumer.name)
+                frameworkDirectConsumer.copyTo(modernCSharpConsumer, overwrite = true)
+                consumerDirectory.resolve("NullablePrimitiveArrayConsumer.runtimeconfig.json")
+                    .copyTo(
+                        consumerDirectory.resolve("FrameworkDirectNullableArrayConsumer.runtimeconfig.json"),
+                        overwrite = true,
+                    )
+                runDotNet(
+                    dotnetHost,
+                    modernCSharpConsumer,
+                    consumerDirectory,
+                    "Roslyn nullable-array consumer failed on $target",
+                )
+            }
         }
     }
 

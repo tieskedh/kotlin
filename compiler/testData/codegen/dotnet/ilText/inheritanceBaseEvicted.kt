@@ -1,10 +1,10 @@
-// Eviction cascades down the inheritance chain: `Bad` fails the member pre-pass (an `Array<Int?>`
-// parameter has no selected CLR vector mapping), so `Mid` — whose base no longer exists — is evicted at render
+// Eviction cascades down the inheritance chain: `Bad` fails the member pre-pass (an open
+// `Array<T?>` parameter has no selected CLR vector mapping), so `Mid` — whose base no longer exists — is evicted at render
 // with a reason carrying Bad's reason, and `Leaf` follows in the next fixpoint round with a
 // reason carrying Mid's. Only the file facade is emitted; no `extends` line may ever name a
 // class that was removed from the module.
 open class Bad {
-    fun f(x: Array<Int?>): Array<Int?> = x
+    fun <T> f(x: Array<T?>): Array<T?> = x
 }
 
 open class Mid(val x: Int) : Bad()

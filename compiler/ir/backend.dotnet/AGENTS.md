@@ -255,6 +255,13 @@ See the
   Kotlin array identity, collapse specialized arrays with `Array<T>`, or infer
   unsigned-array support from this completed family. See
   [the primitive-array ADR](docs/decisions/primitive-arrays.md).
+- An invariant generic array whose element is one concrete nullable signed
+  Common primitive uses the exact closed `System.Nullable<V>[]` carrier for
+  all eight families. Preserve its ordinary `Array<E>` identity and its
+  natural C# `V?[]` view. Do not replace it with `object[]`, collapse it into a
+  specialized primitive-array wrapper, infer support for open `Array<T?>` or
+  star/input projections, or manufacture value-vector covariance by copying.
+  See [the primitive-array ADR](docs/decisions/primitive-arrays.md).
 - Collection-to-array uses the exact Common loops. A replacement generic
   vector preserves the supplied array's runtime element type; do not erase it
   to `object[]`, substitute a target loop, or import JVM's Java-specific null
