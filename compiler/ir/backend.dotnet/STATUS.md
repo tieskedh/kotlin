@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: runtime-typed Common collection-to-array closure
+- Last completed feature: selected-dependency-graph ordinary inline closure
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,11 +20,11 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 938 tests:
+The JUnit audit covered 16 fresh XML files and 939 tests:
 
 - 840 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 77 library-integration tests
+- 78 library-integration tests
 - zero failures, errors, or skips
 
 Focused evidence additionally covers component-complete packed-KLIB loading,
@@ -32,6 +32,12 @@ same- and cross-library inlining from prepared and main IR, all three KLIB
 inliner modes, mutable capture and non-local control flow, compiler ABI and
 friend access, stdlib-free diagnostics, reproducible direct/fallback stdlib
 IR, explicit reified/suspend rejection, and every target/runtime profile. The
+selected-graph closure additionally proves that an inline body from library A
+binds exact public declarations and a nested inline body from explicitly
+selected library B without a general linker; surviving B calls use B's exact
+physical assembly while fully inlined A disappears as a runtime dependency.
+Both prepared-IR and main-IR consumers reject an omitted B with named unbound
+signatures before target lowering and leave no artifact. The
 collection product now also proves empty Collection fast paths, exact
 short-circuit and traversal counts, nullable/widened predicates, reverse List
 search, inlined separate consumers, and direct CIL execution of all six
@@ -75,11 +81,15 @@ and CoreCLR.
 
 ## Active state
 
-No implementation slice is half-landed. The non-reified Common
-collection-to-array closure now uses the exact shared loops. Its narrow CLR
-actual reproduces a supplied vector's runtime element type, retains sufficiently
-large destination identity without JVM's Java-specific tail terminator, and
-keeps public reified `toTypedArray` outside the admitted surface. The backend's
+No implementation slice is half-landed. Ordinary non-reified inline bodies now
+bind exact signatures throughout the complete frontend-selected dependency
+graph. Resolution remains non-linking, and an incomplete graph fails at the
+post-inline/pre-target-lowering boundary instead of crashing an arbitrary
+lowering. The non-reified Common collection-to-array closure uses the exact
+shared loops. Its narrow CLR actual reproduces a supplied vector's runtime
+element type, retains sufficiently large destination identity without JVM's
+Java-specific tail terminator, and keeps public reified `toTypedArray` outside
+the admitted surface. The backend's
 explicit erased-object cast to an open type parameter uses `unbox.any`; safe
 generic casts remain unsupported. Builder storage is selected as a Kotlin-owned
 wrapper over private BCL storage, but implementation is parked: the exact Common
@@ -93,13 +103,9 @@ explicit errors.
 
 - Exact Common `AbstractCollection`/`AbstractList` production still needs the
   remaining `Appendable`/`StringBuilder` closure; do not fork its algorithms
-  into .NET. The builder closure transitively requires the complete public
-  contract DSL and therefore the parked enum and annotation-class
-  representation programmes.
-- An inline body in library A can currently bind built-ins and A-owned
-  declarations. Arbitrary calls from that body into a distinct Kotlin library
-  B need the selected .NET assembly graph as an explicit non-linking resolver
-  input before that breadth is claimed.
+  into .NET. Modern enums, the public contract DSL, builders, Common abstract
+  collection bases, and `EnumEntries` form one atomic source bootstrap cluster;
+  do not break it with target substitutes or one-enum exceptions.
 - KLIB-in-DLL and physical ABI codecs still need neutral serialization owners
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
@@ -112,15 +118,17 @@ explicit errors.
 
 ## Next bounded work
 
-1. Audit and select the enum and annotation-class representations required by
-   the exact Common contract DSL; do not create builder-only stubs.
-2. Actualize the selected complete Common `Appendable`/`StringBuilder` and
+1. Audit the complete reified-inline semantic closure across JVM, JS, Wasm,
+   and Native: substitution, type tests/casts, class literals, arrays, and the
+   precise reflection boundary. Keep every unsupported subset explicit until
+   one coherent reversible slice is selected.
+2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
+   collections/`EnumEntries` bootstrap cluster; do not create builder-only or
+   one-enum stubs.
+3. Actualize the selected complete Common `Appendable`/`StringBuilder` and
    generated `joinTo`/`joinToString` closure once that foundation exists.
-3. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
+4. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
    the remaining builder closure is complete.
-4. Continue the inline programme from its documented ordinary cross-library
-   boundary: first complete arbitrary library-B resolution, then select
-   reified substitution and only later suspend-inline lowering.
 
 ## Navigation
 
