@@ -57,8 +57,8 @@ target substitute:
 - the binary stage runs the mature KLIB inline prefix when the first stage did not already mutate
   that same IR tree;
 - cross-library body resolution treats prepared IR as authoritative, uses main IR as the legacy
-  fallback, and binds referenced producer declarations and built-ins without starting a general
-  IR linker;
+  fallback, and binds exact public signatures through the frontend-selected dependency symbol
+  finder without starting a general IR linker;
 - captured mutable state uses Common's `kotlin.internal.SharedVariableBox<T>` compiler ABI; and
 - ordinary non-reified generic inline methods are admitted while reified and suspend functions
   still fail explicitly.
@@ -202,10 +202,99 @@ This matrix is green. Reified substitution, coroutine lowering, `lateinit`, refl
 adjacent parked features did not enter the slice. The selected Common collection inline families
 may now enter the stdlib product through their exact dependency closures.
 
-This compiler foundation does not yet claim arbitrary dependency chains inside a user library's
-inline body. A body serialized by library A may currently bind built-ins and declarations owned by
-A; binding a call owned by a distinct Kotlin library B requires the selected .NET assembly graph
-to become an explicit input to non-linking IR resolution. That is a later ordinary-inline breadth
-slice, not a reason to introduce a general backend linker implicitly. The selected first Common
-collection families depend only on built-ins and declarations in the same stdlib product, so their
-adoption does not freeze or bypass that future graph boundary.
+## Selected dependency-graph breadth
+
+The completed ordinary-inline breadth includes calls from a body serialized by Kotlin library A
+to declarations owned by a distinct selected Kotlin library B. This is still ordinary non-reified
+inlining; it does not admit a general IR linker or any parked inline family.
+
+### Authority and mature-target precedent
+
+An inline body retains the Kotlin declaration identities of every referenced symbol. The compiler's
+already-resolved dependency graph, not physical CLR name lookup, is authoritative for binding those
+identities.
+
+- JS, Wasm, and Native construct their IR linking/inlining view from the dependency set selected by
+  the frontend and KLIB resolver. A nested reference is never satisfied by searching an unrelated
+  binary after body deserialization.
+- JVM loads inline bodies through the selected Kotlin classpath and resolves their Kotlin metadata
+  and bytecode references against that same compilation graph.
+- The shared non-linking KLIB deserializer deliberately owns a smaller mechanism: prepared inline
+  copies, optional main-IR fallback, same-library supporting declarations, and exact public-symbol
+  lookup through the current IR built-ins' symbol finder. It remains generally usable without
+  acquiring .NET assembly policy.
+
+The CLR creates no semantic exception. It only means that a surviving B-owned call is later bound
+through B's producer-recorded physical declaration index. Logical IR resolution must happen before
+that physical mapping and must not reverse the authority direction.
+
+### Existing implementation boundary
+
+The audit corrected an understated implementation rather than adding a new resolver. When main-IR
+fallback is enabled, `NonLinkingIrInlineFunctionDeserializer` already maps a requested public ID
+signature and symbol kind through `IrBuiltIns.symbolFinder`. Despite its former
+`findBuiltInSymbol` name, that finder contains the complete dependency graph selected by the
+frontend, not only built-ins. The implementation now calls it `findSelectedDependencySymbol` and
+names the corresponding nested-deserializer input `externalSymbolResolver`.
+
+Resolution requires the complete public ID signature; package/name lookup merely supplies a
+candidate set. The same `DotNetIrMangler` signature computer used for serialization selects the
+exact candidate. The frontend and .NET library loader have already rejected duplicate logical
+identities and invalid self-describing assemblies before FIR2IR constructs this symbol finder.
+
+The result is an already-bound logical symbol from the selected graph. The non-linking deserializer
+does not read PE metadata, discover another DLL, choose by physical classpath order, or emit a
+physical reference. If the copied body contains an inline call into B, the ordinary resolver may
+independently request B's inline body from B's own embedded KLIB. A non-inline B call remains an
+external logical call for the existing producer-recorded physical ABI binder.
+
+The resolver first reuses a matching selected external symbol. If none exists, the deserializer may
+materialize a declaration from the current inline producer's supporting main IR. That fallback is
+needed for producer-owned prepared declarations not present in the consumer's ordinary external IR
+view. Built-ins are eager candidates in the same exact-signature resolver. No branch links an
+entire dependency module.
+
+After the shared inline prefix, the backend traverses the actual module with the compiler's shared
+IR-symbol visitor and rejects every remaining unbound symbol before the first .NET lowering. This
+is the no-linker equivalent of the mature linking backends' end-of-linkage check. It deliberately
+checks calls, types, annotations, overrides, and inline provenance instead of relying on one
+symbol-table implementation: non-linking body deserialization can create a reference present in
+the IR tree without registering it in a frontend symbol-table slice. Failure is a module diagnostic
+which names the unresolved public signatures and removes the requested artifact.
+
+### Design attack
+
+- **Start a general .NET IR linker.** Rejected. This slice needs only identity binding for symbols
+  referenced by an inline body; linking all dependency IR changes ownership, reachability, and
+  emission semantics.
+- **Search every loaded KLIB or DLL during body deserialization.** Rejected. It bypasses the validated
+  assembly graph, makes classpath order semantic, and could bind a declaration with no selected
+  physical implementation.
+- **Match only package and source name.** Rejected. Overloads, accessors, constructors, nested
+  declarations, and mangling require the complete public ID signature and symbol kind.
+- **Deserialize a B top-level declaration into A's detached symbol table.** Rejected for ordinary
+  B calls. It duplicates dependency declarations and can disconnect later CLR binding from the
+  frontend's selected symbol. Only B's requested inline body is independently deserialized.
+- **Leave the A call as a physical fallback.** Rejected. Kotlin inline semantics and non-local
+  control flow cannot depend on whether a nested dependency happened to resolve.
+
+### Adversarial evidence
+
+The completed slice proves:
+
+- A's prepared inline copy and main-IR fallback both bind B-owned declarations;
+- an A inline body can call a B inline function whose body in turn calls B-owned compiler ABI and
+  ordinary public functions;
+- A's inline call disappears while the surviving B calls bind to B's exact assembly and methods;
+- the consumer does not acquire a runtime reference to A when no non-inlined A declaration remains;
+- `netstandard2.0` A/B producers execute from `net48` and `net10.0` consumers;
+- existing same-library, built-in, friend-access, all-mode, reified-rejection, and suspend-rejection
+  evidence remains green; and
+- omitting explicitly required B rejects both prepared-IR and main-IR A consumers with the
+  unresolved B signature, without an internal lowering crash or output artifact.
+
+Existing dependency-selection tests separately reject duplicate, malformed, and wrong physical
+identities before the symbol finder is built. This breadth closure does not add transitive
+dependency discovery. The consumer must select every Kotlin DLL required by the inline graph
+explicitly, just as its frontend must see those declarations to type-check the copied body.
+Packaging may copy only assemblies still referenced by emitted CIL.

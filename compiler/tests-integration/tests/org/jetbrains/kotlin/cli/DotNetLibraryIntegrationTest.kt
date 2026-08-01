@@ -19625,6 +19625,169 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testInlineBodyBindsDeclarationsFromAnotherSelectedLibrary() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, ".NET Framework ilasm is not available")
+
+        val libraryBSource = File(tmpdir, "inline-graph-b.kt").apply {
+            writeText(
+                """
+                package inline.graph.b
+
+                @PublishedApi
+                internal fun bump(value: Int): Int = value + 1
+
+                public fun expand(value: Int): Int = value * 2
+
+                public inline fun throughB(value: Int): Int = expand(bump(value))
+                """.trimIndent()
+            )
+        }
+        val libraryASource = File(tmpdir, "inline-graph-a.kt").apply {
+            writeText(
+                """
+                package inline.graph.a
+
+                import inline.graph.b.throughB
+
+                public inline fun throughA(value: Int, transform: (Int) -> Int): Int =
+                    transform(throughB(value))
+                """.trimIndent()
+            )
+        }
+        val consumerSource = File(tmpdir, "inline-graph-consumer.kt").apply {
+            writeText(
+                """
+                package inline.graph.consumer
+
+                import inline.graph.a.throughA
+
+                fun main() {
+                    if (throughA(10) { it + 1 } != 23) throw Error("selected inline dependency graph")
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+
+        for (case in listOf("intra-module" to "Prepared", "disabled" to "Main")) {
+            val mode = case.first
+            val suffix = case.second
+            val libraryBDirectory = File(tmpdir, "inline-graph-b-$suffix").apply { mkdirs() }
+            val libraryBAssemblyName = "Inline.Graph.B.$suffix"
+            compileInProcess(
+                K2DotNetCompiler(),
+                libraryBSource.path,
+                K2DotNetCompilerArguments::irInlinerBeforeKlibSerialization.cliArgument, mode,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+                K2DotNetCompilerArguments::moduleName.cliArgument, libraryBAssemblyName,
+                K2DotNetCompilerArguments::destination.cliArgument, libraryBDirectory.path,
+            )
+            val libraryBAssembly = libraryBDirectory.resolve("$libraryBAssemblyName.dll")
+            val libraryBPackedKlib = loadPackedKlib(
+                libraryBAssembly.toPath(),
+                libraryBAssembly.readKlibCarrier(),
+            )
+            assertEquals(mode != "disabled", libraryBPackedKlib.inlinableFunctionsIr != null)
+            assertTrue(libraryBPackedKlib.ir != null)
+
+            val libraryADirectory = File(tmpdir, "inline-graph-a-$suffix").apply { mkdirs() }
+            val libraryAAssemblyName = "Inline.Graph.A.$suffix"
+            compileInProcess(
+                K2DotNetCompiler(),
+                libraryASource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, libraryBAssembly.path,
+                K2DotNetCompilerArguments::irInlinerBeforeKlibSerialization.cliArgument, mode,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+                K2DotNetCompilerArguments::moduleName.cliArgument, libraryAAssemblyName,
+                K2DotNetCompilerArguments::destination.cliArgument, libraryADirectory.path,
+            )
+            val libraryAAssembly = libraryADirectory.resolve("$libraryAAssemblyName.dll")
+            val libraryAPackedKlib = loadPackedKlib(
+                libraryAAssembly.toPath(),
+                libraryAAssembly.readKlibCarrier(),
+            )
+            assertEquals(mode != "disabled", libraryAPackedKlib.inlinableFunctionsIr != null)
+            assertTrue(libraryAPackedKlib.ir != null)
+
+            val missingBDirectory = File(tmpdir, "inline-graph-missing-b-$suffix").apply { mkdirs() }
+            val missingBAssemblyName = "InlineGraphMissingB$suffix"
+            val missingBAssembly = missingBDirectory.resolve("$missingBAssemblyName.dll")
+            val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    consumerSource.path,
+                    K2DotNetCompilerArguments::classpath.cliArgument, libraryAAssembly.path,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+                    K2DotNetCompilerArguments::moduleName.cliArgument, missingBAssemblyName,
+                    K2DotNetCompilerArguments::destination.cliArgument, missingBAssembly.path,
+                ),
+            )
+            assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+            assertTrue("selected Kotlin/.NET dependency graph is incomplete" in diagnostics) {
+                diagnostics
+            }
+            assertTrue("inline.graph.b/" in diagnostics) { diagnostics }
+            assertFalse(missingBAssembly.exists()) {
+                "An incomplete selected inline dependency graph must not produce an artifact"
+            }
+
+            for (target in listOf("net48", "net10.0")) {
+                val targetSuffix = if (target == "net48") "Framework" else "Core"
+                val consumerDirectory = File(tmpdir, "inline-graph-consumer-$suffix-$targetSuffix").apply {
+                    mkdirs()
+                }
+                val consumerAssemblyName = "InlineGraph${suffix}${targetSuffix}Consumer"
+                val consumerAssembly = consumerDirectory.resolve(
+                    if (target == "net48") "$consumerAssemblyName.exe" else "$consumerAssemblyName.dll"
+                )
+                compileInProcess(
+                    K2DotNetCompiler(),
+                    consumerSource.path,
+                    K2DotNetCompilerArguments::classpath.cliArgument,
+                    listOf(libraryAAssembly, libraryBAssembly)
+                        .joinToString(File.pathSeparator, transform = File::getPath),
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, consumerAssemblyName,
+                    K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+                )
+
+                val consumerIl = consumerDirectory.resolve("$consumerAssemblyName.il").readText()
+                assertTrue("::'throughA'(" !in consumerIl) { consumerIl }
+                assertTrue("::'throughB'(" !in consumerIl) { consumerIl }
+                assertTrue("[$libraryBAssemblyName]" in consumerIl) { consumerIl }
+                assertTrue("::'bump'(" in consumerIl) { consumerIl }
+                assertTrue("::'expand'(" in consumerIl) { consumerIl }
+                assertTrue(".assembly extern '$libraryAAssemblyName'" !in consumerIl) { consumerIl }
+                assertFalse(consumerDirectory.resolve(libraryAAssembly.name).exists()) {
+                    "A fully inlined producer must not remain a runtime dependency"
+                }
+                assertTrue(consumerDirectory.resolve(libraryBAssembly.name).isFile) {
+                    "The surviving selected B dependency was not packaged"
+                }
+
+                if (target == "net48") {
+                    runAssemblerPairing(
+                        frameworkExecutionCommand(checkNotNull(frameworkHost), consumerAssembly),
+                        consumerDirectory,
+                        "Framework selected-graph inline consumer failed for $mode",
+                    )
+                } else {
+                    runDotNet(
+                        modernDotNetHostOrSkip(),
+                        consumerAssembly,
+                        consumerDirectory,
+                        "CoreCLR selected-graph inline consumer failed for $mode",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun testInlinesFriendFunctionThroughSyntheticAccessor() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val producerDirectory = File(tmpdir, "inline-friend-producer").apply { mkdirs() }

@@ -24,7 +24,9 @@ import org.jetbrains.kotlin.ir.util.resolveFakeOverrideOrSelf
  *
  * Prepared inline IR is authoritative when present. The main IR fallback keeps libraries
  * produced with `-Xklib-ir-inliner=disabled` consumable; it remains opt-in here so this target
- * does not silently change another KLIB backend's deserialization policy.
+ * does not silently change another KLIB backend's deserialization policy. The shared resolver
+ * binds referenced public signatures through the current IR built-ins' symbol finder, which is
+ * populated from the frontend-selected dependency graph; it does not discover or link libraries.
  */
 private class DotNetInlineFunctionResolver(
     private val context: DotNetBackendContext,

@@ -117,7 +117,7 @@ class NonLinkingIrInlineFunctionDeserializer(
                     anyNType = irBuiltIns.anyNType,
                     unitType = irBuiltIns.unitType,
                     nothingType = irBuiltIns.nothingType,
-                    builtInSymbolResolver = if (fallbackToMainIr) ::findBuiltInSymbol else null,
+                    externalSymbolResolver = if (fallbackToMainIr) ::findSelectedDependencySymbol else null,
                 )
             }
         } ?: return null
@@ -133,7 +133,7 @@ class NonLinkingIrInlineFunctionDeserializer(
     }
 
     @OptIn(InternalSymbolFinderAPI::class)
-    private fun findBuiltInSymbol(
+    private fun findSelectedDependencySymbol(
         signature: IdSignature,
         symbolKind: BinarySymbolData.SymbolKind,
     ): IrSymbol? {
@@ -144,7 +144,7 @@ class NonLinkingIrInlineFunctionDeserializer(
         }
 
         if (signature is IdSignature.AccessorSignature) {
-            val property = findBuiltInSymbol(
+            val property = findSelectedDependencySymbol(
                 signature.propertySignature,
                 BinarySymbolData.SymbolKind.PROPERTY_SYMBOL,
             )?.owner as? IrProperty ?: return null
@@ -214,7 +214,7 @@ class NonLinkingIrInlineFunctionDeserializer(
         private val anyNType: IrType,
         private val unitType: IrType,
         private val nothingType: IrType,
-        private val builtInSymbolResolver: ((IdSignature, BinarySymbolData.SymbolKind) -> IrSymbol?)?,
+        private val externalSymbolResolver: ((IdSignature, BinarySymbolData.SymbolKind) -> IrSymbol?)?,
     ) {
         private val files = List(ir.irFileCount) { fileIndex ->
             FileDeserializer(ir, fileIndex, containsPreparedInlineFunctionCopies)
@@ -275,7 +275,7 @@ class NonLinkingIrInlineFunctionDeserializer(
 
             val symbol = reference()
             if (symbol.isBound) return symbol
-            builtInSymbolResolver?.invoke(signature, symbolKind)?.let { return it }
+            externalSymbolResolver?.invoke(signature, symbolKind)?.let { return it }
             val module = originalFunctionModule ?: return symbol
             supportingSignatureToFile[signature.topLevelSignature()]?.deserializeTopLevel(
                 signature.topLevelSignature(),

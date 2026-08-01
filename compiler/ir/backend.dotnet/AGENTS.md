@@ -398,10 +398,19 @@ Also:
 - keep temporary probes, playgrounds, and IDE projects outside the repository.
 
 Ordinary non-reified inline support is selected by
-`docs/programmes/inline-functions.md`. Reified and suspend inline functions,
-enums, annotation classes, value classes, reflection, coroutines, concurrency
-primitives, and broad KMP/Gradle product integration remain separate programmes
-until `STATUS.md` or the way forward selects one.
+`docs/programmes/inline-functions.md`. Non-linking inline deserialization may
+bind an exact public signature through `IrBuiltIns.symbolFinder`: that finder
+is the logical dependency graph already selected by the frontend, including
+library B for a body owned by library A. Do not replace it with DLL discovery,
+physical-name lookup, classpath arbitration, or a general IR linker. Surviving
+external calls still bind only through the producer-recorded physical ABI.
+After the shared inline prefix, traverse the actual IR graph and reject every
+remaining unbound symbol before target lowerings; do not make an arbitrary
+lowering or the CIL emitter the missing-dependency detector.
+Reified and suspend inline functions, enums, annotation classes, value classes,
+reflection, coroutines, concurrency primitives, and broad KMP/Gradle product
+integration remain separate programmes until `STATUS.md` or the way forward
+selects one.
 
 ## Verification contract
 
