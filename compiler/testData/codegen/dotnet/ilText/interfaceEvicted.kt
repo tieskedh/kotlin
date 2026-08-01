@@ -1,17 +1,17 @@
 // Eviction cascades from an interface exactly like from a base class: `Bad` fails the member
-// pre-pass (an `Array<Int?>` parameter has no selected CLR vector mapping), `SubBad` — whose extended interface no
+// pre-pass (an open `Array<T?>` parameter has no selected CLR vector mapping), `SubBad` — whose extended interface no
 // longer exists — is evicted at render with a reason carrying Bad's reason, `Impl` fails on its
 // own unmappable override, and `User` falls with the type-mapper cascade (its field type names
 // an evicted class). No `implements` line may ever name an interface that was removed from the
 // module; only the file facade survives.
 interface Bad {
-    fun f(x: Array<Int?>): Array<Int?>
+    fun <T> f(x: Array<T?>): Array<T?>
 }
 
 interface SubBad : Bad
 
 class Impl : SubBad {
-    override fun f(x: Array<Int?>): Array<Int?> = x
+    override fun <T> f(x: Array<T?>): Array<T?> = x
 }
 
 class User {

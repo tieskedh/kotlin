@@ -592,3 +592,25 @@ Kotlin-to-Kotlin identity plus copy-free `sbyte[]`, `short[]`, and `float[]` C# 
 and net10. The next reversible prerequisite is an audit of concrete generic-array constructors and
 intrinsics for already-exact element tokens. It must not select `Array<*>` or a general erased
 Kotlin generic-class view by accident.
+
+### Selected fifth prerequisite: concrete nullable-primitive generic arrays
+
+The audit found one closed element family that the current representation already models exactly
+but the generic-array mapper still rejects: `Array<Boolean?>` through `Array<Char?>`. Common makes
+these ordinary invariant generic arrays. The accepted hybrid-nullability decision already maps each
+concrete nullable scalar to closed CLR `Nullable<V>`, and ECMA-335 vectors compose that value token
+without erasure as `Nullable<V>[]`. This is also the natural C# `V?[]` surface.
+
+The bounded slice must cover all eight families across `arrayOf`, `arrayOfNulls`, `emptyArray`,
+initializer constructors, concrete nullable varargs/spreads, get/set/size, direct and escaping
+iteration, copy/content operations, exact casts, nesting, generic functions/classes, portable KLIB
+consumption, and C# signatures/aliasing on both profiles. It must preserve the existing rejection of
+nested open `Array<T?>`, star/input projections, and value-vector widening to `Array<out Any?>`.
+Those shapes need an erased view or identity-preserving adapter; closed `Nullable<V>[]` does not
+answer them and must not be used as a pretext to weaken their gates.
+
+Implemented evidence now covers that complete matrix on both FIR frontends and runtime profiles.
+The portable-library test additionally executes all eight exact signatures from separate Kotlin
+consumers, including generic substitution, and from one Roslyn consumer on Framework CLR and
+CoreCLR. Open nullable elements and the parked projection/covariance shapes remain rejected by
+backend-reachable negative sentinels rather than frontend-invalid stand-ins.

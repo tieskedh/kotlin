@@ -98,6 +98,65 @@ from that complete registry or carry an explicit family-complete companion
 entry. A partial wrapper that constructs but cannot iterate, copy, cross a
 library boundary, or round-trip through its exact C# vector is not complete.
 
+### Concrete nullable primitive elements remain generic arrays
+
+Common permits each primitive as a nullable element of invariant `Array<E>`.
+The logical type is not a specialized primitive array: `Array<Int?>` remains
+distinct from both `IntArray` and `Array<Int>`. Every mature target accepts the
+shape while choosing its own physical nullable-element representation. JVM
+uses boxed primitive references, JS uses its generic JavaScript array model,
+and Wasm/Native preserve the same Common generic-array contract through their
+target value/reference representations.
+
+CLR supplies an exact, allocation-free typed slot for every concrete nullable
+primitive. The .NET carrier is therefore a vector of the already-selected
+closed `System.Nullable<T>` value, not `object[]`:
+
+| Kotlin type | CLR element/vector | C# view |
+| --- | --- | --- |
+| `Array<Boolean?>` | `Nullable<Boolean>[]` | `bool?[]` |
+| `Array<Byte?>` | `Nullable<SByte>[]` | `sbyte?[]` |
+| `Array<Short?>` | `Nullable<Int16>[]` | `short?[]` |
+| `Array<Int?>` | `Nullable<Int32>[]` | `int?[]` |
+| `Array<Long?>` | `Nullable<Int64>[]` | `long?[]` |
+| `Array<Float?>` | `Nullable<Single>[]` | `float?[]` |
+| `Array<Double?>` | `Nullable<Double>[]` | `double?[]` |
+| `Array<Char?>` | `Nullable<Char>[]` | `char?[]` |
+
+This is a concrete closed-carrier rule. It does not map nested open `Array<T?>`
+to `object[]`: the accepted hybrid-nullability ADR keeps that shape rejected
+because one invariant vector signature cannot become `Nullable<V>[]` for a
+value substitution and a reference vector for a reference substitution.
+Likewise, a projection from a value-element vector to `Array<out Any?>` remains
+outside the admitted physical ABI; CLR vector covariance applies only to
+reference elements. Exact invariant use, nested arrays, generic substitution,
+and concrete same-element projections do not require either widening.
+
+#### Design attack
+
+- **Use `object[]` like a blanket JVM boxing translation.** Rejected. It would
+  collapse `Array<Int?>` with `Array<Any?>`, discard the CLR's exact nullable
+  signature, and lose natural C# interop.
+- **Treat `Nullable<Int32>[]` as `IntArray`.** Rejected. Nullable slots and
+  Kotlin generic-array identity are observable; the specialized wrapper has a
+  different declaration and storage contract.
+- **Admit `Array<T?>` at the same time.** Rejected. A closed exact carrier does
+  not solve the accepted open-nested-carrier problem.
+- **Claim covariance through boxing.** Rejected. Boxing every element into a
+  replacement vector would lose array identity and mutation aliasing.
+- **Support only `Int?`.** Rejected. Common and the selected scalar model are
+  symmetric across all eight concrete primitive families.
+
+Implementation evidence covers all eight literal families, null/default
+construction, initializer order, generic function and class substitution,
+nullable varargs/spreads, direct and escaping iteration, copies and content
+operations, nesting, exact casts, negative sizes, and same-element aliasing on
+Framework CLR and CoreCLR. A portable netstandard2.0 Kotlin library exposes
+the exact eight `Nullable<V>[]` signatures; separate Kotlin consumers and one
+Roslyn consumer execute them without copying on both runtimes. The remaining
+negative sentinels use frontend-legal open/projection forms so admitting this
+closed family cannot silently broaden their boundary.
+
 ### C# vector projection is an explicit adapter
 
 Kotlin-to-Kotlin ABI exposes `Kotlin.IntArray` and its peer wrappers, not
