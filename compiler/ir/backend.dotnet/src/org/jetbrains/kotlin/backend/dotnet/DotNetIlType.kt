@@ -371,8 +371,11 @@ internal fun DotNetIlValueType.isDotNetReferenceShaped(): Boolean = when (this) 
 /** The scalar value types whose CLR vector forms are part of the supported primitive-array slice. */
 internal fun DotNetIlValueType.isSupportedPrimitiveArrayElement(): Boolean = when (this) {
     DotNetIlValueType.Boolean,
+    DotNetIlValueType.Int8,
+    DotNetIlValueType.Int16,
     DotNetIlValueType.Int32,
     DotNetIlValueType.Int64,
+    DotNetIlValueType.Float32,
     DotNetIlValueType.Float64,
     DotNetIlValueType.Char,
         -> true

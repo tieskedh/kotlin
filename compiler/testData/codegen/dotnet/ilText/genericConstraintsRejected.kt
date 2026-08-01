@@ -7,7 +7,7 @@ open class GenericBase<T>(val value: T)
 interface LocalMark
 
 class BrokenBound {
-    fun unsupported(): FloatArray = floatArrayOf()
+    fun unsupported(): Array<Int?> = arrayOf(null)
 }
 
 fun <T : BrokenBound> evictedFunctionBound(value: T): T = value

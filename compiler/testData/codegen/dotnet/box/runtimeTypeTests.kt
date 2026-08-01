@@ -42,8 +42,11 @@ fun isNullableDouble(value: Any?): Boolean = value is Double?
 fun isNullableChar(value: Any?): Boolean = value is Char?
 
 fun isBooleanArray(value: Any?): Boolean = value is BooleanArray
+fun isByteArray(value: Any?): Boolean = value is ByteArray
+fun isShortArray(value: Any?): Boolean = value is ShortArray
 fun isIntArray(value: Any?): Boolean = value is IntArray
 fun isLongArray(value: Any?): Boolean = value is LongArray
+fun isFloatArray(value: Any?): Boolean = value is FloatArray
 fun isDoubleArray(value: Any?): Boolean = value is DoubleArray
 fun isCharArray(value: Any?): Boolean = value is CharArray
 
@@ -131,17 +134,21 @@ fun box(): String {
     }
 
     val booleans: Any = booleanArrayOf(true)
+    val bytes: Any = byteArrayOf((-1).toByte())
+    val shorts: Any = shortArrayOf((-2).toShort())
     val ints: Any = intArrayOf(41)
     val longs: Any = longArrayOf(42L)
+    val floats: Any = floatArrayOf(3.25f)
     val doubles: Any = doubleArrayOf(4.25)
     val chars: Any = charArrayOf('Z')
-    if (!isBooleanArray(booleans) || !isIntArray(ints) || !isLongArray(longs) ||
+    if (!isBooleanArray(booleans) || !isByteArray(bytes) || !isShortArray(shorts) ||
+        !isIntArray(ints) || !isLongArray(longs) || !isFloatArray(floats) ||
         !isDoubleArray(doubles) || !isCharArray(chars)
     ) {
         return "fail 13: primitive-array positive matrix"
     }
-    if (isBooleanArray(ints) || isIntArray(longs) || isLongArray(doubles) ||
-        isDoubleArray(chars) || isCharArray(booleans)
+    if (isBooleanArray(bytes) || isByteArray(shorts) || isShortArray(ints) || isIntArray(longs) ||
+        isLongArray(floats) || isFloatArray(doubles) || isDoubleArray(chars) || isCharArray(booleans)
     ) {
         return "fail 14: primitive-array identities collapsed"
     }

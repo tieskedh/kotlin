@@ -1,6 +1,6 @@
 // Generic eviction rides the existing fixpoint (the generics analogue of
-// inheritanceBaseEvicted.kt): `Bad` fails the member pre-pass (a `FloatArray` has no IL
-// mapping), and because instantiations map their arguments through the LIVE class map, every
+// inheritanceBaseEvicted.kt): `Bad` fails the member pre-pass (an `Array<Int?>` has no selected
+// CLR vector mapping), and because instantiations map their arguments through the LIVE class map, every
 // USE of an instantiation naming `Bad` fails too — `useBad`'s `GB<Bad>` parameter evicts the
 // function per-function, and `DBad`, whose `extends` re-resolution maps the base
 // instantiation's arguments each render round, is evicted whole-class with a reason carrying
@@ -8,7 +8,7 @@
 // instantiated `extends class 'GB`1'<int32>` line and base-ctor chain untouched; no emitted
 // token may ever name an evicted class.
 open class Bad {
-    fun f(x: FloatArray): FloatArray = x
+    fun f(x: Array<Int?>): Array<Int?> = x
 }
 
 open class GB<T>(val v: T)
