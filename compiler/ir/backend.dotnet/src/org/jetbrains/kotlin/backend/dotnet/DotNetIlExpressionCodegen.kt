@@ -434,6 +434,10 @@ internal class DotNetIlExpressionCodegen(
      *   identity. Logical arguments, projections, and stars are deliberately absent from the
      *   CLR check, following JVM/Native erasure. A non-null `as` additionally rejects null with
      *   the mapped Kotlin NPE; `as?` uses `isinst` and therefore returns null on either failure.
+     * - CAST to an open type parameter: widen/box the operand to `object`, then use CLR
+     *   `unbox.any !n`/`!!n`. This is the single instruction that recovers either a value or
+     *   reference instantiation and is the direct CLR counterpart of a non-reified unchecked
+     *   generic cast. SAFE_CAST remains separate because `unbox.any` throws on a wrong value.
      * - Explicit casts and runtime tests against `CharSequence` use the runtime's classified
      *   string-or-capability boundary. The physical object carrier alone never admits a value;
      *   successful casts preserve the original reference.
@@ -446,6 +450,23 @@ internal class DotNetIlExpressionCodegen(
         val castType = typeMapper.toDotNetIlValueType(expression.typeOperand)
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
         if (expression.operator == IrTypeOperator.CAST || expression.operator == IrTypeOperator.SAFE_CAST) {
+            if (expression.operator == IrTypeOperator.CAST && castType is DotNetIlValueType.TypeParameter) {
+                emitExpression(expression.argument, DotNetIlValueType.Object)
+                if (methodContext.isTerminated) return
+                methodContext.emit("unbox.any ${castType.nameInSignature}", pops = 1, pushes = 1)
+                if (!castType.isDotNetAssignableTo(expectedType)) {
+                    val outerCoercion = dotNetWideningCoercionOrNull(
+                        castType,
+                        expectedType,
+                        coreLibraryReference,
+                    ) ?: dotNetUnsupported(
+                        "generic cast produces ${castType.nameInSignature} " +
+                                "where ${expectedType.nameInSignature} is expected"
+                    )
+                    methodContext.emit(outerCoercion, pops = 1, pushes = 1)
+                }
+                return
+            }
             if (expression.typeOperand.isDotNetCharSequenceType()) {
                 if (castType != DotNetIlValueType.Object || expectedType != DotNetIlValueType.Object) {
                     dotNetUnsupported(

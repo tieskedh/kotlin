@@ -49,6 +49,9 @@ tasks {
             rootProject.file("libraries/stdlib/src/kotlin/collections/Collections.kt")
         )
         inputs.file(
+            rootProject.file("libraries/stdlib/common/src/kotlin/collections/CollectionsH.kt")
+        )
+        inputs.file(
             rootProject.file("libraries/stdlib/common/src/generated/_Arrays.kt")
         )
     }

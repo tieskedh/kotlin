@@ -38,6 +38,8 @@ fun main(args: Array<String>) {
     )
     val commonCollectionsFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/collections/Collections.kt")
+    val commonCollectionsHeaderFile =
+        baseDir.resolve("libraries/stdlib/common/src/kotlin/collections/CollectionsH.kt")
     val commonArraysFile =
         baseDir.resolve("libraries/stdlib/common/src/generated/_Arrays.kt")
     val arrayAsListDeclaration = extractCommonDeclaration(
@@ -63,6 +65,30 @@ fun main(args: Array<String>) {
     val throwCountOverflowDeclaration = extractCommonUndocumentedDeclaration(
         commonCollectionsFile,
         "internal fun throwCountOverflow()",
+    )
+    val collectionToArrayDeclaration = extractCommonSingleLineDeclaration(
+        commonCollectionsHeaderFile,
+        "internal expect fun collectionToArray(collection: Collection<*>): Array<Any?>",
+    )
+    val typedCollectionToArrayDeclaration = extractCommonSingleLineDeclaration(
+        commonCollectionsHeaderFile,
+        "internal expect fun <T> collectionToArray(collection: Collection<*>, array: Array<T>): Array<T>",
+    )
+    val arrayOfNullsFromReferenceDeclaration = extractCommonSingleLineDeclaration(
+        commonCollectionsHeaderFile,
+        "internal expect fun <T> arrayOfNulls(reference: Array<T>, size: Int): Array<T>",
+    )
+    val collectionToArrayImplementation = extractCommonFunction(
+        commonCollectionsFile,
+        "internal fun collectionToArrayCommonImpl(collection: Collection<*>): Array<Any?>",
+    )
+    val typedCollectionToArrayImplementation = extractCommonFunction(
+        commonCollectionsFile,
+        "internal fun <T> collectionToArrayCommonImpl(collection: Collection<*>, array: Array<T>): Array<T>",
+    )
+    val terminateCollectionToArrayDeclaration = extractCommonSingleLineDeclaration(
+        commonCollectionsFile,
+        "internal expect fun <T> terminateCollectionToArray(collectionSize: Int, array: Array<T>): Array<T>",
     )
     val selectedTemplates = sequenceOf(
         Aggregates.f_all selectedFor setOf(Family.Iterables),
@@ -112,6 +138,18 @@ fun main(args: Array<String>) {
     generatedSource.appendLine(throwIndexOverflowDeclaration)
     generatedSource.appendLine()
     generatedSource.appendLine(throwCountOverflowDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(collectionToArrayDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(typedCollectionToArrayDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(arrayOfNullsFromReferenceDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(collectionToArrayImplementation)
+    generatedSource.appendLine()
+    generatedSource.appendLine(typedCollectionToArrayImplementation)
+    generatedSource.appendLine()
+    generatedSource.appendLine(terminateCollectionToArrayDeclaration)
     generatedSource.appendLine()
     for (member in members) {
         member.build(generatedSource)
@@ -184,4 +222,58 @@ private fun extractCommonUndocumentedDeclaration(sourceFile: File, declarationHe
         "Cannot find the end of Common declaration '$declarationHeader' in ${sourceFile.path}"
     }
     return source.substring(declarationStart + 2, declarationEnd).trimEnd()
+}
+
+/** Copies one complete single-line declaration and rejects any unexpected trailing source. */
+private fun extractCommonSingleLineDeclaration(sourceFile: File, declaration: String): String {
+    val source = sourceFile.readText().replace("\r\n", "\n")
+    val declarationIndex = source.indexOf(declaration)
+    check(declarationIndex >= 0) {
+        "Cannot find Common declaration '$declaration' in ${sourceFile.path}"
+    }
+    check(source.indexOf(declaration, declarationIndex + declaration.length) < 0) {
+        "Common declaration '$declaration' is not unique in ${sourceFile.path}"
+    }
+    val lineStart = source.lastIndexOf('\n', declarationIndex - 1) + 1
+    val lineEnd = source.indexOf('\n', declarationIndex).takeIf { it >= 0 } ?: source.length
+    check(source.substring(lineStart, lineEnd) == declaration) {
+        "Common declaration '$declaration' is no longer one complete line in ${sourceFile.path}"
+    }
+    return declaration
+}
+
+/**
+ * Copies one complete block-bodied function from authoritative Common source. The unique header
+ * and balanced body are fail-closed generation contracts; the .NET source product does not own a
+ * second spelling of the algorithm.
+ */
+private fun extractCommonFunction(sourceFile: File, declarationHeader: String): String {
+    val source = sourceFile.readText().replace("\r\n", "\n")
+    val declarationIndex = source.indexOf(declarationHeader)
+    check(declarationIndex >= 0) {
+        "Cannot find Common function '$declarationHeader' in ${sourceFile.path}"
+    }
+    check(source.indexOf(declarationHeader, declarationIndex + declarationHeader.length) < 0) {
+        "Common function header '$declarationHeader' is not unique in ${sourceFile.path}"
+    }
+    val bodyStart = source.indexOf('{', declarationIndex + declarationHeader.length)
+    check(bodyStart >= 0) {
+        "Cannot find Common function body for '$declarationHeader' in ${sourceFile.path}"
+    }
+    var depth = 0
+    for (index in bodyStart until source.length) {
+        when (source[index]) {
+            '{' -> depth++
+            '}' -> {
+                depth--
+                check(depth >= 0) {
+                    "Unbalanced Common function body for '$declarationHeader' in ${sourceFile.path}"
+                }
+                if (depth == 0) {
+                    return source.substring(declarationIndex, index + 1).trimEnd()
+                }
+            }
+        }
+    }
+    error("Unterminated Common function body for '$declarationHeader' in ${sourceFile.path}")
 }

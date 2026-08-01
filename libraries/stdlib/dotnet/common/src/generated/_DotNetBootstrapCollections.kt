@@ -40,6 +40,47 @@ internal fun throwIndexOverflow() { throw ArithmeticException("Index overflow ha
 @SinceKotlin("1.3")
 internal fun throwCountOverflow() { throw ArithmeticException("Count overflow has happened.") }
 
+internal expect fun collectionToArray(collection: Collection<*>): Array<Any?>
+
+internal expect fun <T> collectionToArray(collection: Collection<*>, array: Array<T>): Array<T>
+
+internal expect fun <T> arrayOfNulls(reference: Array<T>, size: Int): Array<T>
+
+internal fun collectionToArrayCommonImpl(collection: Collection<*>): Array<Any?> {
+    if (collection.isEmpty()) return emptyArray<Any?>()
+
+    val destination = arrayOfNulls<Any>(collection.size)
+
+    val iterator = collection.iterator()
+    var index = 0
+    while (iterator.hasNext()) {
+        destination[index++] = iterator.next()
+    }
+
+    return destination
+}
+
+internal fun <T> collectionToArrayCommonImpl(collection: Collection<*>, array: Array<T>): Array<T> {
+    if (collection.isEmpty()) return terminateCollectionToArray(0, array)
+
+    val destination = if (array.size < collection.size) {
+        arrayOfNulls(array, collection.size)
+    } else {
+        array
+    }
+
+    val iterator = collection.iterator()
+    var index = 0
+    while (iterator.hasNext()) {
+        @Suppress("UNCHECKED_CAST")
+        destination[index++] = iterator.next() as T
+    }
+
+    return terminateCollectionToArray(collection.size, destination)
+}
+
+internal expect fun <T> terminateCollectionToArray(collectionSize: Int, array: Array<T>): Array<T>
+
 /**
  * Returns `true` if all elements match the given [predicate].
  *

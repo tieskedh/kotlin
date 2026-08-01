@@ -25417,6 +25417,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         executeSelfDescribingStdlib(stdlibDirectory, "net10.0", dotnetHost)
         executeCollectionOverflowCompilerAbi(stdlibDirectory, "net48", dotnetHost = null)
         executeCollectionOverflowCompilerAbi(stdlibDirectory, "net10.0", dotnetHost)
+        assertCollectionToArrayImplementationIl(stdlibDirectory)
+        executeCollectionToArrayImplementation(stdlibDirectory, "net48", dotnetHost = null)
+        executeCollectionToArrayImplementation(stdlibDirectory, "net10.0", dotnetHost)
     }
 
     @Test
@@ -29824,6 +29827,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertEquals(
             mapOf(
+                "arrayOfNulls" to 1,
+                "collectionToArray" to 2,
+                "collectionToArrayCommonImpl" to 2,
+                "terminateCollectionToArray" to 1,
+            ),
+            collectionFunctions
+                .filter { declaration ->
+                    declaration.methodName in setOf(
+                        "arrayOfNulls",
+                        "collectionToArray",
+                        "collectionToArrayCommonImpl",
+                        "terminateCollectionToArray",
+                    )
+                }
+                .groupingBy(DotNetPhysicalDeclaration.Function::methodName)
+                .eachCount(),
+        )
+        assertTrue(collectionFunctions.none { declaration ->
+            declaration.methodName == "dotNetArrayOfNulls"
+        }) {
+            "The target-private allocator operation must not enter the physical ABI index"
+        }
+        assertEquals(
+            mapOf(
                 "all" to 1,
                 "any" to 2,
                 "contains" to 1,
@@ -29981,6 +30008,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
                     "'asList'<'T'>(!!0[] '<this>')" in il
         )
+        assertTrue("dotNetArrayOfNulls" !in il) {
+            "The declaration-suppressing host operation leaked into Kotlin.Stdlib IL"
+        }
         assertTrue(
             ".method public hidebysig static bool 'any'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
@@ -31415,6 +31445,553 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), "Collection-overflow compiler-ABI probe failed for $target:\n$output")
+    }
+
+    private fun assertCollectionToArrayImplementationIl(stdlibDirectory: File) {
+        val il = stdlibDirectory.resolve("Kotlin.Stdlib.il").readText()
+        val collectionToArrayHeaders = il.lineSequence()
+            .filter { line -> "'collectionToArray'" in line && ".method" in line }
+            .toList()
+        assertEquals(2, collectionToArrayHeaders.size, collectionToArrayHeaders.joinToString("\n"))
+        assertTrue(collectionToArrayHeaders.any { header -> "static object[]" in header }) {
+            collectionToArrayHeaders.joinToString("\n")
+        }
+        assertTrue(collectionToArrayHeaders.any { header -> "static !!0[]" in header }) {
+            collectionToArrayHeaders.joinToString("\n")
+        }
+        val runtimeTypedArrayAllocatorStart = il.indexOf(
+            "'arrayOfNulls'<'T'>(!!0[] 'reference', int32 'size')"
+        )
+        assertTrue(runtimeTypedArrayAllocatorStart >= 0)
+        val runtimeTypedArrayAllocatorEnd = il.indexOf(
+            "  .method",
+            runtimeTypedArrayAllocatorStart + 1,
+        ).takeIf { index -> index >= 0 } ?: il.length
+        val runtimeTypedArrayAllocatorIl = il.substring(
+            runtimeTypedArrayAllocatorStart,
+            runtimeTypedArrayAllocatorEnd,
+        )
+        assertTrue("System.Object::GetType()" in runtimeTypedArrayAllocatorIl) {
+            runtimeTypedArrayAllocatorIl
+        }
+        assertTrue("System.Type::GetElementType()" in runtimeTypedArrayAllocatorIl) {
+            runtimeTypedArrayAllocatorIl
+        }
+        assertTrue("System.Array::CreateInstance" in runtimeTypedArrayAllocatorIl) {
+            runtimeTypedArrayAllocatorIl
+        }
+        assertTrue("castclass !!0[]" in runtimeTypedArrayAllocatorIl) {
+            runtimeTypedArrayAllocatorIl
+        }
+        assertTrue("Kotlin.NegativeArraySizeException" in runtimeTypedArrayAllocatorIl) {
+            runtimeTypedArrayAllocatorIl
+        }
+        assertTrue("KotlinCompilerAbiAttribute" in runtimeTypedArrayAllocatorIl) {
+            runtimeTypedArrayAllocatorIl
+        }
+        assertTrue("EditorBrowsableAttribute" in runtimeTypedArrayAllocatorIl) {
+            runtimeTypedArrayAllocatorIl
+        }
+        val typedCommonLoopStart = il.indexOf(
+            "'collectionToArrayCommonImpl'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'collection', " +
+                    "!!0[] 'array')"
+        )
+        assertTrue(typedCommonLoopStart >= 0)
+        val typedCommonLoopEnd = il.indexOf(
+            "  .method",
+            typedCommonLoopStart + 1,
+        ).takeIf { index -> index >= 0 } ?: il.length
+        val typedCommonLoopIl = il.substring(typedCommonLoopStart, typedCommonLoopEnd)
+        assertTrue("unbox.any !!0" in typedCommonLoopIl) { typedCommonLoopIl }
+        assertTrue("dotNetArrayOfNulls" !in il) {
+            "The declaration-suppressing host operation leaked into Kotlin.Stdlib IL"
+        }
+    }
+
+    private fun executeCollectionToArrayImplementation(
+        stdlibDirectory: File,
+        target: String,
+        dotnetHost: File?,
+    ) {
+        val directory = File(tmpdir, "collection-to-array-implementation-$target").apply { mkdirs() }
+        stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+            .copyTo(directory.resolve("Kotlin.Stdlib.dll"), overwrite = true)
+        stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+            .copyTo(directory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME), overwrite = true)
+        val ilFile = directory.resolve("CollectionToArrayProbe.il").apply {
+            writeText(
+                """
+                .assembly extern mscorlib {}
+                .assembly extern Kotlin.Runtime {}
+                .assembly extern Kotlin.Stdlib {}
+                .assembly CollectionToArrayProbe {}
+                .module CollectionToArrayProbe.exe
+
+                .class public auto ansi sealed beforefieldinit ProbeIterator
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
+                {
+                  .field private object[] Values
+                  .field private int32 Index
+                  .field private class ProbeCollection Owner
+
+                  .method public hidebysig specialname rtspecialname instance void .ctor(
+                      class ProbeCollection owner,
+                      object[] values) cil managed
+                  {
+                    .maxstack 2
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ldarg.0
+                    ldarg.1
+                    stfld class ProbeCollection ProbeIterator::Owner
+                    ldarg.0
+                    ldarg.2
+                    stfld object[] ProbeIterator::Values
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance bool HasNext() cil managed
+                  {
+                    .maxstack 2
+                    ldarg.0
+                    ldfld int32 ProbeIterator::Index
+                    ldarg.0
+                    ldfld object[] ProbeIterator::Values
+                    ldlen
+                    conv.i4
+                    clt
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance object Next() cil managed
+                  {
+                    .maxstack 3
+                    .locals init ([0] int32 index)
+                    ldarg.0
+                    ldfld class ProbeCollection ProbeIterator::Owner
+                    dup
+                    ldfld int32 ProbeCollection::NextCalls
+                    ldc.i4.1
+                    add
+                    stfld int32 ProbeCollection::NextCalls
+                    ldarg.0
+                    ldfld int32 ProbeIterator::Index
+                    stloc.0
+                    ldarg.0
+                    ldloc.0
+                    ldc.i4.1
+                    add
+                    stfld int32 ProbeIterator::Index
+                    ldarg.0
+                    ldfld object[] ProbeIterator::Values
+                    ldloc.0
+                    ldelem.ref
+                    ret
+                  }
+                }
+
+                .class public auto ansi sealed beforefieldinit ProbeCollection
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Collections.Collection'
+                {
+                  .field private object[] Values
+                  .field private int32 ReportedSize
+                  .field public int32 IteratorCalls
+                  .field public int32 NextCalls
+
+                  .method public hidebysig specialname rtspecialname instance void .ctor(
+                      object[] values,
+                      int32 reportedSize) cil managed
+                  {
+                    .maxstack 2
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ldarg.0
+                    ldarg.1
+                    stfld object[] ProbeCollection::Values
+                    ldarg.0
+                    ldarg.2
+                    stfld int32 ProbeCollection::ReportedSize
+                    ret
+                  }
+
+                  .method public hidebysig specialname newslot virtual final instance int32 get_Size() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    ldfld int32 ProbeCollection::ReportedSize
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance bool IsEmpty() cil managed
+                  {
+                    .maxstack 2
+                    ldarg.0
+                    ldfld int32 ProbeCollection::ReportedSize
+                    ldc.i4.0
+                    ceq
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance bool ContainsErased(
+                      object element) cil managed
+                  {
+                    .maxstack 1
+                    ldc.i4.0
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance bool ContainsAll(
+                      class [Kotlin.Runtime]'Kotlin.Collections.Collection' elements) cil managed
+                  {
+                    .maxstack 1
+                    ldc.i4.0
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance class [Kotlin.Runtime]
+                      'Kotlin.Collections.Iterator' GetIterator() cil managed
+                  {
+                    .maxstack 3
+                    ldarg.0
+                    dup
+                    ldfld int32 ProbeCollection::IteratorCalls
+                    ldc.i4.1
+                    add
+                    stfld int32 ProbeCollection::IteratorCalls
+                    ldarg.0
+                    ldarg.0
+                    ldfld object[] ProbeCollection::Values
+                    newobj instance void ProbeIterator::.ctor(class ProbeCollection, object[])
+                    ret
+                  }
+                }
+
+                .class public auto ansi sealed beforefieldinit Program
+                       extends [mscorlib]System.Object
+                {
+                  .method private hidebysig static void Fail(string message) cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    newobj instance void [mscorlib]System.Exception::.ctor(string)
+                    throw
+                  }
+
+                  .method public hidebysig static void Main() cil managed
+                  {
+                    .entrypoint
+                    .maxstack 8
+                    .locals init (
+                      [0] class [Kotlin.Runtime]'Kotlin.Collections.Collection' strings,
+                      [1] string[] destination,
+                      [2] string[] stringsResult,
+                      [3] object[] objectsResult,
+                      [4] class [Kotlin.Runtime]'Kotlin.Collections.Collection' ints,
+                      [5] int32[] intsResult,
+                      [6] class ProbeCollection hostile
+                    )
+
+                    ldc.i4.3
+                    newarr [mscorlib]System.String
+                    dup
+                    ldc.i4.0
+                    ldstr "A"
+                    stelem.ref
+                    dup
+                    ldc.i4.1
+                    ldnull
+                    stelem.ref
+                    dup
+                    ldc.i4.2
+                    ldstr "C"
+                    stelem.ref
+                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]
+                        'Kotlin.Collections.CollectionsKt'::'asList'<string>(!!0[])
+                    stloc.0
+
+                    ldloc.0
+                    call object[] [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::
+                        'collectionToArray'(
+                            class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+                    stloc.3
+                    ldloc.3
+                    ldlen
+                    conv.i4
+                    ldc.i4.3
+                    beq.s ERASED_SIZE_OK
+                    ldstr "erased result size changed"
+                    call void Program::Fail(string)
+                ERASED_SIZE_OK:
+                    ldloc.3
+                    isinst string[]
+                    brfalse.s ERASED_TYPE_OK
+                    ldstr "erased result retained string vector type"
+                    call void Program::Fail(string)
+                ERASED_TYPE_OK:
+                    ldloc.3
+                    ldc.i4.0
+                    ldelem.ref
+                    castclass [mscorlib]System.String
+                    ldstr "A"
+                    call bool [mscorlib]System.String::op_Equality(string, string)
+                    brtrue.s ERASED_VALUE_OK
+                    ldstr "erased result value changed"
+                    call void Program::Fail(string)
+                ERASED_VALUE_OK:
+
+                    ldloc.0
+                    ldc.i4.0
+                    newarr [mscorlib]System.String
+                    call !!0[] [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::
+                        'collectionToArray'<string>(
+                            class [Kotlin.Runtime]'Kotlin.Collections.Collection', !!0[])
+                    stloc.2
+                    ldloc.2
+                    ldlen
+                    conv.i4
+                    ldc.i4.3
+                    beq.s TYPED_SIZE_OK
+                    ldstr "typed result size changed"
+                    call void Program::Fail(string)
+                TYPED_SIZE_OK:
+                    ldloc.2
+                    isinst string[]
+                    brtrue.s TYPED_TYPE_OK
+                    ldstr "typed result lost string vector type"
+                    call void Program::Fail(string)
+                TYPED_TYPE_OK:
+                    ldloc.2
+                    ldc.i4.1
+                    ldelem.ref
+                    brfalse.s NULLABLE_VALUE_OK
+                    ldstr "typed nullable element changed"
+                    call void Program::Fail(string)
+                NULLABLE_VALUE_OK:
+
+                    ldc.i4.5
+                    newarr [mscorlib]System.String
+                    dup
+                    ldc.i4.3
+                    ldstr "tail"
+                    stelem.ref
+                    stloc.1
+                    ldloc.0
+                    ldloc.1
+                    call !!0[] [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::
+                        'collectionToArray'<string>(
+                            class [Kotlin.Runtime]'Kotlin.Collections.Collection', !!0[])
+                    stloc.2
+                    ldloc.2
+                    ldloc.1
+                    ceq
+                    brtrue.s OVERSIZED_IDENTITY_OK
+                    ldstr "oversized destination identity changed"
+                    call void Program::Fail(string)
+                OVERSIZED_IDENTITY_OK:
+                    ldloc.2
+                    ldc.i4.3
+                    ldelem.ref
+                    ldstr "tail"
+                    call bool [mscorlib]System.String::op_Equality(string, string)
+                    brtrue.s NON_JAVA_TAIL_OK
+                    ldstr "oversized destination was Java-null-terminated"
+                    call void Program::Fail(string)
+                NON_JAVA_TAIL_OK:
+
+                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]
+                        'Kotlin.Collections.CollectionsKt'::'emptyList'<string>()
+                    stloc.0
+                    ldc.i4.1
+                    newarr [mscorlib]System.String
+                    dup
+                    ldc.i4.0
+                    ldstr "empty-tail"
+                    stelem.ref
+                    stloc.1
+                    ldloc.0
+                    ldloc.1
+                    call !!0[] [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::
+                        'collectionToArray'<string>(
+                            class [Kotlin.Runtime]'Kotlin.Collections.Collection', !!0[])
+                    stloc.2
+                    ldloc.2
+                    ldloc.1
+                    ceq
+                    brtrue.s EMPTY_IDENTITY_OK
+                    ldstr "empty collection replaced destination"
+                    call void Program::Fail(string)
+                EMPTY_IDENTITY_OK:
+                    ldloc.2
+                    ldc.i4.0
+                    ldelem.ref
+                    ldstr "empty-tail"
+                    call bool [mscorlib]System.String::op_Equality(string, string)
+                    brtrue.s EMPTY_TAIL_OK
+                    ldstr "empty collection changed destination tail"
+                    call void Program::Fail(string)
+                EMPTY_TAIL_OK:
+
+                    ldc.i4.2
+                    newarr [mscorlib]System.String
+                    dup
+                    ldc.i4.0
+                    ldstr "X"
+                    stelem.ref
+                    dup
+                    ldc.i4.1
+                    ldstr "Y"
+                    stelem.ref
+                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]
+                        'Kotlin.Collections.CollectionsKt'::'asList'<string>(!!0[])
+                    stloc.0
+                    ldloc.0
+                    ldc.i4.0
+                    newarr [mscorlib]System.String
+                    call !!0[] [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::
+                        'collectionToArray'<object>(
+                            class [Kotlin.Runtime]'Kotlin.Collections.Collection', !!0[])
+                    stloc.3
+                    ldloc.3
+                    isinst string[]
+                    brtrue.s COVARIANT_TYPE_OK
+                    ldstr "covariant runtime vector type was erased"
+                    call void Program::Fail(string)
+                COVARIANT_TYPE_OK:
+
+                    ldc.i4.2
+                    newarr [mscorlib]System.Int32
+                    dup
+                    ldc.i4.0
+                    ldc.i4.7
+                    stelem.i4
+                    dup
+                    ldc.i4.1
+                    ldc.i4.8
+                    stelem.i4
+                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]
+                        'Kotlin.Collections.CollectionsKt'::'asList'<int32>(!!0[])
+                    stloc.s 4
+                    ldloc.s 4
+                    ldc.i4.0
+                    newarr [mscorlib]System.Int32
+                    call !!0[] [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::
+                        'collectionToArray'<int32>(
+                            class [Kotlin.Runtime]'Kotlin.Collections.Collection', !!0[])
+                    stloc.s 5
+                    ldloc.s 5
+                    ldc.i4.1
+                    ldelem.i4
+                    ldc.i4.8
+                    beq.s VALUE_VECTOR_OK
+                    ldstr "value vector element changed"
+                    call void Program::Fail(string)
+                VALUE_VECTOR_OK:
+
+                    ldc.i4.0
+                    newarr [mscorlib]System.String
+                    ldc.i4.2
+                    call !!0[] [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::
+                        'arrayOfNulls'<object>(!!0[], int32)
+                    stloc.3
+                    ldloc.3
+                    isinst string[]
+                    brtrue.s DIRECT_COVARIANT_ALLOCATOR_OK
+                    ldstr "direct allocator erased runtime vector type"
+                    call void Program::Fail(string)
+                DIRECT_COVARIANT_ALLOCATOR_OK:
+                    .try
+                    {
+                      ldc.i4.0
+                      newarr [mscorlib]System.String
+                      ldc.i4.m1
+                      call !!0[] [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::
+                          'arrayOfNulls'<string>(!!0[], int32)
+                      pop
+                      ldstr "negative array size returned"
+                      call void Program::Fail(string)
+                      leave.s NEGATIVE_SIZE_DONE
+                    }
+                    catch [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'
+                    {
+                      pop
+                      leave.s NEGATIVE_SIZE_DONE
+                    }
+                NEGATIVE_SIZE_DONE:
+
+                    ldc.i4.2
+                    newarr [mscorlib]System.Object
+                    dup
+                    ldc.i4.0
+                    ldstr "first"
+                    stelem.ref
+                    dup
+                    ldc.i4.1
+                    ldstr "second"
+                    stelem.ref
+                    ldc.i4.1
+                    newobj instance void ProbeCollection::.ctor(object[], int32)
+                    stloc.s 6
+                    .try
+                    {
+                      ldloc.s 6
+                      ldc.i4.0
+                      newarr [mscorlib]System.String
+                      call !!0[] [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::
+                          'collectionToArray'<string>(
+                              class [Kotlin.Runtime]'Kotlin.Collections.Collection', !!0[])
+                      pop
+                      ldstr "under-reported collection size did not fail"
+                      call void Program::Fail(string)
+                      leave.s HOSTILE_DONE
+                    }
+                    catch [mscorlib]System.IndexOutOfRangeException
+                    {
+                      pop
+                      leave.s HOSTILE_DONE
+                    }
+                HOSTILE_DONE:
+                    ldloc.s 6
+                    ldfld int32 ProbeCollection::IteratorCalls
+                    ldc.i4.1
+                    beq.s HOSTILE_ITERATOR_OK
+                    ldstr "hostile collection iterator count changed"
+                    call void Program::Fail(string)
+                HOSTILE_ITERATOR_OK:
+                    ldloc.s 6
+                    ldfld int32 ProbeCollection::NextCalls
+                    ldc.i4.2
+                    beq.s DONE
+                    ldstr "hostile collection next count changed"
+                    call void Program::Fail(string)
+                DONE:
+                    ret
+                  }
+                }
+                """.trimIndent()
+            )
+        }
+        val profile = checkNotNull(DotNetTarget.fromString(target))
+        val executable = directory.resolve(
+            if (profile == DotNetTarget.NET48) "CollectionToArrayProbe.exe" else "CollectionToArrayProbe.dll"
+        )
+        assertTrue(
+            DotNetIlAssembler.assembleExecutable(ilFile, executable, profile, MessageCollector.NONE),
+            "Could not assemble collection-to-array implementation probe for $target",
+        )
+        val command = if (profile == DotNetTarget.NET48) {
+            listOf(executable.path)
+        } else {
+            listOf(checkNotNull(dotnetHost).path, "exec", executable.path)
+        }
+        val process = ProcessBuilder(command)
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, process.waitFor(), "Collection-to-array implementation probe failed for $target:\n$output")
     }
 
     @Test

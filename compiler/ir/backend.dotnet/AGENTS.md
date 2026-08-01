@@ -252,6 +252,14 @@ See the
 - Kotlin primitive arrays use Kotlin-owned wrapper identity around CLR
   storage. Do not expose raw CLR vectors as Kotlin array identity. See
   [the primitive-array ADR](docs/decisions/primitive-arrays.md).
+- Collection-to-array uses the exact Common loops. A replacement generic
+  vector preserves the supplied array's runtime element type; do not erase it
+  to `object[]`, substitute a target loop, or import JVM's Java-specific null
+  terminator. See
+  [the collection-to-array ADR](docs/decisions/collection-to-array.md).
+- A non-reified explicit cast from an erased object to an open type parameter
+  uses CLR `unbox.any !n`/`!!n`, which handles value and reference
+  instantiations. Do not use that throwing operation to implement `as? T`.
 - Variant/generic interfaces use the versioned split-interface/bridge model
   where one CLR interface cannot truthfully carry all Kotlin views. MethodImpl
   and effective interface maps are semantic ABI, not IL spelling trivia. See

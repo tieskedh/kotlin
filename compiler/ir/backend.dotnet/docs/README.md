@@ -54,6 +54,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Classified CLR exception model](decisions/classified-clr-exceptions.md)
 - [Primitive scalar carriers](decisions/primitive-scalars.md)
 - [Kotlin-owned primitive-array wrappers](decisions/primitive-arrays.md)
+- [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
 - [Generic and variant interface ABI](decisions/draft-adr-generic-interface-abi.md)
 - [Callable and callable-reference ABI](decisions/draft-adr-callable-and-reference-abi.md)
