@@ -11,7 +11,7 @@ object BrokenObjectOwner {
     }
 
     object BrokenObject {
-        fun unsupported(value: Array<Int?>): Array<Int?> = value
+        fun <T> unsupported(value: Array<T?>): Array<T?> = value
     }
 
     object GoodObject {
@@ -23,7 +23,7 @@ object BrokenObjectOwner {
     }
 
     open class BrokenBase {
-        fun unsupported(value: Array<Int?>): Array<Int?> = value
+        fun <T> unsupported(value: Array<T?>): Array<T?> = value
     }
 
     class Derived : BrokenBase()

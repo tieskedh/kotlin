@@ -647,12 +647,6 @@ internal class DotNetIlTypeMapper private constructor(
             )
         }
         val elementType = toDotNetIlValueType(elementIrType) ?: return null
-        if (elementType is DotNetIlValueType.NullableValue) {
-            dotNetUnsupported(
-                "generic array type ${type.render()} has a nullable primitive element; " +
-                        "nullable value-type array elements are not supported yet"
-            )
-        }
         return DotNetIlValueType.GenericArray(elementType)
     }
 
