@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: classified Common `CharSequence` carrier
+- Last completed feature: runtime-typed Common collection-to-array closure
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -40,7 +40,12 @@ physical fallback methods on Framework CLR and CoreCLR. The classified
 custom-implementation identity, shared operation/cast/type-test
 classification, erased physical CLR bounds with authoritative KLIB bounds,
 portable Kotlin-library consumption on both runtimes, and handwritten C#
-implementation through the runtime manifest.
+implementation through the runtime manifest. The collection-to-array closure
+additionally proves exact Common iteration, erased and typed results, nullable
+and value elements, undersized allocation, oversized and empty destination
+identity, non-Java tail preservation, covariant runtime vector identity,
+negative-size failure, and hostile inaccurate-size behavior on Framework CLR
+and CoreCLR.
 
 ## Current architecture
 
@@ -70,26 +75,27 @@ implementation through the runtime manifest.
 
 ## Active state
 
-No implementation slice is half-landed. Logical `CharSequence` values now use
-the accepted classified object carrier: raw strings keep `System.String`
-identity, Kotlin and explicit C# implementations occupy the runtime capability
-interface, and every polymorphic operation, cast, and type test uses the same
-two-arm classifier. KLIB retains the generic bound while the incompatible CLR
-marker constraint is omitted. Runtime surface level 10 records this ABI.
-Builder storage is now selected as a Kotlin-owned wrapper over private BCL
-storage, but implementation is parked: the exact Common source closure reaches
-the public contract DSL, including annotation classes and `InvocationKind`,
-whose general representations are not yet selected. The previously completed
-Common collection predicates and ordinary inline-function boundary remain
-intact; reified and suspend inline are still explicit errors.
+No implementation slice is half-landed. The non-reified Common
+collection-to-array closure now uses the exact shared loops. Its narrow CLR
+actual reproduces a supplied vector's runtime element type, retains sufficiently
+large destination identity without JVM's Java-specific tail terminator, and
+keeps public reified `toTypedArray` outside the admitted surface. The backend's
+explicit erased-object cast to an open type parameter uses `unbox.any`; safe
+generic casts remain unsupported. Builder storage is selected as a Kotlin-owned
+wrapper over private BCL storage, but implementation is parked: the exact Common
+source closure reaches the public contract DSL, including annotation classes
+and `InvocationKind`, whose general representations are not yet selected. The
+classified `CharSequence` carrier, Common collection predicates, and ordinary
+inline-function boundary remain intact; reified and suspend inline are still
+explicit errors.
 
 ## Open architectural blockers
 
 - Exact Common `AbstractCollection`/`AbstractList` production still needs the
-  remaining `Appendable`/`StringBuilder` and typed collection-to-array
-  closures; do not fork their algorithms into .NET. The builder closure
-  transitively requires the complete public contract DSL and therefore the
-  parked enum and annotation-class representation programmes.
+  remaining `Appendable`/`StringBuilder` closure; do not fork its algorithms
+  into .NET. The builder closure transitively requires the complete public
+  contract DSL and therefore the parked enum and annotation-class
+  representation programmes.
 - An inline body in library A can currently bind built-ins and A-owned
   declarations. Arbitrary calls from that body into a distinct Kotlin library
   B need the selected .NET assembly graph as an explicit non-linking resolver
@@ -106,14 +112,15 @@ intact; reified and suspend inline are still explicit errors.
 
 ## Next bounded work
 
-1. Design and implement typed collection-to-array actuals that preserve the
-   requested CLR vector element type.
-2. Audit and select the enum and annotation-class representations required by
+1. Audit and select the enum and annotation-class representations required by
    the exact Common contract DSL; do not create builder-only stubs.
-3. Actualize the selected complete Common `Appendable`/`StringBuilder` and
+2. Actualize the selected complete Common `Appendable`/`StringBuilder` and
    generated `joinTo`/`joinToString` closure once that foundation exists.
-4. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
-   both remaining closures are complete.
+3. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
+   the remaining builder closure is complete.
+4. Continue the inline programme from its documented ordinary cross-library
+   boundary: first complete arbitrary library-B resolution, then select
+   reified substitution and only later suspend-inline lowering.
 
 ## Navigation
 
