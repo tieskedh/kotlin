@@ -99,6 +99,13 @@ classified `CharSequence` carrier, Common collection predicates, and ordinary
 inline-function boundary remain intact; reified and suspend inline are still
 explicit errors.
 
+The reified audit is complete. Shared IR substitution is ready, but public
+reified support stays parked because Kotlin-owned generic-class type tests and
+casts require an erased runtime identity over physically closed CLR carriers.
+Physically exact non-generic reference casts are now complete for Kotlin
+classes/interfaces, imported CLR interfaces, strings, `Any`, primitive-array
+wrappers, and exact CLR vectors without admitting closed generic instances.
+
 ## Open architectural blockers
 
 - Exact Common `AbstractCollection`/`AbstractList` production still needs the
@@ -118,10 +125,9 @@ explicit errors.
 
 ## Next bounded work
 
-1. Audit the complete reified-inline semantic closure across JVM, JS, Wasm,
-   and Native: substitution, type tests/casts, class literals, arrays, and the
-   precise reflection boundary. Keep every unsupported subset explicit until
-   one coherent reversible slice is selected.
+1. Continue the reified prerequisites with boxed scalar casts and adversarially
+   close the concrete type-test/array-intrinsic matrix; do not admit
+   Kotlin-owned generic-class casts before their erased runtime view is selected.
 2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
    collections/`EnumEntries` bootstrap cluster; do not create builder-only or
    one-enum stubs.
