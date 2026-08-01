@@ -378,10 +378,11 @@ Also:
   becomes visible during implementation; and
 - keep temporary probes, playgrounds, and IDE projects outside the repository.
 
-Enums, annotation classes, value classes, reflection, broad inline/reified
-support, coroutines, concurrency primitives, and broad KMP/Gradle product
-integration remain separate programmes until `STATUS.md` or the way forward
-selects one.
+Ordinary non-reified inline support is selected by
+`docs/programmes/inline-functions.md`. Reified and suspend inline functions,
+enums, annotation classes, value classes, reflection, coroutines, concurrency
+primitives, and broad KMP/Gradle product integration remain separate programmes
+until `STATUS.md` or the way forward selects one.
 
 ## Verification contract
 

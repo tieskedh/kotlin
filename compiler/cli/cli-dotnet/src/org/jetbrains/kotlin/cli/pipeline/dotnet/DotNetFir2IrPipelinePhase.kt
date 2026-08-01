@@ -1,7 +1,7 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.common.extensions.IrGenerationExtension
-import org.jetbrains.kotlin.backend.dotnet.DotNetIrMangler
+import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.builtins.DefaultBuiltIns
 import org.jetbrains.kotlin.cli.common.diagnosticsCollector
 import org.jetbrains.kotlin.cli.pipeline.CheckCompilationErrors
@@ -39,6 +39,7 @@ object DotNetFir2IrPipelinePhase : PipelinePhase<DotNetFrontendPipelineArtifact,
             input.frontendOutput,
             configuration,
             input.libraryMetadata,
+            input.libraryIr,
         )
     }
 }

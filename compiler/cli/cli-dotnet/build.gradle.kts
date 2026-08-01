@@ -17,6 +17,7 @@ dependencies {
     implementation(project(":compiler:frontend"))
     implementation(project(":core:descriptors"))
     implementation(project(":compiler:ir.tree"))
+    implementation(project(":compiler:ir.serialization.dotnet"))
     implementation(project(":compiler:ir.backend.common"))
     implementation(project(":compiler:backend.dotnet"))
     implementation(project(":compiler:serialization"))
