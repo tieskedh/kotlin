@@ -3427,6 +3427,7 @@ internal class DotNetIlEmitter(
             is DotNetIlValueType.NullableValue, DotNetIlValueType.Object,
             is DotNetIlValueType.GenericInstance, is DotNetIlValueType.TypeParameter,
             is DotNetIlValueType.PrimitiveArray, is DotNetIlValueType.GenericArray,
+            is DotNetIlValueType.ErasedGenericArray,
                 -> unsupportedValue()
         }
     }
@@ -4028,6 +4029,7 @@ internal class DotNetIlEmitter(
             is DotNetIlValueType.GenericInstance,
             is DotNetIlValueType.PrimitiveArray,
             is DotNetIlValueType.GenericArray,
+            is DotNetIlValueType.ErasedGenericArray,
                 -> "ldnull"
         }
         appendLine("    $instruction")

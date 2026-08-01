@@ -107,6 +107,15 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     }
 
     /**
+     * The element-erased Common `Array<*>` view. Exact generic arrays stay CLR SZ vectors; this
+     * structural type names their common `System.Array` base without claiming that every
+     * `System.Array` value has Kotlin generic-array identity. RTTI and casts therefore go through
+     * the runtime SZ-array classifier rather than a bare `isinst`.
+     */
+    data class ErasedGenericArray(val coreLibraryReference: kotlin.String) :
+        DotNetIlValueType("class ${coreLibraryReference}System.Array")
+
+    /**
      * A concrete nullable Kotlin primitive (`Byte?`, `Short?`, `Int?`, `Long?`, `Float?`, `Double?`,
      * `Boolean?`, `Char?`) in
      * an EXACT typed position: CLR `System.Nullable<T>` — the hybrid-representation decision
@@ -363,7 +372,7 @@ internal fun DotNetIlValueType.isDotNetReferenceShaped(): Boolean = when (this) 
     DotNetIlValueType.String, DotNetIlValueType.Object,
     is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass,
     is DotNetIlValueType.GenericInstance, is DotNetIlValueType.PrimitiveArray,
-    is DotNetIlValueType.GenericArray,
+    is DotNetIlValueType.GenericArray, is DotNetIlValueType.ErasedGenericArray,
         -> true
     else -> false
 }

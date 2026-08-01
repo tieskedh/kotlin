@@ -260,7 +260,8 @@ See the
   all eight families. Preserve its ordinary `Array<E>` identity and its
   natural C# `V?[]` view. Do not replace it with `object[]`, collapse it into a
   specialized primitive-array wrapper, infer support for open `Array<T?>` or
-  star/input projections, or manufacture value-vector covariance by copying.
+  input projections, or manufacture value-vector covariance by copying.
+  `Array<*>` follows its separate classified erased-view decision below.
   See [the primitive-array ADR](docs/decisions/primitive-arrays.md).
 - Collection-to-array uses the exact Common loops. A replacement generic
   vector preserves the supplied array's runtime element type; do not erase it
@@ -276,6 +277,15 @@ See the
   `Nullable<T>`; safe casts test the exact underlying box and materialize the
   existing `Nullable<T>` result. Do not infer value-class identity from the
   same storage shape.
+- `Array<*>` uses `System.Array` only as its physical erased storage view. All
+  exact CLR SZ vectors widen to it without copying; `size`, reads, and erased
+  iteration operate on the original array, and writes remain projected out.
+  Runtime tests/casts must use the one runtime SZ-array classifier so
+  rectangular and non-zero-based arrays are not silently admitted. Do not use
+  `object[]`, wrap or copy value vectors, infer star identity from a bare CLR
+  signature, or generalize this rule to input/out projections, open
+  `Array<T?>`, or other Kotlin generic classes. See
+  [the star-projected-array ADR](docs/decisions/star-projected-arrays.md).
 - Ordinary runtime type tests evaluate their operand once at the erased object
   boundary, implement Kotlin nullable-target semantics before the non-null
   check, and then use either an existing Kotlin classifier or one physically
@@ -284,9 +294,9 @@ See the
   primitive-array wrappers, and fully known CLR vectors. Never admit a
   `GenericInstance` as Kotlin runtime identity: Kotlin-owned generic classes
   are declaration-erased on mature targets even though their current CLR
-  storage is closed. Star-projected `Array<*>` likewise remains unsupported
-  until its successful typed-use carrier is selected; do not equate it with
-  `object[]` or silently admit every `System.Array`.
+  storage is closed. `Array<*>` is the one selected structural erased-array
+  case above; its classified `System.Array` path must not leak into ordinary
+  generic-class RTTI.
 - Variant/generic interfaces use the versioned split-interface/bridge model
   where one CLR interface cannot truthfully carry all Kotlin views. MethodImpl
   and effective interface maps are semantic ABI, not IL spelling trivia. See
