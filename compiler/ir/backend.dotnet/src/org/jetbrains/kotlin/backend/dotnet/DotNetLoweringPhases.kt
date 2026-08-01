@@ -56,11 +56,16 @@ import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.phaser.NamedCompilerPhase
 import org.jetbrains.kotlin.config.phaser.PhaseConfig
 import org.jetbrains.kotlin.config.phaser.PhaserState
+import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.inline.OuterThisInInlineFunctionsSpecialAccessorLowering
 import org.jetbrains.kotlin.ir.inline.SyntheticAccessorLowering
 import org.jetbrains.kotlin.ir.inline.isConsideredAsPrivateForInlining
+import org.jetbrains.kotlin.ir.symbols.IrSymbol
+import org.jetbrains.kotlin.ir.util.IrTreeSymbolsVisitor
+import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.isTypeOfIntrinsic
+import org.jetbrains.kotlin.ir.visitors.acceptVoid
 
 private class DotNetKotlinNothingValueExceptionLowering(context: DotNetBackendContext) :
     KotlinNothingValueExceptionLowering(context)
@@ -253,8 +258,35 @@ internal object DotNetLoweringPhases {
                 engine.runPhase(lowering, irModuleFragment)
             }
         }
+        rejectIncompleteSelectedDependencyGraph(irModuleFragment)
         for (lowering in dotNetLowerings) {
             engine.runPhase(lowering, irModuleFragment)
         }
+    }
+
+    /**
+     * Kotlin/.NET deliberately deserializes only inline bodies and does not run a whole-program IR
+     * linker. Every public symbol reached from those bodies must therefore bind through the
+     * frontend-selected library graph before target lowering starts. Mature linking backends can
+     * defer this check until their linkage step; this backend has no such later owner.
+     */
+    private fun rejectIncompleteSelectedDependencyGraph(irModuleFragment: IrModuleFragment) {
+        val unresolvedDeclarations = linkedSetOf<IrSymbol>()
+        irModuleFragment.acceptVoid(object : IrTreeSymbolsVisitor() {
+            override fun visitSymbol(container: IrElement, symbol: IrSymbol) {
+                if (!symbol.isBound) unresolvedDeclarations += symbol
+            }
+        })
+        if (unresolvedDeclarations.isEmpty()) return
+
+        val renderedSignatures = unresolvedDeclarations
+            .map { symbol -> symbol.signature?.render() ?: symbol.toString() }
+            .sorted()
+            .joinToString()
+        dotNetUnsupported(
+            "the selected Kotlin/.NET dependency graph is incomplete after non-linking inline resolution; " +
+                    "unresolved declarations: $renderedSignatures. Add every Kotlin/.NET library that provides " +
+                    "those declarations to the compilation classpath"
+        )
     }
 }
