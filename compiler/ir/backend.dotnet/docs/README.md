@@ -50,6 +50,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [CLR importer boundary](decisions/draft-adr-clr-importer-boundary.md)
 - [`System.Object` as the physical `Any` foundation](decisions/system-object-any.md)
 - [Classified `CharSequence` carrier](decisions/char-sequence-carrier.md)
+- [Kotlin-owned `Appendable` and `StringBuilder`](decisions/appendable-string-builder.md)
 - [Classified CLR exception model](decisions/classified-clr-exceptions.md)
 - [Primitive scalar carriers](decisions/primitive-scalars.md)
 - [Kotlin-owned primitive-array wrappers](decisions/primitive-arrays.md)
