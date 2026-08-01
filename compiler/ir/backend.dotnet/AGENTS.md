@@ -407,10 +407,17 @@ external calls still bind only through the producer-recorded physical ABI.
 After the shared inline prefix, traverse the actual IR graph and reject every
 remaining unbound symbol before target lowerings; do not make an arbitrary
 lowering or the CIL emitter the missing-dependency detector.
-Reified and suspend inline functions, enums, annotation classes, value classes,
-reflection, coroutines, concurrency primitives, and broad KMP/Gradle product
-integration remain separate programmes until `STATUS.md` or the way forward
-selects one.
+Do not enable either reified-inline support gate until the complete operation
+closure in `docs/programmes/inline-functions.md` is truthful. In particular,
+never compile a Kotlin-owned generic-class type test/cast as closed CLR
+`C<T>` identity: Kotlin generic arguments do not participate in runtime class
+identity, and the private data-class equality view is not a general carrier.
+Physically exact non-generic casts and scalar/array prerequisites may land
+independently, but must reject rather than generalize to `GenericInstance`.
+Reified Common stdlib declarations remain outside the product meanwhile.
+Suspend inline functions, enums, annotation classes, value classes, reflection,
+coroutines, concurrency primitives, and broad KMP/Gradle product integration
+remain separate programmes until `STATUS.md` or the way forward selects one.
 
 ## Verification contract
 

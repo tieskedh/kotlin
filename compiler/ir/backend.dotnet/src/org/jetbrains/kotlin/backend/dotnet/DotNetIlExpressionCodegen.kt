@@ -434,6 +434,13 @@ internal class DotNetIlExpressionCodegen(
      *   identity. Logical arguments, projections, and stars are deliberately absent from the
      *   CLR check, following JVM/Native erasure. A non-null `as` additionally rejects null with
      *   the mapped Kotlin NPE; `as?` uses `isinst` and therefore returns null on either failure.
+     * - CAST/SAFE_CAST to a physically exact non-generic reference carrier (`Any`, `String`, a
+     *   non-generic Kotlin class/interface or interface admitted by the current CLR importer, a
+     *   primitive-array wrapper, or a concrete CLR vector): the same single-evaluation
+     *   `castclass`/`isinst` shape. This is kept
+     *   deliberately narrower than [isDotNetReferenceShaped]: a Kotlin-owned generic class is a
+     *   CLR [DotNetIlValueType.GenericInstance], whose type arguments must NOT participate in
+     *   Kotlin runtime identity, and mapped exception relationships require their classifier.
      * - CAST to an open type parameter: widen/box the operand to `object`, then use CLR
      *   `unbox.any !n`/`!!n`. This is the single instruction that recovers either a value or
      *   reference instantiation and is the direct CLR counterpart of a non-reified unchecked
@@ -490,9 +497,19 @@ internal class DotNetIlExpressionCodegen(
                 }
                 return
             }
-            if (!typeMapper.isSplitGenericInterfaceType(expression.typeOperand) ||
-                castType !is DotNetIlValueType.UserClass
-            ) {
+            val isSplitGenericInterfaceCast =
+                typeMapper.isSplitGenericInterfaceType(expression.typeOperand) &&
+                        castType is DotNetIlValueType.UserClass
+            val isPhysicallyExactReferenceCast = when (castType) {
+                DotNetIlValueType.Object,
+                DotNetIlValueType.String,
+                is DotNetIlValueType.UserClass,
+                is DotNetIlValueType.PrimitiveArray,
+                is DotNetIlValueType.GenericArray,
+                    -> true
+                else -> false
+            }
+            if (!isSplitGenericInterfaceCast && !isPhysicallyExactReferenceCast) {
                 dotNetUnsupported("type operator ${expression.operator} is not supported")
             }
             if (!castType.isDotNetAssignableTo(expectedType)) {

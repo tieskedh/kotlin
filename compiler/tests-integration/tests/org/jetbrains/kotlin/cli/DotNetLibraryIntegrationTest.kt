@@ -23921,6 +23921,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public fun verifyInt(api: Api): Int =
                         api.Compute(40)
 
+                    public fun castForeignApi(value: Any): Api =
+                        value as Api
+
+                    public fun safeForeignApi(value: Any?): Api? =
+                        value as? Api
+
                     public fun verifyString(api: Api): Int =
                         api.Compute("abcd")
 
@@ -24072,6 +24078,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "callvirt instance int32 [Foreign.CallContracts]'ForeignCallContracts.Api'::'Compute'(int32)" in il
             ) { il }
             assertTrue(
+                "castclass class [Foreign.CallContracts]'ForeignCallContracts.Api'" in il
+            ) { il }
+            assertTrue(
+                "isinst class [Foreign.CallContracts]'ForeignCallContracts.Api'" in il
+            ) { il }
+            assertTrue(
                 "callvirt instance int32 [Foreign.CallContracts]'ForeignCallContracts.Api'::'Compute'(string)" in il
             ) { il }
             assertTrue(
@@ -24172,6 +24184,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require((int)Method(facade, "verifyInt").Invoke(
                                 null, new object[] { api }) == 41,
                                 "foreign int overload binding failed");
+                            Require(Object.ReferenceEquals(
+                                Method(facade, "castForeignApi").Invoke(
+                                    null, new object[] { api }),
+                                api),
+                                "foreign checked cast changed identity");
+                            Require(Object.ReferenceEquals(
+                                Method(facade, "safeForeignApi").Invoke(
+                                    null, new object[] { api }),
+                                api),
+                                "foreign safe cast changed identity");
+                            Require(Method(facade, "safeForeignApi").Invoke(
+                                null, new object[] { new object() }) == null,
+                                "foreign safe cast admitted an unrelated object");
+                            try
+                            {
+                                Method(facade, "castForeignApi").Invoke(
+                                    null, new object[] { new object() });
+                                throw new Exception("foreign checked cast admitted an unrelated object");
+                            }
+                            catch (TargetInvocationException invocation)
+                            {
+                                Require(invocation.InnerException is InvalidCastException,
+                                    "foreign checked cast did not preserve InvalidCastException");
+                            }
                             Require((int)Method(facade, "verifyString").Invoke(
                                 null, new object[] { api }) == 14,
                                 "foreign string overload binding failed");

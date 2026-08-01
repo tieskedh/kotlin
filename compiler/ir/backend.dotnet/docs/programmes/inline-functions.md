@@ -298,3 +298,137 @@ identities before the symbol finder is built. This breadth closure does not add 
 dependency discovery. The consumer must select every Kotlin DLL required by the inline graph
 explicitly, just as its frontend must see those declarations to type-check the copied body.
 Packaging may copy only assemblies still referenced by emitted CIL.
+
+## Reified-inline prerequisite audit
+
+Reified inline remains parked as a public language feature. The shared inliner is not the blocker:
+`FunctionInlining` already substitutes every reified type parameter in copied IR types, class
+references, and `typeOf` arguments. Kotlin/.NET currently disables that path in both the
+pre-serialization context and the binary resolver so an incomplete target operation model cannot
+be mistaken for support.
+
+### Mature-target ownership
+
+- JS, Wasm, and Native perform reified substitution in the shared IR inliner. JS and Wasm then
+  remove declarations with reified type parameters because every valid Kotlin call was inlined.
+- Native rewrites a surviving physical reified-inline body to an explicit unsupported-call throw.
+- JVM retains a physical method containing reification markers; direct execution reaches
+  `throwUndefinedForReified`, while the JVM inliner replaces those markers and operations at the
+  Kotlin call site.
+
+No mature target treats an ordinary generic method call as Kotlin reification. The logical KLIB
+declaration and compiler-readable body remain authoritative even when the target omits or poisons
+the physical fallback.
+
+Kotlin/.NET libraries additionally require a producer-recorded physical declaration for each
+published logical callable. That makes a hidden throwing CLR stub the likely target-aligned shape,
+closer to JVM/Native than silent removal, but it is not selected until the complete reified feature
+lands. An ordinary CLR generic method which happens to execute some `T` operations is not a valid
+substitute: C# could call it directly, and unsupported body shapes would make the KLIB/physical
+index depend on which reified operations happened to occur.
+
+### Complete semantic closure
+
+| Reified use | Existing foundation | Remaining requirement |
+| --- | --- | --- |
+| call-site type substitution and nested reified calls | shared first-/second-stage IR inliner and selected dependency graph | enable only after every surviving substituted operation is truthful |
+| `value is T` / `!is T` | CLR tests for exact non-generic references, boxed scalars, arrays, open CLR parameters, classified exceptions/`CharSequence`, and split generic interfaces | Kotlin-owned generic classes need a general declaration-erased runtime identity; a closed `isinst C<String>` is too strict |
+| `value as T` / `as? T` | open-parameter casts, classified `CharSequence`, and split generic-interface casts | exact ordinary reference/scalar casts first; then the same erased generic-class identity and typed-use model as type tests |
+| `arrayOfNulls<T>`, `emptyArray<T>`, varargs, and array constructors | typed CLR-vector intrinsics and Common array-constructor lowering | prove nested generic element, nullability, projection, and cross-module substitutions without assuming closed CLR generic identity equals Kotlin runtime identity |
+| `T::class` | none | select a Kotlin `KClass` identity and its truthful `System.Type` bridge before emitting class literals |
+| `typeOf<T>()` | shared inliner preserves/substitutes its type argument | select `KType`, type arguments, variance, nullability, and reflection ownership |
+| `enumValues<T>`, `enumValueOf<T>`, `enumEntries<T>` | none | complete the atomic enum/contracts/builder/abstract-collections/`EnumEntries` cluster |
+| annotation-associated and other reflection operations | none | annotation classes, retention, reflection, and target-specific association policy |
+| surviving physical reified declaration | real CLR generic-method carrier exists | choose and mark an uncallable/throwing compiler-ABI stub without weakening KLIB/physical coverage |
+
+The generic-class row is the central representation constraint. Kotlin runtime class identity does
+not include generic arguments; the target has already enforced that rule for generated data-class
+equality. The CLR nevertheless represents ordinary storage and signatures as closed `C<T>` types.
+Using `isinst C<String>` for `is T` would make `C<String>` and `C<Any>` different Kotlin runtime
+classes. Conversely, merely testing a new marker interface is insufficient for `as C<String>`:
+the CLR verifier still needs a usable value carrier after the erased check. A general solution may
+require an erased class view with member adaptation, not an isolated reified-inliner special case.
+
+Foreign CLR generic types remain a separate importer question. Their closed CLR identity is an
+objective platform fact and may justify a foreign-type rule; it must not silently define the
+runtime identity of Kotlin-owned generic classes.
+
+### Design attack
+
+- **Set both support flags to true and rely on current CIL.** Rejected. Simple `is String` would
+  work, but `is C<String>` would silently use stronger CLR identity and therefore change Kotlin
+  results.
+- **Enable only the stdlib functions that happen to instantiate `T` with current leaf types.**
+  Rejected. A public reified KLIB declaration can be instantiated by a later consumer with every
+  legal runtime-available type; producer success must not publish a body whose correctness depends
+  on today’s tests.
+- **Use the private data-class equality view for all generic tests.** Rejected. That view exists
+  only on generated data classes, exposes equality properties rather than a general value carrier,
+  and is explicitly not public runtime type identity.
+- **Adopt closed CLR generic identity as a useful .NET deviation.** Rejected without a separate
+  language decision. CLR makes it easy, but ease is not a technical impossibility of preserving
+  Kotlin semantics.
+- **Treat `System.Type` as `KClass` or `KType`.** Rejected. It cannot carry Kotlin nullability,
+  projections, annotations, or declaration identity by itself.
+- **Remove reified methods from a self-describing DLL without updating physical coverage.**
+  Rejected. The embedded KLIB and producer-recorded physical index must describe one coherent
+  product.
+
+### Reversible work order
+
+Work may continue without freezing the generic-class decision:
+
+1. complete explicit checked/safe casts for physically exact non-generic reference carriers;
+2. complete boxed scalar casts and the exact reference/primitive array cast matrix;
+3. adversarially validate existing concrete type tests and array intrinsics independently of
+   reified declarations;
+4. design the general erased runtime view for Kotlin-owned generic classes, including typed use
+   after a successful erased cast;
+5. select `KClass`/class literals, then `KType`/`typeOf`;
+6. integrate the enum intrinsic family only after its atomic source cluster; and
+7. finally enable reified in both inliner stages, select the physical throwing-stub contract, and
+   test source/library consumers over all three KLIB modes and both runtime profiles.
+
+Steps 1–3 are ordinary language/runtime-operation features and may land independently. They must
+not accept a `DotNetIlValueType.GenericInstance` merely because CLR has a convenient instruction.
+The public Common reified stdlib families remain excluded until the complete closure is truthful.
+
+### Selected first prerequisite: physically exact reference casts
+
+The first reversible slice is ordinary `as`/`as?` for a target whose Kotlin classifier has one
+exact CLR reference carrier:
+
+- `Any`/`Any?` (`System.Object`) and `String`/`String?`;
+- non-generic Kotlin classes/interfaces and interfaces admitted by the current foreign CLR
+  importer, represented by one `UserClass` token;
+- Kotlin primitive-array wrapper classes; and
+- invariant generic-array vectors whose complete element token is already representable.
+
+FIR/Common remain authoritative for cast type, result nullability, and evaluation order. The CIL
+operation is only the physical realization:
+
+- `as?` widens/boxes the operand once and uses `isinst`, returning the original reference or null;
+- `as T?` uses `castclass` and admits null;
+- `as T` uses `castclass`, then applies the existing Kotlin not-null barrier because CLR
+  `castclass` itself accepts null; and
+- a wrong non-null cast throws CLR `InvalidCastException`, the target's exact physical carrier for
+  Kotlin `ClassCastException`.
+
+The slice reuses the existing classified `CharSequence` and split generic-interface branches; it
+does not replace them. It excludes mapped Kotlin exception classifiers because broad Kotlin
+exception relationships require the versioned classifier, boxed scalar casts because their stack
+and nullable-result shapes are different, open type parameters beyond the existing checked-cast
+case, and every `GenericInstance`. A later exception-cast slice must preserve Kotlin classifier
+relationships; a later generic-class slice must preserve erased declaration identity. Neither may
+fall through to this exact-carrier path.
+
+Adversarial evidence must cover success, safe failure, checked failure caught as
+`ClassCastException`, nullable/non-null null behavior, single operand evaluation, base/interface
+and imported CLR carriers, primitive/generic arrays, and continued rejection of a Kotlin-owned
+generic-class cast. Both Framework CLR and CoreCLR must execute the same source.
+
+This prerequisite is implemented. `exactReferenceCasts.kt` executes the Kotlin carrier matrix in
+both FIR frontends and runtime profiles; the foreign-call integration test executes checked and
+safe casts to an imported CLR interface under net48 and net10; and
+`genericInterfacesRejected.kt` continues to omit the Kotlin-owned generic-class cast function.
+The next reversible prerequisite is boxed scalar casts, not either reified support gate.
