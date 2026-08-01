@@ -67,8 +67,8 @@ Kotlin `Float` is an exact CLR `float32`/`System.Single` in signatures, fields, 
 arguments, generic arrays, nullable positions, and boxes. CIL's floating evaluation-stack kind is
 a physical execution detail: `float32` declaration and storage boundaries retain the public
 32-bit identity, and `conv.r4` is used for Common conversions and mixed-operation promotion that
-produce a `Float`. `FloatArray` remains a separately gated Kotlin-owned specialized-array wrapper;
-landing the scalar does not silently publish it as `System.Single[]`.
+produce a `Float`. `FloatArray` is separately selected as a Kotlin-owned specialized-array wrapper
+by the primitive-array ADR; scalar identity never silently publishes it as Kotlin `System.Single[]`.
 
 Common's distinct floating contracts are implemented explicitly:
 
@@ -135,9 +135,9 @@ physical signature is directly usable as C# `float`.
 - KLIB remains authoritative for Kotlin logical types; CLR metadata exposes the truthful physical
   and C# view.
 
-No profile-specific scalar meaning is allowed. Specialized primitive arrays remain Kotlin-owned
-wrappers under the separate primitive-array ADR, while generic `Array<Byte>` and `Array<Short>`
-use natural `int8[]` and `int16[]` vectors.
+No profile-specific scalar meaning is allowed. All eight signed specialized primitive arrays are
+Kotlin-owned wrappers under the separate primitive-array ADR, while generic `Array<Byte>`,
+`Array<Short>`, and `Array<Float>` use natural `int8[]`, `int16[]`, and `float32[]` vectors.
 
 ## Freeze conditions
 

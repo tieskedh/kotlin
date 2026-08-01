@@ -11,7 +11,7 @@ object BrokenObjectOwner {
     }
 
     object BrokenObject {
-        fun unsupported(value: FloatArray): FloatArray = value
+        fun unsupported(value: Array<Int?>): Array<Int?> = value
     }
 
     object GoodObject {
@@ -23,7 +23,7 @@ object BrokenObjectOwner {
     }
 
     open class BrokenBase {
-        fun unsupported(value: FloatArray): FloatArray = value
+        fun unsupported(value: Array<Int?>): Array<Int?> = value
     }
 
     class Derived : BrokenBase()

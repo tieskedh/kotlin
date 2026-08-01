@@ -26161,7 +26161,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             """
             package sample
 
-            public fun unsupported(value: FloatArray): FloatArray = value
+            public fun unsupported(value: Array<Int?>): Array<Int?> = value
             """,
         )
         assertPublicationFails(
@@ -27408,6 +27408,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun identity(values: IntArray): IntArray = values
 
+                public fun identityBytes(values: ByteArray): ByteArray = values
+
+                public fun identityShorts(values: ShortArray): ShortArray = values
+
+                public fun identityFloats(values: FloatArray): FloatArray = values
+
                 private var remembered: IntArray? = null
 
                 public fun sameIdentity(first: IntArray, second: IntArray): Boolean = first === second
@@ -27436,6 +27442,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::dotNetExports.cliArgument,
             "primitivearrays.identity(kotlin.IntArray)=RoundTripSpecialized",
             K2DotNetCompilerArguments::dotNetExports.cliArgument,
+            "primitivearrays.identityBytes(kotlin.ByteArray)=RoundTripBytes",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument,
+            "primitivearrays.identityShorts(kotlin.ShortArray)=RoundTripShorts",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument,
+            "primitivearrays.identityFloats(kotlin.FloatArray)=RoundTripFloats",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument,
             "primitivearrays.makeSpecialized=MakeSpecialized",
             K2DotNetCompilerArguments::dotNetExports.cliArgument,
             "primitivearrays.sameIdentity(kotlin.IntArray,kotlin.IntArray)=SameSpecialized",
@@ -27459,6 +27471,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ) { libraryIl }
         assertTrue("int32[] 'makeGeneric'()" in libraryIl) { libraryIl }
         assertTrue("int32[] 'RoundTripSpecialized'(int32[] 'values')" in libraryIl) { libraryIl }
+        assertTrue("int8[] 'RoundTripBytes'(int8[] 'values')" in libraryIl) { libraryIl }
+        assertTrue("int16[] 'RoundTripShorts'(int16[] 'values')" in libraryIl) { libraryIl }
+        assertTrue("float32[] 'RoundTripFloats'(float32[] 'values')" in libraryIl) { libraryIl }
         assertTrue("int32[] 'MakeSpecialized'()" in libraryIl) { libraryIl }
         assertTrue("bool 'SameSpecialized'(int32[] 'first', int32[] 'second')" in libraryIl) { libraryIl }
         assertTrue("bool 'RememberSpecialized'(int32[] 'values')" in libraryIl) { libraryIl }
@@ -27486,6 +27501,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         generic[0] = 41
                         if (measure(specialized) != 42 || measure(generic) != 53) {
                             throw Error("cross-module mutation")
+                        }
+                        val bytes = identityBytes(byteArrayOf((-2).toByte(), 3.toByte()))
+                        val shorts = identityShorts(shortArrayOf((-200).toShort(), 300.toShort()))
+                        val floats = identityFloats(floatArrayOf(-2.5f, 3.75f))
+                        if (bytes[0] != (-2).toByte() || bytes[1] != 3.toByte()) {
+                            throw Error("ByteArray cross-module round trip")
+                        }
+                        if (shorts[0] != (-200).toShort() || shorts[1] != 300.toShort()) {
+                            throw Error("ShortArray cross-module round trip")
+                        }
+                        if (floats[0] != -2.5f || floats[1] != 3.75f) {
+                            throw Error("FloatArray cross-module round trip")
                         }
                     }
                     """.trimIndent()
@@ -27552,6 +27579,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             MethodInfo makeGeneric = facade.GetMethod("makeGeneric", Type.EmptyTypes);
                             MethodInfo roundTripExport = facade.GetMethod(
                                 "RoundTripSpecialized", new Type[] { typeof(int[]) });
+                            MethodInfo byteRoundTripExport = facade.GetMethod(
+                                "RoundTripBytes", new Type[] { typeof(sbyte[]) });
+                            MethodInfo shortRoundTripExport = facade.GetMethod(
+                                "RoundTripShorts", new Type[] { typeof(short[]) });
+                            MethodInfo floatRoundTripExport = facade.GetMethod(
+                                "RoundTripFloats", new Type[] { typeof(float[]) });
                             MethodInfo makeSpecializedExport = facade.GetMethod(
                                 "MakeSpecialized", Type.EmptyTypes);
                             MethodInfo sameExport = facade.GetMethod(
@@ -27570,6 +27603,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 "generic substitution did not retain the natural CLR vector");
                             Require(roundTripExport != null && roundTripExport.ReturnType == typeof(int[]),
                                 "explicit specialized-array export is not int[]-shaped");
+                            Require(byteRoundTripExport != null && byteRoundTripExport.ReturnType == typeof(sbyte[]),
+                                "ByteArray export is not signed int8[]-shaped");
+                            Require(shortRoundTripExport != null && shortRoundTripExport.ReturnType == typeof(short[]),
+                                "ShortArray export is not int16[]-shaped");
+                            Require(floatRoundTripExport != null && floatRoundTripExport.ReturnType == typeof(float[]),
+                                "FloatArray export is not float32[]-shaped");
                             Require(makeSpecializedExport != null &&
                                     makeSpecializedExport.ReturnType == typeof(int[]),
                                 "explicit specialized-array result export is not int[]-shaped");
@@ -27587,6 +27626,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 "_storage", BindingFlags.Instance | BindingFlags.NonPublic);
                             Require(storageField != null && storageField.IsPrivate && storageField.FieldType == typeof(int[]),
                                 "wrapper storage layout is not private int[]");
+                            Type byteWrapperType = Type.GetType("Kotlin.ByteArray, Kotlin.Runtime", true);
+                            Type shortWrapperType = Type.GetType("Kotlin.ShortArray, Kotlin.Runtime", true);
+                            Type floatWrapperType = Type.GetType("Kotlin.FloatArray, Kotlin.Runtime", true);
+                            FieldInfo byteStorageField = byteWrapperType.GetField(
+                                "_storage", BindingFlags.Instance | BindingFlags.NonPublic);
+                            FieldInfo shortStorageField = shortWrapperType.GetField(
+                                "_storage", BindingFlags.Instance | BindingFlags.NonPublic);
+                            FieldInfo floatStorageField = floatWrapperType.GetField(
+                                "_storage", BindingFlags.Instance | BindingFlags.NonPublic);
+                            Require(byteStorageField != null && byteStorageField.FieldType == typeof(sbyte[]),
+                                "ByteArray wrapper storage is not signed sbyte[]");
+                            Require(shortStorageField != null && shortStorageField.FieldType == typeof(short[]),
+                                "ShortArray wrapper storage is not short[]");
+                            Require(floatStorageField != null && floatStorageField.FieldType == typeof(float[]),
+                                "FloatArray wrapper storage is not float[]");
                             FieldInfo internTable = wrapperType.GetField(
                                 "_internedByStorage", BindingFlags.Static | BindingFlags.NonPublic);
                             Require(internTable != null && internTable.IsPrivate && internTable.IsInitOnly &&
@@ -27621,6 +27675,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 null, new object[] { exportedInput });
                             Require(Object.ReferenceEquals(exportedInput, exportedRoundTrip),
                                 "explicit export copied or replaced primitive-array storage");
+                            sbyte[] byteInput = new sbyte[] { -2, 3 };
+                            short[] shortInput = new short[] { -200, 300 };
+                            float[] floatInput = new float[] { -2.5f, 3.75f };
+                            Require(Object.ReferenceEquals(byteInput, byteRoundTripExport.Invoke(
+                                    null, new object[] { byteInput })),
+                                "ByteArray export copied or replaced its signed storage");
+                            Require(Object.ReferenceEquals(shortInput, shortRoundTripExport.Invoke(
+                                    null, new object[] { shortInput })),
+                                "ShortArray export copied or replaced its storage");
+                            Require(Object.ReferenceEquals(floatInput, floatRoundTripExport.Invoke(
+                                    null, new object[] { floatInput })),
+                                "FloatArray export copied or replaced its storage");
                             Require((bool) sameExport.Invoke(
                                     null, new object[] { exportedInput, exportedInput }),
                                 "one CLR vector did not project to one Kotlin wrapper within a call");

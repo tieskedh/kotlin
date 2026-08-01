@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: ordinary exact-carrier runtime type tests
+- Last completed feature: complete signed Common primitive arrays
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,9 +20,9 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 951 tests:
+The JUnit audit covered 16 fresh XML files and 955 tests:
 
-- 852 FIR, IL-text, and box tests
+- 856 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 78 library-integration tests
 - zero failures, errors, or skips
@@ -52,6 +52,16 @@ and value elements, undersized allocation, oversized and empty destination
 identity, non-Java tail preservation, covariant runtime vector identity,
 negative-size failure, and hostile inaccurate-size behavior on Framework CLR
 and CoreCLR.
+
+The complete signed Common primitive-array family additionally proves exact
+Kotlin-owned `BooleanArray`, `ByteArray`, `ShortArray`, `IntArray`,
+`LongArray`, `FloatArray`, `DoubleArray`, and `CharArray` identities over their
+private CLR vectors. Constructors, initializer order, literals, varargs and
+spreads, direct and escaping specialized iteration, copies/content operations,
+RTTI/casts, generic-array separation, bounds failures, portable Kotlin
+libraries, and copy-free exact C# vector adapters execute on both frontends and
+runtime profiles. In particular, Kotlin `ByteArray` projects as signed
+`sbyte[]`/`int8[]`, never C# `byte[]`.
 
 ## Current architecture
 
@@ -117,6 +127,14 @@ smart-cast use, and single evaluation are covered; classified exceptions,
 Closed `GenericInstance` checks remain forbidden, and a legal
 `ReifiedBox<*>` source test is pinned as an omitted declaration.
 
+All eight signed Common primitive-array wrappers are now complete through one
+runtime registry and the symmetric .NET stdlib declaration surface. The new
+three families retain exact `SByte[]`, `Int16[]`, and `Single[]` private
+storage, remain distinct from `Array<Byte>`, `Array<Short>`, and
+`Array<Float>`, and cross portable Kotlin-library and explicit C# export
+boundaries without copying. Unsigned arrays, nullable primitive elements in
+generic arrays, and `Array<*>` remain deliberately outside this closure.
+
 ## Open architectural blockers
 
 - Exact Common `AbstractCollection`/`AbstractList` production still needs the
@@ -136,11 +154,10 @@ Closed `GenericInstance` checks remain forbidden, and a legal
 
 ## Next bounded work
 
-1. Continue the reversible reified prerequisites by closing the concrete
-   array-intrinsic matrix. Begin with the missing Common `ByteArray`,
-   `ShortArray`, and `FloatArray` wrappers now that their scalar carriers are
-   implemented; keep `Array<*>` parked until its erased identity and typed-use
-   carrier are selected.
+1. Continue the reversible reified prerequisites by auditing concrete generic-
+   array constructors and intrinsics for already-exact element tokens. Close
+   only the truthful ordinary-source matrix; keep `Array<*>`, nullable/open
+   element carriers, and Kotlin-owned generic-class erased identity parked.
 2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
    collections/`EnumEntries` bootstrap cluster; do not create builder-only or
    one-enum stubs.

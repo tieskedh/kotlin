@@ -568,3 +568,27 @@ net10. The emitter now lists admitted physical carrier kinds explicitly and reje
 `GenericInstance` that reaches it. The next reversible prerequisite is the concrete array-
 intrinsic matrix, starting with the remaining signed `ByteArray`, `ShortArray`, and `FloatArray`
 wrappers now that their scalar carriers exist; this does not select an `Array<*>` carrier.
+
+### Selected fourth prerequisite: complete signed primitive arrays
+
+The [primitive-array ADR](../decisions/primitive-arrays.md) selects one Kotlin-owned wrapper model
+for the complete eight-family Common surface. `ByteArray`, `ShortArray`, and `FloatArray` were
+previously evicted only because their scalar carriers were incomplete; that reason no longer
+exists. This slice adds those three to the single wrapper/runtime registry and closes every
+already-selected consumer: constructors and initializer loops, literals and varargs, get/set and
+size, direct and escaping iteration, copies/content operations, exact type tests/casts, portable
+Kotlin libraries, and explicit aliasing C# export adapters on both runtime profiles.
+
+The slice does not generalize generic arrays. In particular, it neither admits nullable primitive
+elements in `Array<T?>` nor selects a star-projected `Array<*>` carrier. It also does not infer the
+unsigned value-class array families from signed storage: `UByteArray`, `UShortArray`, `UIntArray`,
+and `ULongArray` remain part of the parked value-class programme.
+
+This prerequisite is implemented. The complete wrapper registry now drives all eight signed
+families; `remainingPrimitiveArrays.kt` executes their missing constructor, initializer, literal,
+vararg, iterator, copy/content, RTTI/cast, generic-separation, and failure matrix in both FIR
+frontends and runtime profiles. The portable-library integration fixture additionally proves exact
+Kotlin-to-Kotlin identity plus copy-free `sbyte[]`, `short[]`, and `float[]` C# adapters on net48
+and net10. The next reversible prerequisite is an audit of concrete generic-array constructors and
+intrinsics for already-exact element tokens. It must not select `Array<*>` or a general erased
+Kotlin generic-class view by accident.

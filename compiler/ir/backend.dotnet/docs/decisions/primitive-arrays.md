@@ -60,6 +60,44 @@ The runtime owns wrapper definitions and a versioned internal storage/access
 ABI. Compiler intrinsics and stdlib operations use that ABI; ordinary Kotlin
 signatures never substitute the storage vector for the wrapper.
 
+### The signed Common family is complete
+
+The selected wrapper set contains all eight non-unsigned Common primitive
+arrays: `BooleanArray`, `ByteArray`, `ShortArray`, `IntArray`, `LongArray`,
+`FloatArray`, `DoubleArray`, and `CharArray`. Common gives every family the
+same constructor, initializer, indexed access, mutation, size, and specialized
+iterator contract. The mature targets keep that family atomic:
+
+- JVM uses the corresponding eight JVM primitive vectors;
+- JS selects distinct primitive-array representations and runtime predicates;
+- Wasm defines a Kotlin array class over the corresponding Wasm storage array
+  for every family; and
+- Native defines a distinct runtime type, specialized accessors, and iterator
+  for every family.
+
+.NET therefore does not leave `ByteArray`, `ShortArray`, or `FloatArray`
+parked once the exact `Byte`, `Short`, and `Float` scalar carriers exist. They
+use the same wrapper generator and compiler/runtime ABI as the first five:
+
+| Kotlin array | private CLR storage | C# export view |
+| --- | --- | --- |
+| `ByteArray` | `System.SByte[]` (`int8[]`) | `sbyte[]` |
+| `ShortArray` | `System.Int16[]` (`int16[]`) | `short[]` |
+| `FloatArray` | `System.Single[]` (`float32[]`) | `float[]` |
+
+The element carrier is exact. `ByteArray` is signed and must not become C#
+`byte[]`/CLR `UInt8[]`; `Byte` and `Short` are not widened to `Int32` in
+storage, and `Float` is not widened to `Double`. Evaluation-stack promotion
+does not change the array element or signature type.
+
+One registry owns the admitted wrapper family. Type mapping, runtime wrapper
+generation, constructor/literal/member intrinsics, varargs, indexed for-loop
+lowering, escaping specialized iterators, copy/content helpers, runtime type
+tests/casts, nullable metadata, and explicit C# vector adapters must all derive
+from that complete registry or carry an explicit family-complete companion
+entry. A partial wrapper that constructs but cannot iterate, copy, cross a
+library boundary, or round-trip through its exact C# vector is not complete.
+
 ### C# vector projection is an explicit adapter
 
 Kotlin-to-Kotlin ABI exposes `Kotlin.IntArray` and its peer wrappers, not
@@ -117,6 +155,22 @@ not adapted.
 - C# can receive primitive vectors without dictating Kotlin's type model.
 - Unpublished raw-vector primitive-array ABI is intentionally replaceable.
 
+## Design attack: completing the last three signed wrappers
+
+- Mapping the specialized arrays directly to raw CLR vectors is rejected: it
+  would collapse `ByteArray` with `Array<Byte>`, `ShortArray` with
+  `Array<Short>`, and `FloatArray` with `Array<Float>`.
+- Using `byte[]` for Kotlin `ByteArray` is rejected: C# `byte` is unsigned,
+  while Kotlin `Byte` is the already-selected signed `System.SByte` carrier.
+- Widening narrow or float storage is rejected: stack promotion is not source
+  identity, and widened storage would change signatures, aliasing, reflection,
+  and C# projection.
+- Adding only constructor/get/set intrinsics is rejected: Common also requires
+  literals/varargs, initializer order, specialized iteration, copying,
+  content operations, type tests, and separate compilation.
+- Reusing a raw vector only for C# convenience is rejected as Kotlin ABI. The
+  existing explicit aliasing adapter remains the sole foreign projection.
+
 ## Freeze conditions and open decisions
 
 Before array-bearing ABI freezes, validation must cover:
@@ -131,7 +185,7 @@ Before array-bearing ABI freezes, validation must cover:
 - C# aliasing, repeated-conversion identity, round trips, and stale-artifact
   rejection.
 
-Remaining specialized wrappers, unsigned arrays, debugger projections, enumerator
-shape, modern span adapters, implicit-conversion policy, and optimization
-strategy remain open. None may collapse Kotlin wrapper identity or expose a
-profile-specific representation in Common KLIB.
+Unsigned arrays, debugger projections, enumerator shape, modern span adapters,
+implicit-conversion policy, and optimization strategy remain open. None may
+collapse Kotlin wrapper identity or expose a profile-specific representation
+in Common KLIB.
