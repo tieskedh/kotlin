@@ -97,6 +97,13 @@ explicitly selected library B through the existing non-linking deserializer and 
 symbol finder. Preserve that boundary without introducing a general IR linker or transitive
 dependency discovery.
 
+The reified audit now identifies generic-class runtime identity as the first hard representation
+boundary: Kotlin erases declaration arguments for runtime class identity while ordinary CLR
+storage uses closed `C<T>` carriers. Do not flip the inliner capability gates or compile a
+Kotlin-owned generic-class test as closed CLR identity. Complete the independently truthful
+non-generic reference, boxed-scalar, and array cast prerequisites first; the generic erased view,
+`KClass`, `KType`, enum intrinsics, and physical reified stub remain later decisions.
+
 ### 2. Expand Common collections by exact dependency closure
 
 Use [`common-collections.md`](common-collections.md). The next slice may now include its selected
