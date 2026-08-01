@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -6,8 +11,24 @@
 .assembly 'genericInnerClasses' {}
 .module 'main-genericInnerClasses.il'
 
+.class interface public abstract auto ansi 'GenericInnerPairBase'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'first__KotlinErased__dc07a6466999d3cc903287bf12d44c2c'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'second__KotlinErased__519866886da27f95070b9bd20d9aa672'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi beforefieldinit 'GenericInnerPairBase`2'<'A', 'B'>
        extends [mscorlib]System.Object
+       implements 'GenericInnerPairBase'
 {
   .field private !0 'first'
   .field private !1 'second'
@@ -52,6 +73,26 @@
     call instance !1 class 'GenericInnerPairBase`2'<!0, !1>::'get_second'()
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-first>'() cil managed
+  {
+    .override method instance object 'GenericInnerPairBase'::'first__KotlinErased__dc07a6466999d3cc903287bf12d44c2c'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericInnerPairBase`2'<!0, !1>
+    call instance !0 class 'GenericInnerPairBase`2'<!0, !1>::'first'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-second>'() cil managed
+  {
+    .override method instance object 'GenericInnerPairBase'::'second__KotlinErased__519866886da27f95070b9bd20d9aa672'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericInnerPairBase`2'<!0, !1>
+    call instance !1 class 'GenericInnerPairBase`2'<!0, !1>::'second'()
+    box !1
+    ret
+  }
   .property instance !0 'first'()
   {
     .get instance !0 'GenericInnerPairBase`2'::'get_first'()
@@ -61,11 +102,43 @@
     .get instance !1 'GenericInnerPairBase`2'::'get_second'()
   }
 }
+.class interface public abstract auto ansi 'GenericInnerOuter'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance class 'GenericInnerOuter`1'/'Plain' 'plain__KotlinErased__ae31ebbe04ff1bf02e8e5f90e6cc0478'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance class 'GenericInnerOuter`1'/'Own' 'own__KotlinErased__c2346411c133e2415ad1d3399158f951'<'U'>(!!0 'item') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GenericInnerOuter`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'GenericInnerOuter'
 {
+  .class nested public interface abstract auto ansi 'Plain'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'outer__KotlinErased__87380314a48ad91c8a2bf21539836e65'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+    .method public hidebysig newslot abstract virtual instance bool 'owns__KotlinErased__3fdce0754b0cd99c0122f332a49c3038'(class 'GenericInnerOuter' 'outer') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+  }
   .class nested public auto ansi sealed beforefieldinit 'Plain`1'<'T'>
          extends [mscorlib]System.Object
+         implements 'GenericInnerOuter`1'/'Plain'
   {
     .field private class 'GenericInnerOuter`1'<!0> 'this$0'
     .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!0> 'this$0') cil managed
@@ -86,7 +159,7 @@
       call instance !0 class 'GenericInnerOuter`1'<!0>::'get_seed'()
       ret
     }
-    .method public hidebysig instance bool 'owns'(class 'GenericInnerOuter`1'<!0> 'outer') cil managed
+    .method public hidebysig instance bool 'owns__KotlinErased__97ca7e9012e4bce92e7c83ed3d14258e'(class 'GenericInnerOuter`1'<!0> 'outer') cil managed
     {
       .maxstack 2
       ldarg.0
@@ -95,9 +168,46 @@
       ceq
       ret
     }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-outer>'() cil managed
+    {
+      .override method instance object 'GenericInnerOuter`1'/'Plain'::'outer__KotlinErased__87380314a48ad91c8a2bf21539836e65'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericInnerOuter`1'/'Plain`1'<!0>
+      call instance !0 class 'GenericInnerOuter`1'/'Plain`1'<!0>::'outer'()
+      box !0
+      ret
+    }
+    .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-owns>'(class 'GenericInnerOuter' 'outer') cil managed
+    {
+      .override method instance bool 'GenericInnerOuter`1'/'Plain'::'owns__KotlinErased__3fdce0754b0cd99c0122f332a49c3038'(class 'GenericInnerOuter')
+      .maxstack 2
+      ldarg.0
+      castclass class 'GenericInnerOuter`1'/'Plain`1'<!0>
+      ldarg.1
+      castclass class 'GenericInnerOuter`1'<!0>
+      call instance bool class 'GenericInnerOuter`1'/'Plain`1'<!0>::'owns__KotlinErased__97ca7e9012e4bce92e7c83ed3d14258e'(class 'GenericInnerOuter`1'<!0>)
+      ret
+    }
+  }
+  .class nested public interface abstract auto ansi 'Own'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'item__KotlinErased__5a78b18fa4425222e9a22c1bc7b40522'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+    .method public hidebysig newslot abstract virtual instance object 'outer__KotlinErased__b58e2908867ed5bc872fe00233170c04'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
   }
   .class nested public auto ansi sealed beforefieldinit 'Own`2'<'U', 'T'>
          extends [mscorlib]System.Object
+         implements 'GenericInnerOuter`1'/'Own'
   {
     .field private !0 'item'
     .field private class 'GenericInnerOuter`1'<!1> 'this$0'
@@ -136,13 +246,49 @@
       call instance !0 class 'GenericInnerOuter`1'<!1>::'get_seed'()
       ret
     }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-item>'() cil managed
+    {
+      .override method instance object 'GenericInnerOuter`1'/'Own'::'item__KotlinErased__5a78b18fa4425222e9a22c1bc7b40522'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericInnerOuter`1'/'Own`2'<!0, !1>
+      call instance !0 class 'GenericInnerOuter`1'/'Own`2'<!0, !1>::'item'()
+      box !0
+      ret
+    }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-outer>'() cil managed
+    {
+      .override method instance object 'GenericInnerOuter`1'/'Own'::'outer__KotlinErased__b58e2908867ed5bc872fe00233170c04'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericInnerOuter`1'/'Own`2'<!0, !1>
+      call instance !1 class 'GenericInnerOuter`1'/'Own`2'<!0, !1>::'outer'()
+      box !1
+      ret
+    }
     .property instance !0 'item'()
     {
       .get instance !0 'GenericInnerOuter`1'/'Own`2'::'get_item'()
     }
   }
+  .class nested public interface abstract auto ansi 'Base'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'item__KotlinErased__46c996ea1fb81ccabd36edb5e75ce446'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+    .method public hidebysig newslot abstract virtual instance object 'outer__KotlinErased__decf6bac49df9c3dbf3e7f926f0dfe17'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+  }
   .class nested public auto ansi beforefieldinit 'Base`2'<'U', 'T'>
          extends [mscorlib]System.Object
+         implements 'GenericInnerOuter`1'/'Base'
   {
     .field private !0 'item'
     .field private class 'GenericInnerOuter`1'<!1> 'this$0'
@@ -181,13 +327,45 @@
       call instance !0 class 'GenericInnerOuter`1'<!1>::'get_seed'()
       ret
     }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-item>'() cil managed
+    {
+      .override method instance object 'GenericInnerOuter`1'/'Base'::'item__KotlinErased__46c996ea1fb81ccabd36edb5e75ce446'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericInnerOuter`1'/'Base`2'<!0, !1>
+      call instance !0 class 'GenericInnerOuter`1'/'Base`2'<!0, !1>::'item'()
+      box !0
+      ret
+    }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-outer>'() cil managed
+    {
+      .override method instance object 'GenericInnerOuter`1'/'Base'::'outer__KotlinErased__decf6bac49df9c3dbf3e7f926f0dfe17'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericInnerOuter`1'/'Base`2'<!0, !1>
+      callvirt instance !1 class 'GenericInnerOuter`1'/'Base`2'<!0, !1>::'outer'()
+      box !1
+      ret
+    }
     .property instance !0 'item'()
     {
       .get instance !0 'GenericInnerOuter`1'/'Base`2'::'get_item'()
     }
   }
+  .class nested public interface abstract auto ansi 'Derived'
+         implements 'GenericInnerOuter`1'/'Base'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'outer__KotlinErased__79362aa88143755e34fa774d0497a1b5'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+  }
   .class nested public auto ansi sealed beforefieldinit 'Derived`2'<'V', 'T'>
          extends class 'GenericInnerOuter`1'/'Base`2'<!0, !1>
+         implements 'GenericInnerOuter`1'/'Derived'
   {
     .field private class 'GenericInnerOuter`1'<!1> 'this$0'
     .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!1> 'this$0', !0 'item') cil managed
@@ -210,9 +388,26 @@
       call instance !0 class 'GenericInnerOuter`1'<!1>::'get_seed'()
       ret
     }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-outer>'() cil managed
+    {
+      .override method instance object 'GenericInnerOuter`1'/'Derived'::'outer__KotlinErased__79362aa88143755e34fa774d0497a1b5'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericInnerOuter`1'/'Derived`2'<!0, !1>
+      callvirt instance !1 class 'GenericInnerOuter`1'/'Derived`2'<!0, !1>::'outer'()
+      box !1
+      ret
+    }
+  }
+  .class nested public interface abstract auto ansi 'Pair'
+         implements 'GenericInnerPairBase'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
   }
   .class nested public auto ansi sealed beforefieldinit 'Pair`2'<'U', 'T'>
          extends class 'GenericInnerPairBase`2'<!0, !1>
+         implements 'GenericInnerOuter`1'/'Pair'
   {
     .field private class 'GenericInnerOuter`1'<!1> 'this$0'
     .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!1> 'this$0', !0 'item') cil managed
@@ -229,11 +424,38 @@
       ret
     }
   }
+  .class nested public interface abstract auto ansi 'First'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
   .class nested public auto ansi sealed beforefieldinit 'First`2'<'U', 'T'>
          extends [mscorlib]System.Object
+         implements 'GenericInnerOuter`1'/'First'
   {
+    .class nested public interface abstract auto ansi 'Second'
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .method public hidebysig newslot abstract virtual instance object 'root__KotlinErased__88f64bbd2fad83808fd3a138419b1cf8'() cil managed
+      {
+        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      }
+      .method public hidebysig newslot abstract virtual instance object 'middle__KotlinErased__a31468395c8155097ce2b142ecb57458'() cil managed
+      {
+        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      }
+      .method public hidebysig newslot abstract virtual instance object 'own__KotlinErased__9d514a7d032264151adc169bf5bfd9bd'() cil managed
+      {
+        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      }
+    }
     .class nested public auto ansi sealed beforefieldinit 'Second`3'<'V', 'U', 'T'>
            extends [mscorlib]System.Object
+           implements 'GenericInnerOuter`1'/'First`2'/'Second'
     {
       .field private !0 'own'
       .field private class 'GenericInnerOuter`1'/'First`2'<!1, !2> 'this$0'
@@ -281,6 +503,36 @@
         call instance !0 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'get_own'()
         ret
       }
+      .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-root>'() cil managed
+      {
+        .override method instance object 'GenericInnerOuter`1'/'First`2'/'Second'::'root__KotlinErased__88f64bbd2fad83808fd3a138419b1cf8'()
+        .maxstack 1
+        ldarg.0
+        castclass class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>
+        call instance !2 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'root'()
+        box !2
+        ret
+      }
+      .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-middle>'() cil managed
+      {
+        .override method instance object 'GenericInnerOuter`1'/'First`2'/'Second'::'middle__KotlinErased__a31468395c8155097ce2b142ecb57458'()
+        .maxstack 1
+        ldarg.0
+        castclass class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>
+        call instance !1 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'middle'()
+        box !1
+        ret
+      }
+      .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-own>'() cil managed
+      {
+        .override method instance object 'GenericInnerOuter`1'/'First`2'/'Second'::'own__KotlinErased__9d514a7d032264151adc169bf5bfd9bd'()
+        .maxstack 1
+        ldarg.0
+        castclass class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>
+        call instance !0 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'own'()
+        box !0
+        ret
+      }
       .property instance !0 'own'()
       {
         .get instance !0 'GenericInnerOuter`1'/'First`2'/'Second`3'::'get_own'()
@@ -313,8 +565,19 @@
       .get instance !0 'GenericInnerOuter`1'/'First`2'::'get_middle'()
     }
   }
+  .class nested public interface abstract auto ansi 'ConstructorPaths'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__f9a8dc234ff1e2ca17f1f8fe16ffef29'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+  }
   .class nested public auto ansi sealed beforefieldinit 'ConstructorPaths`1'<'T'>
          extends [mscorlib]System.Object
+         implements 'GenericInnerOuter`1'/'ConstructorPaths'
   {
     .field private !0 'value'
     .field private class 'GenericInnerOuter`1'<!0> 'this$0'
@@ -355,6 +618,16 @@
       call instance !0 class 'GenericInnerOuter`1'/'ConstructorPaths`1'<!0>::'get_value'()
       ret
     }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-value>'() cil managed
+    {
+      .override method instance object 'GenericInnerOuter`1'/'ConstructorPaths'::'value__KotlinErased__f9a8dc234ff1e2ca17f1f8fe16ffef29'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericInnerOuter`1'/'ConstructorPaths`1'<!0>
+      call instance !0 class 'GenericInnerOuter`1'/'ConstructorPaths`1'<!0>::'value'()
+      box !0
+      ret
+    }
     .property instance !0 'value'()
     {
       .get instance !0 'GenericInnerOuter`1'/'ConstructorPaths`1'::'get_value'()
@@ -393,16 +666,52 @@
     newobj instance void class 'GenericInnerOuter`1'/'Own`2'<!!0, !0>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
     ret
   }
+  .method private hidebysig newslot virtual final instance class 'GenericInnerOuter`1'/'Plain' '<GenericClassCanonicalBridge-plain>'() cil managed
+  {
+    .override method instance class 'GenericInnerOuter`1'/'Plain' 'GenericInnerOuter'::'plain__KotlinErased__ae31ebbe04ff1bf02e8e5f90e6cc0478'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericInnerOuter`1'<!0>
+    call instance class 'GenericInnerOuter`1'/'Plain`1'<!0> class 'GenericInnerOuter`1'<!0>::'plain'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'GenericInnerOuter`1'/'Own' '<GenericClassCanonicalBridge-own>'<'U'>(!!0 'item') cil managed
+  {
+    .override method instance class 'GenericInnerOuter`1'/'Own' 'GenericInnerOuter'::'own__KotlinErased__c2346411c133e2415ad1d3399158f951'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    castclass class 'GenericInnerOuter`1'<!0>
+    ldarg.1
+    call instance class 'GenericInnerOuter`1'/'Own`2'<!!0, !0> class 'GenericInnerOuter`1'<!0>::'own'<!!0>(!!0)
+    ret
+  }
   .property instance !0 'seed'()
   {
     .get instance !0 'GenericInnerOuter`1'::'get_seed'()
   }
 }
+.class interface public abstract auto ansi 'DuplicateGenericInnerOuter'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+}
 .class public auto ansi sealed beforefieldinit 'DuplicateGenericInnerOuter`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'DuplicateGenericInnerOuter'
 {
+  .class nested public interface abstract auto ansi 'Duplicate'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'item__KotlinErased__98fbaef49e06816b7d3d40455303eccf'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+  }
   .class nested public auto ansi sealed beforefieldinit 'Duplicate`2'<'T', 'T'>
          extends [mscorlib]System.Object
+         implements 'DuplicateGenericInnerOuter`1'/'Duplicate'
   {
     .field private !0 'item'
     .field private class 'DuplicateGenericInnerOuter`1'<!1> 'this$0'
@@ -433,6 +742,16 @@
       call instance !0 class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<!0, !1>::'get_item'()
       ret
     }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-item>'() cil managed
+    {
+      .override method instance object 'DuplicateGenericInnerOuter`1'/'Duplicate'::'item__KotlinErased__98fbaef49e06816b7d3d40455303eccf'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<!0, !1>
+      call instance !0 class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<!0, !1>::'item'()
+      box !0
+      ret
+    }
     .property instance !0 'item'()
     {
       .get instance !0 'DuplicateGenericInnerOuter`1'/'Duplicate`2'::'get_item'()
@@ -449,12 +768,22 @@
 .class public abstract sealed auto ansi beforefieldinit 'genericInnerClassesKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static class 'GenericInnerOuter`1'/'Own`2'<!!1, !!0> 'makeGenericInnerOwn'<'T', 'U'>(class 'GenericInnerOuter`1'<!!0> 'outer', !!1 'item') cil managed
+  .method public hidebysig static class 'GenericInnerOuter`1'/'Own' 'makeGenericInnerOwn__KotlinErased__fa1f16a98081308a188b8f0e55e53cf5'<'T', 'U'>(class 'GenericInnerOuter' 'outer', !!1 'item') cil managed
   {
     .maxstack 2
     ldarg.0
+    castclass class 'GenericInnerOuter`1'<!!0>
     ldarg.1
     newobj instance void class 'GenericInnerOuter`1'/'Own`2'<!!1, !!0>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
+    ret
+  }
+  .method public hidebysig static bool 'isGenericInnerOwn'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldtoken 'GenericInnerOuter`1'/'Own`2'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'IsGenericClass'(object, class [mscorlib]System.Type)
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -462,57 +791,34 @@
     .entrypoint
     .maxstack 3
     .locals init (
-      [0] class 'GenericInnerOuter`1'<string> 'outer',
-      [1] class 'GenericInnerOuter`1'/'Plain`1'<string> 'plain',
-      [2] class 'GenericInnerOuter`1'/'Own`2'<int32, string> 'own',
-      [3] class 'GenericInnerOuter`1'/'Own`2'<int32, string> 'made',
-      [4] class 'GenericInnerOuter`1'/'Base`2'<int32, string> 'base',
-      [5] class 'GenericInnerPairBase`2'<int32, string> 'pair',
-      [6] class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string> 'second',
-      [7] class 'GenericInnerOuter`1'/'ConstructorPaths`1'<string> 'constructorPath',
-      [8] class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<int32, string> 'duplicate'
+      [0] class 'GenericInnerOuter' 'outer',
+      [1] class 'GenericInnerOuter`1'/'Plain' 'plain',
+      [2] class 'GenericInnerOuter`1'/'Own' 'own',
+      [3] object 'ownAny',
+      [4] class 'GenericInnerOuter`1'/'Own' 'projectedOwn',
+      [5] class 'GenericInnerOuter`1'/'Own' 'made',
+      [6] class 'GenericInnerOuter`1'/'Base' 'base',
+      [7] class 'GenericInnerPairBase' 'pair',
+      [8] class 'GenericInnerOuter`1'/'First`2'/'Second' 'second',
+      [9] class 'GenericInnerOuter`1'/'ConstructorPaths' 'constructorPath',
+      [10] class 'DuplicateGenericInnerOuter`1'/'Duplicate' 'duplicate'
     )
     ldstr "outer"
     newobj instance void class 'GenericInnerOuter`1'<string>::.ctor(!0)
     stloc.0
     ldloc.0
-    call instance class 'GenericInnerOuter`1'/'Plain`1'<!0> class 'GenericInnerOuter`1'<string>::'plain'()
+    callvirt instance class 'GenericInnerOuter`1'/'Plain' 'GenericInnerOuter'::'plain__KotlinErased__ae31ebbe04ff1bf02e8e5f90e6cc0478'()
+    castclass class 'GenericInnerOuter`1'/'Plain'
     stloc.1
     ldloc.0
     ldc.i4 7
-    call instance class 'GenericInnerOuter`1'/'Own`2'<!!0, !0> class 'GenericInnerOuter`1'<string>::'own'<int32>(!!0)
+    callvirt instance class 'GenericInnerOuter`1'/'Own' 'GenericInnerOuter'::'own__KotlinErased__c2346411c133e2415ad1d3399158f951'<int32>(!!0)
+    castclass class 'GenericInnerOuter`1'/'Own'
     stloc.2
-    ldloc.0
-    ldc.i4 9
-    call class 'GenericInnerOuter`1'/'Own`2'<!!1, !!0> 'genericInnerClassesKt'::'makeGenericInnerOwn'<string, int32>(class 'GenericInnerOuter`1'<!!0>, !!1)
+    ldloc.2
     stloc.3
-    ldloc.0
-    ldc.i4 11
-    newobj instance void class 'GenericInnerOuter`1'/'Derived`2'<int32, string>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
-    stloc 4
-    ldloc.0
-    ldc.i4 13
-    newobj instance void class 'GenericInnerOuter`1'/'Pair`2'<int32, string>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
-    stloc 5
-    ldloc.0
-    ldstr "middle"
-    newobj instance void class 'GenericInnerOuter`1'/'First`2'<string, string>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
-    ldc.i4 17
-    newobj instance void class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::.ctor(class 'GenericInnerOuter`1'/'First`2'<!1, !2>, !0)
-    stloc 6
-    ldloc.0
-    newobj instance void class 'GenericInnerOuter`1'/'ConstructorPaths`1'<string>::.ctor(class 'GenericInnerOuter`1'<!0>)
-    stloc 7
-    newobj instance void class 'DuplicateGenericInnerOuter`1'<string>::.ctor()
-    ldc.i4 19
-    newobj instance void class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<int32, string>::.ctor(class 'DuplicateGenericInnerOuter`1'<!1>, !0)
-    stloc 8
-    ldloc.1
-    call instance !0 class 'GenericInnerOuter`1'/'Plain`1'<string>::'outer'()
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc.1
-    ldloc.0
-    call instance bool class 'GenericInnerOuter`1'/'Plain`1'<string>::'owns'(class 'GenericInnerOuter`1'<!0>)
+    ldloc.3
+    call bool 'genericInnerClassesKt'::'isGenericInnerOwn'(object)
     brtrue IL_boolStrTrue_0
     ldstr "false"
     br IL_boolStrEnd_1
@@ -520,61 +826,158 @@ IL_boolStrTrue_0:
     ldstr "true"
 IL_boolStrEnd_1:
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc.2
-    call instance !0 class 'GenericInnerOuter`1'/'Own`2'<int32, string>::'item'()
-    box [mscorlib]System.Int32
-    ldnull
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc.2
-    call instance !1 class 'GenericInnerOuter`1'/'Own`2'<int32, string>::'outer'()
+    ldloc.3
+    ldtoken 'GenericInnerOuter`1'/'Own`2'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'IsGenericClass'(object, class [mscorlib]System.Type)
+    brtrue IL_boolStrTrue_2
+    ldstr "false"
+    br IL_boolStrEnd_3
+IL_boolStrTrue_2:
+    ldstr "true"
+IL_boolStrEnd_3:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
-    call instance !0 class 'GenericInnerOuter`1'/'Own`2'<int32, string>::'item'()
+    ldtoken 'GenericInnerOuter`1'/'Own`2'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CheckGenericClassCast'(object, class [mscorlib]System.Type)
+    castclass class 'GenericInnerOuter`1'/'Own'
+    dup
+    brtrue IL_notNull_4
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_4:
+    stloc 4
+    ldloc.0
+    ldc.i4 9
+    call class 'GenericInnerOuter`1'/'Own' 'genericInnerClassesKt'::'makeGenericInnerOwn__KotlinErased__fa1f16a98081308a188b8f0e55e53cf5'<string, int32>(class 'GenericInnerOuter', !!1)
+    castclass class 'GenericInnerOuter`1'/'Own'
+    stloc 5
+    ldloc.0
+    castclass class 'GenericInnerOuter`1'<string>
+    ldc.i4 11
+    newobj instance void class 'GenericInnerOuter`1'/'Derived`2'<int32, string>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
+    stloc 6
+    ldloc.0
+    castclass class 'GenericInnerOuter`1'<string>
+    ldc.i4 13
+    newobj instance void class 'GenericInnerOuter`1'/'Pair`2'<int32, string>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
+    stloc 7
+    ldloc.0
+    castclass class 'GenericInnerOuter`1'<string>
+    ldstr "middle"
+    newobj instance void class 'GenericInnerOuter`1'/'First`2'<string, string>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
+    ldc.i4 17
+    newobj instance void class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::.ctor(class 'GenericInnerOuter`1'/'First`2'<!1, !2>, !0)
+    stloc 8
+    ldloc.0
+    castclass class 'GenericInnerOuter`1'<string>
+    newobj instance void class 'GenericInnerOuter`1'/'ConstructorPaths`1'<string>::.ctor(class 'GenericInnerOuter`1'<!0>)
+    stloc 9
+    newobj instance void class 'DuplicateGenericInnerOuter`1'<string>::.ctor()
+    ldc.i4 19
+    newobj instance void class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<int32, string>::.ctor(class 'DuplicateGenericInnerOuter`1'<!1>, !0)
+    stloc 10
+    ldloc.1
+    callvirt instance object 'GenericInnerOuter`1'/'Plain'::'outer__KotlinErased__87380314a48ad91c8a2bf21539836e65'()
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    ldloc.0
+    callvirt instance bool 'GenericInnerOuter`1'/'Plain'::'owns__KotlinErased__3fdce0754b0cd99c0122f332a49c3038'(class 'GenericInnerOuter')
+    brtrue IL_boolStrTrue_5
+    ldstr "false"
+    br IL_boolStrEnd_6
+IL_boolStrTrue_5:
+    ldstr "true"
+IL_boolStrEnd_6:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    callvirt instance object 'GenericInnerOuter`1'/'Own'::'item__KotlinErased__5a78b18fa4425222e9a22c1bc7b40522'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    callvirt instance object 'GenericInnerOuter`1'/'Own'::'outer__KotlinErased__b58e2908867ed5bc872fe00233170c04'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 4
-    call instance !0 class 'GenericInnerOuter`1'/'Base`2'<int32, string>::'item'()
-    box [mscorlib]System.Int32
-    ldnull
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    ldloc.2
+    ceq
+    brtrue IL_boolStrTrue_7
+    ldstr "false"
+    br IL_boolStrEnd_8
+IL_boolStrTrue_7:
+    ldstr "true"
+IL_boolStrEnd_8:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 4
-    callvirt instance !1 class 'GenericInnerOuter`1'/'Base`2'<int32, string>::'outer'()
+    callvirt instance object 'GenericInnerOuter`1'/'Own'::'item__KotlinErased__5a78b18fa4425222e9a22c1bc7b40522'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 4
+    callvirt instance object 'GenericInnerOuter`1'/'Own'::'outer__KotlinErased__b58e2908867ed5bc872fe00233170c04'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 5
-    call instance !0 class 'GenericInnerPairBase`2'<int32, string>::'first'()
+    callvirt instance object 'GenericInnerOuter`1'/'Own'::'item__KotlinErased__5a78b18fa4425222e9a22c1bc7b40522'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 5
-    call instance !1 class 'GenericInnerPairBase`2'<int32, string>::'second'()
+    ldloc 6
+    callvirt instance object 'GenericInnerOuter`1'/'Base'::'item__KotlinErased__46c996ea1fb81ccabd36edb5e75ce446'()
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 6
-    call instance !2 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::'root'()
+    callvirt instance object 'GenericInnerOuter`1'/'Base'::'outer__KotlinErased__decf6bac49df9c3dbf3e7f926f0dfe17'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 6
-    call instance !1 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::'middle'()
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 6
-    call instance !0 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::'own'()
+    ldloc 7
+    callvirt instance object 'GenericInnerPairBase'::'first__KotlinErased__dc07a6466999d3cc903287bf12d44c2c'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 7
-    call instance !0 class 'GenericInnerOuter`1'/'ConstructorPaths`1'<string>::'value'()
+    callvirt instance object 'GenericInnerPairBase'::'second__KotlinErased__519866886da27f95070b9bd20d9aa672'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 8
-    call instance !0 class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<int32, string>::'item'()
+    callvirt instance object 'GenericInnerOuter`1'/'First`2'/'Second'::'root__KotlinErased__88f64bbd2fad83808fd3a138419b1cf8'()
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 8
+    callvirt instance object 'GenericInnerOuter`1'/'First`2'/'Second'::'middle__KotlinErased__a31468395c8155097ce2b142ecb57458'()
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 8
+    callvirt instance object 'GenericInnerOuter`1'/'First`2'/'Second'::'own__KotlinErased__9d514a7d032264151adc169bf5bfd9bd'()
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 9
+    callvirt instance object 'GenericInnerOuter`1'/'ConstructorPaths'::'value__KotlinErased__f9a8dc234ff1e2ca17f1f8fe16ffef29'()
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 10
+    callvirt instance object 'DuplicateGenericInnerOuter`1'/'Duplicate'::'item__KotlinErased__98fbaef49e06816b7d3d40455303eccf'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

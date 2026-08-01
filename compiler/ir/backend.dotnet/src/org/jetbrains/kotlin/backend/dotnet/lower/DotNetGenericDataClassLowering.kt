@@ -54,7 +54,7 @@ import org.jetbrains.kotlin.util.OperatorNameConventions
 internal val DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE")
 
-private val DOTNET_GENERIC_DATA_CLASS_ERASED_VIEW: IrDeclarationOrigin =
+internal val DOTNET_GENERIC_DATA_CLASS_ERASED_VIEW: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_DATA_CLASS_ERASED_VIEW")
 
 /**

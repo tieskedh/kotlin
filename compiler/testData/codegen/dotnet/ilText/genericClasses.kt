@@ -1,14 +1,7 @@
-// Generic top-level classes, stage 1 (probe series genprobe_s2/_s3/_s4): real CLR reified
-// generics, the Roslyn shape — `.class ... 'demo.Box`1'<'T'>` with the CLS arity suffix INSIDE
-// the quoted identifier (outside the quotes is an ilasm syntax error, genprobe_s2c) — fields
-// typed `!0`, ctor params typed `!0`, methods taking/returning `!0`, properties typed `!0` with
-// `.property` blocks whose accessor references use the BARE class name (no type-args list).
-// Member-reference operands always carry an instantiation: the CLOSED one at external call
-// sites (`newobj instance void class 'Box`1'<string>::.ctor(!0)`), the OPEN self-instantiation
-// (`class 'Box`1'<!0>`) inside the class's own bodies. Multiple instantiations of one class
-// coexist (true reification: `Box`1<int32>` stores a raw int32, zero box/unbox), a Nullable
-// instantiation composes with the landed hybrid spellings, and instantiations nest
-// (`Box<Box<String>>` in every operand position, genprobe_s3).
+// Kotlin generic-class identity is a non-generic canonical interface. The Roslyn-shaped
+// `Box`1<T>` remains as the same object's invariant implementation capability, with `!0` fields
+// and member bodies. Canonical ABI signatures therefore erase class arguments; overloads whose
+// parameters differ only by those arguments receive stable Kotlin-logical physical names.
 
 class Box<T>(private var value: T) {
     fun get(): T = value
@@ -22,6 +15,26 @@ class Box<T>(private var value: T) {
 }
 
 class Pair2<A, B>(val first: A, val second: B)
+
+fun erasedOverload(value: Box<Int>): String = "int"
+
+fun erasedOverload(value: Box<String>): String = "string"
+
+class ErasedMemberOverloads {
+    fun select(value: Box<Int>): String = "int"
+
+    fun select(value: Box<String>): String = "string"
+}
+
+// Kotlin class identity is erased even though the companion CLR capability remains reified.
+// These operations must classify the exact producer-recorded open Box`1 ancestry, then return
+// the same object through the non-generic canonical view.
+@Suppress("UNCHECKED_CAST")
+fun erasedGenericCast(value: Any): Box<String> = value as Box<String>
+
+fun erasedGenericTest(value: Any): Boolean = value is Box<*>
+
+fun erasedGenericSafeCast(value: Any): Box<*>? = value as? Box<*>
 
 fun main() {
     val bs = Box<String>("first")
@@ -38,4 +51,11 @@ fun main() {
     val p = Pair2<Int, String>(1, "one")
     println(p.first)
     println(p.second)
+    println(erasedGenericTest(bs))
+    println(erasedGenericSafeCast(bs) === bs)
+    println(erasedGenericCast(bs) === bs)
+    println(erasedOverload(bi))
+    println(erasedOverload(bs))
+    println(ErasedMemberOverloads().select(bi))
+    println(ErasedMemberOverloads().select(bs))
 }

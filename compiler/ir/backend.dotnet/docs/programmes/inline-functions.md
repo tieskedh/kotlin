@@ -332,8 +332,8 @@ index depend on which reified operations happened to occur.
 | Reified use | Existing foundation | Remaining requirement |
 | --- | --- | --- |
 | call-site type substitution and nested reified calls | shared first-/second-stage IR inliner and selected dependency graph | enable only after every surviving substituted operation is truthful |
-| `value is T` / `!is T` | CLR tests for exact non-generic references, boxed scalars, arrays, open CLR parameters, classified exceptions/`CharSequence`, and split generic interfaces | Kotlin-owned generic classes need a general declaration-erased runtime identity; a closed `isinst C<String>` is too strict |
-| `value as T` / `as? T` | open-parameter casts, classified `CharSequence`, and split generic-interface casts | exact ordinary reference/scalar casts first; then the same erased generic-class identity and typed-use model as type tests |
+| `value is T` / `!is T` | exact references, boxed scalars, arrays, open CLR parameters, classified exceptions/`CharSequence`, split generic interfaces, and declaration-erased Kotlin generic classes | execute the substituted cross-classifier matrix when the public reified gate is enabled; no closed `C<T>` identity is permitted |
+| `value as T` / `as? T` | the same classifier families, including identity-preserving generic-class checked/safe casts and typed-use barriers | execute checked, safe, nullable, failed, and later-member-use substitutions through both inliner stages |
 | `arrayOfNulls<T>`, `emptyArray<T>`, varargs, and array constructors | typed CLR-vector intrinsics and Common array-constructor lowering | prove nested generic element, nullability, projection, and cross-module substitutions without assuming closed CLR generic identity equals Kotlin runtime identity |
 | `T::class` | none | select a Kotlin `KClass` identity and its truthful `System.Type` bridge before emitting class literals |
 | `typeOf<T>()` | shared inliner preserves/substitutes its type argument | select `KType`, type arguments, variance, nullability, and reflection ownership |
@@ -341,13 +341,14 @@ index depend on which reified operations happened to occur.
 | annotation-associated and other reflection operations | none | annotation classes, retention, reflection, and target-specific association policy |
 | surviving physical reified declaration | real CLR generic-method carrier exists | choose and mark an uncallable/throwing compiler-ABI stub without weakening KLIB/physical coverage |
 
-The generic-class row is the central representation constraint. Kotlin runtime class identity does
-not include generic arguments; the target has already enforced that rule for generated data-class
-equality. The CLR nevertheless represents ordinary storage and signatures as closed `C<T>` types.
-Using `isinst C<String>` for `is T` would make `C<String>` and `C<Any>` different Kotlin runtime
-classes. Conversely, merely testing a new marker interface is insufficient for `as C<String>`:
-the CLR verifier still needs a usable value carrier after the erased check. A general solution may
-require an erased class view with member adaptation, not an isolated reified-inliner special case.
+The central generic-class representation constraint is now resolved by the
+[generic-class erased-identity ADR](../decisions/generic-class-erased-identity.md). Kotlin runtime
+identity names the declaration through a producer-recorded open TypeDef classifier; stable Kotlin
+ABI values use its non-generic canonical interface; and the same object retains an invariant
+`C<T>` implementation capability with typed fields, inheritance, and C# subclassing. Checked casts
+therefore preserve Kotlin erasure and still leave a verifier-usable member receiver. Reified
+substitution must route through these ordinary operation paths rather than emit a closed
+`isinst C<String>` or invent an inliner-only representation.
 
 Foreign CLR generic types remain a separate importer question. Their closed CLR identity is an
 objective platform fact and may justify a foreign-type rule; it must not silently define the
@@ -376,7 +377,7 @@ runtime identity of Kotlin-owned generic classes.
 
 ### Reversible work order
 
-Work may continue without freezing the generic-class decision:
+The reversible prerequisite order is:
 
 1. complete explicit checked/safe casts for physically exact non-generic reference carriers;
 2. complete boxed scalar casts and the exact reference/primitive array cast matrix;
@@ -389,9 +390,10 @@ Work may continue without freezing the generic-class decision:
 7. finally enable reified in both inliner stages, select the physical throwing-stub contract, and
    test source/library consumers over all three KLIB modes and both runtime profiles.
 
-Steps 1–3 are ordinary language/runtime-operation features and may land independently. They must
-not accept a `DotNetIlValueType.GenericInstance` merely because CLR has a convenient instruction.
-The public Common reified stdlib families remain excluded until the complete closure is truthful.
+Steps 1–4 are implemented as ordinary language/runtime-operation features. They do not accept a
+closed `DotNetIlValueType.GenericInstance` merely because CLR has a convenient instruction. The
+public Common reified stdlib families remain excluded until the remaining array/reflection/enum
+operations and the physical fallback contract form one truthful closure.
 
 ### Selected first prerequisite: physically exact reference casts
 
@@ -644,3 +646,44 @@ rejects rectangular and non-zero-based CLR arrays through the shared classifier.
 backend-reachable sentinels keep input projections, open nullable elements, and value-vector
 covariance outside the feature. The next reversible prerequisite is declaration-erased runtime
 identity for ordinary Kotlin generic classes, not either reified support gate.
+
+### Selected seventh prerequisite: erased generic-class identity
+
+Common and every mature target give all constructions of one ordinary generic class one runtime
+classifier. The CLR instead reifies invariant `C<T>` constructions. A closed CLR cast is too
+strict, while a reflection predicate alone cannot support member use after Kotlin accepts an
+unchecked cast between different logical arguments.
+
+The selected split-class model gives each Kotlin generic class a non-generic canonical interface
+for every Kotlin ABI value and erased member slot, while retaining the existing invariant `C<T>`
+as the typed implementation and C# capability on the same object. Generated bridges adapt erased
+canonical calls to typed virtual members. Runtime tests and casts additionally walk the actual
+base-class chain for the producer-recorded open `C<>` definition, so a foreign implementation of
+the public compiler interface cannot manufacture Kotlin class identity.
+
+This keeps KLIB arguments, variance, projections, and bounds authoritative; preserves CLR generic
+storage, inheritance, and C# subclassing where truthful; and never wraps, copies, or reinterprets
+an object. The complete representation, rejected alternatives, schema consequences, and
+adversarial gate are in the [generic-class erased-identity ADR](../decisions/generic-class-erased-identity.md).
+
+The bounded implementation covers ordinary generic classes already admitted by the class model.
+It does not infer support for value classes, foreign CLR generic classes as Kotlin-owned
+declarations, currently rejected open-nullable nested constructions, reflection, or either public
+reified-inline gate.
+
+This prerequisite is implemented. Local box and IL-text suites cover reference, scalar,
+nullable-scalar, nested, inherited, inner, data, generic-member, projected, cast, identity,
+single-evaluation, wrong-argument, default-dispatch, owner-relative interface, and erased-overload
+shapes on both FIR frontends and runtime profiles. A separate netstandard2.0 producer is consumed
+by Kotlin and Roslyn on Framework CLR and CoreCLR, including C# subclass dispatch, hostile
+canonical-interface rejection, external generic ancestry, nested generic open-TypeDef identity,
+nested external member signatures, and top-level/member overloads whose arguments differ only in
+erased Kotlin class parameters. The producer is compiled twice and must emit byte-identical CIL,
+including private/local canonical slots. ABI 17 records both owner views and each typed/canonical
+member relation explicitly.
+
+The next reversible work is to re-audit the remaining reified array-operation substitution matrix
+against the now-complete array and generic-class carriers. That audit must distinguish an operation
+which is already truthful after ordinary IR substitution from the still-unselected `KClass`,
+`KType`, enum, annotation, and physical throwing-stub contracts; it must not enable either public
+reified gate piecemeal.

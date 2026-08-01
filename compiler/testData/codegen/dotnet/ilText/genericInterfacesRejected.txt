@@ -19,29 +19,3 @@
   {
   }
 }
-.class public auto ansi sealed beforefieldinit 'ReifiedBox`1'<'T'>
-       extends [mscorlib]System.Object
-{
-  .field private !0 'value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
-  {
-    .maxstack 2
-    ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
-    ldarg.0
-    ldarg.1
-    stfld !0 class 'ReifiedBox`1'<!0>::'value'
-    ret
-  }
-  .method public hidebysig specialname instance !0 'get_value'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    ldfld !0 class 'ReifiedBox`1'<!0>::'value'
-    ret
-  }
-  .property instance !0 'value'()
-  {
-    .get instance !0 'ReifiedBox`1'::'get_value'()
-  }
-}

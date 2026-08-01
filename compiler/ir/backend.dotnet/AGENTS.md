@@ -286,6 +286,28 @@ See the
   signature, or generalize this rule to input/out projections, open
   `Array<T?>`, or other Kotlin generic classes. See
   [the star-projected-array ADR](docs/decisions/star-projected-arrays.md).
+- Every Kotlin-owned ordinary generic class uses a non-generic canonical CLR
+  interface for Kotlin storage, dispatch, projections, and erased casts while
+  retaining its invariant arity-suffixed CLR class as the typed implementation
+  and C# capability on the same object. Canonical bridges own erased member
+  barriers; runtime tests/casts must also verify ancestry from the exact
+  producer-recorded open generic class definition, never the interface alone.
+  Do not use a closed `C<T>` as Kotlin identity, wrap or reinterpret a cast,
+  erase away the typed CLR class, or choose carriers from local provenance.
+  Any ordinary callable parameter containing this erased view receives a
+  stable whole-Kotlin-signature physical name before an overload collision
+  exists; never derive ABI naming from the current overload set. A canonical
+  slot of a cross-module declaration uses its public KLIB identity; a slot
+  below a private/local owner uses only the explicit stable structural codec.
+  Never hash file-local IR signatures, rendered types, object identity,
+  declaration order, or source offsets into a physical name. A canonical
+  value upcast to a non-generic CLR base uses only a proven same-object checked
+  cast from its typed ancestry; the canonical interface cannot inherit a CLR
+  class. Keep owner-relative exact interface capabilities on typed `C<T>`;
+  never fabricate an `I<object>` canonical edge. Compiler-generated default-
+  argument dispatchers are implementation helpers, not canonical source-member
+  slots, and recover any exact typed owner only from authoritative IR.
+  See [the generic-class ADR](docs/decisions/generic-class-erased-identity.md).
 - Ordinary runtime type tests evaluate their operand once at the erased object
   boundary, implement Kotlin nullable-target semantics before the non-null
   check, and then use either an existing Kotlin classifier or one physically

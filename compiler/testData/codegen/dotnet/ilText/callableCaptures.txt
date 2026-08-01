@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -139,9 +144,25 @@
     ret
   }
 }
+.class interface private abstract auto ansi 'callableCapturesKt$genericMutableCapture$1'
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'InvokeExact__KotlinErased__1f1ae6ed4cc96793187ab74cef06f891'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'Invoke__KotlinErased__c1ab8904f719420d17f1130c48ff2131'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$genericMutableCapture$1`1'<'T'>
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<!0>
+       implements 'callableCapturesKt$genericMutableCapture$1', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<!0>
 {
   .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0> '$value'
   .field private !0 '$replacement'
@@ -176,6 +197,27 @@
     .maxstack 1
     ldarg.0
     callvirt instance !0 class 'callableCapturesKt$genericMutableCapture$1`1'<!0>::'InvokeExact'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-InvokeExact>'() cil managed
+  {
+    .override method instance object 'callableCapturesKt$genericMutableCapture$1'::'InvokeExact__KotlinErased__1f1ae6ed4cc96793187ab74cef06f891'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'callableCapturesKt$genericMutableCapture$1`1'<!0>
+    callvirt instance !0 class 'callableCapturesKt$genericMutableCapture$1`1'<!0>::'InvokeExact'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-invoke>'() cil managed
+  {
+    .override method instance object 'callableCapturesKt$genericMutableCapture$1'::'Invoke__KotlinErased__c1ab8904f719420d17f1130c48ff2131'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'callableCapturesKt$genericMutableCapture$1`1'<!0>
+    callvirt instance object class 'callableCapturesKt$genericMutableCapture$1`1'<!0>::'Invoke'()
+    unbox.any !0
     box !0
     ret
   }

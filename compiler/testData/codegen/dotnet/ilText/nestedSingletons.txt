@@ -316,8 +316,14 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'GenericAncestor'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+}
 .class public auto ansi sealed beforefieldinit 'GenericAncestor`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'GenericAncestor'
 {
   .class nested public auto ansi sealed 'CompanionHolder'
          extends [mscorlib]System.Object
@@ -497,8 +503,14 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'DirectGenericObjectOwner'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+}
 .class public auto ansi sealed beforefieldinit 'DirectGenericObjectOwner`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'DirectGenericObjectOwner'
 {
   .class nested public auto ansi sealed 'Singleton'
          extends [mscorlib]System.Object
@@ -581,8 +593,14 @@
 .class public auto ansi sealed beforefieldinit 'GenericNestedObjectOwner'
        extends [mscorlib]System.Object
 {
+  .class nested public interface abstract auto ansi 'Generic'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
   .class nested public auto ansi sealed beforefieldinit 'Generic`1'<'T'>
          extends [mscorlib]System.Object
+         implements 'GenericNestedObjectOwner'/'Generic'
   {
     .class nested public auto ansi sealed 'Singleton'
            extends [mscorlib]System.Object
