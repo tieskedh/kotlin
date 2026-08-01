@@ -501,6 +501,7 @@ internal object DotNetMappedExceptions {
 internal fun DotNetIlValueType.isDotNetAssignableTo(expected: DotNetIlValueType): Boolean = when {
     this == expected -> true
     expected == DotNetIlValueType.Object -> isDotNetReferenceShaped()
+    this is DotNetIlValueType.GenericArray && expected is DotNetIlValueType.ErasedGenericArray -> true
     this is DotNetIlValueType.GenericArray && expected is DotNetIlValueType.GenericArray &&
             elementType.isDotNetReferenceShaped() &&
             expected.elementType.isDotNetReferenceShaped() ->
