@@ -76,7 +76,10 @@ identity, Kotlin and explicit C# implementations occupy the runtime capability
 interface, and every polymorphic operation, cast, and type test uses the same
 two-arm classifier. KLIB retains the generic bound while the incompatible CLR
 marker constraint is omitted. Runtime surface level 10 records this ABI.
-Builder storage remains deliberately undecided. The previously completed
+Builder storage is now selected as a Kotlin-owned wrapper over private BCL
+storage, but implementation is parked: the exact Common source closure reaches
+the public contract DSL, including annotation classes and `InvocationKind`,
+whose general representations are not yet selected. The previously completed
 Common collection predicates and ordinary inline-function boundary remain
 intact; reified and suspend inline are still explicit errors.
 
@@ -84,7 +87,9 @@ intact; reified and suspend inline are still explicit errors.
 
 - Exact Common `AbstractCollection`/`AbstractList` production still needs the
   remaining `Appendable`/`StringBuilder` and typed collection-to-array
-  closures; do not fork their algorithms into .NET.
+  closures; do not fork their algorithms into .NET. The builder closure
+  transitively requires the complete public contract DSL and therefore the
+  parked enum and annotation-class representation programmes.
 - An inline body in library A can currently bind built-ins and A-owned
   declarations. Arbitrary calls from that body into a distinct Kotlin library
   B need the selected .NET assembly graph as an explicit non-linking resolver
@@ -101,14 +106,13 @@ intact; reified and suspend inline are still explicit errors.
 
 ## Next bounded work
 
-1. Audit and actualize the complete Common `Appendable`/`StringBuilder`
-   string-building closure needed by collection rendering, beginning from
-   `joinTo`/`joinToString`; choose builder storage independently rather than
-   inferring it from the classified `CharSequence` carrier or copying a target
-   algorithm.
-2. Design and implement typed collection-to-array actuals that preserve the
+1. Design and implement typed collection-to-array actuals that preserve the
    requested CLR vector element type.
-3. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
+2. Audit and select the enum and annotation-class representations required by
+   the exact Common contract DSL; do not create builder-only stubs.
+3. Actualize the selected complete Common `Appendable`/`StringBuilder` and
+   generated `joinTo`/`joinToString` closure once that foundation exists.
+4. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
    both remaining closures are complete.
 
 ## Navigation
