@@ -13,11 +13,11 @@ class Impl : Able {
 class GoodDelegate(delegate: Able) : Able by delegate
 
 interface UnsupportedDelegate {
-    fun convert(value: Array<Int?>): Array<Int?>
+    fun <T> convert(value: Array<T?>): Array<T?>
 }
 
 class UnsupportedImpl : UnsupportedDelegate {
-    override fun convert(value: Array<Int?>): Array<Int?> = value
+    override fun <T> convert(value: Array<T?>): Array<T?> = value
 }
 
 class BadDelegate(delegate: UnsupportedDelegate) : UnsupportedDelegate by delegate
