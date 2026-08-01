@@ -432,3 +432,71 @@ both FIR frontends and runtime profiles; the foreign-call integration test execu
 safe casts to an imported CLR interface under net48 and net10; and
 `genericInterfacesRejected.kt` continues to omit the Kotlin-owned generic-class cast function.
 The next reversible prerequisite is boxed scalar casts, not either reified support gate.
+
+### Selected second prerequisite: boxed scalar casts
+
+Common cast semantics distinguish primitive identities; they do not perform numeric conversion.
+The shared `asForConstants.kt`, `asSafeForConstants.kt`, and `boxing6.kt` tests require a boxed
+`Int` to cast only to `Int`, for example, while `Byte`, `Short`, `Long`, `Float`, `Double`, and
+`Char` remain different runtime types. Explicit conversion functions, not `as`/`as?`, move between
+those identities. `Boolean` is distinct from every numeric type as well.
+
+Mature targets preserve that rule through their runtime representation:
+
+- JVM materializes both sides in boxed form for an explicit cast. Its safe-cast lowering performs
+  the corresponding runtime type test once and returns the boxed value or null before ordinary
+  unboxing at a typed use site.
+- JS performs its Kotlin runtime predicate once and returns the unchanged value or null/throws; it
+  does not reinterpret a successful scalar cast as numeric conversion.
+- Wasm performs a Kotlin type check, then narrows the cached value or returns null/throws.
+- Native erases non-reified type parameters for the check and lowers `as?` to one cached `is` test
+  plus the successful implicit cast; scalar boxing/unboxing remains target representation work.
+
+The CLR has exact value types and exact boxes for all eight selected Common scalars, so no new
+logical identity is needed. The target-specific requirement is only to bridge the object boundary
+to its hybrid nullable carrier:
+
+| Kotlin operation | CIL realization |
+| --- | --- |
+| `value as T` | evaluate as `object` once, then `unbox.any System.<boxed T>` |
+| `value as T?` | evaluate as `object` once, then `unbox.any Nullable<T>` |
+| `value as? T` or `value as? T?` | evaluate as `object` once, `isinst System.<boxed T>`, then `unbox.any Nullable<T>` |
+
+CLR nullable boxing makes the last two rows exact: unboxing a boxed `T` as `Nullable<T>` produces
+a present value, unboxing null produces an empty value, and `isinst` changes an unrelated object
+to null before the nullable unbox. The two-instruction safe shape assembled and executed with
+present, wrong-type, and null inputs on CLR 4 and CoreCLR. A checked wrong type remains CLR
+`InvalidCastException`, the physical Kotlin `ClassCastException`; a checked null to non-null `T`
+remains CLR `NullReferenceException`, the physical Kotlin `NullPointerException`.
+
+If the cast result is consumed as `T?` or `Any?`, the normal widening layer then constructs
+`Nullable<T>` or boxes it. This is part of the cast closure: restricting explicit casts to a local
+whose physical type happens to equal the cast target would be an emitter limitation, not Kotlin
+semantics.
+
+#### Design attack
+
+- **Use CLR numeric conversion instructions after unboxing.** Rejected. That would turn Kotlin
+  casts into conversions and make `1 as Long` succeed contrary to Common.
+- **Implement safe casts by catching `InvalidCastException`.** Rejected. It obscures ordinary
+  control flow, does not naturally distinguish a null success for a nullable target, and diverges
+  from every mature target's test-then-result shape.
+- **Return a raw scalar from `as?`.** Rejected. Failure requires a representable null; the selected
+  physical result is the existing `Nullable<T>` carrier.
+- **Use `isinst Nullable<T>` as a new identity.** Rejected. Nullable values box as the underlying
+  `T` or null. The runtime test must target the exact underlying box, matching the already-selected
+  `is T` implementation.
+- **Admit `UInt` and other value classes because they also have scalar storage.** Rejected. Value
+  classes are a parked language programme whose Kotlin identity cannot be inferred from storage.
+
+The bounded implementation includes `Boolean`, `Byte`, `Short`, `Int`, `Long`, `Float`, `Double`,
+and `Char`, both nullable spellings, outer nullable/object widening, exact-type success, distinct-
+scalar rejection, null behavior, exception mapping, and single evaluation. It changes neither
+numeric conversion nor value-class identity and does not enable reified inline support.
+
+This prerequisite is implemented. `scalarCasts.kt` runs the complete bounded matrix in both FIR
+frontends and runtime profiles. The emitter deliberately obtains an `as?` result carrier from the
+IR expression type: FIR keeps the requested type in `typeOperand` (`Int`) and makes the expression
+result nullable (`Int?`). Treating the operand as the physical result would reject every ordinary
+safe scalar cast. Reified inline remains disabled; the next reversible work is the existing
+concrete type-test and array-intrinsic matrix.
