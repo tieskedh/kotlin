@@ -260,6 +260,12 @@ See the
 - A non-reified explicit cast from an erased object to an open type parameter
   uses CLR `unbox.any !n`/`!!n`, which handles value and reference
   instantiations. Do not use that throwing operation to implement `as? T`.
+- Explicit casts to the eight selected Common primitive scalars preserve exact
+  boxed identity and never perform numeric conversion. Checked non-null casts
+  unbox the exact `System.<T>` box; checked nullable casts unbox as
+  `Nullable<T>`; safe casts test the exact underlying box and materialize the
+  existing `Nullable<T>` result. Do not infer value-class identity from the
+  same storage shape.
 - Variant/generic interfaces use the versioned split-interface/bridge model
   where one CLR interface cannot truthfully carry all Kotlin views. MethodImpl
   and effective interface maps are semantic ABI, not IL spelling trivia. See

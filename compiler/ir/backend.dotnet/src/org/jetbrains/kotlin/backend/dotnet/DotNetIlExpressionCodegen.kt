@@ -441,6 +441,10 @@ internal class DotNetIlExpressionCodegen(
      *   deliberately narrower than [isDotNetReferenceShaped]: a Kotlin-owned generic class is a
      *   CLR [DotNetIlValueType.GenericInstance], whose type arguments must NOT participate in
      *   Kotlin runtime identity, and mapped exception relationships require their classifier.
+     * - CAST/SAFE_CAST to one of the eight Common primitive scalars: test/unbox only the exact
+     *   CLR box selected by the scalar ABI. A checked nullable cast uses `unbox.any Nullable<T>`;
+     *   a safe cast first changes a wrong object to null with `isinst System.<T>`, then uses the
+     *   same nullable unbox to produce some-T or empty. No cast performs numeric conversion.
      * - CAST to an open type parameter: widen/box the operand to `object`, then use CLR
      *   `unbox.any !n`/`!!n`. This is the single instruction that recovers either a value or
      *   reference instantiation and is the direct CLR counterpart of a non-reified unchecked
@@ -461,17 +465,48 @@ internal class DotNetIlExpressionCodegen(
                 emitExpression(expression.argument, DotNetIlValueType.Object)
                 if (methodContext.isTerminated) return
                 methodContext.emit("unbox.any ${castType.nameInSignature}", pops = 1, pushes = 1)
-                if (!castType.isDotNetAssignableTo(expectedType)) {
-                    val outerCoercion = dotNetWideningCoercionOrNull(
-                        castType,
-                        expectedType,
-                        coreLibraryReference,
-                    ) ?: dotNetUnsupported(
-                        "generic cast produces ${castType.nameInSignature} " +
-                                "where ${expectedType.nameInSignature} is expected"
-                    )
-                    methodContext.emit(outerCoercion, pops = 1, pushes = 1)
+                emitCastResultCoercion(castType, expectedType, "generic cast")
+                return
+            }
+            val scalarCastType =
+                (castType as? DotNetIlValueType.NullableValue)?.elementType ?: castType
+            val boxedScalarTypeRef =
+                scalarCastType.dotNetBoxedCorelibRefOrNull(coreLibraryReference)
+            if (boxedScalarTypeRef != null) {
+                val scalarResultType = if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                    typeMapper.toDotNetIlValueType(expression.type)
+                        ?: dotNetUnsupported(
+                            "safe scalar cast has unsupported result type ${expression.type.render()}"
+                        )
+                } else {
+                    castType
                 }
+                emitExpression(expression.argument, DotNetIlValueType.Object)
+                if (methodContext.isTerminated) return
+                if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                    if (scalarResultType !is DotNetIlValueType.NullableValue ||
+                        scalarResultType.elementType != scalarCastType
+                    ) {
+                        dotNetUnsupported(
+                            "safe scalar cast has inconsistent physical result " +
+                                    scalarResultType.nameInSignature
+                        )
+                    }
+                    methodContext.emit("isinst $boxedScalarTypeRef", pops = 1, pushes = 1)
+                    methodContext.emit(
+                        "unbox.any ${scalarResultType.nameInSignature}",
+                        pops = 1,
+                        pushes = 1,
+                    )
+                } else {
+                    val narrowing = castType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
+                        ?: error(
+                            "Internal .NET backend error: scalar cast has no object narrowing for " +
+                                    castType.nameInSignature
+                    )
+                    methodContext.emit(narrowing, pops = 1, pushes = 1)
+                }
+                emitCastResultCoercion(scalarResultType, expectedType, "scalar cast")
                 return
             }
             if (expression.typeOperand.isDotNetCharSequenceType()) {
@@ -624,6 +659,23 @@ internal class DotNetIlExpressionCodegen(
                 )
             methodContext.emit(outerCoercion, pops = 1, pushes = 1)
         }
+    }
+
+    private fun emitCastResultCoercion(
+        castType: DotNetIlValueType,
+        expectedType: DotNetIlValueType,
+        operationDescription: String,
+    ) {
+        if (castType.isDotNetAssignableTo(expectedType)) return
+        val outerCoercion = dotNetWideningCoercionOrNull(
+            castType,
+            expectedType,
+            coreLibraryReference,
+        ) ?: dotNetUnsupported(
+            "$operationDescription produces ${castType.nameInSignature} " +
+                    "where ${expectedType.nameInSignature} is expected"
+        )
+        methodContext.emit(outerCoercion, pops = 1, pushes = 1)
     }
 
     private fun emitRuntimeTypeTest(

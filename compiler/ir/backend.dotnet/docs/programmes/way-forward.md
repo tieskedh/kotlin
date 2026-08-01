@@ -100,9 +100,10 @@ dependency discovery.
 The reified audit now identifies generic-class runtime identity as the first hard representation
 boundary: Kotlin erases declaration arguments for runtime class identity while ordinary CLR
 storage uses closed `C<T>` carriers. Do not flip the inliner capability gates or compile a
-Kotlin-owned generic-class test as closed CLR identity. Complete the independently truthful
-non-generic reference, boxed-scalar, and array cast prerequisites first; the generic erased view,
-`KClass`, `KType`, enum intrinsics, and physical reified stub remain later decisions.
+Kotlin-owned generic-class test as closed CLR identity. The independently truthful non-generic
+reference, boxed-scalar, and array cast prerequisites are complete; close the existing concrete
+type-test and array-intrinsic matrix next. The generic erased view, `KClass`, `KType`, enum
+intrinsics, and physical reified stub remain later decisions.
 
 ### 2. Expand Common collections by exact dependency closure
 

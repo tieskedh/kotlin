@@ -105,6 +105,10 @@ casts require an erased runtime identity over physically closed CLR carriers.
 Physically exact non-generic reference casts are now complete for Kotlin
 classes/interfaces, imported CLR interfaces, strings, `Any`, primitive-array
 wrappers, and exact CLR vectors without admitting closed generic instances.
+Boxed-scalar casts are now complete for all eight selected Common primitives:
+exact boxed identity, nullable unboxing for checked nullable casts, and
+`isinst` plus nullable unboxing for safe casts, with no numeric-conversion or
+value-class widening.
 
 ## Open architectural blockers
 
@@ -125,9 +129,9 @@ wrappers, and exact CLR vectors without admitting closed generic instances.
 
 ## Next bounded work
 
-1. Continue the reified prerequisites with boxed scalar casts and adversarially
-   close the concrete type-test/array-intrinsic matrix; do not admit
-   Kotlin-owned generic-class casts before their erased runtime view is selected.
+1. Continue the reversible reified prerequisites by adversarially closing the
+   concrete type-test/array-intrinsic matrix; do not admit Kotlin-owned
+   generic-class casts before their erased runtime view is selected.
 2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
    collections/`EnumEntries` bootstrap cluster; do not create builder-only or
    one-enum stubs.
