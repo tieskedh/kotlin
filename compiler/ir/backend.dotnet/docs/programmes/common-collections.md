@@ -301,21 +301,31 @@ a host interface already implemented by its string; JavaScript supplies the clos
 classifying host strings beside Kotlin interface implementations and rewriting the three logical
 operations. CLR has the same constraint because `System.String` is sealed.
 
-This carrier must land and pass its representation gate before `Appendable` or `StringBuilder` is
-published. It deliberately does not decide builder storage. Once the carrier is proven, the next
-bounded audit must choose a complete Common `Appendable`/`StringBuilder` actualization rather than
-publishing a partial target-authored builder merely to unblock `joinToString`.
+The carrier has landed and passed its representation gate. The selected
+[`Appendable`/`StringBuilder` decision](../decisions/appendable-string-builder.md) keeps both public
+identities Kotlin-owned and uses `System.Text.StringBuilder` only as private storage. Raw BCL
+builders do not become a third `CharSequence` classifier arm.
+
+The source audit exposed a prerequisite that a partial builder must not hide: Common
+`StringBuilder.kt` and its exact `Standard.kt` dependency use the public `kotlin.contracts` source
+family. That family includes public effect interfaces, annotation classes, and the
+`InvocationKind` enum. The target cannot publish those KLIB declarations while omitting their
+physical product, and it cannot fake just enough contract declarations for builder compilation.
+Complete enum and annotation-class representation decisions therefore precede builder
+actualization. Typed collection-to-array remains an independent, reversible prerequisite and is
+selected first while that language foundation is parked.
 
 ## Programme order
 
-1. Complete the string-building and typed collection-to-array prerequisites needed by the
-   abstract bases.
-2. Implement typed collection-to-array semantics and compile the exact Common abstract bases.
-3. Add mutable collection/list contracts and an ordinary implementation.
-4. Add sets and maps from their exact Common dependency closures.
-5. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-6. Let `EnumEntries` and enums consume the established collection substrate.
-7. Remove the bootstrap allowlist when the complete generated product is supportable.
+1. Complete typed collection-to-array semantics independently.
+2. Complete the enum/annotation-class foundation required by the exact contract DSL, then
+   actualize the selected builder and generated join closure.
+3. Compile the exact Common abstract bases once both prerequisites exist.
+4. Add mutable collection/list contracts and an ordinary implementation.
+5. Add sets and maps from their exact Common dependency closures.
+6. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+7. Let `EnumEntries` consume the established collection substrate.
+8. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 
