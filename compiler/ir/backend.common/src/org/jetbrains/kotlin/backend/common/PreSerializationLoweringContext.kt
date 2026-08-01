@@ -25,6 +25,16 @@ abstract class PreSerializationLoweringContext(
 ) : LoweringContext {
     abstract val irMangler: KotlinMangler.IrMangler
 
+    /**
+     * Whether non-linking inline-body deserialization may use the dependency's main IR as a body
+     * fallback and to bind declarations referenced by a prepared body. Binary-producing KLIB
+     * targets normally have a later linker and keep this disabled.
+     */
+    open val linkInlineFunctionReferencesFromMainIr: Boolean = false
+
+    /** Whether this target may inline functions whose type parameters are reified. */
+    open val supportsReifiedInlineFunctions: Boolean = true
+
     override val irFactory: IrFactory
         get() = IrFactoryImpl
 

@@ -82,16 +82,27 @@ The current bounded work order is intentional. It may interleave small slices, b
 must not pull an earlier responsibility back into the backend or publish a shape whose prerequisites
 are still undecided.
 
-### 1. Expand Common collections by exact dependency closure
+### 1. Preserve the completed ordinary inline foundation
 
-Use [`common-collections.md`](common-collections.md). Select the next non-inline Common/generated
-family only after its complete source, expect/actual, backend, and runtime dependency closure is
-known. Do not fork Common algorithms to make a slice look smaller.
+[`inline-functions.md`](inline-functions.md) records the completed component-aware embedded KLIB
+loading, target IR serialization, shared first-/second-stage inliner phases, Common shared-variable
+ABI, and all existing KLIB inliner modes. New work must keep its separate-DLL, friend/compiler-ABI,
+main/prepared IR, and cross-profile matrix green.
+
+Ordinary non-reified inline is available for exact Common-source adoption. Reified and suspend
+inline functions remain separate programmes and must continue to fail clearly.
+
+### 2. Expand Common collections by exact dependency closure
+
+Use [`common-collections.md`](common-collections.md). The next slice may now include its selected
+ordinary non-reified Common/generated inline families, but only after each complete source,
+expect/actual, backend, and runtime dependency closure is known. Do not fork Common algorithms to
+make a slice look smaller.
 
 The collection work provides ordinary user value and foundations for enums, while exercising
 generic interfaces, arrays, separate products, and profile-compatible stdlib publication.
 
-### 2. Retain and enforce the completed declaration architecture seam
+### 3. Retain and enforce the completed declaration architecture seam
 
 Use [`compiler-architecture.md`](compiler-architecture.md). The versioned neutral carrier is now
 shared by the foreign FIR provider and backend binding, and Kotlin-facing provider policy lives in
@@ -101,7 +112,7 @@ backend. Preserve and validate that dependency direction as the importer grows.
 Further extraction still requires concrete independent consumers. It is not a request to split
 large classes or create layers for their own sake.
 
-### 3. Broaden foreign CLR interoperability only through exact mappings
+### 4. Broaden foreign CLR interoperability only through exact mappings
 
 Use [`clr-annotations.md`](clr-annotations.md) and the
 [importer ADR](../decisions/draft-adr-clr-importer-boundary.md). Admit complete declaration families
@@ -111,7 +122,7 @@ semantics are all specified.
 Do not flatten property/ref/out state, bypass Common smart-cast stability, or infer a declaration
 role from an attribute name.
 
-### 4. Close the remaining draft ABI decisions before wider breadth
+### 5. Close the remaining draft ABI decisions before wider breadth
 
 The following drafts must be accepted, revised, or explicitly excluded before third-party binary
 publication:
@@ -162,7 +173,8 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - general annotation classes, use-site targets, retention, and runtime reflection;
 - `KClass`, class literals, `typeOf`, and broad reflection;
 - value/inline classes;
-- inline/reified functions and cross-module inlining;
+- reified functions, `typeOf`, and reflection-dependent inline substitution;
+- suspend inline functions until coroutine state machines are supported;
 - coroutine state machines and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;
 - `CharSequence`, `Appendable`, `StringBuilder`, and `lateinit`;

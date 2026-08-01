@@ -42,7 +42,8 @@ private fun createIrValidationAfterInliningPrivateFunctionsKlibPhase(context: Lo
 }
 
 fun loweringsOfTheFirstPhase(
-    languageVersionSettings: LanguageVersionSettings
+    languageVersionSettings: LanguageVersionSettings,
+    includeLateinitLowering: Boolean = true,
 ): List<(PreSerializationLoweringContext) -> ModuleLoweringPass> {
     val inlineIntraModule = languageVersionSettings.supportsFeature(LanguageFeature.IrIntraModuleInlinerBeforeKlibSerialization)
     val inlineCrossModuleFunctions =
@@ -84,7 +85,9 @@ fun loweringsOfTheFirstPhase(
         this += ::VersionOverloadsLowering
         this += ::InlineCallCycleCheckerLowering
         if (inlineIntraModule) {
-            this += ::LateinitLowering
+            if (includeLateinitLowering) {
+                this += ::LateinitLowering
+            }
             this += ::createSharedVariablesLoweringPhase
             this += ::LocalClassesInInlineLambdasLowering
             this += ::ArrayConstructorLowering

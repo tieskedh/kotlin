@@ -223,6 +223,9 @@ import org.jetbrains.kotlin.cli.pipeline.metadata.MetadataConfigurationUpdater
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_MANUALLY_ALTERED_LANGUAGE_FEATURES
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_METADATA_FLAGS
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_NEW_COMPANION_INITIALIZATION
+import org.jetbrains.kotlin.library.components.inlinableFunctionsIr
+import org.jetbrains.kotlin.library.components.ir
+import org.jetbrains.kotlin.library.loader.loadPackedKlib
 import org.jetbrains.kotlin.platform.dotnet.isDotNet
 import org.jetbrains.kotlin.test.TestCaseWithTmpdir
 import org.junit.jupiter.api.Assertions.assertArrayEquals
@@ -19329,6 +19332,394 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testInlinesOrdinaryFunctionsWithinOneModule() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val source = File(tmpdir, "inline-local.kt").apply {
+            writeText(
+                """
+                package inline.local
+
+                inline fun <T> twice(value: T, transform: (T) -> T): T = transform(transform(value))
+                inline fun escape(block: () -> Int): Int = block()
+                private inline fun privately(block: () -> Int): Int = block()
+
+                fun evaluate(): Int {
+                    var calls = 0
+                    val value = twice(10) {
+                        calls += 1
+                        it + calls
+                    }
+                    return value * 10 + calls
+                }
+
+                fun early(): Int {
+                    escape { return 42 }
+                    return -1
+                }
+
+                fun privateResult(): Int = privately { 17 }
+
+                fun main() {
+                    if (evaluate() != 132) throw Error("generic inline lambda or mutable capture")
+                    if (early() != 42) throw Error("non-local return")
+                    if (privateResult() != 17) throw Error("private inline")
+                }
+                """.trimIndent()
+            )
+        }
+        val outputDirectory = File(tmpdir, "inline-local-output").apply { mkdirs() }
+        val assembly = outputDirectory.resolve("InlineLocal.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            K2DotNetCompilerArguments::irInlinerBeforeKlibSerialization.cliArgument, "intra-module",
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "InlineLocal",
+            K2DotNetCompilerArguments::destination.cliArgument, assembly.path,
+        )
+
+        val il = outputDirectory.resolve("InlineLocal.il").readText()
+        assertTrue("::'twice'<" !in il) { il }
+        assertTrue("::'escape'(" !in il) { il }
+        assertTrue("::'privately'(" !in il) { il }
+        runDotNet(modernDotNetHostOrSkip(), assembly, outputDirectory, "Intra-module inline executable failed")
+    }
+
+    @Test
+    fun testInlinesOrdinaryFunctionsOnBinaryStageByDefault() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val source = File(tmpdir, "inline-default.kt").apply {
+            writeText(
+                """
+                package inline.defaultmode
+
+                inline fun <T> applyTwice(value: T, transform: (T) -> T): T = transform(transform(value))
+
+                fun main() {
+                    if (applyTwice(3) { it + 2 } != 7) throw Error("default binary-stage inlining")
+                }
+                """.trimIndent()
+            )
+        }
+        val outputDirectory = File(tmpdir, "inline-default-output").apply { mkdirs() }
+        val assembly = outputDirectory.resolve("InlineDefault.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "InlineDefault",
+            K2DotNetCompilerArguments::destination.cliArgument, assembly.path,
+        )
+
+        val il = outputDirectory.resolve("InlineDefault.il").readText()
+        assertTrue("::'applyTwice'<" !in il) { il }
+        runDotNet(modernDotNetHostOrSkip(), assembly, outputDirectory, "Default binary-stage inline executable failed")
+    }
+
+    @Test
+    fun testInlinesOrdinaryFunctionsAcrossLibrariesFromPreparedAndMainIr() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val producerSource = File(tmpdir, "inline-producer.kt").apply {
+            writeText(
+                """
+                package inline.library
+
+                @PublishedApi
+                internal fun bump(value: Int): Int = value + 1
+
+                public inline fun twice(value: Int, transform: (Int) -> Int): Int =
+                    transform(transform(bump(value)))
+
+                public inline fun escape(block: () -> Int): Int = block()
+
+                public inline fun escaping(crossinline transform: (Int) -> Int): () -> Int =
+                    { transform(bump(6)) }
+
+                public inline fun retained(noinline transform: (Int) -> Int): (Int) -> Int {
+                    var calls = 0
+                    return { value ->
+                        calls += 1
+                        transform(value) + calls
+                    }
+                }
+
+                public inline fun ordered(first: () -> Int, second: () -> Int): Int =
+                    first() * 10 + second()
+
+                public inline fun consumeOnce(value: Int, transform: (Int) -> Int): Int =
+                    transform(value) + value
+
+                public class InlineHost(val offset: Int) {
+                    public inline fun apply(value: Int, transform: (Int) -> Int): Int =
+                        transform(value) + offset
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerSource = File(tmpdir, "inline-consumer.kt").apply {
+            writeText(
+                """
+                package inline.consumer
+
+                import inline.library.escape
+                import inline.library.escaping
+                import inline.library.consumeOnce
+                import inline.library.InlineHost
+                import inline.library.ordered
+                import inline.library.retained
+                import inline.library.twice
+
+                fun early(): Int {
+                    escape { return 41 }
+                    return -1
+                }
+
+                fun main() {
+                    if (twice(10) { it + 1 } != 13) throw Error("cross-library generic lambda")
+                    if (early() != 41) throw Error("cross-library non-local return")
+
+                    var order = 0
+                    val orderedResult = ordered(
+                        {
+                            order = order * 10 + 1
+                            3
+                        },
+                        {
+                            order = order * 10 + 2
+                            4
+                        },
+                    )
+                    if (orderedResult != 34 || order != 12) throw Error("inline evaluation order")
+
+                    var evaluations = 0
+                    val once = consumeOnce(++evaluations + 4) { it * 2 }
+                    if (once != 15 || evaluations != 1) throw Error("inline argument evaluated more than once")
+
+                    if (InlineHost(4).apply(6) { it * 3 } != 22) throw Error("member inline receiver or producer accessor")
+
+                    val escaped = escaping { it * 2 }
+                    if (escaped() != 14) throw Error("crossinline escaping lambda")
+
+                    var seed = 10
+                    val kept = retained { it + seed }
+                    seed = 20
+                    if (kept(1) != 22 || kept(1) != 23) throw Error("noinline lambda or shared variable")
+
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+
+        for (case in listOf(
+            Triple("intra-module", "Prepared", true),
+            Triple("full", "Full", true),
+            Triple("disabled", "Main", false),
+        )) {
+            val mode = case.first
+            val suffix = case.second
+            val expectsPreparedIr = case.third
+            val producerDirectory = File(tmpdir, "inline-producer-$suffix").apply { mkdirs() }
+            val producerAssemblyName = "Inline.$suffix.Producer"
+            compileInProcess(
+                K2DotNetCompiler(),
+                producerSource.path,
+                K2DotNetCompilerArguments::irInlinerBeforeKlibSerialization.cliArgument, mode,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+                K2DotNetCompilerArguments::moduleName.cliArgument, producerAssemblyName,
+                K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+            )
+            val producerAssembly = producerDirectory.resolve("$producerAssemblyName.dll")
+            val packedLibrary = loadPackedKlib(producerAssembly.toPath(), producerAssembly.readKlibCarrier())
+            assertEquals(expectsPreparedIr, packedLibrary.inlinableFunctionsIr != null) {
+                "Unexpected prepared-inline component for -Xklib-ir-inliner=$mode"
+            }
+            assertTrue(packedLibrary.ir != null) { "Every .NET library mode must retain main IR" }
+
+            val producerIl = producerDirectory.resolve("$producerAssemblyName.il").readText()
+            assertTrue("KotlinCompilerAbiAttribute" in producerIl) { producerIl }
+
+            for (target in listOf("net48", "net10.0")) {
+                val targetSuffix = if (target == "net48") "Framework" else "Core"
+                val consumerDirectory = File(tmpdir, "inline-consumer-$suffix-$targetSuffix").apply { mkdirs() }
+                val consumerAssemblyName = "Inline${suffix}${targetSuffix}Consumer"
+                val consumerAssembly = consumerDirectory.resolve(
+                    if (target == "net48") "$consumerAssemblyName.exe" else "$consumerAssemblyName.dll"
+                )
+                compileInProcess(
+                    K2DotNetCompiler(),
+                    consumerSource.path,
+                    K2DotNetCompilerArguments::classpath.cliArgument, producerAssembly.path,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, consumerAssemblyName,
+                    K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+                )
+
+                val consumerIl = consumerDirectory.resolve("$consumerAssemblyName.il").readText()
+                assertTrue("::'twice'(" !in consumerIl) { consumerIl }
+                assertTrue("::'escape'(" !in consumerIl) { consumerIl }
+                assertTrue("::'escaping'(" !in consumerIl) { consumerIl }
+                assertTrue("::'consumeOnce'(" !in consumerIl) { consumerIl }
+                assertTrue("::'apply'(" !in consumerIl) { consumerIl }
+                assertTrue("::'retained'(" !in consumerIl) { consumerIl }
+                assertTrue("::'ordered'(" !in consumerIl) { consumerIl }
+                assertTrue("::'bump'(" in consumerIl) { consumerIl }
+                assertTrue("SharedVariableBox" in consumerIl) { consumerIl }
+                if (target == "net48") {
+                    runAssemblerPairing(
+                        frameworkExecutionCommand(checkNotNull(frameworkHost), consumerAssembly),
+                        consumerDirectory,
+                        "Framework cross-library inline consumer failed for $mode",
+                    )
+                } else {
+                    runDotNet(
+                        modernDotNetHostOrSkip(),
+                        consumerAssembly,
+                        consumerDirectory,
+                        "CoreCLR cross-library inline consumer failed for $mode",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun testInlinesFriendFunctionThroughSyntheticAccessor() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val producerDirectory = File(tmpdir, "inline-friend-producer").apply { mkdirs() }
+        val producerSource = producerDirectory.resolve("inlineFriendProducer.kt").apply {
+            writeText(
+                """
+                package inline.friend
+
+                private fun hidden(value: Int): Int = value + 2
+
+                internal inline fun throughHidden(value: Int): Int = hidden(value)
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::irInlinerBeforeKlibSerialization.cliArgument, "intra-module",
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::dotNetFriendAssemblies.cliArgument, "Inline.Friend.Consumer",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Inline.Friend.Producer",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val producerAssembly = producerDirectory.resolve("Inline.Friend.Producer.dll")
+        val producerIl = producerDirectory.resolve("Inline.Friend.Producer.il").readText()
+        assertTrue(".method assembly hidebysig static int32 'access\$hidden" in producerIl) { producerIl }
+
+        val consumerDirectory = File(tmpdir, "inline-friend-consumer").apply { mkdirs() }
+        val consumerSource = consumerDirectory.resolve("inlineFriendConsumer.kt").apply {
+            writeText(
+                """
+                package inline.consumer
+
+                import inline.friend.throughHidden
+
+                fun main() {
+                    if (throughHidden(40) != 42) throw Error("synthetic inline accessor")
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("Inline.Friend.Consumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, producerAssembly.path,
+            K2DotNetCompilerArguments::friendPaths.cliArgument, producerAssembly.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Inline.Friend.Consumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+
+        val consumerIl = consumerDirectory.resolve("Inline.Friend.Consumer.il").readText()
+        assertTrue("::'throughHidden'(" !in consumerIl) { consumerIl }
+        assertTrue("access\$hidden" in consumerIl) { consumerIl }
+        runDotNet(
+            modernDotNetHostOrSkip(),
+            consumerAssembly,
+            consumerDirectory,
+            "Friend inline synthetic-accessor consumer failed",
+        )
+    }
+
+    @Test
+    fun testReifiedInlineFunctionsRemainRejected() {
+        val source = File(tmpdir, "inline-reified.kt").apply {
+            writeText(
+                """
+                package inline.reified
+
+                inline fun <reified T> isType(value: Any): Boolean = value is T
+
+                fun main() {
+                    if (!isType<String>("ok")) throw Error("reified inline")
+                }
+                """.trimIndent()
+            )
+        }
+        val output = File(tmpdir, "InlineReified.dll")
+        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                source.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+                K2DotNetCompilerArguments::moduleName.cliArgument, "InlineReified",
+                K2DotNetCompilerArguments::destination.cliArgument, output.path,
+            ),
+        )
+
+        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+        assertTrue("call to unsupported function 'isType'" in diagnostics) { diagnostics }
+        assertFalse(output.exists()) { "A rejected reified program must not leave a runnable artifact" }
+    }
+
+    @Test
+    fun testSuspendInlineFunctionsRemainExplicitlyUnsupported() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val source = File(tmpdir, "inline-suspend.kt").apply {
+            writeText(
+                """
+                package inline.suspendshape
+
+                suspend inline fun suspended(block: () -> Int): Int = block()
+
+                fun main() {
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+        val outputDirectory = File(tmpdir, "inline-suspend-output").apply { mkdirs() }
+        val output = outputDirectory.resolve("InlineSuspend.dll")
+        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                source.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+                K2DotNetCompilerArguments::moduleName.cliArgument, "InlineSuspend",
+                K2DotNetCompilerArguments::destination.cliArgument, output.path,
+            ),
+        )
+
+        assertEquals(ExitCode.OK, exitCode, diagnostics)
+        assertTrue("suspend function 'suspended' requires coroutine lowering" in diagnostics) { diagnostics }
+        val il = outputDirectory.resolve("InlineSuspend.il").readText()
+        assertTrue("'suspended'" !in il) { il }
+        runDotNet(modernDotNetHostOrSkip(), output, outputDirectory, "Suspend-inline rejection executable failed")
+    }
+
+    @Test
     fun testProducesPortableSelfDescribingUserLibrary() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
@@ -19420,6 +19811,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 embeddedPayload.getValue(entryName),
                 "JVM and Framework resource readers differ at $entryName",
             )
+        }
+        val packedLibrary = loadPackedKlib(implementationLibrary.toPath(), implementationLibrary.readKlibCarrier())
+        assertEquals(1, checkNotNull(packedLibrary.ir).irFileCount) {
+            "A one-source user library must retain its IR without injected bootstrap-stdlib files"
         }
 
         val il = outputDirectory.resolve("Sample.Library.il").readText()
@@ -19539,8 +19934,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, unrelatedConsumerAssembly.path,
         )
         val unrelatedConsumerIl = unrelatedConsumerDirectory.resolve("UnrelatedConsumer.il").readText()
-        assertTrue(".assembly extern 'Sample.Library'" !in unrelatedConsumerIl)
-        assertTrue("[Sample.Library]" !in unrelatedConsumerIl)
+        assertTrue(".assembly extern 'Sample.Library'" !in unrelatedConsumerIl) { unrelatedConsumerIl }
+        assertTrue("[Sample.Library]" !in unrelatedConsumerIl) { unrelatedConsumerIl }
         assertTrue(!unrelatedConsumerDirectory.resolve("Sample.Library.dll").exists()) {
             "An unused metadata classpath entry must not become a CLR runtime dependency"
         }
@@ -29528,6 +29923,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SharedVariableBox.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SyntheticConstructorMarker.kt").absoluteFile
         sourceFiles.sortBy(File::invariantSeparatorsPath)
         assertEquals(DOTNET_STDLIB_SOURCES.keys.sorted(), sourceFiles.map(File::getName).sorted())
         for (sourceFile in sourceFiles) {

@@ -6,7 +6,10 @@
 package org.jetbrains.kotlin.library
 
 import org.jetbrains.kotlin.library.components.ir
+import org.jetbrains.kotlin.library.components.inlinableFunctionsIr
 import org.jetbrains.kotlin.library.components.metadata
+import org.jetbrains.kotlin.library.impl.IrArrayWriter
+import org.jetbrains.kotlin.library.loader.loadPackedKlib
 import org.jetbrains.kotlin.library.loader.loadPackedMetadataKlib
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -31,6 +34,7 @@ class PackedMetadataKlibLoaderTest {
                 "default/linkdata/package_sample/first.knm" to byteArrayOf(5, 6),
                 "default/linkdata/package_sample/second.knm" to byteArrayOf(7),
                 "default/unknown/future-component.bin" to byteArrayOf(8),
+                *packedIrComponent("default/ir/", 10),
             ),
         )
 
@@ -56,6 +60,44 @@ class PackedMetadataKlibLoaderTest {
 
         assertEquals("Reordered", library.uniqueName)
         assertArrayEquals(byteArrayOf(2), library.metadata.getPackageFragment("", "root"))
+    }
+
+    @Test
+    fun `component-complete loader exposes main and prepared IR`() {
+        val mainIr = packedIrComponent("default/ir/", 10)
+        val preparedIr = packedIrComponent("default/ir_inlinable_functions/", 20)
+        val library = loadPackedKlib(
+            Paths.get("Inline.Library.dll"),
+            packedKlib(
+                "default/manifest" to "unique_name=Inline.Library\n".toByteArray(),
+                "default/linkdata/module" to byteArrayOf(1),
+                *mainIr,
+                *preparedIr,
+            ),
+        )
+
+        assertIrComponent(library.ir!!, 10)
+        assertIrComponent(library.inlinableFunctionsIr!!, 20)
+    }
+
+    @Test
+    fun `component-complete loader rejects a partial IR component`() {
+        val exception = assertThrows<IllegalArgumentException> {
+            loadPackedKlib(
+                Paths.get("Partial.dll"),
+                packedKlib(
+                    "default/manifest" to "unique_name=Partial\n".toByteArray(),
+                    "default/linkdata/module" to byteArrayOf(),
+                    "default/ir/files.knf" to irArray(byteArrayOf(1)),
+                ),
+            )
+        }
+
+        assertEquals(
+            "Invalid packed KLIB 'Partial.dll': IR component 'default/ir/' is incomplete; " +
+                    "missing bodies.knb, irDeclarations.knd, signatures.knt, strings.knt, types.knt",
+            exception.message,
+        )
     }
 
     @Test
@@ -145,6 +187,42 @@ class PackedMetadataKlibLoaderTest {
             }
             bytes.toByteArray()
         }
+
+    private fun packedIrComponent(directory: String, seed: Int): Array<Pair<String, ByteArray>> {
+        val fileData = byteArrayOf(seed.toByte())
+        val fileEntry = byteArrayOf((seed + 1).toByte())
+        val declaration = byteArrayOf((seed + 2).toByte())
+        val body = byteArrayOf((seed + 3).toByte())
+        val type = byteArrayOf((seed + 4).toByte())
+        val signature = byteArrayOf((seed + 5).toByte())
+        val debugInfo = byteArrayOf((seed + 6).toByte())
+        val stringLiteral = byteArrayOf((seed + 7).toByte())
+        return arrayOf(
+            "${directory}files.knf" to irArray(fileData),
+            "${directory}fileEntries.knf" to irArray(irArray(fileEntry)),
+            "${directory}irDeclarations.knd" to irArray(declaration),
+            "${directory}bodies.knb" to irArray(irArray(body)),
+            "${directory}types.knt" to irArray(irArray(type)),
+            "${directory}signatures.knt" to irArray(irArray(signature)),
+            "${directory}debugInfo.knd" to irArray(irArray(debugInfo)),
+            "${directory}strings.knt" to irArray(irArray(stringLiteral)),
+        )
+    }
+
+    private fun assertIrComponent(component: org.jetbrains.kotlin.library.components.KlibIrComponent, seed: Int) {
+        assertEquals(1, component.irFileCount)
+        assertArrayEquals(byteArrayOf(seed.toByte()), component.irFile(0))
+        assertArrayEquals(byteArrayOf((seed + 1).toByte()), component.irFileEntry(0, 0))
+        assertArrayEquals(byteArrayOf((seed + 2).toByte()), component.declarations(0))
+        assertArrayEquals(byteArrayOf((seed + 3).toByte()), component.body(0, 0))
+        assertArrayEquals(byteArrayOf((seed + 4).toByte()), component.type(0, 0))
+        assertArrayEquals(byteArrayOf((seed + 5).toByte()), component.signature(0, 0))
+        assertArrayEquals(byteArrayOf((seed + 6).toByte()), component.signatureDebugInfo(0, 0))
+        assertArrayEquals(byteArrayOf((seed + 7).toByte()), component.stringLiteral(0, 0))
+    }
+
+    private fun irArray(vararg entries: ByteArray): ByteArray =
+        IrArrayWriter(entries.toList(), useVarInt = false).writeIntoMemory()
 
     private fun ByteArray.replacingAscii(original: String, replacement: String): ByteArray {
         val originalBytes = original.toByteArray(Charsets.US_ASCII)

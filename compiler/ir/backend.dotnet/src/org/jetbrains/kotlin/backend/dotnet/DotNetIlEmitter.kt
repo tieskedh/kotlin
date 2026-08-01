@@ -1009,10 +1009,10 @@ internal class DotNetIlEmitter(
             for (function in functions) {
                 if (intrinsicMethods.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true) continue
                 try {
-                    // Generic top-level functions are stage-1 supported (real CLR generic
-                    // methods, `!!n`-indexed — no monomorphization or erasure machinery); the
-                    // gate rejects the unsupported flavors (inline/reified, variance,
-                    // constraints) loudly before the signature maps.
+                    // Generic top-level functions use real CLR generic methods (`!!n`-indexed,
+                    // with no monomorphization or erasure machinery). Ordinary non-reified
+                    // inline methods keep that physical fallback; suspend/reified, variance,
+                    // and unsupported constraints fail loudly before the signature maps.
                     function.checkDotNetFunctionShapeSupported()
                     availableFunctions[function] = DotNetIlFunctionInfo(
                         facadeClassInfo,
@@ -1937,16 +1937,16 @@ internal class DotNetIlEmitter(
      * while its valid enclosing classes and siblings remain available.
      */
     private fun IrSimpleFunction.checkDotNetFunctionShapeSupported() {
+        if (isSuspend) {
+            dotNetUnsupported("suspend function '${name.asString()}' requires coroutine lowering, which is not available")
+        }
         if (isOriginallyLocalDeclaration) {
             val functionName = name.asString()
             dotNetLocalCaptureRejectionReason?.let { reason ->
                 dotNetUnsupported("local function '$functionName' $reason")
             }
-            if (isSuspend) {
-                dotNetUnsupported("local function '$functionName' is suspend; coroutine lowering is not available")
-            }
             if (isInline) {
-                dotNetUnsupported("local function '$functionName' is inline; inline lowering is not available")
+                dotNetUnsupported("local function '$functionName' retains an unsupported inline declaration shape")
             }
         }
         checkDotNetGenericFunctionSupported()
@@ -2890,12 +2890,15 @@ internal class DotNetIlEmitter(
                         IrDeclarationOrigin.DELEGATE,
                         IrDeclarationOrigin.FIELD_FOR_OUTER_THIS,
                         LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE,
+                        LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CROSSINLINE_CAPTURED_VALUE,
                             -> {
                             if (declaration.isStatic) {
                                 val fieldKind =
                                     when (declaration.origin) {
                                         IrDeclarationOrigin.FIELD_FOR_OUTER_THIS -> "outer-instance"
-                                        LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE -> "captured-value"
+                                        LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE,
+                                        LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CROSSINLINE_CAPTURED_VALUE,
+                                            -> "captured-value"
                                         else -> "interface-delegate"
                                     }
                                 dotNetUnsupported(

@@ -277,7 +277,9 @@ internal class DotNetIlMethodCodegen(
         if (origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) return "private"
         if (origin.isDotNetGenericInterfaceBridge) return "private"
         if (origin == DOTNET_COVARIANT_RETURN_BRIDGE) return "private"
-        if (this is IrConstructor && constructedClass.isDotNetStdlibImplementation) return "assembly"
+        if (this is IrConstructor && constructedClass.isDotNetStdlibImplementation) {
+            return if (constructedClass.isPublishedApi()) "public" else "assembly"
+        }
         if (this is IrSimpleFunction && isDotNetStdlibImplementation) return "public"
         if (isOriginallyLocalDeclaration) return if (parent is IrFile) "assembly" else "private"
         if (isDotNetPublishedCompilerAbi()) return "public"
@@ -308,7 +310,8 @@ internal class DotNetIlMethodCodegen(
     /** Whether this method is CLR-public for compiler linking rather than Kotlin/C# user API. */
     private fun IrFunction.isDotNetCompilerAbiSurface(): Boolean =
         dotNetMemberVisibility() == "public" &&
-                (origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER ||
+                (origin == IrDeclarationOrigin.SYNTHETIC_ACCESSOR ||
+                        origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER ||
                         origin == DOTNET_INTERFACE_DEFAULT_HELPER ||
                         origin == DOTNET_STATIC_INITIALIZATION_ENTRY ||
                         (this is IrSimpleFunction && name.asString().endsWith("\$default")) ||

@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.render
 import java.io.File
 
@@ -60,6 +61,16 @@ internal object DotNetStdlibLibrary {
         "kotlin.io.ReadAfterEOFException" to READ_AFTER_EOF_EXCEPTION_IL_NAME,
         "kotlin.SuppressedExceptionList" to "Kotlin.SuppressedExceptionList",
         "kotlin.SuppressedExceptionIterator" to "Kotlin.SuppressedExceptionIterator",
+        "kotlin.internal.SharedVariableBox" to "Kotlin.Internal.SharedVariableBox`1",
+        "kotlin.internal.SharedVariableBoxBoolean" to "Kotlin.Internal.SharedVariableBoxBoolean",
+        "kotlin.internal.SharedVariableBoxByte" to "Kotlin.Internal.SharedVariableBoxByte",
+        "kotlin.internal.SharedVariableBoxShort" to "Kotlin.Internal.SharedVariableBoxShort",
+        "kotlin.internal.SharedVariableBoxInt" to "Kotlin.Internal.SharedVariableBoxInt",
+        "kotlin.internal.SharedVariableBoxLong" to "Kotlin.Internal.SharedVariableBoxLong",
+        "kotlin.internal.SharedVariableBoxFloat" to "Kotlin.Internal.SharedVariableBoxFloat",
+        "kotlin.internal.SharedVariableBoxDouble" to "Kotlin.Internal.SharedVariableBoxDouble",
+        "kotlin.internal.SharedVariableBoxChar" to "Kotlin.Internal.SharedVariableBoxChar",
+        "kotlin.internal.SyntheticConstructorMarker" to "Kotlin.Internal.SyntheticConstructorMarker",
     )
     private val implementationFunctionFacadeIlNames = mapOf(
         "kotlin.collections.any" to COLLECTIONS_FACADE_IL_NAME,
@@ -169,9 +180,13 @@ internal object DotNetStdlibLibrary {
 
     /** Public target-stdlib declarations referenced while bootstrap sources remain same-module. */
     fun publicImplementationClassInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
-        if (irClass.visibility != DescriptorVisibilities.PUBLIC) return null
+        if (irClass.visibility != DescriptorVisibilities.PUBLIC && !irClass.isPublishedApi()) return null
         val ilName = implementationClassIlName(irClass) ?: return null
-        return DotNetIlClassInfo(ilName, assemblyName = ASSEMBLY_NAME)
+        return DotNetIlClassInfo(
+            ilName,
+            typeParameterVariances = irClass.typeParameters.map { it.variance },
+            assemblyName = ASSEMBLY_NAME,
+        )
     }
 
     fun implementationFunctionFacadeIlName(function: IrSimpleFunction): String? {
@@ -218,9 +233,13 @@ internal object DotNetStdlibLibrary {
         function: IrSimpleFunction,
         typeMapper: DotNetIlTypeMapper,
     ): DotNetIlFunctionInfo? {
-        val facadeName = implementationFunctionFacadeIlName(function) ?: return null
+        val owner = (function.parent as? IrClass)?.let(::publicImplementationClassInfoOrNull)
+            ?: implementationFunctionFacadeIlName(function)?.let { facadeName ->
+                DotNetIlClassInfo(facadeName, assemblyName = ASSEMBLY_NAME)
+            }
+            ?: return null
         return DotNetIlFunctionInfo(
-            owner = DotNetIlClassInfo(facadeName, assemblyName = ASSEMBLY_NAME),
+            owner = owner,
             signature = function.dotNetSignature(typeMapper),
             physicalMethodName = function.dotNetAbiMethodName(),
         )
@@ -335,6 +354,8 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.internal",
             facadeIlName = THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,
         ),
+        "SharedVariableBox.kt" to ImplementationSource(packageFqName = "kotlin.internal"),
+        "SyntheticConstructorMarker.kt" to ImplementationSource(packageFqName = "kotlin.internal"),
     )
     private val resolutionOnlySources = mapOf(
         "Annotations.kt" to "kotlin.internal",

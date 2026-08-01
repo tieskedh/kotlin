@@ -43,6 +43,14 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "common-non-jvm/src/kotlin/Exceptions.kt",
     ),
     DotNetStdlibSourceResource(
+        "SharedVariableBox.kt",
+        "common-non-jvm/src/kotlin/internal/SharedVariableBox.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "SyntheticConstructorMarker.kt",
+        "common-non-jvm/src/kotlin/internal/SyntheticConstructorMarker.kt",
+    ),
+    DotNetStdlibSourceResource(
         "ExceptionsH.kt",
         "common/src/kotlin/ExceptionsH.kt",
         isCommon = true,

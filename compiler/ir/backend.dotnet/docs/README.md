@@ -40,6 +40,9 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
   authority rules belong in the importer ADR.
 - [`programmes/compiler-architecture.md`](programmes/compiler-architecture.md)
   tracks the remaining module/package ownership corrections.
+- [`programmes/inline-functions.md`](programmes/inline-functions.md)
+  owns the selected ordinary inline/KLIB IR infrastructure programme while
+  keeping reified and suspend inline support separate.
 
 ## Foundational decisions
 

@@ -66,30 +66,35 @@ abstract class InlineFunctionResolverReplacingCoroutineIntrinsics<Ctx : Lowering
  * These resolvers are supposed to be run at the first compilation stage for all non-JVM targets.
  */
 internal class PreSerializationPrivateInlineFunctionResolver(
-    context: LoweringContext,
-) : InlineFunctionResolverReplacingCoroutineIntrinsics<LoweringContext>(context, InlineMode.PRIVATE_INLINE_FUNCTIONS) {
+    private val preSerializationContext: PreSerializationLoweringContext,
+) : InlineFunctionResolverReplacingCoroutineIntrinsics<LoweringContext>(preSerializationContext, InlineMode.PRIVATE_INLINE_FUNCTIONS) {
     override fun getFunctionDeclaration(symbol: IrFunctionSymbol): IrFunction? {
         return super.getFunctionDeclaration(symbol)?.also { function ->
             check(function.body != null) { "Unexpected inline function without body: ${function.render()}" }
+        }?.takeUnless { function ->
+            !preSerializationContext.supportsReifiedInlineFunctions && function.typeParameters.any { it.isReified }
         }
     }
 }
 
 internal class PreSerializationNonPrivateInlineFunctionResolver(
-    context: PreSerializationLoweringContext,
+    private val preSerializationContext: PreSerializationLoweringContext,
     inlineCrossModuleFunctions: Boolean,
 ) : InlineFunctionResolverReplacingCoroutineIntrinsics<LoweringContext>(
-    context,
+    preSerializationContext,
     if (inlineCrossModuleFunctions) InlineMode.ALL_INLINE_FUNCTIONS else InlineMode.INTRA_MODULE_INLINE_FUNCTIONS
 ) {
 
     private val deserializer = NonLinkingIrInlineFunctionDeserializer(
-        irBuiltIns = context.irBuiltIns,
-        signatureComputer = PublicIdSignatureComputer(context.irMangler)
+        irBuiltIns = preSerializationContext.irBuiltIns,
+        signatureComputer = PublicIdSignatureComputer(preSerializationContext.irMangler),
+        fallbackToMainIr = preSerializationContext.linkInlineFunctionReferencesFromMainIr,
     )
 
     override fun getFunctionDeclaration(symbol: IrFunctionSymbol): IrFunction? {
         val declarationMaybeFromOtherModule = super.getFunctionDeclaration(symbol) ?: return null
+        if (!preSerializationContext.supportsReifiedInlineFunctions && declarationMaybeFromOtherModule.typeParameters.any { it.isReified })
+            return null
         if (declarationMaybeFromOtherModule.hasAnnotation(EXCLUDED_FROM_FIRST_STAGE_INLINING_ANNOTATION_FQNAME))
             return null
 

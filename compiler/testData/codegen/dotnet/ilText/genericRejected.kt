@@ -9,7 +9,7 @@
 // - `===` on `T` operands: an unconstrained `T` may instantiate to a value type with no stable
 //   reference identity, and boxing would manufacture two unrelated references;
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
-// - inline generic functions (and with them `reified`): no inlining model;
+// - reified inline functions: ordinary inlining is supported, but reified operations are not;
 // - varargs of `T`: the parameter type is the unsupported projected `Array<out T>` ABI;
 // Widening an unconstrained `T` to `Any?`, structural `==`/`== null`, templates, and `toString`
 // are supported through CLR `box !!n` plus the System.Object Any foundation. Other unconstrained

@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — select the next exact non-inline Common dependency closure**
+- Status: **Active — inline compiler prerequisite complete; Common source admission next**
 - ABI foundation: [`../decisions/draft-adr-generic-interface-abi.md`](../decisions/draft-adr-generic-interface-abi.md)
 
 ## Purpose
@@ -114,11 +114,13 @@ for-loop lowering. Rewriting the generated body as target source would only hide
 compiler phase, while materializing an `IntRange` solely for this check would retain work the mature
 targets deliberately eliminate.
 
-The Common `List.elementAtOrNull` overload is deliberately excluded: upstream marks that special
-overload `@InlineOnly`, while cross-module generic inline production remains parked. Publishing a
-target copy or non-inline substitute would make the .NET surface differ from Common. Including only
-the Iterable overload is sound because ordinary overload resolution still chooses it for a List;
-its body then reaches the admitted non-inline List fast path.
+The Common `List.elementAtOrNull` overload remains absent from the currently published bootstrap
+allowlist: upstream marks that special overload `@InlineOnly`. The completed ordinary inliner has
+removed the compiler blocker, so this exact generated declaration is now eligible for the next
+source-admission slice. Until that slice updates generation, product metadata, and cross-DLL tests
+together, including only the Iterable overload remains sound because ordinary overload resolution
+still chooses it for a List and reaches the admitted non-inline List fast path. A target copy or
+non-inline substitute remains forbidden.
 
 Both admitted functions are ordinary static generic methods on
 `Kotlin.Collections.CollectionsKt`. The CLR creates no representation difference and supplies no
@@ -131,15 +133,19 @@ The admitted closure is Common `Iterable<T>.count()`. Its `Aggregates` body retu
 `checkCountOverflow` expect declaration after every increment. The paired Common
 `throwCountOverflow` helper owns the `ArithmeticException` type and exact message.
 
-The generated `Collection<T>.count()` overload remains excluded because it is `@InlineOnly`; a
-statically known Collection still resolves to the admitted Iterable overload and reaches the same
-size fast path. Publishing a non-inline substitute overload would fork the Common source surface.
+The generated `Collection<T>.count()` overload remains absent from the current allowlist because it
+is `@InlineOnly`; it is now eligible for the same exact-source adoption as the selected predicate
+families. Until then, a statically known Collection still resolves to the admitted Iterable
+overload and reaches the same size fast path. Publishing a non-inline substitute overload would
+fork the Common source surface.
 
-JVM and Native/Wasm make the internal `checkCountOverflow` actual `@InlineOnly`; JS uses an
-ordinary actual with the same body. The Common expect declaration itself is not inline. .NET uses
-the JS-shaped callable actual: the CLR JIT may inline the tiny static method independently, while
-claiming a Kotlin inline contract without an IR inliner would create a false cross-module compiler
-ABI. The logical operation, overflow condition, exception, and message remain exactly Common.
+JVM and Native/Wasm make the internal `checkCountOverflow` actual `@InlineOnly`; JS uses an ordinary
+actual with the same body. The Common expect declaration itself is not inline. The current .NET
+product still uses the JS-shaped callable actual, which remains semantically truthful. Now that
+the KLIB inliner exists, the next inline collection slice must reassess that choice against the
+closer Native/Wasm KLIB precedent and change declaration, product metadata, and tests atomically if
+it selects `@InlineOnly`. The logical operation, overflow condition, exception, and message remain
+exactly Common either way.
 
 `count`, `checkCountOverflow`, and `throwCountOverflow` share
 `Kotlin.Collections.CollectionsKt`. The two helpers remain Kotlin-internal compiler ABI rather than
@@ -166,9 +172,10 @@ match respectively. They call Common `checkIndexOverflow` before comparing each 
 The paired `throwIndexOverflow` helper owns the `ArithmeticException` and exact message.
 
 JVM and Native/Wasm use an `@InlineOnly` index-overflow actual; JS uses an ordinary callable actual
-with the same body. As with count overflow, .NET selects the JS-shaped actual because the Common
-expect declaration is not inline and the target cannot truthfully promise cross-module Kotlin
-inlining. This changes no logical behavior and leaves CLR JIT inlining free.
+with the same body. As with count overflow, the current JS-shaped .NET actual is truthful but its
+former compiler limitation is gone. Reassess both overflow actuals together in the next source
+admission slice; do not let one become inline while the other retains an accidental historical
+shape.
 
 All five public overloads and both internal helpers share
 `Kotlin.Collections.CollectionsKt`; the helpers are marked compiler ABI. Using LINQ or BCL
@@ -229,7 +236,7 @@ interoperable than consuming the authoritative explicit platform names.
 
 ## Next selection rule
 
-Select the next exact non-inline Common/generated family only when all of these are closed:
+Select the next exact Common/generated family only when all of these are closed:
 
 1. every source declaration and generator variant is identified from an authoritative owner;
 2. every called Common helper and expect/actual dependency is supported;
@@ -243,9 +250,10 @@ Do not choose a family solely because one downstream feature, such as enums, nee
 ## Abstract collection/list blockers
 
 All mature targets compile the shared `AbstractCollection.kt` and `AbstractList.kt`. Kotlin/.NET
-must do the same once their exact closure exists. The current blockers are:
+must do the same once their exact closure exists. The remaining source-product blockers are:
 
-- generic inline helpers used by `contains`, `containsAll`, `indexOf`, and `lastIndexOf`;
+- admission and adversarial publication of the now-supported generic inline helpers used by
+  `contains`, `containsAll`, `indexOf`, and `lastIndexOf`;
 - `joinToString` and its `CharSequence`/`Appendable`/`StringBuilder` closure; and
 - typed collection-to-array expect/actual operations that preserve the caller's CLR array element
   type.
@@ -256,8 +264,10 @@ these prerequisites are genuinely supported.
 
 ## Programme order
 
-1. Add bounded non-inline Common/generated operations by the selection rule above.
-2. Complete generic inline and string-building prerequisites needed by the abstract bases.
+1. Admit the selected ordinary non-reified Common/generated inline helpers using the completed
+   compiler programme.
+2. Complete the string-building and typed collection-to-array prerequisites needed by the
+   abstract bases.
 3. Implement typed collection-to-array semantics and compile the exact Common abstract bases.
 4. Add mutable collection/list contracts and an ordinary implementation.
 5. Add sets and maps from their exact Common dependency closures.

@@ -13,7 +13,9 @@ dependencies {
     api(project(":compiler:cli-base"))
     api(project(":compiler:ir.tree"))
     api(project(":compiler:ir.backend.common"))
+    implementation(project(":compiler:ir.inline"))
     api(project(":compiler:ir.serialization.common"))
+    api(project(":compiler:ir.serialization.dotnet"))
     implementation(project(":compiler:util"))
     implementation(project(":core:descriptors"))
 
@@ -54,6 +56,12 @@ tasks.named<ProcessResources>("processResources") {
     }
     from(rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt")) {
         into("kotlin-dotnet-stdlib/common-non-jvm/src/kotlin")
+    }
+    from(files(
+        rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/internal/SharedVariableBox.kt"),
+        rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/internal/SyntheticConstructorMarker.kt"),
+    )) {
+        into("kotlin-dotnet-stdlib/common-non-jvm/src/kotlin/internal")
     }
 }
 

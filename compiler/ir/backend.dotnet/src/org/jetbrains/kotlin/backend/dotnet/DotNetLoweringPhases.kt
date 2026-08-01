@@ -3,7 +3,13 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.common.lower.ArrayConstructorLowering
 import org.jetbrains.kotlin.backend.common.lower.KotlinNothingValueExceptionLowering
 import org.jetbrains.kotlin.backend.common.lower.LocalDelegatedPropertiesLowering
+import org.jetbrains.kotlin.backend.common.lower.RedundantCastsRemoverLowering
 import org.jetbrains.kotlin.backend.common.lower.RangeContainsLowering
+import org.jetbrains.kotlin.backend.common.lower.inline.InlineCallCycleCheckerLowering
+import org.jetbrains.kotlin.backend.common.lower.inline.LocalClassesInInlineLambdasLowering
+import org.jetbrains.kotlin.backend.common.phaser.IrValidationAfterInliningAllFunctionsOnTheSecondStagePhase
+import org.jetbrains.kotlin.backend.common.phaser.IrValidationAfterInliningOnlyPrivateFunctionsPhase
+import org.jetbrains.kotlin.backend.common.phaser.KlibIrValidationBeforeLoweringPhase
 import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
@@ -42,14 +48,68 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLoweri
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetUpgradeCallableReferences
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetVarargLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetAllFunctionInlining
+import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetPrivateFunctionInlining
 import org.jetbrains.kotlin.config.phaseConfig
+import org.jetbrains.kotlin.config.LanguageFeature
+import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.phaser.NamedCompilerPhase
 import org.jetbrains.kotlin.config.phaser.PhaseConfig
 import org.jetbrains.kotlin.config.phaser.PhaserState
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.inline.OuterThisInInlineFunctionsSpecialAccessorLowering
+import org.jetbrains.kotlin.ir.inline.SyntheticAccessorLowering
+import org.jetbrains.kotlin.ir.inline.isConsideredAsPrivateForInlining
+import org.jetbrains.kotlin.ir.util.isTypeOfIntrinsic
 
 private class DotNetKotlinNothingValueExceptionLowering(context: DotNetBackendContext) :
     KotlinNothingValueExceptionLowering(context)
+
+private fun createSyntheticAccessorGenerationPhase(context: DotNetBackendContext): SyntheticAccessorLowering =
+    SyntheticAccessorLowering(context)
+
+private fun createValidateIrAfterInliningOnlyPrivateFunctionsPhase(
+    context: DotNetBackendContext,
+): IrValidationAfterInliningOnlyPrivateFunctionsPhase<DotNetBackendContext> =
+    IrValidationAfterInliningOnlyPrivateFunctionsPhase(
+        context,
+        checkInlineFunctionCallSites = { useSite ->
+            useSite.symbol.owner.typeParameters.any { it.isReified } ||
+                    !useSite.symbol.isConsideredAsPrivateForInlining()
+        },
+    )
+
+private fun createValidateIrAfterInliningAllFunctionsPhase(
+    context: DotNetBackendContext,
+): IrValidationAfterInliningAllFunctionsOnTheSecondStagePhase<DotNetBackendContext> =
+    IrValidationAfterInliningAllFunctionsOnTheSecondStagePhase(
+        context,
+        checkInlineFunctionCallSites = { useSite ->
+            val function = useSite.symbol.owner
+            function.typeParameters.any { it.isReified } ||
+                    function.symbol.isTypeOfIntrinsic() ||
+                    function.body == null
+        },
+    )
+
+private val dotNetInlineLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
+    // BEGIN: Common Native/JS/Wasm inline prefix. `lateinit` stays parked for the target, so its
+    // shared lowering is intentionally absent until .NET owns the required throw-helper symbol.
+    ::KlibIrValidationBeforeLoweringPhase,
+    ::InlineCallCycleCheckerLowering,
+    ::DotNetUpgradeCallableReferences,
+    ::DotNetSharedVariablesLowering,
+    ::LocalClassesInInlineLambdasLowering,
+    ::ArrayConstructorLowering,
+    ::DotNetPrivateFunctionInlining,
+    ::OuterThisInInlineFunctionsSpecialAccessorLowering,
+    ::createSyntheticAccessorGenerationPhase,
+    ::createValidateIrAfterInliningOnlyPrivateFunctionsPhase,
+    ::DotNetAllFunctionInlining,
+    ::RedundantCastsRemoverLowering,
+    ::createValidateIrAfterInliningAllFunctionsPhase,
+    // END: Common Native/JS/Wasm inline prefix.
+)
 
 internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
     // Normalize companion-block backing fields before any shared lowering can classify state.
@@ -188,6 +248,11 @@ internal object DotNetLoweringPhases {
     fun lower(irModuleFragment: IrModuleFragment, context: DotNetBackendContext) {
         val phaseConfig = context.configuration.phaseConfig ?: PhaseConfig()
         val engine = PhaseEngine(phaseConfig, PhaserState(), context)
+        if (!context.configuration.languageVersionSettings.supportsFeature(LanguageFeature.IrIntraModuleInlinerBeforeKlibSerialization)) {
+            for (lowering in dotNetInlineLowerings) {
+                engine.runPhase(lowering, irModuleFragment)
+            }
+        }
         for (lowering in dotNetLowerings) {
             engine.runPhase(lowering, irModuleFragment)
         }

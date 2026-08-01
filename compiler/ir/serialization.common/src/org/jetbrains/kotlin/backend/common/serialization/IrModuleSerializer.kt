@@ -29,6 +29,10 @@ abstract class IrModuleSerializer<Serializer : IrFileSerializer>(
     protected open fun backendSpecificFileFilter(file: IrFile): Boolean =
         true
 
+    /** Allows a backend's source-file selection to apply to prepared inline-function copies too. */
+    protected open fun backendSpecificPreparedInlineFunctionFilter(function: IrSimpleFunction): Boolean =
+        true
+
     protected abstract val globalDeclarationTable: GlobalDeclarationTable
 
     private fun serializeIrFile(file: IrFile): SerializedIrFile {
@@ -49,8 +53,8 @@ abstract class IrModuleSerializer<Serializer : IrFileSerializer>(
             globalDeclarationTable.clashDetector.reportErrorsTo(diagnosticReporter)
         }
 
-        val inlinableFunctionsFile = module.preparedInlineFunctionCopies?.let {
-            serializePreparedInlinableFunctions(it)
+        val inlinableFunctionsFile = module.preparedInlineFunctionCopies?.let { functions ->
+            serializePreparedInlinableFunctions(functions.filter(this::backendSpecificPreparedInlineFunctionFilter))
         }
         return SerializedIrModule(serializedFiles, inlinableFunctionsFile)
     }
