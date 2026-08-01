@@ -65,7 +65,9 @@ fun main(args: Array<String>) {
         "internal fun throwCountOverflow()",
     )
     val selectedTemplates = sequenceOf(
+        Aggregates.f_all selectedFor setOf(Family.Iterables),
         Aggregates.f_any selectedFor setOf(Family.Iterables),
+        Aggregates.f_any_predicate selectedFor setOf(Family.Iterables),
         Aggregates.f_count selectedFor setOf(Family.Iterables),
         Aggregates.f_none selectedFor setOf(Family.Iterables),
         Elements.f_contains selectedFor setOf(Family.Iterables),
@@ -74,6 +76,8 @@ fun main(args: Array<String>) {
         Elements.f_firstOrNull selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_getOrNull selectedFor setOf(Family.Lists),
         Elements.f_indexOf selectedFor setOf(Family.Iterables, Family.Lists),
+        Elements.f_indexOfFirst selectedFor setOf(Family.Iterables, Family.Lists),
+        Elements.f_indexOfLast selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_last selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_lastIndexOf selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_lastOrNull selectedFor setOf(Family.Iterables, Family.Lists),
