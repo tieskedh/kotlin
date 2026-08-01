@@ -29,6 +29,25 @@ internal actual fun checkCountOverflow(count: Int): Int {
     return count
 }
 
+internal actual fun collectionToArray(collection: Collection<*>): Array<Any?> =
+    collectionToArrayCommonImpl(collection)
+
+internal actual fun <T> collectionToArray(collection: Collection<*>, array: Array<T>): Array<T> =
+    collectionToArrayCommonImpl(collection, array)
+
+internal actual fun <T> arrayOfNulls(reference: Array<T>, size: Int): Array<T> =
+    dotNetArrayOfNulls(reference, size)
+
+internal actual fun <T> terminateCollectionToArray(
+    collectionSize: Int,
+    array: Array<T>,
+): Array<T> = array
+
+// CLR vectors retain their runtime element type. This target-private external operation allocates
+// from that physical type, including across covariant foreign boundaries; the backend emits the
+// BCL operation directly and does not publish this declaration.
+private external fun <T> dotNetArrayOfNulls(reference: Array<T>, size: Int): Array<T>
+
 internal object EmptyIterator : ListIterator<Nothing> {
     override fun hasNext(): Boolean = false
     override fun hasPrevious(): Boolean = false
