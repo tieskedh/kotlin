@@ -11,8 +11,14 @@
 .assembly 'nestedClassesRejected' {}
 .module 'main-nestedClassesRejected.il'
 
+.class interface public abstract auto ansi 'GenericInnerHost'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+}
 .class public auto ansi sealed beforefieldinit 'GenericInnerHost`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'GenericInnerHost'
 {
   .class nested public auto ansi sealed beforefieldinit 'Good'
          extends [mscorlib]System.Object
@@ -78,8 +84,14 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'GenericCompanionHost'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+}
 .class public auto ansi sealed beforefieldinit 'GenericCompanionHost`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'GenericCompanionHost'
 {
   .class nested public abstract sealed auto ansi '<CompanionStatics>'
          extends [mscorlib]System.Object
@@ -161,8 +173,14 @@
 .class public auto ansi sealed beforefieldinit 'GenericNestedCompanionHost'
        extends [mscorlib]System.Object
 {
+  .class nested public interface abstract auto ansi 'Nested'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
   .class nested public auto ansi sealed beforefieldinit 'Nested`1'<'T'>
          extends [mscorlib]System.Object
+         implements 'GenericNestedCompanionHost'/'Nested'
   {
     .class nested public abstract sealed auto ansi '<CompanionStatics>'
            extends [mscorlib]System.Object

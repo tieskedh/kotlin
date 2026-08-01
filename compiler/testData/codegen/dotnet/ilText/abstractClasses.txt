@@ -62,9 +62,78 @@
     .get instance int32 'Root'::'get_seed'()
   }
 }
+.class interface public abstract auto ansi 'AbstractBase'
+       implements 'Named'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_stored__KotlinErased__36d1f6ebb1ac19d55262d18c73e86f00'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'current__KotlinErased__8720f08131d2cf962efca56f62ce4c8f'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig specialname newslot abstract virtual instance string 'get_label__KotlinErased__0b6aaca8630b08e8c0082bad32103058'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_mutable__KotlinErased__d409925261b0496525b150ceaf93363d'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig specialname newslot abstract virtual instance void 'set_mutable__KotlinErased__9909bc75f7a7cff857eefac8c9dd8046'(int32 '<set-?>') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance string 'render__KotlinErased__0678994389a47c9e41e0f43e40c0ae79'(int32 'value') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'name__KotlinErased__a86d992bca5dbd26b4945212b86eb20c'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance string 'template__KotlinErased__0c7f4cf77954addc46537ec488c7c162'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'finalValue__KotlinErased__3b179cdd320296701d8d2bafeb1d542e'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'echo__KotlinErased__b11b44609e61e6a916a3cc2518a1d98c'<'M'>(!!0 'value') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'stored__KotlinErased__36d1f6ebb1ac19d55262d18c73e86f00'()
+  {
+    .get instance object 'AbstractBase'::'get_stored__KotlinErased__36d1f6ebb1ac19d55262d18c73e86f00'()
+  }
+  .property instance string 'label__KotlinErased__0b6aaca8630b08e8c0082bad32103058'()
+  {
+    .get instance string 'AbstractBase'::'get_label__KotlinErased__0b6aaca8630b08e8c0082bad32103058'()
+  }
+  .property instance int32 'mutable__KotlinErased__d409925261b0496525b150ceaf93363d'()
+  {
+    .get instance int32 'AbstractBase'::'get_mutable__KotlinErased__d409925261b0496525b150ceaf93363d'()
+    .set instance void 'AbstractBase'::'set_mutable__KotlinErased__9909bc75f7a7cff857eefac8c9dd8046'(int32)
+  }
+}
 .class public abstract auto ansi beforefieldinit 'AbstractBase`1'<'T'>
        extends 'Root'
-       implements 'Named', class 'Named`1'<!0>
+       implements 'AbstractBase', 'Named', class 'Named`1'<!0>
 {
   .field private !0 'stored'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'stored', int32 'seed') cil managed
@@ -144,6 +213,104 @@
     callvirt instance !0 class 'AbstractBase`1'<!0>::'name'()
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-stored>>'() cil managed
+  {
+    .override method instance object 'AbstractBase'::'get_stored__KotlinErased__36d1f6ebb1ac19d55262d18c73e86f00'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'AbstractBase`1'<!0>
+    call instance !0 class 'AbstractBase`1'<!0>::'get_stored'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-current>'() cil managed
+  {
+    .override method instance object 'AbstractBase'::'current__KotlinErased__8720f08131d2cf962efca56f62ce4c8f'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'AbstractBase`1'<!0>
+    callvirt instance !0 class 'AbstractBase`1'<!0>::'current'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-<get-label>>'() cil managed
+  {
+    .override method instance string 'AbstractBase'::'get_label__KotlinErased__0b6aaca8630b08e8c0082bad32103058'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'AbstractBase`1'<!0>
+    callvirt instance string class 'AbstractBase`1'<!0>::'get_label'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-<get-mutable>>'() cil managed
+  {
+    .override method instance int32 'AbstractBase'::'get_mutable__KotlinErased__d409925261b0496525b150ceaf93363d'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'AbstractBase`1'<!0>
+    callvirt instance int32 class 'AbstractBase`1'<!0>::'get_mutable'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericClassCanonicalBridge-<set-mutable>>'(int32 '<set-?>') cil managed
+  {
+    .override method instance void 'AbstractBase'::'set_mutable__KotlinErased__9909bc75f7a7cff857eefac8c9dd8046'(int32)
+    .maxstack 2
+    ldarg.0
+    castclass class 'AbstractBase`1'<!0>
+    ldarg.1
+    callvirt instance void class 'AbstractBase`1'<!0>::'set_mutable'(int32)
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-render>'(int32 'value') cil managed
+  {
+    .override method instance string 'AbstractBase'::'render__KotlinErased__0678994389a47c9e41e0f43e40c0ae79'(int32)
+    .maxstack 2
+    ldarg.0
+    castclass class 'AbstractBase`1'<!0>
+    ldarg.1
+    callvirt instance string class 'AbstractBase`1'<!0>::'render'(int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-name>'() cil managed
+  {
+    .override method instance object 'AbstractBase'::'name__KotlinErased__a86d992bca5dbd26b4945212b86eb20c'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'AbstractBase`1'<!0>
+    callvirt instance !0 class 'AbstractBase`1'<!0>::'name'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-template>'() cil managed
+  {
+    .override method instance string 'AbstractBase'::'template__KotlinErased__0c7f4cf77954addc46537ec488c7c162'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'AbstractBase`1'<!0>
+    callvirt instance string class 'AbstractBase`1'<!0>::'template'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-finalValue>'() cil managed
+  {
+    .override method instance object 'AbstractBase'::'finalValue__KotlinErased__3b179cdd320296701d8d2bafeb1d542e'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'AbstractBase`1'<!0>
+    call instance !0 class 'AbstractBase`1'<!0>::'finalValue'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericClassCanonicalBridge-echo>'<'M'>(!!0 'value') cil managed
+  {
+    .override method instance !!0 'AbstractBase'::'echo__KotlinErased__b11b44609e61e6a916a3cc2518a1d98c'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    castclass class 'AbstractBase`1'<!0>
+    ldarg.1
+    callvirt instance !!0 class 'AbstractBase`1'<!0>::'echo'<!!0>(!!0)
+    ret
+  }
   .property instance !0 'stored'()
   {
     .get instance !0 'AbstractBase`1'::'get_stored'()
@@ -158,8 +325,20 @@
     .set instance void 'AbstractBase`1'::'set_mutable'(int32)
   }
 }
+.class interface public abstract auto ansi 'Middle'
+       implements 'AbstractBase'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance string 'template__KotlinErased__06f2e417dad835733fca82454043ee26'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public abstract auto ansi beforefieldinit 'Middle`1'<'T'>
        extends class 'AbstractBase`1'<!0>
+       implements 'Middle'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'stored', int32 'seed') cil managed
   {
@@ -177,6 +356,15 @@
     ldarg.0
     call instance string class 'AbstractBase`1'<!0>::'template'()
     call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-template>'() cil managed
+  {
+    .override method instance string 'Middle'::'template__KotlinErased__06f2e417dad835733fca82454043ee26'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'Middle`1'<!0>
+    callvirt instance string class 'Middle`1'<!0>::'template'()
     ret
   }
 }
@@ -200,7 +388,8 @@
   {
     .maxstack 1
     ldarg.0
-    call instance !0 class 'AbstractBase`1'<string>::'get_stored'()
+    callvirt instance object 'AbstractBase'::'get_stored__KotlinErased__36d1f6ebb1ac19d55262d18c73e86f00'()
+    castclass [mscorlib]System.String
     ret
   }
   .method public hidebysig specialname virtual instance string 'get_label'() cil managed
@@ -240,7 +429,8 @@
   {
     .maxstack 1
     ldarg.0
-    call instance !0 class 'AbstractBase`1'<string>::'get_stored'()
+    callvirt instance object 'AbstractBase'::'get_stored__KotlinErased__36d1f6ebb1ac19d55262d18c73e86f00'()
+    castclass [mscorlib]System.String
     ret
   }
   .method public hidebysig virtual instance !!0 'echo'<'M'>(!!0 'value') cil managed
@@ -376,8 +566,28 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'GenericChoice'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__afaca217432ce57a7a363696930afed9'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'currentChoice__KotlinErased__ab4233bf6d5a794e0e6a993ce8ce8b03'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'value__KotlinErased__afaca217432ce57a7a363696930afed9'()
+  {
+    .get instance object 'GenericChoice'::'get_value__KotlinErased__afaca217432ce57a7a363696930afed9'()
+  }
+}
 .class public abstract auto ansi beforefieldinit 'GenericChoice`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'GenericChoice'
 {
   .field private !0 'value'
   .method famandassem hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
@@ -400,6 +610,26 @@
   .method public hidebysig newslot abstract virtual instance !0 'currentChoice'() cil managed
   {
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  {
+    .override method instance object 'GenericChoice'::'get_value__KotlinErased__afaca217432ce57a7a363696930afed9'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericChoice`1'<!0>
+    call instance !0 class 'GenericChoice`1'<!0>::'get_value'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-currentChoice>'() cil managed
+  {
+    .override method instance object 'GenericChoice'::'currentChoice__KotlinErased__ab4233bf6d5a794e0e6a993ce8ce8b03'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericChoice`1'<!0>
+    callvirt instance !0 class 'GenericChoice`1'<!0>::'currentChoice'()
+    box !0
+    ret
+  }
   .property instance !0 'value'()
   {
     .get instance !0 'GenericChoice`1'::'get_value'()
@@ -420,7 +650,8 @@
   {
     .maxstack 1
     ldarg.0
-    call instance !0 class 'GenericChoice`1'<string>::'get_value'()
+    callvirt instance object 'GenericChoice'::'get_value__KotlinErased__afaca217432ce57a7a363696930afed9'()
+    castclass [mscorlib]System.String
     ret
   }
 }
@@ -464,8 +695,33 @@
     .get instance string 'Token'::'get_text'()
   }
 }
+.class interface public abstract auto ansi 'Constrained'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_stored__KotlinErased__a3bffff3c59e464b670da6a9ee90af07'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'current__KotlinErased__947b6eb62a1d7c1060f1bb6469059a5b'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance string 'marker__KotlinErased__9ecc6d57c6e1412a039544e619d539df'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'stored__KotlinErased__a3bffff3c59e464b670da6a9ee90af07'()
+  {
+    .get instance object 'Constrained'::'get_stored__KotlinErased__a3bffff3c59e464b670da6a9ee90af07'()
+  }
+}
 .class public abstract auto ansi beforefieldinit 'Constrained`1'<(class 'Marked') 'T'>
        extends [mscorlib]System.Object
+       implements 'Constrained'
 {
   .field private !0 'stored'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'stored') cil managed
@@ -502,13 +758,54 @@
     callvirt instance string 'Marked'::'mark'()
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-stored>>'() cil managed
+  {
+    .override method instance object 'Constrained'::'get_stored__KotlinErased__a3bffff3c59e464b670da6a9ee90af07'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'Constrained`1'<!0>
+    call instance !0 class 'Constrained`1'<!0>::'get_stored'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-current>'() cil managed
+  {
+    .override method instance object 'Constrained'::'current__KotlinErased__947b6eb62a1d7c1060f1bb6469059a5b'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'Constrained`1'<!0>
+    callvirt instance !0 class 'Constrained`1'<!0>::'current'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-marker>'() cil managed
+  {
+    .override method instance string 'Constrained'::'marker__KotlinErased__9ecc6d57c6e1412a039544e619d539df'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'Constrained`1'<!0>
+    call instance string class 'Constrained`1'<!0>::'marker'()
+    ret
+  }
   .property instance !0 'stored'()
   {
     .get instance !0 'Constrained`1'::'get_stored'()
   }
 }
+.class interface public abstract auto ansi 'ConcreteConstrained'
+       implements 'Constrained'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'current__KotlinErased__c4f8a8bf8056e37595e54a32fcf8d871'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'ConcreteConstrained`1'<(class 'Marked') 'T'>
        extends class 'Constrained`1'<!0>
+       implements 'ConcreteConstrained'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'stored') cil managed
   {
@@ -522,7 +819,18 @@
   {
     .maxstack 1
     ldarg.0
-    call instance !0 class 'Constrained`1'<!0>::'get_stored'()
+    callvirt instance object 'Constrained'::'get_stored__KotlinErased__a3bffff3c59e464b670da6a9ee90af07'()
+    unbox.any !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-current>'() cil managed
+  {
+    .override method instance object 'ConcreteConstrained'::'current__KotlinErased__c4f8a8bf8056e37595e54a32fcf8d871'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'ConcreteConstrained`1'<!0>
+    callvirt instance !0 class 'ConcreteConstrained`1'<!0>::'current'()
+    box !0
     ret
   }
 }
@@ -730,10 +1038,10 @@ IL_genericInterfaceJoin_1:
     .maxstack 3
     .locals init (
       [0] class 'Leaf' 'leaf',
-      [1] class 'AbstractBase`1'<string> 'abstractView',
+      [1] class 'AbstractBase' 'abstractView',
       [2] class 'Choice' 'choice',
-      [3] class 'GenericChoice`1'<string> 'genericChoice',
-      [4] class 'ConcreteConstrained`1'<class 'Token'> 'constrained'
+      [3] class 'GenericChoice' 'genericChoice',
+      [4] class 'ConcreteConstrained' 'constrained'
     )
     ldstr "stored"
     ldc.i4 3
@@ -753,10 +1061,11 @@ IL_genericInterfaceJoin_1:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    callvirt instance string class 'Middle`1'<string>::'template'()
+    callvirt instance string 'Middle'::'template__KotlinErased__06f2e417dad835733fca82454043ee26'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    call instance !0 class 'AbstractBase`1'<string>::'finalValue'()
+    callvirt instance object 'AbstractBase'::'finalValue__KotlinErased__3b179cdd320296701d8d2bafeb1d542e'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
     ldc.i4 11
@@ -770,11 +1079,11 @@ IL_genericInterfaceJoin_1:
     stloc.1
     ldloc.1
     ldstr "abstract"
-    callvirt instance !!0 class 'AbstractBase`1'<string>::'echo'<string>(!!0)
+    callvirt instance !!0 'AbstractBase'::'echo__KotlinErased__b11b44609e61e6a916a3cc2518a1d98c'<string>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
     ldc.i4 6
-    callvirt instance void class 'AbstractBase`1'<string>::'set_mutable'(int32)
+    callvirt instance void 'AbstractBase'::'set_mutable__KotlinErased__9909bc75f7a7cff857eefac8c9dd8046'(int32)
     ldloc.0
     callvirt instance int32 'Leaf'::'get_mutable'()
     box [mscorlib]System.Int32
@@ -802,18 +1111,20 @@ IL_genericInterfaceJoin_1:
     newobj instance void 'StringChoice'::.ctor(string)
     stloc.3
     ldloc.3
-    callvirt instance !0 class 'GenericChoice`1'<string>::'currentChoice'()
+    callvirt instance object 'GenericChoice'::'currentChoice__KotlinErased__ab4233bf6d5a794e0e6a993ce8ce8b03'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "marked"
     newobj instance void 'Token'::.ctor(string)
     newobj instance void class 'ConcreteConstrained`1'<class 'Token'>::.ctor(!0)
     stloc 4
     ldloc 4
-    callvirt instance !0 class 'ConcreteConstrained`1'<class 'Token'>::'current'()
+    callvirt instance object 'ConcreteConstrained'::'current__KotlinErased__c4f8a8bf8056e37595e54a32fcf8d871'()
+    castclass 'Token'
     callvirt instance string 'Token'::'mark'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 4
-    call instance string class 'Constrained`1'<class 'Token'>::'marker'()
+    callvirt instance string 'Constrained'::'marker__KotlinErased__9ecc6d57c6e1412a039544e619d539df'()
     call void [mscorlib]System.Console::WriteLine(string)
     call void 'FactoryBase'::'<EnsureInitialized>'()
     ldsfld class 'FactoryBase'/'Companion' 'FactoryBase'::'Companion'

@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -10,9 +15,45 @@
 .assembly 'lists' {}
 .module 'main-lists.il'
 
+.class interface private abstract auto ansi 'PairListIterator'
+       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance bool 'hasNext__KotlinErased__40c8f401f67123f6e48237daf4b98cf2'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'next__KotlinErased__4b47b0afa9f7407f40dbbe91a8a21738'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'hasPrevious__KotlinErased__a5e55be6f0f36b9a8f21e72ae4886eb9'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'previous__KotlinErased__b8ebb3258149adb9e5ba04e59d01b8e1'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'nextIndex__KotlinErased__5c3a99205de9d639fbd68f63414246a5'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'previousIndex__KotlinErased__aa50a4d1368728966a6af1d6ea810531'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class private auto ansi sealed beforefieldinit 'PairListIterator`1'<'T'>
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>
+       implements 'PairListIterator', [Kotlin.Runtime]'Kotlin.Collections.ListIterator', class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>
 {
   .field private class [Kotlin.Runtime]'Kotlin.Collections.List' 'list'
   .field private int32 'position'
@@ -331,6 +372,62 @@ IL_genericInterfaceJoin_1:
     callvirt instance int32 class 'PairListIterator`1'<!0>::'previousIndex'()
     ret
   }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-hasNext>'() cil managed
+  {
+    .override method instance bool 'PairListIterator'::'hasNext__KotlinErased__40c8f401f67123f6e48237daf4b98cf2'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairListIterator`1'<!0>
+    callvirt instance bool class 'PairListIterator`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-next>'() cil managed
+  {
+    .override method instance object 'PairListIterator'::'next__KotlinErased__4b47b0afa9f7407f40dbbe91a8a21738'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairListIterator`1'<!0>
+    callvirt instance !0 class 'PairListIterator`1'<!0>::'next'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-hasPrevious>'() cil managed
+  {
+    .override method instance bool 'PairListIterator'::'hasPrevious__KotlinErased__a5e55be6f0f36b9a8f21e72ae4886eb9'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairListIterator`1'<!0>
+    callvirt instance bool class 'PairListIterator`1'<!0>::'hasPrevious'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-previous>'() cil managed
+  {
+    .override method instance object 'PairListIterator'::'previous__KotlinErased__b8ebb3258149adb9e5ba04e59d01b8e1'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairListIterator`1'<!0>
+    callvirt instance !0 class 'PairListIterator`1'<!0>::'previous'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-nextIndex>'() cil managed
+  {
+    .override method instance int32 'PairListIterator'::'nextIndex__KotlinErased__5c3a99205de9d639fbd68f63414246a5'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairListIterator`1'<!0>
+    callvirt instance int32 class 'PairListIterator`1'<!0>::'nextIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-previousIndex>'() cil managed
+  {
+    .override method instance int32 'PairListIterator'::'previousIndex__KotlinErased__aa50a4d1368728966a6af1d6ea810531'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairListIterator`1'<!0>
+    callvirt instance int32 class 'PairListIterator`1'<!0>::'previousIndex'()
+    ret
+  }
   .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'list'()
   {
     .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'PairListIterator`1'::'get_list'()
@@ -341,9 +438,74 @@ IL_genericInterfaceJoin_1:
     .set instance void 'PairListIterator`1'::'set_position'(int32)
   }
 }
+.class interface public abstract auto ansi 'PairList'
+       implements [Kotlin.Runtime]'Kotlin.Collections.List'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_size__KotlinErased__eed51b57b7f834aca1eaa0915468c6aa'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'isEmpty__KotlinErased__16ef9742864c9ca51416fba0537ea8c1'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'contains__KotlinErased__63d7be0a578c1077ddc07cc0ac31e784'(object 'element') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterator__KotlinErased__ad7009f9771291577664cfad1161286d'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'containsAll__KotlinErased__7f4646b3bdcfd724b64f24d07e484ef2'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'get__KotlinErased__98e466a3c879e70368abb5f2a3985098'(int32 'index') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'indexOf__KotlinErased__4d6d6ca4a3160081af8ad7b033b78b7a'(object 'element') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'lastIndexOf__KotlinErased__d130610ed38f3f8c364b3f03ead59618'(object 'element') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'listIterator__KotlinErased__72c393b3418b55cd692538aee4a5de5c'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'listIterator__KotlinErased__68f19a39ca56bda605373e2aba0d1bd3'(int32 'index') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'subList__KotlinErased__5ac028a05d5e6468c29f719d949af0f2'(int32 'fromIndex', int32 'toIndex') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance int32 'size__KotlinErased__eed51b57b7f834aca1eaa0915468c6aa'()
+  {
+    .get instance int32 'PairList'::'get_size__KotlinErased__eed51b57b7f834aca1eaa0915468c6aa'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'PairList`1'<'T'>
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<!0>
+       implements 'PairList', [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<!0>
 {
   .field private !0 'first'
   .field private !0 'second'
@@ -982,6 +1144,117 @@ IL_whenNext_1:
     .override method instance class [Kotlin.Runtime]'Kotlin.Collections.List' class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'SubList'(int32, int32)
     .maxstack 3
     ldarg.0
+    ldarg.1
+    ldarg.2
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.List' class 'PairList`1'<!0>::'subList'(int32, int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-<get-size>>'() cil managed
+  {
+    .override method instance int32 'PairList'::'get_size__KotlinErased__eed51b57b7f834aca1eaa0915468c6aa'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairList`1'<!0>
+    callvirt instance int32 class 'PairList`1'<!0>::'get_size'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-isEmpty>'() cil managed
+  {
+    .override method instance bool 'PairList'::'isEmpty__KotlinErased__16ef9742864c9ca51416fba0537ea8c1'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairList`1'<!0>
+    callvirt instance bool class 'PairList`1'<!0>::'isEmpty'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-contains>'(object 'element') cil managed
+  {
+    .override method instance bool 'PairList'::'contains__KotlinErased__63d7be0a578c1077ddc07cc0ac31e784'(object)
+    .maxstack 2
+    ldarg.0
+    castclass class 'PairList`1'<!0>
+    ldarg.1
+    unbox.any !0
+    callvirt instance bool class 'PairList`1'<!0>::'contains'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<GenericClassCanonicalBridge-iterator>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'PairList'::'iterator__KotlinErased__ad7009f9771291577664cfad1161286d'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairList`1'<!0>
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class 'PairList`1'<!0>::'iterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-containsAll>'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
+  {
+    .override method instance bool 'PairList'::'containsAll__KotlinErased__7f4646b3bdcfd724b64f24d07e484ef2'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    .maxstack 2
+    ldarg.0
+    castclass class 'PairList`1'<!0>
+    ldarg.1
+    callvirt instance bool class 'PairList`1'<!0>::'containsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-get>'(int32 'index') cil managed
+  {
+    .override method instance object 'PairList'::'get__KotlinErased__98e466a3c879e70368abb5f2a3985098'(int32)
+    .maxstack 2
+    ldarg.0
+    castclass class 'PairList`1'<!0>
+    ldarg.1
+    callvirt instance !0 class 'PairList`1'<!0>::'get'(int32)
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-indexOf>'(object 'element') cil managed
+  {
+    .override method instance int32 'PairList'::'indexOf__KotlinErased__4d6d6ca4a3160081af8ad7b033b78b7a'(object)
+    .maxstack 2
+    ldarg.0
+    castclass class 'PairList`1'<!0>
+    ldarg.1
+    unbox.any !0
+    callvirt instance int32 class 'PairList`1'<!0>::'indexOf'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-lastIndexOf>'(object 'element') cil managed
+  {
+    .override method instance int32 'PairList'::'lastIndexOf__KotlinErased__d130610ed38f3f8c364b3f03ead59618'(object)
+    .maxstack 2
+    ldarg.0
+    castclass class 'PairList`1'<!0>
+    ldarg.1
+    unbox.any !0
+    callvirt instance int32 class 'PairList`1'<!0>::'lastIndexOf'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<GenericClassCanonicalBridge-listIterator>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'PairList'::'listIterator__KotlinErased__72c393b3418b55cd692538aee4a5de5c'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairList`1'<!0>
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class 'PairList`1'<!0>::'listIterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<GenericClassCanonicalBridge-listIterator>'(int32 'index') cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'PairList'::'listIterator__KotlinErased__68f19a39ca56bda605373e2aba0d1bd3'(int32)
+    .maxstack 2
+    ldarg.0
+    castclass class 'PairList`1'<!0>
+    ldarg.1
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class 'PairList`1'<!0>::'listIterator'(int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' '<GenericClassCanonicalBridge-subList>'(int32 'fromIndex', int32 'toIndex') cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'PairList'::'subList__KotlinErased__5ac028a05d5e6468c29f719d949af0f2'(int32, int32)
+    .maxstack 3
+    ldarg.0
+    castclass class 'PairList`1'<!0>
     ldarg.1
     ldarg.2
     callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.List' class 'PairList`1'<!0>::'subList'(int32, int32)

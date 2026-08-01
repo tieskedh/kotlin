@@ -268,7 +268,9 @@ internal object DotNetStdlibLibrary {
         return DotNetIlFunctionInfo(
             owner = owner,
             signature = function.dotNetSignature(typeMapper),
-            physicalMethodName = function.dotNetAbiMethodName(),
+            physicalMethodName = function.dotNetAbiMethodName(
+                isSplitGenericClass = typeMapper::isSplitGenericClass,
+            ),
         )
     }
 

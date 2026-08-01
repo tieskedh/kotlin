@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: classified star-projected generic arrays
+- Last completed feature: erased runtime identity for ordinary Kotlin generic classes
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,11 +20,11 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 965 tests:
+The JUnit audit covered 16 fresh XML files and 966 tests:
 
 - 864 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 80 library-integration tests
+- 81 library-integration tests
 - zero failures, errors, or skips
 
 Focused evidence additionally covers component-complete packed-KLIB loading,
@@ -84,6 +84,22 @@ consumed separately by Kotlin and Roslyn on Framework CLR and CoreCLR, while
 input projections, open nullable elements, and value-vector covariance remain
 negative.
 
+Ordinary Kotlin-owned generic classes now have one declaration-erased Kotlin
+identity without discarding truthful CLR generic capability. Every logical
+`C<T>` uses a non-generic canonical interface for Kotlin storage, projected
+member dispatch, and casts, while the same object remains the invariant CLR
+`C<T>` implementation for state, inheritance, constructors, and C# use.
+Runtime tests and casts additionally verify the producer-recorded open typed
+TypeDef through the actual base chain, rejecting hostile canonical-interface
+implementors without wrapping or changing identity. ABI 17 records both owner
+paths and typed/canonical member bridges; erased callable names are derived
+from complete logical identities. Public slots use public KLIB identity and
+private/local slots use a bounded structural codec, with an executable
+double-producer CIL reproducibility check. Kotlin and Roslyn consumers execute
+the portable producer on Framework CLR and CoreCLR, including nested types,
+default dispatch, inheritance, overloads, virtual C# subclass dispatch, and
+wrong-argument failure at the later logical member barrier.
+
 ## Current architecture
 
 - `:core:language.targets.dotnet` owns the logical .NET platform and the
@@ -130,12 +146,15 @@ classified `CharSequence` carrier, Common collection predicates, and ordinary
 inline-function boundary remain intact; reified and suspend inline are still
 explicit errors.
 
-The reified audit is complete. Shared IR substitution is ready, but public
-reified support stays parked because Kotlin-owned generic-class type tests and
-casts require an erased runtime identity over physically closed CLR carriers.
-Physically exact non-generic reference casts are now complete for Kotlin
-classes/interfaces, imported CLR interfaces, strings, `Any`, primitive-array
-wrappers, and exact CLR vectors without admitting closed generic instances.
+The reified audit established that shared IR substitution is ready, and its
+ordinary runtime prerequisites now include declaration-erased Kotlin generic
+classes as well as classified star-projected arrays. Public reified support
+remains parked while the remaining array-operation substitution matrix is
+re-audited and while `KClass`, `KType`, enum/annotation, and physical
+throwing-stub contracts remain unselected. Physically exact non-generic
+reference casts are complete for Kotlin classes/interfaces, imported CLR
+interfaces, strings, `Any`, primitive-array wrappers, and exact CLR vectors
+without admitting closed generic instances.
 Boxed-scalar casts are now complete for all eight selected Common primitives:
 exact boxed identity, nullable unboxing for checked nullable casts, and
 `isinst` plus nullable unboxing for safe casts, with no numeric-conversion or
@@ -145,8 +164,9 @@ frontends and runtime profiles. Exact scalars, classes/interfaces, strings,
 supported primitive-array wrappers, imported CLR interfaces, nullable forms,
 smart-cast use, and single evaluation are covered; classified exceptions,
 `CharSequence`, and split generic interfaces retain their dedicated paths.
-Closed `GenericInstance` checks remain forbidden, and a legal
-`ReifiedBox<*>` source test is pinned as an omitted declaration.
+Closed `GenericInstance` checks remain forbidden as Kotlin identity; ordinary
+generic-class tests instead use the producer-recorded open TypeDef and return
+the same canonical object view.
 
 All eight signed Common primitive-array wrappers are now complete through one
 runtime registry and the symmetric .NET stdlib declaration surface. The new
@@ -164,6 +184,13 @@ specialized-wrapper identities above. It does not admit open nullable
 elements, input projections, or value-vector covariance. Those parked shapes
 still require successful typed-use carriers rather than inference from the
 star read-only view.
+
+The generic-class closure now covers final/open/abstract/sealed, nested/inner,
+data, inherited, nullable/scalar, generic-member, default-argument, projected,
+and erased-overload shapes. Canonical interfaces never fabricate
+owner-relative `I<object>` capabilities; exact typed capabilities remain on
+`C<T>`. Identical private/local canonical slots are stable across compiler
+processes and frontend order.
 
 ## Open architectural blockers
 
@@ -184,11 +211,12 @@ star read-only view.
 
 ## Next bounded work
 
-1. Continue the reversible reified prerequisites with a cross-target audit of
-   declaration-erased runtime identity for Kotlin-owned generic classes. Keep
-   closed CLR construction types as storage candidates only; select no public
-   classifier until successful erased casts also support later typed method and
-   property use without treating `C<T>` as Kotlin runtime identity.
+1. Re-audit the remaining reified array-operation substitution matrix against
+   the completed primitive, nullable-primitive, star-array, and generic-class
+   carriers. Separate operations already truthful after ordinary Common IR
+   substitution from still-unselected `KClass`, `KType`, enum, annotation, and
+   physical throwing-stub contracts; do not enable either public reified gate
+   piecemeal.
 2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
    collections/`EnumEntries` bootstrap cluster; do not create builder-only or
    one-enum stubs.

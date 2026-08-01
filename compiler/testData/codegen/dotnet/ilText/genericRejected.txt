@@ -11,8 +11,23 @@
 .assembly 'genericRejected' {}
 .module 'main-genericRejected.il'
 
+.class interface public abstract auto ansi 'Gen'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_v__KotlinErased__e07056811a67090c914e3572869e5f52'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'v__KotlinErased__e07056811a67090c914e3572869e5f52'()
+  {
+    .get instance object 'Gen'::'get_v__KotlinErased__e07056811a67090c914e3572869e5f52'()
+  }
+}
 .class public auto ansi beforefieldinit 'Gen`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'Gen'
 {
   .field private !0 'v'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'v') cil managed
@@ -32,13 +47,38 @@
     ldfld !0 class 'Gen`1'<!0>::'v'
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-v>>'() cil managed
+  {
+    .override method instance object 'Gen'::'get_v__KotlinErased__e07056811a67090c914e3572869e5f52'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'Gen`1'<!0>
+    call instance !0 class 'Gen`1'<!0>::'get_v'()
+    box !0
+    ret
+  }
   .property instance !0 'v'()
   {
     .get instance !0 'Gen`1'::'get_v'()
   }
 }
+.class interface public abstract auto ansi 'Constrained'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_v__KotlinErased__7a2af1b4abdb3d1c11ec240542dacdc2'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'v__KotlinErased__7a2af1b4abdb3d1c11ec240542dacdc2'()
+  {
+    .get instance object 'Constrained'::'get_v__KotlinErased__7a2af1b4abdb3d1c11ec240542dacdc2'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'Constrained`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'Constrained'
 {
   .field private !0 'v'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'v') cil managed
@@ -58,13 +98,38 @@
     ldfld !0 class 'Constrained`1'<!0>::'v'
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-v>>'() cil managed
+  {
+    .override method instance object 'Constrained'::'get_v__KotlinErased__7a2af1b4abdb3d1c11ec240542dacdc2'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'Constrained`1'<!0>
+    call instance !0 class 'Constrained`1'<!0>::'get_v'()
+    box !0
+    ret
+  }
   .property instance !0 'v'()
   {
     .get instance !0 'Constrained`1'::'get_v'()
   }
 }
+.class interface public abstract auto ansi 'WithCompanion'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_v__KotlinErased__14a7c420cba40858e820a19961621c68'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'v__KotlinErased__14a7c420cba40858e820a19961621c68'()
+  {
+    .get instance object 'WithCompanion'::'get_v__KotlinErased__14a7c420cba40858e820a19961621c68'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'WithCompanion`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'WithCompanion'
 {
   .class nested public abstract sealed auto ansi '<CompanionStatics>'
          extends [mscorlib]System.Object
@@ -153,6 +218,16 @@
     ldfld !0 class 'WithCompanion`1'<!0>::'v'
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-v>>'() cil managed
+  {
+    .override method instance object 'WithCompanion'::'get_v__KotlinErased__14a7c420cba40858e820a19961621c68'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'WithCompanion`1'<!0>
+    call instance !0 class 'WithCompanion`1'<!0>::'get_v'()
+    box !0
+    ret
+  }
   .property instance !0 'v'()
   {
     .get instance !0 'WithCompanion`1'::'get_v'()
@@ -169,6 +244,22 @@
     .maxstack 1
     ldarg.0
     box !!0
+    ret
+  }
+  .method public hidebysig static class 'Gen' 'castGeneric'(object 'x') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldtoken 'Gen`1'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CheckGenericClassCast'(object, class [mscorlib]System.Type)
+    castclass class 'Gen'
+    dup
+    brtrue IL_notNull_0
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_0:
     ret
   }
   .method public hidebysig static !!0 'inlined'<'T'>(!!0 'x') cil managed

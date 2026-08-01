@@ -50,8 +50,14 @@
     .get instance int32 'NestedBase'::'get_seed'()
   }
 }
+.class interface public abstract auto ansi 'GenericOuter'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+}
 .class public auto ansi sealed beforefieldinit 'GenericOuter`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'GenericOuter'
 {
   .class nested public auto ansi sealed beforefieldinit 'Plain'
          extends [mscorlib]System.Object
@@ -86,8 +92,19 @@
       .get instance int32 'GenericOuter`1'/'Plain'::'get_number'()
     }
   }
+  .class nested public interface abstract auto ansi 'Generic'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'item__KotlinErased__dbb8a2527f3f4ac2eae856ec44d31ace'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+  }
   .class nested public auto ansi sealed beforefieldinit 'Generic`1'<'U'>
          extends [mscorlib]System.Object
+         implements 'GenericOuter`1'/'Generic'
   {
     .field private !0 'item'
     .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
@@ -112,6 +129,16 @@
       .maxstack 1
       ldarg.0
       call instance !0 class 'GenericOuter`1'/'Generic`1'<!0>::'get_item'()
+      ret
+    }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-item>'() cil managed
+    {
+      .override method instance object 'GenericOuter`1'/'Generic'::'item__KotlinErased__dbb8a2527f3f4ac2eae856ec44d31ace'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericOuter`1'/'Generic`1'<!0>
+      call instance !0 class 'GenericOuter`1'/'Generic`1'<!0>::'item'()
+      box !0
       ret
     }
     .property instance !0 'item'()
@@ -611,7 +638,8 @@ IL_whenNext_1:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "generic"
     newobj instance void class 'GenericOuter`1'/'Generic`1'<string>::.ctor(!0)
-    call instance !0 class 'GenericOuter`1'/'Generic`1'<string>::'item'()
+    callvirt instance object 'GenericOuter`1'/'Generic'::'item__KotlinErased__dbb8a2527f3f4ac2eae856ec44d31ace'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "deep"
     newobj instance void 'GenericOuter`1'/'Middle'/'Deep'::.ctor(string)

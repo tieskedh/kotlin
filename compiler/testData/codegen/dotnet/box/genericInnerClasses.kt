@@ -65,6 +65,8 @@ class DuplicateGenericInnerOuter<T> {
 fun <T, U> makeGenericInnerOwn(outer: GenericInnerOuter<T>, item: U): GenericInnerOuter<T>.Own<U> =
     outer.Own(item)
 
+fun isGenericInnerOwn(value: Any?): Boolean = value is GenericInnerOuter<*>.Own<*>
+
 fun box(): String {
     val outer = GenericInnerOuter("outer")
     val other = GenericInnerOuter("other")
@@ -75,6 +77,14 @@ fun box(): String {
 
     val own = outer.own(7)
     if (own.item() != 7 || own.outer() != "outer") return "fail 2: own plus outer ordering"
+    val ownAny: Any = own
+    if (!isGenericInnerOwn(ownAny) || ownAny !is GenericInnerOuter<*>.Own<*>) {
+        return "fail 2a: projected inner erased identity"
+    }
+    val projectedOwn = ownAny as GenericInnerOuter<*>.Own<*>
+    if (projectedOwn !== own || projectedOwn.item() != 7 || projectedOwn.outer() != "outer") {
+        return "fail 2b: projected inner cast identity and members"
+    }
 
     val made = makeGenericInnerOwn(outer, 9)
     if (made.item() != 9 || made.outer() != "outer") return "fail 3: generic factory call site"

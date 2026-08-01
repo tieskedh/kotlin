@@ -112,7 +112,8 @@ internal class DotNetIlExpressionCodegen(
             expression is IrCall &&
             intrinsicMethods.getIntrinsic(expression.symbol) == null &&
             !expression.symbol.owner.isDotNetErasedObjectResult() &&
-            !expression.symbol.owner.isSplitGenericInterfaceMember()
+            !expression.symbol.owner.isSplitGenericInterfaceMember() &&
+            !expression.symbol.owner.isSplitGenericClassMember()
         ) {
             val returnType = resolveCall(expression).returnType
             if (returnType is DotNetIlReturnType.Value) return returnType.type
@@ -435,6 +436,12 @@ internal class DotNetIlExpressionCodegen(
      *   identity. Logical arguments, projections, and stars are deliberately absent from the
      *   CLR check, following JVM/Native erasure. A non-null `as` additionally rejects null with
      *   the mapped Kotlin NPE; `as?` uses `isinst` and therefore returns null on either failure.
+     * - CAST/SAFE_CAST and INSTANCEOF/NOT_INSTANCEOF against an ordinary Kotlin generic class:
+     *   classify the value by walking its CLR base-class chain and comparing the exact open
+     *   typed TypeDef recorded by the producer. The public canonical interface is the resulting
+     *   Kotlin storage/dispatch view, never sufficient evidence by itself: a foreign class may
+     *   implement that interface without being an instance of the Kotlin class. Type arguments
+     *   remain erased, exactly as on JVM/Native.
      * - CAST/SAFE_CAST to a physically exact non-generic reference carrier (`Any`, `String`, a
      *   non-generic Kotlin class/interface or interface admitted by the current CLR importer, a
      *   primitive-array wrapper, or a concrete CLR vector): the same single-evaluation
@@ -551,6 +558,33 @@ internal class DotNetIlExpressionCodegen(
                     pops = 1,
                     pushes = 1,
                 )
+                if (expression.operator == IrTypeOperator.CAST && !expression.typeOperand.isMarkedNullable()) {
+                    emitReferenceNotNullOrThrowNpe()
+                }
+                return
+            }
+            val genericClassInfo = expression.typeOperand.dotNetGenericClassInfoOrNull()
+            if (genericClassInfo != null) {
+                val canonicalType = DotNetIlValueType.UserClass(genericClassInfo.canonicalClassInfo)
+                if (castType != canonicalType || !canonicalType.isDotNetAssignableTo(expectedType)) {
+                    dotNetUnsupported(
+                        "classified generic-class cast has inconsistent physical result " +
+                                "${castType.nameInSignature} where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                emitExpression(expression.argument, DotNetIlValueType.Object)
+                if (methodContext.isTerminated) return
+                emitOpenGenericClassDefinition(genericClassInfo)
+                methodContext.emit(
+                    if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                        DotNetRuntimeLibraryHelpers.safeGenericClassCastCallInstruction(coreLibraryReference)
+                    } else {
+                        DotNetRuntimeLibraryHelpers.checkGenericClassCastCallInstruction(coreLibraryReference)
+                    },
+                    pops = 2,
+                    pushes = 1,
+                )
+                methodContext.emit("castclass ${canonicalType.nameInSignature}", pops = 1, pushes = 1)
                 if (expression.operator == IrTypeOperator.CAST && !expression.typeOperand.isMarkedNullable()) {
                     emitReferenceNotNullOrThrowNpe()
                 }
@@ -824,10 +858,47 @@ internal class DotNetIlExpressionCodegen(
             nullableJoinLabel?.let(methodContext::emitLabel)
             return
         }
+        val genericClassInfo = expression.typeOperand.dotNetGenericClassInfoOrNull()
+        if (genericClassInfo != null) {
+            emitOpenGenericClassDefinition(genericClassInfo)
+            methodContext.emit(
+                DotNetRuntimeLibraryHelpers.isGenericClassCallInstruction(coreLibraryReference),
+                pops = 2,
+                pushes = 1,
+            )
+            if (!positive) {
+                methodContext.emit("ldc.i4.0", pushes = 1)
+                methodContext.emit("ceq", pops = 2, pushes = 1)
+            }
+            nullableJoinLabel?.let(methodContext::emitLabel)
+            return
+        }
         methodContext.emit("isinst ${runtimeTestType.nameInSignature}", pops = 1, pushes = 1)
         methodContext.emit("ldnull", pushes = 1)
         methodContext.emit(matchesNonNullInstruction, pops = 2, pushes = 1)
         nullableJoinLabel?.let(methodContext::emitLabel)
+    }
+
+    private fun IrType.dotNetGenericClassInfoOrNull(): DotNetGenericClassInfo? {
+        if (!typeMapper.isSplitGenericClassType(this)) return null
+        val irClass = ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
+        return typeMapper.genericClassInfoOrNull(irClass)
+    }
+
+    /**
+     * Loads the exact producer-recorded open CLR class definition used by erased class tests.
+     * CoreCLR ILAsm requires the bare TypeDef token here: prefixing it with `class` assembles but
+     * produces a TypeRef that fails to resolve at runtime (generic-open-token-20260801 probe).
+     */
+    private fun emitOpenGenericClassDefinition(genericClassInfo: DotNetGenericClassInfo) {
+        methodContext.emit("ldtoken ${genericClassInfo.typedClassInfo.ilTypeRef}", pushes = 1)
+        methodContext.emit(
+            "call class ${coreLibraryReference}System.Type " +
+                    "${coreLibraryReference}System.Type::GetTypeFromHandle(" +
+                    "valuetype ${coreLibraryReference}System.RuntimeTypeHandle)",
+            pops = 1,
+            pushes = 1,
+        )
     }
 
     private fun IrType.dotNetKFunctionExecutionArityOrNull(): Int? =
@@ -1111,7 +1182,10 @@ internal class DotNetIlExpressionCodegen(
         resolveGenericInterfaceDefaultBodyCallOrNull(call, call.symbol.owner)?.let { return it }
         val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
         val calleeName = callee.name.asString()
-        val info = availableFunctions[callee] ?: typeMapper.referencedFunctionInfoOrNull(callee)
+        val typedGenericClassSuperInfo = call.superQualifierSymbol
+            ?.takeUnless { qualifier -> qualifier.owner.isInterface }
+            ?.let { typeMapper.typedGenericClassFunctionInfoOrNull(callee) }
+        val info = typedGenericClassSuperInfo ?: availableFunctions[callee] ?: typeMapper.referencedFunctionInfoOrNull(callee)
             ?: dotNetUnsupported(
                 "call to unsupported function '$calleeName' on " +
                         ((callee.parent as? IrClass)?.fqNameWhenAvailable?.asString() ?: callee.parent.render()) +
@@ -1155,6 +1229,13 @@ internal class DotNetIlExpressionCodegen(
         var classInstantiation = emptyList<DotNetIlValueType>()
         if (info.isInstance && info.owner.typeParameterCount > 0) {
             val ownerView = receiverType!!.dotNetViewAsGenericOwner(info.owner)
+                // A canonical C receiver deliberately has no closed CLR owner view. The logical
+                // IR receiver can still carry the exact C<T> capability needed by implementation
+                // helpers (notably Common's generated default-argument dispatchers); recover it
+                // from that authority, never from the canonical interface spelling.
+                ?: call.arguments.firstOrNull()?.type
+                    ?.let(typeMapper::genericClassCapabilityTypeOrNull)
+                    ?.takeIf { capability -> capability.classInfo.ilTypeRef == info.owner.ilTypeRef }
                 ?: dotNetUnsupported(
                     "call to '$calleeName' through a receiver that is not an instantiation of its declaring class"
                 )
@@ -1194,8 +1275,24 @@ internal class DotNetIlExpressionCodegen(
         // Argument VALUES flow at the substituted types (the CLR's reification: `Box<Int>`
         // really takes an `int32`), while the member-ref operand keeps the open ones.
         val parameterTypes = info.signature.parameterTypes
-            .map { it.substituteDotNetTypeParameters(classInstantiation, methodInstantiation) }
-        val virtual = call.superQualifierSymbol == null && callee.isDotNetVirtual()
+            .mapIndexed { index, parameterType ->
+                try {
+                    parameterType.substituteDotNetTypeParameters(classInstantiation, methodInstantiation)
+                } catch (failure: IllegalStateException) {
+                    throw IllegalStateException(
+                        "Internal .NET backend error: cannot substitute parameter $index of '$calleeName' " +
+                                "on ${info.owner.ilTypeRef}; parameter=${parameterType.nameInSignature}, " +
+                                "ownerArguments=${classInstantiation.map { it.nameInSignature }}, " +
+                                "methodArguments=${methodInstantiation.map { it.nameInSignature }}",
+                        failure,
+                    )
+                }
+            }
+        val canonicalGenericClassCall = (callee.parent as? IrClass)?.let { owner ->
+            typeMapper.genericClassInfoOrNull(owner)?.canonicalClassInfo?.ilTypeRef == info.owner.ilTypeRef
+        } == true
+        val virtual = call.superQualifierSymbol == null &&
+                (callee.isDotNetVirtual() || canonicalGenericClassCall)
         return ResolvedCall(
             callee = callee,
             calleeName = calleeName,
@@ -1403,7 +1500,9 @@ internal class DotNetIlExpressionCodegen(
             is DotNetMappedExceptions.Entry.Rejected -> dotNetUnsupported(entry.reason)
             null -> {}
         }
-        val classInfo = typeMapper.classInfoOrNull(irClass)
+        val genericClassInfo = typeMapper.genericClassInfoOrNull(irClass)
+        val constructorTypeMapper = if (genericClassInfo != null) typeMapper.typedGenericClassView() else typeMapper
+        val classInfo = genericClassInfo?.typedClassInfo ?: constructorTypeMapper.classInfoOrNull(irClass)
             ?: dotNetUnsupported("constructor call of unsupported class '${irClass.name.asString()}'")
         val [producedType, ownerToken, classInstantiation] = if (irClass.typeParameters.isEmpty()) {
             Triple(DotNetIlValueType.UserClass(classInfo) as DotNetIlValueType, classInfo.ilTypeRef, emptyList<DotNetIlValueType>())
@@ -1413,9 +1512,10 @@ internal class DotNetIlExpressionCodegen(
             // type parameters to the constructor call's typeArguments. Both are authoritative IR
             // encodings of the same constructed CLR owner.
             val argumentsFromCall = call.typeArguments.map { argument ->
-                argument?.let(typeMapper::toDotNetIlValueType)
+                argument?.let(constructorTypeMapper::toDotNetIlValueType)
             }
-            val instanceType = (typeMapper.toDotNetIlValueType(call.type) as? DotNetIlValueType.GenericInstance)
+            val instanceType = typeMapper.genericClassCapabilityTypeOrNull(call.type)
+                ?: (constructorTypeMapper.toDotNetIlValueType(call.type) as? DotNetIlValueType.GenericInstance)
                 ?: argumentsFromCall
                     .takeIf { arguments ->
                         arguments.size == irClass.typeParameters.size && arguments.all { it != null }
@@ -1439,7 +1539,7 @@ internal class DotNetIlExpressionCodegen(
                         "where ${expectedType.nameInSignature} is expected"
             )
         }
-        val parameterTypes = constructor.dotNetSignature(typeMapper).parameterTypes
+        val parameterTypes = constructor.dotNetSignature(constructorTypeMapper).parameterTypes
         val substitutedParameterTypes = parameterTypes.map { it.substituteDotNetTypeParameters(classInstantiation) }
         emitArguments(call.arguments, substitutedParameterTypes, "constructor of '${irClass.name.asString()}'")
         methodContext.emit(
@@ -1511,6 +1611,17 @@ internal class DotNetIlExpressionCodegen(
             val [ownerView, receiver, receiverType] = resolveGenericFieldOwner(expression.receiver, field, isStatic)
             val fieldType = declaredFieldType.substituteDotNetTypeParameters(ownerView.arguments)
             if (!fieldType.isDotNetAssignableTo(expectedType)) {
+                if (emitCanonicalGenericClassViewCoercionOrNull(expression.type, fieldType, expectedType) {
+                        emitExpression(receiver, receiverType)
+                        methodContext.emit(
+                            "ldfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString(), ownerView.nameInSignature)}",
+                            pops = 1,
+                            pushes = 1,
+                        )
+                    }
+                ) {
+                    return
+                }
                 dotNetUnsupported(
                     "field '${field.name.asString()}' has type ${fieldType.nameInSignature} " +
                             "where ${expectedType.nameInSignature} is expected"
@@ -1525,6 +1636,24 @@ internal class DotNetIlExpressionCodegen(
             return
         }
         if (!declaredFieldType.isDotNetAssignableTo(expectedType)) {
+            if (emitCanonicalGenericClassViewCoercionOrNull(expression.type, declaredFieldType, expectedType) {
+                    if (isStatic) {
+                        methodContext.emit(
+                            "ldsfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}",
+                            pushes = 1,
+                        )
+                    } else {
+                        emitFieldReceiver(expression.receiver, field, classInfo)
+                        methodContext.emit(
+                            "ldfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}",
+                            pops = 1,
+                            pushes = 1,
+                        )
+                    }
+                }
+            ) {
+                return
+            }
             dotNetUnsupported(
                 "field '${field.name.asString()}' has type ${declaredFieldType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"
@@ -1661,10 +1790,26 @@ internal class DotNetIlExpressionCodegen(
             producedType == DotNetIlValueType.Object &&
             (call.symbol.owner.isDotNetErasedObjectResult() ||
                     call.symbol.owner.isSplitGenericInterfaceMember() ||
+                    call.symbol.owner.isSplitGenericClassMember() ||
                     call.symbol.owner.hasErasedNullableTypeParameterResult())
         ) {
             emitErasedObjectAs(expectedType, "${call.symbol.owner.name.asString()} result")
-        } else if (producedType?.isDotNetAssignableTo(expectedType) != true) {
+        } else if (producedType != null && emitCanonicalGenericClassViewCoercionOrNull(
+                call.type,
+                producedType,
+                expectedType,
+                emitValue = {},
+            )
+        ) {
+            // The call already left its result on the evaluation stack.
+        } else if (producedType != null && !producedType.isDotNetAssignableTo(expectedType)) {
+            val coercion = dotNetWideningCoercionOrNull(producedType, expectedType, coreLibraryReference)
+                ?: dotNetUnsupported(
+                    "call to '${call.symbol.owner.name.asString()}' produces ${returnType.nameInSignature} " +
+                            "where ${expectedType.nameInSignature} is expected"
+                )
+            methodContext.emit(coercion, pops = 1, pushes = 1)
+        } else if (producedType == null) {
             dotNetUnsupported(
                 "call to '${call.symbol.owner.name.asString()}' produces ${returnType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"
@@ -1676,6 +1821,12 @@ internal class DotNetIlExpressionCodegen(
         (parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true ||
                 allOverridden().any { overridden ->
                     (overridden.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true
+                }
+
+    private fun IrSimpleFunction.isSplitGenericClassMember(): Boolean =
+        (parent as? IrClass)?.let(typeMapper::isSplitGenericClass) == true ||
+                allOverridden().any { overridden ->
+                    (overridden.parent as? IrClass)?.let(typeMapper::isSplitGenericClass) == true
                 }
 
     /** Whether this logical result is an open `T?` represented by the stable object carrier. */
@@ -2241,6 +2392,12 @@ internal class DotNetIlExpressionCodegen(
         val slot = methodContext.reference(expression.symbol)
         val slotType = slot.type
         if (!slotType.isDotNetAssignableTo(expectedType)) {
+            if (emitCanonicalGenericClassViewCoercionOrNull(expression.type, slotType, expectedType) {
+                    emitLoadSlot(slot)
+                }
+            ) {
+                return
+            }
             if (slotType == DotNetIlValueType.Object && methodContext.isErasedRuntimeParameter(expression.symbol)) {
                 val instruction = expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
                     ?: dotNetUnsupported(
@@ -2283,6 +2440,30 @@ internal class DotNetIlExpressionCodegen(
             )
         }
         emitLoadSlot(slot)
+    }
+
+    /**
+     * Recovers a truthful non-generic base/interface view from a generic class's canonical
+     * sibling. CLR interfaces cannot extend classes, so the canonical metadata graph cannot
+     * express this Kotlin upcast even though every admitted implementation is the same typed
+     * `C<T>` object and its real base chain does. A foreign object violating the Kotlin ABI fails
+     * at this cast boundary instead of acquiring the base identity.
+     */
+    private inline fun emitCanonicalGenericClassViewCoercionOrNull(
+        logicalType: IrType,
+        producedType: DotNetIlValueType,
+        expectedType: DotNetIlValueType,
+        emitValue: () -> Unit,
+    ): Boolean {
+        if (!producedType.isDotNetReferenceShaped() || !expectedType.isDotNetReferenceShaped()) return false
+        val info = logicalType.dotNetGenericClassInfoOrNull() ?: return false
+        if (producedType != DotNetIlValueType.UserClass(info.canonicalClassInfo)) return false
+        val typedCapability = typeMapper.genericClassCapabilityTypeOrNull(logicalType)
+            ?: DotNetIlValueType.UserClass(info.typedClassInfo)
+        if (!typedCapability.isDotNetAssignableTo(expectedType)) return false
+        emitValue()
+        methodContext.emit("castclass ${expectedType.nameInSignature}", pops = 1, pushes = 1)
+        return true
     }
 
     private fun emitLoadSlot(slot: DotNetIlSlot) {

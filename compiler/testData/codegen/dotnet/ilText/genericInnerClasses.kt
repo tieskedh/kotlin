@@ -69,10 +69,16 @@ class DuplicateGenericInnerOuter<T> {
 fun <T, U> makeGenericInnerOwn(outer: GenericInnerOuter<T>, item: U): GenericInnerOuter<T>.Own<U> =
     outer.Own(item)
 
+fun isGenericInnerOwn(value: Any?): Boolean = value is GenericInnerOuter<*>.Own<*>
+
 fun main() {
     val outer = GenericInnerOuter("outer")
     val plain = outer.plain()
     val own = outer.own(7)
+    val ownAny: Any = own
+    println(isGenericInnerOwn(ownAny))
+    println(ownAny is GenericInnerOuter<*>.Own<*>)
+    val projectedOwn = ownAny as GenericInnerOuter<*>.Own<*>
     val made = makeGenericInnerOwn(outer, 9)
     val base: GenericInnerOuter<String>.Base<Int> = outer.Derived(11)
     val pair: GenericInnerPairBase<Int, String> = outer.Pair(13)
@@ -84,6 +90,9 @@ fun main() {
     println(plain.owns(outer))
     println(own.item())
     println(own.outer())
+    println(projectedOwn === own)
+    println(projectedOwn.item())
+    println(projectedOwn.outer())
     println(made.item())
     println(base.item())
     println(base.outer())

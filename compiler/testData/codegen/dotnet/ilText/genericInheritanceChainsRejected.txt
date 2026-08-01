@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -6,8 +11,23 @@
 .assembly 'genericInheritanceChainsRejected' {}
 .module 'main-genericInheritanceChainsRejected.il'
 
+.class interface public abstract auto ansi 'RejectBase'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__690502146aac346d3d5184216e7885e6'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'value__KotlinErased__690502146aac346d3d5184216e7885e6'()
+  {
+    .get instance object 'RejectBase'::'get_value__KotlinErased__690502146aac346d3d5184216e7885e6'()
+  }
+}
 .class public auto ansi beforefieldinit 'RejectBase`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'RejectBase'
 {
   .field private !0 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
@@ -27,13 +47,30 @@
     ldfld !0 class 'RejectBase`1'<!0>::'value'
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  {
+    .override method instance object 'RejectBase'::'get_value__KotlinErased__690502146aac346d3d5184216e7885e6'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'RejectBase`1'<!0>
+    call instance !0 class 'RejectBase`1'<!0>::'get_value'()
+    box !0
+    ret
+  }
   .property instance !0 'value'()
   {
     .get instance !0 'RejectBase`1'::'get_value'()
   }
 }
+.class interface public abstract auto ansi 'SurvivingDerived'
+       implements 'RejectBase'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+}
 .class public auto ansi sealed beforefieldinit 'SurvivingDerived`1'<'T'>
        extends class 'RejectBase`1'<!0>
+       implements 'SurvivingDerived'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
   {
@@ -44,8 +81,15 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'ExternalGenericArgument'
+       implements 'RejectBase'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+}
 .class public auto ansi sealed beforefieldinit 'ExternalGenericArgument`1'<'T'>
        extends class 'RejectBase`1'<class [Kotlin.Runtime]'Kotlin.Collections.List'>
+       implements 'ExternalGenericArgument'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Collections.List' 'value') cil managed
   {
@@ -56,8 +100,15 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'UnsupportedArrayArgument'
+       implements 'RejectBase'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+}
 .class public auto ansi sealed beforefieldinit 'UnsupportedArrayArgument`1'<'T'>
        extends class 'RejectBase`1'<int32[]>
+       implements 'UnsupportedArrayArgument'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor(int32[] 'value') cil managed
   {
@@ -77,7 +128,8 @@
     .maxstack 3
     ldc.i4 23
     newobj instance void class 'SurvivingDerived`1'<int32>::.ctor(!0)
-    call instance !0 class 'RejectBase`1'<int32>::'get_value'()
+    callvirt instance object 'RejectBase'::'get_value__KotlinErased__690502146aac346d3d5184216e7885e6'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

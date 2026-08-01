@@ -18,11 +18,19 @@ import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
+import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrStarProjection
+import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.util.IdSignatureRenderer
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFakeOverride
+import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.types.Variance
@@ -92,8 +100,10 @@ sealed interface DotNetPhysicalDeclaration {
      * One logical Kotlin class and its physical CLR owner.
      *
      * [ownerPath] is always the canonical owner. A Kotlin-owned generic interface additionally
-     * records its CLR-facing generic view and optional complete invariant capability explicitly;
-     * consumers must never reconstruct either sibling from the canonical name or its arity.
+     * records its CLR-facing generic view and optional complete invariant capability. An ordinary
+     * Kotlin generic class records its invariant typed implementation in [declaredOwnerPath] and
+     * leaves [exactOwnerPath] absent. Consumers distinguish those shapes from authoritative KLIB
+     * declaration kind and must never reconstruct a sibling from the canonical name or its arity.
      */
     data class Class(
         override val ownerPath: List<String>,
@@ -259,6 +269,29 @@ sealed interface DotNetPhysicalDeclaration {
             }
         }
     }
+
+    /**
+     * Producer-recorded same-object adaptation from one ordinary generic class's canonical
+     * Kotlin member slot to its typed CLR source member. The canonical slot itself remains the
+     * [Function] entry under [memberLogicalKey]; this record prevents consumers and tooling from
+     * reconstructing the typed owner, source name, or MethodImpl body from naming conventions.
+     */
+    data class GenericClassMemberBridge(
+        override val ownerPath: List<String>,
+        val ownerLogicalKey: String,
+        val memberLogicalKey: String,
+        val typedMethodName: String,
+        val implementationMethodName: String,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty()) { "a generic-class member bridge requires its typed CLR owner" }
+            require(ownerLogicalKey.isNotEmpty()) { "a generic-class member bridge requires its logical owner" }
+            require(memberLogicalKey.isNotEmpty()) { "a generic-class member bridge requires its logical member" }
+            require(typedMethodName.isNotEmpty() && implementationMethodName.isNotEmpty()) {
+                "a generic-class member bridge requires typed source and implementation method names"
+            }
+        }
+    }
 }
 
 internal fun DotNetPhysicalDeclaration.InterfaceDefaultPromotion.indexKey(): String =
@@ -276,6 +309,9 @@ internal fun DotNetPhysicalDeclaration.CovariantReturnBridge.indexKey(): String 
 
 internal fun DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder.indexKey(): String =
     "W:$ownerLogicalKey:$inheritedLogicalMemberKey:${physicalView.name}"
+
+internal fun DotNetPhysicalDeclaration.GenericClassMemberBridge.indexKey(): String =
+    "G:$ownerLogicalKey:$memberLogicalKey"
 
 /** One portable Kotlin/CLR binding that is absent or physically different in a platform variant. */
 data class DotNetPortablePhysicalAbiDifference(
@@ -337,7 +373,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "16"
+    const val ABI_VERSION = "17"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -389,6 +425,7 @@ object DotNetLibraryAbiCodec {
                 is DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.CovariantReturnBridge -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.GenericClassMemberBridge -> declaration.encodeFields()
             }
             encodeText(fields.joinToString("\u0000"))
         }
@@ -409,6 +446,7 @@ object DotNetLibraryAbiCodec {
                 "W" -> decodeInterfaceDefaultClassForwarder(fields, logicalKey)
                 "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
                 "FDA" -> decodeInterfaceDefaultArgumentFunction(fields, logicalKey)
+                "G" -> decodeGenericClassMemberBridge(fields, logicalKey)
                 else -> throw IllegalArgumentException("declaration '$logicalKey' has an unknown CLR identity kind")
             }
             require(put(logicalKey, declaration) == null) { "duplicate CLR declaration identity '$logicalKey'" }
@@ -897,6 +935,39 @@ object DotNetLibraryAbiCodec {
         ) + ownerPath + declaredPath + exactPath + initializationPath + objectInstancePath
     }
 
+    private fun DotNetPhysicalDeclaration.GenericClassMemberBridge.encodeFields(): List<String> =
+        listOf(
+            "G",
+            ownerLogicalKey,
+            memberLogicalKey,
+            typedMethodName,
+            implementationMethodName,
+        ) + ownerPath
+
+    private fun decodeGenericClassMemberBridge(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.GenericClassMemberBridge {
+        require(fields.size >= 6) {
+            "generic-class member bridge '$logicalKey' has an incomplete CLR identity"
+        }
+        return DotNetPhysicalDeclaration.GenericClassMemberBridge(
+            ownerPath = fields.drop(5).requireOwnerPath(logicalKey, "typed implementation"),
+            ownerLogicalKey = fields[1].also { value ->
+                require(value.isNotEmpty()) { "generic-class member bridge '$logicalKey' has an empty logical owner" }
+            },
+            memberLogicalKey = fields[2].also { value ->
+                require(value.isNotEmpty()) { "generic-class member bridge '$logicalKey' has an empty logical member" }
+            },
+            typedMethodName = fields[3].requireMethodName(logicalKey, "typed source"),
+            implementationMethodName = fields[4].requireMethodName(logicalKey, "implementation"),
+        ).also { bridge ->
+            require(bridge.indexKey() == logicalKey) {
+                "generic-class member bridge '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+
     private fun decodeClass(
         fields: List<String>,
         logicalKey: String,
@@ -1093,30 +1164,61 @@ private val IrDeclaration.isDotNetCrossModuleDeclaration: Boolean
  * Stable identity suffix for one logical generic-interface slot.
  *
  * Public declarations use the same Kotlin [org.jetbrains.kotlin.ir.util.IdSignature] that keys
- * the companion KLIB index. Non-exported declarations use a structural source identity; they do
- * not cross module boundaries, but still need deterministic collision-free names inside their
- * assembly. The digest is deliberately independent of declaration order and source offsets.
+ * the companion KLIB index. Non-exported declarations use an explicit structural type codec;
+ * they do not cross module boundaries, but still need deterministic collision-free names inside
+ * their owner. Neither `IrType.render()` nor the general IR mangler is safe here: lowered
+ * private/local type-parameter identities in both contain process-local identity. The bounded
+ * codec mirrors the existing covariant-slot identity rule and uses only classifier names,
+ * projections, nullability, parameter kinds, and owner/method type-parameter indices. The digest
+ * is deliberately independent of declaration order and source offsets.
  */
 internal fun IrSimpleFunction.dotNetGenericInterfaceCanonicalSlotId(): String {
     val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
-    val logicalIdentity = computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: buildString {
-        append((parent as? IrClass)?.fqNameWhenAvailable?.asString().orEmpty())
-        append('|')
-        append(dotNetIlMethodName())
-        append('|')
-        append(typeParameters.size)
-        append('|')
-        parameters.forEach { parameter ->
-            append(parameter.kind)
-            append(':')
-            append(parameter.type.render())
-            append(';')
+    val logicalIdentity = takeIf { function -> function.isDotNetCrossModuleDeclaration }
+        ?.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)
+        ?: buildString {
+            append((parent as? IrClass)?.fqNameWhenAvailable?.asString().orEmpty())
+            append('|')
+            append(dotNetIlMethodName())
+            append('|')
+            append(typeParameters.size)
+            append('|')
+            parameters.forEach { parameter ->
+                append(parameter.kind)
+                append(':')
+                append(parameter.type.dotNetCanonicalSlotStructuralTypeKey())
+                append(';')
+            }
+            append("->")
+            append(returnType.dotNetCanonicalSlotStructuralTypeKey())
         }
-        append("->")
-        append(returnType.render())
-    }
     val digest = DotNetLibraryAbiCodec.logicalIdentityDigest(logicalIdentity)
     return digest
+}
+
+private fun IrType.dotNetCanonicalSlotStructuralTypeKey(): String {
+    val simpleType = this as? IrSimpleType ?: return javaClass.simpleName
+    val classifierKey = when (val classifier = simpleType.classifier) {
+        is IrClassSymbol -> classifier.owner.fqNameWhenAvailable?.asString()
+            ?: classifier.owner.name.asString()
+        is IrTypeParameterSymbol -> {
+            val parameter = classifier.owner
+            val ownerParameters = when (val parameterOwner = parameter.parent) {
+                is IrClass -> parameterOwner.typeParameters
+                is IrSimpleFunction -> parameterOwner.typeParameters
+                else -> emptyList()
+            }
+            "${parameter.parent.javaClass.simpleName}#${ownerParameters.indexOf(parameter)}"
+        }
+        else -> classifier.javaClass.simpleName
+    }
+    val arguments = simpleType.arguments.joinToString(",", prefix = "<", postfix = ">") { argument ->
+        when (argument) {
+            is IrStarProjection -> "*"
+            is IrTypeProjection -> "${argument.variance}:${argument.type.dotNetCanonicalSlotStructuralTypeKey()}"
+        }
+    }
+    return classifierKey + arguments + if (simpleType.isMarkedNullable()) "?" else ""
 }
 
 /** Reserved physical name of a canonical erased slot; typed capabilities keep the source name. */
@@ -1208,13 +1310,29 @@ internal class DotNetExternalDeclarations(
      * Whether [irClass] has a producer-recorded physical CLR class in a bound library.
      *
      * This is intentionally distinct from [declaredClassInfoOrNull]: an ordinary non-generic
-     * class has only its canonical physical view, while a split generic interface can also have
-     * a declared typed capability. Shape gates that merely authorize an external base or
-     * interface must test declaration membership, not the presence of that optional capability.
+     * class has only its canonical physical view, while split generic interfaces and classes
+     * also have a producer-recorded typed view. Shape gates that merely authorize an external
+     * base or interface must test declaration membership, not the presence of that optional view.
      */
     fun hasClass(irClass: IrClass): Boolean {
         val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return false
         return declarations[logicalKey]?.declaration is DotNetPhysicalDeclaration.Class
+    }
+
+    /** Whether KLIB kind plus the producer index select the split ordinary generic-class ABI. */
+    fun hasGenericClass(irClass: IrClass): Boolean {
+        if (irClass.isInterface || irClass.typeParameters.isEmpty()) return false
+        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return false
+        val declaration = declarations[logicalKey]?.declaration as? DotNetPhysicalDeclaration.Class ?: return false
+        return declaration.declaredOwnerPath != null && declaration.exactOwnerPath == null
+    }
+
+    /** Whether KLIB kind plus the producer index select the split generic-interface ABI. */
+    fun hasGenericInterface(irClass: IrClass): Boolean {
+        if (!irClass.isInterface || irClass.typeParameters.isEmpty()) return false
+        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return false
+        val declaration = declarations[logicalKey]?.declaration as? DotNetPhysicalDeclaration.Class ?: return false
+        return declaration.declaredOwnerPath != null
     }
 
     fun classInfoOrNull(irClass: IrClass, typeMapper: DotNetIlTypeMapper): DotNetIlClassInfo? {
@@ -1258,6 +1376,57 @@ internal class DotNetExternalDeclarations(
             declaredOwnerPath,
             irClass.typeParameters.map { it.variance },
         ).also { declaredClassInfoByLogicalKey[logicalKey] = it }
+    }
+
+    /** The canonical/typed pair recorded for an ordinary Kotlin generic class. */
+    fun genericClassInfoOrNull(irClass: IrClass, typeMapper: DotNetIlTypeMapper): DotNetGenericClassInfo? {
+        if (irClass.isInterface || irClass.typeParameters.isEmpty()) return null
+        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
+        val bound = declarations[logicalKey] ?: return null
+        val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
+        declaration.declaredOwnerPath ?: return null
+        val typed = declaredClassInfoOrNull(irClass) ?: return null
+        val canonical = canonicalClassInfoByLogicalKey.getOrPut(logicalKey) {
+            buildClassInfo(
+                bound.library.artifact.assemblyName,
+                declaration.ownerPath,
+                emptyList(),
+            )
+        }
+        val info = DotNetGenericClassInfo(canonical, typed)
+        if (classLinksInProgress.add(logicalKey)) {
+            try {
+                val typedMapper = typeMapper.typedGenericClassView()
+                val baseType = irClass.dotNetBaseSuperTypeOrNull()
+                typed.baseType = baseType?.let(typedMapper::toDotNetIlValueType)
+                val canonicalBase = baseType
+                    ?.takeIf { type ->
+                        val baseClass = (type.classifier as? org.jetbrains.kotlin.ir.symbols.IrClassSymbol)?.owner
+                        baseClass?.let(typeMapper::isSplitGenericClass) == true
+                    }
+                    ?.let(typeMapper::toDotNetIlValueType)
+                val canonicalInterfaces = irClass.dotNetDirectInterfaceTypes()
+                    .mapNotNull(typeMapper::toDotNetIlImplementedInterfaceType)
+                    .filter { interfaceType ->
+                        interfaceType is DotNetIlValueType.UserClass ||
+                                interfaceType is DotNetIlValueType.GenericInstance
+                    }
+                canonical.interfaces = (listOfNotNull(canonicalBase) + canonicalInterfaces).distinct()
+                val typedInterfaces = irClass.dotNetDirectInterfaceTypes()
+                    .mapNotNull(typedMapper::toDotNetIlImplementedInterfaceType)
+                    .filter { interfaceType ->
+                        interfaceType is DotNetIlValueType.UserClass ||
+                                interfaceType is DotNetIlValueType.GenericInstance
+                    }
+                typed.interfaces = (
+                        listOf(DotNetIlValueType.UserClass(canonical)) +
+                                typedInterfaces
+                        ).distinct()
+            } finally {
+                classLinksInProgress.remove(logicalKey)
+            }
+        }
+        return info
     }
 
     /** The explicitly indexed complete typed capability; every CLR parameter is invariant. */
@@ -1325,11 +1494,39 @@ internal class DotNetExternalDeclarations(
                 buildClassInfo(bound.library.artifact.assemblyName, declaration.ownerPath, emptyList())
             }
         }
-        val signature = function.dotNetSignature(typeMapper)
+        // Function records carry the stable Kotlin ABI. A caller may currently be rendering the
+        // typed implementation body of its own generic class; that local capability must not
+        // leak into reconstruction of another declaration's canonical generic-class signature.
+        val signature = function.dotNetSignature(typeMapper.canonicalGenericClassView())
         require(signature.hasThis == declaration.isInstance) {
             "external function '$logicalKey' has a CLR dispatch shape inconsistent with its metadata"
         }
         return DotNetIlFunctionInfo(owner, signature, declaration.methodName)
+    }
+
+    /** Exact typed source member selected for a `super` call on an external generic class. */
+    fun typedGenericClassFunctionInfoOrNull(
+        function: IrSimpleFunction,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo? {
+        val ownerClass = function.parent as? IrClass ?: return null
+        if (!hasGenericClass(ownerClass)) return null
+        val ownerLogicalKey = ownerClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
+        val memberLogicalKey = function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val bound = declarations["G:$ownerLogicalKey:$memberLogicalKey"] ?: return null
+        val bridge = bound.declaration as? DotNetPhysicalDeclaration.GenericClassMemberBridge ?: return null
+        require(bridge.ownerLogicalKey == ownerLogicalKey && bridge.memberLogicalKey == memberLogicalKey) {
+            "external generic-class member bridge is internally inconsistent"
+        }
+        val owner = genericClassInfoOrNull(ownerClass, typeMapper)?.typedClassInfo ?: return null
+        require(owner.physicalPathComponents() == bridge.ownerPath) {
+            "external generic-class member '$memberLogicalKey' is bound outside its typed CLR class"
+        }
+        return DotNetIlFunctionInfo(
+            owner = owner,
+            signature = function.dotNetSignature(typeMapper.typedGenericClassView()),
+            physicalMethodName = bridge.typedMethodName,
+        )
     }
 
     fun interfaceDefaultImplementationOrNull(
@@ -1394,6 +1591,7 @@ internal class DotNetExternalDeclarations(
     fun genericInterfaceIntersectionSlots(
         owner: IrClass,
         signatureSource: IrSimpleFunction,
+        typeMapper: DotNetIlTypeMapper,
     ): List<DotNetBoundGenericInterfaceIntersectionSlot> {
         val ownerLogicalKey = owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return emptyList()
         val overriddenByLogicalKey = signatureSource.allOverridden()
@@ -1407,7 +1605,9 @@ internal class DotNetExternalDeclarations(
             val slot = bound.declaration as? DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot
                 ?: return@mapNotNull null
             if (slot.ownerLogicalKey != ownerLogicalKey ||
-                slot.methodName != signatureSource.dotNetAbiMethodName() ||
+                slot.methodName != signatureSource.dotNetAbiMethodName(
+                    isSplitGenericClass = typeMapper::isSplitGenericClass,
+                ) ||
                 !slot.contributingLogicalMemberKeys.all(overriddenByLogicalKey::containsKey)
             ) {
                 return@mapNotNull null
@@ -1542,6 +1742,8 @@ internal fun collectDotNetLibraryDeclarations(
     availableClasses: Map<IrClass, DotNetIlClassInfo>,
     availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
+    genericClasses: Map<IrClass, DotNetGenericClassInfo> = emptyMap(),
+    genericClassBridges: List<DotNetLoweredGenericClassBridge> = emptyList(),
     preLoweringDeclarationKeys: Map<IrDeclaration, String> = emptyMap(),
     interfaceDefaultImplementations: Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation> = emptyMap(),
     defaultArgumentDispatchers: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
@@ -1552,6 +1754,7 @@ internal fun collectDotNetLibraryDeclarations(
     interfaceDefaultClassForwarders: List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
     staticInitializations: Map<IrClass, DotNetLoweredStaticInitialization> = emptyMap(),
     objectInstanceFields: Map<IrClass, IrField> = emptyMap(),
+    typeMapper: DotNetIlTypeMapper? = null,
 ): Map<String, DotNetPhysicalDeclaration> = buildMap {
     val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
     val compilerAbiFunctions = buildSet {
@@ -1565,6 +1768,7 @@ internal fun collectDotNetLibraryDeclarations(
         covariantReturnBridges.mapTo(hashSetOf()) { it.implementation }
     val interfaceDefaultClassForwarderFunctions =
         interfaceDefaultClassForwarders.mapTo(hashSetOf()) { it.implementation }
+    val genericClassBridgeFunctions = genericClassBridges.mapTo(hashSetOf()) { it.implementation }
     val compilerAbiClasses = compilerAbiFunctions
         .mapNotNullTo(hashSetOf()) { function -> function.parent as? IrClass }
         .filterTo(hashSetOf()) { irClass ->
@@ -1577,6 +1781,7 @@ internal fun collectDotNetLibraryDeclarations(
         if (irClass.fileOrNull !in files || irClass.isOriginallyLocalDeclaration) continue
         val logicalKey = preLoweringDeclarationKeys[irClass] ?: continue
         val genericInterface = genericInterfaces[irClass]
+        val genericClass = genericClasses[irClass]
         val staticInitialization = staticInitializations[irClass]?.let { lowered ->
             val entryInfo = availableFunctions[lowered.entry]
                 ?: error(
@@ -1601,7 +1806,7 @@ internal fun collectDotNetLibraryDeclarations(
                 fieldName = field.name.asString(),
             )
         }
-        if (genericInterface == null) {
+        if (genericInterface == null && genericClass == null) {
             put(
                 logicalKey,
                 DotNetPhysicalDeclaration.Class(
@@ -1610,7 +1815,7 @@ internal fun collectDotNetLibraryDeclarations(
                     objectInstance = objectInstance,
                 )
             )
-        } else {
+        } else if (genericInterface != null) {
             val canonicalOwnerPath = genericInterface.canonicalClassInfo.physicalPathComponents()
             require(canonicalOwnerPath == classInfo.physicalPathComponents()) {
                 "generic interface '${irClass.render()}' has a canonical CLR owner inconsistent with its class index"
@@ -1625,6 +1830,21 @@ internal fun collectDotNetLibraryDeclarations(
                     objectInstance = objectInstance,
                 )
             )
+        } else {
+            checkNotNull(genericClass)
+            val canonicalOwnerPath = genericClass.canonicalClassInfo.physicalPathComponents()
+            require(canonicalOwnerPath == classInfo.physicalPathComponents()) {
+                "generic class '${irClass.render()}' has a canonical CLR owner inconsistent with its class index"
+            }
+            put(
+                logicalKey,
+                DotNetPhysicalDeclaration.Class(
+                    ownerPath = canonicalOwnerPath,
+                    declaredOwnerPath = genericClass.typedClassInfo.physicalPathComponents(),
+                    staticInitialization = staticInitialization,
+                    objectInstance = objectInstance,
+                )
+            )
         }
     }
     for (entry in availableFunctions) {
@@ -1632,7 +1852,8 @@ internal fun collectDotNetLibraryDeclarations(
         val functionInfo = entry.value
         if (function in compilerAbiFunctions || function in genericInterfaceViewBridgeFunctions ||
             function in covariantReturnBridgeFunctions ||
-            function in interfaceDefaultClassForwarderFunctions
+            function in interfaceDefaultClassForwarderFunctions ||
+            function in genericClassBridgeFunctions
         ) {
             continue
         }
@@ -1671,6 +1892,34 @@ internal fun collectDotNetLibraryDeclarations(
                 defaultArgumentDispatcher = defaultArgumentDispatcher,
             )
         )
+    }
+    for (bridge in genericClassBridges) {
+        val genericClass = genericClasses[bridge.owner] ?: continue
+        if (bridge.owner.fileOrNull !in files || bridge.owner.isOriginallyLocalDeclaration) continue
+        if (bridge.owner !in availableClasses || bridge.implementation !in availableFunctions) continue
+        val ownerLogicalKey = preLoweringDeclarationKeys[bridge.owner] ?: continue
+        val memberLogicalKey = preLoweringDeclarationKeys[bridge.source] ?: continue
+        val implementationInfo = availableFunctions.getValue(bridge.implementation)
+        val typedOwnerPath = genericClass.typedClassInfo.physicalPathComponents()
+        require(implementationInfo.owner.physicalPathComponents() == typedOwnerPath) {
+            "generic-class bridge for '${bridge.source.render()}' is emitted outside its typed CLR owner"
+        }
+        val declaration = DotNetPhysicalDeclaration.GenericClassMemberBridge(
+            ownerPath = typedOwnerPath,
+            ownerLogicalKey = ownerLogicalKey,
+            memberLogicalKey = memberLogicalKey,
+            typedMethodName = bridge.source.dotNetErasedCarrierMethodNameOrNull(
+                isSplitGenericClass = { irClass ->
+                    genericClasses.containsKey(irClass) || typeMapper?.isSplitGenericClass(irClass) == true
+                },
+            )
+                ?: bridge.source.dotNetIlMethodName(),
+            implementationMethodName = implementationInfo.physicalMethodName
+                ?: bridge.implementation.dotNetIlMethodName(),
+        )
+        require(put(declaration.indexKey(), declaration) == null) {
+            "multiple generic-class member bridges claim '${declaration.indexKey()}'"
+        }
     }
     for (promotion in interfaceDefaultPromotions) {
         val ownerInfo = availableClasses[promotion.owner] ?: continue

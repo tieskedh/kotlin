@@ -1,10 +1,7 @@
-// Generic top-level classes on the real CoreCLR (stage-1 generics, probe series genprobe):
-// Box/Pair with mutable state, multiple instantiations of ONE class coexisting with different
-// arguments (true reification — `Box`1<int32>` really stores a raw int32), the Int? hybrid
-// instantiation (wrapped and empty flavors through `!0`-typed state), nested instantiation
-// (`Box<Box<Int>>` drilled through two `get` hops), generic member dispatch through
-// instantiated receivers, `.property` accessors typed `!0`, and a member body instantiating
-// its OWN class with permuted type parameters (`Pair2<B, A>` — `class 'Pair2`2'<!1, !0>`).
+// Kotlin generic-class identity is the non-generic canonical CLR interface; the invariant
+// `Box`1<T>` class is the same object's typed implementation capability. These checks keep the
+// reified storage advantage while attacking erased Kotlin casts, ancestry, evaluation count,
+// state identity, and parameter-overload collisions.
 
 class Box<T>(private var value: T) {
     fun get(): T = value
@@ -19,6 +16,35 @@ class Box<T>(private var value: T) {
 
 class Pair2<A, B>(val first: A, val second: B) {
     fun swap(): Pair2<B, A> = Pair2<B, A>(second, first)
+}
+
+open class ErasedBase<T>(private var stored: T) {
+    open fun read(): T = stored
+
+    open fun write(value: T) {
+        stored = value
+    }
+}
+
+class StringBase(value: String) : ErasedBase<String>(value)
+
+class DerivedErased<U>(value: U) : ErasedBase<U>(value)
+
+private fun erasedOverload(value: Box<Int>): String = "int:${value.get()}"
+
+private fun erasedOverload(value: Box<String>): String = "string:${value.get()}"
+
+private class ErasedMemberOverloads {
+    fun select(value: Box<Int>): String = "int:${value.get()}"
+
+    fun select(value: Box<String>): String = "string:${value.get()}"
+}
+
+private var erasedEvaluationCount = 0
+
+private fun countedErased(value: Any?): Any? {
+    erasedEvaluationCount++
+    return value
 }
 
 fun box(): String {
@@ -45,5 +71,71 @@ fun box(): String {
     val s = p.swap()
     if (s.first != "one") return "fail 11: swap first"
     if (s.second != 1) return "fail 12: swap second"
+
+    val erased = ErasedBase("erased")
+    val star = erased as Any as ErasedBase<*>
+    if (star !== erased || star.read() != "erased") return "fail 13: star cast identity/read"
+    val erasedAny: Any = erased
+    if (erasedAny !is ErasedBase<*>) return "fail 14: direct star test"
+    val stringBaseAny: Any = StringBase("derived")
+    if (stringBaseAny !is ErasedBase<*>) return "fail 15: non-generic derived ancestry"
+    val genericDerived = DerivedErased(17)
+    val genericDerivedAny: Any = genericDerived
+    if (genericDerivedAny !is DerivedErased<*> || genericDerivedAny !is ErasedBase<*>) {
+        return "fail 16: generic derived ancestry"
+    }
+    val unrelated: Any = "not a class"
+    if (unrelated is ErasedBase<*>) return "fail 17: unrelated star test"
+
+    erasedEvaluationCount = 0
+    if (countedErased(erased) !is ErasedBase<*> || erasedEvaluationCount != 1) {
+        return "fail 18: test evaluates once"
+    }
+    erasedEvaluationCount = 0
+    val safe = countedErased(erased) as? ErasedBase<Int>
+    if (safe !== erased || erasedEvaluationCount != 1) return "fail 19: erased safe cast"
+    erasedEvaluationCount = 0
+    if (countedErased("wrong") as? ErasedBase<*> != null || erasedEvaluationCount != 1) {
+        return "fail 20: rejected safe cast evaluates once"
+    }
+    erasedEvaluationCount = 0
+    try {
+        countedErased("wrong") as ErasedBase<*>
+        return "fail 21: checked cast accepted unrelated value"
+    } catch (_: ClassCastException) {
+        if (erasedEvaluationCount != 1) return "fail 22: checked cast evaluates once"
+    }
+
+    val runtimeNull = countedErased(null)
+    if (runtimeNull is ErasedBase<*>) return "fail 23: null non-null test"
+    if (runtimeNull !is ErasedBase<*>?) return "fail 24: null nullable test"
+    if ((null as Any?) as? ErasedBase<*> != null) return "fail 25: null safe cast"
+    if ((null as Any?) as ErasedBase<*>? != null) return "fail 26: nullable checked cast"
+    try {
+        (null as Any?) as ErasedBase<*>
+        return "fail 27: non-null checked cast accepted null"
+    } catch (_: NullPointerException) {
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    val wrongArguments = erased as Any as ErasedBase<Int>
+    if (wrongArguments as Any !== erased) return "fail 28: unchecked cast changed identity"
+    try {
+        val impossible: Int = wrongArguments.read()
+        impossible + 1
+        return "fail 29: erased member result did not enforce logical type"
+    } catch (_: ClassCastException) {
+    }
+    erased.write("changed")
+    if (star.read() != "changed") return "fail 30: erased views do not share state"
+    if (erasedOverload(Box(31)) != "int:31") return "fail 31: top-level Int overload"
+    if (erasedOverload(Box("thirty-two")) != "string:thirty-two") {
+        return "fail 32: top-level String overload"
+    }
+    val memberOverloads = ErasedMemberOverloads()
+    if (memberOverloads.select(Box(33)) != "int:33") return "fail 33: member Int overload"
+    if (memberOverloads.select(Box("thirty-four")) != "string:thirty-four") {
+        return "fail 34: member String overload"
+    }
     return "OK"
 }

@@ -371,9 +371,30 @@
   {
   }
 }
+.class interface public abstract auto ansi 'GenericDefaultsImpl'
+       implements 'GenericDefaults'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'fallback__KotlinErased__fcb4bf548c8a405fd21456c8032b1e32'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'choose__KotlinErased__b678cd9dc2e11ccd16f44f929593eee2'(object 'value') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'echo__KotlinErased__32e530c86162da081e92cb14604c99f3'<'R'>(!!0 'value', !!0 'selected') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GenericDefaultsImpl`1'<'T'>
        extends [mscorlib]System.Object
-       implements 'GenericDefaults', class 'GenericDefaults`1'<!0>
+       implements 'GenericDefaultsImpl', 'GenericDefaults', class 'GenericDefaults`1'<!0>
 {
   .field private !0 'fallback'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'fallback') cil managed
@@ -464,6 +485,39 @@
     .override method instance !!0 class 'GenericDefaults`1'<!0>::'echo'<[1]>(!!0, !!0)
     .maxstack 3
     ldarg.0
+    ldarg.1
+    ldarg.2
+    callvirt instance !!0 class 'GenericDefaultsImpl`1'<!0>::'echo'<!!0>(!!0, !!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-fallback>'() cil managed
+  {
+    .override method instance object 'GenericDefaultsImpl'::'fallback__KotlinErased__fcb4bf548c8a405fd21456c8032b1e32'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericDefaultsImpl`1'<!0>
+    callvirt instance !0 class 'GenericDefaultsImpl`1'<!0>::'fallback'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-choose>'(object 'value') cil managed
+  {
+    .override method instance object 'GenericDefaultsImpl'::'choose__KotlinErased__b678cd9dc2e11ccd16f44f929593eee2'(object)
+    .maxstack 2
+    ldarg.0
+    castclass class 'GenericDefaultsImpl`1'<!0>
+    ldarg.1
+    unbox.any !0
+    callvirt instance !0 class 'GenericDefaultsImpl`1'<!0>::'choose'(!0)
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericClassCanonicalBridge-echo>'<'R'>(!!0 'value', !!0 'selected') cil managed
+  {
+    .override method instance !!0 'GenericDefaultsImpl'::'echo__KotlinErased__32e530c86162da081e92cb14604c99f3'<[1]>(!!0, !!0)
+    .maxstack 3
+    ldarg.0
+    castclass class 'GenericDefaultsImpl`1'<!0>
     ldarg.1
     ldarg.2
     callvirt instance !!0 class 'GenericDefaultsImpl`1'<!0>::'echo'<!!0>(!!0, !!0)
@@ -821,9 +875,25 @@
   {
   }
 }
+.class interface public abstract auto ansi 'BoundedDefaultsImpl'
+       implements 'BoundedDefaults'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'fallback__KotlinErased__7de7fc5796a5b9d6fc35c3b595a69dc7'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'choose__KotlinErased__469910c7d57931d58582d98af2318577'(object 'value') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'BoundedDefaultsImpl`1'<(class 'BoundValue') 'T'>
        extends [mscorlib]System.Object
-       implements 'BoundedDefaults', class 'BoundedDefaults`1'<!0>
+       implements 'BoundedDefaultsImpl', 'BoundedDefaults', class 'BoundedDefaults`1'<!0>
 {
   .field private !0 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
@@ -891,6 +961,28 @@
     ldarg.0
     ldarg.1
     callvirt instance !0 class 'BoundedDefaultsImpl`1'<!0>::'choose'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-fallback>'() cil managed
+  {
+    .override method instance object 'BoundedDefaultsImpl'::'fallback__KotlinErased__7de7fc5796a5b9d6fc35c3b595a69dc7'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'BoundedDefaultsImpl`1'<!0>
+    callvirt instance !0 class 'BoundedDefaultsImpl`1'<!0>::'fallback'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-choose>'(object 'value') cil managed
+  {
+    .override method instance object 'BoundedDefaultsImpl'::'choose__KotlinErased__469910c7d57931d58582d98af2318577'(object)
+    .maxstack 2
+    ldarg.0
+    castclass class 'BoundedDefaultsImpl`1'<!0>
+    ldarg.1
+    unbox.any !0
+    callvirt instance !0 class 'BoundedDefaultsImpl`1'<!0>::'choose'(!0)
+    box !0
     ret
   }
   .property instance !0 'value'()

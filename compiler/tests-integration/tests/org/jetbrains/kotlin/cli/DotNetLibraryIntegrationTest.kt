@@ -10208,6 +10208,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ownerPath = listOf("sample.Consumer"),
                 declaredOwnerPath = listOf("sample.Consumer`1"),
             ),
+            "C:sample/Box" to DotNetPhysicalDeclaration.Class(
+                ownerPath = listOf("sample.Box"),
+                declaredOwnerPath = listOf("sample.Box`1"),
+            ),
             "C:sample/Counter" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Counter"),
                 staticInitialization = DotNetStaticInitialization(
@@ -10278,13 +10282,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
                         implementationMethodName = "<InterfaceDefaultForwarder-defaultWithDefaults>",
                     ),
+            "G:C:sample/Box:F:sample/Box.read" to
+                    DotNetPhysicalDeclaration.GenericClassMemberBridge(
+                        ownerPath = listOf("sample.Box`1"),
+                        ownerLogicalKey = "C:sample/Box",
+                        memberLogicalKey = "F:sample/Box.read",
+                        typedMethodName = "read",
+                        implementationMethodName = "<GenericClassCanonicalBridge-read>",
+                    ),
         )
         val properties = Properties().apply {
             setProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY, DotNetLibraryAbiCodec.ABI_VERSION)
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("16", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("17", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -19195,7 +19207,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .single { declaration ->
                 declaration.staticInitialization?.ownerPath?.last() == "<StaticInitialization>"
             }
-        assertEquals("staticfailure.ProducerGenericChildFailure`1", genericChildDeclaration.ownerPath.last())
+        assertEquals("staticfailure.ProducerGenericChildFailure", genericChildDeclaration.ownerPath.last())
+        assertEquals(
+            "staticfailure.ProducerGenericChildFailure`1",
+            genericChildDeclaration.declaredOwnerPath?.last(),
+        )
         assertEquals(
             "<StaticInitialization>",
             genericChildDeclaration.staticInitialization?.ownerPath?.last(),
@@ -26873,8 +26889,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             "valuetype [netstandard]System.Nullable`1<int16> 'nullable'" in libraryIl
         ) { libraryIl }
-        assertTrue("class 'narrowscalarabi.NarrowBox`1'<int8> 'boxedByte'" in libraryIl) { libraryIl }
-        assertTrue("class 'narrowscalarabi.NarrowBox`1'<int16> 'boxedShort'" in libraryIl) { libraryIl }
+        assertTrue("class 'narrowscalarabi.NarrowBox' 'boxedByte'" in libraryIl) { libraryIl }
+        assertTrue("class 'narrowscalarabi.NarrowBox' 'boxedShort'" in libraryIl) { libraryIl }
 
         data class Profile(
             val target: String,
@@ -27162,7 +27178,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "valuetype [netstandard]System.Nullable`1<float32> 'nullable'" in libraryIl
         ) { libraryIl }
         assertTrue("float32 'add'(float32 'left', float32 'right')" in libraryIl) { libraryIl }
-        assertTrue("class 'floatscalarabi.FloatBox`1'<float32> 'boxed'" in libraryIl) { libraryIl }
+        assertTrue("class 'floatscalarabi.FloatBox' 'boxed'" in libraryIl) { libraryIl }
 
         data class Profile(
             val target: String,
@@ -27995,6 +28011,322 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     consumerDirectory,
                     "Roslyn nullable-array consumer failed on $target",
                 )
+            }
+        }
+    }
+
+    @Test
+    fun testGenericClassErasedIdentityAcrossPortableLibraryBoundary() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard facade is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "generic-class-erased-library").apply { mkdirs() }
+        val librarySource = libraryDirectory.resolve("genericClassLibrary.kt").apply {
+            writeText(
+                """
+                package genericclassabi
+
+                public open class Box<T>(private var value: T) {
+                    public open fun read(): T = value
+
+                    public open fun write(next: T) {
+                        value = next
+                    }
+                }
+
+                public fun makeBox(value: String): Box<String> = Box(value)
+                public fun isBox(value: Any?): Boolean = value is Box<*>
+                public fun checkedBox(value: Any?): Box<*> = value as Box<*>
+                public fun safeBox(value: Any?): Box<*>? = value as? Box<*>
+                public fun readStar(value: Box<*>): Any? = value.read()
+                public fun readString(value: Box<String>): String = value.read()
+                public fun writeString(value: Box<String>, next: String) = value.write(next)
+                public fun choose(value: Box<Int>): String = "int:${'$'}{value.read()}"
+                public fun choose(value: Box<String>): String = "string:${'$'}{value.read()}"
+
+                public class OverloadOwner {
+                    public fun choose(value: Box<Int>): String = "int:${'$'}{value.read()}"
+                    public fun choose(value: Box<String>): String = "string:${'$'}{value.read()}"
+                }
+
+                public class Holder {
+                    public class Nested<T>(private val value: T) {
+                        public fun read(): T = value
+                    }
+                }
+
+                public fun makeNested(): Holder.Nested<String> = Holder.Nested("nested")
+                public fun isNested(value: Any?): Boolean = value is Holder.Nested<*>
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "GenericClass.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("GenericClass.Library.dll")
+        val libraryIl = libraryDirectory.resolve("GenericClass.Library.il").readText()
+        val repeatedLibraryDirectory = File(tmpdir, "generic-class-erased-library-repeat").apply { mkdirs() }
+        val repeatedLibrarySource = repeatedLibraryDirectory.resolve(librarySource.name).apply {
+            writeText(librarySource.readText())
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            repeatedLibrarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "GenericClass.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, repeatedLibraryDirectory.path,
+        )
+        assertEquals(
+            libraryIl,
+            repeatedLibraryDirectory.resolve("GenericClass.Library.il").readText(),
+            "Generic-class canonical slots must be reproducible across independent IR symbols",
+        )
+        assertTrue(".class interface public abstract auto ansi 'genericclassabi.Box'" in libraryIl) { libraryIl }
+        assertTrue(".class public auto ansi beforefieldinit 'genericclassabi.Box`1'<'T'>" in libraryIl) { libraryIl }
+        assertTrue("implements 'genericclassabi.Box'" in libraryIl) { libraryIl }
+        assertTrue("<GenericClassCanonicalBridge-read>" in libraryIl) { libraryIl }
+        assertTrue("<GenericClassCanonicalBridge-write>" in libraryIl) { libraryIl }
+
+        val declarations = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest())
+        val boxClass = declarations.values.filterIsInstance<DotNetPhysicalDeclaration.Class>()
+            .single { declaration -> declaration.ownerPath.last() == "genericclassabi.Box" }
+        assertEquals("genericclassabi.Box`1", boxClass.declaredOwnerPath?.last())
+        assertEquals(null, boxClass.exactOwnerPath)
+        val classBridges = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericClassMemberBridge>()
+            .filter { bridge -> bridge.ownerPath.last() == "genericclassabi.Box`1" }
+        assertEquals(setOf("read", "write"), classBridges.map { it.typedMethodName }.toSet())
+        assertTrue(classBridges.all { bridge -> "<GenericClassCanonicalBridge-" in bridge.implementationMethodName })
+        val canonicalFunctions = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .filter { declaration -> declaration.ownerPath.last() == "genericclassabi.Box" }
+        val canonicalRead = canonicalFunctions.single { function -> function.methodName.startsWith("read__KotlinErased__") }
+        val canonicalWrite = canonicalFunctions.single { function -> function.methodName.startsWith("write__KotlinErased__") }
+        val facadeFunctions = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .filter { declaration -> declaration.ownerPath.last() == "genericclassabi.genericClassLibraryKt" }
+        val readStarFunction = facadeFunctions.single { function ->
+            function.methodName.startsWith("readStar__KotlinErased__")
+        }
+        val readStringFunction = facadeFunctions.single { function ->
+            function.methodName.startsWith("readString__KotlinErased__")
+        }
+        val writeStringFunction = facadeFunctions.single { function ->
+            function.methodName.startsWith("writeString__KotlinErased__")
+        }
+        val erasedOverloads = declarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .filter { declaration -> declaration.methodName.startsWith("choose__KotlinErased__") }
+        assertEquals(4, erasedOverloads.size)
+        assertEquals(4, erasedOverloads.map { declaration ->
+            declaration.ownerPath to declaration.methodName
+        }.toSet().size)
+
+        val csharpSource = libraryDirectory.resolve("GenericClassConsumer.cs").apply {
+            writeText(
+                """
+                using System;
+
+                public sealed class CSharpBox : genericclassabi.Box<string>
+                {
+                    public CSharpBox(string value) : base(value) {}
+
+                    public override string read()
+                    {
+                        return base.read() + "!";
+                    }
+
+                    public override void write(string value)
+                    {
+                        base.write(value + "?");
+                    }
+                }
+
+                public sealed class FakeCanonicalBox : genericclassabi.Box
+                {
+                    public object ${canonicalRead.methodName}()
+                    {
+                        return "fake";
+                    }
+
+                    public void ${canonicalWrite.methodName}(object value) {}
+                }
+
+                public static class GenericClassConsumer
+                {
+                    public static int Main()
+                    {
+                        CSharpBox typed = new CSharpBox("csharp");
+                        if (!genericclassabi.genericClassLibraryKt.isBox(typed)) return 1;
+                        if (genericclassabi.genericClassLibraryKt.${readStarFunction.methodName}(typed).ToString() != "csharp!") return 2;
+                        genericclassabi.genericClassLibraryKt.${writeStringFunction.methodName}(typed, "changed");
+                        if (genericclassabi.genericClassLibraryKt.${readStringFunction.methodName}(typed) != "changed?!") return 3;
+                        if (!Object.ReferenceEquals(typed,
+                            genericclassabi.genericClassLibraryKt.checkedBox(typed))) return 4;
+
+                        FakeCanonicalBox fake = new FakeCanonicalBox();
+                        if (genericclassabi.genericClassLibraryKt.isBox(fake)) return 5;
+                        if (genericclassabi.genericClassLibraryKt.safeBox(fake) != null) return 6;
+                        bool rejected = false;
+                        try
+                        {
+                            genericclassabi.genericClassLibraryKt.checkedBox(fake);
+                        }
+                        catch (InvalidCastException)
+                        {
+                            rejected = true;
+                        }
+                        return rejected ? 0 : 7;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpConsumer = libraryDirectory.resolve("GenericClassConsumer.exe")
+        val csharpCompile = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            csharpSource,
+            csharpConsumer,
+            metadataLibrary,
+            checkNotNull(frameworkNetStandardFacade),
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package genericclassconsumer
+
+                    import genericclassabi.*
+
+                    class LocalBox(value: String) : Box<String>(value) {
+                        override fun read(): String = super.read() + "!"
+
+                        override fun write(next: String) {
+                            super.write(next + "?")
+                        }
+                    }
+
+                    class LocalCarrier<T>(private val value: T) {
+                        fun wrap(): Box<T> = Box(value)
+
+                        fun read(box: Box<T>): T = box.read()
+                    }
+
+                    fun main() {
+                        val library = makeBox("library")
+                        if (!isBox(library) || library !is Box<*> || readStar(library) != "library") {
+                            throw Error("library erased identity")
+                        }
+                        if (checkedBox(library) !== library || safeBox(library) !== library) {
+                            throw Error("library cast identity")
+                        }
+                        val local = LocalBox("local")
+                        val localAny: Any = local
+                        if (localAny !is Box<*> || checkedBox(localAny) !== local) {
+                            throw Error("external generic base ancestry")
+                        }
+                        writeString(local, "changed")
+                        if (readString(local) != "changed?!") throw Error("external typed super dispatch")
+                        val carrier = LocalCarrier("nested")
+                        val nested = carrier.wrap()
+                        if (carrier.read(nested) != "nested" || nested !is Box<*>) {
+                            throw Error("external generic class in canonical member signature")
+                        }
+                        if (choose(Box(35)) != "int:35" || choose(Box("thirty-six")) != "string:thirty-six") {
+                            throw Error("external erased top-level overload")
+                        }
+                        val overloadOwner = OverloadOwner()
+                        if (overloadOwner.choose(Box(37)) != "int:37" ||
+                            overloadOwner.choose(Box("thirty-eight")) != "string:thirty-eight"
+                        ) {
+                            throw Error("external erased member overload")
+                        }
+                        val holderNested = makeNested()
+                        val nestedAny: Any = holderNested
+                        if (!isNested(nestedAny) || nestedAny !is Holder.Nested<*>) {
+                            throw Error("external nested generic erased identity")
+                        }
+                        val nestedProjected = nestedAny as Holder.Nested<*>
+                        if (nestedProjected !== holderNested || nestedProjected.read() != "nested") {
+                            throw Error("external nested generic cast identity and members")
+                        }
+                        if (safeBox("wrong") != null || isBox("wrong")) throw Error("unrelated admission")
+                        @Suppress("UNCHECKED_CAST")
+                        val wrong = library as Any as Box<Int>
+                        try {
+                            val value: Int = wrong.read()
+                            value + 1
+                            throw Error("logical type barrier")
+                        } catch (_: ClassCastException) {
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "GenericClassKotlinConsumer.exe" else "GenericClassKotlinConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "GenericClassKotlinConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            if (target == "net10.0") {
+                runDotNet(dotnetHost, application, consumerDirectory, "Generic-class Kotlin consumer failed for $target")
+            } else {
+                val process = ProcessBuilder(frameworkExecutionCommand(checkNotNull(frameworkHost), application))
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Generic-class Kotlin consumer failed for $target:\n$output")
+                consumerDirectory.resolve("Kotlin.Runtime.dll")
+                    .copyTo(libraryDirectory.resolve("Kotlin.Runtime.dll"), overwrite = true)
+                val csharpProcess = ProcessBuilder(frameworkExecutionCommand(checkNotNull(frameworkHost), csharpConsumer))
+                    .directory(libraryDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val csharpOutput = csharpProcess.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, csharpProcess.waitFor(), "Generic-class C# consumer failed on net48:\n$csharpOutput")
+            }
+            if (target == "net10.0") {
+                val modernCSharpConsumer = consumerDirectory.resolve(csharpConsumer.name)
+                csharpConsumer.copyTo(modernCSharpConsumer, overwrite = true)
+                consumerDirectory.resolve("GenericClassKotlinConsumer.runtimeconfig.json")
+                    .copyTo(
+                        consumerDirectory.resolve("GenericClassConsumer.runtimeconfig.json"),
+                        overwrite = true,
+                    )
+                runDotNet(dotnetHost, modernCSharpConsumer, consumerDirectory, "Generic-class C# consumer failed on net10")
             }
         }
     }
@@ -30726,13 +31058,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("System.Runtime.Versioning.TargetFrameworkAttribute" in il)
         if (target == "netstandard2.0") assertTrue("[mscorlib]" !in il)
         assertTrue(
-            "implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', " +
+            "implements 'Kotlin.Collections.ArrayIterator', " +
+                    "[Kotlin.Runtime]'Kotlin.Collections.Iterator', " +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>" in il
         )
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-" in il)
         assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-" in il)
         assertTrue(
-            "implements [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+            "implements 'Kotlin.Collections.ArrayIterable', " +
+                    "[Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable`1'<!0>" in il
         )
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.Iterable-iterator-" in il)
@@ -30746,7 +31080,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .takeIf { index -> index >= 0 } ?: il.length
         val arrayAsListIl = il.substring(arrayAsListStart, arrayAsListEnd)
         assertTrue(
-            "implements [Kotlin.Runtime]'Kotlin.Collections.List', " +
+            "implements 'Kotlin.Collections.ArrayAsList', " +
+                    "[Kotlin.Runtime]'Kotlin.Collections.List', " +
                     "'Kotlin.Collections.RandomAccess', class [Kotlin.Runtime]" +
                     "'Kotlin.Collections.List__KotlinExact`1'<!0>" in arrayAsListIl
         )

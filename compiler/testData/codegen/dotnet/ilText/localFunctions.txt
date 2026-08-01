@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -12,8 +17,19 @@
   {
   }
 }
+.class interface public abstract auto ansi 'GenericLocalFunctionOwner'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__9b9b95813f9fd94c9ee2a7d8e11bde74'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GenericLocalFunctionOwner`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'GenericLocalFunctionOwner'
 {
   .field private !0 'seed'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'seed') cil managed
@@ -38,14 +54,24 @@
     .maxstack 2
     ldstr "receiver"
     ldarg.0
-    call !!0 class 'GenericLocalFunctionOwner`1'<!0>::'value$local'<!0, string>(!!1, class 'GenericLocalFunctionOwner`1'<!!0>)
+    call !!0 class 'GenericLocalFunctionOwner`1'<!0>::'value$local__KotlinErased__0bc9c57906b6eed27a8d45980b814aa0'<!0, string>(!!1, class 'GenericLocalFunctionOwner`1'<!!0>)
     ret
   }
-  .method private hidebysig static !!0 'value$local'<'T', 'U'>(!!1 '<this>', class 'GenericLocalFunctionOwner`1'<!!0> 'this$0') cil managed
+  .method private hidebysig static !!0 'value$local__KotlinErased__0bc9c57906b6eed27a8d45980b814aa0'<'T', 'U'>(!!1 '<this>', class 'GenericLocalFunctionOwner`1'<!!0> 'this$0') cil managed
   {
     .maxstack 1
     ldarg.1
     call instance !0 class 'GenericLocalFunctionOwner`1'<!!0>::'get_seed'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-value>'() cil managed
+  {
+    .override method instance object 'GenericLocalFunctionOwner'::'value__KotlinErased__9b9b95813f9fd94c9ee2a7d8e11bde74'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericLocalFunctionOwner`1'<!0>
+    call instance !0 class 'GenericLocalFunctionOwner`1'<!0>::'value'()
+    box !0
     ret
   }
   .property instance !0 'seed'()
@@ -53,8 +79,19 @@
     .get instance !0 'GenericLocalFunctionOwner`1'::'get_seed'()
   }
 }
+.class interface public abstract auto ansi 'GenericLocalFunctionNoReceiver'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__26fd930ae49b06a0ed44f7bbab5af2dc'(object 'input') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GenericLocalFunctionNoReceiver`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'GenericLocalFunctionNoReceiver'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
@@ -74,6 +111,18 @@
   {
     .maxstack 1
     ldarg.0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-value>'(object 'input') cil managed
+  {
+    .override method instance object 'GenericLocalFunctionNoReceiver'::'value__KotlinErased__26fd930ae49b06a0ed44f7bbab5af2dc'(object)
+    .maxstack 2
+    ldarg.0
+    castclass class 'GenericLocalFunctionNoReceiver`1'<!0>
+    ldarg.1
+    unbox.any !0
+    call instance !0 class 'GenericLocalFunctionNoReceiver`1'<!0>::'value'(!0)
+    box !0
     ret
   }
 }
@@ -333,11 +382,13 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "owner"
     newobj instance void class 'GenericLocalFunctionOwner`1'<string>::.ctor(!0)
-    call instance !0 class 'GenericLocalFunctionOwner`1'<string>::'value'()
+    callvirt instance object 'GenericLocalFunctionOwner'::'value__KotlinErased__9b9b95813f9fd94c9ee2a7d8e11bde74'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void class 'GenericLocalFunctionNoReceiver`1'<string>::.ctor()
     ldstr "no-owner"
-    call instance !0 class 'GenericLocalFunctionNoReceiver`1'<string>::'value'(!0)
+    callvirt instance object 'GenericLocalFunctionNoReceiver'::'value__KotlinErased__26fd930ae49b06a0ed44f7bbab5af2dc'(object)
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 8
     newobj instance void 'LocalFunctionInInitializer'::.ctor(int32)

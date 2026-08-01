@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -6,8 +11,23 @@
 .assembly 'narrowIntegerScalars' {}
 .module 'main-narrowIntegerScalars.il'
 
+.class interface public abstract auto ansi 'test.NarrowBox'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__cb8c6003ddaec19f8a10b571b9df0a92'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'value__KotlinErased__cb8c6003ddaec19f8a10b571b9df0a92'()
+  {
+    .get instance object 'test.NarrowBox'::'get_value__KotlinErased__cb8c6003ddaec19f8a10b571b9df0a92'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'test.NarrowBox`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'test.NarrowBox'
 {
   .field private !0 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
@@ -25,6 +45,16 @@
     .maxstack 1
     ldarg.0
     ldfld !0 class 'test.NarrowBox`1'<!0>::'value'
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  {
+    .override method instance object 'test.NarrowBox'::'get_value__KotlinErased__cb8c6003ddaec19f8a10b571b9df0a92'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'test.NarrowBox`1'<!0>
+    call instance !0 class 'test.NarrowBox`1'<!0>::'get_value'()
+    box !0
     ret
   }
   .property instance !0 'value'()
@@ -261,7 +291,8 @@ IL_whenEnd_0:
     ldc.i4 -9
     conv.i1
     newobj instance void class 'test.NarrowBox`1'<int8>::.ctor(!0)
-    call instance !0 class 'test.NarrowBox`1'<int8>::'get_value'()
+    callvirt instance object 'test.NarrowBox'::'get_value__KotlinErased__cb8c6003ddaec19f8a10b571b9df0a92'()
+    unbox.any [mscorlib]System.SByte
     box [mscorlib]System.SByte
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

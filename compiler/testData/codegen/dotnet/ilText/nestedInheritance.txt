@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -149,11 +154,28 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'GenericFamily'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+}
 .class public auto ansi sealed beforefieldinit 'GenericFamily`1'<'Unused'>
        extends [mscorlib]System.Object
+       implements 'GenericFamily'
 {
+  .class nested public interface abstract auto ansi 'Base'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'item__KotlinErased__4f39bf4dd6e9a46921e6bad769ea9af4'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+  }
   .class nested public auto ansi beforefieldinit 'Base`1'<'T'>
          extends [mscorlib]System.Object
+         implements 'GenericFamily`1'/'Base'
   {
     .field private !0 'item'
     .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
@@ -180,13 +202,35 @@
       call instance !0 class 'GenericFamily`1'/'Base`1'<!0>::'get_item'()
       ret
     }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-item>'() cil managed
+    {
+      .override method instance object 'GenericFamily`1'/'Base'::'item__KotlinErased__4f39bf4dd6e9a46921e6bad769ea9af4'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericFamily`1'/'Base`1'<!0>
+      callvirt instance !0 class 'GenericFamily`1'/'Base`1'<!0>::'item'()
+      box !0
+      ret
+    }
     .property instance !0 'item'()
     {
       .get instance !0 'GenericFamily`1'/'Base`1'::'get_item'()
     }
   }
+  .class nested public interface abstract auto ansi 'Derived'
+         implements 'GenericFamily`1'/'Base'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'item__KotlinErased__0364c405a80502093b1dfdf856534074'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+  }
   .class nested public auto ansi sealed beforefieldinit 'Derived`1'<'T'>
          extends class 'GenericFamily`1'/'Base`1'<!0>
+         implements 'GenericFamily`1'/'Derived'
   {
     .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
     {
@@ -201,6 +245,16 @@
       .maxstack 1
       ldarg.0
       call instance !0 class 'GenericFamily`1'/'Base`1'<!0>::'item'()
+      ret
+    }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-item>'() cil managed
+    {
+      .override method instance object 'GenericFamily`1'/'Derived'::'item__KotlinErased__0364c405a80502093b1dfdf856534074'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericFamily`1'/'Derived`1'<!0>
+      callvirt instance !0 class 'GenericFamily`1'/'Derived`1'<!0>::'item'()
+      box !0
       ret
     }
   }
@@ -420,11 +474,12 @@
     callvirt instance int32 'NestedValue'::'value'()
     ret
   }
-  .method public hidebysig static !!0 'readGeneric'<'T'>(class 'GenericFamily`1'/'Base`1'<!!0> 'value') cil managed
+  .method public hidebysig static !!0 'readGeneric__KotlinErased__d41c8ce10c216eb3a05586ccf15ead2c'<'T'>(class 'GenericFamily`1'/'Base' 'value') cil managed
   {
     .maxstack 1
     ldarg.0
-    callvirt instance !0 class 'GenericFamily`1'/'Base`1'<!!0>::'item'()
+    callvirt instance object 'GenericFamily`1'/'Base'::'item__KotlinErased__4f39bf4dd6e9a46921e6bad769ea9af4'()
+    unbox.any !!0
     ret
   }
   .method public hidebysig static int32 'readParent'(class 'DepthFamily'/'Parent' 'value') cil managed
@@ -476,7 +531,7 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "generic"
     newobj instance void class 'GenericFamily`1'/'Derived`1'<string>::.ctor(!0)
-    call !!0 'nestedInheritanceKt'::'readGeneric'<string>(class 'GenericFamily`1'/'Base`1'<!!0>)
+    call !!0 'nestedInheritanceKt'::'readGeneric__KotlinErased__d41c8ce10c216eb3a05586ccf15ead2c'<string>(class 'GenericFamily`1'/'Base')
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 9
     newobj instance void 'DepthFamily'/'Parent'/'Child'::.ctor(int32)

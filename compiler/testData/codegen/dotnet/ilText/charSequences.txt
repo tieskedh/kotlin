@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -68,8 +73,23 @@
     .get instance int32 'test.charsequences.LocalSequenceImpl'::'get_length'()
   }
 }
+.class interface public abstract auto ansi 'test.charsequences.SequenceHolder'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__b263682a08dc7757fba39ad2120338fa'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'value__KotlinErased__b263682a08dc7757fba39ad2120338fa'()
+  {
+    .get instance object 'test.charsequences.SequenceHolder'::'get_value__KotlinErased__b263682a08dc7757fba39ad2120338fa'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'test.charsequences.SequenceHolder`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'test.charsequences.SequenceHolder'
 {
   .field private !0 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
@@ -87,6 +107,16 @@
     .maxstack 1
     ldarg.0
     ldfld !0 class 'test.charsequences.SequenceHolder`1'<!0>::'value'
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  {
+    .override method instance object 'test.charsequences.SequenceHolder'::'get_value__KotlinErased__b263682a08dc7757fba39ad2120338fa'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'test.charsequences.SequenceHolder`1'<!0>
+    call instance !0 class 'test.charsequences.SequenceHolder`1'<!0>::'get_value'()
+    box !0
     ret
   }
   .property instance !0 'value'()
@@ -255,7 +285,8 @@ IL_boolStrEnd_3:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "holder"
     newobj instance void class 'test.charsequences.SequenceHolder`1'<string>::.ctor(!0)
-    call instance !0 class 'test.charsequences.SequenceHolder`1'<string>::'get_value'()
+    callvirt instance object 'test.charsequences.SequenceHolder'::'get_value__KotlinErased__b263682a08dc7757fba39ad2120338fa'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }
