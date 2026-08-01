@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -6,8 +11,24 @@
 .assembly 'genericInheritance' {}
 .module 'main-genericInheritance.il'
 
+.class interface public abstract auto ansi 'Box'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'describe__KotlinErased__95219811e487b87dcf8b73f6e6fe2f63'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi beforefieldinit 'Box`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'Box'
 {
   .field private !0 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
@@ -47,6 +68,26 @@
     .maxstack 1
     ldarg.0
     call instance !0 class 'Box`1'<!0>::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-get>'() cil managed
+  {
+    .override method instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'Box`1'<!0>
+    call instance !0 class 'Box`1'<!0>::'get'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-describe>'() cil managed
+  {
+    .override method instance object 'Box'::'describe__KotlinErased__95219811e487b87dcf8b73f6e6fe2f63'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'Box`1'<!0>
+    callvirt instance !0 class 'Box`1'<!0>::'describe'()
+    box !0
     ret
   }
   .property instance !0 'value'()
@@ -118,8 +159,28 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'GDerived'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_payload__KotlinErased__e06f1124dba8d319b17c498ccc18f701'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance string 'name__KotlinErased__cad25d5f011470ca03fb979c257bf817'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'payload__KotlinErased__e06f1124dba8d319b17c498ccc18f701'()
+  {
+    .get instance object 'GDerived'::'get_payload__KotlinErased__e06f1124dba8d319b17c498ccc18f701'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GDerived`1'<'T'>
        extends 'PlainBase'
+       implements 'GDerived'
 {
   .field private !0 'payload'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'payload') cil managed
@@ -145,6 +206,25 @@
     ldstr "generic-derived"
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-payload>>'() cil managed
+  {
+    .override method instance object 'GDerived'::'get_payload__KotlinErased__e06f1124dba8d319b17c498ccc18f701'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GDerived`1'<!0>
+    call instance !0 class 'GDerived`1'<!0>::'get_payload'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-name>'() cil managed
+  {
+    .override method instance string 'GDerived'::'name__KotlinErased__cad25d5f011470ca03fb979c257bf817'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GDerived`1'<!0>
+    callvirt instance string class 'GDerived`1'<!0>::'name'()
+    ret
+  }
   .property instance !0 'payload'()
   {
     .get instance !0 'GDerived`1'::'get_payload'()
@@ -159,17 +239,18 @@
     .maxstack 3
     .locals init (
       [0] class 'IntBox' 'ib',
-      [1] class 'Box`1'<int32> 'asBase',
+      [1] class 'Box' 'asBase',
       [2] class 'LabeledBox' 'lb',
       [3] class 'Labeled' 'asLabeled',
-      [4] class 'GDerived`1'<string> 'g',
+      [4] class 'GDerived' 'g',
       [5] class 'PlainBase' 'asPlain'
     )
     ldc.i4 42
     newobj instance void 'IntBox'::.ctor(int32)
     stloc.0
     ldloc.0
-    call instance !0 class 'Box`1'<int32>::'get'()
+    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -185,7 +266,8 @@
     ldloc.0
     stloc.1
     ldloc.1
-    callvirt instance !0 class 'Box`1'<int32>::'describe'()
+    callvirt instance object 'Box'::'describe__KotlinErased__95219811e487b87dcf8b73f6e6fe2f63'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -200,7 +282,8 @@
     callvirt instance string 'Labeled'::'label'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.2
-    call instance !0 class 'Box`1'<int32>::'get'()
+    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -210,15 +293,17 @@
     newobj instance void class 'GDerived`1'<string>::.ctor(!0)
     stloc 4
     ldloc 4
-    callvirt instance string class 'GDerived`1'<string>::'name'()
+    callvirt instance string 'GDerived'::'name__KotlinErased__cad25d5f011470ca03fb979c257bf817'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 4
+    castclass class 'PlainBase'
     stloc 5
     ldloc 5
     callvirt instance string 'PlainBase'::'name'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 4
-    call instance !0 class 'GDerived`1'<string>::'get_payload'()
+    callvirt instance object 'GDerived'::'get_payload__KotlinErased__e06f1124dba8d319b17c498ccc18f701'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

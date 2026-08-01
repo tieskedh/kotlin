@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -6,9 +11,45 @@
 .assembly 'listIterators' {}
 .module 'main-listIterators.il'
 
+.class interface public abstract auto ansi 'PairCursor'
+       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance bool 'hasNext__KotlinErased__fac40efb65967c4d6e36787b6655e6d9'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'next__KotlinErased__d138056972543e2aa97f828e8276348c'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'hasPrevious__KotlinErased__6cc1efdc1d8743c8a1038b0ab2a9885f'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'previous__KotlinErased__4d334007d2cbe10b04900458470020af'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'nextIndex__KotlinErased__de43d548c2ca77050a7870bc7ed9b65b'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'previousIndex__KotlinErased__5ba7278695e147b5790d9fd96180e4e6'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'PairCursor`1'<'T'>
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>
+       implements 'PairCursor', [Kotlin.Runtime]'Kotlin.Collections.ListIterator', class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>
 {
   .field private !0 'first'
   .field private !0 'second'
@@ -299,6 +340,62 @@ IL_whenEnd_2:
     callvirt instance int32 class 'PairCursor`1'<!0>::'previousIndex'()
     ret
   }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-hasNext>'() cil managed
+  {
+    .override method instance bool 'PairCursor'::'hasNext__KotlinErased__fac40efb65967c4d6e36787b6655e6d9'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairCursor`1'<!0>
+    callvirt instance bool class 'PairCursor`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-next>'() cil managed
+  {
+    .override method instance object 'PairCursor'::'next__KotlinErased__d138056972543e2aa97f828e8276348c'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairCursor`1'<!0>
+    callvirt instance !0 class 'PairCursor`1'<!0>::'next'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-hasPrevious>'() cil managed
+  {
+    .override method instance bool 'PairCursor'::'hasPrevious__KotlinErased__6cc1efdc1d8743c8a1038b0ab2a9885f'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairCursor`1'<!0>
+    callvirt instance bool class 'PairCursor`1'<!0>::'hasPrevious'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-previous>'() cil managed
+  {
+    .override method instance object 'PairCursor'::'previous__KotlinErased__4d334007d2cbe10b04900458470020af'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairCursor`1'<!0>
+    callvirt instance !0 class 'PairCursor`1'<!0>::'previous'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-nextIndex>'() cil managed
+  {
+    .override method instance int32 'PairCursor'::'nextIndex__KotlinErased__de43d548c2ca77050a7870bc7ed9b65b'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairCursor`1'<!0>
+    callvirt instance int32 class 'PairCursor`1'<!0>::'nextIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-previousIndex>'() cil managed
+  {
+    .override method instance int32 'PairCursor'::'previousIndex__KotlinErased__5ba7278695e147b5790d9fd96180e4e6'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'PairCursor`1'<!0>
+    callvirt instance int32 class 'PairCursor`1'<!0>::'previousIndex'()
+    ret
+  }
   .property instance !0 'first'()
   {
     .get instance !0 'PairCursor`1'::'get_first'()
@@ -313,9 +410,58 @@ IL_whenEnd_2:
     .set instance void 'PairCursor`1'::'set_position'(int32)
   }
 }
+.class interface public abstract auto ansi 'ForwardCursor'
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_first__KotlinErased__da2d70c4ea2826083a4ce03ef41b04d2'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_second__KotlinErased__a3859ebb2bb94402ccb8136db602c185'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_position__KotlinErased__22c9fad7e534657e4c4f6bdb38df5677'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig specialname newslot abstract virtual instance void 'set_position__KotlinErased__8d811a6a5e1f715bff5b185237aab3ac'(int32 '<set-?>') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'hasNext__KotlinErased__fbf8bfce5d189b02cb809ec89c70b455'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'next__KotlinErased__9e09b3d555cc07397816cccb73ef2aff'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'first__KotlinErased__da2d70c4ea2826083a4ce03ef41b04d2'()
+  {
+    .get instance object 'ForwardCursor'::'get_first__KotlinErased__da2d70c4ea2826083a4ce03ef41b04d2'()
+  }
+  .property instance object 'second__KotlinErased__a3859ebb2bb94402ccb8136db602c185'()
+  {
+    .get instance object 'ForwardCursor'::'get_second__KotlinErased__a3859ebb2bb94402ccb8136db602c185'()
+  }
+  .property instance int32 'position__KotlinErased__22c9fad7e534657e4c4f6bdb38df5677'()
+  {
+    .get instance int32 'ForwardCursor'::'get_position__KotlinErased__22c9fad7e534657e4c4f6bdb38df5677'()
+    .set instance void 'ForwardCursor'::'set_position__KotlinErased__8d811a6a5e1f715bff5b185237aab3ac'(int32)
+  }
+}
 .class public auto ansi beforefieldinit 'ForwardCursor`1'<'T'>
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
+       implements 'ForwardCursor', [Kotlin.Runtime]'Kotlin.Collections.Iterator', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
 {
   .field private !0 'first'
   .field private !0 'second'
@@ -447,6 +593,65 @@ IL_whenEnd_0:
     callvirt instance !0 class 'ForwardCursor`1'<!0>::'next'()
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-first>>'() cil managed
+  {
+    .override method instance object 'ForwardCursor'::'get_first__KotlinErased__da2d70c4ea2826083a4ce03ef41b04d2'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'ForwardCursor`1'<!0>
+    call instance !0 class 'ForwardCursor`1'<!0>::'get_first'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-second>>'() cil managed
+  {
+    .override method instance object 'ForwardCursor'::'get_second__KotlinErased__a3859ebb2bb94402ccb8136db602c185'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'ForwardCursor`1'<!0>
+    call instance !0 class 'ForwardCursor`1'<!0>::'get_second'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-<get-position>>'() cil managed
+  {
+    .override method instance int32 'ForwardCursor'::'get_position__KotlinErased__22c9fad7e534657e4c4f6bdb38df5677'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'ForwardCursor`1'<!0>
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericClassCanonicalBridge-<set-position>>'(int32 '<set-?>') cil managed
+  {
+    .override method instance void 'ForwardCursor'::'set_position__KotlinErased__8d811a6a5e1f715bff5b185237aab3ac'(int32)
+    .maxstack 2
+    ldarg.0
+    castclass class 'ForwardCursor`1'<!0>
+    ldarg.1
+    call instance void class 'ForwardCursor`1'<!0>::'set_position'(int32)
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-hasNext>'() cil managed
+  {
+    .override method instance bool 'ForwardCursor'::'hasNext__KotlinErased__fbf8bfce5d189b02cb809ec89c70b455'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'ForwardCursor`1'<!0>
+    callvirt instance bool class 'ForwardCursor`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-next>'() cil managed
+  {
+    .override method instance object 'ForwardCursor'::'next__KotlinErased__9e09b3d555cc07397816cccb73ef2aff'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'ForwardCursor`1'<!0>
+    callvirt instance !0 class 'ForwardCursor`1'<!0>::'next'()
+    box !0
+    ret
+  }
   .property instance !0 'first'()
   {
     .get instance !0 'ForwardCursor`1'::'get_first'()
@@ -461,9 +666,35 @@ IL_whenEnd_0:
     .set instance void 'ForwardCursor`1'::'set_position'(int32)
   }
 }
+.class interface public abstract auto ansi 'InheritedPairCursor'
+       implements 'ForwardCursor', [Kotlin.Runtime]'Kotlin.Collections.ListIterator'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance bool 'hasPrevious__KotlinErased__99a34a7d56d45a782173811f29de71c9'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'previous__KotlinErased__e171ea6692d11792c4585da0a26eba2f'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'nextIndex__KotlinErased__c7bb6b358a83301f2319f1b9dc750730'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'previousIndex__KotlinErased__e61dd1d4e7779c8c025c169528fc4990'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'InheritedPairCursor`1'<'T'>
        extends class 'ForwardCursor`1'<!0>
-       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>
+       implements 'InheritedPairCursor', [Kotlin.Runtime]'Kotlin.Collections.ListIterator', class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>
 {
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'first', !0 'second') cil managed
   {
@@ -478,7 +709,7 @@ IL_whenEnd_0:
   {
     .maxstack 2
     ldarg.0
-    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    callvirt instance int32 'ForwardCursor'::'get_position__KotlinErased__22c9fad7e534657e4c4f6bdb38df5677'()
     ldc.i4 0
     cgt
     ret
@@ -490,7 +721,7 @@ IL_whenEnd_0:
       [0] int32 '<unary>'
     )
     ldarg.0
-    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    callvirt instance int32 'ForwardCursor'::'get_position__KotlinErased__22c9fad7e534657e4c4f6bdb38df5677'()
     ldc.i4 0
     ceq
     brfalse IL_whenNext_1
@@ -498,24 +729,26 @@ IL_whenEnd_0:
     throw
 IL_whenNext_1:
     ldarg.0
-    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    callvirt instance int32 'ForwardCursor'::'get_position__KotlinErased__22c9fad7e534657e4c4f6bdb38df5677'()
     stloc.0
     ldarg.0
     ldloc.0
     ldc.i4.1
     sub
-    call instance void class 'ForwardCursor`1'<!0>::'set_position'(int32)
+    callvirt instance void 'ForwardCursor'::'set_position__KotlinErased__8d811a6a5e1f715bff5b185237aab3ac'(int32)
     ldarg.0
-    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    callvirt instance int32 'ForwardCursor'::'get_position__KotlinErased__22c9fad7e534657e4c4f6bdb38df5677'()
     ldc.i4 0
     ceq
     brfalse IL_whenNext_3
     ldarg.0
-    call instance !0 class 'ForwardCursor`1'<!0>::'get_first'()
+    callvirt instance object 'ForwardCursor'::'get_first__KotlinErased__da2d70c4ea2826083a4ce03ef41b04d2'()
+    unbox.any !0
     br IL_whenEnd_2
 IL_whenNext_3:
     ldarg.0
-    call instance !0 class 'ForwardCursor`1'<!0>::'get_second'()
+    callvirt instance object 'ForwardCursor'::'get_second__KotlinErased__a3859ebb2bb94402ccb8136db602c185'()
+    unbox.any !0
 IL_whenEnd_2:
     ret
   }
@@ -523,14 +756,14 @@ IL_whenEnd_2:
   {
     .maxstack 1
     ldarg.0
-    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    callvirt instance int32 'ForwardCursor'::'get_position__KotlinErased__22c9fad7e534657e4c4f6bdb38df5677'()
     ret
   }
   .method public hidebysig newslot virtual instance int32 'previousIndex'() cil managed
   {
     .maxstack 2
     ldarg.0
-    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    callvirt instance int32 'ForwardCursor'::'get_position__KotlinErased__22c9fad7e534657e4c4f6bdb38df5677'()
     ldc.i4 1
     sub
     ret
@@ -605,7 +838,7 @@ IL_whenEnd_2:
     .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'HasNext'()
     .maxstack 1
     ldarg.0
-    callvirt instance bool class 'ForwardCursor`1'<!0>::'hasNext'()
+    callvirt instance bool 'ForwardCursor'::'hasNext__KotlinErased__fbf8bfce5d189b02cb809ec89c70b455'()
     ret
   }
   .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-hasNext-e9da7bcc10da566104b0b1004324a3d7>'() cil managed
@@ -613,7 +846,7 @@ IL_whenEnd_2:
     .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'HasNext'()
     .maxstack 1
     ldarg.0
-    callvirt instance bool class 'ForwardCursor`1'<!0>::'hasNext'()
+    callvirt instance bool 'ForwardCursor'::'hasNext__KotlinErased__fbf8bfce5d189b02cb809ec89c70b455'()
     ret
   }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-next-3c1f5063f0e7629b648c57b8483c87ad>'() cil managed
@@ -621,7 +854,8 @@ IL_whenEnd_2:
     .override method instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
     .maxstack 1
     ldarg.0
-    callvirt instance !0 class 'ForwardCursor`1'<!0>::'next'()
+    callvirt instance object 'ForwardCursor'::'next__KotlinErased__9e09b3d555cc07397816cccb73ef2aff'()
+    unbox.any !0
     box !0
     ret
   }
@@ -630,7 +864,45 @@ IL_whenEnd_2:
     .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'Next'()
     .maxstack 1
     ldarg.0
-    callvirt instance !0 class 'ForwardCursor`1'<!0>::'next'()
+    callvirt instance object 'ForwardCursor'::'next__KotlinErased__9e09b3d555cc07397816cccb73ef2aff'()
+    unbox.any !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-hasPrevious>'() cil managed
+  {
+    .override method instance bool 'InheritedPairCursor'::'hasPrevious__KotlinErased__99a34a7d56d45a782173811f29de71c9'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'InheritedPairCursor`1'<!0>
+    callvirt instance bool class 'InheritedPairCursor`1'<!0>::'hasPrevious'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-previous>'() cil managed
+  {
+    .override method instance object 'InheritedPairCursor'::'previous__KotlinErased__e171ea6692d11792c4585da0a26eba2f'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'InheritedPairCursor`1'<!0>
+    callvirt instance !0 class 'InheritedPairCursor`1'<!0>::'previous'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-nextIndex>'() cil managed
+  {
+    .override method instance int32 'InheritedPairCursor'::'nextIndex__KotlinErased__c7bb6b358a83301f2319f1b9dc750730'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'InheritedPairCursor`1'<!0>
+    callvirt instance int32 class 'InheritedPairCursor`1'<!0>::'nextIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-previousIndex>'() cil managed
+  {
+    .override method instance int32 'InheritedPairCursor'::'previousIndex__KotlinErased__e61dd1d4e7779c8c025c169528fc4990'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'InheritedPairCursor`1'<!0>
+    callvirt instance int32 class 'InheritedPairCursor`1'<!0>::'previousIndex'()
     ret
   }
 }
@@ -775,11 +1047,12 @@ IL_genericInterfaceJoin_1:
     ldloc.2
     ret
   }
-  .method public hidebysig static int32 'inheritedNext'(class 'InheritedPairCursor`1'<int32> 'iterator') cil managed
+  .method public hidebysig static int32 'inheritedNext__KotlinErased__07ec84e7118d8b61e1adaab3fdd3de4d'(class 'InheritedPairCursor' 'iterator') cil managed
   {
     .maxstack 1
     ldarg.0
-    callvirt instance !0 class 'ForwardCursor`1'<int32>::'next'()
+    callvirt instance object 'ForwardCursor'::'next__KotlinErased__9e09b3d555cc07397816cccb73ef2aff'()
+    unbox.any [mscorlib]System.Int32
     ret
   }
   .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'widen'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
@@ -835,7 +1108,7 @@ IL_genericInterfaceJoin_1:
     ldc.i4 6
     ldc.i4 8
     newobj instance void class 'InheritedPairCursor`1'<int32>::.ctor(!0, !0)
-    call int32 'listIteratorsKt'::'inheritedNext'(class 'InheritedPairCursor`1'<int32>)
+    call int32 'listIteratorsKt'::'inheritedNext__KotlinErased__07ec84e7118d8b61e1adaab3fdd3de4d'(class 'InheritedPairCursor')
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

@@ -1030,7 +1030,7 @@ internal fun collectDotNetCSharpImplementationManifest(
                     val getterDefault = genericInterfaceDefaults.singleOrNull { it.source == accessor }
                     getterDefault
                         ?.let { typeMapper.genericInterfaceTypedMethodName(accessor) }
-                        ?: accessor.dotNetExceptionCarrierMethodNameOrNull()
+                        ?: accessor.dotNetErasedCarrierMethodNameOrNull(typeMapper::isSplitGenericClass)
                         ?: accessor.dotNetIlMethodName()
                 }
                 return dotNetPhysicalPropertyName(
@@ -1103,7 +1103,7 @@ internal fun collectDotNetCSharpImplementationManifest(
                             val signatureMapper = typeMapper.genericInterfaceSignatureView(memberView)
                             val physicalMethodName = genericDefault
                                 ?.let { typeMapper.genericInterfaceTypedMethodName(source) }
-                                ?: source.dotNetExceptionCarrierMethodNameOrNull()
+                                ?: source.dotNetErasedCarrierMethodNameOrNull(typeMapper::isSplitGenericClass)
                                 ?: source.dotNetIlMethodName()
                             val owner = checkNotNull(
                                 checkNotNull(interfaceInfo).classInfo(memberView.physicalView)

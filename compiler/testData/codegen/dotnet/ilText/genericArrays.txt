@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -57,8 +62,23 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'test.genericarrays.Box'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__79a3f7e87fe6ea48fd0a3d146dc6cd38'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'value__KotlinErased__79a3f7e87fe6ea48fd0a3d146dc6cd38'()
+  {
+    .get instance object 'test.genericarrays.Box'::'get_value__KotlinErased__79a3f7e87fe6ea48fd0a3d146dc6cd38'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'test.genericarrays.Box`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'test.genericarrays.Box'
 {
   .field private !0 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
@@ -78,13 +98,48 @@
     ldfld !0 class 'test.genericarrays.Box`1'<!0>::'value'
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  {
+    .override method instance object 'test.genericarrays.Box'::'get_value__KotlinErased__79a3f7e87fe6ea48fd0a3d146dc6cd38'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'test.genericarrays.Box`1'<!0>
+    call instance !0 class 'test.genericarrays.Box`1'<!0>::'get_value'()
+    box !0
+    ret
+  }
   .property instance !0 'value'()
   {
     .get instance !0 'test.genericarrays.Box`1'::'get_value'()
   }
 }
+.class interface public abstract auto ansi 'test.genericarrays.ArrayBox'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_values__KotlinErased__96a4af9c3c2d08df80e7ee5db7c9ae67'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'first__KotlinErased__b8f744e6ca887603da40fd8630485378'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance void 'replace__KotlinErased__815a6abd71e495ebc301e3bc42c5e78b'(object 'value') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'values__KotlinErased__96a4af9c3c2d08df80e7ee5db7c9ae67'()
+  {
+    .get instance object 'test.genericarrays.ArrayBox'::'get_values__KotlinErased__96a4af9c3c2d08df80e7ee5db7c9ae67'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'test.genericarrays.ArrayBox`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'test.genericarrays.ArrayBox'
 {
   .field private !0[] 'values'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0[] 'values') cil managed
@@ -140,6 +195,37 @@
     ldloc.1
     ldloc.2
     stelem !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-values>>'() cil managed
+  {
+    .override method instance object 'test.genericarrays.ArrayBox'::'get_values__KotlinErased__96a4af9c3c2d08df80e7ee5db7c9ae67'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'test.genericarrays.ArrayBox`1'<!0>
+    call instance !0[] class 'test.genericarrays.ArrayBox`1'<!0>::'get_values'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-first>'() cil managed
+  {
+    .override method instance object 'test.genericarrays.ArrayBox'::'first__KotlinErased__b8f744e6ca887603da40fd8630485378'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'test.genericarrays.ArrayBox`1'<!0>
+    call instance !0 class 'test.genericarrays.ArrayBox`1'<!0>::'first'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericClassCanonicalBridge-replace>'(object 'value') cil managed
+  {
+    .override method instance void 'test.genericarrays.ArrayBox'::'replace__KotlinErased__815a6abd71e495ebc301e3bc42c5e78b'(object)
+    .maxstack 2
+    ldarg.0
+    castclass class 'test.genericarrays.ArrayBox`1'<!0>
+    ldarg.1
+    unbox.any !0
+    call instance void class 'test.genericarrays.ArrayBox`1'<!0>::'replace'(!0)
+    ret
     ret
   }
   .property instance !0[] 'values'()
@@ -372,15 +458,15 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ret
   }
-  .method public hidebysig static class 'test.genericarrays.Box`1'<string>[] 'boxes'() cil managed
+  .method public hidebysig static class 'test.genericarrays.Box'[] 'boxes'() cil managed
   {
     .maxstack 3
     .locals init (
-      [0] class 'test.genericarrays.Box`1'<string>[] '<arrayOfStorage>',
-      [1] class 'test.genericarrays.Box`1'<string> '<arrayElement>'
+      [0] class 'test.genericarrays.Box'[] '<arrayOfStorage>',
+      [1] class 'test.genericarrays.Box' '<arrayElement>'
     )
     ldc.i4 1
-    newarr class 'test.genericarrays.Box`1'<string>
+    newarr class 'test.genericarrays.Box'
     stloc.0
     ldstr "boxed"
     newobj instance void class 'test.genericarrays.Box`1'<string>::.ctor(!0)
@@ -388,7 +474,7 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldc.i4 0
     ldloc.1
-    stelem class 'test.genericarrays.Box`1'<string>
+    stelem class 'test.genericarrays.Box'
     ldloc.0
     ret
   }
@@ -597,7 +683,7 @@ IL_whileEnd_1:
       [2] class 'test.genericarrays.Derived' '<arrayElement>',
       [3] class 'test.genericarrays.Derived'[] '<arrayOfStorage>@3',
       [4] class 'test.genericarrays.Derived' '<arrayElement>@4',
-      [5] class 'test.genericarrays.ArrayBox`1'<string> 'holder'
+      [5] class 'test.genericarrays.ArrayBox' 'holder'
     )
     call string[] 'test.genericarrays.genericArraysKt'::'stringLiteral'()
     stloc.0
@@ -648,7 +734,7 @@ IL_whileEnd_1:
     pop
     call class 'test.genericarrays.Base'[] 'test.genericarrays.genericArraysKt'::'baseLiteral'()
     pop
-    call class 'test.genericarrays.Box`1'<string>[] 'test.genericarrays.genericArraysKt'::'boxes'()
+    call class 'test.genericarrays.Box'[] 'test.genericarrays.genericArraysKt'::'boxes'()
     pop
     ldstr "marker"
     call object[] 'test.genericarrays.genericArraysKt'::'anyValues'(string)
@@ -666,11 +752,11 @@ IL_whileEnd_1:
     newobj instance void class 'test.genericarrays.ArrayBox`1'<string>::.ctor(!0[])
     stloc 5
     ldloc 5
-    call instance !0 class 'test.genericarrays.ArrayBox`1'<string>::'first'()
+    callvirt instance object 'test.genericarrays.ArrayBox'::'first__KotlinErased__b8f744e6ca887603da40fd8630485378'()
     pop
     ldloc 5
     ldstr "e"
-    call instance void class 'test.genericarrays.ArrayBox`1'<string>::'replace'(!0)
+    callvirt instance void 'test.genericarrays.ArrayBox'::'replace__KotlinErased__815a6abd71e495ebc301e3bc42c5e78b'(object)
     ldloc.0
     ldloc.0
     call bool 'test.genericarrays.genericArraysKt'::'sameArray'(string[], string[])

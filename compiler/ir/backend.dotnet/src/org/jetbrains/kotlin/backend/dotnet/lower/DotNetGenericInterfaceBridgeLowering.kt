@@ -146,7 +146,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         fun isKotlinOwnedGenericInterface(irClass: IrClass): Boolean =
             irClass in genericInterfaces ||
                     DotNetRuntimeTypes.genericInterfaceInfoFor(irClass) != null ||
-                    externalDeclarations.declaredClassInfoOrNull(irClass) != null
+                    externalDeclarations.hasGenericInterface(irClass)
         for (irClass in bridgeOwners.sortedBy { it.classInheritanceDepth() }) {
             addBridges(irClass, ::isKotlinOwnedGenericInterface, externalDeclarations)
         }

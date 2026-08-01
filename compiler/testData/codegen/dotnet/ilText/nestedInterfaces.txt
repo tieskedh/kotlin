@@ -289,9 +289,20 @@ IL_whenNext_1:
     {
     }
   }
+  .class nested public interface abstract auto ansi 'ProducerImplementation'
+         implements 'InterfaceDeclarationHost'/'Producer'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'produce__KotlinErased__593002446c0085812ddf49bc321b37c8'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+  }
   .class nested public auto ansi sealed beforefieldinit 'ProducerImplementation`1'<'T'>
          extends [mscorlib]System.Object
-         implements 'InterfaceDeclarationHost'/'Producer', class 'InterfaceDeclarationHost'/'Producer`1'<!0>
+         implements 'InterfaceDeclarationHost'/'ProducerImplementation', 'InterfaceDeclarationHost'/'Producer', class 'InterfaceDeclarationHost'/'Producer`1'<!0>
   {
     .field private !0 'stored'
     .method public hidebysig specialname rtspecialname instance void .ctor(!0 'stored') cil managed
@@ -333,6 +344,16 @@ IL_whenNext_1:
       .maxstack 1
       ldarg.0
       callvirt instance !0 class 'InterfaceDeclarationHost'/'ProducerImplementation`1'<!0>::'produce'()
+      ret
+    }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-produce>'() cil managed
+    {
+      .override method instance object 'InterfaceDeclarationHost'/'ProducerImplementation'::'produce__KotlinErased__593002446c0085812ddf49bc321b37c8'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'InterfaceDeclarationHost'/'ProducerImplementation`1'<!0>
+      callvirt instance !0 class 'InterfaceDeclarationHost'/'ProducerImplementation`1'<!0>::'produce'()
+      box !0
       ret
     }
     .property instance !0 'stored'()
@@ -521,9 +542,20 @@ IL_whenNext_1:
     {
     }
   }
+  .class nested public interface abstract auto ansi 'IndependentImplementation'
+         implements 'GenericInterfaceDeclarationHost'/'Independent'
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig newslot abstract virtual instance object 'item__KotlinErased__3bb99bb47998a4cd27749baa74668362'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    }
+  }
   .class nested public auto ansi sealed beforefieldinit 'IndependentImplementation`1'<'U'>
          extends [mscorlib]System.Object
-         implements 'GenericInterfaceDeclarationHost'/'Independent', class 'GenericInterfaceDeclarationHost'/'Independent`1'<!0>
+         implements 'GenericInterfaceDeclarationHost'/'IndependentImplementation', 'GenericInterfaceDeclarationHost'/'Independent', class 'GenericInterfaceDeclarationHost'/'Independent`1'<!0>
   {
     .field private !0 'stored'
     .method public hidebysig specialname rtspecialname instance void .ctor(!0 'stored') cil managed
@@ -565,6 +597,16 @@ IL_whenNext_1:
       .maxstack 1
       ldarg.0
       callvirt instance !0 class 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'<!0>::'item'()
+      ret
+    }
+    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-item>'() cil managed
+    {
+      .override method instance object 'GenericInterfaceDeclarationHost'/'IndependentImplementation'::'item__KotlinErased__3bb99bb47998a4cd27749baa74668362'()
+      .maxstack 1
+      ldarg.0
+      castclass class 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'<!0>
+      callvirt instance !0 class 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'<!0>::'item'()
+      box !0
       ret
     }
     .property instance !0 'stored'()

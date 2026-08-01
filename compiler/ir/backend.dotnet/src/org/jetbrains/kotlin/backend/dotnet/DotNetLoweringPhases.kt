@@ -48,6 +48,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLoweri
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetUpgradeCallableReferences
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetVarargLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericClassBridgeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetAllFunctionInlining
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetPrivateFunctionInlining
 import org.jetbrains.kotlin.config.phaseConfig
@@ -189,6 +190,11 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInnerClassesLowering,
     ::DotNetInnerClassesMemberBodyLowering,
     ::DotNetInnerClassConstructorCallsLowering,
+    // Ordinary generic classes retain one typed CLR implementation while Kotlin calls and
+    // runtime identity use non-generic canonical slots on that same object. Run only after the
+    // common inner-class pipeline has copied outer parameters into physical inner declarations;
+    // those declarations have become generic classes too and require the same bridge set.
+    ::DotNetGenericClassBridgeLowering,
     // Initializer merging first — a stated deviation from the JVM phase order for a CLR-neutral
     // reason: DotNetForLoopLowering is an IrBuildingTransformer whose builder only exists inside
     // functions (LowerUtils installs it in visitFunction), so a `for` loop inside an `init {}`
