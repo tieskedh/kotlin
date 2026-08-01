@@ -41,6 +41,21 @@ internal fun throwIndexOverflow() { throw ArithmeticException("Index overflow ha
 internal fun throwCountOverflow() { throw ArithmeticException("Count overflow has happened.") }
 
 /**
+ * Returns `true` if all elements match the given [predicate].
+ *
+ * Note that if the collection contains no elements, the function returns `true`
+ * because there are no elements in it that _do not_ match the predicate.
+ * See a more detailed explanation of this logic concept in ["Vacuous truth"](https://en.wikipedia.org/wiki/Vacuous_truth) article.
+ *
+ * @sample samples.collections.Collections.Aggregates.all
+ */
+public inline fun <T> Iterable<T>.all(predicate: (T) -> Boolean): Boolean {
+    if (this is Collection && isEmpty()) return true
+    for (element in this) if (!predicate(element)) return false
+    return true
+}
+
+/**
  * Returns `true` if collection has at least one element.
  *
  * @sample samples.collections.Collections.Aggregates.any
@@ -48,6 +63,17 @@ internal fun throwCountOverflow() { throw ArithmeticException("Count overflow ha
 public fun <T> Iterable<T>.any(): Boolean {
     if (this is Collection) return !isEmpty()
     return iterator().hasNext()
+}
+
+/**
+ * Returns `true` if at least one element matches the given [predicate].
+ *
+ * @sample samples.collections.Collections.Aggregates.anyWithPredicate
+ */
+public inline fun <T> Iterable<T>.any(predicate: (T) -> Boolean): Boolean {
+    if (this is Collection && isEmpty()) return false
+    for (element in this) if (predicate(element)) return true
+    return false
 }
 
 /**
@@ -174,6 +200,61 @@ public fun <@kotlin.internal.OnlyInputTypes T> Iterable<T>.indexOf(element: T): 
 @Suppress("EXTENSION_SHADOWED_BY_MEMBER") // false warning, extension takes precedence in some cases
 public fun <@kotlin.internal.OnlyInputTypes T> List<T>.indexOf(element: T): Int {
     return indexOf(element)
+}
+
+/**
+ * Returns index of the first element matching the given [predicate], or -1 if the collection does not contain such element.
+ */
+public inline fun <T> Iterable<T>.indexOfFirst(predicate: (T) -> Boolean): Int {
+    var index = 0
+    for (item in this) {
+        checkIndexOverflow(index)
+        if (predicate(item))
+            return index
+        index++
+    }
+    return -1
+}
+
+/**
+ * Returns index of the first element matching the given [predicate], or -1 if the list does not contain such element.
+ */
+public inline fun <T> List<T>.indexOfFirst(predicate: (T) -> Boolean): Int {
+    var index = 0
+    for (item in this) {
+        if (predicate(item))
+            return index
+        index++
+    }
+    return -1
+}
+
+/**
+ * Returns index of the last element matching the given [predicate], or -1 if the collection does not contain such element.
+ */
+public inline fun <T> Iterable<T>.indexOfLast(predicate: (T) -> Boolean): Int {
+    var lastIndex = -1
+    var index = 0
+    for (item in this) {
+        checkIndexOverflow(index)
+        if (predicate(item))
+            lastIndex = index
+        index++
+    }
+    return lastIndex
+}
+
+/**
+ * Returns index of the last element matching the given [predicate], or -1 if the list does not contain such element.
+ */
+public inline fun <T> List<T>.indexOfLast(predicate: (T) -> Boolean): Int {
+    val iterator = this.listIterator(size)
+    while (iterator.hasPrevious()) {
+        if (predicate(iterator.previous())) {
+            return iterator.nextIndex()
+        }
+    }
+    return -1
 }
 
 /**

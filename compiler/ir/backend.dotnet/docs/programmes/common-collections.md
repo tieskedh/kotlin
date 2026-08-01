@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — inline compiler prerequisite complete; Common source admission next**
+- Status: **Active — selected predicate-inline families admitted; abstract-base prerequisites next**
 - ABI foundation: [`../decisions/draft-adr-generic-interface-abi.md`](../decisions/draft-adr-generic-interface-abi.md)
 
 ## Purpose
@@ -140,12 +140,16 @@ overload and reaches the same size fast path. Publishing a non-inline substitute
 fork the Common source surface.
 
 JVM and Native/Wasm make the internal `checkCountOverflow` actual `@InlineOnly`; JS uses an ordinary
-actual with the same body. The Common expect declaration itself is not inline. The current .NET
-product still uses the JS-shaped callable actual, which remains semantically truthful. Now that
-the KLIB inliner exists, the next inline collection slice must reassess that choice against the
-closer Native/Wasm KLIB precedent and change declaration, product metadata, and tests atomically if
-it selects `@InlineOnly`. The logical operation, overflow condition, exception, and message remain
-exactly Common either way.
+actual with the same body. The Common expect declaration itself is not inline. Kotlin/.NET retains
+the JS-shaped callable actual after reassessment with the first inline collection slice. This is
+not a semantic fork: regular inline bodies may call the `@PublishedApi` helper, and its physical
+compiler-ABI method makes the same overflow decision and throws through the same Common helper.
+Selecting the JVM/Native/Wasm shape would instead require a complete `@InlineOnly` declaration-
+suppression and ABI change, while removing no call required by Common semantics. That is a distinct
+pre-ABI optimization/representation decision rather than a prerequisite for admitting the source.
+Both overflow actuals must keep the same shape until such a feature changes declaration, product
+metadata, inlined-consumer behavior, and tests atomically. The logical operation, overflow
+condition, exception, and message remain exactly Common either way.
 
 `count`, `checkCountOverflow`, and `throwCountOverflow` share
 `Kotlin.Collections.CollectionsKt`. The two helpers remain Kotlin-internal compiler ABI rather than
@@ -172,18 +176,47 @@ match respectively. They call Common `checkIndexOverflow` before comparing each 
 The paired `throwIndexOverflow` helper owns the `ArithmeticException` and exact message.
 
 JVM and Native/Wasm use an `@InlineOnly` index-overflow actual; JS uses an ordinary callable actual
-with the same body. As with count overflow, the current JS-shaped .NET actual is truthful but its
-former compiler limitation is gone. Reassess both overflow actuals together in the next source
-admission slice; do not let one become inline while the other retains an accidental historical
-shape.
+with the same body. The paired reassessment above deliberately retains the ordinary JS-shaped .NET
+actual. Iterable `indexOfFirst` and `indexOfLast` therefore prove that an inline body from a
+self-describing library can retain a legal call to physical `@PublishedApi` compiler ABI. The List
+variants contain no overflow-helper call. Do not let one overflow actual become inline while the
+other retains an accidental historical shape.
 
 All five public overloads and both internal helpers share
 `Kotlin.Collections.CollectionsKt`; the helpers are marked compiler ABI. Using LINQ or BCL
 collection search was rejected: it would substitute CLR comparer and enumeration policy, miss
 Common's exact fast-path and overflow boundaries, and conflate optional BCL adapters with Kotlin
-collection identity. This closure also does not remove the Common abstract-base blocker:
-`AbstractCollection` and `AbstractList` depend on the separate inline-lambda `any`, `all`,
-`indexOfFirst`, and `indexOfLast` variants.
+collection identity. This equality-search closure alone did not remove the Common abstract-base
+blocker; the paired predicate closure below now supplies its separate inline-lambda helpers.
+
+### Predicate quantifiers and index search
+
+The admitted exact Common template closure is:
+
+- `Iterable<T>.any(predicate)` and `Iterable<T>.all(predicate)` from `Aggregates`; and
+- `Iterable<T>.indexOfFirst(predicate)`, `List<T>.indexOfFirst(predicate)`,
+  `Iterable<T>.indexOfLast(predicate)`, and `List<T>.indexOfLast(predicate)` from `Elements`.
+
+All six declarations are ordinary non-reified inline functions. Their public physical methods
+remain fallback bodies in `Kotlin.Collections.CollectionsKt`, while Kotlin consumers inline the
+serialized Common IR from the self-describing stdlib. No .NET source owns an algorithm body.
+
+The generated algorithms preserve distinctions that a target rewrite could easily erase:
+
+- `all` is vacuously true and `any` false for an empty Collection without requesting an iterator;
+- both quantifiers traverse once and stop at the first decisive predicate result;
+- Iterable index search checks index overflow at the Common boundary and evaluates in encounter
+  order; and
+- List `indexOfLast` walks backwards from `listIterator(size)`, while List `indexOfFirst` keeps the
+  ordinary forward `for` traversal and neither List overload calls an overflow helper.
+
+The CLR supplies no conflicting representation constraint. LINQ quantifiers/search, BCL
+enumeration, a target-authored loop, forced materialization, or a non-inline substitute would
+change identity, control flow, predicate/non-local-return behavior, traversal direction, or
+physical source ownership. They are therefore rejected. Cross-DLL tests must prove both halves of
+the regular-inline contract: the fallback methods and KLIB bindings exist in the stdlib, but calls
+from Kotlin consumers disappear after inlining; only the Iterable index bodies may retain calls to
+the ordinary compiler-ABI overflow helper.
 
 ### Signed numeric sum
 
@@ -252,8 +285,6 @@ Do not choose a family solely because one downstream feature, such as enums, nee
 All mature targets compile the shared `AbstractCollection.kt` and `AbstractList.kt`. Kotlin/.NET
 must do the same once their exact closure exists. The remaining source-product blockers are:
 
-- admission and adversarial publication of the now-supported generic inline helpers used by
-  `contains`, `containsAll`, `indexOf`, and `lastIndexOf`;
 - `joinToString` and its `CharSequence`/`Appendable`/`StringBuilder` closure; and
 - typed collection-to-array expect/actual operations that preserve the caller's CLR array element
   type.
@@ -264,16 +295,14 @@ these prerequisites are genuinely supported.
 
 ## Programme order
 
-1. Admit the selected ordinary non-reified Common/generated inline helpers using the completed
-   compiler programme.
-2. Complete the string-building and typed collection-to-array prerequisites needed by the
+1. Complete the string-building and typed collection-to-array prerequisites needed by the
    abstract bases.
-3. Implement typed collection-to-array semantics and compile the exact Common abstract bases.
-4. Add mutable collection/list contracts and an ordinary implementation.
-5. Add sets and maps from their exact Common dependency closures.
-6. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-7. Let `EnumEntries` and enums consume the established collection substrate.
-8. Remove the bootstrap allowlist when the complete generated product is supportable.
+2. Implement typed collection-to-array semantics and compile the exact Common abstract bases.
+3. Add mutable collection/list contracts and an ordinary implementation.
+4. Add sets and maps from their exact Common dependency closures.
+5. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+6. Let `EnumEntries` and enums consume the established collection substrate.
+7. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 
