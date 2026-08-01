@@ -686,6 +686,40 @@ internal class DotNetIlExpressionCodegen(
         val matchesNullInstruction = if (positive) "ceq" else "cgt.un"
         val matchesNonNullInstruction = if (positive) "cgt.un" else "ceq"
 
+        val exceptionEntry = DotNetMappedExceptions.mappedEntry(expression.typeOperand.classFqName)
+        val isClassifiedCharSequence = expression.typeOperand.isDotNetCharSequenceType()
+        val runtimeTestType = if (castType is DotNetIlValueType.NullableValue) castType.elementType else castType
+        if (exceptionEntry == null && !isClassifiedCharSequence && !expression.typeOperand.isNullableNothing()) {
+            when (runtimeTestType) {
+                DotNetIlValueType.Boolean,
+                DotNetIlValueType.Int8,
+                DotNetIlValueType.Int16,
+                DotNetIlValueType.Int32,
+                DotNetIlValueType.Int64,
+                DotNetIlValueType.Float32,
+                DotNetIlValueType.Float64,
+                DotNetIlValueType.Char,
+                DotNetIlValueType.String,
+                DotNetIlValueType.Object,
+                is DotNetIlValueType.UserClass,
+                is DotNetIlValueType.PrimitiveArray,
+                is DotNetIlValueType.GenericArray,
+                is DotNetIlValueType.TypeParameter,
+                    -> Unit
+                is DotNetIlValueType.GenericInstance -> dotNetUnsupported(
+                    "runtime type test against closed CLR generic instance " +
+                            "${runtimeTestType.nameInSignature} would make Kotlin type arguments " +
+                            "part of runtime identity"
+                )
+                is DotNetIlValueType.MappedClass,
+                is DotNetIlValueType.NullableValue,
+                    -> dotNetUnsupported(
+                        "runtime type test against ${runtimeTestType.nameInSignature} has no selected " +
+                                "exact carrier or classifier"
+                    )
+            }
+        }
+
         emitExpression(expression.argument, DotNetIlValueType.Object)
         if (methodContext.isTerminated) return
         if (expression.typeOperand.isNullableNothing()) {
@@ -717,7 +751,6 @@ internal class DotNetIlExpressionCodegen(
         } else {
             null
         }
-        val exceptionEntry = DotNetMappedExceptions.mappedEntry(expression.typeOperand.classFqName)
         if (exceptionEntry != null) {
             // Every logical exception test goes through the one runtime classifier, including
             // exact classes. `isinst System.Exception` is only the physical admission step for
@@ -740,7 +773,7 @@ internal class DotNetIlExpressionCodegen(
             nullableJoinLabel?.let(methodContext::emitLabel)
             return
         }
-        if (expression.typeOperand.isDotNetCharSequenceType()) {
+        if (isClassifiedCharSequence) {
             methodContext.emit(
                 DotNetRuntimeLibraryHelpers.isCharSequenceCallInstruction,
                 pops = 1,
@@ -753,7 +786,6 @@ internal class DotNetIlExpressionCodegen(
             nullableJoinLabel?.let(methodContext::emitLabel)
             return
         }
-        val runtimeTestType = if (castType is DotNetIlValueType.NullableValue) castType.elementType else castType
         methodContext.emit("isinst ${runtimeTestType.nameInSignature}", pops = 1, pushes = 1)
         methodContext.emit("ldnull", pushes = 1)
         methodContext.emit(matchesNonNullInstruction, pops = 2, pushes = 1)
