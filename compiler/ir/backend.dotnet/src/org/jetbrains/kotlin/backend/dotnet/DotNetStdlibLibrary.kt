@@ -36,6 +36,8 @@ internal object DotNetStdlibLibrary {
     const val ARRAY_AS_LIST_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayAsListIterator`1"
     const val ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayIterator`1"
     const val ARRAY_ITERABLE_IL_NAME = "Kotlin.Collections.ArrayIterable`1"
+    const val ERASED_ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ErasedArrayIterator"
+    const val ERASED_ARRAY_ITERABLE_IL_NAME = "Kotlin.Collections.ErasedArrayIterable"
     const val EMPTY_ITERATOR_IL_NAME = "Kotlin.Collections.EmptyIterator"
     const val EMPTY_LIST_IL_NAME = "Kotlin.Collections.EmptyList"
     const val RANDOM_ACCESS_IL_NAME = "Kotlin.Collections.RandomAccess"
@@ -48,12 +50,16 @@ internal object DotNetStdlibLibrary {
     const val EXCEPTIONS_FACADE_IL_NAME = "Kotlin.DotNetExceptionsKt"
     const val ARRAY_ITERATOR_FACTORY_NAME = "dotNetArrayIterator"
     const val ARRAY_ITERABLE_FACTORY_NAME = "dotNetArrayIterable"
+    const val ERASED_ARRAY_ITERATOR_FACTORY_NAME = "dotNetErasedArrayIterator"
+    const val ERASED_ARRAY_ITERABLE_FACTORY_NAME = "dotNetErasedArrayIterable"
 
     private val implementationClassIlNames = mapOf(
         "kotlin.collections.ArrayAsList" to ARRAY_AS_LIST_IL_NAME,
         "kotlin.collections.ArrayAsListIterator" to ARRAY_AS_LIST_ITERATOR_IL_NAME,
         "kotlin.collections.ArrayIterator" to ARRAY_ITERATOR_IL_NAME,
         "kotlin.collections.ArrayIterable" to ARRAY_ITERABLE_IL_NAME,
+        "kotlin.collections.ErasedArrayIterator" to ERASED_ARRAY_ITERATOR_IL_NAME,
+        "kotlin.collections.ErasedArrayIterable" to ERASED_ARRAY_ITERABLE_IL_NAME,
         "kotlin.collections.EmptyIterator" to EMPTY_ITERATOR_IL_NAME,
         "kotlin.collections.EmptyList" to EMPTY_LIST_IL_NAME,
         "kotlin.collections.RandomAccess" to RANDOM_ACCESS_IL_NAME,
@@ -103,6 +109,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.throwIndexOverflow" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERATOR_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ARRAY_ITERABLE_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.$ERASED_ARRAY_ITERATOR_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.$ERASED_ARRAY_ITERABLE_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.io.readln" to IO_FACADE_IL_NAME,
         "kotlin.io.readlnOrNull" to IO_FACADE_IL_NAME,
         "kotlin.internal.throwNoWhenBranchMatchedException" to THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,
@@ -179,6 +187,18 @@ internal object DotNetStdlibLibrary {
     /** Calls the stdlib-owned Iterable factory for a vector already on the IL stack. */
     fun arrayIterableFactoryCallInstruction(elementType: DotNetIlValueType): String =
         ARRAY_ITERABLE_FACTORY_INFO.renderStdlibCall(ARRAY_ITERABLE_FACTORY_NAME, elementType)
+
+    fun erasedArrayIteratorFactoryCallInstruction(coreLibraryReference: String): String =
+        "call class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]${"Kotlin.Collections.Iterator".toIlIdentifier()} " +
+                "[$ASSEMBLY_NAME]${COLLECTIONS_FACADE_IL_NAME.toIlIdentifier()}::" +
+                "${ERASED_ARRAY_ITERATOR_FACTORY_NAME.toIlIdentifier()}(" +
+                "class ${coreLibraryReference}System.Array)"
+
+    fun erasedArrayIterableFactoryCallInstruction(coreLibraryReference: String): String =
+        "call class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]${"Kotlin.Collections.Iterable".toIlIdentifier()} " +
+                "[$ASSEMBLY_NAME]${COLLECTIONS_FACADE_IL_NAME.toIlIdentifier()}::" +
+                "${ERASED_ARRAY_ITERABLE_FACTORY_NAME.toIlIdentifier()}(" +
+                "class ${coreLibraryReference}System.Array)"
 
     fun implementationClassIlName(irClass: IrClass): String? {
         if ((irClass.parent as? IrFile)?.isDotNetStdlibImplementationSource != true) return null

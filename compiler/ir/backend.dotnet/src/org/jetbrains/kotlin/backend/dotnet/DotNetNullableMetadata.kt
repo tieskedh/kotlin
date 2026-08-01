@@ -82,6 +82,7 @@ internal object DotNetNullableMetadata {
             -> listOf(type.referenceFlag())
 
         is DotNetIlValueType.PrimitiveArray -> listOf(type.referenceFlag())
+        is DotNetIlValueType.ErasedGenericArray -> listOf(type.referenceFlag())
         is DotNetIlValueType.GenericArray -> {
             val elementType = type.singleTypeArgument("array")
             listOf(type.referenceFlag()) + flags(elementType, physicalType.elementType)

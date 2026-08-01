@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: concrete nullable-primitive generic arrays
+- Last completed feature: classified star-projected generic arrays
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,11 +20,11 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 960 tests:
+The JUnit audit covered 16 fresh XML files and 965 tests:
 
-- 860 FIR, IL-text, and box tests
+- 864 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 79 library-integration tests
+- 80 library-integration tests
 - zero failures, errors, or skips
 
 Focused evidence additionally covers component-complete packed-KLIB loading,
@@ -71,7 +71,18 @@ nested arrays, and exact casts on both frontends and runtimes. A portable
 netstandard2.0 Kotlin library is consumed separately by Kotlin and Roslyn on
 Framework CLR and CoreCLR; all eight natural C# `V?[]` signatures preserve
 aliasing. Backend-reachable sentinels continue to reject open `Array<T?>`,
-star/input projections, and value-vector covariance.
+input projections, and value-vector covariance.
+
+Star-projected generic arrays are now complete through one classified erased
+view. Every exact reference, value, and nullable-value SZ vector widens to
+`System.Array` without copying and retains identity for size, reads, iteration,
+reference equality, and later exact casts. Runtime tests and checked/safe casts
+share one SZ-array classifier; specialized Kotlin primitive-array wrappers,
+rectangular CLR arrays, and rank-one non-zero-based CLR arrays remain outside
+the Kotlin `Array<*>` identity. Portable netstandard2.0 Kotlin libraries are
+consumed separately by Kotlin and Roslyn on Framework CLR and CoreCLR, while
+input projections, open nullable elements, and value-vector covariance remain
+negative.
 
 ## Current architecture
 
@@ -142,15 +153,17 @@ runtime registry and the symmetric .NET stdlib declaration surface. The new
 three families retain exact `SByte[]`, `Int16[]`, and `Single[]` private
 storage, remain distinct from `Array<Byte>`, `Array<Short>`, and
 `Array<Float>`, and cross portable Kotlin-library and explicit C# export
-boundaries without copying. Unsigned arrays and `Array<*>` remain deliberately
-outside this specialized-wrapper closure.
+boundaries without copying. Unsigned arrays remain deliberately outside this
+specialized-wrapper closure; `Array<*>` now sees the wrappers only as non-array
+objects and never exposes their private vectors.
 
 The separate generic-array closure now admits all eight concrete nullable
-primitive element types as exact `Nullable<V>[]` vectors. It does not change
-the specialized-wrapper identities above and does not admit open nullable
-elements, star/input projections, or value-vector covariance. Those parked
-shapes still require a truthful erased identity and successful typed-use
-carrier rather than `object[]` inference.
+primitive element types as exact `Nullable<V>[]` vectors and admits
+`Array<*>` through their classified `System.Array` base without changing the
+specialized-wrapper identities above. It does not admit open nullable
+elements, input projections, or value-vector covariance. Those parked shapes
+still require successful typed-use carriers rather than inference from the
+star read-only view.
 
 ## Open architectural blockers
 
@@ -172,11 +185,10 @@ carrier rather than `object[]` inference.
 ## Next bounded work
 
 1. Continue the reversible reified prerequisites with a cross-target audit of
-   `Array<*>`: select neither `object[]` nor `System.Array` until one erased
-   identity also supports Kotlin `size`, indexed reads, iteration, subsequent
-   casts, mutation/aliasing rules, and value-element vectors without copying.
-   Keep open `Array<T?>`, input projections, value-vector covariance, and
-   Kotlin-owned generic-class erased identity parked during that audit.
+   declaration-erased runtime identity for Kotlin-owned generic classes. Keep
+   closed CLR construction types as storage candidates only; select no public
+   classifier until successful erased casts also support later typed method and
+   property use without treating `C<T>` as Kotlin runtime identity.
 2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
    collections/`EnumEntries` bootstrap cluster; do not create builder-only or
    one-enum stubs.

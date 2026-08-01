@@ -2096,6 +2096,74 @@ $throwableSupportTypesIl
             |      ret
             |    }
             |
+            |    .method public hidebysig static bool 'IsGenericArray'(object 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      .locals init (
+            |        [0] class ${coreLibraryReference}System.Array 'array',
+            |        [1] class ${coreLibraryReference}System.Type 'runtimeType',
+            |        [2] class ${coreLibraryReference}System.Type 'elementType'
+            |      )
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Array
+            |      stloc.0
+            |      ldloc.0
+            |      brfalse.s IL_genericArrayFalse
+            |      ldloc.0
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Rank()
+            |      ldc.i4.1
+            |      bne.un.s IL_genericArrayFalse
+            |      ldloc.0
+            |      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Object::GetType()
+            |      stloc.1
+            |      ldloc.1
+            |      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetElementType()
+            |      stloc.2
+            |      ldloc.2
+            |      brfalse.s IL_genericArrayFalse
+            |      ldloc.1
+            |      ldloc.2
+            |      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::MakeArrayType()
+            |      call bool ${coreLibraryReference}System.Type::op_Equality(
+            |          class ${coreLibraryReference}System.Type, class ${coreLibraryReference}System.Type)
+            |      ret
+            |IL_genericArrayFalse:
+            |      ldc.i4.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class ${coreLibraryReference}System.Array 'CheckGenericArrayCast'(
+            |        object 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brfalse.s IL_genericArrayCastValid
+            |      ldarg.0
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'IsGenericArray'(object)
+            |      brtrue.s IL_genericArrayCastValid
+            |      newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor()
+            |      throw
+            |IL_genericArrayCastValid:
+            |      ldarg.0
+            |      castclass ${coreLibraryReference}System.Array
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class ${coreLibraryReference}System.Array 'SafeGenericArrayCast'(
+            |        object 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'IsGenericArray'(object)
+            |      brfalse.s IL_genericArraySafeCastNull
+            |      ldarg.0
+            |      castclass ${coreLibraryReference}System.Array
+            |      ret
+            |IL_genericArraySafeCastNull:
+            |      ldnull
+            |      ret
+            |    }
+            |
             |    .method public hidebysig static object 'CheckCharSequenceCast'(object 'value') cil managed
             |    {
             |      .maxstack 1
@@ -3526,6 +3594,21 @@ $throwableSupportTypesIl
         "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"IsCharSequence".toIlIdentifier()}(object)"
+
+    val isGenericArrayCallInstruction: String =
+        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"IsGenericArray".toIlIdentifier()}(object)"
+
+    fun checkGenericArrayCastCallInstruction(coreLibraryReference: String): String =
+        "call class ${coreLibraryReference}System.Array [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"CheckGenericArrayCast".toIlIdentifier()}(object)"
+
+    fun safeGenericArrayCastCallInstruction(coreLibraryReference: String): String =
+        "call class ${coreLibraryReference}System.Array [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"SafeGenericArrayCast".toIlIdentifier()}(object)"
 
     val checkCharSequenceCastCallInstruction: String =
         "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +

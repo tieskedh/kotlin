@@ -1119,11 +1119,15 @@ private object DotNetIlArrayOfNullsLikeIntrinsic : DotNetIlIntrinsicMethod() {
 private fun IrCall.genericArrayReceiver(
     codegen: DotNetIlExpressionCodegen,
     memberName: String,
-): Pair<IrExpression, DotNetIlValueType.GenericArray> {
+): Pair<IrExpression, DotNetIlValueType> {
     val receiver = arguments.firstOrNull()
         ?: dotNetUnsupported("missing generic-array receiver for '$memberName'")
-    val arrayType = codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
-        ?: dotNetUnsupported("receiver of generic-array '$memberName' has unsupported type ${receiver.type.render()}")
+    val arrayType = codegen.toDotNetIlValueType(receiver.type)
+    if (arrayType !is DotNetIlValueType.GenericArray &&
+        arrayType !is DotNetIlValueType.ErasedGenericArray
+    ) {
+        dotNetUnsupported("receiver of generic-array '$memberName' has unsupported type ${receiver.type.render()}")
+    }
     return receiver to arrayType
 }
 
@@ -1137,8 +1141,16 @@ private object DotNetIlGenericArraySizeIntrinsic : DotNetIlIntrinsicMethod() {
         if (expectedType != DotNetIlValueType.Int32 || call.arguments.size != 1) return false
         val [receiver, arrayType] = call.genericArrayReceiver(codegen, "size")
         codegen.emitExpression(receiver, arrayType)
-        codegen.emit("ldlen", pops = 1, pushes = 1)
-        codegen.emit("conv.i4", pops = 1, pushes = 1)
+        if (arrayType is DotNetIlValueType.ErasedGenericArray) {
+            codegen.emit(
+                "callvirt instance int32 ${codegen.coreLibraryReference}System.Array::get_Length()",
+                pops = 1,
+                pushes = 1,
+            )
+        } else {
+            codegen.emit("ldlen", pops = 1, pushes = 1)
+            codegen.emit("conv.i4", pops = 1, pushes = 1)
+        }
         return true
     }
 }
@@ -1152,7 +1164,12 @@ private object DotNetIlGenericArrayGetIntrinsic : DotNetIlIntrinsicMethod() {
     ): Boolean {
         if (call.arguments.size != 2) return false
         val [receiver, arrayType] = call.genericArrayReceiver(codegen, "get")
-        if (expectedType != arrayType.elementType) return false
+        val elementType = when (arrayType) {
+            is DotNetIlValueType.GenericArray -> arrayType.elementType
+            is DotNetIlValueType.ErasedGenericArray -> DotNetIlValueType.Object
+            else -> error("Internal .NET backend error: non-array receiver ${arrayType.nameInSignature}")
+        }
+        if (expectedType != elementType) return false
         val index = call.arguments[1]
             ?: dotNetUnsupported("missing generic-array index for 'get'")
         codegen.emitExpression(receiver, arrayType)
@@ -1161,7 +1178,15 @@ private object DotNetIlGenericArrayGetIntrinsic : DotNetIlIntrinsicMethod() {
         val indexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<arrayIndex>")
         codegen.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
         codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
-        codegen.emit(arrayType.loadElementInstruction, pops = 2, pushes = 1)
+        if (arrayType is DotNetIlValueType.ErasedGenericArray) {
+            codegen.emit(
+                "callvirt instance object ${codegen.coreLibraryReference}System.Array::GetValue(int32)",
+                pops = 2,
+                pushes = 1,
+            )
+        } else {
+            codegen.emit((arrayType as DotNetIlValueType.GenericArray).loadElementInstruction, pops = 2, pushes = 1)
+        }
         return true
     }
 }
@@ -1174,6 +1199,10 @@ private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
     ): Boolean {
         if (call.arguments.size != 3) return false
         val [receiver, arrayType] = call.genericArrayReceiver(codegen, "set")
+        if (arrayType is DotNetIlValueType.ErasedGenericArray) {
+            dotNetUnsupported("star-projected generic-array set must remain projected out by the frontend")
+        }
+        arrayType as DotNetIlValueType.GenericArray
         val index = call.arguments[1]
             ?: dotNetUnsupported("missing generic-array index for 'set'")
         val value = call.arguments[2]
@@ -1211,10 +1240,21 @@ private class DotNetIlArrayIteratorIntrinsic(
         if (expectedType != DotNetRuntimeTypes.iteratorType || call.arguments.size != 1) return false
         val receiver = call.arguments.single()
             ?: dotNetUnsupported("missing array receiver for 'iterator'")
-        val arrayType = fixedArrayType ?: (
-                codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
-                ?: dotNetUnsupported("'iterator' has unsupported array receiver ${receiver.type.render()}")
-        )
+        val arrayType = fixedArrayType ?: codegen.toDotNetIlValueType(receiver.type)
+            ?.takeIf {
+                it is DotNetIlValueType.GenericArray || it is DotNetIlValueType.ErasedGenericArray
+            }
+            ?: dotNetUnsupported("'iterator' has unsupported array receiver ${receiver.type.render()}")
+        if (arrayType is DotNetIlValueType.ErasedGenericArray) {
+            codegen.emitExpression(receiver, arrayType)
+            codegen.recordAssemblyReference(DotNetStdlibLibrary.ASSEMBLY_NAME)
+            codegen.emit(
+                DotNetStdlibLibrary.erasedArrayIteratorFactoryCallInstruction(codegen.coreLibraryReference),
+                pops = 1,
+                pushes = 1,
+            )
+            return true
+        }
         val elementType = arrayType.elementTypeForArrayProducer("iterator")
         codegen.emitExpression(receiver, arrayType)
         if (arrayType is DotNetIlValueType.PrimitiveArray) {
@@ -1244,10 +1284,21 @@ private class DotNetIlArrayAsIterableIntrinsic(
         if (expectedType != DotNetRuntimeTypes.iterableType || call.arguments.size != 1) return false
         val receiver = call.arguments.single()
             ?: dotNetUnsupported("missing array receiver for 'asIterable'")
-        val arrayType = fixedArrayType ?: (
-                codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
-                ?: dotNetUnsupported("'asIterable' has unsupported array receiver ${receiver.type.render()}")
-        )
+        val arrayType = fixedArrayType ?: codegen.toDotNetIlValueType(receiver.type)
+            ?.takeIf {
+                it is DotNetIlValueType.GenericArray || it is DotNetIlValueType.ErasedGenericArray
+            }
+            ?: dotNetUnsupported("'asIterable' has unsupported array receiver ${receiver.type.render()}")
+        if (arrayType is DotNetIlValueType.ErasedGenericArray) {
+            codegen.emitExpression(receiver, arrayType)
+            codegen.recordAssemblyReference(DotNetStdlibLibrary.ASSEMBLY_NAME)
+            codegen.emit(
+                DotNetStdlibLibrary.erasedArrayIterableFactoryCallInstruction(codegen.coreLibraryReference),
+                pops = 1,
+                pushes = 1,
+            )
+            return true
+        }
         val elementType = arrayType.elementTypeForArrayProducer("asIterable")
         codegen.emitExpression(receiver, arrayType)
         if (arrayType is DotNetIlValueType.PrimitiveArray) {
@@ -2073,7 +2124,11 @@ private class DotNetIlEqualityIntrinsic(
             emitObjectEquality(codegen, left, right)
             return true
         } else {
-            dotNetUnsupported("equality comparison of unsupported operand types")
+            dotNetUnsupported(
+                "equality comparison of unsupported operand types " +
+                        "${left.type.render()} (${leftType?.nameInSignature ?: "unmapped"}) and " +
+                        "${right.type.render()} (${rightType?.nameInSignature ?: "unmapped"})"
+            )
         }
 
         codegen.emitExpression(left, operandType)
@@ -2105,6 +2160,7 @@ private class DotNetIlEqualityIntrinsic(
             // `===` are `ceq` here (structural comparison remains contentEquals).
             is DotNetIlValueType.PrimitiveArray,
             is DotNetIlValueType.GenericArray,
+            is DotNetIlValueType.ErasedGenericArray,
                 -> codegen.emit("ceq", pops = 2, pushes = 1)
             is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass, DotNetIlValueType.Object,
             is DotNetIlValueType.GenericInstance,
@@ -3319,6 +3375,13 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
         (leftType == DotNetIlValueType.Object || rightType == DotNetIlValueType.Object) &&
                 leftType?.isDotNetReferenceShaped() == true && rightType?.isDotNetReferenceShaped() == true ->
             DotNetIlValueType.Object
+        // An exact generic vector and its star-projected System.Array view compare through that
+        // identity-preserving erased view. This is a no-instruction CLR upcast; both `==` and
+        // `===` remain array reference identity, never content comparison or boxing/copying.
+        leftType is DotNetIlValueType.GenericArray && rightType is DotNetIlValueType.ErasedGenericArray ->
+            rightType
+        rightType is DotNetIlValueType.GenericArray && leftType is DotNetIlValueType.ErasedGenericArray ->
+            leftType
         // Two differently-mapped exception operands (e.g. `caught === original` where one side
         // is typed `Throwable` and the other `IllegalStateException`) compare through their
         // common CLR supertype: every mapped exception widens to `System.Exception`, and the

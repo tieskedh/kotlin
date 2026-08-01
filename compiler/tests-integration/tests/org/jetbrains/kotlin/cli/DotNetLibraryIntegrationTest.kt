@@ -28000,6 +28000,262 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testStarProjectedArraysAcrossPortableLibraryBoundary() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard facade is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "star-projected-array-library")
+        val librarySource = File(tmpdir, "starProjectedArrayLibrary.kt").apply {
+            writeText(
+                """
+                package starprojectedarrays
+
+                public fun eraseStrings(values: Array<String>): Array<*> = values
+                public fun eraseInts(values: Array<Int>): Array<*> = values
+                public fun eraseNullableInts(values: Array<Int?>): Array<*> = values
+                public fun identityStar(values: Array<*>): Array<*> = values
+                public fun starSize(values: Array<*>): Int = values.size
+                public fun starFirst(values: Array<*>): Any? = values[0]
+                public fun isGenericArray(value: Any?): Boolean = value is Array<*>
+                public fun checkedStar(value: Any?): Array<*> = value as Array<*>
+                public fun safeStar(value: Any?): Array<*>? = value as? Array<*>
+
+                @Suppress("UNCHECKED_CAST")
+                public fun incrementFirstInt(values: Array<*>): Int {
+                    val exact = values as Array<Int>
+                    exact[0] = exact[0] + 1
+                    return exact[0]
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "StarProjectedArray.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("StarProjectedArray.Library.dll")
+        val libraryIl = libraryDirectory.resolve("StarProjectedArray.Library.il").readText()
+        val systemArray = "class [netstandard]System.Array"
+        assertTrue("$systemArray 'eraseStrings'(string[] 'values')" in libraryIl) { libraryIl }
+        assertTrue("$systemArray 'eraseInts'(int32[] 'values')" in libraryIl) { libraryIl }
+        assertTrue("$systemArray 'eraseNullableInts'(" in libraryIl) { libraryIl }
+        assertTrue("$systemArray 'identityStar'($systemArray 'values')" in libraryIl) { libraryIl }
+        assertTrue("int32 'starSize'($systemArray 'values')" in libraryIl) { libraryIl }
+        assertTrue("object 'starFirst'($systemArray 'values')" in libraryIl) { libraryIl }
+
+        val csharpSource = libraryDirectory.resolve("StarProjectedArrayConsumer.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Reflection;
+
+                public static class StarProjectedArrayConsumer
+                {
+                    private static bool HasArraySignature(Type facade, string name, Type parameter, Type result)
+                    {
+                        MethodInfo method = facade.GetMethod(name, new Type[] { parameter });
+                        return method != null && method.ReturnType == result;
+                    }
+
+                    public static int Main()
+                    {
+                        Type facade = typeof(starprojectedarrays.starProjectedArrayLibraryKt);
+                        if (!HasArraySignature(facade, "eraseStrings", typeof(string[]), typeof(Array))) return 1;
+                        if (!HasArraySignature(facade, "eraseInts", typeof(int[]), typeof(Array))) return 2;
+                        if (!HasArraySignature(facade, "eraseNullableInts", typeof(int?[]), typeof(Array))) return 3;
+                        if (!HasArraySignature(facade, "identityStar", typeof(Array), typeof(Array))) return 4;
+                        if (!HasArraySignature(facade, "checkedStar", typeof(object), typeof(Array))) return 5;
+                        if (!HasArraySignature(facade, "safeStar", typeof(object), typeof(Array))) return 6;
+
+                        string[] strings = new string[] { "a", "b" };
+                        int[] ints = new int[] { 40, 2 };
+                        int?[] nullableInts = new int?[] { 1, null, 3 };
+                        if (!Object.ReferenceEquals(strings,
+                            starprojectedarrays.starProjectedArrayLibraryKt.eraseStrings(strings))) return 7;
+                        if (!Object.ReferenceEquals(ints,
+                            starprojectedarrays.starProjectedArrayLibraryKt.eraseInts(ints))) return 8;
+                        if (!Object.ReferenceEquals(nullableInts,
+                            starprojectedarrays.starProjectedArrayLibraryKt.eraseNullableInts(nullableInts))) return 9;
+                        if (!Object.ReferenceEquals(ints,
+                            starprojectedarrays.starProjectedArrayLibraryKt.identityStar(ints))) return 10;
+                        if (starprojectedarrays.starProjectedArrayLibraryKt.starSize(ints) != 2) return 11;
+                        if (!Object.Equals(starprojectedarrays.starProjectedArrayLibraryKt.starFirst(ints), 40)) return 12;
+
+                        if (!starprojectedarrays.starProjectedArrayLibraryKt.isGenericArray(strings) ||
+                            !starprojectedarrays.starProjectedArrayLibraryKt.isGenericArray(ints) ||
+                            !starprojectedarrays.starProjectedArrayLibraryKt.isGenericArray(nullableInts)) return 13;
+                        if (!Object.ReferenceEquals(ints,
+                            starprojectedarrays.starProjectedArrayLibraryKt.checkedStar(ints))) return 14;
+                        if (!Object.ReferenceEquals(strings,
+                            starprojectedarrays.starProjectedArrayLibraryKt.safeStar(strings))) return 15;
+                        if (starprojectedarrays.starProjectedArrayLibraryKt.incrementFirstInt(ints) != 41 || ints[0] != 41) {
+                            return 16;
+                        }
+
+                        Array rectangular = new int[1, 2];
+                        Array nonZeroBased = Array.CreateInstance(typeof(int), new int[] { 2 }, new int[] { 1 });
+                        if (starprojectedarrays.starProjectedArrayLibraryKt.isGenericArray(rectangular) ||
+                            starprojectedarrays.starProjectedArrayLibraryKt.isGenericArray(nonZeroBased)) return 17;
+                        if (starprojectedarrays.starProjectedArrayLibraryKt.safeStar(rectangular) != null ||
+                            starprojectedarrays.starProjectedArrayLibraryKt.safeStar(nonZeroBased) != null) return 18;
+
+                        bool rectangularRejected = false;
+                        try
+                        {
+                            starprojectedarrays.starProjectedArrayLibraryKt.checkedStar(rectangular);
+                        }
+                        catch (InvalidCastException)
+                        {
+                            rectangularRejected = true;
+                        }
+                        if (!rectangularRejected) return 19;
+
+                        bool nonZeroRejected = false;
+                        try
+                        {
+                            starprojectedarrays.starProjectedArrayLibraryKt.checkedStar(nonZeroBased);
+                        }
+                        catch (InvalidCastException)
+                        {
+                            nonZeroRejected = true;
+                        }
+                        if (!nonZeroRejected) return 20;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpConsumer = libraryDirectory.resolve("StarProjectedArrayConsumer.exe")
+        val csharpCompile = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            csharpSource,
+            csharpConsumer,
+            metadataLibrary,
+            checkNotNull(frameworkNetStandardFacade),
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package starprojectedarrayconsumer
+
+                    import starprojectedarrays.*
+
+                    fun main() {
+                        val strings = arrayOf("a", "b")
+                        val ints = arrayOf(40, 2)
+                        val nullableInts = arrayOf<Int?>(1, null, 3)
+                        val stringStar = eraseStrings(strings)
+                        val intStar = eraseInts(ints)
+                        val nullableStar = eraseNullableInts(nullableInts)
+                        if (stringStar !== strings || intStar !== ints || nullableStar !== nullableInts) {
+                            throw Error("star identity")
+                        }
+                        if (identityStar(intStar) !== ints || starSize(nullableStar) != 3 ||
+                            starFirst(stringStar) != "a" || starFirst(nullableStar) != 1
+                        ) throw Error("star operations")
+                        if (!isGenericArray(strings) || !isGenericArray(ints) ||
+                            !isGenericArray(nullableInts) || isGenericArray(intArrayOf(1))
+                        ) throw Error("star classifier")
+                        if (checkedStar(ints) !== ints || safeStar(strings) !== strings ||
+                            safeStar(intArrayOf(1)) != null
+                        ) throw Error("star casts")
+                        if (incrementFirstInt(intStar) != 41 || ints[0] != 41) {
+                            throw Error("exact mutation alias")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "StarProjectedArrayKotlinConsumer.exe" else "StarProjectedArrayKotlinConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "StarProjectedArrayKotlinConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            if (target == "net10.0") {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    consumerDirectory,
+                    "Star-array Kotlin consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(frameworkExecutionCommand(checkNotNull(frameworkHost), application))
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(
+                    0,
+                    process.waitFor(),
+                    "Star-array Kotlin consumer failed for $target:\n$output",
+                )
+                val runtimeAssembly = consumerDirectory.resolve("Kotlin.Runtime.dll")
+                assertTrue(runtimeAssembly.isFile)
+                runtimeAssembly.copyTo(libraryDirectory.resolve(runtimeAssembly.name), overwrite = true)
+                val frameworkCSharpProcess = ProcessBuilder(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), csharpConsumer)
+                )
+                    .directory(libraryDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val frameworkCSharpOutput = frameworkCSharpProcess.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(
+                    0,
+                    frameworkCSharpProcess.waitFor(),
+                    "Roslyn star-array consumer failed on net48:\n$frameworkCSharpOutput",
+                )
+            }
+            if (target == "net10.0") {
+                val modernCSharpConsumer = consumerDirectory.resolve(csharpConsumer.name)
+                csharpConsumer.copyTo(modernCSharpConsumer, overwrite = true)
+                consumerDirectory.resolve("StarProjectedArrayKotlinConsumer.runtimeconfig.json")
+                    .copyTo(
+                        consumerDirectory.resolve("StarProjectedArrayConsumer.runtimeconfig.json"),
+                        overwrite = true,
+                    )
+                runDotNet(
+                    dotnetHost,
+                    modernCSharpConsumer,
+                    consumerDirectory,
+                    "Roslyn star-array consumer failed on $target",
+                )
+            }
+        }
+    }
+
+    @Test
     fun testCharSequenceCarrierAcrossPortableLibraryBoundary() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,

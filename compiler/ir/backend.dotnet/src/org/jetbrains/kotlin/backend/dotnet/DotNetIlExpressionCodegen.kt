@@ -389,6 +389,7 @@ internal class DotNetIlExpressionCodegen(
             is DotNetIlValueType.GenericInstance,
             is DotNetIlValueType.PrimitiveArray,
             is DotNetIlValueType.GenericArray,
+            is DotNetIlValueType.ErasedGenericArray,
             -> methodContext.emit("ldnull", pushes = 1)
         }
     }
@@ -523,6 +524,29 @@ internal class DotNetIlExpressionCodegen(
                         DotNetRuntimeLibraryHelpers.safeCharSequenceCastCallInstruction
                     } else {
                         DotNetRuntimeLibraryHelpers.checkCharSequenceCastCallInstruction
+                    },
+                    pops = 1,
+                    pushes = 1,
+                )
+                if (expression.operator == IrTypeOperator.CAST && !expression.typeOperand.isMarkedNullable()) {
+                    emitReferenceNotNullOrThrowNpe()
+                }
+                return
+            }
+            if (castType is DotNetIlValueType.ErasedGenericArray) {
+                if (expectedType != castType) {
+                    dotNetUnsupported(
+                        "classified Array<*> cast has inconsistent physical result " +
+                                "${castType.nameInSignature} where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                emitExpression(expression.argument, DotNetIlValueType.Object)
+                if (methodContext.isTerminated) return
+                methodContext.emit(
+                    if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                        DotNetRuntimeLibraryHelpers.safeGenericArrayCastCallInstruction(coreLibraryReference)
+                    } else {
+                        DotNetRuntimeLibraryHelpers.checkGenericArrayCastCallInstruction(coreLibraryReference)
                     },
                     pops = 1,
                     pushes = 1,
@@ -704,6 +728,7 @@ internal class DotNetIlExpressionCodegen(
                 is DotNetIlValueType.UserClass,
                 is DotNetIlValueType.PrimitiveArray,
                 is DotNetIlValueType.GenericArray,
+                is DotNetIlValueType.ErasedGenericArray,
                 is DotNetIlValueType.TypeParameter,
                     -> Unit
                 is DotNetIlValueType.GenericInstance -> dotNetUnsupported(
@@ -776,6 +801,19 @@ internal class DotNetIlExpressionCodegen(
         if (isClassifiedCharSequence) {
             methodContext.emit(
                 DotNetRuntimeLibraryHelpers.isCharSequenceCallInstruction,
+                pops = 1,
+                pushes = 1,
+            )
+            if (!positive) {
+                methodContext.emit("ldc.i4.0", pushes = 1)
+                methodContext.emit("ceq", pops = 2, pushes = 1)
+            }
+            nullableJoinLabel?.let(methodContext::emitLabel)
+            return
+        }
+        if (runtimeTestType is DotNetIlValueType.ErasedGenericArray) {
+            methodContext.emit(
+                DotNetRuntimeLibraryHelpers.isGenericArrayCallInstruction,
                 pops = 1,
                 pushes = 1,
             )
@@ -865,6 +903,7 @@ internal class DotNetIlExpressionCodegen(
                 is DotNetIlValueType.GenericInstance,
                 is DotNetIlValueType.PrimitiveArray,
                 is DotNetIlValueType.GenericArray,
+                is DotNetIlValueType.ErasedGenericArray,
                 is DotNetIlValueType.MappedClass,
                 is DotNetIlValueType.TypeParameter,
                     -> {
@@ -2187,6 +2226,10 @@ internal class DotNetIlExpressionCodegen(
                 null -> methodContext.emit("ldnull", pushes = 1)
                 else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
             }
+            is DotNetIlValueType.ErasedGenericArray -> when (expression.value) {
+                null -> methodContext.emit("ldnull", pushes = 1)
+                else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
+            }
             // No constant has a type-parameter type (`T?`/null is rejected at the type mapper
             // and every value constant maps to its concrete type first); defensive.
             is DotNetIlValueType.TypeParameter ->
@@ -2350,6 +2393,7 @@ internal fun DotNetIlValueType.dotNetObjectNarrowingInstructionOrNull(coreLibrar
         is DotNetIlValueType.GenericInstance,
         is DotNetIlValueType.PrimitiveArray,
         is DotNetIlValueType.GenericArray,
+        is DotNetIlValueType.ErasedGenericArray,
             -> "castclass $nameInSignature"
         else -> null
     }
