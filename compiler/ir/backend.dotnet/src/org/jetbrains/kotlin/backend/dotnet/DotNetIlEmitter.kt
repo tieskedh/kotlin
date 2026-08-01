@@ -671,7 +671,7 @@ internal class DotNetIlEmitter(
             }
             classInfo.interfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
                 try {
-                    typeMapper.toDotNetIlValueType(interfaceType)
+                    typeMapper.toDotNetIlImplementedInterfaceType(interfaceType)
                 } catch (_: DotNetIlUnsupportedException) {
                     null
                 }
@@ -2165,6 +2165,7 @@ internal class DotNetIlEmitter(
             for (superInterface in superClasses.filter { it.isInterface }) {
                 if (superInterface !in moduleInterfaces &&
                     DotNetRuntimeTypes.genericInterfaceInfoFor(superInterface) == null &&
+                    !superInterface.isDotNetCharSequenceClass() &&
                     !externalDeclarations.hasClass(superInterface) &&
                     importedClrDeclarations.classInfoOrNull(superInterface) == null &&
                     superInterface.dotNetFixedFunctionArityOrNull() == null &&
@@ -2349,6 +2350,7 @@ internal class DotNetIlEmitter(
                 !superInterface.isInterface ||
                 superInterface !in moduleInterfaces &&
                 DotNetRuntimeTypes.genericInterfaceInfoFor(superInterface) == null &&
+                !superInterface.isDotNetCharSequenceClass() &&
                 !externalDeclarations.hasClass(superInterface)
             ) {
                 dotNetUnsupported(
@@ -2768,7 +2770,7 @@ internal class DotNetIlEmitter(
                         "'${superInterface.diagnosticName()}' could not be compiled: " +
                         (classSkipReasons[superInterface] ?: "the interface is not available in this module")
             )
-            typeMapper.toDotNetIlValueType(superInterfaceType)
+            typeMapper.toDotNetIlImplementedInterfaceType(superInterfaceType)
                 ?: dotNetUnsupported(
                     "its ${if (irClass.isInterface) "extended" else "implemented"} interface " +
                             "instantiation '${superInterfaceType.render()}' could not be compiled: " +

@@ -39,6 +39,7 @@ import org.jetbrains.kotlin.ir.types.isString
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.defaultType
+import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 
@@ -56,6 +57,14 @@ internal fun IrType.isSupportedDotNetPrimitiveArray(): Boolean = when (classFqNa
 /** Whether this is Kotlin's invariant generic array classifier (`Array<E>`). */
 internal fun IrType.isDotNetGenericArray(): Boolean =
     classFqName?.asString() == "kotlin.Array"
+
+/** Whether this is the logical Common `CharSequence` classifier (nullable or non-null). */
+internal fun IrType.isDotNetCharSequenceType(): Boolean =
+    classFqName == StandardNames.FqNames.charSequence.toSafe()
+
+/** Whether this declaration is the Common `CharSequence` interface. */
+internal fun IrClass.isDotNetCharSequenceClass(): Boolean =
+    fqNameWhenAvailable == StandardNames.FqNames.charSequence.toSafe()
 
 /** The exact invariant element type used by the indexed-loop lowering, or null for projections. */
 internal fun IrType.dotNetInvariantArrayElementTypeOrNull(): IrType? {
@@ -534,6 +543,21 @@ internal class DotNetIlTypeMapper private constructor(
             valueType?.let(::recordAssemblyReferences)
         }
 
+    /**
+     * Maps a declared interface supertype to the CLR interface a generated type implements.
+     * Most interfaces use their ordinary value mapping. `CharSequence` is the deliberate
+     * exception: values use the classified object carrier so `System.String` remains admissible,
+     * while an authored implementation must name the runtime capability in its InterfaceImpl row.
+     */
+    fun toDotNetIlImplementedInterfaceType(type: IrSimpleType): DotNetIlValueType? {
+        val irClass = (type.classifier as? IrClassSymbol)?.owner ?: return null
+        return if (irClass.isDotNetCharSequenceClass()) {
+            DotNetRuntimeTypes.charSequenceImplementationType.also(::recordAssemblyReferences)
+        } else {
+            toDotNetIlValueType(type)
+        }
+    }
+
     private fun mapDotNetIlValueType(type: IrType): DotNetIlValueType? {
         DotNetRuntimeTypes.mapCompilerRuntimeType(type)?.let { return it }
         if (
@@ -562,6 +586,11 @@ internal class DotNetIlTypeMapper private constructor(
             // narrows non-null T to string, but T? still has the uniform open-nullable ABI.
             type.isOpenNullableTypeParameter() -> DotNetIlValueType.Object
             type.isDotNetStringType() -> DotNetIlValueType.String
+            // System.String is sealed and cannot implement a Kotlin-owned interface. As on JS,
+            // the logical interface therefore uses an object carrier plus runtime classification;
+            // this arm is only the direct CharSequence classifier, never an arbitrary subtype or
+            // a type parameter bounded by it (those retain their own physical token).
+            type.isDotNetCharSequenceType() -> DotNetIlValueType.Object
             type.isAny() || type.isNullableAny() -> DotNetIlValueType.Object
             type.isSupportedDotNetPrimitiveArray() -> toPrimitiveArrayType(type)
             type.isDotNetGenericArray() -> toGenericArrayTypeOrNull(type)
@@ -824,6 +853,10 @@ internal class DotNetIlTypeMapper private constructor(
  * Maps the supported constraints of this parameter to their physical CLR types.
  * `Any?` is the unconstrained Kotlin default and contributes no metadata. The historical
  * function-only `String` bound keeps its pre-stage-1 slot erosion and is likewise omitted here.
+ * A logical `CharSequence` bound is also omitted: constraining the CLR parameter to the runtime
+ * capability interface would reject the legal Kotlin substitution `T = String`, because sealed
+ * `System.String` cannot implement that interface. KLIB retains the authoritative bound and
+ * member operations classify the boxed/widened value at runtime.
  * A bound on another type parameter is normally retained as its positional `!n`/`!!n` TypeSpec.
  * The exception is a method bound which depends on a type parameter of a split Kotlin generic
  * interface. Such a relationship remains part of the logical Kotlin signature, but is omitted
@@ -849,7 +882,10 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
     forMetadata: Boolean = true,
 ): List<DotNetIlValueType> {
     val mappedBounds = superTypes
-        .filterNot { it.isNullableAny() || it.isString() || it.isNullableString() }
+        .filterNot {
+            it.isNullableAny() || it.isString() || it.isNullableString() ||
+                    it.isDotNetCharSequenceType()
+        }
         .mapIndexedNotNull { index, bound ->
             val simpleBound = bound as? IrSimpleType
                 ?: dotNetUnsupported(
@@ -968,7 +1004,10 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
  *   string-concat lowering's receiver mapping sends every use of such a `T` to IL `string`,
  *   see [isDotNetStringType]) and stays supported on FUNCTIONS for compatibility — the
  *   function still declares its real `<T>` arity and call sites still carry the instantiation
- *   (no erasure of the token; only the SLOT type is the bound's `string`).
+ *   (no erasure of the token; only the SLOT type is the bound's `string`). A direct
+ *   `CharSequence` bound is supported on every generic owner but omitted from physical CLR
+ *   constraints: the real parameter token remains in every slot, while KLIB and the classified
+ *   operation boundary enforce the logical bound.
  */
 internal fun checkDotNetTypeParametersSupported(
     typeParameters: List<IrTypeParameter>,
@@ -1001,6 +1040,7 @@ internal fun checkDotNetTypeParametersSupported(
                 // a generic-interface capability. Reject it at the owning declaration instead.
                 superType.isAny() -> true
                 superType.isString() || superType.isNullableString() -> !allowStringBounds
+                superType.isDotNetCharSequenceType() -> false
                 else -> {
                     val simpleType = superType as? IrSimpleType
                     simpleType == null || simpleType.isMarkedNullable() ||

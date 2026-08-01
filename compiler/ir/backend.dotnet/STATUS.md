@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: Common/generated predicate quantifiers and index search
+- Last completed feature: classified Common `CharSequence` carrier
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,11 +20,11 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 931 tests:
+The JUnit audit covered 16 fresh XML files and 938 tests:
 
-- 834 FIR, IL-text, and box tests
+- 840 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 76 library-integration tests
+- 77 library-integration tests
 - zero failures, errors, or skips
 
 Focused evidence additionally covers component-complete packed-KLIB loading,
@@ -35,7 +35,12 @@ IR, explicit reified/suspend rejection, and every target/runtime profile. The
 collection product now also proves empty Collection fast paths, exact
 short-circuit and traversal counts, nullable/widened predicates, reverse List
 search, inlined separate consumers, and direct CIL execution of all six
-physical fallback methods on Framework CLR and CoreCLR.
+physical fallback methods on Framework CLR and CoreCLR. The classified
+`CharSequence` carrier additionally proves unchanged `System.String` and
+custom-implementation identity, shared operation/cast/type-test
+classification, erased physical CLR bounds with authoritative KLIB bounds,
+portable Kotlin-library consumption on both runtimes, and handwritten C#
+implementation through the runtime manifest.
 
 ## Current architecture
 
@@ -65,20 +70,20 @@ physical fallback methods on Framework CLR and CoreCLR.
 
 ## Active state
 
-No implementation slice is half-landed. The exact Common generator now admits
-`Iterable.any(predicate)`, `Iterable.all(predicate)`, and the Iterable/List
-`indexOfFirst`/`indexOfLast` overloads. Kotlin consumers inline their embedded
-IR; the self-describing stdlib retains executable physical fallback bodies.
-The paired count/index-overflow actuals deliberately remain ordinary
-JS-shaped `@PublishedApi` compiler ABI after comparison with JVM,
-Native/Wasm, and JS precedent. Reified and suspend inline remain explicit
-errors. The earlier closed foreign-vector grammar and its symmetric Kotlin
-implementation remain intact.
+No implementation slice is half-landed. Logical `CharSequence` values now use
+the accepted classified object carrier: raw strings keep `System.String`
+identity, Kotlin and explicit C# implementations occupy the runtime capability
+interface, and every polymorphic operation, cast, and type test uses the same
+two-arm classifier. KLIB retains the generic bound while the incompatible CLR
+marker constraint is omitted. Runtime surface level 10 records this ABI.
+Builder storage remains deliberately undecided. The previously completed
+Common collection predicates and ordinary inline-function boundary remain
+intact; reified and suspend inline are still explicit errors.
 
 ## Open architectural blockers
 
 - Exact Common `AbstractCollection`/`AbstractList` production still needs the
-  `CharSequence`/`Appendable`/`StringBuilder` and typed collection-to-array
+  remaining `Appendable`/`StringBuilder` and typed collection-to-array
   closures; do not fork their algorithms into .NET.
 - An inline body in library A can currently bind built-ins and A-owned
   declarations. Arbitrary calls from that body into a distinct Kotlin library
@@ -96,9 +101,11 @@ implementation remain intact.
 
 ## Next bounded work
 
-1. Audit and admit the smallest exact Common string-building closure needed by
-   collection rendering, beginning from `joinTo`/`joinToString` and their
-   `Appendable`/`StringBuilder` dependencies rather than a target copy.
+1. Audit and actualize the complete Common `Appendable`/`StringBuilder`
+   string-building closure needed by collection rendering, beginning from
+   `joinTo`/`joinToString`; choose builder storage independently rather than
+   inferring it from the classified `CharSequence` carrier or copying a target
+   algorithm.
 2. Design and implement typed collection-to-array actuals that preserve the
    requested CLR vector element type.
 3. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
