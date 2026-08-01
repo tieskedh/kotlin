@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: selected-dependency-graph ordinary inline closure
+- Last completed feature: ordinary exact-carrier runtime type tests
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,9 +20,9 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 939 tests:
+The JUnit audit covered 16 fresh XML files and 951 tests:
 
-- 840 FIR, IL-text, and box tests
+- 852 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 78 library-integration tests
 - zero failures, errors, or skips
@@ -108,7 +108,14 @@ wrappers, and exact CLR vectors without admitting closed generic instances.
 Boxed-scalar casts are now complete for all eight selected Common primitives:
 exact boxed identity, nullable unboxing for checked nullable casts, and
 `isinst` plus nullable unboxing for safe casts, with no numeric-conversion or
-value-class widening.
+value-class widening. Ordinary runtime type tests now have an explicit
+exact-carrier admission boundary and an adversarial matrix across both FIR
+frontends and runtime profiles. Exact scalars, classes/interfaces, strings,
+supported primitive-array wrappers, imported CLR interfaces, nullable forms,
+smart-cast use, and single evaluation are covered; classified exceptions,
+`CharSequence`, and split generic interfaces retain their dedicated paths.
+Closed `GenericInstance` checks remain forbidden, and a legal
+`ReifiedBox<*>` source test is pinned as an omitted declaration.
 
 ## Open architectural blockers
 
@@ -129,9 +136,11 @@ value-class widening.
 
 ## Next bounded work
 
-1. Continue the reversible reified prerequisites by adversarially closing the
-   concrete type-test/array-intrinsic matrix; do not admit Kotlin-owned
-   generic-class casts before their erased runtime view is selected.
+1. Continue the reversible reified prerequisites by closing the concrete
+   array-intrinsic matrix. Begin with the missing Common `ByteArray`,
+   `ShortArray`, and `FloatArray` wrappers now that their scalar carriers are
+   implemented; keep `Array<*>` parked until its erased identity and typed-use
+   carrier are selected.
 2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
    collections/`EnumEntries` bootstrap cluster; do not create builder-only or
    one-enum stubs.
