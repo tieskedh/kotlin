@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: ordinary foreign CLR vectors with symmetric Kotlin implementation
+- Last completed feature: ordinary non-reified inline functions across self-describing libraries
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,17 +20,18 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 925 tests:
+The JUnit audit covered 16 fresh XML files and 931 tests:
 
 - 834 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 70 library-integration tests
+- 76 library-integration tests
 - zero failures, errors, or skips
 
-The architecture slice additionally passed focused compilation and dependency
-analysis for both new modules. Its adversarial carrier test proves exact
-assembly, TypeDef, MethodDef, Property, getter, and setter identity and rejects
-wrong owners plus copied physical rows.
+Focused evidence additionally covers component-complete packed-KLIB loading,
+same- and cross-library inlining from prepared and main IR, all three KLIB
+inliner modes, mutable capture and non-local control flow, compiler ABI and
+friend access, stdlib-free diagnostics, reproducible direct/fallback stdlib
+IR, explicit reified/suspend rejection, and every target/runtime profile.
 
 ## Current architecture
 
@@ -48,6 +49,8 @@ wrong owners plus copied physical rows.
   overridability rule for retained flexible CLR array declarations.
 - `:compiler:ir:backend.dotnet` owns IR lowering, CIL mapping/emission, and
   backend product construction.
+- `:compiler:ir:serialization.dotnet` owns .NET KLIB IR serialization and the
+  logical IR mangler shared with backend identity mapping.
 - `cli-base` owns the .NET content-root carrier; .NET compilation no longer
   represents CLR roots as JVM classpath roots.
 - Common and generated stdlib sources remain semantically authoritative.
@@ -58,26 +61,25 @@ wrong owners plus copied physical rows.
 
 ## Active state
 
-No implementation slice is half-landed. The closed foreign interface grammar
-now admits ordinary one-dimensional zero-based vectors over the supported
-signed primitive, `string`, and `object` elements in parameters, returns, and
-non-indexed properties. Kotlin sees `Array<E>` with JVM-shaped foreign
-flexibility while physical binding remains the exact CLR `E[]`; Kotlin
-primitive-array wrappers are not conflated with native vectors. Kotlin classes
-can implement the same retained foreign TypeDef/MethodDef slots, and C# reverse
-dispatch is verified on every supported runtime profile. Primitive
-`ParamArray`, unsigned vectors, rectangular arrays, and unsupported element
-grammars remain withheld atomically.
+No implementation slice is half-landed. Ordinary non-reified inline calls use
+the shared KLIB first-/second-stage machinery within one module and across a
+self-describing producer DLL. Embedded KLIBs retain main and prepared IR;
+Common `SharedVariableBox` and synthetic-accessor ABI are compiled into the
+stdlib; logical Kotlin visibility remains in KLIB while required physical
+compiler ABI is linkable but hidden from ordinary C# exports. Reified and
+suspend inline remain explicit errors. The earlier closed foreign-vector
+grammar and its symmetric Kotlin implementation remain intact.
 
 ## Open architectural blockers
 
-- Exact Common `AbstractCollection`/`AbstractList` production needs generic
-  inline support, `CharSequence`/`Appendable`/`StringBuilder`, and typed
-  collection-to-array support; do not fork their algorithms into .NET.
-- Inline support needs component-complete embedded KLIB loading, target IR
-  serialization, the shared pre-serialization/inlining phases, and Common's
-  `SharedVariableBox`; the current metadata-only embedded loader deliberately
-  discards serialized IR.
+- Exact Common `AbstractCollection`/`AbstractList` production still needs
+  admission of its now-supported ordinary inline helper families,
+  `CharSequence`/`Appendable`/`StringBuilder`, and typed collection-to-array
+  support; do not fork their algorithms into .NET.
+- An inline body in library A can currently bind built-ins and A-owned
+  declarations. Arbitrary calls from that body into a distinct Kotlin library
+  B need the selected .NET assembly graph as an explicit non-linking resolver
+  input before that breadth is claimed.
 - KLIB-in-DLL and physical ABI codecs still need neutral serialization owners
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
@@ -90,14 +92,14 @@ grammars remain withheld atomically.
 
 ## Next bounded work
 
-1. Complete the embedded KLIB component seam and add target IR serialization
-   without moving logical identity out of KLIB.
-2. Integrate the shared two-stage IR inliner and Common shared-variable box,
-   preserving supported `-Xklib-ir-inliner` modes rather than implementing an
-   intra-module-only shortcut.
-3. Admit the first non-reified Common inline collection helpers only with
-   same-module, separate-DLL, non-local-return, capture, compiler-ABI, and
-   cross-profile adversarial evidence.
+1. Admit the selected Common/generated non-reified `any(predicate)`, `all`,
+   `indexOfFirst`, and `indexOfLast` families through their exact source and
+   helper closure, without target copies or non-inline substitutes.
+2. Reassess the paired Common count/index-overflow actuals now that ordinary
+   inline is available, and update source, physical ABI, and tests atomically
+   if mature KLIB precedent selects `@InlineOnly`.
+3. Continue the string-building and typed collection-to-array closures needed
+   before exact Common `AbstractCollection`/`AbstractList` admission.
 
 ## Navigation
 

@@ -106,8 +106,9 @@ internal class DotNetInventNamesForLocalFunctions(
  * Invokes common closure conversion for named classes, anonymous objects, explicit local
  * functions, and callable-object classes produced by [DotNetCallableReferenceLowering]. Immutable
  * captures become private fields/constructor parameters; mutable locals have already become
- * immutable references to shared cells. Crossinline captures remain rejected because this backend
- * has no inline lowering.
+ * immutable references to shared cells. Inline-lambda captures are ordinary FunctionN values by
+ * this point: FIR has enforced crossinline/noinline control-flow rules and the shared inliner has
+ * copied every selected call site before this physical closure conversion runs.
  */
 internal class DotNetLocalDeclarationsLowering private constructor(
     override val context: DotNetBackendContext,
@@ -129,9 +130,7 @@ internal class DotNetLocalDeclarationsLowering private constructor(
                 is IrVariable -> if (capturedDeclaration.isVar) {
                     "captures mutable local '${capturedDeclaration.name.asString()}' without shared-variable lowering"
                 } else null
-                is IrValueParameter -> if (capturedDeclaration.isCrossinline) {
-                    "captures crossinline parameter '${capturedDeclaration.name.asString()}'; inline captures are not supported"
-                } else null
+                is IrValueParameter -> null
                 else -> null
             }
             if (reason != null) {

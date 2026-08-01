@@ -11,7 +11,7 @@ import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.common.lower.UpgradeCallableReferences
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
-import org.jetbrains.kotlin.backend.dotnet.DotNetIrMangler
+import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.backend.dotnet.dotNetFixedFunctionArityOrNull
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality

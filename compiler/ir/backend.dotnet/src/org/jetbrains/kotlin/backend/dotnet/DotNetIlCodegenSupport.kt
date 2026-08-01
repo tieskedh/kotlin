@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
@@ -956,7 +957,7 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
  * classes and functions remain invariant. [dotNetConstraintTypes] performs the live
  * module-local mapping later, once the class registry exists. Everything else is rejected loudly
  * at the declaration (never erased):
- * - `reified` requires the inlining model this backend does not have;
+ * - `reified` requires target support for the reified operations that can survive ordinary inlining;
  * - declaration-site variance (`out`/`in`) is rejected outside interfaces because ECMA-335
  *   (II.10.1.7) allows variance only on interfaces and delegates; emitting a Kotlin class's
  *   variance as invariant would silently change assignability;
@@ -980,7 +981,7 @@ internal fun checkDotNetTypeParametersSupported(
         if (typeParameter.isReified) {
             dotNetUnsupported(
                 "$ownerDescription has a reified type parameter '$parameterName'; " +
-                        "reified type parameters are not supported (no inlining model)"
+                        "reified type parameters are not supported"
             )
         }
         if (!allowDeclarationSiteVariance && typeParameter.variance != Variance.INVARIANT) {
@@ -1028,18 +1029,13 @@ internal fun checkDotNetTypeParametersSupported(
 
 /**
  * The generic-method gate, run over top-level functions during gathering and over member
- * functions by their owning class/interface shape gate. A generic function must additionally be
- * non-inline (inline implies the missing inlining model, and `reified` — rejected by the shared
- * gate — is only expressible on inline functions). Non-generic functions pass untouched.
+ * functions by their owning class/interface shape gate. Ordinary non-reified inline functions
+ * use the same physical CLR generic method representation; reified parameters remain rejected by
+ * the shared type-parameter gate. Non-generic functions pass untouched.
  */
 internal fun IrSimpleFunction.checkDotNetGenericFunctionSupported() {
     if (typeParameters.isEmpty()) return
     val functionName = name.asString()
-    if (isInline) {
-        dotNetUnsupported(
-            "generic function '$functionName' is inline; inline generic functions are not supported (no inlining model)"
-        )
-    }
     checkDotNetTypeParametersSupported(typeParameters, "function '$functionName'", allowStringBounds = true)
 }
 

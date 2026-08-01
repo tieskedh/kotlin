@@ -63,7 +63,7 @@ import org.jetbrains.kotlin.fir.pipeline.runPlatformCheckers
 import org.jetbrains.kotlin.fir.session.AdditionalProvidersSupplier
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_UNIQUE_NAME
 import org.jetbrains.kotlin.library.KotlinLibrary
-import org.jetbrains.kotlin.library.loader.loadPackedMetadataKlib
+import org.jetbrains.kotlin.library.loader.loadPackedKlib
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.util.PhaseType
 import org.jetbrains.kotlin.util.PotentiallyIncorrectPhaseTimeMeasurement
@@ -269,7 +269,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLi
             return null
         }
         val library = try {
-            loadPackedMetadataKlib(canonicalAssembly.toPath(), resource.content)
+            loadPackedKlib(canonicalAssembly.toPath(), resource.content)
         } catch (exception: IllegalArgumentException) {
             report(
                 COMPILER_ARGUMENTS_ERROR,

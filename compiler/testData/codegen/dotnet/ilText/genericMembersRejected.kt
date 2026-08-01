@@ -1,5 +1,6 @@
-// Unsupported method-generic shapes reject their whole owning class or interface. They are never
-// erased or emitted with weakened constraints.
+// Ordinary non-reified inline methods are the supported control. The remaining unsupported
+// method-generic shapes reject their whole owning class or interface; they are never erased or
+// emitted with weakened constraints.
 
 class InlineMember {
     inline fun <T> id(value: T): T = value

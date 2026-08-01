@@ -22,6 +22,7 @@ object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, 
                         configuration = input.configuration,
                         artifact = artifact,
                         metadata = metadata,
+                        ir = checkNotNull(input.libraryIr),
                         declarations = declarations,
                     )
                 }
@@ -38,6 +39,7 @@ object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, 
             output.file,
             input.configuration,
             input.libraryMetadata,
+            input.libraryIr,
             output.declarations,
         )
     }
