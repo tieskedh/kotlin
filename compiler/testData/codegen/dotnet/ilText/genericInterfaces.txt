@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -155,9 +160,34 @@
   {
   }
 }
+.class interface public abstract auto ansi 'GenericChannel'
+       implements 'Channel'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'produce__KotlinErased__6b24d0418e361e570000bcc9d4b41906'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__7dfad2ad75565f17f022fa7dedca350f'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance void 'consume__KotlinErased__15e8bc3b69986b857e952df7d4b6e6ec'(object 'value') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'value__KotlinErased__7dfad2ad75565f17f022fa7dedca350f'()
+  {
+    .get instance object 'GenericChannel'::'get_value__KotlinErased__7dfad2ad75565f17f022fa7dedca350f'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GenericChannel`1'<'T'>
        extends [mscorlib]System.Object
-       implements 'Channel', class 'Channel`1'<!0>
+       implements 'GenericChannel', 'Channel', class 'Channel`1'<!0>
 {
   .field private !0 'current'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'current') cil managed
@@ -262,6 +292,38 @@
     ret
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-produce>'() cil managed
+  {
+    .override method instance object 'GenericChannel'::'produce__KotlinErased__6b24d0418e361e570000bcc9d4b41906'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericChannel`1'<!0>
+    callvirt instance !0 class 'GenericChannel`1'<!0>::'produce'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  {
+    .override method instance object 'GenericChannel'::'get_value__KotlinErased__7dfad2ad75565f17f022fa7dedca350f'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericChannel`1'<!0>
+    callvirt instance !0 class 'GenericChannel`1'<!0>::'get_value'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericClassCanonicalBridge-consume>'(object 'value') cil managed
+  {
+    .override method instance void 'GenericChannel'::'consume__KotlinErased__15e8bc3b69986b857e952df7d4b6e6ec'(object)
+    .maxstack 2
+    ldarg.0
+    castclass class 'GenericChannel`1'<!0>
+    ldarg.1
+    unbox.any !0
+    callvirt instance void class 'GenericChannel`1'<!0>::'consume'(!0)
+    ret
+    ret
+  }
   .property instance !0 'current'()
   {
     .get instance !0 'GenericChannel`1'::'get_current'()
@@ -272,9 +334,29 @@
     .get instance !0 'GenericChannel`1'::'get_value'()
   }
 }
+.class interface public abstract auto ansi 'GenericProducer'
+       implements 'Producer'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'produce__KotlinErased__99be442d3bada73f12d530f6dd66a1ef'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__355bb7a2cb6a1eb09f69fcfddb3bdda3'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'value__KotlinErased__355bb7a2cb6a1eb09f69fcfddb3bdda3'()
+  {
+    .get instance object 'GenericProducer'::'get_value__KotlinErased__355bb7a2cb6a1eb09f69fcfddb3bdda3'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GenericProducer`1'<'T'>
        extends [mscorlib]System.Object
-       implements 'Producer', class 'Producer`1'<!0>
+       implements 'GenericProducer', 'Producer', class 'Producer`1'<!0>
 {
   .field private !0 'current'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'current') cil managed
@@ -340,6 +422,26 @@
     .maxstack 1
     ldarg.0
     callvirt instance !0 class 'GenericProducer`1'<!0>::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-produce>'() cil managed
+  {
+    .override method instance object 'GenericProducer'::'produce__KotlinErased__99be442d3bada73f12d530f6dd66a1ef'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericProducer`1'<!0>
+    callvirt instance !0 class 'GenericProducer`1'<!0>::'produce'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  {
+    .override method instance object 'GenericProducer'::'get_value__KotlinErased__355bb7a2cb6a1eb09f69fcfddb3bdda3'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericProducer`1'<!0>
+    callvirt instance !0 class 'GenericProducer`1'<!0>::'get_value'()
+    box !0
     ret
   }
   .property instance !0 'current'()
@@ -469,9 +571,25 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'SwappedPair'
+       implements 'Swapped'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'first__KotlinErased__a4a84e1e74dd05d7aee700ec2e691103'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'second__KotlinErased__1bb27bdf4f1aa3b5e4e50d86185d7de0'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'SwappedPair`2'<'A', 'B'>
        extends [mscorlib]System.Object
-       implements 'Swapped', class 'Swapped`2'<!0, !1>
+       implements 'SwappedPair', 'Swapped', class 'Swapped`2'<!0, !1>
 {
   .field private !0 'a'
   .field private !1 'b'
@@ -548,6 +666,26 @@
     .maxstack 1
     ldarg.0
     callvirt instance !0 class 'SwappedPair`2'<!0, !1>::'second'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-first>'() cil managed
+  {
+    .override method instance object 'SwappedPair'::'first__KotlinErased__a4a84e1e74dd05d7aee700ec2e691103'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'SwappedPair`2'<!0, !1>
+    callvirt instance !1 class 'SwappedPair`2'<!0, !1>::'first'()
+    box !1
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-second>'() cil managed
+  {
+    .override method instance object 'SwappedPair'::'second__KotlinErased__1bb27bdf4f1aa3b5e4e50d86185d7de0'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'SwappedPair`2'<!0, !1>
+    callvirt instance !0 class 'SwappedPair`2'<!0, !1>::'second'()
+    box !0
     ret
   }
   .property instance !0 'a'()
@@ -1336,7 +1474,7 @@ IL_nullableTypeTestJoin_1:
       [24] class 'BoundedProducer' '<genericInterfaceReceiver>@24',
       [25] class 'BoundedProducer`1'<class 'Item'> '<genericInterfaceCapability>@25',
       [26] class 'Item' '<genericInterfaceResult>@26',
-      [27] class 'GenericProducer`1'<class 'Producer'> 'nestedValue',
+      [27] class 'GenericProducer' 'nestedValue',
       [28] class 'Producer' '<genericInterfaceReceiver>@28',
       [29] class 'Producer`1'<class 'Producer'> '<genericInterfaceCapability>@29',
       [30] class 'Producer' '<genericInterfaceResult>@30',
@@ -1370,7 +1508,7 @@ IL_nullableTypeTestJoin_1:
       [58] object '<genericInterfaceResult>@58',
       [59] class 'VariantCell' '<genericInterfaceReceiver>@59',
       [60] class 'VariantCell__KotlinExact`1'<object> '<genericInterfaceCapability>@60',
-      [61] class 'GenericProducer`1'<valuetype [mscorlib]System.Nullable`1<int32>> 'nullableInt',
+      [61] class 'GenericProducer' 'nullableInt',
       [62] class 'Producer' '<genericInterfaceReceiver>@62',
       [63] class 'Producer`1'<object> '<genericInterfaceCapability>@63',
       [64] object '<genericInterfaceResult>@64',

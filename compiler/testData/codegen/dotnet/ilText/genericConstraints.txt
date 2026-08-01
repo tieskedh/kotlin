@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -118,8 +123,24 @@
     .get instance int32 'test.constraints.Impl'::'get_right'()
   }
 }
+.class interface public abstract auto ansi 'test.constraints.GenericParent'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'inheritedVirtual__KotlinErased__c32d8b7bf9d2a425cb74fe3933c8ad9f'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'inheritedFinal__KotlinErased__7f0d51f3fb9607185cb153a556deb79c'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi beforefieldinit 'test.constraints.GenericParent`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'test.constraints.GenericParent'
 {
   .field private !0 'item'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
@@ -151,6 +172,26 @@
     .maxstack 1
     ldarg.0
     call instance !0 class 'test.constraints.GenericParent`1'<!0>::'get_item'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-inheritedVirtual>'() cil managed
+  {
+    .override method instance object 'test.constraints.GenericParent'::'inheritedVirtual__KotlinErased__c32d8b7bf9d2a425cb74fe3933c8ad9f'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'test.constraints.GenericParent`1'<!0>
+    callvirt instance !0 class 'test.constraints.GenericParent`1'<!0>::'inheritedVirtual'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-inheritedFinal>'() cil managed
+  {
+    .override method instance object 'test.constraints.GenericParent'::'inheritedFinal__KotlinErased__7f0d51f3fb9607185cb153a556deb79c'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'test.constraints.GenericParent`1'<!0>
+    call instance !0 class 'test.constraints.GenericParent`1'<!0>::'inheritedFinal'()
+    box !0
     ret
   }
   .property instance !0 'item'()
@@ -188,8 +229,28 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'test.constraints.BoundBox'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__08b8111a70b57263696af97e8d40d49f'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'total__KotlinErased__2cb8b9e99b2e9e1253577728c7c910e2'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'value__KotlinErased__08b8111a70b57263696af97e8d40d49f'()
+  {
+    .get instance object 'test.constraints.BoundBox'::'get_value__KotlinErased__08b8111a70b57263696af97e8d40d49f'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'test.constraints.BoundBox`1'<(class 'test.constraints.Left', class 'test.constraints.Right') 'T'>
        extends [mscorlib]System.Object
+       implements 'test.constraints.BoundBox'
 {
   .field private !0 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
@@ -231,6 +292,25 @@
     ldloc.2
     constrained. !0
     callvirt instance int32 'test.constraints.Left'::'left'(int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  {
+    .override method instance object 'test.constraints.BoundBox'::'get_value__KotlinErased__08b8111a70b57263696af97e8d40d49f'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'test.constraints.BoundBox`1'<!0>
+    call instance !0 class 'test.constraints.BoundBox`1'<!0>::'get_value'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-total>'() cil managed
+  {
+    .override method instance int32 'test.constraints.BoundBox'::'total__KotlinErased__2cb8b9e99b2e9e1253577728c7c910e2'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'test.constraints.BoundBox`1'<!0>
+    call instance int32 class 'test.constraints.BoundBox`1'<!0>::'total'()
     ret
   }
   .property instance !0 'value'()
@@ -369,7 +449,8 @@
     stloc.0
     ldloca 0
     constrained. !!0
-    callvirt instance !0 class 'test.constraints.GenericParent`1'<string>::'inheritedVirtual'()
+    callvirt instance object 'test.constraints.GenericParent'::'inheritedVirtual__KotlinErased__c32d8b7bf9d2a425cb74fe3933c8ad9f'()
+    castclass [mscorlib]System.String
     ret
   }
   .method public hidebysig static string 'inheritedGenericFinal'<(class 'test.constraints.StringParent') 'T'>(!!0 'value') cil managed
@@ -380,9 +461,10 @@
     )
     ldarg.0
     stloc.0
-    ldloc.0
-    box !!0
-    call instance !0 class 'test.constraints.GenericParent`1'<string>::'inheritedFinal'()
+    ldloca 0
+    constrained. !!0
+    callvirt instance object 'test.constraints.GenericParent'::'inheritedFinal__KotlinErased__7f0d51f3fb9607185cb153a556deb79c'()
+    castclass [mscorlib]System.String
     ret
   }
   .method public hidebysig static int32 'protectedCall'<(class 'test.constraints.Left') 'T'>(!!0 'value') cil managed
@@ -497,7 +579,7 @@ IL_tryEnd_0:
     pop
     ldloc.0
     newobj instance void class 'test.constraints.BoundBox`1'<class 'test.constraints.Impl'>::.ctor(!0)
-    call instance int32 class 'test.constraints.BoundBox`1'<class 'test.constraints.Impl'>::'total'()
+    callvirt instance int32 'test.constraints.BoundBox'::'total__KotlinErased__2cb8b9e99b2e9e1253577728c7c910e2'()
     pop
     ret
   }

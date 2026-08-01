@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -6,9 +11,25 @@
 .assembly 'collections' {}
 .module 'main-collections.il'
 
+.class interface private abstract auto ansi 'OneIterator'
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance bool 'hasNext__KotlinErased__41036b5786b22e6cd79dba5dd1d1c367'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance object 'next__KotlinErased__fda946328a129d0bd8c20c81049e784e'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class private auto ansi sealed beforefieldinit 'OneIterator`1'<'T'>
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
+       implements 'OneIterator', [Kotlin.Runtime]'Kotlin.Collections.Iterator', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
 {
   .field private !0 'value'
   .field private bool 'available'
@@ -105,6 +126,25 @@ IL_whenNext_1:
     callvirt instance !0 class 'OneIterator`1'<!0>::'next'()
     ret
   }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-hasNext>'() cil managed
+  {
+    .override method instance bool 'OneIterator'::'hasNext__KotlinErased__41036b5786b22e6cd79dba5dd1d1c367'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'OneIterator`1'<!0>
+    callvirt instance bool class 'OneIterator`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-next>'() cil managed
+  {
+    .override method instance object 'OneIterator'::'next__KotlinErased__fda946328a129d0bd8c20c81049e784e'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'OneIterator`1'<!0>
+    callvirt instance !0 class 'OneIterator`1'<!0>::'next'()
+    box !0
+    ret
+  }
   .property instance !0 'value'()
   {
     .get instance !0 'OneIterator`1'::'get_value'()
@@ -115,9 +155,44 @@ IL_whenNext_1:
     .set instance void 'OneIterator`1'::'set_available'(bool)
   }
 }
+.class interface public abstract auto ansi 'OneCollection'
+       implements [Kotlin.Runtime]'Kotlin.Collections.Collection'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_size__KotlinErased__becb3eacbae50099ca5ee377afb892e2'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'isEmpty__KotlinErased__fe26fb26c13ea0c60648f7c19437c0c5'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'contains__KotlinErased__45d420539c4e1cabd115e52c02fbe784'(object 'element') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterator__KotlinErased__7378fa62b8dc28fd1c85230e9e0f9598'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'containsAll__KotlinErased__b9031bd1eef12008adf2aa02a7caeb70'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance int32 'size__KotlinErased__becb3eacbae50099ca5ee377afb892e2'()
+  {
+    .get instance int32 'OneCollection'::'get_size__KotlinErased__becb3eacbae50099ca5ee377afb892e2'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'OneCollection`1'<'T'>
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.Collection', class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<!0>
+       implements 'OneCollection', [Kotlin.Runtime]'Kotlin.Collections.Collection', class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<!0>
 {
   .field private !0 'value'
   .field private bool 'present'
@@ -403,6 +478,54 @@ IL_whenNext_1:
     .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!0>::'ContainsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
     .maxstack 2
     ldarg.0
+    ldarg.1
+    callvirt instance bool class 'OneCollection`1'<!0>::'containsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-<get-size>>'() cil managed
+  {
+    .override method instance int32 'OneCollection'::'get_size__KotlinErased__becb3eacbae50099ca5ee377afb892e2'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'OneCollection`1'<!0>
+    callvirt instance int32 class 'OneCollection`1'<!0>::'get_size'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-isEmpty>'() cil managed
+  {
+    .override method instance bool 'OneCollection'::'isEmpty__KotlinErased__fe26fb26c13ea0c60648f7c19437c0c5'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'OneCollection`1'<!0>
+    callvirt instance bool class 'OneCollection`1'<!0>::'isEmpty'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-contains>'(object 'element') cil managed
+  {
+    .override method instance bool 'OneCollection'::'contains__KotlinErased__45d420539c4e1cabd115e52c02fbe784'(object)
+    .maxstack 2
+    ldarg.0
+    castclass class 'OneCollection`1'<!0>
+    ldarg.1
+    unbox.any !0
+    callvirt instance bool class 'OneCollection`1'<!0>::'contains'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<GenericClassCanonicalBridge-iterator>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'OneCollection'::'iterator__KotlinErased__7378fa62b8dc28fd1c85230e9e0f9598'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'OneCollection`1'<!0>
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class 'OneCollection`1'<!0>::'iterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-containsAll>'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
+  {
+    .override method instance bool 'OneCollection'::'containsAll__KotlinErased__b9031bd1eef12008adf2aa02a7caeb70'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    .maxstack 2
+    ldarg.0
+    castclass class 'OneCollection`1'<!0>
     ldarg.1
     callvirt instance bool class 'OneCollection`1'<!0>::'containsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
     ret

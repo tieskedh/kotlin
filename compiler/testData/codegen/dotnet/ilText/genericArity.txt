@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -32,8 +37,23 @@
     .get instance int32 'Holder'::'get_n'()
   }
 }
+.class interface public abstract auto ansi 'HolderG'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_v__KotlinErased__b8544947732f7a92004a733e8798fc91'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'v__KotlinErased__b8544947732f7a92004a733e8798fc91'()
+  {
+    .get instance object 'HolderG'::'get_v__KotlinErased__b8544947732f7a92004a733e8798fc91'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'HolderG`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'HolderG'
 {
   .field private !0 'v'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'v') cil managed
@@ -51,6 +71,16 @@
     .maxstack 1
     ldarg.0
     ldfld !0 class 'HolderG`1'<!0>::'v'
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-v>>'() cil managed
+  {
+    .override method instance object 'HolderG'::'get_v__KotlinErased__b8544947732f7a92004a733e8798fc91'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'HolderG`1'<!0>
+    call instance !0 class 'HolderG`1'<!0>::'get_v'()
+    box !0
     ret
   }
   .property instance !0 'v'()
@@ -101,7 +131,8 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 2
     newobj instance void class 'HolderG`1'<int32>::.ctor(!0)
-    call instance !0 class 'HolderG`1'<int32>::'get_v'()
+    callvirt instance object 'HolderG'::'get_v__KotlinErased__b8544947732f7a92004a733e8798fc91'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

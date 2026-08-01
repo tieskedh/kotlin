@@ -11,8 +11,28 @@
 .assembly 'companionStaticHolders' {}
 .module 'main-companionStaticHolders.il'
 
+.class interface public abstract auto ansi 'GenericHolderOwner'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_value__KotlinErased__d489093cac4e75e6539d68aea2bb8f82'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'reveal__KotlinErased__37a08abdccb652cbb9fa5039fb6ee063'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance int32 'value__KotlinErased__d489093cac4e75e6539d68aea2bb8f82'()
+  {
+    .get instance int32 'GenericHolderOwner'::'get_value__KotlinErased__d489093cac4e75e6539d68aea2bb8f82'()
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GenericHolderOwner`1'<'T'>
        extends [mscorlib]System.Object
+       implements 'GenericHolderOwner'
 {
   .class nested public abstract sealed auto ansi beforefieldinit '<CompanionStatics>'
          extends [mscorlib]System.Object
@@ -32,14 +52,14 @@
       ldc.i4 11
       ret
     }
-    .method public hidebysig static class 'GenericHolderOwner`1'<string> 'create'(int32 'value') cil managed
+    .method public hidebysig static class 'GenericHolderOwner' 'create'(int32 'value') cil managed
     {
       .maxstack 1
       ldarg.0
       newobj instance void class 'GenericHolderOwner`1'<string>::.ctor(int32)
       ret
     }
-    .method public hidebysig static class 'GenericHolderOwner`1'<string> 'create$default'(int32 'value', int32 '$mask0') cil managed
+    .method public hidebysig static class 'GenericHolderOwner' 'create$default'(int32 'value', int32 '$mask0') cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
@@ -58,7 +78,8 @@
   IL_whenNext_1:
   IL_whenEnd_0:
       ldarg.0
-      call class 'GenericHolderOwner`1'<string> 'GenericHolderOwner`1'/'<CompanionStatics>'::'create'(int32)
+      call class 'GenericHolderOwner' 'GenericHolderOwner`1'/'<CompanionStatics>'::'create'(int32)
+      castclass class 'GenericHolderOwner'
       ret
     }
     .method public hidebysig static !!0 'echo'<'R'>(!!0 'value') cil managed
@@ -110,6 +131,24 @@
     call int32 'GenericHolderOwner`1'/'<CompanionStatics>'::'access$secret'()
     ret
   }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  {
+    .override method instance int32 'GenericHolderOwner'::'get_value__KotlinErased__d489093cac4e75e6539d68aea2bb8f82'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericHolderOwner`1'<!0>
+    call instance int32 class 'GenericHolderOwner`1'<!0>::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-reveal>'() cil managed
+  {
+    .override method instance int32 'GenericHolderOwner'::'reveal__KotlinErased__37a08abdccb652cbb9fa5039fb6ee063'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericHolderOwner`1'<!0>
+    call instance int32 class 'GenericHolderOwner`1'<!0>::'reveal'()
+    ret
+  }
   .property instance int32 'value'()
   {
     .get instance int32 'GenericHolderOwner`1'::'get_value'()
@@ -153,21 +192,22 @@
     .entrypoint
     .maxstack 3
     .locals init (
-      [0] class 'GenericHolderOwner`1'<string> 'owner'
+      [0] class 'GenericHolderOwner' 'owner'
     )
     ldc.i4 0
     ldc.i4 1
-    call class 'GenericHolderOwner`1'<string> 'GenericHolderOwner`1'/'<CompanionStatics>'::'create$default'(int32, int32)
+    call class 'GenericHolderOwner' 'GenericHolderOwner`1'/'<CompanionStatics>'::'create$default'(int32, int32)
+    castclass class 'GenericHolderOwner'
     stloc.0
     ldloc.0
-    call instance int32 class 'GenericHolderOwner`1'<string>::'get_value'()
+    callvirt instance int32 'GenericHolderOwner'::'get_value__KotlinErased__d489093cac4e75e6539d68aea2bb8f82'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    call instance int32 class 'GenericHolderOwner`1'<string>::'reveal'()
+    callvirt instance int32 'GenericHolderOwner'::'reveal__KotlinErased__37a08abdccb652cbb9fa5039fb6ee063'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

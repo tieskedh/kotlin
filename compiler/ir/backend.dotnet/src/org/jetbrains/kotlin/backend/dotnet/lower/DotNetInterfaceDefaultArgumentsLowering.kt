@@ -191,7 +191,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         fun isKotlinOwnedGenericInterface(irClass: IrClass): Boolean =
             irClass in localGenericInterfaces ||
                     DotNetRuntimeTypes.genericInterfaceInfoFor(irClass) != null ||
-                    externalDeclarations.declaredClassInfoOrNull(irClass) != null
+                    externalDeclarations.hasGenericInterface(irClass)
         val externalBindings = linkedMapOf<IrSimpleFunction, ExternalDefaultBinding>()
         fun externalBindingFor(member: IrSimpleFunction): ExternalDefaultBinding? {
             externalBindings[member]?.let { return it }
@@ -937,7 +937,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         fun isKotlinOwnedGenericInterface(candidate: IrClass): Boolean =
             candidate == owner || candidate == inheritedOwner ||
                     DotNetRuntimeTypes.genericInterfaceInfoFor(candidate) != null ||
-                    externalDeclarations.declaredClassInfoOrNull(candidate) != null
+                    externalDeclarations.hasGenericInterface(candidate)
 
         fun IrType.referencesInheritedOwnerParameter(): Boolean {
             val simpleType = this as? IrSimpleType ?: return false

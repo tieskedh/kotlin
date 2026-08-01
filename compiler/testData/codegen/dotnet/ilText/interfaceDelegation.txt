@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -480,9 +485,25 @@
     .get instance string 'StringSource'::'get_item'()
   }
 }
+.class interface public abstract auto ansi 'GenericSource'
+       implements 'Source'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'current__KotlinErased__809c2472100cf09dee47957bafc92a9d'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'choose__KotlinErased__06312e04bd5164fabc5ae914c30ec438'<'M'>(!!0 'item') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GenericSource`1'<'T'>
        extends [mscorlib]System.Object
-       implements 'Source', class 'Source`1'<!0>
+       implements 'GenericSource', 'Source', class 'Source`1'<!0>
 {
   .field private class 'Source' '$$delegate_0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Source' 'delegate') cil managed
@@ -585,6 +606,26 @@ IL_genericInterfaceJoin_1:
     .override method instance !!0 class 'Source`1'<!0>::'choose'<[1]>(!!0)
     .maxstack 2
     ldarg.0
+    ldarg.1
+    callvirt instance !!0 class 'GenericSource`1'<!0>::'choose'<!!0>(!!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-current>'() cil managed
+  {
+    .override method instance object 'GenericSource'::'current__KotlinErased__809c2472100cf09dee47957bafc92a9d'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'GenericSource`1'<!0>
+    callvirt instance !0 class 'GenericSource`1'<!0>::'current'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericClassCanonicalBridge-choose>'<'M'>(!!0 'item') cil managed
+  {
+    .override method instance !!0 'GenericSource'::'choose__KotlinErased__06312e04bd5164fabc5ae914c30ec438'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    castclass class 'GenericSource`1'<!0>
     ldarg.1
     callvirt instance !!0 class 'GenericSource`1'<!0>::'choose'<!!0>(!!0)
     ret
