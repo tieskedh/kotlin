@@ -500,3 +500,71 @@ IR expression type: FIR keeps the requested type in `typeOperand` (`Int`) and ma
 result nullable (`Int?`). Treating the operand as the physical result would reject every ordinary
 safe scalar cast. Reified inline remains disabled; the next reversible work is the existing
 concrete type-test and array-intrinsic matrix.
+
+### Selected third prerequisite: ordinary runtime type tests
+
+Common source and FIR remain authoritative for the legality of `is`/`!is`, the tested Kotlin
+classifier, smart-cast facts, and nullable-target semantics. A target realizes those facts without
+making its physical generic representation part of Kotlin runtime identity:
+
+- JVM lowers a nullable target to one cached null-or-non-null check and emits `instanceof` against
+  the non-null erased JVM classifier;
+- Native explicitly erases type parameters before casts and leaves runtime tests on Kotlin type
+  information rather than closed generic arguments;
+- JS caches an effectful operand once and selects Kotlin predicates for primitives, arrays,
+  functions, and interfaces instead of treating JavaScript's native `instanceof` as universal;
+  and
+- Wasm likewise caches once, handles nullable targets separately, and selects Kotlin predicates or
+  subclass/interface checks according to the logical classifier.
+
+The .NET realization follows the same rule. It widens or boxes the operand to `object` once,
+accepts null exactly when the target is nullable, and checks a non-null value through either the
+existing Kotlin classifier (`CharSequence` and mapped exceptions) or one physically exact carrier.
+The exact ordinary set is `Any`, `String`, non-generic Kotlin/foreign classes and interfaces, the
+eight exact boxed Common scalars, supported primitive-array wrappers, and a CLR vector whose full
+element token is already known. Split generic interfaces retain their existing canonical erased
+identity.
+
+Two convenient CLR checks are deliberately outside this slice:
+
+- a Kotlin-owned `C<T>` is stored as a closed CLR `C<T>` today, but Kotlin `is C<*>` tests only the
+  declaration identity; admitting `GenericInstance` would silently make logical arguments part of
+  Kotlin RTTI; and
+- `Array<*>` has no single truthful CLR vector token. `object[]` excludes value vectors such as
+  `Array<Int>`, while `System.Array` is broader than Kotlin's one-dimensional generic array and
+  does not by itself provide the typed element operations promised after a successful smart cast.
+
+Both remain rejected until their erased identity and successful typed-use carriers are designed.
+Concrete `Array<E>` checks can become observable after reified substitution, but ordinary source
+cannot name them in a legal runtime check; their nested/nullability/projection matrix therefore
+remains in the later array/reified prerequisite.
+
+#### Design attack
+
+- **Let every mapped type reach CLR `isinst`.** Rejected. It accidentally turns the backend's
+  closed generic storage choice into stricter Kotlin runtime semantics.
+- **Map `C<*>` to `C<object>`.** Rejected. CLR generic classes are invariant, and value/reference
+  instantiations remain physically different even though Kotlin's runtime check erases arguments.
+- **Map `Array<*>` to `object[]`.** Rejected. It makes `Array<Int>` fail the same Common check that
+  succeeds on mature targets.
+- **Map `Array<*>` directly to `System.Array`.** Parked, not selected. Admission alone is
+  insufficient: the smart-cast result must still support Kotlin `size`, indexed reads, iteration,
+  and subsequent casts without copying or losing identity.
+- **Rely on existing incidental tests.** Rejected. Scalar families, nullable positive/negative
+  forms, distinct primitive-array wrappers, inheritance/interface checks, null, and effectful
+  operands need one adversarial matrix so later reified work cannot regress them independently.
+
+The bounded implementation must make accepted carrier kinds explicit in the emitter, retain the
+classified exception/`CharSequence` and split-interface paths, and keep generic-class rejection in
+the negative IL golden. Its executable matrix covers all eight scalar boxes, ordinary class and
+interface inheritance, `Any`/`String`, every currently selected primitive-array wrapper, nullable
+and negative tests, distinct-carrier failures, smart-cast use, and single evaluation on both CLR
+profiles and both FIR frontends. It does not enable either reified-inline gate.
+
+This prerequisite is implemented. `runtimeTypeTests.kt` owns the ordinary exact-carrier matrix;
+`genericInterfacesRejected.kt` contains a legal `ReifiedBox<*>` check whose declaration remains
+absent; and the foreign-call integration fixture executes imported-interface tests on net48 and
+net10. The emitter now lists admitted physical carrier kinds explicitly and rejects any closed
+`GenericInstance` that reaches it. The next reversible prerequisite is the concrete array-
+intrinsic matrix, starting with the remaining signed `ByteArray`, `ShortArray`, and `FloatArray`
+wrappers now that their scalar carriers exist; this does not select an `Array<*>` carrier.
