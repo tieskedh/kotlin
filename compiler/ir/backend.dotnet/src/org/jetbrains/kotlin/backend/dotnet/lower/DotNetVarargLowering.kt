@@ -343,10 +343,13 @@ internal class DotNetVarargLowering(
 private val OPTIMIZED_ARRAY_OF_NAMES = setOf(
     "arrayOf",
     "booleanArrayOf",
+    "byteArrayOf",
     "charArrayOf",
     "doubleArrayOf",
+    "floatArrayOf",
     "intArrayOf",
     "longArrayOf",
+    "shortArrayOf",
 )
 
 private fun IrFunction.isOptimizedDotNetArrayOf(): Boolean {

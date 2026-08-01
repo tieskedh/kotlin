@@ -46,8 +46,11 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 /** Whether this is one of the primitive-array classifiers whose scalar element type is supported. */
 internal fun IrType.isSupportedDotNetPrimitiveArray(): Boolean = when (classFqName?.asString()) {
     "kotlin.BooleanArray",
+    "kotlin.ByteArray",
+    "kotlin.ShortArray",
     "kotlin.IntArray",
     "kotlin.LongArray",
+    "kotlin.FloatArray",
     "kotlin.DoubleArray",
     "kotlin.CharArray",
         -> true

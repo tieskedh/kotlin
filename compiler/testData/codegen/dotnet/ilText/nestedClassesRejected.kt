@@ -1,5 +1,5 @@
 // Unsupported nested shapes remove only their own metadata subtree. BrokenFamily reaches the
-// member pre-pass before Bad's FloatArray signature fails; Good, the root, and UsesBroken survive.
+// member pre-pass before Bad's `Array<Int?>` signature fails; Good, the root, and UsesBroken survive.
 // DeepBrokenFamily instead fails while recursively rendering a three-level nested member body,
 // exercising deepest-failure attribution while its valid metadata ancestors survive.
 // BrokenNestedBaseFamily pins the inheritance cascade: its nested base fails the member pre-pass,
@@ -19,7 +19,7 @@ class GenericInnerHost<T> {
 
 class BrokenInnerHost {
     inner class Bad {
-        fun unsupported(value: FloatArray): FloatArray = value
+        fun unsupported(value: Array<Int?>): Array<Int?> = value
     }
 
     class Good {
@@ -47,7 +47,7 @@ class BrokenFamily {
     }
 
     class Bad {
-        fun unsupported(value: FloatArray): FloatArray = value
+        fun unsupported(value: Array<Int?>): Array<Int?> = value
     }
 }
 
@@ -57,7 +57,7 @@ class UsesBroken {
 
 class BrokenNestedBaseFamily {
     open class Base {
-        fun unsupported(value: FloatArray): FloatArray = value
+        fun unsupported(value: Array<Int?>): Array<Int?> = value
     }
 }
 
