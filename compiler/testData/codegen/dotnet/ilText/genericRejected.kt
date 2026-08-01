@@ -1,11 +1,9 @@
 // Shapes that stay rejected loudly after generic-interfaces stage 4 (each declaration is skipped
-// with a specific warning and absent from the emitted IL; `Gen`, `WithCompanion`, `Marked`, and
-// `main` are the supported remainder):
+// with a specific warning and absent from the emitted IL; `Gen`, `Constrained`, `WithCompanion`,
+// `Marked`, and `main` are the supported remainder):
 // - declaration-site variance (`out`/`in`) on classes: ECMA-335 (II.10.1.7) allows variance only
 //   on interfaces and delegates — emitting the parameter as invariant would silently change
 //   assignability;
-// - constraints outside the supported direct module-local class/interface model
-//   (`T : CharSequence` below);
 // - `===` on `T` operands: an unconstrained `T` may instantiate to a value type with no stable
 //   reference identity, and boxing would manufacture two unrelated references;
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;

@@ -743,6 +743,30 @@ $throwableExceptionTypesIl
             }
           }
 
+          // Capability arm of the classified Kotlin CharSequence carrier. System.String is the
+          // other arm and deliberately cannot implement this interface; logical CharSequence
+          // signatures therefore remain object-shaped and dispatch through runtime helpers.
+          .class interface public abstract auto ansi CharSequence
+          {
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_length() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance char get(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object subSequence(
+                int32 startIndex, int32 endIndex) cil managed
+            {
+            }
+
+            .property instance int32 length()
+            {
+              .get instance int32 Kotlin.CharSequence::get_length()
+            }
+          }
+
           .class public sealed auto ansi Unit extends ${coreLibraryReference}System.Object
           {
             .field public static initonly class Kotlin.Unit INSTANCE

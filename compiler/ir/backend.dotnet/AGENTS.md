@@ -238,6 +238,12 @@ See the
   `equals`, `hashCode`, and `toString` semantics remain explicit compiler or
   runtime behavior. See
   [the `Any` foundation ADR](docs/decisions/system-object-any.md).
+- `CharSequence` uses a classified `System.Object` carrier because sealed
+  `System.String` cannot implement a Kotlin-owned interface. Strings retain
+  identity; Kotlin implementations occupy the runtime capability interface;
+  calls, casts, and type tests share one classifier. Do not wrap strings,
+  constrain generic parameters to the marker, or admit arbitrary objects. See
+  [the `CharSequence` carrier ADR](docs/decisions/char-sequence-carrier.md).
 - Kotlin primitive arrays use Kotlin-owned wrapper identity around CLR
   storage. Do not expose raw CLR vectors as Kotlin array identity. See
   [the primitive-array ADR](docs/decisions/primitive-arrays.md).

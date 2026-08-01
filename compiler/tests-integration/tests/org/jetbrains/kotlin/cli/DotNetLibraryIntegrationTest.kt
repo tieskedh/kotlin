@@ -10938,7 +10938,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
             runtimeManifest.logicalIdentityScheme,
         )
-        assertEquals(5, runtimeManifest.interfaces.size)
+        assertEquals(6, runtimeManifest.interfaces.size)
         assertTrue(runtimeManifest.interfaces.all { contract ->
             contract.logicalKey.startsWith("C:") &&
                     !contract.logicalKey.startsWith("runtime:") &&
@@ -10956,8 +10956,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val runtimeIterableContract = runtimeManifest.interfaces.single { contract ->
             contract.canonicalOwnerPath.last() == "Kotlin.Collections.Iterable"
         }
+        val runtimeCharSequenceContract = runtimeManifest.interfaces.single { contract ->
+            contract.canonicalOwnerPath.last() == "Kotlin.CharSequence"
+        }
         assertTrue(runtimeCollectionContract.sourceAuthoringSupported)
         assertTrue(runtimeListContract.sourceAuthoringSupported)
+        assertTrue(runtimeCharSequenceContract.sourceAuthoringSupported)
+        assertEquals(null, runtimeCharSequenceContract.declaredOwnerPath)
+        assertEquals(null, runtimeCharSequenceContract.exactOwnerPath)
+        assertTrue(runtimeCharSequenceContract.typeParameters.isEmpty())
+        assertEquals(
+            setOf("length", "get", "subSequence"),
+            runtimeCharSequenceContract.members.map { member -> member.sourceName }.toSet(),
+        )
+        runtimeCharSequenceContract.members.forEach { member ->
+            assertEquals(DotNetCSharpInterfaceView.CANONICAL, member.authoringView)
+            assertEquals(1, member.slots.size)
+            assertEquals(DotNetCSharpSlotRole.CANONICAL, member.slots.single().role)
+            assertEquals(listOf("Kotlin.CharSequence"), member.slots.single().ownerPath)
+        }
+        runtimeCharSequenceContract.members.single { member -> member.sourceName == "length" }
+            .slots.single().also { slot ->
+                assertEquals("get_length", slot.methodName)
+                assertEquals("length", slot.propertyName)
+                assertEquals("int32", slot.returnType)
+                assertTrue(slot.parameterTypes.isEmpty())
+            }
+        runtimeCharSequenceContract.members.single { member -> member.sourceName == "get" }
+            .slots.single().also { slot ->
+                assertEquals("get", slot.methodName)
+                assertEquals(null, slot.propertyName)
+                assertEquals("char", slot.returnType)
+                assertEquals(listOf("int32"), slot.parameterTypes)
+            }
+        runtimeCharSequenceContract.members.single { member -> member.sourceName == "subSequence" }
+            .slots.single().also { slot ->
+                assertEquals("subSequence", slot.methodName)
+                assertEquals(null, slot.propertyName)
+                assertEquals("object", slot.returnType)
+                assertEquals(listOf("int32", "int32"), slot.parameterTypes)
+            }
         assertEquals(
             DotNetCSharpWrongShapeFallback.FALSE,
             runtimeCollectionContract.members.single { member ->
@@ -27441,6 +27479,234 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 verifierProcess.waitFor(),
                 "Primitive-array C# verifier failed for $target:\n$verifierOutput",
             )
+        }
+    }
+
+    @Test
+    fun testCharSequenceCarrierAcrossPortableLibraryBoundary() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "char-sequence-library").apply { mkdirs() }
+        val librarySource = libraryDirectory.resolve("charSequenceLibrary.kt").apply {
+            writeText(
+                """
+                package charsequenceabi
+
+                public class LibrarySequence(private val text: String) : CharSequence {
+                    override val length: Int get() = text.length
+                    override fun get(index: Int): Char = text[index]
+                    override fun subSequence(startIndex: Int, endIndex: Int): CharSequence =
+                        text.subSequence(startIndex, endIndex)
+                }
+
+                public fun lengthOf(value: CharSequence): Int = value.length
+
+                public fun firstOf(value: CharSequence): Char = value[0]
+
+                public fun slice(value: CharSequence, startIndex: Int, endIndex: Int): CharSequence =
+                    value.subSequence(startIndex, endIndex)
+
+                public fun isSequence(value: Any?): Boolean = value is CharSequence
+
+                public fun safeSequence(value: Any): CharSequence? = value as? CharSequence
+
+                public fun checkedSequence(value: Any): CharSequence = value as CharSequence
+
+                public fun <T : CharSequence> genericLength(value: T): Int = value.length
+
+                public fun <T : CharSequence> genericIdentity(value: T): T = value
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CharSequence.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("CharSequence.Library.dll")
+        val libraryIl = libraryDirectory.resolve("CharSequence.Library.il").readText()
+        assertTrue("implements [Kotlin.Runtime]'Kotlin.CharSequence'" in libraryIl) { libraryIl }
+        assertTrue("static int32 'lengthOf'(object 'value')" in libraryIl) { libraryIl }
+        assertTrue("static object 'slice'(object 'value', int32 'startIndex', int32 'endIndex')" in libraryIl) {
+            libraryIl
+        }
+        assertTrue("static int32 'genericLength'<'T'>(!!0 'value')" in libraryIl) { libraryIl }
+        assertTrue("static !!0 'genericIdentity'<'T'>(!!0 'value')" in libraryIl) { libraryIl }
+        assertTrue("box !!0" in libraryIl) { libraryIl }
+        assertTrue("::'CharSequenceLength'(object)" in libraryIl) { libraryIl }
+        assertTrue("<(class [Kotlin.Runtime]'Kotlin.CharSequence')" !in libraryIl) { libraryIl }
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package charsequenceconsumer
+
+                    import charsequenceabi.*
+
+                    fun main() {
+                        val string = "abcd"
+                        val implementation = LibrarySequence("wxyz")
+                        if (lengthOf(string) != 4 || firstOf(string) != 'a') throw Error("string carrier")
+                        if (lengthOf(implementation) != 4 || firstOf(implementation) != 'w') {
+                            throw Error("implementation carrier")
+                        }
+                        if (slice(string, 1, 3) != "bc") throw Error("string slice")
+                        if (slice(implementation, 1, 3) != "xy") throw Error("implementation slice")
+                        if (!isSequence(string) || !isSequence(implementation) || isSequence(42)) {
+                            throw Error("classifier")
+                        }
+                        if (safeSequence(string) !== string ||
+                            safeSequence(implementation) !== implementation ||
+                            safeSequence(42) != null
+                        ) {
+                            throw Error("safe cast")
+                        }
+                        if (checkedSequence(string) !== string ||
+                            checkedSequence(implementation) !== implementation
+                        ) {
+                            throw Error("checked cast identity")
+                        }
+                        try {
+                            checkedSequence(42)
+                            throw Error("invalid checked cast succeeded")
+                        } catch (_: ClassCastException) {
+                        }
+                        if (genericLength(string) != 4 || genericLength(implementation) != 4) {
+                            throw Error("generic operation")
+                        }
+                        if (genericIdentity(string) !== string ||
+                            genericIdentity(implementation) !== implementation
+                        ) {
+                            throw Error("generic identity")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "CharSequenceConsumer.exe" else "CharSequenceConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "CharSequenceConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            if (target == "net10.0") {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    consumerDirectory,
+                    "CharSequence Kotlin consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(application.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "CharSequence Kotlin consumer failed for $target:\n$output")
+            }
+
+            if (target == "net10.0") {
+                val csharpSource = consumerDirectory.resolve("consumer.cs").apply {
+                    writeText(
+                        """
+                        using System;
+
+                        public sealed class ForeignSequence : Kotlin.CharSequence
+                        {
+                            private readonly string value;
+
+                            public ForeignSequence(string value) { this.value = value; }
+
+                            public int length { get { return value.Length; } }
+
+                            public char get(int index) { return value[index]; }
+
+                            public object subSequence(int startIndex, int endIndex)
+                            {
+                                return value.Substring(startIndex, endIndex - startIndex);
+                            }
+                        }
+
+                        public static class Program
+                        {
+                            public static int Main()
+                            {
+                                var foreign = new ForeignSequence("foreign");
+                                if (charsequenceabi.charSequenceLibraryKt.lengthOf("string") != 6) return 1;
+                                if (charsequenceabi.charSequenceLibraryKt.lengthOf(foreign) != 7) return 2;
+                                if (charsequenceabi.charSequenceLibraryKt.firstOf(foreign) != 'f') return 3;
+                                if ((string) charsequenceabi.charSequenceLibraryKt.slice(foreign, 1, 4) != "ore") return 4;
+                                if (!charsequenceabi.charSequenceLibraryKt.isSequence("string") ||
+                                    !charsequenceabi.charSequenceLibraryKt.isSequence(foreign) ||
+                                    charsequenceabi.charSequenceLibraryKt.isSequence(42)) return 5;
+                                if (!Object.ReferenceEquals(
+                                    charsequenceabi.charSequenceLibraryKt.safeSequence(foreign), foreign)) return 6;
+                                if (charsequenceabi.charSequenceLibraryKt.safeSequence(42) != null) return 7;
+                                if (charsequenceabi.charSequenceLibraryKt.genericLength<string>("generic") != 7 ||
+                                    charsequenceabi.charSequenceLibraryKt.genericLength<ForeignSequence>(foreign) != 7) {
+                                    return 8;
+                                }
+                                if (!Object.ReferenceEquals(
+                                    charsequenceabi.charSequenceLibraryKt.genericIdentity<ForeignSequence>(foreign),
+                                    foreign)) return 9;
+                                try
+                                {
+                                    charsequenceabi.charSequenceLibraryKt.checkedSequence(42);
+                                    return 10;
+                                }
+                                catch (InvalidCastException)
+                                {
+                                }
+                                return 0;
+                            }
+                        }
+                        """.trimIndent()
+                    )
+                }
+                val csharpApplication = consumerDirectory.resolve("CharSequenceCSharpConsumer.dll")
+                val csharpCompile = runModernCSharpCompiler(
+                    checkNotNull(modernCSharp),
+                    csharpSource,
+                    csharpApplication,
+                    metadataLibrary,
+                    consumerDirectory.resolve("Kotlin.Runtime.dll"),
+                    target = "exe",
+                )
+                assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+                consumerDirectory.resolve("CharSequenceConsumer.runtimeconfig.json").copyTo(
+                    consumerDirectory.resolve("CharSequenceCSharpConsumer.runtimeconfig.json"),
+                    overwrite = true,
+                )
+                runDotNet(
+                    dotnetHost,
+                    csharpApplication,
+                    consumerDirectory,
+                    "CharSequence C# consumer failed",
+                )
+            }
         }
     }
 

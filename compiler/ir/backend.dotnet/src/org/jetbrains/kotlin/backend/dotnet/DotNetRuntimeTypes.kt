@@ -60,6 +60,12 @@ internal object DotNetRuntimeTypes {
     )
     val nothingType = DotNetIlValueType.UserClass(nothingClass)
 
+    private val charSequenceClass = DotNetIlClassInfo(
+        ilClassName = "Kotlin.CharSequence",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+    val charSequenceImplementationType = DotNetIlValueType.UserClass(charSequenceClass)
+
     private val functionBase = DotNetIlClassInfo(
         ilClassName = "Kotlin.Function",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
@@ -338,6 +344,7 @@ internal object DotNetRuntimeTypes {
     fun classInfoFor(irClass: IrClass): DotNetIlClassInfo? {
         genericInterfaceInfoFor(irClass)?.let { return it.canonicalClassInfo }
         return when {
+            irClass.isDotNetCharSequenceClass() -> charSequenceClass
             irClass.isDotNetMutableRefStub == true -> mutableRefClass
             irClass.isDotNetFunctionReferenceBase == true -> functionReferenceBase
             irClass.dotNetExactFunctionArity != null -> exactFunctionClasses[irClass.dotNetExactFunctionArity!!]
@@ -366,7 +373,11 @@ internal object DotNetRuntimeTypes {
      * in Kotlin.Runtime's C# authoring manifest.
      */
     fun supportsCSharpSourceAuthoring(irClass: IrClass): Boolean =
-        genericInterfaceDescriptorFor(irClass) != null
+        irClass.isDotNetCharSequenceClass() || genericInterfaceDescriptorFor(irClass) != null
+
+    /** The non-generic implementation capability for the classified CharSequence carrier. */
+    fun charSequenceImplementationClassInfo(irClass: IrClass): DotNetIlClassInfo? =
+        charSequenceClass.takeIf { irClass.isDotNetCharSequenceClass() }
 
     /** Stable runtime spellings for one built-in canonical slot and its typed capability. */
     private fun genericInterfaceMethodNamesOrNull(

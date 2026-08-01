@@ -2080,6 +2080,125 @@ $throwableSupportTypesIl
             |         extends ${coreLibraryReference}System.Object
             |  {
             |    $compilerAbiTypeAttributesIl
+            |    .method public hidebysig static bool 'IsCharSequence'(object 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.String
+            |      brtrue.s IL_charSequenceTrue
+            |      ldarg.0
+            |      isinst Kotlin.CharSequence
+            |      brtrue.s IL_charSequenceTrue
+            |      ldc.i4.0
+            |      ret
+            |IL_charSequenceTrue:
+            |      ldc.i4.1
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static object 'CheckCharSequenceCast'(object 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brfalse.s IL_charSequenceCastValid
+            |      ldarg.0
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'IsCharSequence'(object)
+            |      brtrue.s IL_charSequenceCastValid
+            |      newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor()
+            |      throw
+            |IL_charSequenceCastValid:
+            |      ldarg.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static object 'SafeCharSequenceCast'(object 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'IsCharSequence'(object)
+            |      brfalse.s IL_charSequenceSafeCastNull
+            |      ldarg.0
+            |      ret
+            |IL_charSequenceSafeCastNull:
+            |      ldnull
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int32 'CharSequenceLength'(object 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.String
+            |      dup
+            |      brfalse.s IL_charSequenceLengthImplementation
+            |      callvirt instance int32 ${coreLibraryReference}System.String::get_Length()
+            |      ret
+            |IL_charSequenceLengthImplementation:
+            |      pop
+            |      ldarg.0
+            |      castclass Kotlin.CharSequence
+            |      callvirt instance int32 Kotlin.CharSequence::get_length()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static char 'CharSequenceGet'(object 'value', int32 'index') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.String
+            |      dup
+            |      brfalse.s IL_charSequenceGetImplementation
+            |      ldarg.1
+            |      callvirt instance char ${coreLibraryReference}System.String::get_Chars(int32)
+            |      ret
+            |IL_charSequenceGetImplementation:
+            |      pop
+            |      ldarg.0
+            |      castclass Kotlin.CharSequence
+            |      ldarg.1
+            |      callvirt instance char Kotlin.CharSequence::get(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static object 'CharSequenceSubSequence'(
+            |        object 'value', int32 'startIndex', int32 'endIndex') cil managed
+            |    {
+            |      .maxstack 4
+            |      .locals init ([0] string 'stringValue')
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.String
+            |      stloc.0
+            |      ldloc.0
+            |      brfalse.s IL_charSequenceSubSequenceImplementation
+            |      ldarg.1
+            |      ldc.i4.0
+            |      blt.s IL_charSequenceSubSequenceInvalid
+            |      ldarg.2
+            |      ldarg.1
+            |      blt.s IL_charSequenceSubSequenceInvalid
+            |      ldarg.2
+            |      ldloc.0
+            |      callvirt instance int32 ${coreLibraryReference}System.String::get_Length()
+            |      bgt.s IL_charSequenceSubSequenceInvalid
+            |      ldloc.0
+            |      ldarg.1
+            |      ldarg.2
+            |      ldarg.1
+            |      sub
+            |      callvirt instance string ${coreLibraryReference}System.String::Substring(int32, int32)
+            |      ret
+            |IL_charSequenceSubSequenceInvalid:
+            |      newobj instance void ${coreLibraryReference}System.IndexOutOfRangeException::.ctor()
+            |      throw
+            |IL_charSequenceSubSequenceImplementation:
+            |      ldarg.0
+            |      castclass Kotlin.CharSequence
+            |      ldarg.1
+            |      ldarg.2
+            |      callvirt instance object Kotlin.CharSequence::subSequence(int32, int32)
+            |      ret
+            |    }
+            |
             |    .method public hidebysig static bool 'AreEqual'(object, object) cil managed
             |    {
             |      .maxstack 2
@@ -3402,6 +3521,36 @@ $throwableSupportTypesIl
         "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"StringValueOf".toIlIdentifier()}(object)"
+
+    val isCharSequenceCallInstruction: String =
+        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"IsCharSequence".toIlIdentifier()}(object)"
+
+    val checkCharSequenceCastCallInstruction: String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"CheckCharSequenceCast".toIlIdentifier()}(object)"
+
+    val safeCharSequenceCastCallInstruction: String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"SafeCharSequenceCast".toIlIdentifier()}(object)"
+
+    val charSequenceLengthCallInstruction: String =
+        "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"CharSequenceLength".toIlIdentifier()}(object)"
+
+    val charSequenceGetCallInstruction: String =
+        "call char [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"CharSequenceGet".toIlIdentifier()}(object, int32)"
+
+    val charSequenceSubSequenceCallInstruction: String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"CharSequenceSubSequence".toIlIdentifier()}(object, int32, int32)"
 
     /** Captures one original CLR exception in the runtime-owned per-initializer failure state. */
     fun captureStaticInitializationFailureCallInstruction(coreLibraryReference: String): String =

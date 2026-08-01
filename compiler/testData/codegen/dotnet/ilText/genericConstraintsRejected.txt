@@ -49,6 +49,12 @@
 .class public abstract sealed auto ansi beforefieldinit 'test.constraints.rejected.genericConstraintsRejectedKt'
        extends [mscorlib]System.Object
 {
+  .method public hidebysig static !!0 'builtinBound'<'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
