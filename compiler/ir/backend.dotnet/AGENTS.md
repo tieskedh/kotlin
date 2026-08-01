@@ -308,6 +308,15 @@ See the
   argument dispatchers are implementation helpers, not canonical source-member
   slots, and recover any exact typed owner only from authoritative IR.
   See [the generic-class ADR](docs/decisions/generic-class-erased-identity.md).
+- Reified array construction, once enabled, must reuse the ordinary carrier
+  selected after shared IR substitution. Do not add a reified-only array
+  token/wrapper, fall back to `object[]` for an unsupported element, or use a
+  closed typed CLR generic class as Kotlin element identity. Array-allocation
+  readiness does not enable either public reified gate: `KClass`, `KType`,
+  enums, annotations, remaining classifier families, the final substituted
+  type-operator matrix, and the physical throwing-stub contract stay one
+  complete feature boundary. See
+  [the reified-array decision](docs/decisions/reified-array-operations.md).
 - Ordinary runtime type tests evaluate their operand once at the erased object
   boundary, implement Kotlin nullable-target semantics before the non-null
   check, and then use either an existing Kotlin classifier or one physically

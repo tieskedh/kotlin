@@ -55,6 +55,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Primitive scalar carriers](decisions/primitive-scalars.md)
 - [Kotlin-owned primitive-array wrappers](decisions/primitive-arrays.md)
 - [Classified `Array<*>` erased view](decisions/star-projected-arrays.md)
+- [Reified array operations reuse ordinary substituted carriers](decisions/reified-array-operations.md)
 - [Erased identity and typed capability for generic classes](decisions/generic-class-erased-identity.md)
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)

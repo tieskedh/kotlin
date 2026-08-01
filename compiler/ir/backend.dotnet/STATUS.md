@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: erased runtime identity for ordinary Kotlin generic classes
+- Last completed feature: post-substitution reified array-operation readiness
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,9 +20,9 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 966 tests:
+The JUnit audit covered 16 fresh XML files and 970 tests:
 
-- 864 FIR, IL-text, and box tests
+- 868 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 81 library-integration tests
 - zero failures, errors, or skips
@@ -100,6 +100,17 @@ the portable producer on Framework CLR and CoreCLR, including nested types,
 default dispatch, inheritance, overloads, virtual C# subclass dispatch, and
 wrong-argument failure at the later logical member barrier.
 
+The post-substitution reified-array audit now proves that every admitted
+ordinary array carrier remains truthful after the shared inliner has replaced
+a type parameter with a concrete type. The adversarial matrix covers reference,
+scalar, nullable-scalar, classified `CharSequence`, generic-class, split-
+interface, nested, star-element, primitive-array-wrapper, and `Throwable`
+elements; empty, nullable, initialized, negative-size, vararg, and spread
+operations execute on both FIR frontends and runtime profiles. These operations
+reuse the ordinary `Array<E>` mapper and intrinsics. No reified-only token,
+wrapper, or `object[]` fallback was added, and both public reified gates remain
+closed.
+
 ## Current architecture
 
 - `:core:language.targets.dotnet` owns the logical .NET platform and the
@@ -146,15 +157,16 @@ classified `CharSequence` carrier, Common collection predicates, and ordinary
 inline-function boundary remain intact; reified and suspend inline are still
 explicit errors.
 
-The reified audit established that shared IR substitution is ready, and its
+The reified audit established that shared IR substitution is ready. Its
 ordinary runtime prerequisites now include declaration-erased Kotlin generic
-classes as well as classified star-projected arrays. Public reified support
-remains parked while the remaining array-operation substitution matrix is
-re-audited and while `KClass`, `KType`, enum/annotation, and physical
-throwing-stub contracts remain unselected. Physically exact non-generic
-reference casts are complete for Kotlin classes/interfaces, imported CLR
-interfaces, strings, `Any`, primitive-array wrappers, and exact CLR vectors
-without admitting closed generic instances.
+classes and classified star-projected arrays, and the complete admitted array-
+operation substitution matrix has passed without a target-specific reified
+representation. Public reified support remains parked while `KClass`, `KType`,
+enum/annotation, final substituted type-test/cast, and physical throwing-stub
+contracts remain unselected. Physically exact non-generic reference casts are
+complete for Kotlin classes/interfaces, imported CLR interfaces, strings,
+`Any`, primitive-array wrappers, and exact CLR vectors without admitting closed
+generic instances.
 Boxed-scalar casts are now complete for all eight selected Common primitives:
 exact boxed identity, nullable unboxing for checked nullable casts, and
 `isinst` plus nullable unboxing for safe casts, with no numeric-conversion or
@@ -211,12 +223,12 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Re-audit the remaining reified array-operation substitution matrix against
-   the completed primitive, nullable-primitive, star-array, and generic-class
-   carriers. Separate operations already truthful after ordinary Common IR
-   substitution from still-unselected `KClass`, `KType`, enum, annotation, and
-   physical throwing-stub contracts; do not enable either public reified gate
-   piecemeal.
+1. Audit and select the complete Common `KClass` and class-literal contract as
+   the next reified prerequisite. Keep Kotlin logical classifier identity
+   authoritative where `System.Type` is only physical evidence, compare the
+   mature targets' lowering and runtime boundaries, and resolve dynamic
+   `obj::class` across every already-admitted classified carrier before
+   implementation. Keep `KType` and the public reified gates separate.
 2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
    collections/`EnumEntries` bootstrap cluster; do not create builder-only or
    one-enum stubs.

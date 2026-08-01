@@ -97,15 +97,15 @@ explicitly selected library B through the existing non-linking deserializer and 
 symbol finder. Preserve that boundary without introducing a general IR linker or transitive
 dependency discovery.
 
-The reified audit now identifies generic-class runtime identity as the first hard representation
-boundary: Kotlin erases declaration arguments for runtime class identity while ordinary CLR
-storage uses closed `C<T>` carriers. Do not flip the inliner capability gates or compile a
-Kotlin-owned generic-class test as closed CLR identity. The independently truthful non-generic
-reference, boxed-scalar, ordinary type-test, and complete signed primitive-array prerequisites are
-now complete. Audit the concrete generic-array constructor/intrinsic matrix for already-exact
-element tokens next, while keeping `Array<*>` and nullable/open element carriers parked. The
-generic erased view, `KClass`, `KType`, enum intrinsics, and physical reified stub remain later
-decisions.
+The reified programme has completed its independently truthful non-generic reference,
+boxed-scalar, ordinary type-test, signed primitive-array, nullable-primitive generic-array,
+classified `Array<*>`, and declaration-erased generic-class prerequisites. The concrete
+post-substitution array-operation audit is complete as well: array construction reuses those
+ordinary carriers and needs no reified-only representation. Do not flip either inliner capability
+gate or mistake that allocation readiness for the whole language feature. Kotlin `KClass` and
+class literals are now the next hard representation boundary, followed by `KType`, the atomic
+enum/annotation source clusters, the final substituted type-operator matrix, and the physical
+reified throwing-stub contract.
 
 ### 2. Expand Common collections by exact dependency closure
 

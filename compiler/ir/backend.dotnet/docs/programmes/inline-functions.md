@@ -687,3 +687,29 @@ against the now-complete array and generic-class carriers. That audit must disti
 which is already truthful after ordinary IR substitution from the still-unselected `KClass`,
 `KType`, enum, annotation, and physical throwing-stub contracts; it must not enable either public
 reified gate piecemeal.
+
+### Selected eighth prerequisite: post-substitution array operations
+
+The [reified-array decision](../decisions/reified-array-operations.md) completes that audit. Common
+and the shared inliner remain authoritative: once a valid call site has replaced `T`, array
+allocation must use the same ordinary `Array<E>` mapping as non-inline Kotlin. The current
+`arrayOf`, generic-vararg, `emptyArray`, `arrayOfNulls`, and Common `Array(size) { ... }` paths are
+representation-ready for every classifier already admitted by the target. Nested exact vectors,
+nullable scalar vectors, specialized-array wrappers, `Array<*>` element views, split generic
+interfaces, and declaration-erased generic classes need no reified-only carrier.
+
+This finding narrows the blocker; it does not enable support. Actual reified call sites still need
+the final substituted type-test/cast matrix, and a public declaration may use `T::class`,
+`typeOf<T>()`, enum or annotation operations, or later instantiate with a classifier whose target
+representation is parked. A published logical reified declaration also needs the still-unselected
+physical throwing-stub contract. Both .NET support gates therefore remain false.
+
+`arraySubstitutionCarriers.kt` adversarially executes the concrete post-substitution shapes across
+both FIR frontends and runtime profiles. Existing portable-library matrices provide cross-module
+evidence for the underlying carriers. When the complete feature is enabled, an actual reified
+producer/consumer test across all KLIB inliner modes remains mandatory; the concrete matrix is a
+prerequisite, not a substitute for that final gate.
+
+The next reversible language prerequisite is to select Kotlin `KClass`/class-literal identity and
+its truthful CLR `System.Type` bridge. That is a separate reflection decision; array readiness is
+not evidence that `System.Type` alone can replace Kotlin reflection identity.
