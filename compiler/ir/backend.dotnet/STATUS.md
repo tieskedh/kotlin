@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: ordinary non-reified inline functions across self-describing libraries
+- Last completed feature: Common/generated predicate quantifiers and index search
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -31,7 +31,11 @@ Focused evidence additionally covers component-complete packed-KLIB loading,
 same- and cross-library inlining from prepared and main IR, all three KLIB
 inliner modes, mutable capture and non-local control flow, compiler ABI and
 friend access, stdlib-free diagnostics, reproducible direct/fallback stdlib
-IR, explicit reified/suspend rejection, and every target/runtime profile.
+IR, explicit reified/suspend rejection, and every target/runtime profile. The
+collection product now also proves empty Collection fast paths, exact
+short-circuit and traversal counts, nullable/widened predicates, reverse List
+search, inlined separate consumers, and direct CIL execution of all six
+physical fallback methods on Framework CLR and CoreCLR.
 
 ## Current architecture
 
@@ -61,21 +65,21 @@ IR, explicit reified/suspend rejection, and every target/runtime profile.
 
 ## Active state
 
-No implementation slice is half-landed. Ordinary non-reified inline calls use
-the shared KLIB first-/second-stage machinery within one module and across a
-self-describing producer DLL. Embedded KLIBs retain main and prepared IR;
-Common `SharedVariableBox` and synthetic-accessor ABI are compiled into the
-stdlib; logical Kotlin visibility remains in KLIB while required physical
-compiler ABI is linkable but hidden from ordinary C# exports. Reified and
-suspend inline remain explicit errors. The earlier closed foreign-vector
-grammar and its symmetric Kotlin implementation remain intact.
+No implementation slice is half-landed. The exact Common generator now admits
+`Iterable.any(predicate)`, `Iterable.all(predicate)`, and the Iterable/List
+`indexOfFirst`/`indexOfLast` overloads. Kotlin consumers inline their embedded
+IR; the self-describing stdlib retains executable physical fallback bodies.
+The paired count/index-overflow actuals deliberately remain ordinary
+JS-shaped `@PublishedApi` compiler ABI after comparison with JVM,
+Native/Wasm, and JS precedent. Reified and suspend inline remain explicit
+errors. The earlier closed foreign-vector grammar and its symmetric Kotlin
+implementation remain intact.
 
 ## Open architectural blockers
 
-- Exact Common `AbstractCollection`/`AbstractList` production still needs
-  admission of its now-supported ordinary inline helper families,
-  `CharSequence`/`Appendable`/`StringBuilder`, and typed collection-to-array
-  support; do not fork their algorithms into .NET.
+- Exact Common `AbstractCollection`/`AbstractList` production still needs the
+  `CharSequence`/`Appendable`/`StringBuilder` and typed collection-to-array
+  closures; do not fork their algorithms into .NET.
 - An inline body in library A can currently bind built-ins and A-owned
   declarations. Arbitrary calls from that body into a distinct Kotlin library
   B need the selected .NET assembly graph as an explicit non-linking resolver
@@ -92,14 +96,13 @@ grammar and its symmetric Kotlin implementation remain intact.
 
 ## Next bounded work
 
-1. Admit the selected Common/generated non-reified `any(predicate)`, `all`,
-   `indexOfFirst`, and `indexOfLast` families through their exact source and
-   helper closure, without target copies or non-inline substitutes.
-2. Reassess the paired Common count/index-overflow actuals now that ordinary
-   inline is available, and update source, physical ABI, and tests atomically
-   if mature KLIB precedent selects `@InlineOnly`.
-3. Continue the string-building and typed collection-to-array closures needed
-   before exact Common `AbstractCollection`/`AbstractList` admission.
+1. Audit and admit the smallest exact Common string-building closure needed by
+   collection rendering, beginning from `joinTo`/`joinToString` and their
+   `Appendable`/`StringBuilder` dependencies rather than a target copy.
+2. Design and implement typed collection-to-array actuals that preserve the
+   requested CLR vector element type.
+3. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
+   both remaining closures are complete.
 
 ## Navigation
 

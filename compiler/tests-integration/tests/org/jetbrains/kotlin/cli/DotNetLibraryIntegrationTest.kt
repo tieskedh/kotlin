@@ -29558,12 +29558,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertEquals(
             mapOf(
-                "any" to 1,
+                "all" to 1,
+                "any" to 2,
                 "contains" to 1,
                 "count" to 1,
                 "elementAtOrNull" to 1,
                 "getOrNull" to 1,
                 "indexOf" to 2,
+                "indexOfFirst" to 2,
+                "indexOfLast" to 2,
                 "lastIndexOf" to 2,
                 "none" to 1,
                 "single" to 2,
@@ -29572,12 +29575,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             collectionFunctions
                 .filter { declaration ->
                     declaration.methodName in setOf(
+                        "all",
                         "any",
                         "contains",
                         "count",
                         "elementAtOrNull",
                         "getOrNull",
                         "indexOf",
+                        "indexOfFirst",
+                        "indexOfLast",
                         "lastIndexOf",
                         "none",
                         "single",
@@ -29589,12 +29595,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(collectionFunctions.none { declaration ->
             declaration.methodName in setOf(
+                "all",
                 "any",
                 "contains",
                 "count",
                 "elementAtOrNull",
                 "getOrNull",
                 "indexOf",
+                "indexOfFirst",
+                "indexOfLast",
                 "lastIndexOf",
                 "none",
                 "single",
@@ -29711,6 +29720,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
         )
         assertTrue(
+            ".method public hidebysig static bool 'all'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static bool 'any'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
+        )
+        assertTrue(
             ".method public hidebysig static bool 'contains'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', !!0 'element')" in il
         )
@@ -29809,6 +29828,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             ".method public hidebysig static int32 'indexOf'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', !!0 'element')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'indexOfFirst'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'indexOfFirst'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'indexOfLast'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'indexOfLast'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
         )
         assertTrue(
             ".method public hidebysig static object 'lastOrNull'<'T'>(" +
@@ -30009,6 +30048,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun <T> containsElement(values: Iterable<T>, element: T): Boolean =
                     values.contains(element)
 
+                public fun <T> allMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Boolean = values.all(predicate)
+
+                public fun <T> anyMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Boolean = values.any(predicate)
+
                 public fun <T> firstElementIndex(values: Iterable<T>, element: T): Int =
                     values.indexOf(element)
 
@@ -30020,6 +30069,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun listLastElementIndex(values: List<String>, element: Any?): Int =
                     values.lastIndexOf(element)
+
+                public fun <T> firstMatchingIndex(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Int = values.indexOfFirst(predicate)
+
+                public fun <T> lastMatchingIndex(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Int = values.indexOfLast(predicate)
+
+                public fun <T> listFirstMatchingIndex(
+                    values: List<T>,
+                    predicate: (T) -> Boolean,
+                ): Int = values.indexOfFirst(predicate)
+
+                public fun <T> listLastMatchingIndex(
+                    values: List<T>,
+                    predicate: (T) -> Boolean,
+                ): Int = values.indexOfLast(predicate)
 
                 public fun <T> cardinality(values: Iterable<T>): T? {
                     values.any()
@@ -30097,6 +30166,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             "::'contains'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
         )
+        assertTrue(
+            "::'all'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The separate consumer must inline the Common all(predicate) body:\n$il"
+        }
+        assertTrue(
+            "::'any'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The separate consumer must inline the Common any(predicate) body:\n$il"
+        }
         assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue(
             "::'sumOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
@@ -30127,6 +30208,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(
             "::'lastIndexOf'<object>(class [Kotlin.Runtime]'Kotlin.Collections.List', !!0)" in il
+        )
+        assertTrue("::'indexOfFirst'<" !in il) {
+            "The separate consumer must inline both Common indexOfFirst bodies:\n$il"
+        }
+        assertTrue("::'indexOfLast'<" !in il) {
+            "The separate consumer must inline both Common indexOfLast bodies:\n$il"
+        }
+        assertEquals(
+            2,
+            Regex(
+                "\\[Kotlin\\.Stdlib]'Kotlin\\.Collections\\.CollectionsKt'::" +
+                        "'checkIndexOverflow'\\(int32\\)"
+            ).findAll(il).count(),
+            "Only the two inlined Iterable index-search bodies may retain overflow-helper calls",
         )
         assertTrue("::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
@@ -30232,6 +30327,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun <T> installedContainsElement(values: Iterable<T>, element: T): Boolean =
                     values.contains(element)
 
+                public fun <T> installedAllMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Boolean = values.all(predicate)
+
+                public fun <T> installedAnyMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Boolean = values.any(predicate)
+
                 public fun <T> installedFirstElementIndex(values: Iterable<T>, element: T): Int =
                     values.indexOf(element)
 
@@ -30243,6 +30348,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun installedListLastElementIndex(values: List<String>, element: Any?): Int =
                     values.lastIndexOf(element)
+
+                public fun <T> installedFirstMatchingIndex(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Int = values.indexOfFirst(predicate)
+
+                public fun <T> installedLastMatchingIndex(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Int = values.indexOfLast(predicate)
+
+                public fun <T> installedListFirstMatchingIndex(
+                    values: List<T>,
+                    predicate: (T) -> Boolean,
+                ): Int = values.indexOfFirst(predicate)
+
+                public fun <T> installedListLastMatchingIndex(
+                    values: List<T>,
+                    predicate: (T) -> Boolean,
+                ): Int = values.indexOfLast(predicate)
+
+                public fun installedNonLocalMatch(values: Iterable<Int>): Int {
+                    values.any { value ->
+                        if (value == 2) return value
+                        false
+                    }
+                    return -1
+                }
 
                 public fun <T> installedCardinality(values: Iterable<T>): T? {
                     values.any()
@@ -30289,6 +30422,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             values.asIterable().contains("K") &&
                             values.asIterable().indexOf("K") == 1 &&
                             values.asIterable().lastIndexOf("changed") == 0 &&
+                            values.asIterable().all { it == "changed" || it == "K" } &&
+                            values.asIterable().any { it == "K" } &&
+                            values.asIterable().indexOfFirst { it == "K" } == 1 &&
+                            values.asIterable().indexOfLast { it == "changed" } == 0 &&
+                            view.indexOfFirst { it == "K" } == 1 &&
+                            view.indexOfLast { it == "changed" } == 0 &&
+                            installedNonLocalMatch(arrayOf(1, 2, 3).asIterable()) == 2 &&
                             view.any() &&
                             !view.none() &&
                             arrayOf("only").asIterable().single() == "only" &&
@@ -30338,6 +30478,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             "::'contains'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
         )
+        assertTrue(
+            "::'all'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The installed consumer must inline the Common all(predicate) body:\n$il"
+        }
+        assertTrue(
+            "::'any'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The installed consumer must inline the Common any(predicate) body:\n$il"
+        }
         assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'sumOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'sumOfShort'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
@@ -30357,6 +30509,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             "::'lastIndexOf'<object>(class [Kotlin.Runtime]'Kotlin.Collections.List', !!0)" in il
         )
+        assertTrue("::'indexOfFirst'<" !in il) {
+            "The installed consumer must inline both Common indexOfFirst bodies:\n$il"
+        }
+        assertTrue("::'indexOfLast'<" !in il) {
+            "The installed consumer must inline both Common indexOfLast bodies:\n$il"
+        }
         assertTrue("::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
@@ -30507,6 +30665,60 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                 }
 
+                class HostileEmptyCollection<T> : Collection<T> {
+                    override val size: Int get() = 0
+
+                    override fun isEmpty(): Boolean = true
+
+                    override fun contains(element: T): Boolean = false
+
+                    override fun containsAll(elements: Collection<T>): Boolean = elements.isEmpty()
+
+                    override fun iterator(): Iterator<T> =
+                        throw IllegalStateException("empty collection iterator requested")
+                }
+
+                class ReverseOnlyIntList(values: Array<Int>) : List<Int> {
+                    private val backing: List<Int> = values.asList()
+                    public var requestedListIteratorIndex: Int = -1
+
+                    override val size: Int get() = backing.size
+
+                    override fun isEmpty(): Boolean = backing.isEmpty()
+
+                    override fun contains(element: Int): Boolean = backing.contains(element)
+
+                    override fun containsAll(elements: Collection<Int>): Boolean =
+                        backing.containsAll(elements)
+
+                    override fun iterator(): Iterator<Int> =
+                        throw IllegalStateException("forward iterator requested")
+
+                    override fun get(index: Int): Int = backing[index]
+
+                    override fun indexOf(element: Int): Int = backing.indexOf(element)
+
+                    override fun lastIndexOf(element: Int): Int = backing.lastIndexOf(element)
+
+                    override fun listIterator(): ListIterator<Int> = listIterator(0)
+
+                    override fun listIterator(index: Int): ListIterator<Int> {
+                        requestedListIteratorIndex = index
+                        return backing.listIterator(index)
+                    }
+
+                    override fun subList(fromIndex: Int, toIndex: Int): List<Int> =
+                        backing.subList(fromIndex, toIndex)
+                }
+
+                fun nonLocalMatch(values: Iterable<Int>): Int {
+                    values.any { value ->
+                        if (value == 2) return value
+                        false
+                    }
+                    return -1
+                }
+
                 fun main() {
                     print(false)
                     print("|")
@@ -30558,6 +30770,77 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             countedSum == 6 &&
                             counting.iteratorCalls == 1 &&
                             counting.nextCalls == 3
+                    val empty = HostileEmptyCollection<Int>()
+                    var emptyPredicateCalls = 0
+                    val emptyFastPathOk =
+                        empty.all { emptyPredicateCalls++; false } &&
+                            !empty.any { emptyPredicateCalls++; true } &&
+                            emptyPredicateCalls == 0
+                    val anyCounting = CountingInts(arrayOf(1, 2, 3, 4))
+                    var anyPredicateCalls = 0
+                    val anyShortCircuitOk =
+                        anyCounting.any { value ->
+                            anyPredicateCalls++
+                            value == 2
+                        } &&
+                            anyPredicateCalls == 2 &&
+                            anyCounting.iteratorCalls == 1 &&
+                            anyCounting.nextCalls == 2
+                    val allCounting = CountingInts(arrayOf(1, 2, 3, 4))
+                    var allPredicateCalls = 0
+                    val allShortCircuitOk =
+                        !allCounting.all { value ->
+                            allPredicateCalls++
+                            value < 3
+                        } &&
+                            allPredicateCalls == 3 &&
+                            allCounting.iteratorCalls == 1 &&
+                            allCounting.nextCalls == 3
+                    val indexed = CountingInts(arrayOf(1, 2, 3, 2))
+                    var firstPredicateCalls = 0
+                    val firstMatch = indexed.indexOfFirst { value ->
+                        firstPredicateCalls++
+                        value == 2
+                    }
+                    var lastPredicateCalls = 0
+                    val lastMatch = indexed.indexOfLast { value ->
+                        lastPredicateCalls++
+                        value == 2
+                    }
+                    val iterableIndexOk =
+                        firstMatch == 1 &&
+                            lastMatch == 3 &&
+                            firstPredicateCalls == 2 &&
+                            lastPredicateCalls == 4 &&
+                            indexed.iteratorCalls == 2 &&
+                            indexed.nextCalls == 6
+                    val reverse = ReverseOnlyIntList(arrayOf(1, 2, 3, 2))
+                    var reverseTrace = 0
+                    val reverseIndex = reverse.indexOfLast { value ->
+                        reverseTrace = reverseTrace * 10 + value
+                        value == 2
+                    }
+                    val listIndexOk =
+                        view.indexOfFirst { it == 3 } == 1 &&
+                            reverseIndex == 3 &&
+                            reverseTrace == 2 &&
+                            reverse.requestedListIteratorIndex == reverse.size
+                    var capturedTotal = 0
+                    val captureOk =
+                        !arrayOf(1, 2, 3, 4).asIterable().all { value ->
+                            capturedTotal += value
+                            value < 3
+                        } && capturedTotal == 6
+                    val widened: Iterable<Any?> = arrayOf<String?>(null, "K").asIterable()
+                    val nullableWidenedOk =
+                        widened.any { it == null } &&
+                            widened.all { it == null || it == "K" } &&
+                            widened.indexOfFirst { it == null } == 0 &&
+                            widened.indexOfLast { it == "K" } == 1
+                    val inlinePredicatesOk =
+                        emptyFastPathOk && anyShortCircuitOk && allShortCircuitOk &&
+                            iterableIndexOk && listIndexOk && captureOk && nullableWidenedOk &&
+                            nonLocalMatch(arrayOf(1, 2, 3).asIterable()) == 2
                     var readlnEofIsCommon = false
                     try {
                         readln()
@@ -30568,7 +30851,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     println(
                         first + "|" + second + "|" + (atEof == null) + "|" +
                             readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk + "|" +
-                            indexedOptionalOk + "|" + numericSumOk
+                            indexedOptionalOk + "|" + numericSumOk + "|" + inlinePredicatesOk
                     )
                 }
                 """.trimIndent()
@@ -30602,7 +30885,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }
@@ -30621,9 +30904,58 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             writeText(
                 """
                 .assembly extern mscorlib {}
+                .assembly extern Kotlin.Runtime {}
                 .assembly extern Kotlin.Stdlib {}
                 .assembly CollectionOverflowProbe {}
                 .module CollectionOverflowProbe.exe
+
+                .class public auto ansi sealed beforefieldinit PositivePredicate
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Function1'
+                {
+                  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+                  {
+                    .maxstack 2
+                    ldarg.1
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.0
+                    cgt
+                    box [mscorlib]System.Boolean
+                    ret
+                  }
+                }
+
+                .class public auto ansi sealed beforefieldinit EqualTwoPredicate
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Function1'
+                {
+                  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+                  {
+                    .maxstack 2
+                    ldarg.1
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.2
+                    ceq
+                    box [mscorlib]System.Boolean
+                    ret
+                  }
+                }
 
                 .class public auto ansi sealed beforefieldinit Program
                        extends [mscorlib]System.Object
@@ -30639,8 +30971,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   .method public hidebysig static void Main() cil managed
                   {
                     .entrypoint
-                    .maxstack 2
-                    .locals init ([0] class [mscorlib]System.ArithmeticException failure)
+                    .maxstack 4
+                    .locals init (
+                      [0] class [mscorlib]System.ArithmeticException failure,
+                      [1] int32[] values,
+                      [2] class [Kotlin.Runtime]'Kotlin.Collections.Iterable' iterable,
+                      [3] class [Kotlin.Runtime]'Kotlin.Collections.List' list
+                    )
 
                     ldc.i4.0
                     call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'checkCountOverflow'(int32)
@@ -30698,7 +31035,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                       pop
                       ldstr "negative index returned"
                       call void Program::Fail(string)
-                      leave.s DONE
+                      leave.s PREDICATES
                     }
                     catch [mscorlib]System.ArithmeticException
                     {
@@ -30711,8 +31048,81 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                       ldstr "index overflow message changed"
                       call void Program::Fail(string)
                 INDEX_MESSAGE_OK:
-                      leave.s DONE
+                      leave.s PREDICATES
                     }
+                PREDICATES:
+                    ldc.i4.4
+                    newarr [mscorlib]System.Int32
+                    dup
+                    ldc.i4.0
+                    ldc.i4.1
+                    stelem.i4
+                    dup
+                    ldc.i4.1
+                    ldc.i4.2
+                    stelem.i4
+                    dup
+                    ldc.i4.2
+                    ldc.i4.3
+                    stelem.i4
+                    dup
+                    ldc.i4.3
+                    ldc.i4.2
+                    stelem.i4
+                    stloc.1
+
+                    ldloc.1
+                    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<int32>(!!0[])
+                    stloc.2
+                    ldloc.1
+                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(!!0[])
+                    stloc.3
+
+                    ldloc.2
+                    newobj instance void PositivePredicate::.ctor()
+                    call bool [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'all'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    brtrue.s ALL_OK
+                    ldstr "all fallback changed"
+                    call void Program::Fail(string)
+                ALL_OK:
+                    ldloc.2
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call bool [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'any'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    brtrue.s ANY_OK
+                    ldstr "any fallback changed"
+                    call void Program::Fail(string)
+                ANY_OK:
+                    ldloc.2
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'indexOfFirst'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldc.i4.1
+                    beq.s ITERABLE_FIRST_OK
+                    ldstr "Iterable indexOfFirst fallback changed"
+                    call void Program::Fail(string)
+                ITERABLE_FIRST_OK:
+                    ldloc.2
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'indexOfLast'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldc.i4.3
+                    beq.s ITERABLE_LAST_OK
+                    ldstr "Iterable indexOfLast fallback changed"
+                    call void Program::Fail(string)
+                ITERABLE_LAST_OK:
+                    ldloc.3
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'indexOfFirst'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldc.i4.1
+                    beq.s LIST_FIRST_OK
+                    ldstr "List indexOfFirst fallback changed"
+                    call void Program::Fail(string)
+                LIST_FIRST_OK:
+                    ldloc.3
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'indexOfLast'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldc.i4.3
+                    beq.s DONE
+                    ldstr "List indexOfLast fallback changed"
+                    call void Program::Fail(string)
                 DONE:
                     ret
                   }
