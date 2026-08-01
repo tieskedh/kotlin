@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.fir.pipeline.AllModulesFrontendOutput
 import org.jetbrains.kotlin.fir.pipeline.Fir2IrActualizedResult
 import org.jetbrains.kotlin.library.SerializedMetadata
+import org.jetbrains.kotlin.library.SerializedIrModule
 import java.io.File
 
 data class DotNetFrontendPipelineArtifact(
@@ -16,6 +17,7 @@ data class DotNetFrontendPipelineArtifact(
     override val configuration: CompilerConfiguration,
     val sourceFiles: List<KtSourceFile>,
     val libraryMetadata: SerializedMetadata? = null,
+    val libraryIr: SerializedIrModule? = null,
 ) : FrontendPipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)
     override fun withCompilerConfiguration(newConfiguration: CompilerConfiguration): DotNetFrontendPipelineArtifact =
@@ -30,6 +32,7 @@ data class DotNetFir2IrPipelineArtifact(
     val frontendOutput: AllModulesFrontendOutput,
     override val configuration: CompilerConfiguration,
     val libraryMetadata: SerializedMetadata?,
+    val libraryIr: SerializedIrModule?,
 ) : Fir2IrPipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)
     override fun withCompilerConfiguration(newConfiguration: CompilerConfiguration): DotNetFir2IrPipelineArtifact =
@@ -40,6 +43,7 @@ data class DotNetBackendPipelineArtifact(
     val output: File,
     override val configuration: CompilerConfiguration,
     val libraryMetadata: SerializedMetadata?,
+    val libraryIr: SerializedIrModule?,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
 ) : PipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)

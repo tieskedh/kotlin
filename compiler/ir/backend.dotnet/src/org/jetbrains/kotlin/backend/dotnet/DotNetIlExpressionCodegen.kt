@@ -912,7 +912,11 @@ internal class DotNetIlExpressionCodegen(
         val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
         val calleeName = callee.name.asString()
         val info = availableFunctions[callee] ?: typeMapper.referencedFunctionInfoOrNull(callee)
-            ?: dotNetUnsupported("call to unsupported function '$calleeName'")
+            ?: dotNetUnsupported(
+                "call to unsupported function '$calleeName' on " +
+                        ((callee.parent as? IrClass)?.fqNameWhenAvailable?.asString() ?: callee.parent.render()) +
+                        " (origin ${callee.origin})"
+            )
         info.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         // A generic FUNCTION call, top-level or member, carries its instantiation on the method token —
         // `call !!0 'FileKt'::'id'<string>(!!0)`, signature slots verbatim from the declaration

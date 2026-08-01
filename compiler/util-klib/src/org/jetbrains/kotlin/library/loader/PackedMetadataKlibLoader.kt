@@ -15,6 +15,21 @@ import org.jetbrains.kotlin.library.KotlinLibraryVersioning
 import org.jetbrains.kotlin.library.builtInsPlatform
 import org.jetbrains.kotlin.library.components.KlibMetadataComponent
 import org.jetbrains.kotlin.library.components.KlibMetadataConstants.KLIB_METADATA_FILE_EXTENSION_WITH_DOT
+import org.jetbrains.kotlin.library.components.KlibIrComponent
+import org.jetbrains.kotlin.library.components.KlibIrConstants.KLIB_IR_BODIES_FILE_NAME
+import org.jetbrains.kotlin.library.components.KlibIrConstants.KLIB_IR_DEBUG_INFO_FILE_NAME
+import org.jetbrains.kotlin.library.components.KlibIrConstants.KLIB_IR_DECLARATIONS_FILE_NAME
+import org.jetbrains.kotlin.library.components.KlibIrConstants.KLIB_IR_FILE_ENTRIES_FILE_NAME
+import org.jetbrains.kotlin.library.components.KlibIrConstants.KLIB_IR_FILES_FILE_NAME
+import org.jetbrains.kotlin.library.components.KlibIrConstants.KLIB_IR_FOLDER_NAME
+import org.jetbrains.kotlin.library.components.KlibIrConstants.KLIB_IR_INLINABLE_FUNCTIONS_FOLDER_NAME
+import org.jetbrains.kotlin.library.components.KlibIrConstants.KLIB_IR_SIGNATURES_FILE_NAME
+import org.jetbrains.kotlin.library.components.KlibIrConstants.KLIB_IR_STRINGS_FILE_NAME
+import org.jetbrains.kotlin.library.components.KlibIrConstants.KLIB_IR_TYPES_FILE_NAME
+import org.jetbrains.kotlin.library.impl.DeclarationId
+import org.jetbrains.kotlin.library.impl.DeclarationIdMultiTableReader
+import org.jetbrains.kotlin.library.impl.IrArrayReader
+import org.jetbrains.kotlin.library.impl.IrMultiArrayReader
 import org.jetbrains.kotlin.library.readKonanLibraryVersioning
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -40,25 +55,50 @@ import java.util.zip.ZipInputStream
 fun loadPackedMetadataKlib(
     libraryPath: Path,
     packedKlib: ByteArray,
+): KotlinLibrary = loadPackedKlib(libraryPath, packedKlib, retainIr = false, description = "metadata KLIB")
+
+/**
+ * Loads a component-complete packed KLIB whose physical container is owned by another library format.
+ *
+ * In addition to the manifest and metadata retained by [loadPackedMetadataKlib], this adapter exposes
+ * both the ordinary and prepared-inlinable-functions IR components when present. A present IR component
+ * must contain every mandatory table; malformed partial components are rejected while the container is
+ * loaded instead of failing later during IR deserialization.
+ *
+ * The returned [KotlinLibrary.path] remains [libraryPath]. Unknown future components are validated as ZIP
+ * entries but ignored.
+ *
+ * @throws IllegalArgumentException if [packedKlib] is not a canonical, bounded KLIB.
+ */
+fun loadPackedKlib(
+    libraryPath: Path,
+    packedKlib: ByteArray,
+): KotlinLibrary = loadPackedKlib(libraryPath, packedKlib, retainIr = true, description = "KLIB")
+
+private fun loadPackedKlib(
+    libraryPath: Path,
+    packedKlib: ByteArray,
+    retainIr: Boolean,
+    description: String,
 ): KotlinLibrary {
     try {
-        return PackedMetadataKlib(libraryPath, PackedMetadataArchive(packedKlib))
+        return PackedKlib(libraryPath, PackedKlibArchive(packedKlib, retainIr))
     } catch (exception: PackedMetadataKlibFormatException) {
         throw IllegalArgumentException(
-            "Invalid packed metadata KLIB '$libraryPath': ${exception.message}",
+            "Invalid packed $description '$libraryPath': ${exception.message}",
             exception,
         )
     } catch (exception: Exception) {
         throw IllegalArgumentException(
-            "Invalid packed metadata KLIB '$libraryPath': ${exception.message ?: exception::class.java.simpleName}",
+            "Invalid packed $description '$libraryPath': ${exception.message ?: exception::class.java.simpleName}",
             exception,
         )
     }
 }
 
-private class PackedMetadataKlib(
+private class PackedKlib(
     override val path: Path,
-    archive: PackedMetadataArchive,
+    archive: PackedKlibArchive,
 ) : KotlinLibrary {
     override val manifestProperties: Properties = Properties().apply {
         InputStreamReader(ByteArrayInputStream(archive.manifest), Charsets.UTF_8).use(::load)
@@ -67,9 +107,16 @@ private class PackedMetadataKlib(
     override val attributes = KlibAttributes()
 
     private val metadata = PackedMetadataComponent(archive.metadataEntries)
+    private val mainIr = archive.mainIrEntries?.let(::PackedIrComponent)
+    private val inlinableFunctionsIr = archive.inlinableFunctionsIrEntries?.let(::PackedIrComponent)
 
     override fun <KC : KlibComponent> getComponent(kind: KlibComponent.Kind<KC, *>): KC? {
-        val component = if (kind === KlibMetadataComponent) metadata else null
+        val component = when (kind) {
+            KlibMetadataComponent -> metadata
+            KlibIrComponent.Kind.Main -> mainIr
+            KlibIrComponent.Kind.InlinableFunctions -> inlinableFunctionsIr
+            else -> null
+        }
         @Suppress("UNCHECKED_CAST")
         return component as KC?
     }
@@ -80,6 +127,36 @@ private class PackedMetadataKlib(
         versions.metadataVersion?.let { "$KLIB_PROPERTY_METADATA_VERSION=$it" },
         builtInsPlatform?.let { "$KLIB_PROPERTY_BUILTINS_PLATFORM=${it.name}" },
     ).joinToString("\n")
+}
+
+private class PackedIrComponent(entries: Map<String, ByteArray>) : KlibIrComponent {
+    private val irFiles = IrArrayReader(entries.getValue(KLIB_IR_FILES_FILE_NAME))
+    private val irFileEntries = entries[KLIB_IR_FILE_ENTRIES_FILE_NAME]?.let(::IrMultiArrayReader)
+    private val declarations = DeclarationIdMultiTableReader(entries.getValue(KLIB_IR_DECLARATIONS_FILE_NAME))
+    private val bodies = IrMultiArrayReader(entries.getValue(KLIB_IR_BODIES_FILE_NAME))
+    private val types = IrMultiArrayReader(entries.getValue(KLIB_IR_TYPES_FILE_NAME))
+    private val signatures = IrMultiArrayReader(entries.getValue(KLIB_IR_SIGNATURES_FILE_NAME))
+    private val signatureDebugInfos = entries[KLIB_IR_DEBUG_INFO_FILE_NAME]?.let(::IrMultiArrayReader)
+    private val stringLiterals = IrMultiArrayReader(entries.getValue(KLIB_IR_STRINGS_FILE_NAME))
+
+    override val irFileCount: Int
+        get() = irFiles.entryCount()
+
+    override fun irFile(index: Int) = irFiles.tableItemBytes(index)
+    override fun irFileEntry(index: Int, fileIndex: Int) = irFileEntries?.tableItemBytes(fileIndex, index)
+    override fun declaration(index: Int, fileIndex: Int) = declarations.tableItemBytes(fileIndex, DeclarationId(index))
+    override fun body(index: Int, fileIndex: Int) = bodies.tableItemBytes(fileIndex, index)
+    override fun type(index: Int, fileIndex: Int) = types.tableItemBytes(fileIndex, index)
+    override fun signature(index: Int, fileIndex: Int) = signatures.tableItemBytes(fileIndex, index)
+    override fun signatureDebugInfo(index: Int, fileIndex: Int) = signatureDebugInfos?.tableItemBytes(fileIndex, index)
+    override fun stringLiteral(index: Int, fileIndex: Int) = stringLiterals.tableItemBytes(fileIndex, index)
+
+    override fun irFileEntries(fileIndex: Int) = irFileEntries?.tableItemBytes(fileIndex)
+    override fun declarations(fileIndex: Int) = declarations.tableItemBytes(fileIndex)
+    override fun bodies(fileIndex: Int) = bodies.tableItemBytes(fileIndex)
+    override fun types(fileIndex: Int) = types.tableItemBytes(fileIndex)
+    override fun signatures(fileIndex: Int) = signatures.tableItemBytes(fileIndex)
+    override fun stringLiterals(fileIndex: Int) = stringLiterals.tableItemBytes(fileIndex)
 }
 
 private class PackedMetadataComponent(
@@ -114,9 +191,11 @@ private class PackedMetadataComponent(
     }
 }
 
-private class PackedMetadataArchive(packedKlib: ByteArray) {
+private class PackedKlibArchive(packedKlib: ByteArray, retainIr: Boolean) {
     val manifest: ByteArray
     val metadataEntries: Map<String, ByteArray>
+    val mainIrEntries: Map<String, ByteArray>?
+    val inlinableFunctionsIrEntries: Map<String, ByteArray>?
 
     init {
         val retainedEntries = linkedMapOf<String, ByteArray>()
@@ -143,7 +222,9 @@ private class PackedMetadataArchive(packedKlib: ByteArray) {
 
                     val retain = !entry.isDirectory && (
                             entry.name == MANIFEST_ENTRY ||
-                                    entry.name.startsWith(METADATA_DIRECTORY)
+                                    entry.name.startsWith(METADATA_DIRECTORY) ||
+                                    retainIr && entry.name.startsWith(MAIN_IR_DIRECTORY) ||
+                                    retainIr && entry.name.startsWith(INLINABLE_FUNCTIONS_IR_DIRECTORY)
                             )
                     val output = if (retain) ByteArrayOutputStream() else null
                     var entrySize = 0L
@@ -181,8 +262,23 @@ private class PackedMetadataArchive(packedKlib: ByteArray) {
         if (MODULE_HEADER_ENTRY !in retainedEntries) {
             malformed("archive has no '$MODULE_HEADER_ENTRY'")
         }
-        metadataEntries = retainedEntries
+        metadataEntries = retainedEntries.filterKeys { it.startsWith(METADATA_DIRECTORY) }
+        mainIrEntries = retainedEntries.irComponentEntries(MAIN_IR_DIRECTORY)
+        inlinableFunctionsIrEntries = retainedEntries.irComponentEntries(INLINABLE_FUNCTIONS_IR_DIRECTORY)
     }
+}
+
+private fun Map<String, ByteArray>.irComponentEntries(directory: String): Map<String, ByteArray>? {
+    val entries = asSequence()
+        .filter { (name, _) -> name.startsWith(directory) }
+        .associate { (name, bytes) -> name.removePrefix(directory) to bytes }
+    if (entries.isEmpty()) return null
+
+    val missingFiles = MANDATORY_IR_FILES - entries.keys
+    if (missingFiles.isNotEmpty()) {
+        malformed("IR component '$directory' is incomplete; missing ${missingFiles.sorted().joinToString()}")
+    }
+    return entries
 }
 
 private fun validateCentralDirectory(
@@ -421,6 +517,8 @@ private class PackedMetadataKlibFormatException(message: String, cause: Throwabl
 
 private const val MANIFEST_ENTRY = "default/manifest"
 private const val METADATA_DIRECTORY = "default/linkdata/"
+private const val MAIN_IR_DIRECTORY = "default/$KLIB_IR_FOLDER_NAME/"
+private const val INLINABLE_FUNCTIONS_IR_DIRECTORY = "default/$KLIB_IR_INLINABLE_FUNCTIONS_FOLDER_NAME/"
 private const val MODULE_HEADER_ENTRY = "${METADATA_DIRECTORY}module"
 private const val ROOT_PACKAGE_DIRECTORY = "root_package/"
 private const val PACKAGE_DIRECTORY_PREFIX = "package_"
@@ -460,3 +558,11 @@ private const val ZIP64_END_ENTRY_COUNT_ON_DISK_OFFSET = 24L
 private const val ZIP64_END_ENTRY_COUNT_OFFSET = 32L
 private const val ZIP64_END_CENTRAL_SIZE_OFFSET = 40L
 private const val ZIP64_END_CENTRAL_OFFSET_OFFSET = 48L
+private val MANDATORY_IR_FILES = setOf(
+    KLIB_IR_FILES_FILE_NAME,
+    KLIB_IR_DECLARATIONS_FILE_NAME,
+    KLIB_IR_BODIES_FILE_NAME,
+    KLIB_IR_TYPES_FILE_NAME,
+    KLIB_IR_SIGNATURES_FILE_NAME,
+    KLIB_IR_STRINGS_FILE_NAME,
+)
