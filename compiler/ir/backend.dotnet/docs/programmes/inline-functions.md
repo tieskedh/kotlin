@@ -605,12 +605,42 @@ The bounded slice must cover all eight families across `arrayOf`, `arrayOfNulls`
 initializer constructors, concrete nullable varargs/spreads, get/set/size, direct and escaping
 iteration, copy/content operations, exact casts, nesting, generic functions/classes, portable KLIB
 consumption, and C# signatures/aliasing on both profiles. It must preserve the existing rejection of
-nested open `Array<T?>`, star/input projections, and value-vector widening to `Array<out Any?>`.
-Those shapes need an erased view or identity-preserving adapter; closed `Nullable<V>[]` does not
-answer them and must not be used as a pretext to weaken their gates.
+nested open `Array<T?>`, input projections, and value-vector widening to `Array<out Any?>`.
+Star projection remains a separate erased-view prerequisite; closed `Nullable<V>[]` does not
+answer any of those shapes and must not be used as a pretext to weaken their gates.
 
 Implemented evidence now covers that complete matrix on both FIR frontends and runtime profiles.
 The portable-library test additionally executes all eight exact signatures from separate Kotlin
 consumers, including generic substitution, and from one Roslyn consumer on Framework CLR and
 CoreCLR. Open nullable elements and the parked projection/covariance shapes remain rejected by
 backend-reachable negative sentinels rather than frontend-invalid stand-ins.
+
+### Selected sixth prerequisite: classified star-projected arrays
+
+The cross-target audit found a shared semantic rule and one CLR-specific carrier split. JVM, JS,
+Wasm, and Native all erase the element argument of `Array<*>` while preserving generic-array
+identity, excluding specialized primitive arrays, permitting `size` plus `Any?` reads/iteration,
+and retaining the original object for later exact casts. JVM's `object[]` works only because its
+generic value elements are boxed. The .NET target's exact `int32[]` and `Nullable<Int32>[]` vectors
+therefore require CLR's common `System.Array` base as their identity-preserving erased storage view.
+
+`System.Array` alone is too broad for Kotlin RTTI because it includes rectangular and non-zero-based
+arrays. The selected design pairs that physical view with one runtime SZ-array classifier, and uses
+`Length`/`GetValue` plus erased iterator/iterable adapters for successful star use. Kotlin-owned
+primitive-array wrappers remain outside the classifier. No path copies, wraps, tags, or changes an
+exact vector; KLIB keeps the star projection authoritative. The full decision and adversarial gate
+are in the [star-projected-array ADR](../decisions/star-projected-arrays.md).
+
+This prerequisite remains bounded to `Array<*>`. It does not infer support for input projections,
+open `Array<T?>`, value-vector covariance to `Array<out Any?>`, or declaration-erased identity for
+ordinary Kotlin generic classes.
+
+This prerequisite is implemented. `starProjectedArrays.kt` executes reference, value,
+nullable-value, nested, and empty vectors across both FIR frontends and runtime profiles, including
+identity, mutation aliasing, erased reads/iteration, exact follow-up casts, nullable RTTI, and
+single evaluation. The portable-library test additionally proves `System.Array` signatures and
+copy-free Kotlin/Roslyn consumption on Framework CLR and CoreCLR, accepts foreign SZ vectors, and
+rejects rectangular and non-zero-based CLR arrays through the shared classifier. The existing
+backend-reachable sentinels keep input projections, open nullable elements, and value-vector
+covariance outside the feature. The next reversible prerequisite is declaration-erased runtime
+identity for ordinary Kotlin generic classes, not either reified support gate.

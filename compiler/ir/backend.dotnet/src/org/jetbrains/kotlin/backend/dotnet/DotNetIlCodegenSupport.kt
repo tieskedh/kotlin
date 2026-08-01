@@ -622,16 +622,17 @@ internal class DotNetIlTypeMapper private constructor(
      * arrays now have distinct Kotlin.Runtime wrapper types. An OPEN type parameter remains valid
      * (`!n[]`/`!!n[]`) and substitutes reified CLR element types. A Kotlin `out` projection keeps
      * the same element token: the projection remains authoritative KLIB metadata, while CLR
-     * reference-array covariance is admitted only by the physical assignability check. `in` and
-     * star projections have no truthful vector element token and remain rejected.
+     * reference-array covariance is admitted only by the physical assignability check. A star
+     * projection uses the classified [DotNetIlValueType.ErasedGenericArray] `System.Array` view;
+     * `in` retains a typed write contract and remains rejected.
      */
-    private fun toGenericArrayTypeOrNull(type: IrType): DotNetIlValueType.GenericArray? {
+    private fun toGenericArrayTypeOrNull(type: IrType): DotNetIlValueType? {
         val simpleType = type as? IrSimpleType
             ?: dotNetUnsupported("generic array type ${type.render()} has an unsupported shape")
         val argument = simpleType.arguments.singleOrNull()
             ?: dotNetUnsupported("generic array type ${type.render()} must have exactly one element type")
         val projection = argument as? IrTypeProjection
-            ?: dotNetUnsupported("star-projected generic array type ${type.render()} is not supported")
+            ?: return DotNetIlValueType.ErasedGenericArray(coreLibrary.reference)
         if (projection.variance == Variance.IN_VARIANCE) {
             dotNetUnsupported(
                 "generic array type ${type.render()} has an input projection; " +
@@ -827,6 +828,7 @@ internal class DotNetIlTypeMapper private constructor(
                 type.arguments.forEach(::recordAssemblyReferences)
             }
             is DotNetIlValueType.GenericArray -> recordAssemblyReferences(type.elementType)
+            is DotNetIlValueType.ErasedGenericArray -> Unit
             is DotNetIlValueType.PrimitiveArray -> recordAssemblyReferences(type.elementType)
             is DotNetIlValueType.NullableValue -> recordAssemblyReferences(type.elementType)
             is DotNetIlValueType.TypeParameter -> type.upperBounds.forEach(::recordAssemblyReferences)
