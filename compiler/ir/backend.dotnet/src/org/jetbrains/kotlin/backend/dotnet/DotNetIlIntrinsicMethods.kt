@@ -253,6 +253,8 @@ internal class DotNetIlIntrinsicMethods(
             Key(kotlinFqn, null, "arrayOf", listOf(arrayFqn)) to DotNetIlGenericArrayOfIntrinsic,
             Key(kotlinFqn, null, "emptyArray", emptyList()) to DotNetIlGenericEmptyArrayIntrinsic,
             Key(kotlinFqn, null, "arrayOfNulls", listOf(intFqn)) to DotNetIlGenericArrayOfNullsIntrinsic,
+            Key(kotlinCollectionsFqn, null, "dotNetArrayOfNulls", listOf(arrayFqn, intFqn)) to
+                    DotNetIlArrayOfNullsLikeIntrinsic,
             Key(arrayFqn, null, "iterator", emptyList()) to
                     DotNetIlArrayIteratorIntrinsic(fixedArrayType = null),
             Key(arrayFqn, null, "clone", emptyList()) to
@@ -1029,6 +1031,72 @@ private object DotNetIlGenericArrayOfNullsIntrinsic : DotNetIlIntrinsicMethod() 
         if (call.arguments.size != 1) return false
         val size = call.arguments.single() ?: dotNetUnsupported("missing generic-array size")
         emitGuardedArrayAllocation(size, arrayType.newArrayInstruction, codegen)
+        return true
+    }
+}
+
+/**
+ * Allocates a zeroed vector with the supplied vector's exact runtime element type. A static
+ * `newarr !!T` is insufficient across CLR reference-array covariance because the physical input
+ * may be more specific than the Kotlin/CLR generic parameter visible at this call site.
+ */
+private object DotNetIlArrayOfNullsLikeIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val resultType = expectedType as? DotNetIlValueType.GenericArray ?: return false
+        if (call.arguments.size != 2) return false
+        val reference = call.arguments[0]
+            ?: dotNetUnsupported("missing reference array for 'dotNetArrayOfNulls'")
+        val referenceType = codegen.toDotNetIlValueType(reference.type) as? DotNetIlValueType.GenericArray
+            ?: dotNetUnsupported(
+                "'dotNetArrayOfNulls' has unsupported reference type ${reference.type.render()}"
+            )
+        val size = call.arguments[1]
+            ?: dotNetUnsupported("missing size for 'dotNetArrayOfNulls'")
+
+        codegen.emitExpression(reference, referenceType)
+        val referenceSlot = codegen.spillToSyntheticLocal(referenceType, "<arrayTypeReference>")
+        codegen.emitExpression(size, DotNetIlValueType.Int32)
+        val sizeSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<arrayTypeSize>")
+
+        val nonNegativeLabel = codegen.nextLabel("arrayTypeSizeNonNegative")
+        codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+        codegen.emit("ldc.i4.0", pushes = 1)
+        codegen.emit("clt", pops = 2, pushes = 1)
+        codegen.emitBranch("brfalse", nonNegativeLabel, pops = 1)
+        codegen.emitParameterlessExceptionThrow(
+            exceptionTypeRef = DotNetRuntimeLibrary.negativeArraySizeExceptionTypeRef,
+            valuePosition = false,
+        )
+        codegen.emitLabel(nonNegativeLabel)
+
+        val coreLibraryReference = codegen.coreLibraryReference
+        codegen.emit(loadLocalInstruction(referenceSlot.index), pushes = 1)
+        codegen.emit(
+            "call instance class ${coreLibraryReference}System.Type " +
+                    "${coreLibraryReference}System.Object::GetType()",
+            pops = 1,
+            pushes = 1,
+        )
+        codegen.emit(
+            "callvirt instance class ${coreLibraryReference}System.Type " +
+                    "${coreLibraryReference}System.Type::GetElementType()",
+            pops = 1,
+            pushes = 1,
+        )
+        codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+        codegen.emit(
+            "call class ${coreLibraryReference}System.Array ${coreLibraryReference}" +
+                    "System.Array::CreateInstance(class ${coreLibraryReference}System.Type, int32)",
+            pops = 2,
+            pushes = 1,
+        )
+        codegen.emit("castclass ${resultType.nameInSignature}", pops = 1, pushes = 1)
         return true
     }
 }

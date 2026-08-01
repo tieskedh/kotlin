@@ -226,8 +226,9 @@ Before this surface freezes, tests must pin:
   from the runtime classifier.
 
 This ADR does not admit other generated string or array `joinTo` families,
-choose typed collection-to-array representation, compile Common abstract
-collection bases, add BCL collection adapters, or define general reflection
-over private CLR implementation fields. It also does not select the general
+compile Common abstract collection bases, add BCL collection adapters, or
+define general reflection over private CLR implementation fields. The typed
+collection-to-array representation is selected independently by
+[its own ADR](collection-to-array.md). This ADR also does not select the general
 enum or annotation-class representations required by the contract DSL; those
 hard-to-reverse language decisions remain separate prerequisites.

@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — selected predicate-inline families admitted; abstract-base prerequisites next**
+- Status: **Active — runtime-typed array closure admitted; builder language prerequisites next**
 - ABI foundation: [`../decisions/draft-adr-generic-interface-abi.md`](../decisions/draft-adr-generic-interface-abi.md)
 
 ## Purpose
@@ -285,9 +285,7 @@ Do not choose a family solely because one downstream feature, such as enums, nee
 All mature targets compile the shared `AbstractCollection.kt` and `AbstractList.kt`. Kotlin/.NET
 must do the same once their exact closure exists. The remaining source-product blockers are:
 
-- `joinToString` and its `CharSequence`/`Appendable`/`StringBuilder` closure; and
-- typed collection-to-array expect/actual operations that preserve the caller's CLR array element
-  type.
+- `joinToString` and its `CharSequence`/`Appendable`/`StringBuilder` closure.
 
 Importing the abstract bases early would require declaration eviction, copied Common algorithms,
 or unjustified .NET intrinsics. All three are rejected. The private direct List view remains until
@@ -312,20 +310,39 @@ family. That family includes public effect interfaces, annotation classes, and t
 `InvocationKind` enum. The target cannot publish those KLIB declarations while omitting their
 physical product, and it cannot fake just enough contract declarations for builder compilation.
 Complete enum and annotation-class representation decisions therefore precede builder
-actualization. Typed collection-to-array remains an independent, reversible prerequisite and is
-selected first while that language foundation is parked.
+actualization. The independent typed collection-to-array prerequisite has now landed while that
+language foundation remains parked.
+
+### Typed collection-to-array prerequisite
+
+The completed [runtime-typed allocation decision](../decisions/collection-to-array.md) keeps both
+loops in exact Common source. The .NET actual supplies only the CLR-specific allocation needed to
+reproduce the reference array's runtime vector element type and a non-Java termination policy.
+This is independently implementable with ordinary generic functions: public reified
+`Collection<T>.toTypedArray()` remains parked with the reified-inline programme.
+
+JVM is the closest physical precedent because both JVM and CLR arrays carry runtime component
+identity and permit reference-array covariance. JS, Native, and Wasm remain the algorithmic
+precedent for delegating to `collectionToArrayCommonImpl` and, unlike JVM's Java interop contract,
+performing no tail null-termination. A static-token `T[]`, erased `object[]`, LINQ loop, or copied
+target algorithm is rejected.
+
+The source product now extracts the exact Common expects and both complete Common loops. Its
+target actuals preserve empty/reuse/iteration/store behavior, while one declaration-suppressing
+intrinsic reproduces the supplied CLR vector's runtime element type. The Common `as T` store path
+uses the CLR's open `unbox.any !!T` operation for both value and reference instantiations. Public
+reified `toTypedArray` remains outside this completed prerequisite.
 
 ## Programme order
 
-1. Complete typed collection-to-array semantics independently.
-2. Complete the enum/annotation-class foundation required by the exact contract DSL, then
+1. Complete the enum/annotation-class foundation required by the exact contract DSL, then
    actualize the selected builder and generated join closure.
-3. Compile the exact Common abstract bases once both prerequisites exist.
-4. Add mutable collection/list contracts and an ordinary implementation.
-5. Add sets and maps from their exact Common dependency closures.
-6. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-7. Let `EnumEntries` consume the established collection substrate.
-8. Remove the bootstrap allowlist when the complete generated product is supportable.
+2. Compile the exact Common abstract bases once the remaining builder prerequisite exists.
+3. Add mutable collection/list contracts and an ordinary implementation.
+4. Add sets and maps from their exact Common dependency closures.
+5. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+6. Let `EnumEntries` consume the established collection substrate.
+7. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 
