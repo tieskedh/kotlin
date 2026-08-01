@@ -434,6 +434,9 @@ internal class DotNetIlExpressionCodegen(
      *   identity. Logical arguments, projections, and stars are deliberately absent from the
      *   CLR check, following JVM/Native erasure. A non-null `as` additionally rejects null with
      *   the mapped Kotlin NPE; `as?` uses `isinst` and therefore returns null on either failure.
+     * - Explicit casts and runtime tests against `CharSequence` use the runtime's classified
+     *   string-or-capability boundary. The physical object carrier alone never admits a value;
+     *   successful casts preserve the original reference.
      * Everything else — explicit casts to reified generic CLR shapes and value-type tests —
      * stays rejected loudly until its own audited model exists.
      */
@@ -443,6 +446,29 @@ internal class DotNetIlExpressionCodegen(
         val castType = typeMapper.toDotNetIlValueType(expression.typeOperand)
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
         if (expression.operator == IrTypeOperator.CAST || expression.operator == IrTypeOperator.SAFE_CAST) {
+            if (expression.typeOperand.isDotNetCharSequenceType()) {
+                if (castType != DotNetIlValueType.Object || expectedType != DotNetIlValueType.Object) {
+                    dotNetUnsupported(
+                        "classified CharSequence cast has inconsistent physical result " +
+                                "${castType.nameInSignature} where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                emitExpression(expression.argument, DotNetIlValueType.Object)
+                if (methodContext.isTerminated) return
+                methodContext.emit(
+                    if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                        DotNetRuntimeLibraryHelpers.safeCharSequenceCastCallInstruction
+                    } else {
+                        DotNetRuntimeLibraryHelpers.checkCharSequenceCastCallInstruction
+                    },
+                    pops = 1,
+                    pushes = 1,
+                )
+                if (expression.operator == IrTypeOperator.CAST && !expression.typeOperand.isMarkedNullable()) {
+                    emitReferenceNotNullOrThrowNpe()
+                }
+                return
+            }
             if (!typeMapper.isSplitGenericInterfaceType(expression.typeOperand) ||
                 castType !is DotNetIlValueType.UserClass
             ) {
@@ -615,6 +641,19 @@ internal class DotNetIlExpressionCodegen(
             methodContext.emit(
                 DotNetRuntimeLibrary.exceptionClassifierCallInstruction(coreLibraryReference),
                 pops = 2,
+                pushes = 1,
+            )
+            if (!positive) {
+                methodContext.emit("ldc.i4.0", pushes = 1)
+                methodContext.emit("ceq", pops = 2, pushes = 1)
+            }
+            nullableJoinLabel?.let(methodContext::emitLabel)
+            return
+        }
+        if (expression.typeOperand.isDotNetCharSequenceType()) {
+            methodContext.emit(
+                DotNetRuntimeLibraryHelpers.isCharSequenceCallInstruction,
+                pops = 1,
                 pushes = 1,
             )
             if (!positive) {

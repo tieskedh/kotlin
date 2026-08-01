@@ -639,6 +639,12 @@ internal class DotNetIlIntrinsicMethods(
         }
         if (registered != null) return registered
 
+        // The logical CharSequence members are also declared/overridden on String, but sealed
+        // System.String cannot implement the runtime capability interface. Match those two
+        // builtin owners structurally and send both through the one classified operation
+        // boundary. User implementations keep ordinary direct calls on their concrete type.
+        (function as? IrSimpleFunction)?.dotNetCharSequenceIntrinsicOrNull()?.let { return it }
+
         // Calls through fake overrides and user overrides are owned by that class rather than by
         // kotlin.Any, so an exact registry key cannot name them. The JVM resolves those calls to
         // java.lang.Object slots; select the CLR counterpart from the transitive override chain.
@@ -658,6 +664,22 @@ internal class DotNetIlIntrinsicMethods(
         val name: String,
         val valueParameterTypeNames: List<FqName?>,
     )
+}
+
+private fun IrSimpleFunction.dotNetCharSequenceIntrinsicOrNull(): DotNetIlIntrinsicMethod? {
+    val ownerFqName = (parent as? IrClass)?.fqNameWhenAvailable ?: return null
+    if (ownerFqName != StandardNames.FqNames.charSequence.toSafe() &&
+        ownerFqName != StandardNames.FqNames.string.toSafe()
+    ) {
+        return null
+    }
+    val propertyName = correspondingPropertySymbol?.owner?.name?.asString()
+    return when {
+        propertyName == "length" -> DotNetIlCharSequenceLengthIntrinsic
+        name.asString() == "get" -> DotNetIlCharSequenceGetIntrinsic
+        name.asString() == "subSequence" -> DotNetIlCharSequenceSubSequenceIntrinsic
+        else -> null
+    }
 }
 
 /**
@@ -2877,6 +2899,67 @@ private object DotNetIlStringPlusIntrinsic : DotNetIlIntrinsicMethod() {
         codegen.emitStringValueExpression(receiver)
         codegen.emitStringValueExpression(argument)
         codegen.emit("call string ${codegen.coreLibraryReference}System.String::Concat(string, string)", pops = 2, pushes = 1)
+        return true
+    }
+}
+
+/** Common `CharSequence.length`, including the `String` override, through the classified carrier. */
+private object DotNetIlCharSequenceLengthIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Int32 || call.arguments.size != 1) return false
+        val receiver = call.arguments.single()
+            ?: dotNetUnsupported("missing receiver of 'CharSequence.length'")
+        codegen.emitExpression(receiver, DotNetIlValueType.Object)
+        codegen.emit(DotNetRuntimeLibraryHelpers.charSequenceLengthCallInstruction, pops = 1, pushes = 1)
+        return true
+    }
+}
+
+/** Common `CharSequence.get`, including the `String` override, through the classified carrier. */
+private object DotNetIlCharSequenceGetIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Char || call.arguments.size != 2) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing receiver of 'CharSequence.get'")
+        val index = call.arguments[1]
+            ?: dotNetUnsupported("missing index of 'CharSequence.get'")
+        codegen.emitExpression(receiver, DotNetIlValueType.Object)
+        codegen.emitExpression(index, DotNetIlValueType.Int32)
+        codegen.emit(DotNetRuntimeLibraryHelpers.charSequenceGetCallInstruction, pops = 2, pushes = 1)
+        return true
+    }
+}
+
+/** Common `CharSequence.subSequence`, preserving either String or implementation identity. */
+private object DotNetIlCharSequenceSubSequenceIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Object || call.arguments.size != 3) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing receiver of 'CharSequence.subSequence'")
+        val startIndex = call.arguments[1]
+            ?: dotNetUnsupported("missing start index of 'CharSequence.subSequence'")
+        val endIndex = call.arguments[2]
+            ?: dotNetUnsupported("missing end index of 'CharSequence.subSequence'")
+        codegen.emitExpression(receiver, DotNetIlValueType.Object)
+        codegen.emitExpression(startIndex, DotNetIlValueType.Int32)
+        codegen.emitExpression(endIndex, DotNetIlValueType.Int32)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.charSequenceSubSequenceCallInstruction,
+            pops = 3,
+            pushes = 1,
+        )
         return true
     }
 }

@@ -293,6 +293,19 @@ Importing the abstract bases early would require declaration eviction, copied Co
 or unjustified .NET intrinsics. All three are rejected. The private direct List view remains until
 these prerequisites are genuinely supported.
 
+### String-building prerequisite
+
+The first part of this prerequisite is the accepted
+[`CharSequence` classified-carrier decision](../decisions/char-sequence-carrier.md). JVM can reuse
+a host interface already implemented by its string; JavaScript supplies the closer precedent by
+classifying host strings beside Kotlin interface implementations and rewriting the three logical
+operations. CLR has the same constraint because `System.String` is sealed.
+
+This carrier must land and pass its representation gate before `Appendable` or `StringBuilder` is
+published. It deliberately does not decide builder storage. Once the carrier is proven, the next
+bounded audit must choose a complete Common `Appendable`/`StringBuilder` actualization rather than
+publishing a partial target-authored builder merely to unblock `joinToString`.
+
 ## Programme order
 
 1. Complete the string-building and typed collection-to-array prerequisites needed by the
