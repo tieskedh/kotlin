@@ -702,10 +702,32 @@ IL_whenNext_1:
   .method public hidebysig static int32 'basePick__KotlinErased__2f4ea34656dcad286e5775f19847dd60'(class 'GenericBase' 'value') cil managed
   {
     .maxstack 3
+    .locals init (
+      [0] class 'GenericBase' '<genericClassReceiver>',
+      [1] class 'GenericBase`1'<string> '<genericClassCapability>',
+      [2] int32 '<genericClassResult>'
+    )
     ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class 'GenericBase`1'<string>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericClassCanonicalFallback_0
+    ldloc.1
+    ldstr "base"
+    ldc.i4 41
+    callvirt instance !!0 class 'GenericBase`1'<string>::'select'<int32>(!0, !!0)
+    stloc.2
+    br IL_genericClassJoin_1
+IL_genericClassCanonicalFallback_0:
+    ldloc.0
     ldstr "base"
     ldc.i4 41
     callvirt instance !!0 'GenericBase'::'select__KotlinErased__a7bc541bf417ec11d75f0e1c8840e70d'<int32>(object, !!0)
+    stloc.2
+IL_genericClassJoin_1:
+    ldloc.2
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -714,56 +736,78 @@ IL_whenNext_1:
     .maxstack 3
     .locals init (
       [0] class 'MemberHost' 'host',
-      [1] class 'ChildPicker' 'intPicker',
-      [2] class 'GenericIdentity' 'inherited',
-      [3] class 'ArityOverloads' 'overloads'
+      [1] class 'MemberHost' '<genericClassReceiver>',
+      [2] class 'MemberHost`1'<int32> '<genericClassCapability>',
+      [3] int32 '<genericClassResult>',
+      [4] class 'ChildPicker' 'intPicker',
+      [5] class 'GenericIdentity' 'inherited',
+      [6] class 'ArityOverloads' 'overloads'
     )
     ldstr "captured"
     newobj instance void class 'MemberHost`1'<string>::.ctor(!0)
     stloc.0
     ldloc.0
+    castclass class 'MemberHost`1'<string>
     ldstr "context"
     ldc.i4 7
-    callvirt instance !!0 'MemberHost'::'choose__KotlinErased__146a9e1d1c4f658aef788611af52230a'<int32>(object, !!0)
+    call instance !!0 class 'MemberHost`1'<string>::'choose'<int32>(!0, !!0)
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
+    castclass class 'MemberHost`1'<string>
     ldc.i4.1
-    callvirt instance object 'MemberHost'::'capturedFrom__KotlinErased__ba80b7a9fde359e790daa4bd96fa27df'<bool>(!!0)
-    castclass [mscorlib]System.String
+    call instance !0 class 'MemberHost`1'<string>::'capturedFrom'<bool>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
+    castclass class 'MemberHost`1'<string>
     ldstr "relayed"
-    callvirt instance !!0 'MemberHost'::'relay__KotlinErased__da732c7795ab004696b1540d8fb53919'<string>(!!0)
+    call instance !!0 class 'MemberHost`1'<string>::'relay'<string>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
+    castclass class 'MemberHost`1'<string>
     ldc.i4 11
-    callvirt instance class 'MemberHost' 'MemberHost'::'wrap__KotlinErased__569f11134fd3f601f136f4cb7579621c'<int32>(!!0)
-    castclass class 'MemberHost'
+    call instance class 'MemberHost`1'<!!0> class 'MemberHost`1'<string>::'wrap'<int32>(!!0)
+    stloc.1
+    ldloc.1
+    isinst class 'MemberHost`1'<int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_genericClassCanonicalFallback_0
+    ldloc.2
+    call instance !0 class 'MemberHost`1'<int32>::'get_captured'()
+    stloc.3
+    br IL_genericClassJoin_1
+IL_genericClassCanonicalFallback_0:
+    ldloc.1
     callvirt instance object 'MemberHost'::'get_captured__KotlinErased__b94074f3789c7f79c3addcefe9a27128'()
     unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_genericClassJoin_1:
+    ldloc.3
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
+    castclass class 'MemberHost`1'<string>
     ldstr "read"
     newobj instance void class 'MemberHost`1'<string>::.ctor(!0)
-    callvirt instance !!0 'MemberHost'::'read__KotlinErased__3693b76ba16321e7fabe8473b6927586'<string>(class 'MemberHost')
+    call instance !!0 class 'MemberHost`1'<string>::'read__KotlinErased__fc983a1f7919aa0cdafcc1f792f33ff3'<string>(class 'MemberHost`1'<!!0>)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
+    castclass class 'MemberHost`1'<string>
     ldstr "marked"
     newobj instance void 'MarkedValue'::.ctor(string)
-    callvirt instance string 'MemberHost'::'labelOf__KotlinErased__cbbaef25a1ae36b9cddb94bdec8a25b1'<class 'MarkedValue'>(!!0)
+    call instance string class 'MemberHost`1'<string>::'labelOf'<class 'MarkedValue'>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void class 'TypeParameterBoundMember`1'<class 'Marked'>::.ctor()
     ldstr "owner-bound"
     newobj instance void 'MarkedValue'::.ctor(string)
-    callvirt instance !!0 'TypeParameterBoundMember'::'use__KotlinErased__128e75b66fe1b06a7150d1760ef71b1b'<class 'MarkedValue'>(!!0)
+    call instance !!0 class 'TypeParameterBoundMember`1'<class 'Marked'>::'use'<class 'MarkedValue'>(!!0)
     callvirt instance string 'MarkedValue'::'label'()
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void class 'Picker`1'<string>::.ctor()
@@ -774,8 +818,8 @@ IL_whenNext_1:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void class 'Picker`1'<int32>::.ctor()
-    stloc.1
-    ldloc.1
+    stloc 4
+    ldloc 4
     ldc.i4 1
     box [mscorlib]System.Int32
     ldstr "value-owner"
@@ -787,8 +831,8 @@ IL_whenNext_1:
     callvirt instance string 'BoundMemberImpl'::'labelOf'<class 'MarkedValue'>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'InheritedIdentity'::.ctor()
-    stloc.2
-    ldloc.2
+    stloc 5
+    ldloc 5
     ldstr "inherited-interface"
     callvirt instance !!0 'GenericIdentity'::'identity'<string>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
@@ -805,8 +849,8 @@ IL_whenNext_1:
     callvirt instance !!0 'StringDerived'::'select'<string>(string, !!0)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'ArityOverloads'::.ctor()
-    stloc.3
-    ldloc.3
+    stloc 6
+    ldloc 6
     ldc.i4 12
     call instance int32 'ArityOverloads'::'same'(int32)
     box [mscorlib]System.Int32
@@ -814,7 +858,7 @@ IL_whenNext_1:
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc.3
+    ldloc 6
     ldc.i4 13
     call instance int32 'ArityOverloads'::'same'<string>(int32)
     box [mscorlib]System.Int32

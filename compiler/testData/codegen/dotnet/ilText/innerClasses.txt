@@ -592,11 +592,12 @@ IL_boolStrTrue_0:
 IL_boolStrEnd_1:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
-    callvirt instance object 'InnerOuter'/'Generic'::'item__KotlinErased__a51081732eeefdac398e7579e0a38bb1'()
-    castclass [mscorlib]System.String
+    castclass class 'InnerOuter'/'Generic`1'<string>
+    call instance !0 class 'InnerOuter'/'Generic`1'<string>::'item'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
-    callvirt instance int32 'InnerOuter'/'Generic'::'outerSeed__KotlinErased__1a08e0acb39ade0e4d8ca03a7df074d6'()
+    castclass class 'InnerOuter'/'Generic`1'<string>
+    call instance int32 class 'InnerOuter'/'Generic`1'<string>::'outerSeed'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

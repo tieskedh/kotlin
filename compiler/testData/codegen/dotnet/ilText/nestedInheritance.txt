@@ -477,9 +477,29 @@
   .method public hidebysig static !!0 'readGeneric__KotlinErased__d41c8ce10c216eb3a05586ccf15ead2c'<'T'>(class 'GenericFamily`1'/'Base' 'value') cil managed
   {
     .maxstack 1
+    .locals init (
+      [0] class 'GenericFamily`1'/'Base' '<genericClassReceiver>',
+      [1] class 'GenericFamily`1'/'Base`1'<!!0> '<genericClassCapability>',
+      [2] !!0 '<genericClassResult>'
+    )
     ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class 'GenericFamily`1'/'Base`1'<!!0>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericClassCanonicalFallback_0
+    ldloc.1
+    callvirt instance !0 class 'GenericFamily`1'/'Base`1'<!!0>::'item'()
+    stloc.2
+    br IL_genericClassJoin_1
+IL_genericClassCanonicalFallback_0:
+    ldloc.0
     callvirt instance object 'GenericFamily`1'/'Base'::'item__KotlinErased__4f39bf4dd6e9a46921e6bad769ea9af4'()
     unbox.any !!0
+    stloc.2
+IL_genericClassJoin_1:
+    ldloc.2
     ret
   }
   .method public hidebysig static int32 'readParent'(class 'DepthFamily'/'Parent' 'value') cil managed

@@ -579,7 +579,7 @@ IL_tryEnd_0:
     pop
     ldloc.0
     newobj instance void class 'test.constraints.BoundBox`1'<class 'test.constraints.Impl'>::.ctor(!0)
-    callvirt instance int32 'test.constraints.BoundBox'::'total__KotlinErased__2cb8b9e99b2e9e1253577728c7c910e2'()
+    call instance int32 class 'test.constraints.BoundBox`1'<class 'test.constraints.Impl'>::'total'()
     pop
     ret
   }

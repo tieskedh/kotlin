@@ -1410,8 +1410,7 @@ IL_tryEnd_0:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "ten"
     newobj instance void class 'ObjectDeclarationHost'/'Independent`1'<string>::.ctor(!0)
-    callvirt instance object 'ObjectDeclarationHost'/'Independent'::'get_item__KotlinErased__cfb2b18064afd0e95c187f1432bedbf8'()
-    castclass [mscorlib]System.String
+    call instance !0 class 'ObjectDeclarationHost'/'Independent`1'<string>::'get_item'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 18
     newobj instance void 'ObjectDeclarationHost'/'Internal'::.ctor(int32)
@@ -1489,8 +1488,7 @@ IL_tryEnd_0:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "fifteen"
     newobj instance void class 'CompanionDeclarationHost'/'Companion'/'Independent`1'<string>::.ctor(!0)
-    callvirt instance object 'CompanionDeclarationHost'/'Companion'/'Independent'::'get_item__KotlinErased__bdb0e4b004056110b53f6a4c2315fb85'()
-    castclass [mscorlib]System.String
+    call instance !0 class 'CompanionDeclarationHost'/'Companion'/'Independent`1'<string>::'get_item'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 19
     newobj instance void 'CompanionDeclarationHost'/'Companion'/'Internal'::.ctor(int32)
@@ -1535,8 +1533,7 @@ IL_tryEnd_0:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "generic"
     newobj instance void class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<string>::.ctor(!0)
-    callvirt instance object 'GenericMetadataOwner'/'Singleton'/'Independent'::'get_item__KotlinErased__7dfb283ea4d25dbe104eb1f1a3e5d22a'()
-    castclass [mscorlib]System.String
+    call instance !0 class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<string>::'get_item'()
     call void [mscorlib]System.Console::WriteLine(string)
     call void 'GenericMetadataOwner'/'Singleton'/'NestedObject'::'<EnsureInitialized>'()
     ldsfld class 'GenericMetadataOwner'/'Singleton'/'NestedObject' 'GenericMetadataOwner'/'Singleton'/'NestedObject'::'INSTANCE'
