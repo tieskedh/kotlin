@@ -117,6 +117,14 @@ make a slice look smaller.
 The collection work provides ordinary user value and foundations for enums, while exercising
 generic interfaces, arrays, separate products, and profile-compatible stdlib publication.
 
+Generic-class member dispatch may now exploit an exact typed CLR capability through the bounded
+policy in [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md):
+fresh constructions and immutable aliases may call it directly, other exactly representable
+invariant receivers may probe once per call and fall back to canonical dispatch. Global provenance,
+explicit loop guard hoisting, visibility-based full erasure, and AOT-specific specialization remain on hold
+until measurements after this bounded path show a material residual cost. A failed capability
+probe is maintained for Kotlin correctness and is not a performance target.
+
 The remaining builder/abstract-base closure and modern enum support form a bootstrap cycle:
 builder source needs the public contracts family, that family declares `InvocationKind`, every
 modern enum publishes `entries`, and the authoritative `EnumEntriesList` needs the Common abstract

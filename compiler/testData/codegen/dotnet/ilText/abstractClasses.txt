@@ -1039,9 +1039,17 @@ IL_genericInterfaceJoin_1:
     .locals init (
       [0] class 'Leaf' 'leaf',
       [1] class 'AbstractBase' 'abstractView',
-      [2] class 'Choice' 'choice',
-      [3] class 'GenericChoice' 'genericChoice',
-      [4] class 'ConcreteConstrained' 'constrained'
+      [2] class 'AbstractBase' '<genericClassReceiver>',
+      [3] class 'AbstractBase`1'<string> '<genericClassCapability>',
+      [4] string '<genericClassResult>',
+      [5] class 'AbstractBase' '<genericClassReceiver>@5',
+      [6] class 'AbstractBase`1'<string> '<genericClassCapability>@6',
+      [7] class 'Choice' 'choice',
+      [8] class 'GenericChoice' 'genericChoice',
+      [9] class 'GenericChoice' '<genericClassReceiver>@9',
+      [10] class 'GenericChoice`1'<string> '<genericClassCapability>@10',
+      [11] string '<genericClassResult>@11',
+      [12] class 'ConcreteConstrained' 'constrained'
     )
     ldstr "stored"
     ldc.i4 3
@@ -1078,12 +1086,41 @@ IL_genericInterfaceJoin_1:
     ldloc.0
     stloc.1
     ldloc.1
+    stloc.2
+    ldloc.2
+    isinst class 'AbstractBase`1'<string>
+    stloc.3
+    ldloc.3
+    brfalse IL_genericClassCanonicalFallback_0
+    ldloc.3
+    ldstr "abstract"
+    callvirt instance !!0 class 'AbstractBase`1'<string>::'echo'<string>(!!0)
+    stloc 4
+    br IL_genericClassJoin_1
+IL_genericClassCanonicalFallback_0:
+    ldloc.2
     ldstr "abstract"
     callvirt instance !!0 'AbstractBase'::'echo__KotlinErased__b11b44609e61e6a916a3cc2518a1d98c'<string>(!!0)
+    stloc 4
+IL_genericClassJoin_1:
+    ldloc 4
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
+    stloc 5
+    ldloc 5
+    isinst class 'AbstractBase`1'<string>
+    stloc 6
+    ldloc 6
+    brfalse IL_genericClassCanonicalFallback_2
+    ldloc 6
+    ldc.i4 6
+    callvirt instance void class 'AbstractBase`1'<string>::'set_mutable'(int32)
+    br IL_genericClassJoin_3
+IL_genericClassCanonicalFallback_2:
+    ldloc 5
     ldc.i4 6
     callvirt instance void 'AbstractBase'::'set_mutable__KotlinErased__9909bc75f7a7cff857eefac8c9dd8046'(int32)
+IL_genericClassJoin_3:
     ldloc.0
     callvirt instance int32 'Leaf'::'get_mutable'()
     box [mscorlib]System.Int32
@@ -1103,27 +1140,42 @@ IL_genericInterfaceJoin_1:
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 5
     newobj instance void 'Chosen'::.ctor(int32)
-    stloc.2
-    ldloc.2
+    stloc 7
+    ldloc 7
     callvirt instance string 'Choice'::'describe'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "generic-sealed"
     newobj instance void 'StringChoice'::.ctor(string)
-    stloc.3
-    ldloc.3
+    stloc 8
+    ldloc 8
+    stloc 9
+    ldloc 9
+    isinst class 'GenericChoice`1'<string>
+    stloc 10
+    ldloc 10
+    brfalse IL_genericClassCanonicalFallback_4
+    ldloc 10
+    callvirt instance !0 class 'GenericChoice`1'<string>::'currentChoice'()
+    stloc 11
+    br IL_genericClassJoin_5
+IL_genericClassCanonicalFallback_4:
+    ldloc 9
     callvirt instance object 'GenericChoice'::'currentChoice__KotlinErased__ab4233bf6d5a794e0e6a993ce8ce8b03'()
     castclass [mscorlib]System.String
+    stloc 11
+IL_genericClassJoin_5:
+    ldloc 11
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "marked"
     newobj instance void 'Token'::.ctor(string)
     newobj instance void class 'ConcreteConstrained`1'<class 'Token'>::.ctor(!0)
-    stloc 4
-    ldloc 4
-    callvirt instance object 'ConcreteConstrained'::'current__KotlinErased__c4f8a8bf8056e37595e54a32fcf8d871'()
-    castclass 'Token'
+    stloc 12
+    ldloc 12
+    castclass class 'ConcreteConstrained`1'<class 'Token'>
+    callvirt instance !0 class 'ConcreteConstrained`1'<class 'Token'>::'current'()
     callvirt instance string 'Token'::'mark'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 4
+    ldloc 12
     callvirt instance string 'Constrained'::'marker__KotlinErased__9ecc6d57c6e1412a039544e619d539df'()
     call void [mscorlib]System.Console::WriteLine(string)
     call void 'FactoryBase'::'<EnsureInitialized>'()

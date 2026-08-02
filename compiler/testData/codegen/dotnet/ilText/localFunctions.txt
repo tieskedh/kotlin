@@ -382,13 +382,11 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "owner"
     newobj instance void class 'GenericLocalFunctionOwner`1'<string>::.ctor(!0)
-    callvirt instance object 'GenericLocalFunctionOwner'::'value__KotlinErased__9b9b95813f9fd94c9ee2a7d8e11bde74'()
-    castclass [mscorlib]System.String
+    call instance !0 class 'GenericLocalFunctionOwner`1'<string>::'value'()
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void class 'GenericLocalFunctionNoReceiver`1'<string>::.ctor()
     ldstr "no-owner"
-    callvirt instance object 'GenericLocalFunctionNoReceiver'::'value__KotlinErased__26fd930ae49b06a0ed44f7bbab5af2dc'(object)
-    castclass [mscorlib]System.String
+    call instance !0 class 'GenericLocalFunctionNoReceiver`1'<string>::'value'(!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 8
     newobj instance void 'LocalFunctionInInitializer'::.ctor(int32)

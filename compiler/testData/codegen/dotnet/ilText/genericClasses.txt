@@ -287,6 +287,122 @@ IL_notNull_0:
     castclass class 'Box'
     ret
   }
+  .method public hidebysig static int32 'guaranteedAliasRead'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'Box' 'constructed',
+      [1] class 'Box' 'alias'
+    )
+    ldc.i4 40
+    newobj instance void class 'Box`1'<int32>::.ctor(!0)
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloc.1
+    castclass class 'Box`1'<int32>
+    call instance !0 class 'Box`1'<int32>::'get'()
+    ret
+  }
+  .method public hidebysig static int32 'guardedIntRead__KotlinErased__df325ff2ae4d1c4875ee06199a02b55a'(class 'Box' 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'Box' '<genericClassReceiver>',
+      [1] class 'Box`1'<int32> '<genericClassCapability>',
+      [2] int32 '<genericClassResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class 'Box`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericClassCanonicalFallback_0
+    ldloc.1
+    call instance !0 class 'Box`1'<int32>::'get'()
+    stloc.2
+    br IL_genericClassJoin_1
+IL_genericClassCanonicalFallback_0:
+    ldloc.0
+    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
+    unbox.any [mscorlib]System.Int32
+    stloc.2
+IL_genericClassJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static void 'guardedIntWrite__KotlinErased__e9e2ed9320f72dc53408a7134da22299'(class 'Box' 'value', int32 'replacement') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'Box' '<genericClassReceiver>',
+      [1] class 'Box`1'<int32> '<genericClassCapability>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class 'Box`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericClassCanonicalFallback_0
+    ldloc.1
+    ldarg.1
+    call instance void class 'Box`1'<int32>::'put'(!0)
+    br IL_genericClassJoin_1
+IL_genericClassCanonicalFallback_0:
+    ldloc.0
+    ldarg.1
+    box [mscorlib]System.Int32
+    callvirt instance void 'Box'::'put__KotlinErased__bbc5fb7c0b34d2201abd5a7109ee29fe'(object)
+IL_genericClassJoin_1:
+    ret
+  }
+  .method public hidebysig static int32 'guardedMismatchedRead__KotlinErased__ec8d3c6f036dff89729188581b49c7f0'(class 'Box' 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'Box' '<genericClassReceiver>',
+      [1] class 'Box`1'<int32> '<genericClassCapability>',
+      [2] int32 '<genericClassResult>'
+    )
+    ldarg.0
+    castclass object
+    dup
+    brtrue IL_notNull_0
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_0:
+    ldtoken 'Box`1'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CheckGenericClassCast'(object, class [mscorlib]System.Type)
+    castclass class 'Box'
+    dup
+    brtrue IL_notNull_1
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_1:
+    stloc.0
+    ldloc.0
+    isinst class 'Box`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericClassCanonicalFallback_2
+    ldloc.1
+    call instance !0 class 'Box`1'<int32>::'get'()
+    stloc.2
+    br IL_genericClassJoin_3
+IL_genericClassCanonicalFallback_2:
+    ldloc.0
+    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
+    unbox.any [mscorlib]System.Int32
+    stloc.2
+IL_genericClassJoin_3:
+    ldloc.2
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
@@ -299,36 +415,40 @@ IL_notNull_0:
       [4] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
       [5] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>',
       [6] class 'Box' 'nested',
-      [7] class 'Pair2' 'p'
+      [7] class 'Box' '<genericClassReceiver>',
+      [8] class 'Box`1'<string> '<genericClassCapability>',
+      [9] string '<genericClassResult>',
+      [10] class 'Pair2' 'p'
     )
     ldstr "first"
     newobj instance void class 'Box`1'<string>::.ctor(!0)
     stloc.0
     ldloc.0
-    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
-    castclass [mscorlib]System.String
+    castclass class 'Box`1'<string>
+    call instance !0 class 'Box`1'<string>::'get'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
+    castclass class 'Box`1'<string>
     ldstr "second"
-    callvirt instance void 'Box'::'put__KotlinErased__bbc5fb7c0b34d2201abd5a7109ee29fe'(object)
+    call instance void class 'Box`1'<string>::'put'(!0)
     ldloc.0
-    callvirt instance object 'Box'::'get_item__KotlinErased__11135d00fc7c578746a3402b7976979d'()
-    castclass [mscorlib]System.String
+    castclass class 'Box`1'<string>
+    call instance !0 class 'Box`1'<string>::'get_item'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 41
     newobj instance void class 'Box`1'<int32>::.ctor(!0)
     stloc.1
     ldloc.1
+    castclass class 'Box`1'<int32>
     ldloc.1
-    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
-    unbox.any [mscorlib]System.Int32
+    castclass class 'Box`1'<int32>
+    call instance !0 class 'Box`1'<int32>::'get'()
     ldc.i4 1
     add
-    box [mscorlib]System.Int32
-    callvirt instance void 'Box'::'put__KotlinErased__bbc5fb7c0b34d2201abd5a7109ee29fe'(object)
+    call instance void class 'Box`1'<int32>::'put'(!0)
     ldloc.1
-    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
-    unbox.any [mscorlib]System.Int32
+    castclass class 'Box`1'<int32>
+    call instance !0 class 'Box`1'<int32>::'get'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -339,8 +459,8 @@ IL_notNull_0:
     newobj instance void class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>::.ctor(!0)
     stloc.2
     ldloc.2
-    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
-    unbox.any valuetype [mscorlib]System.Nullable`1<int32>
+    castclass class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>
+    call instance !0 class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>::'get'()
     stloc.3
     ldloc.3
     stloc 4
@@ -373,41 +493,44 @@ IL_whenEnd_0:
     newobj instance void class 'Box`1'<class 'Box`1'<string>>::.ctor(!0)
     stloc 6
     ldloc 6
-    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
-    castclass 'Box'
+    castclass class 'Box`1'<class 'Box`1'<string>>
+    call instance !0 class 'Box`1'<class 'Box`1'<string>>::'get'()
+    stloc 7
+    ldloc 7
+    isinst class 'Box`1'<string>
+    stloc 8
+    ldloc 8
+    brfalse IL_genericClassCanonicalFallback_3
+    ldloc 8
+    call instance !0 class 'Box`1'<string>::'get'()
+    stloc 9
+    br IL_genericClassJoin_4
+IL_genericClassCanonicalFallback_3:
+    ldloc 7
     callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
     castclass [mscorlib]System.String
+    stloc 9
+IL_genericClassJoin_4:
+    ldloc 9
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 1
     ldstr "one"
     newobj instance void class 'Pair2`2'<int32, string>::.ctor(!0, !1)
-    stloc 7
-    ldloc 7
-    callvirt instance object 'Pair2'::'get_first__KotlinErased__02a330782265286a0451a125eaba8bd1'()
-    unbox.any [mscorlib]System.Int32
+    stloc 10
+    ldloc 10
+    castclass class 'Pair2`2'<int32, string>
+    call instance !0 class 'Pair2`2'<int32, string>::'get_first'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 7
-    callvirt instance object 'Pair2'::'get_second__KotlinErased__e317903a6367ed0a67a84bfcbd0109c7'()
-    castclass [mscorlib]System.String
+    ldloc 10
+    castclass class 'Pair2`2'<int32, string>
+    call instance !1 class 'Pair2`2'<int32, string>::'get_second'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
     call bool 'genericClassesKt'::'erasedGenericTest'(object)
-    brtrue IL_boolStrTrue_3
-    ldstr "false"
-    br IL_boolStrEnd_4
-IL_boolStrTrue_3:
-    ldstr "true"
-IL_boolStrEnd_4:
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc.0
-    call class 'Box' 'genericClassesKt'::'erasedGenericSafeCast'(object)
-    castclass class 'Box'
-    ldloc.0
-    ceq
     brtrue IL_boolStrTrue_5
     ldstr "false"
     br IL_boolStrEnd_6
@@ -416,7 +539,7 @@ IL_boolStrTrue_5:
 IL_boolStrEnd_6:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    call class 'Box' 'genericClassesKt'::'erasedGenericCast'(object)
+    call class 'Box' 'genericClassesKt'::'erasedGenericSafeCast'(object)
     castclass class 'Box'
     ldloc.0
     ceq
@@ -426,6 +549,18 @@ IL_boolStrEnd_6:
 IL_boolStrTrue_7:
     ldstr "true"
 IL_boolStrEnd_8:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class 'Box' 'genericClassesKt'::'erasedGenericCast'(object)
+    castclass class 'Box'
+    ldloc.0
+    ceq
+    brtrue IL_boolStrTrue_9
+    ldstr "false"
+    br IL_boolStrEnd_10
+IL_boolStrTrue_9:
+    ldstr "true"
+IL_boolStrEnd_10:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
     call string 'genericClassesKt'::'erasedOverload__KotlinErased__1f4a754b0e33e25b1978454a64842ecd'(class 'Box')

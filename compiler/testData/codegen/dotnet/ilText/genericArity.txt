@@ -131,8 +131,7 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 2
     newobj instance void class 'HolderG`1'<int32>::.ctor(!0)
-    callvirt instance object 'HolderG'::'get_v__KotlinErased__b8544947732f7a92004a733e8798fc91'()
-    unbox.any [mscorlib]System.Int32
+    call instance !0 class 'HolderG`1'<int32>::'get_v'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

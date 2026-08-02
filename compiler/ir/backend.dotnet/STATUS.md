@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: post-substitution reified array-operation readiness
+- Last completed feature: bounded typed generic-class member dispatch
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -87,8 +87,17 @@ negative.
 Ordinary Kotlin-owned generic classes now have one declaration-erased Kotlin
 identity without discarding truthful CLR generic capability. Every logical
 `C<T>` uses a non-generic canonical interface for Kotlin storage, projected
-member dispatch, and casts, while the same object remains the invariant CLR
+fallback dispatch, and casts, while the same object remains the invariant CLR
 `C<T>` implementation for state, inheritance, constructors, and C# use.
+Fresh constructions and immutable local aliases now call that typed capability
+directly; other fully representable invariant receivers probe it once per call
+and fall back to the canonical slot on a miss. Value-type fast branches contain
+no bridge boxing, arguments and receivers retain Kotlin evaluation order, and
+typed virtual calls retain CLR override dispatch. Unchecked mismatches are not
+optimized: they miss the probe and keep the required delayed failure at the
+canonical argument/result barrier. Global provenance, compiler-managed guard
+hoisting/loop versioning, visibility-based full erasure, and AOT-specific
+specialization remain explicitly on hold.
 Runtime tests and casts additionally verify the producer-recorded open typed
 TypeDef through the actual base chain, rejecting hostile canonical-interface
 implementors without wrapping or changing identity. ABI 17 records both owner
@@ -139,7 +148,10 @@ closed.
 
 ## Active state
 
-No implementation slice is half-landed. Ordinary non-reified inline bodies now
+No implementation slice is half-landed. Bounded generic-class dispatch now
+uses truthful typed CLR capability where available without changing canonical
+identity, physical ABI 17, library metadata, or failure semantics. Ordinary
+non-reified inline bodies now
 bind exact signatures throughout the complete frontend-selected dependency
 graph. Resolution remains non-linking, and an incomplete graph fails at the
 post-inline/pre-target-lowering boundary instead of crashing an arbitrary
@@ -223,18 +235,24 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Audit and select the complete Common `KClass` and class-literal contract as
+1. Audit and admit the complete generated Common `Iterable.fold`/
+   `foldIndexed` and `List.foldRight`/`foldRightIndexed` family if its direct,
+   packaged, portable, and inlined dependency closure confirms the current
+   callable, overflow, iterator, and generic-result representations. It must
+   use the authoritative generator bodies and must not enter the parked
+   builder/enum/annotation cluster.
+2. Audit and select the complete Common `KClass` and class-literal contract as
    the next reified prerequisite. Keep Kotlin logical classifier identity
    authoritative where `System.Type` is only physical evidence, compare the
    mature targets' lowering and runtime boundaries, and resolve dynamic
    `obj::class` across every already-admitted classified carrier before
    implementation. Keep `KType` and the public reified gates separate.
-2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
+3. Audit and select the atomic enum/annotation/contracts/builder/abstract-
    collections/`EnumEntries` bootstrap cluster; do not create builder-only or
    one-enum stubs.
-3. Actualize the selected complete Common `Appendable`/`StringBuilder` and
+4. Actualize the selected complete Common `Appendable`/`StringBuilder` and
    generated `joinTo`/`joinToString` closure once that foundation exists.
-4. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
+5. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
    the remaining builder closure is complete.
 
 ## Navigation

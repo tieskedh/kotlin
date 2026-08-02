@@ -1152,7 +1152,8 @@ internal class DotNetIlExpressionCodegen(
     /** Uses an optional typed capability in statement position, then discards any produced value. */
     fun tryEmitCapabilityCallForDiscard(call: IrCall): Boolean {
         val logicalResultType = if (call.type.isUnit()) null else typeMapper.toDotNetIlValueType(call.type) ?: return false
-        val emitted = emitGenericInterfaceCapabilityCallOrNull(call, logicalResultType) ||
+        val emitted = emitGenericClassCapabilityCallOrNull(call, logicalResultType) ||
+                emitGenericInterfaceCapabilityCallOrNull(call, logicalResultType) ||
                 (logicalResultType != null && emitCallableCapabilityCallOrNull(call, logicalResultType))
         if (!emitted) return false
         if (logicalResultType != null) methodContext.emit("pop", pops = 1)
@@ -1782,6 +1783,7 @@ internal class DotNetIlExpressionCodegen(
     }
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
+        if (emitGenericClassCapabilityCallOrNull(call, expectedType)) return
         if (emitGenericInterfaceCapabilityCallOrNull(call, expectedType)) return
         if (emitCallableCapabilityCallOrNull(call, expectedType)) return
         val returnType = emitCall(call)
@@ -1837,6 +1839,171 @@ internal class DotNetIlExpressionCodegen(
         }
         if (returnType.isNullableTypeParameter()) return true
         return allOverridden().any { overridden -> overridden.returnType.isNullableTypeParameter() }
+    }
+
+    /**
+     * Uses the invariant CLR implementation of a split generic class without weakening its
+     * declaration-erased Kotlin identity. Fresh constructions and immutable aliases have a
+     * guaranteed capability and take the typed member directly. Every other exactly representable
+     * invariant receiver is probed once; a miss invokes the canonical slot on the same object so
+     * unchecked casts retain their required delayed failure at the later typed-use barrier.
+     *
+     * Receiver and arguments are evaluated once in Kotlin order. The probe happens after the
+     * receiver and before the arguments, and arguments are emitted only in the selected branch.
+     * Failed probes are correctness-only paths: no cache, loop versioning, or special failure
+     * optimization is introduced here.
+     */
+    private fun emitGenericClassCapabilityCallOrNull(
+        call: IrCall,
+        expectedType: DotNetIlValueType?,
+    ): Boolean {
+        if (call.superQualifierSymbol != null) return false
+        val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
+        val owner = callee.parent as? IrClass ?: return false
+        if (!typeMapper.isSplitGenericClass(owner)) return false
+        val receiver = call.arguments.firstOrNull() ?: return false
+        val receiverType = receiver.type as? IrSimpleType ?: return false
+        if ((receiverType.classifier as? IrClassSymbol)?.owner != owner) return false
+        val capability = try {
+            typeMapper.genericClassCapabilityTypeOrNull(receiver.type)
+        } catch (_: DotNetIlUnsupportedException) {
+            null
+        } ?: return false
+        val typedInfo = typeMapper.typedGenericClassFunctionInfoOrNull(callee) ?: return false
+        if (!typedInfo.isInstance || typedInfo.owner.ilTypeRef != capability.classInfo.ilTypeRef) return false
+
+        // Inside a typed implementation body the ordinary function table already resolves to the
+        // physical member. This helper is only the canonical-call-site optimization.
+        val canonical = resolveCall(call)
+        val genericClassInfo = typeMapper.genericClassInfoOrNull(owner) ?: return false
+        if (
+            !canonical.info.isInstance ||
+            canonical.info.owner.ilTypeRef != genericClassInfo.canonicalClassInfo.ilTypeRef
+        ) {
+            return false
+        }
+        val canonicalReceiverType = canonical.receiverType ?: return false
+        val methodInstantiation = canonical.methodInstantiation
+        val typedParameterTypes = typedInfo.signature.parameterTypes.map { parameterType ->
+            parameterType.substituteDotNetTypeParameters(capability.arguments, methodInstantiation)
+        }
+        if (call.arguments.size != typedParameterTypes.size || call.arguments.size != canonical.parameterTypes.size) {
+            return false
+        }
+        val typedReturnType = typedInfo.signature.returnType.substituteDotNetTypeParameters(
+            capability.arguments,
+            methodInstantiation,
+        )
+        val typedResultCoercion: DotNetOptionalInstruction?
+        val canonicalResultInstruction: String?
+        if (expectedType == null) {
+            if (typedReturnType != DotNetIlReturnType.Void || canonical.returnType != DotNetIlReturnType.Void) {
+                return false
+            }
+            typedResultCoercion = null
+            canonicalResultInstruction = null
+        } else {
+            val typedResultType = (typedReturnType as? DotNetIlReturnType.Value)?.type ?: return false
+            val canonicalResultType = (canonical.returnType as? DotNetIlReturnType.Value)?.type ?: return false
+            typedResultCoercion = wideningCoercionOrNull(typedResultType, expectedType) ?: return false
+            canonicalResultInstruction = when {
+                canonicalResultType.isDotNetAssignableTo(expectedType) -> null
+                canonicalResultType == DotNetIlValueType.Object ->
+                    expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference) ?: return false
+                else -> wideningCoercionOrNull(canonicalResultType, expectedType)?.instruction ?: return false
+            }
+        }
+
+        fun emitTypedCall() {
+            emitArguments(
+                call.arguments.drop(1),
+                typedParameterTypes.drop(1),
+                "typed generic-class call to '${callee.name.asString()}'",
+            )
+            methodContext.emit(
+                typedInfo.renderCallInstruction(
+                    typedInfo.physicalMethodName ?: callee.dotNetIlMethodName(),
+                    virtual = callee.isDotNetVirtual(),
+                    ownerToken = capability.nameInSignature,
+                    methodInstantiation = methodInstantiation,
+                ),
+                pops = typedInfo.signature.parameterTypes.size,
+                pushes = if (typedReturnType is DotNetIlReturnType.Value) 1 else 0,
+            )
+            typedResultCoercion?.instruction?.let { instruction ->
+                methodContext.emit(instruction, pops = 1, pushes = 1)
+            }
+        }
+
+        if (receiver.hasGuaranteedGenericClassCapability(capability)) {
+            emitExpression(receiver, capability)
+            emitTypedCall()
+            return true
+        }
+
+        emitExpression(receiver, canonicalReceiverType)
+        val receiverSlot = spillToSyntheticLocal(canonicalReceiverType, "<genericClassReceiver>")
+        val capabilitySlot = methodContext.declareSyntheticLocal(capability, "<genericClassCapability>")
+        val resultSlot = expectedType?.let { resultType ->
+            methodContext.declareSyntheticLocal(resultType, "<genericClassResult>")
+        }
+        val fallbackLabel = methodContext.nextLabel("genericClassCanonicalFallback")
+        val joinLabel = methodContext.nextLabel("genericClassJoin")
+
+        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        methodContext.emit("isinst ${capability.nameInSignature}", pops = 1, pushes = 1)
+        methodContext.emit(storeLocalInstruction(capabilitySlot.index), pops = 1)
+        methodContext.emit(loadLocalInstruction(capabilitySlot.index), pushes = 1)
+        methodContext.emitBranch("brfalse", fallbackLabel, pops = 1)
+
+        methodContext.emit(loadLocalInstruction(capabilitySlot.index), pushes = 1)
+        emitTypedCall()
+        resultSlot?.let { slot -> methodContext.emit(storeLocalInstruction(slot.index), pops = 1) }
+        methodContext.emitGoto(joinLabel)
+
+        methodContext.emitLabel(fallbackLabel)
+        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        emitArguments(
+            call.arguments.drop(1),
+            canonical.parameterTypes.drop(1),
+            "canonical generic-class call to '${callee.name.asString()}'",
+        )
+        methodContext.emit(
+            canonical.info.renderCallInstruction(
+                canonical.info.physicalMethodName ?: callee.dotNetIlMethodName(),
+                virtual = canonical.virtual,
+                ownerToken = canonical.ownerToken,
+                methodInstantiation = canonical.methodInstantiation,
+            ),
+            pops = canonical.info.signature.parameterTypes.size,
+            pushes = if (canonical.returnType is DotNetIlReturnType.Value) 1 else 0,
+        )
+        canonicalResultInstruction?.let { instruction ->
+            methodContext.emit(instruction, pops = 1, pushes = 1)
+        }
+        resultSlot?.let { slot -> methodContext.emit(storeLocalInstruction(slot.index), pops = 1) }
+
+        methodContext.emitLabel(joinLabel)
+        resultSlot?.let { slot -> methodContext.emit(loadLocalInstruction(slot.index), pushes = 1) }
+        return true
+    }
+
+    /** A capability proof which cannot be forged by an unchecked cast or mutable flow. */
+    private fun IrExpression.hasGuaranteedGenericClassCapability(
+        capability: DotNetIlValueType.GenericInstance,
+        visitedVariables: MutableSet<IrVariable> = hashSetOf(),
+    ): Boolean = when (this) {
+        is IrConstructorCall -> {
+            val constructedInfo = typeMapper.genericClassInfoOrNull(symbol.owner.constructedClass)
+            constructedInfo?.typedClassInfo?.ilTypeRef == capability.classInfo.ilTypeRef &&
+                    typeMapper.genericClassCapabilityTypeOrNull(type) == capability
+        }
+        is IrGetValue -> {
+            val variable = symbol.owner as? IrVariable
+            variable != null && !variable.isVar && visitedVariables.add(variable) &&
+                    variable.initializer?.hasGuaranteedGenericClassCapability(capability, visitedVariables) == true
+        }
+        else -> false
     }
 
     /**

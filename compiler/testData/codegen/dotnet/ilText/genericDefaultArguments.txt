@@ -553,7 +553,8 @@ IL_whenEnd_0:
     unbox.any !!0
     pop
     ldloc.0
-    callvirt instance object 'GenericDefaults'::'throughMember__KotlinErased__678750965327297ec7b5e1010ba70bcb'()
+    castclass class 'GenericDefaults`1'<!!0>
+    call instance !0 class 'GenericDefaults`1'<!!0>::'throughMember'()
     pop
     ldloc.0
     castclass class 'GenericDefaults`1'<!!0>

@@ -988,7 +988,7 @@ IL_genericInterfaceJoin_1:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "owner"
     newobj instance void class 'AnonymousOwner`1'<string>::.ctor(!0)
-    callvirt instance class 'AnonymousValue' 'AnonymousOwner'::'source__KotlinErased__9d72aa5a9a8f82f0e7ebcffdabc70d80'()
+    call instance class 'AnonymousValue' class 'AnonymousOwner`1'<string>::'source'()
     stloc.0
     ldloc.0
     isinst class 'AnonymousValue`1'<string>

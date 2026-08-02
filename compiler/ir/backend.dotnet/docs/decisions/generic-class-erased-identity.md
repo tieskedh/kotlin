@@ -146,9 +146,25 @@ erased slots to typed virtual/source members. They cast or unbox an erased
 input before dispatch and box or widen a typed result afterward. A cast never
 allocates an adapter, wrapper, proxy, or copy.
 
-Kotlin calls use canonical dispatch as the stable semantic path. A compiler
-may use the typed view as a proven local optimization only when failure to
-obtain that view falls back to canonical dispatch and cannot change behavior.
+Canonical dispatch remains the stable semantic fallback for Kotlin calls. A
+call may use the typed `C<T>` member directly when the receiver's physical
+capability is proven, or probe that capability once with `isinst C<T>` and use
+canonical dispatch when the probe misses. The receiver and arguments are
+evaluated once in Kotlin order, typed virtual calls retain CLR override
+dispatch, and both paths return the same logical Kotlin value. The probe never
+turns `C<T>` into Kotlin runtime identity: it selects an optional execution
+capability on the same object.
+
+The first provenance boundary is deliberately local and conservative. A
+fresh `C<T>` construction and immutable local aliases which lead directly to
+that construction have a guaranteed capability. A static Kotlin `C<T>` type,
+parameter, field, mutable local, control-flow join, or cast does not: an
+unchecked Kotlin cast can produce that logical view while the object remains a
+different CLR construction. Such receivers take the guarded path. When a
+guard misses, the canonical call preserves Kotlin's required delayed failure
+at the later argument/result use barrier. That exceptional path is a
+correctness path, not an optimization target.
+
 C# may construct, call, and derive from the typed `C<T>` class directly.
 Kotlin functions expose their canonical Kotlin ABI unless an explicit C#
 export product later emits a typed adapter.
@@ -249,6 +265,25 @@ stars, projections, and erased casts. It does not by itself enable:
 Reified substitution may use this classifier only after the remaining
 operation closure is complete.
 
+## Decision evidence
+
+A representative .NET 10 microbenchmark over two million `Box<Int>` operations
+measured the permanent cost which motivated this bounded path. Canonical reads
+allocated about 48 MB and took 11.77 ms; a capability probe at every read
+allocated 64 bytes and took 1.75 ms, while an explicitly hoisted probe and a
+direct typed call both took about 0.97 ms. Canonical read/write allocated about
+96 MB and took 19.05 ms; a probe at every update allocated 64 bytes and took
+3.49 ms, compared with 3.63 ms for the explicitly hoisted form and 3.10 ms for
+the direct typed form.
+
+These are microbenchmark observations rather than language semantics, but they
+show that one ordinary per-call probe already removes the boxing and allocation
+problem and recovers most of the typed route's throughput. Committed IL tests
+therefore pin allocation-free value-type fast branches and canonical fallback
+branches, while runtime and separate-library tests pin behavior. The residual
+gap does not justify compiler-managed loop versioning or global provenance
+analysis without further measurements from actual target programs.
+
 ## Design attack
 
 - **Keep only closed CLR `C<T>` types.** Rejected. Runtime checks become too
@@ -276,6 +311,29 @@ operation closure is complete.
 - **Choose canonical versus typed storage by local provenance.** Rejected.
   Values cross fields, joins, libraries, unchecked casts, and foreign calls;
   one logical Kotlin ABI type cannot have a flow-dependent physical contract.
+- **Treat a static `C<T>` receiver type as exact physical provenance.**
+  Rejected. Unchecked casts deliberately allow a mismatched construction to
+  retain the declaration-erased Kotlin view until a typed member use.
+- **Optimize a failed typed-capability probe.** Rejected. The miss must execute
+  canonical semantics and normally reaches an exceptional typed-use barrier;
+  making that already exceptional path faster does not justify more state or
+  control-flow complexity.
+
+## On hold
+
+The bounded dispatch optimization does not select any of these larger
+programmes:
+
+- global SSA/CFG provenance or interprocedural exactness analysis;
+- cached probes, explicit loop versioning, or compiler-managed guard hoisting
+  beyond ordinary CLR JIT/AOT optimization;
+- a distinct fully erased physical representation for private or local generic
+  classes based on visibility; or
+- profile-specific specialization policy for ReadyToRun or NativeAOT.
+
+They require actual generated-code measurements which remain material after
+the direct/guarded typed path. None may change canonical storage, runtime
+classification, casts, identity, or the published ABI.
 
 ## Completion gate
 

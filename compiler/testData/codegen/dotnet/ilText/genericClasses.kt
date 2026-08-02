@@ -36,6 +36,25 @@ fun erasedGenericTest(value: Any): Boolean = value is Box<*>
 
 fun erasedGenericSafeCast(value: Any): Box<*>? = value as? Box<*>
 
+// A fresh construction and immutable aliases are the deliberately bounded proof set. These calls
+// must target Box`1<int32> directly and must not box the value result.
+fun guaranteedAliasRead(): Int {
+    val constructed = Box(40)
+    val alias = constructed
+    return alias.get()
+}
+
+// A Kotlin Box<Int> parameter is not physical proof: unchecked casts can forge this logical view.
+// The fast branch probes Box`1<int32>; the miss must retain canonical delayed-failure semantics.
+fun guardedIntRead(value: Box<Int>): Int = value.get()
+
+fun guardedIntWrite(value: Box<Int>, replacement: Int) {
+    value.put(replacement)
+}
+
+@Suppress("UNCHECKED_CAST")
+fun guardedMismatchedRead(value: Box<String>): Int = (value as Any as Box<Int>).get()
+
 fun main() {
     val bs = Box<String>("first")
     println(bs.get())

@@ -291,8 +291,7 @@ IL_whenEnd_0:
     ldc.i4 -9
     conv.i1
     newobj instance void class 'test.NarrowBox`1'<int8>::.ctor(!0)
-    callvirt instance object 'test.NarrowBox'::'get_value__KotlinErased__cb8c6003ddaec19f8a10b571b9df0a92'()
-    unbox.any [mscorlib]System.SByte
+    call instance !0 class 'test.NarrowBox`1'<int8>::'get_value'()
     box [mscorlib]System.SByte
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

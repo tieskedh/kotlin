@@ -801,19 +801,46 @@
       [7] class 'GenericInnerPairBase' 'pair',
       [8] class 'GenericInnerOuter`1'/'First`2'/'Second' 'second',
       [9] class 'GenericInnerOuter`1'/'ConstructorPaths' 'constructorPath',
-      [10] class 'DuplicateGenericInnerOuter`1'/'Duplicate' 'duplicate'
+      [10] class 'DuplicateGenericInnerOuter`1'/'Duplicate' 'duplicate',
+      [11] class 'GenericInnerOuter`1'/'Plain' '<genericClassReceiver>',
+      [12] class 'GenericInnerOuter`1'/'Plain`1'<string> '<genericClassCapability>',
+      [13] string '<genericClassResult>',
+      [14] class 'GenericInnerOuter`1'/'Plain' '<genericClassReceiver>@14',
+      [15] class 'GenericInnerOuter`1'/'Plain`1'<string> '<genericClassCapability>@15',
+      [16] bool '<genericClassResult>@16',
+      [17] class 'GenericInnerOuter`1'/'Own' '<genericClassReceiver>@17',
+      [18] class 'GenericInnerOuter`1'/'Own`2'<int32, string> '<genericClassCapability>@18',
+      [19] int32 '<genericClassResult>@19',
+      [20] class 'GenericInnerOuter`1'/'Own' '<genericClassReceiver>@20',
+      [21] class 'GenericInnerOuter`1'/'Own`2'<int32, string> '<genericClassCapability>@21',
+      [22] string '<genericClassResult>@22',
+      [23] class 'GenericInnerOuter`1'/'Own' '<genericClassReceiver>@23',
+      [24] class 'GenericInnerOuter`1'/'Own`2'<int32, string> '<genericClassCapability>@24',
+      [25] int32 '<genericClassResult>@25',
+      [26] class 'GenericInnerOuter`1'/'Base' '<genericClassReceiver>@26',
+      [27] class 'GenericInnerOuter`1'/'Base`2'<int32, string> '<genericClassCapability>@27',
+      [28] int32 '<genericClassResult>@28',
+      [29] class 'GenericInnerOuter`1'/'Base' '<genericClassReceiver>@29',
+      [30] class 'GenericInnerOuter`1'/'Base`2'<int32, string> '<genericClassCapability>@30',
+      [31] string '<genericClassResult>@31',
+      [32] class 'GenericInnerPairBase' '<genericClassReceiver>@32',
+      [33] class 'GenericInnerPairBase`2'<int32, string> '<genericClassCapability>@33',
+      [34] int32 '<genericClassResult>@34',
+      [35] class 'GenericInnerPairBase' '<genericClassReceiver>@35',
+      [36] class 'GenericInnerPairBase`2'<int32, string> '<genericClassCapability>@36',
+      [37] string '<genericClassResult>@37'
     )
     ldstr "outer"
     newobj instance void class 'GenericInnerOuter`1'<string>::.ctor(!0)
     stloc.0
     ldloc.0
-    callvirt instance class 'GenericInnerOuter`1'/'Plain' 'GenericInnerOuter'::'plain__KotlinErased__ae31ebbe04ff1bf02e8e5f90e6cc0478'()
-    castclass class 'GenericInnerOuter`1'/'Plain'
+    castclass class 'GenericInnerOuter`1'<string>
+    call instance class 'GenericInnerOuter`1'/'Plain`1'<!0> class 'GenericInnerOuter`1'<string>::'plain'()
     stloc.1
     ldloc.0
+    castclass class 'GenericInnerOuter`1'<string>
     ldc.i4 7
-    callvirt instance class 'GenericInnerOuter`1'/'Own' 'GenericInnerOuter'::'own__KotlinErased__c2346411c133e2415ad1d3399158f951'<int32>(!!0)
-    castclass class 'GenericInnerOuter`1'/'Own'
+    call instance class 'GenericInnerOuter`1'/'Own`2'<!!0, !0> class 'GenericInnerOuter`1'<string>::'own'<int32>(!!0)
     stloc.2
     ldloc.2
     stloc.3
@@ -880,40 +907,102 @@ IL_notNull_4:
     newobj instance void class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<int32, string>::.ctor(class 'DuplicateGenericInnerOuter`1'<!1>, !0)
     stloc 10
     ldloc.1
+    stloc 11
+    ldloc 11
+    isinst class 'GenericInnerOuter`1'/'Plain`1'<string>
+    stloc 12
+    ldloc 12
+    brfalse IL_genericClassCanonicalFallback_5
+    ldloc 12
+    call instance !0 class 'GenericInnerOuter`1'/'Plain`1'<string>::'outer'()
+    stloc 13
+    br IL_genericClassJoin_6
+IL_genericClassCanonicalFallback_5:
+    ldloc 11
     callvirt instance object 'GenericInnerOuter`1'/'Plain'::'outer__KotlinErased__87380314a48ad91c8a2bf21539836e65'()
     castclass [mscorlib]System.String
+    stloc 13
+IL_genericClassJoin_6:
+    ldloc 13
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
+    stloc 14
+    ldloc 14
+    isinst class 'GenericInnerOuter`1'/'Plain`1'<string>
+    stloc 15
+    ldloc 15
+    brfalse IL_genericClassCanonicalFallback_7
+    ldloc 15
+    ldloc.0
+    castclass class 'GenericInnerOuter`1'<string>
+    call instance bool class 'GenericInnerOuter`1'/'Plain`1'<string>::'owns__KotlinErased__97ca7e9012e4bce92e7c83ed3d14258e'(class 'GenericInnerOuter`1'<!0>)
+    stloc 16
+    br IL_genericClassJoin_8
+IL_genericClassCanonicalFallback_7:
+    ldloc 14
     ldloc.0
     callvirt instance bool 'GenericInnerOuter`1'/'Plain'::'owns__KotlinErased__3fdce0754b0cd99c0122f332a49c3038'(class 'GenericInnerOuter')
-    brtrue IL_boolStrTrue_5
+    stloc 16
+IL_genericClassJoin_8:
+    ldloc 16
+    brtrue IL_boolStrTrue_9
     ldstr "false"
-    br IL_boolStrEnd_6
-IL_boolStrTrue_5:
+    br IL_boolStrEnd_10
+IL_boolStrTrue_9:
     ldstr "true"
-IL_boolStrEnd_6:
+IL_boolStrEnd_10:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.2
+    stloc 17
+    ldloc 17
+    isinst class 'GenericInnerOuter`1'/'Own`2'<int32, string>
+    stloc 18
+    ldloc 18
+    brfalse IL_genericClassCanonicalFallback_11
+    ldloc 18
+    call instance !0 class 'GenericInnerOuter`1'/'Own`2'<int32, string>::'item'()
+    stloc 19
+    br IL_genericClassJoin_12
+IL_genericClassCanonicalFallback_11:
+    ldloc 17
     callvirt instance object 'GenericInnerOuter`1'/'Own'::'item__KotlinErased__5a78b18fa4425222e9a22c1bc7b40522'()
     unbox.any [mscorlib]System.Int32
+    stloc 19
+IL_genericClassJoin_12:
+    ldloc 19
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.2
+    stloc 20
+    ldloc 20
+    isinst class 'GenericInnerOuter`1'/'Own`2'<int32, string>
+    stloc 21
+    ldloc 21
+    brfalse IL_genericClassCanonicalFallback_13
+    ldloc 21
+    call instance !1 class 'GenericInnerOuter`1'/'Own`2'<int32, string>::'outer'()
+    stloc 22
+    br IL_genericClassJoin_14
+IL_genericClassCanonicalFallback_13:
+    ldloc 20
     callvirt instance object 'GenericInnerOuter`1'/'Own'::'outer__KotlinErased__b58e2908867ed5bc872fe00233170c04'()
     castclass [mscorlib]System.String
+    stloc 22
+IL_genericClassJoin_14:
+    ldloc 22
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 4
     ldloc.2
     ceq
-    brtrue IL_boolStrTrue_7
+    brtrue IL_boolStrTrue_15
     ldstr "false"
-    br IL_boolStrEnd_8
-IL_boolStrTrue_7:
+    br IL_boolStrEnd_16
+IL_boolStrTrue_15:
     ldstr "true"
-IL_boolStrEnd_8:
+IL_boolStrEnd_16:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 4
     callvirt instance object 'GenericInnerOuter`1'/'Own'::'item__KotlinErased__5a78b18fa4425222e9a22c1bc7b40522'()
@@ -924,60 +1013,135 @@ IL_boolStrEnd_8:
     call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 5
+    stloc 23
+    ldloc 23
+    isinst class 'GenericInnerOuter`1'/'Own`2'<int32, string>
+    stloc 24
+    ldloc 24
+    brfalse IL_genericClassCanonicalFallback_17
+    ldloc 24
+    call instance !0 class 'GenericInnerOuter`1'/'Own`2'<int32, string>::'item'()
+    stloc 25
+    br IL_genericClassJoin_18
+IL_genericClassCanonicalFallback_17:
+    ldloc 23
     callvirt instance object 'GenericInnerOuter`1'/'Own'::'item__KotlinErased__5a78b18fa4425222e9a22c1bc7b40522'()
     unbox.any [mscorlib]System.Int32
+    stloc 25
+IL_genericClassJoin_18:
+    ldloc 25
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 6
+    stloc 26
+    ldloc 26
+    isinst class 'GenericInnerOuter`1'/'Base`2'<int32, string>
+    stloc 27
+    ldloc 27
+    brfalse IL_genericClassCanonicalFallback_19
+    ldloc 27
+    call instance !0 class 'GenericInnerOuter`1'/'Base`2'<int32, string>::'item'()
+    stloc 28
+    br IL_genericClassJoin_20
+IL_genericClassCanonicalFallback_19:
+    ldloc 26
     callvirt instance object 'GenericInnerOuter`1'/'Base'::'item__KotlinErased__46c996ea1fb81ccabd36edb5e75ce446'()
     unbox.any [mscorlib]System.Int32
+    stloc 28
+IL_genericClassJoin_20:
+    ldloc 28
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 6
+    stloc 29
+    ldloc 29
+    isinst class 'GenericInnerOuter`1'/'Base`2'<int32, string>
+    stloc 30
+    ldloc 30
+    brfalse IL_genericClassCanonicalFallback_21
+    ldloc 30
+    callvirt instance !1 class 'GenericInnerOuter`1'/'Base`2'<int32, string>::'outer'()
+    stloc 31
+    br IL_genericClassJoin_22
+IL_genericClassCanonicalFallback_21:
+    ldloc 29
     callvirt instance object 'GenericInnerOuter`1'/'Base'::'outer__KotlinErased__decf6bac49df9c3dbf3e7f926f0dfe17'()
     castclass [mscorlib]System.String
+    stloc 31
+IL_genericClassJoin_22:
+    ldloc 31
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 7
+    stloc 32
+    ldloc 32
+    isinst class 'GenericInnerPairBase`2'<int32, string>
+    stloc 33
+    ldloc 33
+    brfalse IL_genericClassCanonicalFallback_23
+    ldloc 33
+    call instance !0 class 'GenericInnerPairBase`2'<int32, string>::'first'()
+    stloc 34
+    br IL_genericClassJoin_24
+IL_genericClassCanonicalFallback_23:
+    ldloc 32
     callvirt instance object 'GenericInnerPairBase'::'first__KotlinErased__dc07a6466999d3cc903287bf12d44c2c'()
     unbox.any [mscorlib]System.Int32
+    stloc 34
+IL_genericClassJoin_24:
+    ldloc 34
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 7
+    stloc 35
+    ldloc 35
+    isinst class 'GenericInnerPairBase`2'<int32, string>
+    stloc 36
+    ldloc 36
+    brfalse IL_genericClassCanonicalFallback_25
+    ldloc 36
+    call instance !1 class 'GenericInnerPairBase`2'<int32, string>::'second'()
+    stloc 37
+    br IL_genericClassJoin_26
+IL_genericClassCanonicalFallback_25:
+    ldloc 35
     callvirt instance object 'GenericInnerPairBase'::'second__KotlinErased__519866886da27f95070b9bd20d9aa672'()
     castclass [mscorlib]System.String
+    stloc 37
+IL_genericClassJoin_26:
+    ldloc 37
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 8
-    callvirt instance object 'GenericInnerOuter`1'/'First`2'/'Second'::'root__KotlinErased__88f64bbd2fad83808fd3a138419b1cf8'()
-    castclass [mscorlib]System.String
+    castclass class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>
+    call instance !2 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::'root'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 8
-    callvirt instance object 'GenericInnerOuter`1'/'First`2'/'Second'::'middle__KotlinErased__a31468395c8155097ce2b142ecb57458'()
-    castclass [mscorlib]System.String
+    castclass class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>
+    call instance !1 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::'middle'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 8
-    callvirt instance object 'GenericInnerOuter`1'/'First`2'/'Second'::'own__KotlinErased__9d514a7d032264151adc169bf5bfd9bd'()
-    unbox.any [mscorlib]System.Int32
+    castclass class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>
+    call instance !0 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::'own'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 9
-    callvirt instance object 'GenericInnerOuter`1'/'ConstructorPaths'::'value__KotlinErased__f9a8dc234ff1e2ca17f1f8fe16ffef29'()
-    castclass [mscorlib]System.String
+    castclass class 'GenericInnerOuter`1'/'ConstructorPaths`1'<string>
+    call instance !0 class 'GenericInnerOuter`1'/'ConstructorPaths`1'<string>::'value'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 10
-    callvirt instance object 'DuplicateGenericInnerOuter`1'/'Duplicate'::'item__KotlinErased__98fbaef49e06816b7d3d40455303eccf'()
-    unbox.any [mscorlib]System.Int32
+    castclass class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<int32, string>
+    call instance !0 class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<int32, string>::'item'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

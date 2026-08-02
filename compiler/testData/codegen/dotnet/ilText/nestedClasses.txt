@@ -638,8 +638,7 @@ IL_whenNext_1:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "generic"
     newobj instance void class 'GenericOuter`1'/'Generic`1'<string>::.ctor(!0)
-    callvirt instance object 'GenericOuter`1'/'Generic'::'item__KotlinErased__dbb8a2527f3f4ac2eae856ec44d31ace'()
-    castclass [mscorlib]System.String
+    call instance !0 class 'GenericOuter`1'/'Generic`1'<string>::'item'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "deep"
     newobj instance void 'GenericOuter`1'/'Middle'/'Deep'::.ctor(string)
