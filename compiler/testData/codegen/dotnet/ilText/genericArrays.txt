@@ -752,11 +752,13 @@ IL_whileEnd_1:
     newobj instance void class 'test.genericarrays.ArrayBox`1'<string>::.ctor(!0[])
     stloc 5
     ldloc 5
-    callvirt instance object 'test.genericarrays.ArrayBox'::'first__KotlinErased__b8f744e6ca887603da40fd8630485378'()
+    castclass class 'test.genericarrays.ArrayBox`1'<string>
+    call instance !0 class 'test.genericarrays.ArrayBox`1'<string>::'first'()
     pop
     ldloc 5
+    castclass class 'test.genericarrays.ArrayBox`1'<string>
     ldstr "e"
-    callvirt instance void 'test.genericarrays.ArrayBox'::'replace__KotlinErased__815a6abd71e495ebc301e3bc42c5e78b'(object)
+    call instance void class 'test.genericarrays.ArrayBox`1'<string>::'replace'(!0)
     ldloc.0
     ldloc.0
     call bool 'test.genericarrays.genericArraysKt'::'sameArray'(string[], string[])

@@ -285,8 +285,7 @@ IL_boolStrEnd_3:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "holder"
     newobj instance void class 'test.charsequences.SequenceHolder`1'<string>::.ctor(!0)
-    callvirt instance object 'test.charsequences.SequenceHolder'::'get_value__KotlinErased__b263682a08dc7757fba39ad2120338fa'()
-    castclass [mscorlib]System.String
+    call instance !0 class 'test.charsequences.SequenceHolder`1'<string>::'get_value'()
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }
