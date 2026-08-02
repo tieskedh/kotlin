@@ -30,6 +30,10 @@ class StringBase(value: String) : ErasedBase<String>(value)
 
 class DerivedErased<U>(value: U) : ErasedBase<U>(value)
 
+class OverridingIntBase(value: Int) : ErasedBase<Int>(value) {
+    override fun read(): Int = super.read() + 1
+}
+
 private fun erasedOverload(value: Box<Int>): String = "int:${value.get()}"
 
 private fun erasedOverload(value: Box<String>): String = "string:${value.get()}"
@@ -46,6 +50,27 @@ private fun countedErased(value: Any?): Any? {
     erasedEvaluationCount++
     return value
 }
+
+private var capabilityReceiverCount = 0
+private var capabilityArgumentCount = 0
+
+private fun countedCapabilityReceiver(value: Box<Int>): Box<Int> {
+    capabilityReceiverCount++
+    return value
+}
+
+private fun countedCapabilityArgument(value: Int): Int {
+    capabilityArgumentCount++
+    return value
+}
+
+private fun guardedRead(value: Box<Int>): Int = value.get()
+
+private fun guardedWrite(value: Box<Int>, replacement: Int) {
+    value.put(replacement)
+}
+
+private fun guardedVirtualRead(value: ErasedBase<Int>): Int = value.read()
 
 fun box(): String {
     val bs = Box("hello")
@@ -136,6 +161,26 @@ fun box(): String {
     if (memberOverloads.select(Box(33)) != "int:33") return "fail 33: member Int overload"
     if (memberOverloads.select(Box("thirty-four")) != "string:thirty-four") {
         return "fail 34: member String overload"
+    }
+
+    val guarded = Box(35)
+    if (guardedRead(guarded) != 35) return "fail 35: guarded typed result"
+    guardedWrite(guarded, 36)
+    if (guardedRead(guarded) != 36) return "fail 36: guarded typed argument"
+    capabilityReceiverCount = 0
+    capabilityArgumentCount = 0
+    countedCapabilityReceiver(guarded).put(countedCapabilityArgument(37))
+    if (capabilityReceiverCount != 1 || capabilityArgumentCount != 1 || guardedRead(guarded) != 37) {
+        return "fail 37: guarded receiver/argument evaluation"
+    }
+    if (guardedVirtualRead(OverridingIntBase(38)) != 39) return "fail 38: guarded virtual override"
+
+    @Suppress("UNCHECKED_CAST")
+    val mismatchedBox = Box("mismatch") as Any as Box<Int>
+    try {
+        guardedRead(mismatchedBox)
+        return "fail 39: mismatched capability did not fail at result use"
+    } catch (_: ClassCastException) {
     }
     return "OK"
 }
