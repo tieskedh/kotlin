@@ -193,18 +193,22 @@ blocker; the paired predicate closure below now supplies its separate inline-lam
 
 The admitted exact Common template closure is:
 
-- `Iterable<T>.any(predicate)` and `Iterable<T>.all(predicate)` from `Aggregates`; and
+- `Iterable<T>.any(predicate)`, `all(predicate)`, `none(predicate)`, and
+  `count(predicate)` from `Aggregates`; and
 - `Iterable<T>.indexOfFirst(predicate)`, `List<T>.indexOfFirst(predicate)`,
   `Iterable<T>.indexOfLast(predicate)`, and `List<T>.indexOfLast(predicate)` from `Elements`.
 
-All six declarations are ordinary non-reified inline functions. Their public physical methods
+All eight declarations are ordinary non-reified inline functions. Their public physical methods
 remain fallback bodies in `Kotlin.Collections.CollectionsKt`, while Kotlin consumers inline the
 serialized Common IR from the self-describing stdlib. No .NET source owns an algorithm body.
 
 The generated algorithms preserve distinctions that a target rewrite could easily erase:
 
-- `all` is vacuously true and `any` false for an empty Collection without requesting an iterator;
-- both quantifiers traverse once and stop at the first decisive predicate result;
+- `all` and `none` are vacuously true and `any` false for an empty Collection without requesting
+  an iterator; predicate `count` likewise returns zero through that same fast path;
+- all three quantifiers traverse once and stop at the first decisive predicate result, while
+  predicate `count` traverses to exhaustion and calls Common `checkCountOverflow` after every
+  matching increment;
 - Iterable index search checks index overflow at the Common boundary and evaluates in encounter
   order; and
 - List `indexOfLast` walks backwards from `listIterator(size)`, while List `indexOfFirst` keeps the
@@ -213,10 +217,12 @@ The generated algorithms preserve distinctions that a target rewrite could easil
 The CLR supplies no conflicting representation constraint. LINQ quantifiers/search, BCL
 enumeration, a target-authored loop, forced materialization, or a non-inline substitute would
 change identity, control flow, predicate/non-local-return behavior, traversal direction, or
-physical source ownership. They are therefore rejected. Cross-DLL tests must prove both halves of
-the regular-inline contract: the fallback methods and KLIB bindings exist in the stdlib, but calls
-from Kotlin consumers disappear after inlining; only the Iterable index bodies may retain calls to
-the ordinary compiler-ABI overflow helper.
+physical source ownership. They are therefore rejected. `none(predicate)` is kept as its own
+Common declaration rather than target-rewritten to `!any(predicate)`: doing otherwise changes
+inline/source ownership and may change callback/non-local-return structure. Cross-DLL tests must
+prove both halves of the regular-inline contract: the fallback methods and KLIB bindings exist in
+the stdlib, but calls from Kotlin consumers disappear after inlining; only the Iterable index and
+predicate-count bodies may retain calls to the ordinary compiler-ABI overflow helpers.
 
 ### Accumulator folds
 
