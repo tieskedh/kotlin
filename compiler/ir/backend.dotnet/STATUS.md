@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: bounded typed generic-class member dispatch
+- Last completed feature: generated Common collection accumulator folds
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,9 +20,9 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 970 tests:
+The JUnit audit covered 16 fresh XML files and 974 tests:
 
-- 868 FIR, IL-text, and box tests
+- 872 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 81 library-integration tests
 - zero failures, errors, or skips
@@ -109,6 +109,16 @@ the portable producer on Framework CLR and CoreCLR, including nested types,
 default dispatch, inheritance, overloads, virtual C# subclass dispatch, and
 wrong-argument failure at the later logical member barrier.
 
+The complete collection-facing accumulator-fold family now uses the generated
+Common bodies for `Iterable.fold`/`foldIndexed` and
+`List.foldRight`/`foldRightIndexed`. Adversarial execution pins empty behavior,
+nullable and widened values, left/right order, exact iterator protocols, index
+association, capture, exception identity/timing, and non-local return. Separate
+and installed consumers inline the packaged KLIB bodies, while handwritten CIL
+executes every physical fallback on Framework CLR and CoreCLR. A discarded
+cross-library fold result retains the authoritative erased-accumulator
+`IMPLICIT_CAST`; no failed-cast optimization or new classifier was introduced.
+
 The post-substitution reified-array audit now proves that every admitted
 ordinary array carrier remains truthful after the shared inliner has replaced
 a type parameter with a concrete type. The adversarial matrix covers reference,
@@ -148,7 +158,10 @@ closed.
 
 ## Active state
 
-No implementation slice is half-landed. Bounded generic-class dispatch now
+No implementation slice is half-landed. The generated Common accumulator-fold
+family is published with its physical fallback methods and inlinable KLIB
+bodies; a discarded substituted generic result performs its existing checked
+recovery before being discarded. Bounded generic-class dispatch now
 uses truthful typed CLR capability where available without changing canonical
 identity, physical ABI 17, library metadata, or failure semantics. Ordinary
 non-reified inline bodies now
@@ -235,12 +248,12 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Audit and admit the complete generated Common `Iterable.fold`/
-   `foldIndexed` and `List.foldRight`/`foldRightIndexed` family if its direct,
-   packaged, portable, and inlined dependency closure confirms the current
-   callable, overflow, iterator, and generic-result representations. It must
-   use the authoritative generator bodies and must not enter the parked
-   builder/enum/annotation cluster.
+1. Audit the complete generated Common collection-facing reduce family:
+   `Iterable.reduce`/`reduceIndexed` and nullable variants plus the matching
+   `List.reduceRight`/`reduceRightIndexed` variants. Admit it only if empty
+   failure, generic-super bounds, iterator order, nullable results, packaged
+   fallback, and cross-library inline closure are already truthful; do not
+   replace its Common bodies or enter the parked builder cluster.
 2. Audit and select the complete Common `KClass` and class-literal contract as
    the next reified prerequisite. Keep Kotlin logical classifier identity
    authoritative where `System.Type` is only physical evidence, compare the

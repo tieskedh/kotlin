@@ -212,6 +212,76 @@ public fun <T> List<T>.firstOrNull(): T? {
 }
 
 /**
+ * Accumulates value starting with [initial] value and applying [operation] from left to right
+ * to current accumulator value and each element.
+ *
+ * Returns the specified [initial] value if the collection is empty.
+ *
+ * @param [operation] function that takes current accumulator value and an element, and calculates the next accumulator value.
+ */
+public inline fun <T, R> Iterable<T>.fold(initial: R, operation: (acc: R, T) -> R): R {
+    var accumulator = initial
+    for (element in this) accumulator = operation(accumulator, element)
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with [initial] value and applying [operation] from left to right
+ * to current accumulator value and each element with its index in the original collection.
+ *
+ * Returns the specified [initial] value if the collection is empty.
+ *
+ * @param [operation] function that takes the index of an element, current accumulator value
+ * and the element itself, and calculates the next accumulator value.
+ */
+public inline fun <T, R> Iterable<T>.foldIndexed(initial: R, operation: (index: Int, acc: R, T) -> R): R {
+    var index = 0
+    var accumulator = initial
+    for (element in this) accumulator = operation(checkIndexOverflow(index++), accumulator, element)
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with [initial] value and applying [operation] from right to left
+ * to each element and current accumulator value.
+ *
+ * Returns the specified [initial] value if the list is empty.
+ *
+ * @param [operation] function that takes an element and current accumulator value, and calculates the next accumulator value.
+ */
+public inline fun <T, R> List<T>.foldRight(initial: R, operation: (T, acc: R) -> R): R {
+    var accumulator = initial
+    if (!isEmpty()) {
+        val iterator = listIterator(size)
+        while (iterator.hasPrevious()) {
+            accumulator = operation(iterator.previous(), accumulator)
+        }
+    }
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with [initial] value and applying [operation] from right to left
+ * to each element with its index in the original list and current accumulator value.
+ *
+ * Returns the specified [initial] value if the list is empty.
+ *
+ * @param [operation] function that takes the index of an element, the element itself
+ * and current accumulator value, and calculates the next accumulator value.
+ */
+public inline fun <T, R> List<T>.foldRightIndexed(initial: R, operation: (index: Int, T, acc: R) -> R): R {
+    var accumulator = initial
+    if (!isEmpty()) {
+        val iterator = listIterator(size)
+        while (iterator.hasPrevious()) {
+            val index = iterator.previousIndex()
+            accumulator = operation(index, iterator.previous(), accumulator)
+        }
+    }
+    return accumulator
+}
+
+/**
  * Returns an element at the given [index] or `null` if the [index] is out of bounds of this list.
  *
  * @sample samples.collections.Collections.Elements.getOrNull
