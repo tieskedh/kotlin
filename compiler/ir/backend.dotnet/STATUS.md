@@ -8,6 +8,8 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
+- Reviewed pending upstream head: `76ca9aa1af` (179 commits; one understood
+  virtual-merge conflict, not yet rebased)
 - Last completed feature: general parameterless Kotlin marker annotation
   classes with exact runtime-retained CLR custom-attribute projection
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
@@ -417,16 +419,21 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Audit the complete coherent contracts/enum/builder/abstract-collections/
+1. Rebase onto the deliberately selected reviewed upstream head. Resolve the
+   integration-test Gradle conflict by accepting upstream's obsolete Javac
+   dependency removal while retaining the .NET fixture and `dn` task;
+   regenerate arguments/API and test runners, inspect affected inline/import/
+   annotation/reference boundaries, and run the strict gate.
+2. Audit the complete coherent contracts/enum/builder/abstract-collections/
    `EnumEntries` source/product closure now that its marker-annotation
    prerequisite is complete. Mirror the mature targets' enum lowerings,
    packages, runtime ownership, and generated stdlib sources; do not introduce
    a target contract DSL, builder-only stub, or one-enum exception.
-2. If that audit exposes an unresolved hard-to-reverse enum decision, record
+3. If that audit exposes an unresolved hard-to-reverse enum decision, record
    and lock the exact question, then advance independently unlocked Common
    families such as signed `sumOf` or `allEqual` rather than inventing an enum
    shortcut.
-3. Once the enum/product closure is selected, implement it and actualize the
+4. Once the enum/product closure is selected, implement it and actualize the
    complete Common `Appendable`/`StringBuilder`, generated
    `joinTo`/`joinToString`, and Common `AbstractCollection`/`AbstractList`
    sources as one truthful dependency sequence.
