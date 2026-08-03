@@ -11,14 +11,17 @@
 {
   .method public hidebysig static class [mscorlib]System.Exception 'runtimeValue'() cil managed
   {
-    .maxstack 1
+    .maxstack 3
     ldstr "runtime"
     newobj instance void [Kotlin.Runtime]'Kotlin.RuntimeException'::.ctor(string)
+    dup
+    ldc.i4 3
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     ret
   }
   .method public hidebysig static string 'catchMappedRuntime'() cil managed
   {
-    .maxstack 2
+    .maxstack 3
     .locals init (
       [0] string '<try>',
       [1] class [mscorlib]System.Exception 'failure'
@@ -26,6 +29,9 @@
     .try {
       ldstr "mapped"
       newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
+      dup
+      ldc.i4 6
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
       throw
     }
     filter {
@@ -47,7 +53,7 @@ IL_tryEnd_0:
   }
   .method public hidebysig static string 'distinguishError'() cil managed
   {
-    .maxstack 2
+    .maxstack 3
     .locals init (
       [0] string '<try>',
       [1] class [mscorlib]System.Exception 'failure',
@@ -56,6 +62,9 @@ IL_tryEnd_0:
     .try {
       ldstr "fatal"
       newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string)
+      dup
+      ldc.i4 4
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
       throw
     }
     filter {

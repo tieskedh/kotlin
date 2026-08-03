@@ -163,6 +163,7 @@
          extends [mscorlib]System.Object
          implements 'AnonymousOwner`1'/'AnonymousOwner$source$1', 'AnonymousValue', class 'AnonymousValue`1'<!0>
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
     .field private class 'AnonymousOwner`1'<!0> 'this$0'
     .method public hidebysig specialname rtspecialname instance void .ctor(class 'AnonymousOwner`1'<!0> 'this$0') cil managed
     {
@@ -256,6 +257,7 @@
          extends [mscorlib]System.Object
          implements 'AnonymousIntValue'
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
     .field private int32 '$seed'
     .field private int32 '$offset'
     .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed', int32 '$offset') cil managed
@@ -319,6 +321,7 @@
          extends [mscorlib]System.Object
          implements 'AnonymousIntValue'
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
     .field private int32 '$seed'
     .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
     {
@@ -368,6 +371,7 @@
        extends [mscorlib]System.Object
        implements 'AnonymousIntValue'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
@@ -385,6 +389,7 @@
 .class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$bareAnonymous$value$1'
        extends [mscorlib]System.Object
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private int32 '$seed'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
   {
@@ -410,6 +415,7 @@
        extends [mscorlib]System.Object
        implements 'AnonymousIntValue'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private int32 '$seed'
   .field private int32 '$offset'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed', int32 '$offset') cil managed
@@ -439,6 +445,7 @@
 .class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$superArguments$value$1'
        extends 'AnonymousBase'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private int32 'own'
   .field private int32 '$seed'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed', int32 '$super_call_param$1', int32 '$super_call_param$2') cil managed
@@ -493,6 +500,7 @@
        extends class 'GenericAnonymousBase`1'<!0>
        implements 'anonymousObjectsKt$genericSuperArgument$source$1'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 '$super_call_param$1') cil managed
   {
     .maxstack 2
@@ -517,6 +525,7 @@
        extends [mscorlib]System.Object
        implements 'anonymousObjectsKt$genericAnonymous$source$1', 'AnonymousValue', class 'AnonymousValue`1'<!0>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private !0 '$value'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 '$value') cil managed
   {
@@ -567,10 +576,12 @@
        extends [mscorlib]System.Object
        implements 'AnonymousIntValue'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .class nested private auto ansi sealed beforefieldinit 'anonymousObjectsKt$nestedAnonymous$outer$1$value$inner$1'
          extends [mscorlib]System.Object
          implements 'AnonymousIntValue'
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
     .field private int32 '$seed'
     .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
     {
@@ -624,6 +635,7 @@
        extends [mscorlib]System.Object
        implements 'AnonymousIntValue'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
@@ -642,6 +654,7 @@
        extends [mscorlib]System.Object
        implements 'AnonymousIntValue'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
@@ -659,6 +672,7 @@
 .class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$mixedNamedAndAnonymous$Local'
        extends [mscorlib]System.Object
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 05 4c 6f 63 61 6c 00 00)
   .field private int32 '$seed'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
   {
@@ -682,6 +696,7 @@
        extends [mscorlib]System.Object
        implements 'AnonymousIntValue'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private int32 '$seed'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
   {

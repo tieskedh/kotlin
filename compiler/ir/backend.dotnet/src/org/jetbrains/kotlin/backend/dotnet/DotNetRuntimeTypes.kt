@@ -209,6 +209,9 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
+    private val kClassifierBase = DotNetKClassRuntime.kClassifierClassInfo
+    private val kClassBase = DotNetKClassRuntime.kClassClassInfo
+
     private val kFunctionBase = DotNetIlClassInfo(
         ilClassName = "Kotlin.KFunction",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
@@ -318,6 +321,7 @@ internal object DotNetRuntimeTypes {
             declaredListBase.withRuntimeElementType(),
             exactCollectionBase.withRuntimeElementType(),
         )
+        kClassBase.interfaces = listOf(DotNetIlValueType.UserClass(kClassifierBase))
         kFunctionBase.interfaces = listOf(
             DotNetIlValueType.UserClass(kCallableBase),
             DotNetIlValueType.UserClass(functionBase),
@@ -352,6 +356,8 @@ internal object DotNetRuntimeTypes {
                 typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
             irClass.isDotNetSupportedPrimitiveIterator -> iteratorBase
             irClass.isDotNetPropertyReferenceFactory == true -> propertyReferenceFactory
+            irClass.isDotNetKClassifierBase -> kClassifierBase
+            irClass.isDotNetKClassBase -> kClassBase
             irClass.isDotNetKCallableBase -> kCallableBase
             irClass.isDotNetKFunctionBase || irClass.dotNetFixedKFunctionArityOrNull() != null -> kFunctionBase
             irClass.isDotNetKPropertyBase -> kPropertyBase
@@ -479,6 +485,14 @@ internal object DotNetRuntimeTypes {
         if (type.isNothing() || type.isNullableNothing()) return nothingType
         val simpleType = type as? IrSimpleType ?: return null
         val irClass = simpleType.classifier.owner as? IrClass ?: return null
+        if (irClass.isDotNetKClassifierBase && simpleType.arguments.isEmpty()) {
+            return DotNetIlValueType.UserClass(kClassifierBase)
+        }
+        if (irClass.isDotNetKClassBase && simpleType.arguments.size == 1) {
+            // KClass's type argument remains authoritative in IR/KLIB. Runtime equality and
+            // instance checks use the declaration-erased Kotlin classifier carried by KClassImpl.
+            return DotNetIlValueType.UserClass(kClassBase)
+        }
         if (irClass.fqNameWhenAvailable == DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(defaultConstructorMarkerClass)
         }
@@ -510,6 +524,20 @@ internal object DotNetRuntimeTypes {
         availableFunctions[nameGetter] = DotNetIlFunctionInfo(
             kCallableBase,
             nameGetter.dotNetSignature(typeMapper),
+        )
+        val kClass = irBuiltIns.kClassClass.owner
+        for (propertyName in listOf("simpleName", "qualifiedName")) {
+            val getter = kClass.properties.single { it.name.asString() == propertyName }.getter
+                ?: error("Internal .NET backend error: kotlin.reflect.KClass.$propertyName has no getter")
+            availableFunctions[getter] = DotNetIlFunctionInfo(
+                kClassBase,
+                getter.dotNetSignature(typeMapper),
+            )
+        }
+        val isInstance = kClass.functions.single { function -> function.name.asString() == "isInstance" }
+        availableFunctions[isInstance] = DotNetIlFunctionInfo(
+            kClassBase,
+            isInstance.dotNetSignature(typeMapper),
         )
         for (arity in fixedPropertyClasses.indices) {
             val get = irBuiltIns.getKPropertyClass(mutable = false, arity).owner.functions
@@ -644,6 +672,12 @@ private val IrClass.isDotNetFunctionBase: Boolean
 
 private val IrClass.isDotNetKCallableBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KCallable" && typeParameters.size == 1
+
+private val IrClass.isDotNetKClassifierBase: Boolean
+    get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KClassifier" && typeParameters.isEmpty()
+
+private val IrClass.isDotNetKClassBase: Boolean
+    get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KClass" && typeParameters.size == 1
 
 private val IrClass.isDotNetKFunctionBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KFunction" && typeParameters.size == 1

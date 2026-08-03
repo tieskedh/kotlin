@@ -26,6 +26,7 @@
 .class private auto ansi sealed beforefieldinit 'localClassesRejectedKt$mutableCaptureSupported$Local'
        extends [mscorlib]System.Object
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 05 4c 6f 63 61 6c 00 00)
   .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value'
   .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value') cil managed
   {

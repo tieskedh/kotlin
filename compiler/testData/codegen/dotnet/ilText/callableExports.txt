@@ -80,6 +80,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field assembly static initonly class 'demo.callableExportsKt$makeZero$1' 'INSTANCE'
   .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -148,6 +149,7 @@ IL_whenNext_1:
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private int32 '$offset'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$offset') cil managed
   {
@@ -192,6 +194,7 @@ IL_whenNext_1:
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction2`2'<int32, int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private int32 '$scale'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$scale') cil managed
   {
@@ -241,6 +244,7 @@ IL_whenNext_1:
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<valuetype [mscorlib]System.Nullable`1<int32>>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field assembly static initonly class 'demo.callableExportsKt$makeNullable$1' 'INSTANCE'
   .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -320,6 +324,7 @@ IL_whenNext_1:
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function0'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private class 'demo.State' '$state'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'demo.State' '$state') cil managed
   {
@@ -346,6 +351,7 @@ IL_whenNext_1:
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function1'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private class 'demo.State' '$state'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'demo.State' '$state') cil managed
   {
@@ -373,6 +379,7 @@ IL_whenNext_1:
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function2'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private class 'demo.State' '$state'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'demo.State' '$state') cil managed
   {

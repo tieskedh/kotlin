@@ -14,6 +14,7 @@
 .class private auto ansi sealed beforefieldinit 'localDataClassesKt$localData$Local'
        extends [mscorlib]System.Object
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 05 4c 6f 63 61 6c 00 00)
   .field private int32 'value'
   .field private int32 '$seed'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed', int32 'value') cil managed
@@ -198,6 +199,7 @@ IL_whenNext_5:
        extends [mscorlib]System.Object
        implements 'localDataClassesKt$genericLocalData$Local', 'localDataClassesKt$genericLocalData$Local`1'/'<DataClassErasedView>'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 05 4c 6f 63 61 6c 00 00)
   .class nested private interface abstract auto ansi '<DataClassErasedView>'
   {
     .method public hidebysig newslot abstract virtual instance object '<DataClassComponent0>'() cil managed

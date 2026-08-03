@@ -8,15 +8,15 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: Common `Iterable.sumOf((T) -> Int)` with its
-  logical `sumOf`/physical `sumOfInt` split
+- Last completed feature: the Common `KClass` floor and static/dynamic class
+  literals over classified CLR type evidence
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
 stdlib. The target is not close to 98% feature-complete: enums, annotation
-classes, `KClass`/reflection, reified public APIs, value classes, coroutines,
+classes, `KType`/member reflection, reified public APIs, value classes, coroutines,
 the contracts/builder/abstract-collections cluster, broad Set/Map production,
 and Gradle/KMP product integration remain substantial open programmes.
 
@@ -28,11 +28,11 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun-tasks -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 1006 tests:
+The JUnit audit covered 16 fresh XML files and 1014 tests:
 
-- 904 FIR, IL-text, and box tests
+- 910 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 81 library-integration tests
+- 83 library-integration tests
 - zero failures, errors, or skips
 
 Focused evidence additionally covers component-complete packed-KLIB loading,
@@ -248,6 +248,24 @@ reuse the ordinary `Array<E>` mapper and intrinsics. No reified-only token,
 wrapper, or `object[]` fallback was added, and both public reified gates remain
 closed.
 
+The Common `KClassifier`/`KClass` floor and class literals are now complete
+without equating Kotlin reflection identity with `System.Type`. Static
+`C::class` and single-evaluation dynamic `value::class` produce one nominal
+Kotlin runtime value whose classifier is exact where CLR identity is exact and
+classified where Kotlin already has a broader or erased relation. This covers
+signed scalars, `String`, `Any`, `Unit`, `Nothing`, primitive and generic
+arrays, `CharSequence`, `Number`, mapped and custom exceptions, ordinary and
+generic Kotlin classes/interfaces, local/anonymous names, Common `cast` and
+`safeCast`, and declaration-erased generic-class ancestry. Equality and hashes
+use normalized classifier identity rather than names; two same-named CLR
+classes from distinct assemblies remain distinct. Exact Kotlin exception
+constructor identity reuses weak identity-associated throwable state and never
+wraps or mutates foreign `Exception.Data`. Portable Kotlin libraries are
+consumed separately by Kotlin and Roslyn, installed stdlib products expose only
+the public Common surface, and the retained `System.Type` bridge remains
+compiler ABI. `KType`, `typeOf`, member/annotation reflection, annotation-class
+code generation, and public reified declarations remain separate programmes.
+
 ## Current architecture
 
 - `:core:language.targets.dotnet` owns the logical .NET platform and the
@@ -310,13 +328,14 @@ source closure reaches the public contract DSL, including annotation classes
 and `InvocationKind`, whose general representations are not yet selected. The
 classified `CharSequence` carrier, Common collection predicates, and ordinary
 inline-function boundary remain intact; reified and suspend inline are still
-explicit errors.
+explicit errors. The nominal `KClass` floor is selected and published; it does
+not imply `KType`, member reflection, annotation discovery, or reified support.
 
 The reified audit established that shared IR substitution is ready. Its
 ordinary runtime prerequisites now include declaration-erased Kotlin generic
 classes and classified star-projected arrays, and the complete admitted array-
 operation substitution matrix has passed without a target-specific reified
-representation. Public reified support remains parked while `KClass`, `KType`,
+representation. Public reified support remains parked while `KType`,
 enum/annotation, final substituted type-test/cast, and physical throwing-stub
 contracts remain unselected. Physically exact non-generic reference casts are
 complete for Kotlin classes/interfaces, imported CLR interfaces, strings,
@@ -378,19 +397,25 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Audit and select the complete Common `KClass` and class-literal contract as
-   the next reified prerequisite. Keep Kotlin logical classifier identity
-   authoritative where `System.Type` is only physical evidence, compare the
-   mature targets' lowering and runtime boundaries, and resolve dynamic
-   `obj::class` across every already-admitted classified carrier before
-   implementation. Keep `KType` and the public reified gates separate.
-2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
-   collections/`EnumEntries` bootstrap cluster; do not create builder-only or
-   one-enum stubs.
-3. Actualize the selected complete Common `Appendable`/`StringBuilder` and
-   generated `joinTo`/`joinToString` closure once that foundation exists.
-4. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
-   the remaining builder closure is complete.
+1. Audit a bounded general annotation-class foundation before entering the
+   atomic contracts/enum bootstrap cluster. Compare declaration ownership,
+   metadata production, lowerings, and test placement with JVM, JS, Wasm, and
+   Native; select the broadest coherent argument/target/retention slice whose
+   KLIB identity, CLR `Attribute` projection, separate compilation, and
+   unsupported-shape diagnostics are all truthful. Do not imply annotation
+   discovery through Kotlin reflection.
+2. Implement that selected annotation-class tranche when the audit proves no
+   unresolved hard-to-reverse representation decision. Adopt upstream Common
+   compiler or stdlib tests wherever the supported closure permits it, while
+   retaining .NET-owned tests only for CLR-specific semantics and boundaries.
+3. Audit and then implement the complete coherent
+   contracts/enum/builder/abstract-collections/`EnumEntries` source/product
+   closure. Keep compiler-consumed Kotlin effects authoritative in KLIB and
+   expose CLR/Roslyn attributes only as exact additional projections; do not
+   introduce a target contract DSL, builder-only stub, or one-enum exception.
+4. Actualize the selected complete Common `Appendable`/`StringBuilder` and
+   generated `joinTo`/`joinToString` closure once that foundation exists, then
+   compile the exact Common `AbstractCollection`/`AbstractList` sources.
 
 ## Navigation
 

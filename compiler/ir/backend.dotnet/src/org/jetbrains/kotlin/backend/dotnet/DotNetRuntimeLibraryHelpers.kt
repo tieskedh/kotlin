@@ -105,12 +105,18 @@ internal object DotNetRuntimeLibraryHelpers {
             coreLibraryReference,
             compilerAbiTypeAttributesIl.replace("            |", ""),
         ).prependIndent("            |")
+        val kClassSupportTypesIl = DotNetKClassRuntime.supportTypesIl(
+            coreLibraryReference,
+            compilerAbiTypeAttributesIl.replace("            |", ""),
+        ).prependIndent("            |")
         return """
             |.namespace Kotlin.Runtime.Internal
             |{
 $primitiveArrayHelperTypeIl
             |
 $throwableSupportTypesIl
+            |
+$kClassSupportTypesIl
             |
             |  .class public auto ansi sealed beforefieldinit DefaultConstructorMarker
             |         extends ${coreLibraryReference}System.Object

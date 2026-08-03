@@ -153,6 +153,13 @@ duplicates are retained, and every non-empty read is a stable snapshot. The
 same mechanism applies to Kotlin-owned, mapped BCL, and unknown foreign
 objects.
 
+The state also records the exact logical constructor classifier when two
+Kotlin exception declarations truthfully share one physical CLR type, notably
+`Throwable()` and `Exception()`. Dynamic `value::class` consults this tag so
+the Common `KClass` identity remains exact without wrapping the exception or
+writing `Exception.Data`. Untagged foreign exceptions continue through the
+ordinary CLR ancestry and mapping rules.
+
 ### Stack traces compose Kotlin and CLR facts
 
 Exact CLR type, message, inner-exception chain, and captured CLR frames remain

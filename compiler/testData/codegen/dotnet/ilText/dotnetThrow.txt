@@ -11,16 +11,22 @@
 {
   .method public hidebysig static void 'fail'(string 'msg') cil managed
   {
-    .maxstack 1
+    .maxstack 3
     ldarg.0
     newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
+    dup
+    ldc.i4 6
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     throw
     ret
   }
   .method public hidebysig static void 'failDefault'() cil managed
   {
-    .maxstack 1
+    .maxstack 3
     newobj instance void [mscorlib]System.Exception::.ctor()
+    dup
+    ldc.i4 2
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     throw
     ret
   }
@@ -49,19 +55,25 @@ IL_whenNext_1:
   }
   .method public hidebysig static void 'chain__KotlinException__ce95d2d301bc98028f77cf47637bc367'(string 'm', class [mscorlib]System.Exception 'c') cil managed
   {
-    .maxstack 2
+    .maxstack 3
     ldarg.0
     ldarg.1
     newobj instance void [mscorlib]System.ArgumentException::.ctor(string, class [mscorlib]System.Exception)
+    dup
+    ldc.i4 5
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     throw
     ret
   }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
-    .maxstack 2
+    .maxstack 3
     ldstr "hi"
     newobj instance void [mscorlib]System.Exception::.ctor(string)
+    dup
+    ldc.i4 2
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     call string 'test.dotnetThrowKt'::'describe__KotlinException__24f8aac5c406e8635989e520d20a909b'(class [mscorlib]System.Exception)
     dup
     brtrue IL_stringValueNotNull_0

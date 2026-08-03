@@ -11,14 +11,17 @@
 {
   .method public hidebysig static class [mscorlib]System.Exception 'asThrowable'(string 'message') cil managed
   {
-    .maxstack 1
+    .maxstack 3
     ldarg.0
     newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string)
+    dup
+    ldc.i4 4
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     ret
   }
   .method public hidebysig static string 'exactCatch'(string 'message') cil managed
   {
-    .maxstack 2
+    .maxstack 3
     .locals init (
       [0] string '<try>',
       [1] class [mscorlib]System.Exception 'failure'
@@ -26,6 +29,9 @@
     .try {
       ldarg.0
       newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string)
+      dup
+      ldc.i4 4
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
       throw
     }
     filter {
@@ -48,13 +54,16 @@ IL_tryEnd_0:
   }
   .method public hidebysig static string 'throwableCatch'() cil managed
   {
-    .maxstack 1
+    .maxstack 3
     .locals init (
       [0] string '<try>',
       [1] class [mscorlib]System.Exception '<unused var>'
     )
     .try {
       newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor()
+      dup
+      ldc.i4 4
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
       throw
     }
     catch [mscorlib]System.Exception {
@@ -69,13 +78,16 @@ IL_tryEnd_0:
   }
   .method public hidebysig static string 'collapsedExceptionCatch'() cil managed
   {
-    .maxstack 2
+    .maxstack 3
     .locals init (
       [0] string '<try>',
       [1] class [mscorlib]System.Exception '<unused var>'
     )
     .try {
       newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor()
+      dup
+      ldc.i4 4
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
       throw
     }
     filter {
@@ -97,26 +109,35 @@ IL_tryEnd_0:
   }
   .method public hidebysig static class [mscorlib]System.Exception 'withCause__KotlinException__f782a3a53a6857d23f6955c5eb414ea9'(class [mscorlib]System.Exception 'cause') cil managed
   {
-    .maxstack 2
+    .maxstack 3
     ldstr "message"
     ldarg.0
     newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string, class [mscorlib]System.Exception)
+    dup
+    ldc.i4 4
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     ret
   }
   .method public hidebysig static class [mscorlib]System.Exception 'fromCause__KotlinException__6b95aaa0b6763921caee4569b27a3e3c'(class [mscorlib]System.Exception 'cause') cil managed
   {
-    .maxstack 1
+    .maxstack 3
     ldarg.0
     newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(class [mscorlib]System.Exception)
+    dup
+    ldc.i4 4
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     ret
   }
   .method public hidebysig static bool 'hasNoDefaultState'() cil managed
   {
-    .maxstack 2
+    .maxstack 3
     .locals init (
       [0] class [mscorlib]System.Exception 'failure'
     )
     newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor()
+    dup
+    ldc.i4 4
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     stloc.0
     ldloc.0
     callvirt instance string [mscorlib]System.Exception::get_Message()

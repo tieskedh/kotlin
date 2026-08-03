@@ -1,0 +1,132 @@
+.assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'kClassLiterals' {}
+.module 'main-kClassLiterals.il'
+
+.class public auto ansi sealed beforefieldinit 'Plain'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class interface public abstract auto ansi 'Box'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__2fa21f0c1255421758da862a3d557293'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+  .property instance object 'value__KotlinErased__2fa21f0c1255421758da862a3d557293'()
+  {
+    .get instance object 'Box'::'get_value__KotlinErased__2fa21f0c1255421758da862a3d557293'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Box`1'<'T'>
+       extends [mscorlib]System.Object
+       implements 'Box'
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'Box`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'Box`1'<!0>::'value'
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  {
+    .override method instance object 'Box'::'get_value__KotlinErased__2fa21f0c1255421758da862a3d557293'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'Box`1'<!0>
+    call instance !0 class 'Box`1'<!0>::'get_value'()
+    box !0
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'Box`1'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'kClassLiteralsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.KClass' 'runtimeClass'(object 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'GetClass'(object)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 5
+    ldtoken 'Plain'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Plain"
+    ldstr "Plain"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    callvirt instance string [Kotlin.Runtime]'Kotlin.KClass'::'get_simpleName'()
+    dup
+    brtrue IL_stringValueNotNull_0
+    pop
+    ldstr "null"
+IL_stringValueNotNull_0:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldtoken 'Box`1'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Box"
+    ldstr "Box"
+    ldc.i4 1
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 1
+    newobj instance void class 'Box`1'<int32>::.ctor(!0)
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.KClass'::'isInstance'(object)
+    brtrue IL_boolStrTrue_1
+    ldstr "false"
+    br IL_boolStrEnd_2
+IL_boolStrTrue_1:
+    ldstr "true"
+IL_boolStrEnd_2:
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'Plain'::.ctor()
+    call class [Kotlin.Runtime]'Kotlin.KClass' 'kClassLiteralsKt'::'runtimeClass'(object)
+    callvirt instance string [Kotlin.Runtime]'Kotlin.KClass'::'get_qualifiedName'()
+    dup
+    brtrue IL_stringValueNotNull_3
+    pop
+    ldstr "null"
+IL_stringValueNotNull_3:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

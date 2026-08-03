@@ -30,6 +30,14 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/DotNetExceptions.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetKClass.kt",
+        "dotnet/src/kotlin/reflect/DotNetKClass.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetKClasses.kt",
+        "dotnet/src/kotlin/reflect/DotNetKClasses.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetThrowNoWhenBranchMatchedException.kt",
         "dotnet/src/kotlin/internal/DotNetThrowNoWhenBranchMatchedException.kt",
     ),
@@ -73,6 +81,21 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "Annotations.kt",
         "src/kotlin/internal/Annotations.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "KClass.kt",
+        "src/kotlin/reflect/KClass.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "KClasses.kt",
+        "src/kotlin/reflect/KClasses.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "KClassifier.kt",
+        "src/kotlin/reflect/KClassifier.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

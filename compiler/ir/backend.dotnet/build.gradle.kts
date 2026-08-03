@@ -42,6 +42,13 @@ tasks.named<ProcessResources>("processResources") {
     )) {
         into("kotlin-dotnet-stdlib/src/kotlin/internal")
     }
+    from(files(
+        rootProject.file("libraries/stdlib/src/kotlin/reflect/KClass.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/reflect/KClasses.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/reflect/KClassifier.kt"),
+    )) {
+        into("kotlin-dotnet-stdlib/src/kotlin/reflect")
+    }
     from(rootProject.file("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt")) {
         into("kotlin-dotnet-stdlib/src/kotlin/annotations")
     }

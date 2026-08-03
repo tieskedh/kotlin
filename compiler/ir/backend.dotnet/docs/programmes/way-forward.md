@@ -103,9 +103,9 @@ classified `Array<*>`, and declaration-erased generic-class prerequisites. The c
 post-substitution array-operation audit is complete as well: array construction reuses those
 ordinary carriers and needs no reified-only representation. Do not flip either inliner capability
 gate or mistake that allocation readiness for the whole language feature. Kotlin `KClass` and
-class literals are now the next hard representation boundary, followed by `KType`, the atomic
-enum/annotation source clusters, the final substituted type-operator matrix, and the physical
-reified throwing-stub contract.
+class literals now form a completed nominal floor over classified CLR evidence. `KType`, the
+atomic enum/annotation/contracts source cluster, the final substituted type-operator matrix, and
+the physical reified throwing-stub contract remain separate boundaries.
 
 ### 2. Expand Common collections by exact dependency closure
 
@@ -132,6 +132,22 @@ collection bases. Break that cycle only by admitting the complete coherent sourc
 add a one-enum lowering, a target `EnumEntries` substitute, or a KLIB declaration without its
 physical product. Until that atomic cluster is ready, reversible compiler breadth such as the
 selected-graph inline slice takes precedence.
+
+Before entering that cycle, audit and implement a bounded general annotation-class foundation.
+The completed nominal `KClass` floor supplies class-literal identity, but it does not decide
+annotation constructors, legal values, targets, retention, KLIB application identity, CLR
+`CustomAttribute` emission, or reflection discovery. Follow mature-target compiler ownership and
+lowering boundaries, and select the broadest coherent subset that can preserve both Kotlin and CLR
+facts across separate compilation. A parameterless marker may be an admitted first shape only if
+it is a general language rule with explicit diagnostics for unsupported constructors, not a
+special case for the contracts package. Kotlin reflection discovery remains separate.
+
+Then audit the contracts side of the bootstrap cycle. Existing nullability and CodeAnalysis
+plumbing already distinguishes authoritative Kotlin facts from exact CLR projections. The audit
+must still stop at the cluster boundary if `InvocationKind`, builders, or abstract collections
+cannot be produced truthfully in isolation. Compiler-consumed effects belong to KLIB/Common
+semantics; Roslyn attributes may additionally expose only their exact subset and may also be
+accepted as foreign evidence under Kotlin stability rules.
 
 ### 3. Retain and enforce the completed declaration architecture seam
 
@@ -202,7 +218,8 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 
 - enums, pending the atomic contracts/builder/abstract-collections/`EnumEntries` source cluster;
 - general annotation classes, use-site targets, retention, and runtime reflection;
-- `KClass`, class literals, `typeOf`, and broad reflection;
+- `KType`, `typeOf`, and member/annotation reflection; the nominal `KClass`/class-literal floor is
+  complete;
 - value/inline classes;
 - reified functions, `typeOf`, and reflection-dependent inline substitution;
 - suspend inline functions until coroutine state machines are supported;

@@ -27,6 +27,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field assembly static initonly class 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1' 'INSTANCE'
   .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -95,6 +96,7 @@ IL_whenNext_1:
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field assembly static initonly class 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1' 'INSTANCE'
   .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
