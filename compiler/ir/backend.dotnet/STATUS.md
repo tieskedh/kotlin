@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: generated Common collection last-match predicates
+- Last completed feature: generated Common collection single-match predicates
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,9 +20,9 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 990 tests:
+The JUnit audit covered 16 fresh XML files and 994 tests:
 
-- 888 FIR, IL-text, and box tests
+- 892 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 81 library-integration tests
 - zero failures, errors, or skips
@@ -168,6 +168,18 @@ and CoreCLR. The open-`T` cast uses the existing checked generic result barrier;
 failed typed uses remain an exceptional correctness path and are not optimized.
 `findLast` remains parked with `find` behind the `@InlineOnly` declaration-
 suppression and ABI audit.
+
+Common `Iterable.single(predicate)` and `singleOrNull(predicate)` now use their
+exact generated bodies; Common defines no distinct List predicate overload.
+Both retain the first match with a separate found flag and stop at the second
+match. Adversarial execution pins zero, unique, and multiple-match behavior,
+the exact Common no-match and multiple-match exceptions, second-match stopping,
+nullable unique null, widened/value elements, capture, predicate-failure
+identity/timing, and non-local return. Separate and installed consumers inline
+both bodies, while handwritten CIL executes both physical fallbacks on Framework
+CLR and CoreCLR. The existing open-`T` cast and boxed-or-null slot remain the
+only physical adaptation; LINQ defaults and target-authored traversal were not
+introduced.
 
 The post-substitution reified-array audit now proves that every admitted
 ordinary array carrier remains truthful after the shared inliner has replaced

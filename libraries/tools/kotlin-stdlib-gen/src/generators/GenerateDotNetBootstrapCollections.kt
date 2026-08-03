@@ -126,7 +126,9 @@ fun main(args: Array<String>) {
         Elements.f_lastOrNull selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_lastOrNull_predicate selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_single selectedFor setOf(Family.Iterables, Family.Lists),
+        Elements.f_single_predicate selectedFor setOf(Family.Iterables),
         Elements.f_singleOrNull selectedFor setOf(Family.Iterables, Family.Lists),
+        Elements.f_singleOrNull_predicate selectedFor setOf(Family.Iterables),
         (Numeric.f_sum selectedFor setOf(Family.Iterables))
             .limitedTo(PrimitiveType.numericPrimitives),
     )

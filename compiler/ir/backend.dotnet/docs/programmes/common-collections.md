@@ -392,6 +392,31 @@ nullable and widened matches, value-type cast recovery, predicate failure identi
 capture, non-local return, separate/installed inlining, all four physical signatures, and direct
 fallback execution on Framework CLR and CoreCLR.
 
+### Single-match predicates
+
+The selected single-match closure is exactly Common's two `Iterable<T>` declarations:
+
+- `single(predicate)`; and
+- `singleOrNull(predicate)`.
+
+JVM, JS, Wasm, and Native consume these same generated declarations; Common does not provide a
+separate List predicate overload. Both bodies traverse in encounter order, remember the first
+match with a distinct `found` flag, and stop as soon as a second match proves that uniqueness is
+impossible. `single` throws the exact Common `NoSuchElementException` when there is no match and
+the exact Common `IllegalArgumentException` at the second match. `singleOrNull` returns null for
+both cases. A single matching nullable null remains a successful value, not absence.
+
+The existing Iterable carrier, Function1 invocation, exception mappings, object-backed `T?`
+fallback, open-type-parameter cast barrier, nullable-bottom handling, and cross-library inliner
+close the representation. A LINQ `Single`/`SingleOrDefault` substitution is rejected: CLR default
+values cannot distinguish nullable success, no match, and multiple matches, and foreign exception
+types/messages would replace Common semantics. Full traversal after a second match is also
+rejected because Common has already fixed predicate timing and failure visibility. Completion must
+cover zero, one, and multiple matches; the precise second-match stopping point; nullable and
+widened values; exact exception identity/messages; predicate failure identity; capture and
+non-local return; separate and installed KLIB inlining; both physical signatures; and direct
+fallback execution on Framework CLR and CoreCLR.
+
 ### Signed numeric sum
 
 The admitted numeric closure is the complete signed Common `Numeric.f_sum` family for `Iterable`:

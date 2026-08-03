@@ -781,6 +781,24 @@ public fun <T> List<T>.single(): T {
 }
 
 /**
+ * Returns the single element matching the given [predicate], or throws exception if there is no or more than one matching element.
+ */
+public inline fun <T> Iterable<T>.single(predicate: (T) -> Boolean): T {
+    var single: T? = null
+    var found = false
+    for (element in this) {
+        if (predicate(element)) {
+            if (found) throw IllegalArgumentException("Collection contains more than one matching element.")
+            single = element
+            found = true
+        }
+    }
+    if (!found) throw NoSuchElementException("Collection contains no element matching the predicate.")
+    @Suppress("UNCHECKED_CAST")
+    return single as T
+}
+
+/**
  * Returns single element, or `null` if the collection is empty or has more than one element.
  */
 public fun <T> Iterable<T>.singleOrNull(): T? {
@@ -803,6 +821,23 @@ public fun <T> Iterable<T>.singleOrNull(): T? {
  */
 public fun <T> List<T>.singleOrNull(): T? {
     return if (size == 1) this[0] else null
+}
+
+/**
+ * Returns the single element matching the given [predicate], or `null` if element was not found or more than one element was found.
+ */
+public inline fun <T> Iterable<T>.singleOrNull(predicate: (T) -> Boolean): T? {
+    var single: T? = null
+    var found = false
+    for (element in this) {
+        if (predicate(element)) {
+            if (found) return null
+            single = element
+            found = true
+        }
+    }
+    if (!found) return null
+    return single
 }
 
 /**
