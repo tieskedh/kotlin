@@ -82,22 +82,6 @@ The current bounded work order is intentional. It may interleave small slices, b
 must not pull an earlier responsibility back into the backend or publish a shape whose prerequisites
 are still undecided.
 
-### Upstream integration checkpoint
-
-Before the next semantic tranche, integrate the reviewed upstream range recorded in
-[`../archive/upstream-impact-2026-08-03.md`](../archive/upstream-impact-2026-08-03.md). The virtual
-merge found one understood integration-test Gradle conflict: accept upstream's Javac/test-input-
-check removal while retaining the .NET fixture, factored setup, smoke selection, and `dn` task.
-Regenerate compiler arguments/API and test runners through their owners, inspect the output, and
-run the strict gate.
-
-The rebase itself must not include semantic cleanup. After it is green, separately probe whether
-common IR's bound-value override helper can replace the callable-reference lowering's local
-equivalent without changing CLR accessibility, virtual/final flags, `MethodImpl`, receiver order,
-or cross-library identity. Shared annotation, division, initialization, and bound-receiver tests
-may be adopted only when their full .NET dependency closure already exists. None of these
-integration follow-ups changes the enum/contracts/builder ordering below.
-
 ### 1. Preserve the completed selected-graph ordinary inline foundation
 
 [`inline-functions.md`](inline-functions.md) records the completed component-aware embedded KLIB

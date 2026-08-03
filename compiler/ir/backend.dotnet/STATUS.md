@@ -7,9 +7,10 @@ verification, and work state.
 ## Current branch
 
 - Branch: `dotnet`
-- Upstream base: `origin/master` at `733a49b39`
-- Reviewed pending upstream head: `76ca9aa1af` (179 commits; one understood
-  virtual-merge conflict, not yet rebased)
+- Upstream base: reviewed upstream commit `76ca9aa1af`
+- Last integration checkpoint: the complete reviewed 179-commit range was
+  rebased without semantic cleanup; later `origin/master` commits remain
+  outside this deliberately selected boundary until they are reviewed
 - Last completed feature: general parameterless Kotlin marker annotation
   classes with exact runtime-retained CLR custom-attribute projection
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
@@ -25,7 +26,7 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The last semantic head passed:
+The current post-rebase integration state passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
@@ -37,6 +38,13 @@ The JUnit audit covered 20 fresh XML files and 1029 tests:
 - 21 generated CLI tests
 - 84 library-integration tests
 - zero failures, errors, or skips
+
+All compiler-argument, API, configuration-key, Gradle-option, and test-runner
+generators owned by the affected upstream range were rerun through their
+owning tasks and produced no tracked output changes. Upstream Test Federation
+now treats the .NET FIR, IL-text, and box runners as compiler-domain tests
+through the same shared target-specific runner pattern used by JVM, JS, Wasm,
+Native, and JKLIB.
 
 Focused evidence additionally covers component-complete packed-KLIB loading,
 same- and cross-library inlining from prepared and main IR, all three KLIB
@@ -419,24 +427,27 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Rebase onto the deliberately selected reviewed upstream head. Resolve the
-   integration-test Gradle conflict by accepting upstream's obsolete Javac
-   dependency removal while retaining the .NET fixture and `dn` task;
-   regenerate arguments/API and test runners, inspect affected inline/import/
-   annotation/reference boundaries, and run the strict gate.
-2. Audit the complete coherent contracts/enum/builder/abstract-collections/
+1. Audit the complete coherent contracts/enum/builder/abstract-collections/
    `EnumEntries` source/product closure now that its marker-annotation
    prerequisite is complete. Mirror the mature targets' enum lowerings,
    packages, runtime ownership, and generated stdlib sources; do not introduce
    a target contract DSL, builder-only stub, or one-enum exception.
-3. If that audit exposes an unresolved hard-to-reverse enum decision, record
+2. If that audit exposes an unresolved hard-to-reverse enum decision, record
    and lock the exact question, then advance independently unlocked Common
    families such as signed `sumOf` or `allEqual` rather than inventing an enum
    shortcut.
-4. Once the enum/product closure is selected, implement it and actualize the
+3. Once the enum/product closure is selected, implement it and actualize the
    complete Common `Appendable`/`StringBuilder`, generated
    `joinTo`/`joinToString`, and Common `AbstractCollection`/`AbstractList`
    sources as one truthful dependency sequence.
+
+The post-rebase callable-reference probe found that common IR's new
+`addBoundValueAtOverride` helper cannot directly replace the .NET lowering:
+the shared helper discovers Kotlin-named `boundValueAt`, while the established
+CLR runtime ABI deliberately exposes `BoundValueAt` as `protected final`.
+Retain the local implementation unless the shared helper is separately
+generalized to accept the exact override identity and member flags, with IL,
+runtime-identity, and separate-library evidence proving no ABI change.
 
 ## Navigation
 
