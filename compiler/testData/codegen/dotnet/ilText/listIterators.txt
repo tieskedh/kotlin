@@ -134,6 +134,9 @@ IL_whenNext_1:
     br IL_whenEnd_0
 IL_whenNext_2:
     newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    dup
+    ldc.i4 8
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     throw
 IL_whenEnd_0:
     stloc.0
@@ -169,6 +172,9 @@ IL_whenEnd_0:
     ceq
     brfalse IL_whenNext_1
     newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    dup
+    ldc.i4 8
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     throw
 IL_whenNext_1:
     ldarg.0
@@ -546,6 +552,9 @@ IL_whenNext_1:
     br IL_whenEnd_0
 IL_whenNext_2:
     newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    dup
+    ldc.i4 8
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     throw
 IL_whenEnd_0:
     stloc.0
@@ -726,6 +735,9 @@ IL_whenEnd_0:
     ceq
     brfalse IL_whenNext_1
     newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    dup
+    ldc.i4 8
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     throw
 IL_whenNext_1:
     ldarg.0

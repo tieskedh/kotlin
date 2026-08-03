@@ -74,6 +74,7 @@
          extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
          implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<class 'ExtensionHost', class 'Cell', int32>
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
     .field private static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$2' 'INSTANCE'
     .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -161,6 +162,7 @@
          extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
          implements [Kotlin.Runtime]'Kotlin.Function3'
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
     .field private static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$3' 'INSTANCE'
     .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -241,6 +243,7 @@
          extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
          implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<class 'ExtensionHost', class 'Cell', int32>
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
     .field private static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$4' 'INSTANCE'
     .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -328,6 +331,7 @@
          extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
          implements [Kotlin.Runtime]'Kotlin.Function3'
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
     .field private static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$5' 'INSTANCE'
     .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -526,6 +530,7 @@
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field assembly static initonly class 'propertyReferencesKt$main$read$1' 'INSTANCE'
   .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -599,6 +604,7 @@ IL_whenNext_1:
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field assembly static initonly class 'propertyReferencesKt$main$mutable$1' 'INSTANCE'
   .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -672,6 +678,7 @@ IL_whenNext_1:
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function1'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field assembly static initonly class 'propertyReferencesKt$main$mutable$2' 'INSTANCE'
   .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -740,6 +747,7 @@ IL_whenNext_1:
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<class 'Cell', int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field assembly static initonly class 'propertyReferencesKt$main$unbound$1' 'INSTANCE'
   .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -816,6 +824,7 @@ IL_whenNext_1:
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function2'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field assembly static initonly class 'propertyReferencesKt$main$unbound$2' 'INSTANCE'
   .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -886,6 +895,7 @@ IL_whenNext_1:
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private class 'Cell' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Cell' 'p0') cil managed
   {
@@ -935,6 +945,7 @@ IL_whenNext_1:
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function1'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private class 'Cell' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Cell' 'p0') cil managed
   {
