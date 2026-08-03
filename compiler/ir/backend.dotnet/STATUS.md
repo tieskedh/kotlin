@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: generated Common collection accumulator folds
+- Last completed feature: generated Common receiver-seeded collection reductions
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,9 +20,9 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 974 tests:
+The JUnit audit covered 16 fresh XML files and 978 tests:
 
-- 872 FIR, IL-text, and box tests
+- 876 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 81 library-integration tests
 - zero failures, errors, or skips
@@ -119,6 +119,20 @@ executes every physical fallback on Framework CLR and CoreCLR. A discarded
 cross-library fold result retains the authoritative erased-accumulator
 `IMPLICIT_CAST`; no failed-cast optimization or new classifier was introduced.
 
+The complete collection-facing receiver-seeded reduction family now likewise
+uses the exact generated Common bodies for `Iterable.reduce`, `reduceIndexed`,
+their nullable empty variants, and all four corresponding right-reduction List
+forms. Physical methods preserve the Common `S, T : S` bound as a real CLR
+generic-parameter constraint; open `S?` uses the accepted boxed-or-null fallback
+slot while embedded KLIB remains authoritative. Adversarial execution pins exact
+empty exception messages or null, singleton no-callback behavior, widened and
+nullable accumulators, left/right order and index association, hostile iterator
+protocols, operation-failure identity, and non-local return. Separate consumers
+inline every packaged body, and handwritten CIL executes all eight fallbacks on
+Framework CLR and CoreCLR. Binary inlining's explicit `Nothing?` nullable branch
+reuses the existing bottom/null-carrier emission rather than introducing a cast
+or classifier.
+
 The post-substitution reified-array audit now proves that every admitted
 ordinary array carrier remains truthful after the shared inliner has replaced
 a type parameter with a concrete type. The adversarial matrix covers reference,
@@ -158,10 +172,12 @@ closed.
 
 ## Active state
 
-No implementation slice is half-landed. The generated Common accumulator-fold
-family is published with its physical fallback methods and inlinable KLIB
-bodies; a discarded substituted generic result performs its existing checked
-recovery before being discarded. Bounded generic-class dispatch now
+No implementation slice is half-landed. The generated Common receiver-seeded
+reduction family is published with all eight physical fallback methods and
+inlinable KLIB bodies; an inlined empty nullable branch uses the existing
+nullable-bottom carrier path. The preceding accumulator-fold family remains
+published, and a discarded substituted generic fold result performs its
+existing checked recovery before being discarded. Bounded generic-class dispatch now
 uses truthful typed CLR capability where available without changing canonical
 identity, physical ABI 17, library metadata, or failure semantics. Ordinary
 non-reified inline bodies now

@@ -25653,8 +25653,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         consumeInstalledStdlib(stdlibDirectory, "net10.0", installedProfile = "netstandard2.0")
         executeSelfDescribingStdlib(stdlibDirectory, "net48", dotnetHost = null)
         executeSelfDescribingStdlib(stdlibDirectory, "net10.0", dotnetHost)
-        executeCollectionOverflowCompilerAbi(stdlibDirectory, "net48", dotnetHost = null)
-        executeCollectionOverflowCompilerAbi(stdlibDirectory, "net10.0", dotnetHost)
+        executeCollectionCompilerAbi(stdlibDirectory, "net48", dotnetHost = null)
+        executeCollectionCompilerAbi(stdlibDirectory, "net10.0", dotnetHost)
         assertCollectionToArrayImplementationIl(stdlibDirectory)
         executeCollectionToArrayImplementation(stdlibDirectory, "net48", dotnetHost = null)
         executeCollectionToArrayImplementation(stdlibDirectory, "net10.0", dotnetHost)
@@ -30968,6 +30968,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "indexOfLast" to 2,
                 "lastIndexOf" to 2,
                 "none" to 1,
+                "reduce" to 1,
+                "reduceIndexed" to 1,
+                "reduceIndexedOrNull" to 1,
+                "reduceOrNull" to 1,
+                "reduceRight" to 1,
+                "reduceRightIndexed" to 1,
+                "reduceRightIndexedOrNull" to 1,
+                "reduceRightOrNull" to 1,
                 "single" to 2,
                 "singleOrNull" to 2,
             ),
@@ -30989,6 +30997,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         "indexOfLast",
                         "lastIndexOf",
                         "none",
+                        "reduce",
+                        "reduceIndexed",
+                        "reduceIndexedOrNull",
+                        "reduceOrNull",
+                        "reduceRight",
+                        "reduceRightIndexed",
+                        "reduceRightIndexedOrNull",
+                        "reduceRightOrNull",
                         "single",
                         "singleOrNull",
                     )
@@ -31013,6 +31029,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "indexOfLast",
                 "lastIndexOf",
                 "none",
+                "reduce",
+                "reduceIndexed",
+                "reduceIndexedOrNull",
+                "reduceOrNull",
+                "reduceRight",
+                "reduceRightIndexed",
+                "reduceRightIndexedOrNull",
+                "reduceRightOrNull",
                 "single",
                 "singleOrNull",
             ) &&
@@ -31169,6 +31193,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".method public hidebysig static !!1 'foldRightIndexed'<'T', 'R'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', !!1 'initial', " +
                     "class [Kotlin.Runtime]'Kotlin.Function3' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static !!0 'reduce'<'S', (!!0) 'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function2' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static !!0 'reduceIndexed'<'S', (!!0) 'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function3' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static object 'reduceIndexedOrNull'<'S', (!!0) 'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function3' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static object 'reduceOrNull'<'S', (!!0) 'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function2' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static !!0 'reduceRight'<'S', (!!0) 'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function2' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static !!0 'reduceRightIndexed'<'S', (!!0) 'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function3' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static object 'reduceRightIndexedOrNull'<'S', (!!0) 'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function3' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static object 'reduceRightOrNull'<'S', (!!0) 'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function2' 'operation')" in il
         )
         assertTrue(
             ".method public hidebysig static int32 'sumOfByte'(" +
@@ -31490,6 +31554,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     operation: (Int, T, R) -> R,
                 ): R = values.foldRightIndexed(initial, operation)
 
+                public fun <S, T : S> reduceLeft(
+                    values: Iterable<T>,
+                    operation: (S, T) -> S,
+                ): S = values.reduce(operation)
+
+                public fun <S, T : S> reduceLeftIndexed(
+                    values: Iterable<T>,
+                    operation: (Int, S, T) -> S,
+                ): S = values.reduceIndexed(operation)
+
+                public fun <S, T : S> reduceLeftOrNull(
+                    values: Iterable<T>,
+                    operation: (S, T) -> S,
+                ): S? = values.reduceOrNull(operation)
+
+                public fun <S, T : S> reduceLeftIndexedOrNull(
+                    values: Iterable<T>,
+                    operation: (Int, S, T) -> S,
+                ): S? = values.reduceIndexedOrNull(operation)
+
+                public fun <S, T : S> reduceListRight(
+                    values: List<T>,
+                    operation: (T, S) -> S,
+                ): S = values.reduceRight(operation)
+
+                public fun <S, T : S> reduceListRightIndexed(
+                    values: List<T>,
+                    operation: (Int, T, S) -> S,
+                ): S = values.reduceRightIndexed(operation)
+
+                public fun <S, T : S> reduceListRightOrNull(
+                    values: List<T>,
+                    operation: (T, S) -> S,
+                ): S? = values.reduceRightOrNull(operation)
+
+                public fun <S, T : S> reduceListRightIndexedOrNull(
+                    values: List<T>,
+                    operation: (Int, T, S) -> S,
+                ): S? = values.reduceRightIndexedOrNull(operation)
+
                 public fun sumBytes(values: Iterable<Byte>): Int = values.sum()
 
                 public fun sumShorts(values: Iterable<Short>): Int = values.sum()
@@ -31648,6 +31752,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'foldRightIndexed'<" !in il) {
             "The separate consumer must inline the Common foldRightIndexed body:\n$il"
         }
+        for (functionName in listOf(
+            "reduce",
+            "reduceIndexed",
+            "reduceIndexedOrNull",
+            "reduceOrNull",
+            "reduceRight",
+            "reduceRightIndexed",
+            "reduceRightIndexedOrNull",
+            "reduceRightOrNull",
+        )) {
+            assertTrue("::'$functionName'<" !in il) {
+                "The separate consumer must inline the Common $functionName body:\n$il"
+            }
+        }
         assertTrue(
             "::'sumOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
         )
@@ -31685,12 +31803,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "The separate consumer must inline both Common indexOfLast bodies:\n$il"
         }
         assertEquals(
-            3,
+            5,
             Regex(
                 "\\[Kotlin\\.Stdlib]'Kotlin\\.Collections\\.CollectionsKt'::" +
                         "'checkIndexOverflow'\\(int32\\)"
             ).findAll(il).count(),
-            "Only the two inlined Iterable index-search bodies and foldIndexed may retain overflow-helper calls",
+            "Only indexed Iterable search, fold, and reduction bodies may retain overflow-helper calls",
         )
         assertTrue("::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
@@ -31804,6 +31922,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     initial: R,
                     operation: (Int, T, R) -> R,
                 ): R = values.foldRightIndexed(initial, operation)
+
+                public fun <S, T : S> installedReduceLeft(
+                    values: Iterable<T>,
+                    operation: (S, T) -> S,
+                ): S = values.reduce(operation)
+
+                public fun <S, T : S> installedReduceLeftIndexed(
+                    values: Iterable<T>,
+                    operation: (Int, S, T) -> S,
+                ): S = values.reduceIndexed(operation)
+
+                public fun <S, T : S> installedReduceLeftOrNull(
+                    values: Iterable<T>,
+                    operation: (S, T) -> S,
+                ): S? = values.reduceOrNull(operation)
+
+                public fun <S, T : S> installedReduceLeftIndexedOrNull(
+                    values: Iterable<T>,
+                    operation: (Int, S, T) -> S,
+                ): S? = values.reduceIndexedOrNull(operation)
+
+                public fun <S, T : S> installedReduceListRight(
+                    values: List<T>,
+                    operation: (T, S) -> S,
+                ): S = values.reduceRight(operation)
+
+                public fun <S, T : S> installedReduceListRightIndexed(
+                    values: List<T>,
+                    operation: (Int, T, S) -> S,
+                ): S = values.reduceRightIndexed(operation)
+
+                public fun <S, T : S> installedReduceListRightOrNull(
+                    values: List<T>,
+                    operation: (T, S) -> S,
+                ): S? = values.reduceRightOrNull(operation)
+
+                public fun <S, T : S> installedReduceListRightIndexedOrNull(
+                    values: List<T>,
+                    operation: (Int, T, S) -> S,
+                ): S? = values.reduceRightIndexedOrNull(operation)
 
                 public fun installedSumBytes(values: Iterable<Byte>): Int = values.sum()
 
@@ -31995,6 +32153,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue("::'foldRightIndexed'<" !in il) {
             "The installed consumer must inline the Common foldRightIndexed body:\n$il"
+        }
+        for (functionName in listOf(
+            "reduce",
+            "reduceIndexed",
+            "reduceIndexedOrNull",
+            "reduceOrNull",
+            "reduceRight",
+            "reduceRightIndexed",
+            "reduceRightIndexedOrNull",
+            "reduceRightOrNull",
+        )) {
+            assertTrue("::'$functionName'<" !in il) {
+                "The installed consumer must inline the Common $functionName body:\n$il"
+            }
         }
         assertTrue("::'sumOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'sumOfShort'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
@@ -32232,6 +32404,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return -1
                 }
 
+                fun nonLocalReduceMatch(values: Iterable<Int>): Int {
+                    values.reduce { accumulator, value ->
+                        if (value == 2) return value
+                        accumulator + value
+                    }
+                    return -1
+                }
+
                 fun main() {
                     print(false)
                     print("|")
@@ -32329,6 +32509,82 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             } == 37 &&
                             emptyFoldCalls == 0 &&
                             nonLocalFoldMatch(arrayOf(1, 2, 3).asIterable()) == 2
+                    val reducing = CountingInts(arrayOf(1, 2, 3))
+                    var reduceTrace = 0
+                    val reduced = reducing.reduce { accumulator, value ->
+                        reduceTrace = reduceTrace * 10 + value
+                        accumulator + value
+                    }
+                    var reduceIndexedTrace = 0
+                    val reducedIndexed = reducing.reduceIndexed { index, accumulator, value ->
+                        reduceIndexedTrace = reduceIndexedTrace * 10 + index
+                        index + accumulator + value
+                    }
+                    val reducedOrNull = arrayOf<Int?>(null, 2, 3).asIterable().reduceOrNull { accumulator, value ->
+                        (accumulator ?: 0) + (value ?: 0)
+                    }
+                    val reducedIndexedOrNull = arrayOf(1, 2, 3).asIterable().reduceIndexedOrNull {
+                            index, accumulator, value -> index + accumulator + value
+                    }
+                    val reverseReduce = ReverseOnlyIntList(arrayOf(1, 2, 3))
+                    var reduceRightTrace = 0
+                    val reducedRight = reverseReduce.reduceRight { value, accumulator ->
+                        reduceRightTrace = reduceRightTrace * 10 + value
+                        value - accumulator
+                    }
+                    var reduceRightIndexedTrace = 0
+                    val reducedRightIndexed = reverseReduce.reduceRightIndexed { index, value, accumulator ->
+                        reduceRightIndexedTrace = reduceRightIndexedTrace * 10 + index
+                        index + value + accumulator
+                    }
+                    val reducedRightOrNull = reverseReduce.reduceRightOrNull { value, accumulator -> value + accumulator }
+                    val reducedRightIndexedOrNull = reverseReduce.reduceRightIndexedOrNull {
+                            index, value, accumulator -> index + value + accumulator
+                    }
+                    var emptyReduceCalls = 0
+                    var emptyReduceMessageIsCommon = false
+                    try {
+                        emptyList<Int>().reduce { accumulator, value ->
+                            emptyReduceCalls++
+                            accumulator + value
+                        }
+                    } catch (failure: UnsupportedOperationException) {
+                        emptyReduceMessageIsCommon = failure.message == "Empty collection can't be reduced."
+                    }
+                    val emptyNullableReductions =
+                        emptyList<Int>().reduceOrNull { accumulator, value -> emptyReduceCalls++; accumulator + value } == null &&
+                            emptyList<Int>().reduceIndexedOrNull { index, accumulator, value ->
+                                emptyReduceCalls++
+                                index + accumulator + value
+                            } == null &&
+                            emptyList<Int>().reduceRightOrNull { value, accumulator ->
+                                emptyReduceCalls++
+                                value + accumulator
+                            } == null &&
+                            emptyList<Int>().reduceRightIndexedOrNull { index, value, accumulator ->
+                                emptyReduceCalls++
+                                index + value + accumulator
+                            } == null
+                    val reduceOk =
+                        reduced == 6 &&
+                            reduceTrace == 23 &&
+                            reducedIndexed == 9 &&
+                            reduceIndexedTrace == 12 &&
+                            reducing.iteratorCalls == 2 &&
+                            reducing.nextCalls == 6 &&
+                            reducedOrNull == 5 &&
+                            reducedIndexedOrNull == 9 &&
+                            reducedRight == 2 &&
+                            reduceRightTrace == 21 &&
+                            reducedRightIndexed == 7 &&
+                            reduceRightIndexedTrace == 10 &&
+                            reducedRightOrNull == 6 &&
+                            reducedRightIndexedOrNull == 7 &&
+                            reverseReduce.requestedListIteratorIndex == reverseReduce.size &&
+                            emptyReduceMessageIsCommon &&
+                            emptyNullableReductions &&
+                            emptyReduceCalls == 0 &&
+                            nonLocalReduceMatch(arrayOf(1, 2, 3).asIterable()) == 2
                     val empty = HostileEmptyCollection<Int>()
                     var emptyPredicateCalls = 0
                     val emptyFastPathOk =
@@ -32410,7 +32666,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     println(
                         first + "|" + second + "|" + (atEof == null) + "|" +
                             readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk + "|" +
-                            indexedOptionalOk + "|" + numericSumOk + "|" + foldOk + "|" + inlinePredicatesOk
+                            indexedOptionalOk + "|" + numericSumOk + "|" + foldOk + "|" + reduceOk + "|" +
+                            inlinePredicatesOk
                     )
                 }
                 """.trimIndent()
@@ -32444,29 +32701,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }
 
-    private fun executeCollectionOverflowCompilerAbi(
+    private fun executeCollectionCompilerAbi(
         stdlibDirectory: File,
         target: String,
         dotnetHost: File?,
     ) {
-        val directory = File(tmpdir, "collection-overflow-compiler-abi-$target").apply { mkdirs() }
+        val directory = File(tmpdir, "collection-compiler-abi-$target").apply { mkdirs() }
         stdlibDirectory.resolve("Kotlin.Stdlib.dll")
             .copyTo(directory.resolve("Kotlin.Stdlib.dll"), overwrite = true)
         stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
             .copyTo(directory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME), overwrite = true)
-        val ilFile = directory.resolve("CollectionOverflowProbe.il").apply {
+        val ilFile = directory.resolve("CollectionFunctionsProbe.il").apply {
             writeText(
                 """
                 .assembly extern mscorlib {}
                 .assembly extern Kotlin.Runtime {}
                 .assembly extern Kotlin.Stdlib {}
-                .assembly CollectionOverflowProbe {}
-                .module CollectionOverflowProbe.exe
+                .assembly CollectionFunctionsProbe {}
+                .module CollectionFunctionsProbe.exe
 
                 .class public auto ansi sealed beforefieldinit PositivePredicate
                        extends [mscorlib]System.Object
@@ -32768,9 +33025,121 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     newobj instance void SumIndexedOperation::.ctor()
                     call !!1 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'foldRightIndexed'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', !!1, class [Kotlin.Runtime]'Kotlin.Function3')
                     ldc.i4.s 14
-                    beq.s DONE
+                    beq.s REDUCE
                     ldstr "foldRightIndexed fallback changed"
                     call void Program::Fail(string)
+                REDUCE:
+                    ldloc.2
+                    newobj instance void SumOperation::.ctor()
+                    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduce'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function2')
+                    ldc.i4.8
+                    beq.s REDUCE_INDEXED
+                    ldstr "reduce fallback changed"
+                    call void Program::Fail(string)
+                REDUCE_INDEXED:
+                    ldloc.2
+                    newobj instance void SumIndexedOperation::.ctor()
+                    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduceIndexed'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function3')
+                    ldc.i4.s 14
+                    beq.s REDUCE_OR_NULL
+                    ldstr "reduceIndexed fallback changed"
+                    call void Program::Fail(string)
+                REDUCE_OR_NULL:
+                    ldloc.2
+                    newobj instance void SumOperation::.ctor()
+                    call object [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduceOrNull'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function2')
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.8
+                    beq.s REDUCE_INDEXED_OR_NULL
+                    ldstr "reduceOrNull fallback changed"
+                    call void Program::Fail(string)
+                REDUCE_INDEXED_OR_NULL:
+                    ldloc.2
+                    newobj instance void SumIndexedOperation::.ctor()
+                    call object [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduceIndexedOrNull'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function3')
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.s 14
+                    beq.s REDUCE_RIGHT
+                    ldstr "reduceIndexedOrNull fallback changed"
+                    call void Program::Fail(string)
+                REDUCE_RIGHT:
+                    ldloc.3
+                    newobj instance void SumOperation::.ctor()
+                    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduceRight'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function2')
+                    ldc.i4.8
+                    beq.s REDUCE_RIGHT_INDEXED
+                    ldstr "reduceRight fallback changed"
+                    call void Program::Fail(string)
+                REDUCE_RIGHT_INDEXED:
+                    ldloc.3
+                    newobj instance void SumIndexedOperation::.ctor()
+                    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduceRightIndexed'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function3')
+                    ldc.i4.s 11
+                    beq.s REDUCE_RIGHT_OR_NULL
+                    ldstr "reduceRightIndexed fallback changed"
+                    call void Program::Fail(string)
+                REDUCE_RIGHT_OR_NULL:
+                    ldloc.3
+                    newobj instance void SumOperation::.ctor()
+                    call object [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduceRightOrNull'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function2')
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.8
+                    beq.s REDUCE_RIGHT_INDEXED_OR_NULL
+                    ldstr "reduceRightOrNull fallback changed"
+                    call void Program::Fail(string)
+                REDUCE_RIGHT_INDEXED_OR_NULL:
+                    ldloc.3
+                    newobj instance void SumIndexedOperation::.ctor()
+                    call object [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduceRightIndexedOrNull'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function3')
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.s 11
+                    beq.s EMPTY_REDUCE_OR_NULL
+                    ldstr "reduceRightIndexedOrNull fallback changed"
+                    call void Program::Fail(string)
+                EMPTY_REDUCE_OR_NULL:
+                    ldc.i4.0
+                    newarr [mscorlib]System.Int32
+                    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<int32>(!!0[])
+                    newobj instance void SumOperation::.ctor()
+                    call object [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduceOrNull'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function2')
+                    brfalse.s EMPTY_REDUCE_RIGHT_OR_NULL
+                    ldstr "empty reduceOrNull fallback changed"
+                    call void Program::Fail(string)
+                EMPTY_REDUCE_RIGHT_OR_NULL:
+                    ldc.i4.0
+                    newarr [mscorlib]System.Int32
+                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(!!0[])
+                    newobj instance void SumOperation::.ctor()
+                    call object [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduceRightOrNull'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function2')
+                    brfalse.s EMPTY_REDUCE_THROW
+                    ldstr "empty reduceRightOrNull fallback changed"
+                    call void Program::Fail(string)
+                EMPTY_REDUCE_THROW:
+                    .try
+                    {
+                      ldc.i4.0
+                      newarr [mscorlib]System.Int32
+                      call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<int32>(!!0[])
+                      newobj instance void SumOperation::.ctor()
+                      call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduce'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function2')
+                      pop
+                      ldstr "empty reduce fallback returned"
+                      call void Program::Fail(string)
+                      leave.s DONE
+                    }
+                    catch [mscorlib]System.NotSupportedException
+                    {
+                      stloc.0
+                      ldloc.0
+                      callvirt instance string [mscorlib]System.Exception::get_Message()
+                      ldstr "Empty collection can't be reduced."
+                      call bool [mscorlib]System.String::op_Equality(string, string)
+                      brtrue.s EMPTY_REDUCE_MESSAGE_OK
+                      ldstr "empty reduce fallback message changed"
+                      call void Program::Fail(string)
+                EMPTY_REDUCE_MESSAGE_OK:
+                      leave.s DONE
+                    }
                 DONE:
                     ret
                   }
@@ -32780,11 +33149,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         val profile = checkNotNull(DotNetTarget.fromString(target))
         val executable = directory.resolve(
-            if (profile == DotNetTarget.NET48) "CollectionOverflowProbe.exe" else "CollectionOverflowProbe.dll"
+            if (profile == DotNetTarget.NET48) "CollectionFunctionsProbe.exe" else "CollectionFunctionsProbe.dll"
         )
         assertTrue(
             DotNetIlAssembler.assembleExecutable(ilFile, executable, profile, MessageCollector.NONE),
-            "Could not assemble collection-overflow compiler-ABI probe for $target",
+            "Could not assemble collection compiler-ABI probe for $target",
         )
         val command = if (profile == DotNetTarget.NET48) {
             listOf(executable.path)
@@ -32796,7 +33165,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .redirectErrorStream(true)
             .start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
-        assertEquals(0, process.waitFor(), "Collection-overflow compiler-ABI probe failed for $target:\n$output")
+        assertEquals(0, process.waitFor(), "Collection compiler-ABI probe failed for $target:\n$output")
     }
 
     private fun assertCollectionToArrayImplementationIl(stdlibDirectory: File) {

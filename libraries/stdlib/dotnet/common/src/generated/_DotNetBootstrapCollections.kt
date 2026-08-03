@@ -467,6 +467,190 @@ public fun <T> Iterable<T>.none(): Boolean {
 }
 
 /**
+ * Accumulates value starting with the first element and applying [operation] from left to right
+ * to current accumulator value and each element.
+ *
+ * Throws an exception if this collection is empty. If the collection can be empty in an expected way,
+ * please use [reduceOrNull] instead. It returns `null` when its receiver is empty.
+ *
+ * @param [operation] function that takes current accumulator value and an element,
+ * and calculates the next accumulator value.
+ *
+ * @sample samples.collections.Collections.Aggregates.reduce
+ */
+public inline fun <S, T : S> Iterable<T>.reduce(operation: (acc: S, T) -> S): S {
+    val iterator = this.iterator()
+    if (!iterator.hasNext()) throw UnsupportedOperationException("Empty collection can't be reduced.")
+    var accumulator: S = iterator.next()
+    while (iterator.hasNext()) {
+        accumulator = operation(accumulator, iterator.next())
+    }
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with the first element and applying [operation] from left to right
+ * to current accumulator value and each element with its index in the original collection.
+ *
+ * Throws an exception if this collection is empty. If the collection can be empty in an expected way,
+ * please use [reduceIndexedOrNull] instead. It returns `null` when its receiver is empty.
+ *
+ * @param [operation] function that takes the index of an element, current accumulator value and the element itself,
+ * and calculates the next accumulator value.
+ *
+ * @sample samples.collections.Collections.Aggregates.reduce
+ */
+public inline fun <S, T : S> Iterable<T>.reduceIndexed(operation: (index: Int, acc: S, T) -> S): S {
+    val iterator = this.iterator()
+    if (!iterator.hasNext()) throw UnsupportedOperationException("Empty collection can't be reduced.")
+    var index = 1
+    var accumulator: S = iterator.next()
+    while (iterator.hasNext()) {
+        accumulator = operation(checkIndexOverflow(index++), accumulator, iterator.next())
+    }
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with the first element and applying [operation] from left to right
+ * to current accumulator value and each element with its index in the original collection.
+ *
+ * Returns `null` if the collection is empty.
+ *
+ * @param [operation] function that takes the index of an element, current accumulator value and the element itself,
+ * and calculates the next accumulator value.
+ *
+ * @sample samples.collections.Collections.Aggregates.reduceOrNull
+ */
+@SinceKotlin("1.4")
+public inline fun <S, T : S> Iterable<T>.reduceIndexedOrNull(operation: (index: Int, acc: S, T) -> S): S? {
+    val iterator = this.iterator()
+    if (!iterator.hasNext()) return null
+    var index = 1
+    var accumulator: S = iterator.next()
+    while (iterator.hasNext()) {
+        accumulator = operation(checkIndexOverflow(index++), accumulator, iterator.next())
+    }
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with the first element and applying [operation] from left to right
+ * to current accumulator value and each element.
+ *
+ * Returns `null` if the collection is empty.
+ *
+ * @param [operation] function that takes current accumulator value and an element,
+ * and calculates the next accumulator value.
+ *
+ * @sample samples.collections.Collections.Aggregates.reduceOrNull
+ */
+@SinceKotlin("1.4")
+public inline fun <S, T : S> Iterable<T>.reduceOrNull(operation: (acc: S, T) -> S): S? {
+    val iterator = this.iterator()
+    if (!iterator.hasNext()) return null
+    var accumulator: S = iterator.next()
+    while (iterator.hasNext()) {
+        accumulator = operation(accumulator, iterator.next())
+    }
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with the last element and applying [operation] from right to left
+ * to each element and current accumulator value.
+ *
+ * Throws an exception if this list is empty. If the list can be empty in an expected way,
+ * please use [reduceRightOrNull] instead. It returns `null` when its receiver is empty.
+ *
+ * @param [operation] function that takes an element and current accumulator value,
+ * and calculates the next accumulator value.
+ *
+ * @sample samples.collections.Collections.Aggregates.reduceRight
+ */
+public inline fun <S, T : S> List<T>.reduceRight(operation: (T, acc: S) -> S): S {
+    val iterator = listIterator(size)
+    if (!iterator.hasPrevious())
+        throw UnsupportedOperationException("Empty list can't be reduced.")
+    var accumulator: S = iterator.previous()
+    while (iterator.hasPrevious()) {
+        accumulator = operation(iterator.previous(), accumulator)
+    }
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with the last element and applying [operation] from right to left
+ * to each element with its index in the original list and current accumulator value.
+ *
+ * Throws an exception if this list is empty. If the list can be empty in an expected way,
+ * please use [reduceRightIndexedOrNull] instead. It returns `null` when its receiver is empty.
+ *
+ * @param [operation] function that takes the index of an element, the element itself and current accumulator value,
+ * and calculates the next accumulator value.
+ *
+ * @sample samples.collections.Collections.Aggregates.reduceRight
+ */
+public inline fun <S, T : S> List<T>.reduceRightIndexed(operation: (index: Int, T, acc: S) -> S): S {
+    val iterator = listIterator(size)
+    if (!iterator.hasPrevious())
+        throw UnsupportedOperationException("Empty list can't be reduced.")
+    var accumulator: S = iterator.previous()
+    while (iterator.hasPrevious()) {
+        val index = iterator.previousIndex()
+        accumulator = operation(index, iterator.previous(), accumulator)
+    }
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with the last element and applying [operation] from right to left
+ * to each element with its index in the original list and current accumulator value.
+ *
+ * Returns `null` if the list is empty.
+ *
+ * @param [operation] function that takes the index of an element, the element itself and current accumulator value,
+ * and calculates the next accumulator value.
+ *
+ * @sample samples.collections.Collections.Aggregates.reduceRightOrNull
+ */
+@SinceKotlin("1.4")
+public inline fun <S, T : S> List<T>.reduceRightIndexedOrNull(operation: (index: Int, T, acc: S) -> S): S? {
+    val iterator = listIterator(size)
+    if (!iterator.hasPrevious())
+        return null
+    var accumulator: S = iterator.previous()
+    while (iterator.hasPrevious()) {
+        val index = iterator.previousIndex()
+        accumulator = operation(index, iterator.previous(), accumulator)
+    }
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with the last element and applying [operation] from right to left
+ * to each element and current accumulator value.
+ *
+ * Returns `null` if the list is empty.
+ *
+ * @param [operation] function that takes an element and current accumulator value,
+ * and calculates the next accumulator value.
+ *
+ * @sample samples.collections.Collections.Aggregates.reduceRightOrNull
+ */
+@SinceKotlin("1.4")
+public inline fun <S, T : S> List<T>.reduceRightOrNull(operation: (T, acc: S) -> S): S? {
+    val iterator = listIterator(size)
+    if (!iterator.hasPrevious())
+        return null
+    var accumulator: S = iterator.previous()
+    while (iterator.hasPrevious()) {
+        accumulator = operation(iterator.previous(), accumulator)
+    }
+    return accumulator
+}
+
+/**
  * Returns the single element, or throws an exception if the collection is empty or has more than one element.
  */
 public fun <T> Iterable<T>.single(): T {
