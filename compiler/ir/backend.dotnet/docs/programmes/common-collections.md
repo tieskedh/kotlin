@@ -218,6 +218,49 @@ the regular-inline contract: the fallback methods and KLIB bindings exist in the
 from Kotlin consumers disappear after inlining; only the Iterable index bodies may retain calls to
 the ordinary compiler-ABI overflow helper.
 
+### Accumulator folds
+
+The selected fold closure is the complete collection-facing Common `Aggregates` family:
+
+- `Iterable<T>.fold(initial, operation)`;
+- `Iterable<T>.foldIndexed(initial, operation)`;
+- `List<T>.foldRight(initial, operation)`; and
+- `List<T>.foldRightIndexed(initial, operation)`.
+
+JVM, JS, Wasm, and Native all consume these generated Common bodies; none owns a platform fold
+algorithm. Kotlin/.NET therefore selects the same four template variants without a target body or
+intrinsic. Array, primitive-array, unsigned-array, string, and sequence variants belong to their
+own source-product closures and are not implied by this collection slice.
+
+All four declarations are ordinary non-reified inline functions with fallback methods on
+`Kotlin.Collections.CollectionsKt`. `fold` traverses left to right and returns the initial value
+without invoking the operation when empty. `foldIndexed` additionally calls the already admitted
+Common `checkIndexOverflow(index++)` before every operation. The List pair requests
+`listIterator(size)` only for a non-empty list and traverses through `hasPrevious`/`previous`;
+`foldRightIndexed` obtains `previousIndex` before the matching element. This pins operation order,
+index association, iterator calls, and exception timing to Common.
+
+The dependency closure is already physical: `Iterable`/`List` and their iterators are published,
+fixed `Function2` and `Function3` invocation execute, generic method results retain `R`, the
+ordinary inliner preserves captures and non-local returns, and `checkIndexOverflow` is callable
+compiler ABI. No collection builder, enum, annotation, reflection token, reified operation, or new
+CLR carrier is involved.
+
+The cross-library non-local-return gate exposed one ordinary inline cleanup requirement. KLIB IR
+stores the generic accumulator as its erased `Any?` slot and recovers the substituted `R` through
+an `IMPLICIT_CAST`. If the caller discards the fold result, that recovery is itself in statement
+position. Kotlin/.NET now emits and discards precisely that existing cast shape, including its
+checked unbox; it does not infer a new cast, optimize failed casts, or broaden the accepted runtime
+classifier set.
+
+A LINQ aggregate, indexed loop over arbitrary Iterable, reversed copy, BCL enumerator, target-authored
+fallback, or fallback-only non-inline declaration is rejected. Each changes traversal capability,
+allocation, user-operation timing, non-local return behavior, or authoritative source ownership
+without a CLR representation constraint. Adversarial completion therefore covers empty and
+nullable accumulators, primitive/reference/widened elements, exact left/right traces, hostile
+iterators, Function3 index association, capture and non-local return, packaged fallback bodies,
+separate-consumer inlining, and direct fallback execution on Framework CLR and CoreCLR.
+
 ### Signed numeric sum
 
 The admitted numeric closure is the complete signed Common `Numeric.f_sum` family for `Iterable`:

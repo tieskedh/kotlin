@@ -777,6 +777,12 @@ internal class DotNetIlMethodCodegen(
             expression is IrBreakContinue -> emitBreakContinue(expression)
             expression is IrTypeOperatorCall && expression.operator == IrTypeOperator.IMPLICIT_COERCION_TO_UNIT ->
                 emitDiscardableExpression(expression.argument)
+            // A deserialized generic inline body can end in an erased value which is implicitly
+            // recovered to the substituted result type even when the caller discards that result.
+            // Keep the recovery observable (including its checked unbox) and discard only the
+            // produced value; `Iterable.fold<Int, Int>(...)` is the canonical Common shape.
+            expression is IrTypeOperatorCall && expression.operator == IrTypeOperator.IMPLICIT_CAST ->
+                emitDiscardableExpression(expression)
             expression is IrGetObjectValue && expression.type.isUnit() -> Unit
             expression is IrContainerExpression -> emitBlockStatement(expression)
             // A side-effect-free value read in statement position (e.g. the trailing `<unary>`
