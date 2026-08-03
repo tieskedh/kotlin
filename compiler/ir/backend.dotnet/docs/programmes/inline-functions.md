@@ -36,6 +36,10 @@ Their binary stage begins with the corresponding common lowering/inliner prefix 
 remain for the selected KLIB inliner mode receive the same semantics before target lowerings.
 KLIB stores both normal serialized IR and, when produced by the first stage, the prepared
 inlinable-functions component. The logical declaration in metadata remains authoritative.
+Dependency deserialization on mature KLIB paths explicitly retains inline bodies when they may be
+consumed without whole-world linking. Kotlin/.NET follows that ownership: every selected Kotlin
+dependency keeps the required body components, while a foreign CLR assembly never receives a
+synthetic Kotlin inline body.
 
 JVM uses its class-file inline-body representation and JVM backend sequence rather than KLIB IR,
 but establishes the same invariant: a consumer receives compiler-readable body information and
@@ -211,6 +215,8 @@ The completed slice proves:
 - `net48` and `net10.0` execution plus `netstandard2.0` production and consumption;
 - complete main/prepared component loading, partial-component rejection, and the existing packed
   archive's duplicate, non-canonical, truncated, CRC, and expansion-budget rejection;
+- selected dependency KLIBs retain prepared/main inline bodies across separate-library loading,
+  while foreign CLR dependencies contribute no invented inline body;
 - no injected bootstrap stdlib IR in a user-produced library; and
 - byte-identical embedded stdlib KLIBs for repository sources and packaged fallback sources, plus
   successful stdlib-free foreign/diagnostic compilation; and

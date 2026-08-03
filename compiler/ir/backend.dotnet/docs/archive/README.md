@@ -19,9 +19,10 @@ Archived snapshots:
 - [`upstream-sync-2026-07-28.md`](upstream-sync-2026-07-28.md) and
   [`upstream-sync-2026-07-30.md`](upstream-sync-2026-07-30.md) preserve dated
   rebase-impact evidence.
-- [`upstream-impact-2026-08-03.md`](upstream-impact-2026-08-03.md) accounts for
-  all 179 commits pending after the 2026-07-30 upstream base and records their
-  thematic Kotlin/.NET impact before a later rebase.
+- [`upstream-impact-2026-08-03.md`](upstream-impact-2026-08-03.md) records the
+  exact 179-commit pending range, virtual-merge evidence, screened directions,
+  and durable Kotlin/.NET consequences before a later rebase. Git and the exact
+  range own its reproducible per-commit ledger.
 - [`common-io-source-partition.md`](common-io-source-partition.md) preserves a
   completed programme whose durable rules now live in the runtime/stdlib ADR.
 - [`superseded-hybrid-exception-identity.md`](superseded-hybrid-exception-identity.md)

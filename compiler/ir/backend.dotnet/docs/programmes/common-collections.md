@@ -664,7 +664,9 @@ The source audit exposed a prerequisite that a partial builder must not hide: Co
 family. That family includes public effect interfaces, annotation classes, and the
 `InvocationKind` enum. The parameterless annotation declarations now have a general physical
 representation, leaving the enum and contract-effect product as the unresolved part of this
-dependency. The target cannot fake just enough contract declarations for builder compilation.
+dependency. Common now also applies `returnsResultOf` to result-forwarding functions in
+`Standard.kt`; that effect has no exact Roslyn CodeAnalysis representation and must survive in
+KLIB. The target cannot fake just enough contract declarations for builder compilation.
 Complete enum representation therefore still precedes builder actualization. The independent
 typed collection-to-array prerequisite has now landed while that language foundation remains
 parked.

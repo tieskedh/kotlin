@@ -205,6 +205,17 @@ only runtime-retained applications on exact CLR parents, keeps source/binary app
 KLIB, and deliberately provides no annotation discovery. The remaining chain should reuse the
 importer value algebra, but it must not be smuggled in as one more standard-attribute mapping.
 
+Shared PSI and decompiler support for rich annotation constants is the canonical future semantic
+test reservoir. Enable its unary/binary/parenthesized constants, strings, class literals, arrays,
+enum entries, nested annotations, unsigned values, and invalid non-constants as their real target
+dependencies land; do not copy those cases into a .NET-only language suite.
+
+The shared KLIB metadata reader can post-process each `KmAnnotation`. A future foreign importer or
+interop tool may use that callback to normalize an already decoded, recognized foreign annotation
+while constructing a Kotlin view. The callback is not a physical ABI codec, does not erase the
+original CLR evidence, and never lets projected custom attributes override a Kotlin-produced
+library's authoritative embedded KLIB.
+
 ## Public source-annotation decision
 
 Names analogous to `@JvmName`, `@JvmStatic`, `@JsExport`, or `@ObjCName` may eventually be useful
