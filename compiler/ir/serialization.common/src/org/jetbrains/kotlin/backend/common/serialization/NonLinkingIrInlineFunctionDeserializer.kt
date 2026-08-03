@@ -71,6 +71,26 @@ class NonLinkingIrInlineFunctionDeserializer(
             ))
         }
     }
+    private val eagerlyKnownBuiltInFunctions by lazy(LazyThreadSafetyMode.NONE) {
+        buildList {
+            addAll(listOf(
+                irBuiltIns.eqeqeqSymbol, irBuiltIns.eqeqSymbol,
+                irBuiltIns.throwCceSymbol, irBuiltIns.throwIseSymbol,
+                irBuiltIns.andandSymbol, irBuiltIns.ororSymbol,
+                irBuiltIns.noWhenBranchMatchedExceptionSymbol,
+                irBuiltIns.illegalArgumentExceptionSymbol,
+                irBuiltIns.dataClassArrayMemberHashCodeSymbol,
+                irBuiltIns.dataClassArrayMemberToStringSymbol,
+                irBuiltIns.checkNotNullSymbol,
+                irBuiltIns.linkageErrorSymbol,
+            ))
+            addAll(irBuiltIns.ieee754equalsFunByOperandType.values)
+            addAll(irBuiltIns.lessFunByOperandType.values)
+            addAll(irBuiltIns.lessOrEqualFunByOperandType.values)
+            addAll(irBuiltIns.greaterOrEqualFunByOperandType.values)
+            addAll(irBuiltIns.greaterFunByOperandType.values)
+        }
+    }
 
     /**
      * This is a separate symbol table ("detached") from the symbol table ("main") that is used in IR linker.
@@ -184,8 +204,17 @@ class NonLinkingIrInlineFunctionDeserializer(
                 }
                     ?: classId(segments.size)?.let(irBuiltIns.symbolFinder::findClass)
             }
-            BinarySymbolData.SymbolKind.FUNCTION_SYMBOL ->
-                irBuiltIns.symbolFinder.findFunctions(callableId()).firstOrNull { it.matches(signature) }
+            BinarySymbolData.SymbolKind.FUNCTION_SYMBOL -> {
+                val callableId = callableId()
+                val knownBuiltIns = eagerlyKnownBuiltInFunctions.filter { it.owner.callableId == callableId }
+                // Synthetic built-ins can be reconstructed with a signature variant different
+                // from the serialized copy. As for eagerly known built-in classes above, accept
+                // the stable logical identity only when it names exactly one compiler-owned
+                // function; overloaded operators still require an exact signature match.
+                knownBuiltIns.firstOrNull { it.matches(signature) }
+                    ?: knownBuiltIns.singleOrNull()
+                    ?: irBuiltIns.symbolFinder.findFunctions(callableId).firstOrNull { it.matches(signature) }
+            }
             BinarySymbolData.SymbolKind.PROPERTY_SYMBOL ->
                 irBuiltIns.symbolFinder.findProperties(callableId()).firstOrNull { it.matches(signature) }
             BinarySymbolData.SymbolKind.CONSTRUCTOR_SYMBOL ->
