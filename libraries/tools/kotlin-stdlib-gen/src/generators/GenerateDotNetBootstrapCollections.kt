@@ -99,6 +99,8 @@ fun main(args: Array<String>) {
         Aggregates.f_foldIndexed selectedFor setOf(Family.Iterables),
         Aggregates.f_foldRight selectedFor setOf(Family.Lists),
         Aggregates.f_foldRightIndexed selectedFor setOf(Family.Lists),
+        Aggregates.f_forEach selectedFor setOf(Family.Iterables),
+        Aggregates.f_forEachIndexed selectedFor setOf(Family.Iterables),
         Aggregates.f_none selectedFor setOf(Family.Iterables),
         Aggregates.f_reduceSuper selectedFor setOf(Family.Iterables),
         Aggregates.f_reduceIndexedSuper selectedFor setOf(Family.Iterables),
