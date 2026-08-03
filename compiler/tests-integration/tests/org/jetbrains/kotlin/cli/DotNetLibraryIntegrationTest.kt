@@ -30982,8 +30982,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "reduceRightIndexed" to 1,
                 "reduceRightIndexedOrNull" to 1,
                 "reduceRightOrNull" to 1,
-                "single" to 2,
-                "singleOrNull" to 2,
+                "single" to 3,
+                "singleOrNull" to 3,
             ),
             collectionFunctions
                 .filter { declaration ->
@@ -31429,12 +31429,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')" in il
         )
         assertTrue(
+            ".method public hidebysig static !!0 'single'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
+        )
+        assertTrue(
             ".method public hidebysig static object 'singleOrNull'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
         )
         assertTrue(
             ".method public hidebysig static object 'singleOrNull'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static object 'singleOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
         )
         assertTrue(
             ".method public hidebysig specialname static int32 'get_lastIndex'<'T'>(" +
@@ -31606,6 +31616,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     values: List<T>,
                     predicate: (T) -> Boolean,
                 ): T? = values.lastOrNull(predicate)
+
+                public fun <T> singleMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T = values.single(predicate)
+
+                public fun <T> singleMatchingOrNull(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.singleOrNull(predicate)
 
                 public fun <T> optionalAt(values: Iterable<T>, index: Int): T? =
                     values.elementAtOrNull(index)
@@ -31841,6 +31861,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         }
         assertTrue(
+            "::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The separate consumer must inline the Common single(predicate) body:\n$il"
+        }
+        assertTrue(
+            "::'singleOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The separate consumer must inline the Common singleOrNull(predicate) body:\n$il"
+        }
+        assertTrue(
             "::'elementAtOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32)" in il
         )
         assertTrue("::'getOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List', int32)" in il)
@@ -32047,6 +32079,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     values: List<T>,
                     predicate: (T) -> Boolean,
                 ): T? = values.lastOrNull(predicate)
+
+                public fun <T> installedSingleMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T = values.single(predicate)
+
+                public fun <T> installedSingleMatchingOrNull(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.singleOrNull(predicate)
 
                 public fun <T> installedOptionalAt(values: Iterable<T>, index: Int): T? =
                     values.elementAtOrNull(index)
@@ -32315,6 +32357,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ) {
                 "The installed consumer must inline the Common $receiverName.lastOrNull(predicate) body:\n$il"
             }
+        }
+        assertTrue(
+            "::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The installed consumer must inline the Common single(predicate) body:\n$il"
+        }
+        assertTrue(
+            "::'singleOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The installed consumer must inline the Common singleOrNull(predicate) body:\n$il"
         }
         assertTrue(
             "::'elementAtOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32)" in il
@@ -32655,6 +32709,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return -1
                 }
 
+                fun nonLocalSingleMatch(values: Iterable<Int>): Int {
+                    values.single { value ->
+                        if (value == 2) return value
+                        false
+                    }
+                    return -1
+                }
+
                 fun main() {
                     print(false)
                     print("|")
@@ -32956,6 +33018,66 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             emptyIterableLastMessageIsCommon &&
                             emptyListLastMessageIsCommon &&
                             nonLocalLastMatch(arrayOf(1, 2, 3).asIterable()) == 2
+                    val uniqueSingle = CountingInts(arrayOf(1, 2, 3))
+                    var singlePredicateTrace = 0
+                    val singlePredicate = uniqueSingle.single { value ->
+                        singlePredicateTrace = singlePredicateTrace * 10 + value
+                        value == 2
+                    }
+                    var singleOrNullPredicateTrace = 0
+                    val singleOrNullPredicate = uniqueSingle.singleOrNull { value ->
+                        singleOrNullPredicateTrace = singleOrNullPredicateTrace * 10 + value
+                        value == 2
+                    }
+                    val multipleSingle = CountingInts(arrayOf(2, 1, 2, 3))
+                    var multipleSingleCalls = 0
+                    var multipleSingleMessageIsCommon = false
+                    try {
+                        multipleSingle.single { value -> multipleSingleCalls++; value == 2 }
+                    } catch (failure: IllegalArgumentException) {
+                        multipleSingleMessageIsCommon =
+                            failure.message == "Collection contains more than one matching element."
+                    }
+                    val multipleSingleOrNull =
+                        multipleSingle.singleOrNull { value -> multipleSingleCalls++; value == 2 }
+                    var emptySingleCalls = 0
+                    var emptySingleMessageIsCommon = false
+                    val emptySingle: Iterable<Int> = emptyList()
+                    try {
+                        emptySingle.single { value -> emptySingleCalls++; value == 1 }
+                    } catch (failure: NoSuchElementException) {
+                        emptySingleMessageIsCommon =
+                            failure.message == "Collection contains no element matching the predicate."
+                    }
+                    var nullableSingleCalls = 0
+                    val nullableSingle: String? = arrayOf<String?>(null, "K").asIterable().single { value ->
+                        nullableSingleCalls++
+                        value == null
+                    }
+                    val nullableSingleOrNull: String? =
+                        arrayOf<String?>(null, "K").asIterable().singleOrNull { value ->
+                            nullableSingleCalls++
+                            value == null
+                        }
+                    val singlePredicateOk =
+                        singlePredicate == 2 &&
+                            singleOrNullPredicate == 2 &&
+                            singlePredicateTrace == 123 &&
+                            singleOrNullPredicateTrace == 123 &&
+                            uniqueSingle.iteratorCalls == 2 &&
+                            uniqueSingle.nextCalls == 6 &&
+                            multipleSingleOrNull == null &&
+                            multipleSingleCalls == 6 &&
+                            multipleSingle.iteratorCalls == 2 &&
+                            multipleSingle.nextCalls == 6 &&
+                            multipleSingleMessageIsCommon &&
+                            emptySingle.singleOrNull { value -> emptySingleCalls++; value == 1 } == null &&
+                            emptySingleCalls == 0 &&
+                            emptySingleMessageIsCommon &&
+                            nullableSingle == null &&
+                            nullableSingleOrNull == null &&
+                            nullableSingleCalls == 4 &&
+                            nonLocalSingleMatch(arrayOf(1, 2, 3).asIterable()) == 2
                     val empty = HostileEmptyCollection<Int>()
                     var emptyPredicateCalls = 0
                     val emptyFastPathOk =
@@ -33038,7 +33160,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         first + "|" + second + "|" + (atEof == null) + "|" +
                             readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk + "|" +
                             indexedOptionalOk + "|" + numericSumOk + "|" + foldOk + "|" + reduceOk + "|" +
-                            forEachOk + "|" + firstPredicateOk + "|" + lastPredicateOk + "|" + inlinePredicatesOk
+                            forEachOk + "|" + firstPredicateOk + "|" + lastPredicateOk + "|" +
+                            singlePredicateOk + "|" + inlinePredicatesOk
                     )
                 }
                 """.trimIndent()
@@ -33072,7 +33195,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }
@@ -33138,6 +33261,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ldarg.1
                     unbox.any [mscorlib]System.Int32
                     ldc.i4.2
+                    ceq
+                    box [mscorlib]System.Boolean
+                    ret
+                  }
+                }
+
+                .class public auto ansi sealed beforefieldinit EqualThreePredicate
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Function1'
+                {
+                  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+                  {
+                    .maxstack 2
+                    ldarg.1
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.3
                     ceq
                     box [mscorlib]System.Boolean
                     ret
@@ -33452,6 +33599,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ldstr "List lastOrNull(predicate) fallback changed"
                     call void Program::Fail(string)
                 LIST_LAST_OR_NULL_PREDICATE_OK:
+                    ldloc.2
+                    newobj instance void EqualThreePredicate::.ctor()
+                    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'single'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldc.i4.3
+                    beq.s SINGLE_PREDICATE_OK
+                    ldstr "single(predicate) fallback changed"
+                    call void Program::Fail(string)
+                SINGLE_PREDICATE_OK:
+                    ldloc.2
+                    newobj instance void EqualThreePredicate::.ctor()
+                    call object [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'singleOrNull'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.3
+                    beq.s SINGLE_OR_NULL_PREDICATE_OK
+                    ldstr "singleOrNull(predicate) fallback changed"
+                    call void Program::Fail(string)
+                SINGLE_OR_NULL_PREDICATE_OK:
                     ldloc.2
                     newobj instance void EqualTwoPredicate::.ctor()
                     call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'indexOfFirst'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
