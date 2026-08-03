@@ -79,6 +79,13 @@ the first case: their logical names remain `sum`, while the existing Common
 template names their erased physical methods `sumOfByte` through
 `sumOfDouble`.
 
+The selector-return overload family uses the same rule on the part of the
+logical signature that distinguishes its Common declarations. The admitted
+`Iterable<T>.sumOf((T) -> Int)` declaration remains logical `sumOf`, while its
+physical CLR method is `sumOfInt`. This spelling comes from the same Common
+template's explicit platform name; it is not inferred from the currently
+admitted overload set or from CLR return-type overloading.
+
 The current source generator renders that platform-name record as `@JvmName`
 because JVM was the only mature target with this collision when the template
 was designed. On a non-JVM target `@JvmName` is an optional expectation and is

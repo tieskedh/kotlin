@@ -519,8 +519,9 @@ silently switch to indexed access: Common specifies iteration for both overloads
 The audit deliberately excludes the rest of the nearby generator frontier:
 
 - `elementAtOrElse`, `getOrElse`, and therefore general `elementAt` reach the public contracts DSL;
-- `sumOf` is `@InlineOnly`, but additionally requires an explicit physical overload projection for
-  selectors whose return types erase behind the same CLR `Function1` signature;
+- the Long and Double `sumOf` overloads publish the not-yet-selected
+  `ExperimentalTypeInference` and `OverloadResolutionByLambdaReturnType` annotation classes; the
+  unsigned overloads additionally require unsigned value classes;
 - mapping, filtering, snapshot, running-fold, and running-reduce families construct collection
   implementations that do not yet exist;
 - min/max families require truthful `Comparable`/`Comparator` representation plus their own
@@ -583,6 +584,36 @@ frontend module and only later emits two physical assemblies. The portable self-
 test is the authoritative adversarial execution route for List `elementAtOrNull`, including direct
 indexing, bounds, and propagated `get` exception identity, because it compiles the consumer from
 the producer's embedded KLIB exactly as an external Kotlin user does.
+
+### Int selector sum
+
+The next closed Common frontier is exactly `Iterable<T>.sumOf(selector: (T) -> Int)`. Its
+authoritative `Aggregates.f_sumOf` body starts from `0.toInt()`, traverses the receiver once in
+encounter order, invokes the selector once per element, and uses ordinary wrapping `Int`
+addition. JVM selects the template's explicit `sumOfInt` platform spelling because erased
+function types cannot distinguish selector return types. JS, Wasm, and Native retain the same
+logical KLIB declaration and body without publishing a separately callable CLR-style fallback.
+
+.NET keeps logical `sumOf` in KLIB and uses the same Common-supplied `sumOfInt` spelling for the
+assembly-visible physical body. The mapping is keyed by the exact logical selector-result/return
+type and is recorded in the self-describing physical binding. Naming the MethodDef `sumOf`,
+overloading only by its CLR return type, deriving a hash from the current overload set, omitting
+the physical body, or widening it for C# are rejected: each either produces invalid/unstable CLR
+metadata or contradicts the accepted inline-only contract without a CLR necessity.
+
+The Int overload is independently complete rather than a convenient subset of an otherwise
+available signed family. The Long and Double Common declarations carry
+`@OptIn(ExperimentalTypeInference::class)` and `@OverloadResolutionByLambdaReturnType`; their
+public annotation-class source closure reaches the parked annotation/enum foundation. Removing
+those annotations or publishing unresolved KLIB contracts would fork Common. UInt and ULong also
+require the parked unsigned value-class family. Those four overloads remain excluded until their
+own dependencies are truthful.
+
+Completion must prove empty zero, signed overflow, encounter and callback order, nullable and
+widened receiver elements, callback failure identity and stopping point, non-local return,
+assembly visibility under `sumOfInt`, logical KLIB identity under `sumOf`, no external call from
+separate and installed Kotlin consumers, C# inaccessibility, and execution through the portable
+stdlib on Framework CLR and CoreCLR.
 
 ## Next selection rule
 

@@ -92,6 +92,10 @@ fun main(args: Array<String>) {
         commonCollectionsFile,
         "internal expect fun <T> terminateCollectionToArray(collectionSize: Int, array: Array<T>): Array<T>",
     )
+    val iterableSumOfInt = Aggregates.f_sumOf().singleCommonTemplate(
+        family = Family.Iterables,
+        signature = "sumOf(selector: (T) -> Int)",
+    )
     val selectedTemplates = sequenceOf(
         Aggregates.f_all selectedFor setOf(Family.Iterables),
         Aggregates.f_any selectedFor setOf(Family.Iterables),
@@ -116,6 +120,7 @@ fun main(args: Array<String>) {
         Aggregates.f_reduceRightOrNullSuper selectedFor setOf(Family.Lists),
         Aggregates.f_sumBy selectedFor setOf(Family.Iterables),
         Aggregates.f_sumByDouble selectedFor setOf(Family.Iterables),
+        iterableSumOfInt selectedFor setOf(Family.Iterables),
         Elements.f_contains selectedFor setOf(Family.Iterables),
         Elements.f_elementAt selectedFor setOf(Family.Lists),
         Elements.f_elementAtOrNull selectedFor setOf(Family.Iterables, Family.Lists),
@@ -211,6 +216,22 @@ private infix fun MemberTemplate.selectedFor(families: Set<Family>): SelectedTem
 
 private fun SelectedTemplate.limitedTo(primitives: Set<PrimitiveType>): SelectedTemplate =
     copy(primitives = primitives)
+
+/** Selects one overload template by its exact authoritative Common family/signature pair. */
+private fun List<MemberTemplate>.singleCommonTemplate(
+    family: Family,
+    signature: String,
+): MemberTemplate {
+    val matches = filter { template ->
+        template.instantiate(listOf(KotlinTarget.Common)).any { member ->
+            member.family == family && member.signature == signature
+        }
+    }
+    check(matches.size == 1) {
+        "Expected one Common $family template '$signature', found ${matches.size}"
+    }
+    return matches.single()
+}
 
 /**
  * Copies one complete declaration from an authoritative Common source file. The unique declaration

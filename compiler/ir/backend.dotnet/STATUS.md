@@ -8,8 +8,8 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: Common `@InlineOnly` physical ABI and the generated
-  14-declaration collection delegator/accessor batch
+- Last completed feature: Common `Iterable.sumOf((T) -> Int)` with its
+  logical `sumOf`/physical `sumOfInt` split
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -25,7 +25,7 @@ and Gradle/KMP product integration remain substantial open programmes.
 The last semantic head passed:
 
 ```text
-.\gradlew.bat :compiler:fir:fir2ir:dotNetTest :compiler:tests-integration:dn --no-daemon
+.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun-tasks -q --no-daemon
 ```
 
 The JUnit audit covered 16 fresh XML files and 1006 tests:
@@ -189,6 +189,18 @@ and CoreCLR. The producer/consumer tests use an actual self-describing KLIB;
 the same-frontend bootstrap box harness is not misrepresented as an external
 library boundary.
 
+Common `Iterable<T>.sumOf((T) -> Int)` now uses its exact generated body and
+logical KLIB name. Its assembly-visible CLR fallback is named `sumOfInt`, the
+explicit platform spelling already owned by the Common generator, because the
+future selector-return overloads erase to the same CLR `Function1` parameter.
+Separate and installed consumers inline the body and cannot call that method;
+C# cannot bind it. Adversarial portable execution pins empty zero, wrapping
+overflow, nullable/widened inputs, traversal and callback order, failure
+identity, and non-local return across Framework CLR and CoreCLR. The Long and
+Double selector variants remain outside the source product because their exact
+Common declarations publish the still-parked type-inference annotation-class
+closure; UInt and ULong additionally require unsigned value classes.
+
 Common `Iterable.single(predicate)` and `singleOrNull(predicate)` now use their
 exact generated bodies; Common defines no distinct List predicate overload.
 Both retain the first match with a separate found flag and stop at the second
@@ -264,10 +276,12 @@ closed.
 
 ## Active state
 
-No implementation slice is half-landed. The Common `@InlineOnly` physical ABI
-is selected and its first 14-declaration generated collection batch is
-published with assembly-visible physical bodies and mandatory external KLIB
-inlining. The generated Common signed numeric averages remain published with
+No implementation slice is half-landed. Common Int-selector `sumOf` is
+published under the generated logical declaration and its pinned `sumOfInt`
+physical spelling. The Common `@InlineOnly` physical ABI remains selected and
+its first 14-declaration generated collection batch remains published with
+assembly-visible physical bodies and mandatory external KLIB inlining. The
+generated Common signed numeric averages remain published with
 all six bounded physical names and exact KLIB bodies. The generated Common
 first-match predicate pair remains published with
 both physical fallbacks and inlinable KLIB bodies. The preceding iteration-
@@ -364,26 +378,18 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Perform a generator-frontier audit and select the largest coherent batch of
-   still-missing Common/generated collection declarations whose complete type,
-   helper, inline, physical-name, packaging, and runtime dependencies are
-   already proven. Generate the batch from the authoritative owners and test
-   each behavior family adversarially; remove any declaration that crosses a
-   new representation or language-feature boundary and document that boundary
-   before proceeding. Do not shrink the batch merely to preserve historical
-   micro-slice size, and do not enter the parked builder cluster implicitly.
-2. Audit and select the complete Common `KClass` and class-literal contract as
+1. Audit and select the complete Common `KClass` and class-literal contract as
    the next reified prerequisite. Keep Kotlin logical classifier identity
    authoritative where `System.Type` is only physical evidence, compare the
    mature targets' lowering and runtime boundaries, and resolve dynamic
    `obj::class` across every already-admitted classified carrier before
    implementation. Keep `KType` and the public reified gates separate.
-3. Audit and select the atomic enum/annotation/contracts/builder/abstract-
+2. Audit and select the atomic enum/annotation/contracts/builder/abstract-
    collections/`EnumEntries` bootstrap cluster; do not create builder-only or
    one-enum stubs.
-4. Actualize the selected complete Common `Appendable`/`StringBuilder` and
+3. Actualize the selected complete Common `Appendable`/`StringBuilder` and
    generated `joinTo`/`joinToString` closure once that foundation exists.
-5. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
+4. Compile the exact Common `AbstractCollection`/`AbstractList` sources once
    the remaining builder closure is complete.
 
 ## Navigation

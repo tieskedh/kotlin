@@ -133,6 +133,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.sum" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.sumBy" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.sumByDouble" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.sumOf" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.terminateCollectionToArray" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.throwCountOverflow" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.throwIndexOverflow" to COLLECTIONS_FACADE_IL_NAME,
@@ -259,7 +260,12 @@ internal object DotNetStdlibLibrary {
     /** Selects a pinned Common-generator spelling for a bounded erased stdlib overload family. */
     fun implementationPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
         val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
-        val platformNames = signedIterableNumericPlatformNames[functionFqName] ?: return null
+        val elementPlatformNames = signedIterableNumericPlatformNames[functionFqName]
+        val selectorPlatformNames = signedIterableSelectorSumPlatformNames[functionFqName]
+        if (elementPlatformNames == null && selectorPlatformNames == null) return null
+        check(elementPlatformNames == null || selectorPlatformNames == null) {
+            "Internal .NET backend error: ambiguous stdlib platform-name projection for $functionFqName"
+        }
         val logicalName = functionFqName.substringAfterLast('.')
         if (implementationFunctionFacadeIlName(function) == null) return null
         val receiverType = function.parameters
@@ -279,10 +285,43 @@ internal object DotNetStdlibLibrary {
             ?: dotNetUnsupported(
                 "Common Iterable.$logicalName receiver '${receiverType.render()}' has no exact element type"
             )
-        val elementFqName = elementType.classFqName?.asString()
-        return platformNames[elementFqName]
+        if (elementPlatformNames != null) {
+            val elementFqName = elementType.classFqName?.asString()
+            return elementPlatformNames[elementFqName]
+                ?: dotNetUnsupported(
+                    "Common Iterable.$logicalName element '${elementType.render()}' has no pinned CLR method name"
+                )
+        }
+
+        val selectorType = function.parameters
+            .singleOrNull { parameter -> parameter.kind == IrParameterKind.Regular }
+            ?.type as? IrSimpleType
             ?: dotNetUnsupported(
-                "Common Iterable.$logicalName element '${elementType.render()}' has no pinned CLR method name"
+                "Common Iterable.$logicalName has no single simple selector: " +
+                        function.parameters.joinToString { parameter ->
+                            "${parameter.kind}:${parameter.type.render()}"
+                        }
+            )
+        if (selectorType.classFqName?.asString() != "kotlin.Function1") {
+            dotNetUnsupported(
+                "Common Iterable.$logicalName has unexpected selector '${selectorType.render()}'"
+            )
+        }
+        val selectorResultType = (selectorType.arguments.getOrNull(1) as? IrTypeProjection)?.type
+            ?: dotNetUnsupported(
+                "Common Iterable.$logicalName selector '${selectorType.render()}' has no exact result type"
+            )
+        if (selectorResultType != function.returnType) {
+            dotNetUnsupported(
+                "Common Iterable.$logicalName selector result '${selectorResultType.render()}' " +
+                        "differs from return '${function.returnType.render()}'"
+            )
+        }
+        val selectorResultFqName = selectorResultType.classFqName?.asString()
+        return checkNotNull(selectorPlatformNames)[selectorResultFqName]
+            ?: dotNetUnsupported(
+                "Common Iterable.$logicalName selector result '${selectorResultType.render()}' " +
+                        "has no pinned CLR method name"
             )
     }
 
@@ -364,6 +403,11 @@ internal object DotNetStdlibLibrary {
             "kotlin.Long" to "averageOfLong",
             "kotlin.Float" to "averageOfFloat",
             "kotlin.Double" to "averageOfDouble",
+        ),
+    )
+    private val signedIterableSelectorSumPlatformNames = mapOf(
+        "kotlin.collections.sumOf" to mapOf(
+            "kotlin.Int" to "sumOfInt",
         ),
     )
 
