@@ -54,6 +54,12 @@ accumulate on that enum.
 The .NET platform marker is one unversioned Kotlin platform identity. `net48`,
 `netstandard2.0`, and `net10.0` are target-framework contracts, not three Analysis API platforms.
 
+A future Analysis API or IDE component is a consumer of these same authorities, not a second
+compiler model. It reconstructs Kotlin declarations from embedded KLIB and obtains physical CLR
+owner, method name, property/event shape, and intentional export absence from the same versioned
+physical ABI/placement model used by compilation and C# export. It must not reuse JVM
+`javaMethodName` queries or recompute lowering-owned names in the plugin.
+
 ## Objective CLR evidence versus Kotlin policy
 
 The loader may establish facts such as:
@@ -112,6 +118,11 @@ The carrier protocol has an explicit version. A producer must construct a suppor
 consumer must match it exhaustively; an unknown version or carrier shape is not reinterpreted from
 display names or tokens.
 
+The complete selected assembly/KLIB dependency graph is likewise shared .NET import/library
+infrastructure. Backend emission may consume already-selected bindings but may not discover,
+reorder, or cache the graph. Native dependency-DAG utilities are architectural precedent only;
+depending on a Native implementation would give the graph the wrong owner.
+
 JVM's `core:deserialization.common.jvm` is the dependency-role precedent for a source element
 shared across frontend and later compiler phases. The .NET carrier is not placed there: its facts
 come from foreign CLR import rather than Kotlin/JVM metadata deserialization, and depending on the
@@ -168,6 +179,8 @@ compiler rebuild for an ordinary downstream edit.
 Move KLIB-in-DLL resource handling and physical ABI models/codecs behind a neutral .NET
 library/serialization owner when frontend, tooling, or packaging needs the second consumer. IR
 collectors may produce records but do not own the reusable format merely because they produce it.
+The future Analysis API/IDE view is one such consumer: it must query that shared format rather than
+importing backend packages or duplicating physical name and placement rules.
 
 ### 3. C# implementation manifest
 
@@ -209,6 +222,7 @@ state transition or validation boundary.
 
 - selected assembly graph and objective PE parsing;
 - foreign Kotlin type/contract/nullability policy;
+- IDE-side reconstruction of physical names, owners, properties, or events;
 - generated compiler configuration and language-target identity;
 - general KLIB library loading/serialization;
 - reusable C# manifest decoding;

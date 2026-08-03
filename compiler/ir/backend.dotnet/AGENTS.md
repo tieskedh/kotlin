@@ -458,6 +458,26 @@ For every bounded semantic feature:
    boundaries.
 8. Commit and push the completed feature with its ADR and status update.
 
+## Upstream synchronization
+
+Before rebasing, fetch and name the exact upstream head, account for every
+commit in the pending range by subject and changed paths, inspect the patches
+for every shared owner that can affect .NET, and compute both the path overlap
+and a virtual merge. A thematic review may omit irrelevant commits from its
+prose only after that complete accounting exists.
+
+Route lasting conclusions to their existing owners: ADRs for decisions,
+programmes for ordering and open work, `STATUS.md` for current state, and this
+file only for repeatable workflow. An archive snapshot retains the exact range,
+rebase facts, screened directions, and evidence needed later; Git owns the
+exhaustive commit ledger. Do not make a second changelog in Markdown.
+
+During the rebase, resolve shared generated artifacts through their owning
+generators and preserve target-owned fixtures or module registrations beside
+upstream removals. Keep mechanical integration separate from semantic cleanup.
+Afterward, inspect generated churn, run focused checks for affected boundaries,
+then run and audit the strict aggregate gate.
+
 ## Decision escalation and locks
 
 Exhaust authoritative Common source, shared compiler machinery, mature-target

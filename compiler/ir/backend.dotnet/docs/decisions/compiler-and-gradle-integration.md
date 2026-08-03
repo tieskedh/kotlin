@@ -137,6 +137,18 @@ compiler in-process. Incremental compilation, daemon/BTA routing, and compiler
 reference-index generation remain disabled rather than masquerading as JVM or
 metadata compilation.
 
+When BTA support is added, the operation declares a real .NET target identity
+and whether it uses the build session's reusable `ApplicationEnvironment`.
+Selected assemblies, embedded-KLIB state, physical bindings, and target
+compilation caches remain scoped to that build session; environment reuse does
+not authorize process-global target state.
+
+Unsafe common-source incremental compilation, if introduced, has a distinct
+.NET property and defaults to disabled until task inputs and invalidation cover
+source-set visibility, selected DLL/KLIB identity, friend authorization,
+physical ABI metadata, and inline bodies. It never consumes a JVM, JS, or Wasm
+switch merely because the shared Gradle machinery is similar.
+
 The initial target model is library-first. Executable and test-run products
 must become explicit target products and may never make `netstandard2.0`
 executable.
@@ -192,7 +204,7 @@ Before declaring the integration production-ready, complete and validate:
 - profile-aware stdlib dependency publication;
 - explicit application, test-run, and packaging models;
 - daemon, Build Tools API, and incremental-compilation protocols with a real
-  .NET target identity;
+  .NET target identity, session-scoped state, and complete invalidation inputs;
 - configuration-cache-safe project and associated-compilation dependencies;
 - exhaustive profile mapping and immutable target/task agreement; and
 - a dedicated typed C# export DSL before exposing export selection publicly.

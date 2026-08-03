@@ -146,6 +146,11 @@ C#-ambiguous facade metadata.
 - Backend facade builder: collision validation and wrapper/property emission.
 - Runtime interop helpers: delegate projection/adaptation and round trips.
 - Standard CLR attributes: truthful foreign-language nullability view.
+- Shared physical ABI/placement model: the single answer for compiler, export,
+  and future Analysis API queries about CLR owner, name, property/event shape,
+  or intentional absence.
+- C# presentation/tooling: KDoc projection and C# keyword escaping without
+  changing Kotlin identity or the canonical implementation ABI.
 
 ## Rejected alternatives
 
