@@ -14,6 +14,10 @@ interface ParentMark {
 
 interface ChildMark : ParentMark
 
+interface NonNullValue<T : Any> {
+    fun read(): T
+}
+
 open class Base(private val seed: Int) {
     open fun virtualValue(): Int = seed
 
@@ -41,6 +45,10 @@ open class StringParent(value: String) : GenericParent<String>(value)
 
 class OverrideStringParent(value: String) : StringParent(value) {
     override fun inheritedVirtual(): String = "override"
+}
+
+class NonNullValueBox<T : Any>(private val item: T) : NonNullValue<T> {
+    override fun read(): T = item
 }
 
 fun consumeLeft(value: Left): Int = value.left(2)
@@ -77,6 +85,8 @@ fun <T : Left> widenBound(value: T): Left = value
 
 fun <T : Left> widenAny(value: T): Any = value
 
+fun <T : Any> nonNullBound(value: T): T = value
+
 fun <T, U> typeParameterBound(value: T): T where T : U = value
 
 class BoundBox<T>(val value: T) where T : Left, T : Right {
@@ -97,6 +107,10 @@ fun main() {
     protectedCall(value)
     widenBound(value)
     widenAny(value)
+    nonNullBound("reference")
+    nonNullBound(42)
+    NonNullValueBox("reference").read()
+    NonNullValueBox(42).read()
     typeParameterBound<Impl, Left>(value)
     BoundBox(value).total()
 }

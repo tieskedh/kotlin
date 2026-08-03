@@ -494,6 +494,49 @@ the logical overload name `average`. Completion must pin empty NaN, all six conv
 order floating behavior, full traversal and failure identity, physical signatures, portable
 library consumption, and direct fallback execution on Framework CLR and CoreCLR.
 
+### Proven-frontier generator batch
+
+After the repeated element, predicate, fold, reduction, sum, and average closures, historical
+micro-slice size is no longer a reason to select one or two Common declarations at a time. The
+next source-product batch is therefore the complete still-missing frontier whose dependencies are
+already represented: `Iterable.sumBy`, `Iterable.sumByDouble`, and `requireNoNulls` for `Iterable`
+and `List`. JVM, JS, Wasm, and Native consume these same Common generator templates; .NET does not
+own substitute loops.
+
+The selector sums reuse the proven inline lambda, encounter-order Iterable, Int overflow, Double
+arithmetic/NaN, capture, and non-local-return paths. Their Common `Deprecated`, `ReplaceWith`, and
+`DeprecatedSinceKotlin` records are compiler-recognized Kotlin metadata contracts already present
+in the built-ins; selecting them neither defines a new annotation class nor infers semantics from
+CLR attributes. Their physical fallbacks retain the distinct logical names `sumBy` and
+`sumByDouble`, so no erased overload-name codec is needed.
+
+Both null guards traverse the exact receiver, stop at the first null with Common's message, and
+otherwise return the same object under the strengthened `T : Any` view. That is a logical erased-
+generic cast over the existing canonical Iterable/List identities, not a typed-capability probe,
+wrapper, copy, or permission to optimize a later failed element use. The List overload must not
+silently switch to indexed access: Common specifies iteration for both overloads.
+
+The audit deliberately excludes the rest of the nearby generator frontier:
+
+- `elementAtOrElse`, `getOrElse`, and therefore general `elementAt` reach the public contracts DSL;
+- `find`, `findLast`, `firstNotNullOf`, `componentN`, and `sumOf` require the still-unselected
+  `@InlineOnly` declaration-suppression and ABI contract;
+- mapping, filtering, snapshot, running-fold, and running-reduce families construct collection
+  implementations that do not yet exist;
+- min/max families require truthful `Comparable`/`Comparator` representation plus their own
+  erased physical overload audit;
+- `allEqual` publishes the not-yet-selected `ExperimentalStdlibApi` annotation contract, while
+  `allDistinct` additionally constructs `HashSet`;
+- `onEach` reaches `apply` and the public contracts DSL; and
+- random, Sequence, unsigned, array, Set, and Map variants retain their separate dependency and
+  representation closures.
+
+Completion must prove empty and overflowing selector sums, Double rounding and NaN, nullable and
+widened elements, capture/non-local return, callback failure identity and timing, same-object null
+guard success, exact first-null stopping and message, hostile iterator behavior, both physical
+guard overloads, packaged inlining versus fallback calls, and direct execution on Framework CLR
+and CoreCLR.
+
 ## Next selection rule
 
 Select the next exact Common/generated family only when all of these are closed:

@@ -139,8 +139,9 @@ internal class DotNetIlMethodCodegen(
         )
 
     /**
-     * The join label of returns that crossed protected regions and its synthetic return-value
-     * local, both created lazily by the first such return; see [emitReturnAcrossRegions].
+     * The join label of returns that crossed protected regions and the synthetic return-value
+     * local shared by those returns and ordinary returns that must clear older expression operands.
+     * Both are created lazily; see [emitReturnAcrossRegions] and [emitReturnValueOnCleanStack].
      */
     private var returnJoinLabel: String? = null
     private var returnValueSlot: DotNetIlSlot.Local? = null
@@ -816,13 +817,13 @@ internal class DotNetIlMethodCodegen(
         }
         when (val returnType = signature.returnType) {
             is DotNetIlReturnType.Value -> {
-                emitReturnValue(expression.value, returnType.type)
-                if (methodContext.isTerminated) return
+                if (!emitReturnValueOnCleanStack(expression.value, returnType.type)) return
                 methodContext.emitReturn(pops = 1)
             }
             DotNetIlReturnType.Void -> {
                 emitVoidExpression(expression.value)
                 if (methodContext.isTerminated) return
+                methodContext.drainEvaluationStack()
                 methodContext.emitReturn()
             }
         }
@@ -840,14 +841,16 @@ internal class DotNetIlMethodCodegen(
         when (val returnType = signature.returnType) {
             is DotNetIlReturnType.Value -> {
                 emitReturnValue(expression.value, returnType.type)
-                if (methodContext.isTerminated) return // the value itself threw; nothing returns
+                if (methodContext.isTerminated) return // the value itself terminated; nothing returns
                 val slot = returnValueSlot
                     ?: methodContext.declareSyntheticLocal(returnType.type, "<return>").also { returnValueSlot = it }
                 methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+                methodContext.drainEvaluationStack()
             }
             DotNetIlReturnType.Void -> {
                 emitVoidExpression(expression.value)
                 if (methodContext.isTerminated) return
+                methodContext.drainEvaluationStack()
             }
         }
         val label = returnJoinLabel
@@ -872,6 +875,31 @@ internal class DotNetIlMethodCodegen(
         } else {
             expressionCodegen.emitExpression(expression, expectedType)
         }
+    }
+
+    /**
+     * Evaluates one method result while preserving source order, then ensures it is the only CIL
+     * stack value. Inlined non-local control flow can expose a return beneath an outer expression
+     * whose earlier operands are already pending. The result is spilled only for that dirty-stack
+     * case; ordinary returns retain their direct value/`ret` shape.
+     *
+     * Returns false when evaluating [expression] already terminated control flow.
+     */
+    private fun emitReturnValueOnCleanStack(expression: IrExpression, expectedType: DotNetIlValueType): Boolean {
+        val pendingOperandCount = methodContext.stackDepth
+        emitReturnValue(expression, expectedType)
+        if (methodContext.isTerminated) return false
+        check(methodContext.stackDepth == pendingOperandCount + 1) {
+            "Internal .NET backend error: return expression did not produce exactly one value"
+        }
+        if (pendingOperandCount == 0) return true
+
+        val slot = returnValueSlot
+            ?: methodContext.declareSyntheticLocal(expectedType, "<return>").also { returnValueSlot = it }
+        methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+        methodContext.drainEvaluationStack()
+        methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+        return true
     }
 
     /**
@@ -1333,14 +1361,15 @@ internal class DotNetIlMethodCodegen(
     /**
      * A value expression that may be a block: `try` branch bodies arrive as [IrContainerExpression]s
      * whose trailing expression is the branch value, preceded by arbitrary statements. A trailing
-     * [IrReturn]/[IrBreakContinue] terminates the branch without producing a value (the caller's
-     * `isTerminated` check skips the drain); everything else is emitted against [expectedType].
+     * [IrReturn] terminates the real branch, then records the one phantom value required by dead
+     * enclosing expression bookkeeping; everything else is emitted against [expectedType].
      */
     private fun emitValueExpression(expression: IrExpression, expectedType: DotNetIlValueType) {
         if (expression !is IrContainerExpression) {
             expressionCodegen.emitExpression(expression, expectedType)
             return
         }
+        val entryStackDepth = methodContext.stackDepth
         val last = expression.statements.lastOrNull()
             ?: dotNetUnsupported("empty block in value position")
         for (statement in expression.statements.dropLast(1)) {
@@ -1348,7 +1377,12 @@ internal class DotNetIlMethodCodegen(
             if (methodContext.isTerminated) return
         }
         when (last) {
-            is IrReturn -> emitReturn(last)
+            is IrReturn -> {
+                emitReturn(last)
+                if (methodContext.isTerminated) {
+                    methodContext.notePhantomValueAtTerminatedExpression(entryStackDepth)
+                }
+            }
             is IrBreakContinue -> emitBreakContinue(last)
             is IrExpression -> emitValueExpression(last, expectedType)
             else -> dotNetUnsupported("unsupported trailing statement ${last.javaClass.simpleName} in a block in value position")
