@@ -185,6 +185,15 @@ public fun <T> List<T>.first(): T {
 }
 
 /**
+ * Returns the first element matching the given [predicate].
+ * @throws [NoSuchElementException] if no such element is found.
+ */
+public inline fun <T> Iterable<T>.first(predicate: (T) -> Boolean): T {
+    for (element in this) if (predicate(element)) return element
+    throw NoSuchElementException("Collection contains no element matching the predicate.")
+}
+
+/**
  * Returns the first element, or `null` if the collection is empty.
  */
 public fun <T> Iterable<T>.firstOrNull(): T? {
@@ -209,6 +218,14 @@ public fun <T> Iterable<T>.firstOrNull(): T? {
  */
 public fun <T> List<T>.firstOrNull(): T? {
     return if (isEmpty()) null else this[0]
+}
+
+/**
+ * Returns the first element matching the given [predicate], or `null` if element was not found.
+ */
+public inline fun <T> Iterable<T>.firstOrNull(predicate: (T) -> Boolean): T? {
+    for (element in this) if (predicate(element)) return element
+    return null
 }
 
 /**

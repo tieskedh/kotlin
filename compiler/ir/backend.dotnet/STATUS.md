@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: generated Common collection iteration actions
+- Last completed feature: generated Common collection first-match predicates
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,9 +20,9 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 982 tests:
+The JUnit audit covered 16 fresh XML files and 986 tests:
 
-- 880 FIR, IL-text, and box tests
+- 884 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 81 library-integration tests
 - zero failures, errors, or skips
@@ -144,6 +144,17 @@ handwritten CIL executes both physical void fallbacks and checks full callback
 traces on Framework CLR and CoreCLR. `onEach` remains parked because its exact
 Common body reaches `apply` and the public contracts DSL through `Standard.kt`.
 
+Common `Iterable.first(predicate)` and `firstOrNull(predicate)` now use their
+exact generated first-match loops. Adversarial execution pins empty and
+no-match behavior, the exact Common `NoSuchElementException` message,
+short-circuit traversal, nullable match versus absence, widened elements,
+capture, predicate-failure identity/timing, and non-local return. Separate and
+installed consumers inline only the predicate overloads while existing no-arg
+fallback calls remain; handwritten CIL executes both new physical overloads on
+Framework CLR and CoreCLR. Open `T` and boxed-or-null `T?` reuse their existing
+physical slots. `find` remains parked pending the separate `@InlineOnly`
+declaration-suppression and ABI audit.
+
 The post-substitution reified-array audit now proves that every admitted
 ordinary array carrier remains truthful after the shared inliner has replaced
 a type parameter with a concrete type. The adversarial matrix covers reference,
@@ -183,9 +194,10 @@ closed.
 
 ## Active state
 
-No implementation slice is half-landed. The generated Common iteration-action
-pair is published with both physical void fallbacks, inlinable KLIB bodies, and
-the authoritative `HidesMembers` compiler directive. The preceding
+No implementation slice is half-landed. The generated Common first-match
+predicate pair is published with both physical fallbacks and inlinable KLIB
+bodies. The preceding iteration-action pair remains published with both void
+fallbacks and the authoritative `HidesMembers` compiler directive. The
 receiver-seeded reduction family remains published with all eight fallbacks;
 an inlined empty nullable branch uses the existing nullable-bottom carrier
 path. The accumulator-fold family likewise remains published, and a discarded
