@@ -115,6 +115,17 @@ internal class DotNetIlMethodContext(
     }
 
     /**
+     * Discards every value currently pending on the CIL evaluation stack. A caller-targeted
+     * [IrReturn][org.jetbrains.kotlin.ir.expressions.IrReturn] introduced by the shared inliner
+     * can occur while an outer expression has already pushed earlier operands. Control transfer
+     * must not carry those operands into `ret` or `leave`; a non-void return spills its actual
+     * result before invoking this drain.
+     */
+    fun drainEvaluationStack() {
+        while (stackDepth > 0) emit("pop", pops = 1)
+    }
+
+    /**
      * Emits `throw`, which pops the exception reference and unconditionally leaves the current
      * emission point (mirrors [emitReturn]; ECMA-335 `throw` never falls through).
      */
@@ -152,6 +163,18 @@ internal class DotNetIlMethodContext(
         check(isTerminated) { "Internal .NET backend error: phantom stack value outside a terminated emission point" }
         stackDepth = 1
         if (maxStackDepth < 1) maxStackDepth = 1
+    }
+
+    /**
+     * Records the result a value-position block would have produced if its trailing return had
+     * fallen through. The real control transfer has already normalized and emptied the physical
+     * stack; this phantom depth exists only so dead enclosing expression instructions can finish
+     * their compile-time accounting without resurrecting the operands discarded by `ret`/`leave`.
+     */
+    fun notePhantomValueAtTerminatedExpression(entryStackDepth: Int) {
+        check(isTerminated) { "Internal .NET backend error: phantom stack value outside a terminated emission point" }
+        stackDepth = entryStackDepth + 1
+        if (maxStackDepth < stackDepth) maxStackDepth = stackDepth
     }
 
     fun emitBranch(instruction: String, targetLabel: String, pops: Int = 0) {

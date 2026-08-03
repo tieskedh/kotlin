@@ -37,6 +37,19 @@
        implements 'test.constraints.ParentMark'
 {
 }
+.class interface public abstract auto ansi 'test.constraints.NonNullValue'
+{
+  .method public hidebysig newslot abstract virtual instance object 'read__KotlinErased__6df24e5258dc3ea650afc2d04d8c0f7d'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'test.constraints.NonNullValue`1'<'T'>
+       implements 'test.constraints.NonNullValue'
+{
+  .method public hidebysig newslot abstract virtual instance !0 'read'() cil managed
+  {
+  }
+}
 .class public auto ansi beforefieldinit 'test.constraints.Base'
        extends [mscorlib]System.Object
 {
@@ -227,6 +240,78 @@
     .maxstack 1
     ldstr "override"
     ret
+  }
+}
+.class interface public abstract auto ansi 'test.constraints.NonNullValueBox'
+       implements 'test.constraints.NonNullValue'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig newslot abstract virtual instance object 'read__KotlinErased__d980696f7ef89e7fe7cb9888e7f34e79'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.constraints.NonNullValueBox`1'<'T'>
+       extends [mscorlib]System.Object
+       implements 'test.constraints.NonNullValueBox', 'test.constraints.NonNullValue', class 'test.constraints.NonNullValue`1'<!0>
+{
+  .field private !0 'item'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'test.constraints.NonNullValueBox`1'<!0>::'item'
+    ret
+  }
+  .method private hidebysig specialname instance !0 'get_item'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'test.constraints.NonNullValueBox`1'<!0>::'item'
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'read'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'test.constraints.NonNullValueBox`1'<!0>::'get_item'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-test.constraints.NonNullValue-read-6df24e5258dc3ea650afc2d04d8c0f7d>'() cil managed
+  {
+    .override method instance object 'test.constraints.NonNullValue'::'read__KotlinErased__6df24e5258dc3ea650afc2d04d8c0f7d'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'test.constraints.NonNullValueBox`1'<!0>::'read'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-test.constraints.NonNullValue-read-6df24e5258dc3ea650afc2d04d8c0f7d>'() cil managed
+  {
+    .override method instance !0 class 'test.constraints.NonNullValue`1'<!0>::'read'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'test.constraints.NonNullValueBox`1'<!0>::'read'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-read>'() cil managed
+  {
+    .override method instance object 'test.constraints.NonNullValueBox'::'read__KotlinErased__d980696f7ef89e7fe7cb9888e7f34e79'()
+    .maxstack 1
+    ldarg.0
+    castclass class 'test.constraints.NonNullValueBox`1'<!0>
+    callvirt instance !0 class 'test.constraints.NonNullValueBox`1'<!0>::'read'()
+    box !0
+    ret
+  }
+  .property instance !0 'item'()
+  {
+    .get instance !0 'test.constraints.NonNullValueBox`1'::'get_item'()
   }
 }
 .class interface public abstract auto ansi 'test.constraints.BoundBox'
@@ -519,6 +604,12 @@ IL_tryEnd_0:
     box !!0
     ret
   }
+  .method public hidebysig static !!0 'nonNullBound'<'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
   .method public hidebysig static !!0 'typeParameterBound'<(!!1) 'T', 'U'>(!!0 'value') cil managed
   {
     .maxstack 1
@@ -573,6 +664,20 @@ IL_tryEnd_0:
     pop
     ldloc.0
     call object 'test.constraints.genericConstraintsKt'::'widenAny'<class 'test.constraints.Impl'>(!!0)
+    pop
+    ldstr "reference"
+    call !!0 'test.constraints.genericConstraintsKt'::'nonNullBound'<string>(!!0)
+    pop
+    ldc.i4 42
+    call !!0 'test.constraints.genericConstraintsKt'::'nonNullBound'<int32>(!!0)
+    pop
+    ldstr "reference"
+    newobj instance void class 'test.constraints.NonNullValueBox`1'<string>::.ctor(!0)
+    callvirt instance !0 class 'test.constraints.NonNullValueBox`1'<string>::'read'()
+    pop
+    ldc.i4 42
+    newobj instance void class 'test.constraints.NonNullValueBox`1'<int32>::.ctor(!0)
+    callvirt instance !0 class 'test.constraints.NonNullValueBox`1'<int32>::'read'()
     pop
     ldloc.0
     call !!0 'test.constraints.genericConstraintsKt'::'typeParameterBound'<class 'test.constraints.Impl', class 'test.constraints.Left'>(!!0)

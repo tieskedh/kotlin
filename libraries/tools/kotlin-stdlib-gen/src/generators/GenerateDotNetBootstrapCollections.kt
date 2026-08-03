@@ -9,6 +9,7 @@ import templates.Aggregates
 import templates.COPYRIGHT_NOTICE
 import templates.Elements
 import templates.Family
+import templates.Guards
 import templates.KotlinTarget
 import templates.MemberTemplate
 import templates.Numeric
@@ -112,6 +113,8 @@ fun main(args: Array<String>) {
         Aggregates.f_reduceRightIndexedSuper selectedFor setOf(Family.Lists),
         Aggregates.f_reduceRightIndexedOrNullSuper selectedFor setOf(Family.Lists),
         Aggregates.f_reduceRightOrNullSuper selectedFor setOf(Family.Lists),
+        Aggregates.f_sumBy selectedFor setOf(Family.Iterables),
+        Aggregates.f_sumByDouble selectedFor setOf(Family.Iterables),
         Elements.f_contains selectedFor setOf(Family.Iterables),
         Elements.f_elementAtOrNull selectedFor setOf(Family.Iterables),
         Elements.f_first selectedFor setOf(Family.Iterables, Family.Lists),
@@ -131,6 +134,7 @@ fun main(args: Array<String>) {
         Elements.f_single_predicate selectedFor setOf(Family.Iterables),
         Elements.f_singleOrNull selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_singleOrNull_predicate selectedFor setOf(Family.Iterables),
+        Guards.f_requireNoNulls selectedFor setOf(Family.Iterables, Family.Lists),
         (Numeric.f_average selectedFor setOf(Family.Iterables))
             .limitedTo(PrimitiveType.numericPrimitives),
         (Numeric.f_sum selectedFor setOf(Family.Iterables))

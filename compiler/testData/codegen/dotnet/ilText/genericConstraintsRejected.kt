@@ -14,8 +14,6 @@ fun <T : BrokenBound> evictedFunctionBound(value: T): T = value
 
 class EvictedClassBound<T : BrokenBound>(val value: T)
 
-fun <T : Any> anyBound(value: T): T = value
-
 fun <T : LocalBase?> nullableBound(value: T): T = value
 
 fun <T : GenericBase<String>> genericBound(value: T): T = value

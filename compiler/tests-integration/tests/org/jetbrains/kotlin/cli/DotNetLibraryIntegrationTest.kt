@@ -19395,7 +19395,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 inline fun <T> twice(value: T, transform: (T) -> T): T = transform(transform(value))
                 inline fun escape(block: () -> Int): Int = block()
+                inline fun <T> escapeValue(block: () -> T): T = block()
                 private inline fun privately(block: () -> Int): Int = block()
+
+                class Trace(var value: Int)
+
+                private fun record(trace: Trace, value: Int): Int {
+                    trace.value = trace.value * 10 + value
+                    return value
+                }
+
+                private fun combine(first: Int, second: Int, third: Int, fourth: Int): Int =
+                    first + second + third + fourth
+
+                private fun keep(first: Any, second: Any): Any = second
 
                 fun evaluate(): Int {
                     var calls = 0
@@ -19411,11 +19424,64 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return -1
                 }
 
+                fun earlyFromArguments(trace: Trace): Int {
+                    return combine(record(trace, 1), record(trace, 2), escape {
+                        record(trace, 3)
+                        return 43
+                    }, record(trace, 4))
+                }
+
+                fun earlyReference(trace: Trace, returnMarker: Any): Any {
+                    return keep("pending", escapeValue {
+                        record(trace, 5)
+                        return returnMarker
+                    })
+                }
+
+                fun earlyUnit(trace: Trace, exit: Boolean) {
+                    record(trace, 6) + escape {
+                        record(trace, 7)
+                        if (exit) return
+                        5
+                    }
+                    record(trace, 8)
+                }
+
+                fun earlyAcrossFinally(trace: Trace): Int {
+                    try {
+                        return combine(record(trace, 1), record(trace, 2), escape {
+                            record(trace, 3)
+                            return 46
+                        }, record(trace, 4))
+                    } finally {
+                        record(trace, 9)
+                    }
+                }
+
                 fun privateResult(): Int = privately { 17 }
 
                 fun main() {
                     if (evaluate() != 132) throw Error("generic inline lambda or mutable capture")
                     if (early() != 42) throw Error("non-local return")
+                    val argumentTrace = Trace(0)
+                    if (earlyFromArguments(argumentTrace) != 43 || argumentTrace.value != 123) {
+                        throw Error("non-local return with pending arguments")
+                    }
+                    val referenceTrace = Trace(0)
+                    val returnMarker: Any = Trace(99)
+                    if (earlyReference(referenceTrace, returnMarker) !== returnMarker || referenceTrace.value != 5) {
+                        throw Error("reference return with pending argument")
+                    }
+                    val returningUnitTrace = Trace(0)
+                    earlyUnit(returningUnitTrace, true)
+                    if (returningUnitTrace.value != 67) throw Error("void return with pending argument")
+                    val normalUnitTrace = Trace(0)
+                    earlyUnit(normalUnitTrace, false)
+                    if (normalUnitTrace.value != 678) throw Error("normal value path beside void return")
+                    val finallyTrace = Trace(0)
+                    if (earlyAcrossFinally(finallyTrace) != 46 || finallyTrace.value != 1239) {
+                        throw Error("non-local return with pending operands across finally")
+                    }
                     if (privateResult() != 17) throw Error("private inline")
                 }
                 """.trimIndent()
@@ -19525,14 +19591,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 import inline.library.retained
                 import inline.library.twice
 
+                private var crossPendingTrace = 0
+
+                private fun crossRecord(value: Int): Int {
+                    crossPendingTrace = crossPendingTrace * 10 + value
+                    return value
+                }
+
                 fun early(): Int {
                     escape { return 41 }
                     return -1
                 }
 
+                fun earlyWithPendingCrossLibrary(): Int {
+                    crossPendingTrace = 0
+                    return ordered(
+                        {
+                            crossRecord(1)
+                            3
+                        },
+                        {
+                            crossRecord(2)
+                            return 44
+                        },
+                    )
+                }
+
                 fun main() {
                     if (twice(10) { it + 1 } != 13) throw Error("cross-library generic lambda")
                     if (early() != 41) throw Error("cross-library non-local return")
+                    if (earlyWithPendingCrossLibrary() != 44 || crossPendingTrace != 12) {
+                        throw Error("cross-library non-local return with pending operand")
+                    }
 
                     var order = 0
                     val orderedResult = ordered(
@@ -26344,19 +26434,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "clash on its declared CLR capability",
             "no selected derived intersection slot covers both Kotlin members",
         )
-        assertPublicationFails(
-            "Generic.Interface.UnsupportedAnyConstraint",
-            """
-            package sample
-
-            public interface UnsupportedAnyConstraint<T : Any> {
-                public fun read(): T
-            }
-            """,
-            "constrains type parameter 'T' with kotlin.Any",
-            "no CLR reference-type constraint metadata",
-        )
-
         val inheritedProducerDirectory = File(tmpdir, "inherited-callable-overload-producer")
         val inheritedProducerSource = File(tmpdir, "inherited-callable-overload-producer.kt").apply {
             writeText(
@@ -31002,8 +31079,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "reduceRightIndexed" to 1,
                 "reduceRightIndexedOrNull" to 1,
                 "reduceRightOrNull" to 1,
+                "requireNoNulls" to 2,
                 "single" to 3,
                 "singleOrNull" to 3,
+                "sumBy" to 1,
+                "sumByDouble" to 1,
             ),
             collectionFunctions
                 .filter { declaration ->
@@ -31037,8 +31117,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         "reduceRightIndexed",
                         "reduceRightIndexedOrNull",
                         "reduceRightOrNull",
+                        "requireNoNulls",
                         "single",
                         "singleOrNull",
+                        "sumBy",
+                        "sumByDouble",
                     )
                 }
                 .groupingBy(DotNetPhysicalDeclaration.Function::methodName)
@@ -31075,8 +31158,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "reduceRightIndexed",
                 "reduceRightIndexedOrNull",
                 "reduceRightOrNull",
+                "requireNoNulls",
                 "single",
                 "singleOrNull",
+                "sumBy",
+                "sumByDouble",
             ) &&
                     declaration.isInstance
         })
@@ -31334,6 +31420,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             ".method public hidebysig static float64 'averageOfDouble'(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'sumBy'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'selector')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static float64 'sumByDouble'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'selector')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterable' " +
+                    "'requireNoNulls'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
+                    "'requireNoNulls'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')" in il
         )
         val countOverflowStart = il.indexOf(
             ".method public hidebysig static int32 'checkCountOverflow'(int32 'count')"
@@ -31790,6 +31894,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun averageDoubles(values: Iterable<Double>): Double = values.average()
 
+                @Suppress("DEPRECATION")
+                public fun <T> sumSelectedInts(values: Iterable<T>, selector: (T) -> Int): Int =
+                    values.sumBy(selector)
+
+                @Suppress("DEPRECATION")
+                public fun <T> sumSelectedDoubles(values: Iterable<T>, selector: (T) -> Double): Double =
+                    values.sumByDouble(selector)
+
+                @Suppress("DEPRECATION")
+                public fun sumSelectedNonLocal(values: Iterable<Int>): Int {
+                    values.sumBy { value ->
+                        if (value == 2) return 23
+                        value
+                    }
+                    return -1
+                }
+
+                public fun <T : Any> requireIterableValues(values: Iterable<T?>): Iterable<T> =
+                    values.requireNoNulls()
+
+                public fun <T : Any> requireListValues(values: List<T?>): List<T> =
+                    values.requireNoNulls()
+
                 public fun <T> containsElement(values: Iterable<T>, element: T): Boolean =
                     values.contains(element)
 
@@ -32057,6 +32184,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             "::'averageOfDouble'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
         )
+        assertTrue("::'sumBy'<" !in il) {
+            "The separate consumer must inline the Common sumBy body:\n$il"
+        }
+        assertTrue("::'sumByDouble'<" !in il) {
+            "The separate consumer must inline the Common sumByDouble body:\n$il"
+        }
+        assertTrue(
+            "::'requireNoNulls'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'requireNoNulls'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il
+        )
         assertTrue(
             "::'indexOf'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
         )
@@ -32120,6 +32259,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("[Kotlin.Stdlib]'Kotlin.Io.ConsoleKt'::'readlnOrNull'()" in il)
         assertTrue("System.Console::ReadLine()" !in il) {
             "The consumer must call the stdlib implementation rather than copying CLR input logic:\n$il"
+        }
+
+        val invalidBoundSource = File(tmpdir, "invalid-stdlib-bound-$target.kt").apply {
+            writeText(
+                """
+                public fun invalidBound(values: Iterable<String?>): Iterable<String?> =
+                    values.requireNoNulls<String?>()
+                """.trimIndent()
+            )
+        }
+        val invalidBoundOutput = File(tmpdir, "invalid-stdlib-bound-$target.il")
+        val [invalidBoundDiagnostics, invalidBoundExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                invalidBoundSource.path,
+                K2DotNetCompilerArguments::noStdlib.cliArgument,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "InvalidStdlibBound",
+                K2DotNetCompilerArguments::destination.cliArgument, invalidBoundOutput.path,
+            ),
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, invalidBoundExitCode, invalidBoundDiagnostics)
+        assertTrue("String?" in invalidBoundDiagnostics && "Any" in invalidBoundDiagnostics) {
+            invalidBoundDiagnostics
+        }
+        assertFalse(invalidBoundOutput.exists()) {
+            "A nullable substitution for the KLIB T : Any bound must not produce an artifact"
         }
     }
 
@@ -32310,6 +32477,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun installedAverageDoubles(values: Iterable<Double>): Double = values.average()
 
+                @Suppress("DEPRECATION")
+                public fun <T> installedSumSelectedInts(values: Iterable<T>, selector: (T) -> Int): Int =
+                    values.sumBy(selector)
+
+                @Suppress("DEPRECATION")
+                public fun <T> installedSumSelectedDoubles(values: Iterable<T>, selector: (T) -> Double): Double =
+                    values.sumByDouble(selector)
+
+                @Suppress("DEPRECATION")
+                public fun installedSumSelectedNonLocal(values: Iterable<Int>): Int {
+                    values.sumBy { value ->
+                        if (value == 2) return 23
+                        value
+                    }
+                    return -1
+                }
+
+                public fun <T : Any> installedRequireIterable(values: Iterable<T?>): Iterable<T> =
+                    values.requireNoNulls()
+
+                public fun <T : Any> installedRequireList(values: List<T?>): List<T> =
+                    values.requireNoNulls()
+
                 public fun <T> installedContainsElement(values: Iterable<T>, element: T): Boolean =
                     values.contains(element)
 
@@ -32458,11 +32648,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             arrayOf(1L, 2L).asIterable().average() == 1.5 &&
                             arrayOf(1f, 2f).asIterable().average() == 1.5 &&
                             arrayOf(1.0e16, 1.0, -1.0e16).asIterable().average() == 0.0
+                    val guardedIterable: Iterable<String?> = arrayOf<String?>("a", "b").asIterable()
+                    val guardedList: List<String?> = arrayOf<String?>("a", "b").asList()
+                    val guardedIterableResult: Iterable<String> = guardedIterable.requireNoNulls()
+                    val guardedListResult: List<String> = guardedList.requireNoNulls()
+                    @Suppress("DEPRECATION")
+                    val frontierOk =
+                        arrayOf(Int.MAX_VALUE, 1).asIterable().sumBy { it } == Int.MIN_VALUE &&
+                            arrayOf(1.0e16, 1.0, -1.0e16).asIterable().sumByDouble { it } == 0.0 &&
+                            installedSumSelectedNonLocal(arrayOf(1, 2, 3).asIterable()) == 23 &&
+                            (guardedIterableResult as Any) === (guardedIterable as Any) &&
+                            (guardedListResult as Any) === (guardedList as Any)
                     val throwableOk =
                         snapshot.size == 1 &&
                             snapshot[0] === suppressed &&
                             owner.stackTraceToString() != owner.toString()
-                    println(if (collectionsOk && sumsOk && averagesOk && throwableOk) "OK" else "FAIL")
+                    println(if (collectionsOk && sumsOk && averagesOk && frontierOk && throwableOk) "OK" else "FAIL")
                 }
                 """.trimIndent()
             )
@@ -32605,6 +32806,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'averageOfLong'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'averageOfFloat'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'averageOfDouble'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'sumBy'<" !in il) {
+            "The installed consumer must inline the Common sumBy body:\n$il"
+        }
+        assertTrue("::'sumByDouble'<" !in il) {
+            "The installed consumer must inline the Common sumByDouble body:\n$il"
+        }
+        assertTrue("::'requireNoNulls'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'requireNoNulls'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue(
             "::'indexOf'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
         )
@@ -32900,6 +33109,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return -1
                 }
 
+                @Suppress("DEPRECATION")
+                fun nonLocalSumSelected(values: Iterable<Int>): Int {
+                    values.sumBy { value ->
+                        if (value == 2) return 23
+                        value
+                    }
+                    return -1
+                }
+
                 fun main() {
                     print(false)
                     print("|")
@@ -32975,6 +33193,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             countedAverage == 2.0 &&
                             averageCounting.iteratorCalls == 1 &&
                             averageCounting.nextCalls == 3
+                    val guardedIterable: Iterable<String?> = arrayOf<String?>("a", "b").asIterable()
+                    val guardedList: List<String?> = arrayOf<String?>("a", "b").asList()
+                    val guardedIterableResult: Iterable<String> = guardedIterable.requireNoNulls()
+                    val guardedListResult: List<String> = guardedList.requireNoNulls()
+                    @Suppress("DEPRECATION")
+                    val provenFrontierOk =
+                        arrayOf(Int.MAX_VALUE, 1).asIterable().sumBy { it } == Int.MIN_VALUE &&
+                            arrayOf(1.0e16, 1.0, -1.0e16).asIterable().sumByDouble { it } == 0.0 &&
+                            nonLocalSumSelected(arrayOf(1, 2, 3).asIterable()) == 23 &&
+                            (guardedIterableResult as Any) === (guardedIterable as Any) &&
+                            (guardedListResult as Any) === (guardedList as Any)
                     val folding = CountingInts(arrayOf(1, 2, 3))
                     var leftTrace = 0
                     val leftFold = folding.fold(4) { accumulator, value ->
@@ -33393,7 +33622,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         first + "|" + second + "|" + (atEof == null) + "|" +
                             readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk + "|" +
                             indexedOptionalOk + "|" + numericSumOk + "|" + numericAverageOk + "|" +
-                            foldOk + "|" + reduceOk + "|" + forEachOk + "|" + firstPredicateOk + "|" + lastPredicateOk + "|" +
+                            provenFrontierOk + "|" + foldOk + "|" + reduceOk + "|" + forEachOk + "|" +
+                            firstPredicateOk + "|" + lastPredicateOk + "|" +
                             singlePredicateOk + "|" + inlinePredicatesOk
                     )
                 }
@@ -33428,7 +33658,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }
@@ -33520,6 +33750,51 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ldc.i4.3
                     ceq
                     box [mscorlib]System.Boolean
+                    ret
+                  }
+                }
+
+                .class public auto ansi sealed beforefieldinit IntSelector
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Function1'
+                {
+                  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+                  {
+                    .maxstack 1
+                    ldarg.1
+                    unbox.any [mscorlib]System.Int32
+                    box [mscorlib]System.Int32
+                    ret
+                  }
+                }
+
+                .class public auto ansi sealed beforefieldinit DoubleSelector
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Function1'
+                {
+                  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+                  {
+                    .maxstack 1
+                    ldarg.1
+                    unbox.any [mscorlib]System.Int32
+                    conv.r8
+                    box [mscorlib]System.Double
                     ret
                   }
                 }
@@ -33852,8 +34127,40 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<float64>(!!0[])
                     call float64 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'averageOfDouble'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
                     ldc.r8 2.0
-                    beq.s ALL_START
+                    beq.s SUM_BY
                     ldstr "Double average fallback changed"
+                    call void Program::Fail(string)
+                SUM_BY:
+                    ldloc.2
+                    newobj instance void IntSelector::.ctor()
+                    call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'sumBy'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldc.i4.8
+                    beq.s SUM_BY_DOUBLE
+                    ldstr "sumBy fallback changed"
+                    call void Program::Fail(string)
+                SUM_BY_DOUBLE:
+                    ldloc.2
+                    newobj instance void DoubleSelector::.ctor()
+                    call float64 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'sumByDouble'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldc.r8 8.0
+                    beq.s REQUIRE_ITERABLE
+                    ldstr "sumByDouble fallback changed"
+                    call void Program::Fail(string)
+                REQUIRE_ITERABLE:
+                    ldloc.2
+                    dup
+                    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'requireNoNulls'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+                    ceq
+                    brtrue.s REQUIRE_LIST
+                    ldstr "Iterable requireNoNulls identity changed"
+                    call void Program::Fail(string)
+                REQUIRE_LIST:
+                    ldloc.3
+                    dup
+                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'requireNoNulls'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.List')
+                    ceq
+                    brtrue.s ALL_START
+                    ldstr "List requireNoNulls identity changed"
                     call void Program::Fail(string)
                 ALL_START:
                     ldloc.2

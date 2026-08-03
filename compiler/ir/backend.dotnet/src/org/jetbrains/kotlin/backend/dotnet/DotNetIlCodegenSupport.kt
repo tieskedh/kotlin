@@ -1009,8 +1009,11 @@ internal class DotNetIlTypeMapper private constructor(
 
 /**
  * Maps the supported constraints of this parameter to their physical CLR types.
- * `Any?` is the unconstrained Kotlin default and contributes no metadata. The historical
- * function-only `String` bound keeps its pre-stage-1 slot erosion and is likewise omitted here.
+ * `Any?` is the unconstrained Kotlin default and contributes no metadata. An explicit `Any`
+ * bound is also omitted physically: Kotlin admits both non-null references and value types for
+ * `T : Any`, while CLR's `class` and `valuetype` flags each reject half of that set. KLIB retains
+ * the logical non-null bound; future Roslyn `notnull` metadata is an additive warning view. The
+ * historical function-only `String` bound keeps its pre-stage-1 slot erosion and is likewise omitted here.
  * A logical `CharSequence` bound is also omitted: constraining the CLR parameter to the runtime
  * capability interface would reject the legal Kotlin substitution `T = String`, because sealed
  * `System.String` cannot implement that interface. KLIB retains the authoritative bound and
@@ -1041,7 +1044,7 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
 ): List<DotNetIlValueType> {
     val mappedBounds = superTypes
         .filterNot {
-            it.isNullableAny() || it.isString() || it.isNullableString() ||
+            it.isNullableAny() || it.isAny() || it.isString() || it.isNullableString() ||
                     it.isDotNetCharSequenceType()
         }
         .mapIndexedNotNull { index, bound ->
@@ -1145,7 +1148,8 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
 
 /**
  * The shared generic type-parameter gate: a supported parameter is non-reified and is either
- * unconstrained (`Any?`) or has direct non-null type-parameter or non-generic class/interface bounds.
+ * unconstrained (`Any?`), logically non-null but physically unconstrained (`Any`), or has direct
+ * non-null type-parameter or non-generic class/interface bounds.
  * [allowDeclarationSiteVariance] is true only for generic interfaces, the sole Kotlin
  * declaration kind in this backend that has a direct CLR `+`/`-` metadata representation;
  * classes and functions remain invariant. [dotNetConstraintTypes] performs the live
@@ -1191,12 +1195,9 @@ internal fun checkDotNetTypeParametersSupported(
         val unsupportedBound = typeParameter.superTypes.firstOrNull { superType ->
             when {
                 superType.isNullableAny() -> false
-                // `T : Any` is Kotlin's non-null upper bound. Its CLR representation is the
-                // GenericParam ReferenceTypeConstraint flag rather than a TypeDef/TypeSpec row
-                // for System.Object. This backend does not emit that flag yet, so accepting the
-                // bound here only lets the later live constraint mapper throw while constructing
-                // a generic-interface capability. Reject it at the owning declaration instead.
-                superType.isAny() -> true
+                // No CLR runtime flag represents Kotlin's union of non-null references and value
+                // types. Preserve the bound in KLIB and retain an unconstrained physical token.
+                superType.isAny() -> false
                 superType.isString() || superType.isNullableString() -> !allowStringBounds
                 superType.isDotNetCharSequenceType() -> false
                 else -> {
@@ -1209,13 +1210,6 @@ internal fun checkDotNetTypeParametersSupported(
             }
         }
         if (unsupportedBound != null) {
-            if (unsupportedBound.isAny()) {
-                dotNetUnsupported(
-                    "$ownerDescription constrains type parameter '$parameterName' with kotlin.Any; " +
-                            "explicit non-null type-parameter constraints are not supported " +
-                            "(no CLR reference-type constraint metadata)"
-                )
-            }
             dotNetUnsupported(
                 "$ownerDescription constrains type parameter '$parameterName' with unsupported type " +
                         "${unsupportedBound.render()}; constraints must be non-null type parameters or " +

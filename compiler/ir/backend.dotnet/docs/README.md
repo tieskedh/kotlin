@@ -49,6 +49,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Self-describing Kotlin/.NET library DLL](decisions/adr-self-describing-dotnet-library-dll.md)
 - [CLR importer boundary](decisions/draft-adr-clr-importer-boundary.md)
 - [`System.Object` as the physical `Any` foundation](decisions/system-object-any.md)
+- [Logical `T : Any` with an unconstrained CLR parameter](decisions/non-null-generic-upper-bound.md)
 - [Classified `CharSequence` carrier](decisions/char-sequence-carrier.md)
 - [Kotlin-owned `Appendable` and `StringBuilder`](decisions/appendable-string-builder.md)
 - [Classified CLR exception model](decisions/classified-clr-exceptions.md)

@@ -857,6 +857,32 @@ public inline fun <S, T : S> List<T>.reduceRightOrNull(operation: (T, acc: S) ->
 }
 
 /**
+ * Returns an original collection containing all the non-`null` elements, throwing an [IllegalArgumentException] if there are any `null` elements.
+ */
+public fun <T : Any> Iterable<T?>.requireNoNulls(): Iterable<T> {
+    for (element in this) {
+        if (element == null) {
+            throw IllegalArgumentException("null element found in $this.")
+        }
+    }
+    @Suppress("UNCHECKED_CAST")
+    return this as Iterable<T>
+}
+
+/**
+ * Returns an original collection containing all the non-`null` elements, throwing an [IllegalArgumentException] if there are any `null` elements.
+ */
+public fun <T : Any> List<T?>.requireNoNulls(): List<T> {
+    for (element in this) {
+        if (element == null) {
+            throw IllegalArgumentException("null element found in $this.")
+        }
+    }
+    @Suppress("UNCHECKED_CAST")
+    return this as List<T>
+}
+
+/**
  * Returns the single element, or throws an exception if the collection is empty or has more than one element.
  */
 public fun <T> Iterable<T>.single(): T {
@@ -1013,6 +1039,32 @@ public fun Iterable<Double>.sum(): Double {
     var sum: Double = 0.0
     for (element in this) {
         sum += element
+    }
+    return sum
+}
+
+/**
+ * Returns the sum of all values produced by [selector] function applied to each element in the collection.
+ */
+@Deprecated("Use sumOf instead.", ReplaceWith("this.sumOf(selector)"))
+@DeprecatedSinceKotlin(warningSince = "1.5")
+public inline fun <T> Iterable<T>.sumBy(selector: (T) -> Int): Int {
+    var sum: Int = 0
+    for (element in this) {
+        sum += selector(element)
+    }
+    return sum
+}
+
+/**
+ * Returns the sum of all values produced by [selector] function applied to each element in the collection.
+ */
+@Deprecated("Use sumOf instead.", ReplaceWith("this.sumOf(selector)"))
+@DeprecatedSinceKotlin(warningSince = "1.5")
+public inline fun <T> Iterable<T>.sumByDouble(selector: (T) -> Double): Double {
+    var sum: Double = 0.0
+    for (element in this) {
+        sum += selector(element)
     }
     return sum
 }
