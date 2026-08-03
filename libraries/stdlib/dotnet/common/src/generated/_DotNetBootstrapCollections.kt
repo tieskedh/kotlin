@@ -1214,3 +1214,17 @@ public inline fun <T> Iterable<T>.sumByDouble(selector: (T) -> Double): Double {
     }
     return sum
 }
+
+/**
+ * Returns the sum of all values produced by [selector] function applied to each element in the collection.
+ */
+@SinceKotlin("1.4")
+@kotlin.jvm.JvmName("sumOfInt")
+@kotlin.internal.InlineOnly
+public inline fun <T> Iterable<T>.sumOf(selector: (T) -> Int): Int {
+    var sum: Int = 0.toInt()
+    for (element in this) {
+        sum += selector(element)
+    }
+    return sum
+}

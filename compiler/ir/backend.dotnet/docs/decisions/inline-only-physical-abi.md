@@ -69,6 +69,15 @@ function's open non-null `T`. That read uses the narrowly specified
 of inline-only visibility: the same Common body must behave identically when
 materialized inside its assembly or inside a separate KLIB consumer.
 
+Physical assembly visibility does not remove CLR overload rules. When two
+logical inline-only declarations erase to the same CLR receiver and
+`Function1` parameter, their MethodDefs still require distinct stable names.
+The first such admitted declaration is `Iterable<T>.sumOf((T) -> Int)`: KLIB
+keeps the logical name and selector type, while the physical body uses the
+Common generator's explicit `sumOfInt` platform spelling. This is the bounded
+stdlib projection selected by the generic-interface ABI, not general .NET
+meaning for `@JvmName`.
+
 Prepared inline IR can also refer directly to compiler-owned built-in
 operators such as `kotlin.internal.ir.EQEQ`. The shared non-linking
 deserializer binds those operations back to `IrBuiltIns`: exact signature
