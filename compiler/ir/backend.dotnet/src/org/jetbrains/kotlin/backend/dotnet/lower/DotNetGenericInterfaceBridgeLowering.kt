@@ -143,12 +143,12 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 declaration.acceptChildrenVoid(this)
             }
         })
-        fun isKotlinOwnedGenericInterface(irClass: IrClass): Boolean =
+        fun isMappedKotlinGenericInterface(irClass: IrClass): Boolean =
             irClass in genericInterfaces ||
-                    DotNetRuntimeTypes.genericInterfaceInfoFor(irClass) != null ||
+                    DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass) ||
                     externalDeclarations.hasGenericInterface(irClass)
         for (irClass in bridgeOwners.sortedBy { it.classInheritanceDepth() }) {
-            addBridges(irClass, ::isKotlinOwnedGenericInterface, externalDeclarations)
+            addBridges(irClass, ::isMappedKotlinGenericInterface, externalDeclarations)
         }
     }
 
@@ -165,7 +165,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
 
     private fun addBridges(
         irClass: IrClass,
-        isKotlinOwnedGenericInterface: (IrClass) -> Boolean,
+        isMappedKotlinGenericInterface: (IrClass) -> Boolean,
         externalDeclarations: DotNetExternalDeclarations,
     ) {
         val implementationFunctions = irClass.declarations.flatMap { declaration ->
@@ -184,7 +184,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 // Any methods materialized on every interface). The real declaration appears in
                 // the same allOverridden chain and is the only physical slot to implement.
                 !overridden.isFakeOverride &&
-                        (overridden.parent as? IrClass)?.let(isKotlinOwnedGenericInterface) == true
+                        (overridden.parent as? IrClass)?.let(isMappedKotlinGenericInterface) == true
             }
             .distinctBy { it.symbol }
             .toList()
@@ -211,7 +211,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             } else {
                 target
             } ?: continue
-            if ((implementation.parent as? IrClass)?.let(isKotlinOwnedGenericInterface) == true) continue
+            if ((implementation.parent as? IrClass)?.let(isMappedKotlinGenericInterface) == true) continue
             val interfaceClass = slot.parent as? IrClass
                 ?: error("Internal .NET backend error: generic interface slot has no interface owner")
             val typedSubstitutor = AbstractIrTypeSubstitutor.forSuperClass(
@@ -232,11 +232,11 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 typedSubstitutor = typedSubstitutor,
                 typedViews = slot.dotNetGenericInterfaceMemberViews(
                     interfaceClass,
-                    isKotlinOwnedGenericInterface,
+                    isMappedKotlinGenericInterface,
                 ),
             )
             if (irClass.inheritsGenericInterfaceBridge(plan, externalDeclarations)) continue
-            val canonicalBridge = createCanonicalBridge(plan, isKotlinOwnedGenericInterface)
+            val canonicalBridge = createCanonicalBridge(plan, isMappedKotlinGenericInterface)
             val typedBridges = plan.typedViews.associateWith { view ->
                 createTypedBridge(plan, view)
             }
@@ -342,7 +342,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
 
     private fun createCanonicalBridge(
         plan: BridgePlan,
-        isKotlinOwnedGenericInterface: (IrClass) -> Boolean,
+        isMappedKotlinGenericInterface: (IrClass) -> Boolean,
     ): IrSimpleFunction {
         val canonicalSubstitution = plan.interfaceClass.typeParameters.associate { typeParameter ->
             typeParameter.symbol to context.irBuiltIns.anyNType
@@ -355,7 +355,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             val directParameter = simpleType.classifier as? IrTypeParameterSymbol
             if (directParameter?.owner?.parent == plan.interfaceClass) return context.irBuiltIns.anyNType
             val carrier = (simpleType.classifier as? IrClassSymbol)?.owner
-            return if (carrier?.let(isKotlinOwnedGenericInterface) == true) {
+            return if (carrier?.let(isMappedKotlinGenericInterface) == true) {
                 canonicalSubstitutor.substitute(type)
             } else {
                 // A reified generic class/array depending on an erased interface parameter has

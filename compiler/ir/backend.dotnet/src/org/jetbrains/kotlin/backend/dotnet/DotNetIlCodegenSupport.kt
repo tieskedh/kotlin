@@ -73,6 +73,22 @@ internal fun IrType.isDotNetCharSequenceType(): Boolean =
 internal fun IrClass.isDotNetCharSequenceClass(): Boolean =
     fqNameWhenAvailable == StandardNames.FqNames.charSequence.toSafe()
 
+/** Whether this declaration is Common Kotlin's contravariant `Comparable<T>` interface. */
+internal fun IrClass.isDotNetComparableClass(): Boolean =
+    fqNameWhenAvailable?.asString() == "kotlin.Comparable"
+
+/** Whether this type is an instantiation of Common Kotlin's `Comparable<T>`. */
+internal fun IrType.isDotNetComparableType(): Boolean =
+    classFqName?.asString() == "kotlin.Comparable"
+
+/** The recursive Common bound used by `T : Comparable<T>`. */
+private fun IrType.isDotNetComparableSelfBound(typeParameter: IrTypeParameter): Boolean {
+    val simpleType = this as? IrSimpleType ?: return false
+    if (simpleType.isMarkedNullable() || !isDotNetComparableType()) return false
+    val argument = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return false
+    return ((argument.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner == typeParameter
+}
+
 /**
  * The deliberately small first annotation-class ABI tranche. Keep this predicate shared by the
  * lowering and shape validator: a declaration which receives a concrete runtime implementation
@@ -90,6 +106,13 @@ internal fun IrType.dotNetInvariantArrayElementTypeOrNull(): IrType? {
     if (!isDotNetGenericArray()) return null
     val argument = (this as? IrSimpleType)?.arguments?.singleOrNull() as? IrTypeProjection ?: return null
     return argument.type.takeIf { argument.variance == Variance.INVARIANT }
+}
+
+/** Whether this is a bounded output projection such as `Array<out Comparable<*>>`. */
+internal fun IrType.isDotNetOutProjectedGenericArray(): Boolean {
+    if (!isDotNetGenericArray()) return false
+    val argument = (this as? IrSimpleType)?.arguments?.singleOrNull() as? IrTypeProjection ?: return false
+    return argument.variance == Variance.OUT_VARIANCE
 }
 
 /**
@@ -411,6 +434,26 @@ private enum class DotNetGenericInterfaceMapping(
     EXACT_SIGNATURE(DotNetGenericInterfaceView.EXACT, true),
 }
 
+/**
+ * Common `Comparable<T>` has two truthful BCL views on every supported profile. The CLR's
+ * generic interface does not inherit its non-generic predecessor, so generated implementers
+ * name both views and the generic-interface bridge lowering fills both slots on the same object.
+ */
+private fun dotNetComparableInterfaceInfo(
+    coreLibrary: DotNetCoreLibraryProfile,
+): DotNetGenericInterfaceInfo = DotNetGenericInterfaceInfo(
+    canonicalClassInfo = DotNetIlClassInfo(
+        ilClassName = "System.IComparable",
+        assemblyName = coreLibrary.assemblyName,
+    ),
+    declaredClassInfo = DotNetIlClassInfo(
+        ilClassName = "System.IComparable`1",
+        typeParameterVariances = listOf(Variance.IN_VARIANCE),
+        assemblyName = coreLibrary.assemblyName,
+    ),
+    exactClassInfo = null,
+)
+
 internal class DotNetIlTypeMapper private constructor(
     private val availableClasses: Map<IrClass, DotNetIlClassInfo>,
     val coreLibrary: DotNetCoreLibraryProfile,
@@ -418,6 +461,7 @@ internal class DotNetIlTypeMapper private constructor(
     private val importedClrDeclarations: DotNetClrImportedDeclarations,
     private val genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo>,
     private val genericClasses: Map<IrClass, DotNetGenericClassInfo>,
+    private val comparableInterfaceInfo: DotNetGenericInterfaceInfo,
     private val genericInterfaceMapping: DotNetGenericInterfaceMapping,
     private val mapGenericClassesToTypedCapability: Boolean,
     private val assemblyReferenceSink: (String) -> Unit,
@@ -437,6 +481,7 @@ internal class DotNetIlTypeMapper private constructor(
         DotNetClrImportedDeclarations(foreignAssemblyReferenceSink),
         genericInterfaces,
         genericClasses,
+        dotNetComparableInterfaceInfo(coreLibrary),
         DotNetGenericInterfaceMapping.CANONICAL,
         false,
         assemblyReferenceSink,
@@ -450,6 +495,7 @@ internal class DotNetIlTypeMapper private constructor(
             importedClrDeclarations,
             genericInterfaces,
             genericClasses,
+            comparableInterfaceInfo,
             mapping,
             mapGenericClassesToTypedCapability,
             assemblyReferenceSink,
@@ -464,6 +510,7 @@ internal class DotNetIlTypeMapper private constructor(
             importedClrDeclarations,
             genericInterfaces,
             genericClasses,
+            comparableInterfaceInfo,
             genericInterfaceMapping,
             true,
             assemblyReferenceSink,
@@ -478,6 +525,7 @@ internal class DotNetIlTypeMapper private constructor(
             importedClrDeclarations,
             genericInterfaces,
             genericClasses,
+            comparableInterfaceInfo,
             genericInterfaceMapping,
             false,
             assemblyReferenceSink,
@@ -515,7 +563,7 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun isSplitGenericInterface(irClass: IrClass): Boolean =
         irClass.isInterface && (genericInterfaces.containsKey(irClass) ||
-                DotNetRuntimeTypes.genericInterfaceInfoFor(irClass) != null ||
+                DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass) ||
                 externalDeclarations.hasGenericInterface(irClass))
 
     fun isSplitGenericClass(irClass: IrClass): Boolean =
@@ -569,6 +617,7 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun genericInterfaceInfoOrNull(irClass: IrClass): DotNetGenericInterfaceInfo? =
         if (!irClass.isInterface) null else (genericInterfaces[irClass]
+            ?: comparableInterfaceInfo.takeIf { irClass.isDotNetComparableClass() }
             ?: DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)
             ?: run {
                 val declared = externalDeclarations.declaredClassInfoOrNull(irClass) ?: return null
@@ -586,7 +635,11 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun genericInterfaceTypedMethodName(member: IrSimpleFunction): String =
         member.dotNetAbiMethodName(
-            DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(member) ?: member.dotNetIlMethodName(),
+            if ((member.parent as? IrClass)?.isDotNetComparableClass() == true) {
+                "CompareTo"
+            } else {
+                DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(member) ?: member.dotNetIlMethodName()
+            },
             ::isSplitGenericClass,
         )
 
@@ -626,6 +679,7 @@ internal class DotNetIlTypeMapper private constructor(
      */
     fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
         val runtimeGenericInfo = DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)
+        val mappedComparableInfo = comparableInterfaceInfo.takeIf { irClass.isDotNetComparableClass() }
         val genericClassInfo = genericClassInfoOrNull(irClass)
         return ((if (genericClassInfo != null) {
             if (mapGenericClassesToTypedCapability) genericClassInfo.typedClassInfo
@@ -633,15 +687,18 @@ internal class DotNetIlTypeMapper private constructor(
         } else null) ?: when (genericInterfaceMapping.physicalView) {
             DotNetGenericInterfaceView.CANONICAL ->
                 genericInterfaces[irClass]?.canonicalClassInfo
+                    ?: mappedComparableInfo?.canonicalClassInfo
                     ?: runtimeGenericInfo?.canonicalClassInfo
                     ?: availableClasses[irClass]
             DotNetGenericInterfaceView.DECLARED ->
                 genericInterfaces[irClass]?.declaredClassInfo
+                    ?: mappedComparableInfo?.declaredClassInfo
                     ?: runtimeGenericInfo?.declaredClassInfo
                     ?: externalDeclarations.declaredClassInfoOrNull(irClass)
                     ?: availableClasses[irClass]
             DotNetGenericInterfaceView.EXACT ->
                 genericInterfaces[irClass]?.mostSpecificCapabilityClassInfo
+                    ?: mappedComparableInfo?.mostSpecificCapabilityClassInfo
                     ?: runtimeGenericInfo?.mostSpecificCapabilityClassInfo
                     ?: externalDeclarations.exactClassInfoOrNull(irClass)
                     ?: externalDeclarations.declaredClassInfoOrNull(irClass)
@@ -656,12 +713,23 @@ internal class DotNetIlTypeMapper private constructor(
     }
 
     fun referencedFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? =
-        (DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
+        (comparableFunctionInfoOrNull(function)
+            ?: DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
             ?: DotNetStdlibLibrary.implementationFunctionInfoOrNull(function, this)
             ?: externalDeclarations.functionInfoOrNull(function, this)
             ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->
             functionInfo?.owner?.let(::recordAssemblyReference)
         }
+
+    private fun comparableFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
+        val owner = function.parent as? IrClass ?: return null
+        if (!owner.isDotNetComparableClass() || function.name.asString() != "compareTo") return null
+        return DotNetIlFunctionInfo(
+            owner = comparableInterfaceInfo.canonicalClassInfo,
+            signature = function.dotNetSignature(canonicalGenericInterfaceSignatureView()),
+            physicalMethodName = "CompareTo",
+        )
+    }
 
     /** Exact typed generic-class source slot used only where Kotlin requires non-virtual `super`. */
     fun typedGenericClassFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
@@ -1071,11 +1139,19 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
                     "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
                             "constraints must be non-null type parameters or non-generic module-local classes/interfaces"
                 )
-            if (simpleBound.isMarkedNullable() || simpleBound.arguments.isNotEmpty()) {
+            val isComparableSelfBound = bound.isDotNetComparableSelfBound(this)
+            if (simpleBound.isMarkedNullable() || (simpleBound.arguments.isNotEmpty() && !isComparableSelfBound)) {
                 dotNetUnsupported(
                     "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
                             "constraints must be non-null type parameters or non-generic module-local classes/interfaces"
                 )
+            }
+            if (isComparableSelfBound) {
+                val mappedBound = typeMapper.toDotNetIlValueType(bound) as? DotNetIlValueType.UserClass
+                    ?: dotNetUnsupported(
+                        "type parameter '${name.asString()}' has no canonical CLR Comparable constraint"
+                    )
+                return@mapIndexedNotNull Triple(1, index, mappedBound)
             }
             val boundParameter = (simpleBound.classifier as? IrTypeParameterSymbol)?.owner
             if (
@@ -1218,6 +1294,7 @@ internal fun checkDotNetTypeParametersSupported(
                 superType.isAny() -> false
                 superType.isString() || superType.isNullableString() -> !allowStringBounds
                 superType.isDotNetCharSequenceType() -> false
+                superType.isDotNetComparableSelfBound(typeParameter) -> false
                 else -> {
                     val simpleType = superType as? IrSimpleType
                     simpleType == null || simpleType.isMarkedNullable() ||

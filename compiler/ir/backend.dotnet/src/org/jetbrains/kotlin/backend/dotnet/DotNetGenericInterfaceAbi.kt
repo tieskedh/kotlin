@@ -24,13 +24,15 @@ import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.types.Variance
 
 /**
- * The physical CLR views of one Kotlin-owned generic interface.
+ * The physical CLR views of one logical Kotlin generic interface.
  *
- * [canonicalClassInfo] is the non-generic Kotlin identity used by every Kotlin ABI position.
- * [declaredClassInfo] is the source-friendly CLR generic view with the declaration's original
- * variance. [exactClassInfo], when present, is an all-invariant capability containing members
- * that cannot legally be declared on the variant CLR view. All views describe the same object;
- * none is an adapter representation.
+ * For Kotlin-owned interfaces, [canonicalClassInfo] is the non-generic Kotlin identity used by
+ * every Kotlin ABI position and [declaredClassInfo] is its source-friendly CLR generic view. A
+ * mapped Common interface such as Comparable may instead reuse two truthful host interfaces.
+ * [exactClassInfo], when present, is an all-invariant capability containing members that cannot
+ * legally be declared on the variant CLR view. All views describe the same object; none is an
+ * adapter representation. A host declared view need not inherit the canonical host view, so an
+ * implementation can name both interfaces explicitly.
  */
 internal data class DotNetGenericInterfaceInfo(
     val canonicalClassInfo: DotNetIlClassInfo,
