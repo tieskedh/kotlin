@@ -261,6 +261,49 @@ nullable accumulators, primitive/reference/widened elements, exact left/right tr
 iterators, Function3 index association, capture and non-local return, packaged fallback bodies,
 separate-consumer inlining, and direct fallback execution on Framework CLR and CoreCLR.
 
+### Receiver-seeded reductions
+
+The selected reduction closure is the complete collection-facing Common family:
+
+- `Iterable<T>.reduce` and `reduceIndexed`;
+- `Iterable<T>.reduceOrNull` and `reduceIndexedOrNull`;
+- `List<T>.reduceRight` and `reduceRightIndexed`; and
+- `List<T>.reduceRightOrNull` and `reduceRightIndexedOrNull`.
+
+JVM, JS, Wasm, and Native consume these same generated Common declarations. Kotlin/.NET therefore
+selects the `S, T : S` Iterable/List template variants unchanged. The non-null forms throw the
+Common `UnsupportedOperationException` with its exact collection/list message when empty; the
+nullable forms return null without invoking the operation. Left variants seed from the first
+iterator element and begin indexed callbacks at one. Right variants request `listIterator(size)`,
+seed from the last element, and obtain each remaining `previousIndex` before its matching
+`previous` value.
+
+The existing representation closes every physical dependency. A CLR method type parameter may
+carry the direct `T : S` GenericParamConstraint already used by ordinary target code. Direct open
+`S?` results use the accepted boxed-or-null object slot while KLIB retains their logical nullable
+type; non-null `S` remains the real CLR method parameter. Split Iterable/List and iterator views,
+fixed Function2/Function3 invocation, `checkIndexOverflow`, the classified physical
+`UnsupportedOperationException`, and ordinary cross-library inlining are already published. No
+builder, annotation-class representation, enum, reflection token, reified operation, or new
+carrier is selected here.
+
+The production inliner exposes an empty nullable branch as `Nothing?` followed by an
+`IMPLICIT_CAST` to the substituted result. JVM and Native retain nullable-bottom subtyping through
+their normal post-inline coercions, JS uses its native null value, and Wasm handles nullable
+`Nothing` explicitly when adapting the expected type. Kotlin/.NET likewise reuses its existing
+nullable-bottom emission: a reference result receives null and a closed nullable scalar receives
+the already-selected empty `Nullable<V>` carrier. This is not a runtime cast or a widening of the
+accepted classifier set.
+
+Replacing the functions with LINQ `Aggregate`, indexing arbitrary Iterable, a reversed copy, a
+target-authored exception path, `T`-only overloads, or object-erased non-null results is rejected.
+Those alternatives change bounds, traversal capability, allocation, exception text/timing, or the
+useful physical generic signature without a CLR necessity. Adversarial completion must cover
+single-element no-callback behavior; empty exception type/message and nullable null; reference,
+value, nullable, and widened `S`; exact left/right order and indices; hostile iterators; operation
+failure identity and stopping point; non-local return; the physical `T : S` constraint and `S?`
+slot; packaged KLIB inlining; and direct fallback execution on both supported CLR families.
+
 ### Signed numeric sum
 
 The admitted numeric closure is the complete signed Common `Numeric.f_sum` family for `Iterable`:
