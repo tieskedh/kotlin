@@ -81,6 +81,7 @@ internal object DotNetStdlibLibrary {
     private val implementationFunctionFacadeIlNames = mapOf(
         "kotlin.collections.all" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.any" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.average" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.asList" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.arrayOfNulls" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.checkCountOverflow" to COLLECTIONS_FACADE_IL_NAME,
@@ -241,31 +242,33 @@ internal object DotNetStdlibLibrary {
         return property.fqNameWhenAvailable?.asString()?.let(implementationPropertyFacadeIlNames::get)
     }
 
-    /** Selects the pinned Common-generator spelling for the one erased stdlib overload family. */
+    /** Selects a pinned Common-generator spelling for a bounded erased stdlib overload family. */
     fun implementationPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
-        if (function.fqNameWhenAvailable?.asString() != "kotlin.collections.sum") return null
+        val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
+        val platformNames = signedIterableNumericPlatformNames[functionFqName] ?: return null
+        val logicalName = functionFqName.substringAfterLast('.')
         if (implementationFunctionFacadeIlName(function) == null) return null
         val receiverType = function.parameters
             .singleOrNull { parameter -> parameter.kind == IrParameterKind.ExtensionReceiver }
             ?.type as? IrSimpleType
             ?: dotNetUnsupported(
-                "Common Iterable.sum has no single simple extension receiver: " +
+                "Common Iterable.$logicalName has no single simple extension receiver: " +
                         function.parameters.joinToString { parameter ->
                             "${parameter.kind}:${parameter.type.render()}"
                         }
             )
         val receiverFqName = receiverType.classFqName?.asString()
         if (receiverFqName != "kotlin.collections.Iterable") {
-            dotNetUnsupported("Common Iterable.sum has unexpected receiver '${receiverType.render()}'")
+            dotNetUnsupported("Common Iterable.$logicalName has unexpected receiver '${receiverType.render()}'")
         }
         val elementType = (receiverType.arguments.singleOrNull() as? IrTypeProjection)?.type
             ?: dotNetUnsupported(
-                "Common Iterable.sum receiver '${receiverType.render()}' has no exact element type"
+                "Common Iterable.$logicalName receiver '${receiverType.render()}' has no exact element type"
             )
         val elementFqName = elementType.classFqName?.asString()
-        return signedIterableSumPlatformNames[elementFqName]
+        return platformNames[elementFqName]
             ?: dotNetUnsupported(
-                "Common Iterable.sum element '${elementType.render()}' has no pinned CLR method name"
+                "Common Iterable.$logicalName element '${elementType.render()}' has no pinned CLR method name"
             )
     }
 
@@ -331,13 +334,23 @@ internal object DotNetStdlibLibrary {
     )
     private val ARRAY_ITERATOR_FACTORY_INFO = arrayFactoryInfo(DotNetRuntimeTypes.iteratorType)
     private val ARRAY_ITERABLE_FACTORY_INFO = arrayFactoryInfo(DotNetRuntimeTypes.iterableType)
-    private val signedIterableSumPlatformNames = mapOf(
-        "kotlin.Byte" to "sumOfByte",
-        "kotlin.Short" to "sumOfShort",
-        "kotlin.Int" to "sumOfInt",
-        "kotlin.Long" to "sumOfLong",
-        "kotlin.Float" to "sumOfFloat",
-        "kotlin.Double" to "sumOfDouble",
+    private val signedIterableNumericPlatformNames = mapOf(
+        "kotlin.collections.sum" to mapOf(
+            "kotlin.Byte" to "sumOfByte",
+            "kotlin.Short" to "sumOfShort",
+            "kotlin.Int" to "sumOfInt",
+            "kotlin.Long" to "sumOfLong",
+            "kotlin.Float" to "sumOfFloat",
+            "kotlin.Double" to "sumOfDouble",
+        ),
+        "kotlin.collections.average" to mapOf(
+            "kotlin.Byte" to "averageOfByte",
+            "kotlin.Short" to "averageOfShort",
+            "kotlin.Int" to "averageOfInt",
+            "kotlin.Long" to "averageOfLong",
+            "kotlin.Float" to "averageOfFloat",
+            "kotlin.Double" to "averageOfDouble",
+        ),
     )
 
     private fun arrayFactoryInfo(returnType: DotNetIlValueType): DotNetIlFunctionInfo =

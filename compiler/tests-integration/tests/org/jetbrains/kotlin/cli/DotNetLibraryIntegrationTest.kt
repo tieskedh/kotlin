@@ -30915,6 +30915,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "sumOfFloat",
             "sumOfDouble",
         )
+        val averagePhysicalMethodNames = setOf(
+            "averageOfByte",
+            "averageOfShort",
+            "averageOfInt",
+            "averageOfLong",
+            "averageOfFloat",
+            "averageOfDouble",
+        )
         assertEquals(
             sumPhysicalMethodNames,
             collectionFunctions
@@ -30926,6 +30934,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     (declaration.methodName in sumPhysicalMethodNames && declaration.isInstance)
         }) {
             "Logical sum overloads must bind to six distinct static Common platform names"
+        }
+        assertEquals(
+            averagePhysicalMethodNames,
+            collectionFunctions
+                .filter { declaration -> declaration.methodName in averagePhysicalMethodNames }
+                .mapTo(linkedSetOf(), DotNetPhysicalDeclaration.Function::methodName),
+        )
+        assertTrue(collectionFunctions.none { declaration ->
+            declaration.methodName == "average" ||
+                    (declaration.methodName in averagePhysicalMethodNames && declaration.isInstance)
+        }) {
+            "Logical average overloads must bind to six distinct static Common platform names"
         }
         assertEquals(
             mapOf(
@@ -31289,6 +31309,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(
             ".method public hidebysig static float64 'sumOfDouble'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static float64 'averageOfByte'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static float64 'averageOfShort'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static float64 'averageOfInt'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static float64 'averageOfLong'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static float64 'averageOfFloat'(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static float64 'averageOfDouble'(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
         )
         val countOverflowStart = il.indexOf(
@@ -31734,6 +31778,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun sumDoubles(values: Iterable<Double>): Double = values.sum()
 
+                public fun averageBytes(values: Iterable<Byte>): Double = values.average()
+
+                public fun averageShorts(values: Iterable<Short>): Double = values.average()
+
+                public fun averageInts(values: Iterable<Int>): Double = values.average()
+
+                public fun averageLongs(values: Iterable<Long>): Double = values.average()
+
+                public fun averageFloats(values: Iterable<Float>): Double = values.average()
+
+                public fun averageDoubles(values: Iterable<Double>): Double = values.average()
+
                 public fun <T> containsElement(values: Iterable<T>, element: T): Boolean =
                     values.contains(element)
 
@@ -31984,6 +32040,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "::'sumOfDouble'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
         )
         assertTrue(
+            "::'averageOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'averageOfShort'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'averageOfInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'averageOfLong'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'averageOfFloat'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
+            "::'averageOfDouble'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
+        )
+        assertTrue(
             "::'indexOf'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
         )
         assertTrue(
@@ -32224,6 +32298,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun installedSumDoubles(values: Iterable<Double>): Double = values.sum()
 
+                public fun installedAverageBytes(values: Iterable<Byte>): Double = values.average()
+
+                public fun installedAverageShorts(values: Iterable<Short>): Double = values.average()
+
+                public fun installedAverageInts(values: Iterable<Int>): Double = values.average()
+
+                public fun installedAverageLongs(values: Iterable<Long>): Double = values.average()
+
+                public fun installedAverageFloats(values: Iterable<Float>): Double = values.average()
+
+                public fun installedAverageDoubles(values: Iterable<Double>): Double = values.average()
+
                 public fun <T> installedContainsElement(values: Iterable<T>, element: T): Boolean =
                     values.contains(element)
 
@@ -32353,11 +32439,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             arrayOf(Long.MAX_VALUE, 1L).asIterable().sum() == Long.MIN_VALUE &&
                             arrayOf(16_777_216f, 1f, -16_777_216f).asIterable().sum() == 0f &&
                             arrayOf(1.5, 2.5).asIterable().sum() == 4.0
+                    val emptyByteAverage = emptyArray<Byte>().asIterable().average()
+                    val emptyShortAverage = emptyArray<Short>().asIterable().average()
+                    val emptyIntAverage = emptyArray<Int>().asIterable().average()
+                    val emptyLongAverage = emptyArray<Long>().asIterable().average()
+                    val emptyFloatAverage = emptyArray<Float>().asIterable().average()
+                    val emptyDoubleAverage = emptyArray<Double>().asIterable().average()
+                    val averagesOk =
+                        emptyByteAverage != emptyByteAverage &&
+                            emptyShortAverage != emptyShortAverage &&
+                            emptyIntAverage != emptyIntAverage &&
+                            emptyLongAverage != emptyLongAverage &&
+                            emptyFloatAverage != emptyFloatAverage &&
+                            emptyDoubleAverage != emptyDoubleAverage &&
+                            arrayOf((-1).toByte(), 0.toByte()).asIterable().average() == -0.5 &&
+                            arrayOf((-1).toShort(), 0.toShort()).asIterable().average() == -0.5 &&
+                            arrayOf(-1, 0).asIterable().average() == -0.5 &&
+                            arrayOf(1L, 2L).asIterable().average() == 1.5 &&
+                            arrayOf(1f, 2f).asIterable().average() == 1.5 &&
+                            arrayOf(1.0e16, 1.0, -1.0e16).asIterable().average() == 0.0
                     val throwableOk =
                         snapshot.size == 1 &&
                             snapshot[0] === suppressed &&
                             owner.stackTraceToString() != owner.toString()
-                    println(if (collectionsOk && sumsOk && throwableOk) "OK" else "FAIL")
+                    println(if (collectionsOk && sumsOk && averagesOk && throwableOk) "OK" else "FAIL")
                 }
                 """.trimIndent()
             )
@@ -32494,6 +32599,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'sumOfLong'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'sumOfFloat'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'sumOfDouble'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'averageOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'averageOfShort'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'averageOfInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'averageOfLong'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'averageOfFloat'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'averageOfDouble'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue(
             "::'indexOf'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!0)" in il
         )
@@ -32840,6 +32951,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             countedSum == 6 &&
                             counting.iteratorCalls == 1 &&
                             counting.nextCalls == 3
+                    val emptyByteAverage = emptyArray<Byte>().asIterable().average()
+                    val emptyShortAverage = emptyArray<Short>().asIterable().average()
+                    val emptyIntAverage = emptyArray<Int>().asIterable().average()
+                    val emptyLongAverage = emptyArray<Long>().asIterable().average()
+                    val emptyFloatAverage = emptyArray<Float>().asIterable().average()
+                    val emptyDoubleAverage = emptyArray<Double>().asIterable().average()
+                    val averageCounting = CountingInts(arrayOf(1, 2, 3))
+                    val countedAverage = averageCounting.average()
+                    val numericAverageOk =
+                        emptyByteAverage != emptyByteAverage &&
+                            emptyShortAverage != emptyShortAverage &&
+                            emptyIntAverage != emptyIntAverage &&
+                            emptyLongAverage != emptyLongAverage &&
+                            emptyFloatAverage != emptyFloatAverage &&
+                            emptyDoubleAverage != emptyDoubleAverage &&
+                            arrayOf((-1).toByte(), 0.toByte()).asIterable().average() == -0.5 &&
+                            arrayOf((-1).toShort(), 0.toShort()).asIterable().average() == -0.5 &&
+                            arrayOf(-1, 0).asIterable().average() == -0.5 &&
+                            arrayOf(1L, 2L).asIterable().average() == 1.5 &&
+                            arrayOf(1f, 2f).asIterable().average() == 1.5 &&
+                            arrayOf(1.0e16, 1.0, -1.0e16).asIterable().average() == 0.0 &&
+                            countedAverage == 2.0 &&
+                            averageCounting.iteratorCalls == 1 &&
+                            averageCounting.nextCalls == 3
                     val folding = CountingInts(arrayOf(1, 2, 3))
                     var leftTrace = 0
                     val leftFold = folding.fold(4) { accumulator, value ->
@@ -33257,8 +33392,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     println(
                         first + "|" + second + "|" + (atEof == null) + "|" +
                             readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk + "|" +
-                            indexedOptionalOk + "|" + numericSumOk + "|" + foldOk + "|" + reduceOk + "|" +
-                            forEachOk + "|" + firstPredicateOk + "|" + lastPredicateOk + "|" +
+                            indexedOptionalOk + "|" + numericSumOk + "|" + numericAverageOk + "|" +
+                            foldOk + "|" + reduceOk + "|" + forEachOk + "|" + firstPredicateOk + "|" + lastPredicateOk + "|" +
                             singlePredicateOk + "|" + inlinePredicatesOk
                     )
                 }
@@ -33293,7 +33428,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }
@@ -33632,6 +33767,95 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(!!0[])
                     stloc.3
 
+                    ldc.i4.0
+                    newarr [mscorlib]System.SByte
+                    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<int8>(!!0[])
+                    call float64 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'averageOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+                    dup
+                    ceq
+                    brfalse.s AVERAGE_BYTE
+                    ldstr "empty average fallback changed"
+                    call void Program::Fail(string)
+                AVERAGE_BYTE:
+                    ldc.i4.1
+                    newarr [mscorlib]System.SByte
+                    dup
+                    ldc.i4.0
+                    ldc.i4.2
+                    stelem.i1
+                    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<int8>(!!0[])
+                    call float64 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'averageOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+                    ldc.r8 2.0
+                    beq.s AVERAGE_SHORT
+                    ldstr "Byte average fallback changed"
+                    call void Program::Fail(string)
+                AVERAGE_SHORT:
+                    ldc.i4.1
+                    newarr [mscorlib]System.Int16
+                    dup
+                    ldc.i4.0
+                    ldc.i4.2
+                    stelem.i2
+                    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<int16>(!!0[])
+                    call float64 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'averageOfShort'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+                    ldc.r8 2.0
+                    beq.s AVERAGE_INT
+                    ldstr "Short average fallback changed"
+                    call void Program::Fail(string)
+                AVERAGE_INT:
+                    ldc.i4.1
+                    newarr [mscorlib]System.Int32
+                    dup
+                    ldc.i4.0
+                    ldc.i4.2
+                    stelem.i4
+                    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<int32>(!!0[])
+                    call float64 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'averageOfInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+                    ldc.r8 2.0
+                    beq.s AVERAGE_LONG
+                    ldstr "Int average fallback changed"
+                    call void Program::Fail(string)
+                AVERAGE_LONG:
+                    ldc.i4.1
+                    newarr [mscorlib]System.Int64
+                    dup
+                    ldc.i4.0
+                    ldc.i4.2
+                    conv.i8
+                    stelem.i8
+                    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<int64>(!!0[])
+                    call float64 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'averageOfLong'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+                    ldc.r8 2.0
+                    beq.s AVERAGE_FLOAT
+                    ldstr "Long average fallback changed"
+                    call void Program::Fail(string)
+                AVERAGE_FLOAT:
+                    ldc.i4.1
+                    newarr [mscorlib]System.Single
+                    dup
+                    ldc.i4.0
+                    ldc.r4 2.0
+                    stelem.r4
+                    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<float32>(!!0[])
+                    call float64 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'averageOfFloat'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+                    ldc.r8 2.0
+                    beq.s AVERAGE_DOUBLE
+                    ldstr "Float average fallback changed"
+                    call void Program::Fail(string)
+                AVERAGE_DOUBLE:
+                    ldc.i4.1
+                    newarr [mscorlib]System.Double
+                    dup
+                    ldc.i4.0
+                    ldc.r8 2.0
+                    stelem.r8
+                    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<float64>(!!0[])
+                    call float64 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'averageOfDouble'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+                    ldc.r8 2.0
+                    beq.s ALL_START
+                    ldstr "Double average fallback changed"
+                    call void Program::Fail(string)
+                ALL_START:
                     ldloc.2
                     newobj instance void PositivePredicate::.ctor()
                     call bool [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'all'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
