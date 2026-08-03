@@ -104,7 +104,7 @@ post-substitution array-operation audit is complete as well: array construction 
 ordinary carriers and needs no reified-only representation. Do not flip either inliner capability
 gate or mistake that allocation readiness for the whole language feature. Kotlin `KClass` and
 class literals now form a completed nominal floor over classified CLR evidence. `KType`, the
-atomic enum/annotation/contracts source cluster, the final substituted type-operator matrix, and
+phased enum/`EnumEntries` and contracts products, the final substituted type-operator matrix, and
 the physical reified throwing-stub contract remain separate boundaries.
 
 ### 2. Expand Common collections by exact dependency closure
@@ -125,13 +125,19 @@ explicit loop guard hoisting, visibility-based full erasure, and AOT-specific sp
 until measurements after this bounded path show a material residual cost. A failed capability
 probe is maintained for Kotlin correctness and is not a performance target.
 
-The remaining builder/abstract-base closure and modern enum support form a bootstrap cycle:
-builder source needs the public contracts family, that family declares `InvocationKind`, every
-modern enum publishes `entries`, and the authoritative `EnumEntriesList` needs the Common abstract
-collection bases. Break that cycle only by admitting the complete coherent source cluster. Do not
-add a one-enum lowering, a target `EnumEntries` substitute, or a KLIB declaration without its
-physical product. Until that atomic cluster is ready, reversible compiler breadth such as the
-selected-graph inline slice takes precedence.
+The source-level bootstrap cycle has a truthful three-phase cut. Common `Appendable`, the complete
+`StringBuilder` expect class and its non-contract extensions do not depend on contracts; only the
+two top-level `buildString` declarations do. The existing exact fail-closed Common projection may
+therefore publish the builder class, generated `joinTo`/`joinToString`, and Common abstract
+collection bases first while omitting precisely those two declarations. This is a complete class
+surface and an exact declaration subset, not a target stub or rewritten algorithm.
+
+Modern enums plus the non-reified `EnumEntries` core then form one coherent language/product
+phase. They use Kotlin-owned reference classes, the general Comparable mapping, producer-recorded
+entry-field binding, and the existing static-initialization machinery; they are not CLR value-type
+enums. Once `InvocationKind` exists, the exact contracts/`Standard.kt`/`buildString` closure can
+land and the temporary projection can give way to the full ordinary Common file. General reified
+enum functions remain behind the reified gate throughout.
 
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
@@ -147,12 +153,11 @@ implementation follows the shared annotation member generator and covers separat
 valued constructors and Kotlin reflection discovery remain separate. See
 [`../decisions/marker-annotation-classes.md`](../decisions/marker-annotation-classes.md).
 
-Then audit the contracts side of the bootstrap cycle. Existing nullability and CodeAnalysis
-plumbing already distinguishes authoritative Kotlin facts from exact CLR projections. The audit
-must still stop at the cluster boundary if `InvocationKind`, builders, or abstract collections
-cannot be produced truthfully in isolation. Compiler-consumed effects belong to KLIB/Common
-semantics; Roslyn attributes may additionally expose only their exact subset and may also be
-accepted as foreign evidence under Kotlin stability rules.
+After the builder/abstract-base and enum phases, publish the complete contracts product rather
+than a compiler-private cycle breaker. Existing nullability and CodeAnalysis plumbing already
+distinguishes authoritative Kotlin facts from exact CLR projections. Compiler-consumed effects
+belong to KLIB/Common semantics; Roslyn attributes may additionally expose only their exact subset
+and may also be accepted as foreign evidence under Kotlin stability rules.
 
 ### 3. Retain and enforce the completed declaration architecture seam
 
@@ -221,7 +226,8 @@ The current verified count and command belong only in [`../../STATUS.md`](../../
 
 Parking means “fail clearly and do not constrain a future ABI,” not “approximate now.”
 
-- enums, pending the atomic contracts/builder/abstract-collections/`EnumEntries` source cluster;
+- enums, pending the selected builder/abstract-base foundation and coherent non-reified
+  `EnumEntries` product;
 - valued annotation constructors and arguments, wider use-site targets, and runtime annotation
   reflection; parameterless markers, retention, and their exact CLR-parent projection are selected;
 - `KType`, `typeOf`, and member/annotation reflection; the nominal `KClass`/class-literal floor is

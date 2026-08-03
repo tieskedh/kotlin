@@ -91,28 +91,33 @@ of semantic authority to the BCL.
 
 ### Exact Common source closure
 
-The completed product will compile the authoritative Common `Appendable.kt`
-and `StringBuilder.kt` files with narrow .NET actuals. `StringBuilder.kt`'s
-`buildString` body calls the Common inline scope function `apply`, so the exact
-Common `Standard.kt` file is part of this source-level dependency closure. Its
-declarations must be admitted together rather than replacing `apply` or
-rewriting `buildString` in target source.
+The first product phase compiles authoritative Common `Appendable.kt` and an
+exact fail-closed projection of `StringBuilder.kt`. That projection contains
+the complete expect class and every non-contract top-level extension; it
+omits only the two top-level `buildString` declarations. Those two bodies are
+the only declarations in the file that call Common `apply` and the public
+contracts DSL. Changed, missing, duplicated, or ambiguous extraction markers
+must fail generation, following the existing bootstrap-source policy.
 
-Both Common files also declare contracts. Their exact dependency closure is
-the public `kotlin.contracts` source family, not a compiler-private stub. That
-family includes effect interfaces, binary-retained parameterless annotation
-classes, and the public `InvocationKind` enum. The general marker-annotation
-foundation now covers those annotation declarations; Kotlin/.NET must still
-support and publish the enum and effect product truthfully before publishing
-this builder surface. Resolution-only copies, omitted physical declarations,
-target-local contract shims, or a one-enum codegen exception would make the
-stdlib's own KLIB broader than its executable product and are forbidden.
+This is not a partial builder class or a target-authored substitute. KLIB
+publishes exactly the declarations physically present in the stdlib product,
+and all extracted bodies remain byte-for-byte Common-owned. The deprecated
+`append(CharArray, offset, len)` extension brings its exact Common
+`NotImplementedError` dependency rather than a target exception substitute.
 
-Once that prerequisite is complete, the bootstrap collection generator admits the exact Common
+In the same phase, the bootstrap collection generator admits the exact Common
 `Iterable.joinTo` and `Iterable.joinToString` template variants. It does not
-copy their bodies, call LINQ, or introduce a .NET-only overload. The ordinary
-and packaged-source stdlib paths compile the same files into one
-self-describing `Kotlin.Stdlib.dll`.
+copy their bodies, call LINQ, or introduce a .NET-only overload. Common
+`AbstractCollection` and `AbstractList` may then consume that rendering
+closure through the collections programme.
+
+The later `buildString` phase compiles the two omitted declarations together
+with exact Common `Standard.kt` and the complete public `kotlin.contracts`
+source family. That family includes effect interfaces, parameterless
+annotation classes, and the public `InvocationKind` enum. Resolution-only
+contract copies, target-local shims, rewritten `buildString`, or a one-enum
+exception remain forbidden. Once the dependency exists, the temporary
+projection is replaced by the complete ordinary Common file.
 
 ### `CharSequence` interaction
 
@@ -192,8 +197,10 @@ for the irreducible mechanics and avoid a new versioned runtime service.
 
 ## Consequences
 
-- Kotlin callers see the complete Common builder surface and stable Kotlin
-  identity on every profile.
+- Kotlin callers first see the complete Common builder class and non-contract
+  extension surface with stable identity on every profile; the later contracts
+  phase adds the two exact Common `buildString` declarations without changing
+  that class ABI.
 - C# sees a truthful Kotlin `Appendable` interface and wrapper class rather
   than a false claim about the sealed BCL builder.
 - The wrapper adds one allocation beside its private BCL storage. This is the
@@ -201,9 +208,9 @@ for the irreducible mechanics and avoid a new versioned runtime service.
 - Storage can change before or after ABI freeze without changing public
   identity, provided behavior and private implementation metadata remain
   unobservable.
-- `Standard.kt` scope functions and `NotImplementedError` enter the supported
-  stdlib source product as the exact dependency closure of Common
-  `buildString`; they are not .NET-specific substitutes.
+- `NotImplementedError` enters the first stdlib phase as the exact dependency
+  of the deprecated append extension. `Standard.kt` scope functions enter
+  later with Common `buildString`; neither is a .NET-specific substitute.
 
 ## Freeze conditions and boundaries
 
@@ -226,10 +233,11 @@ Before this surface freezes, tests must pin:
 - absence of `System.Text.StringBuilder` from public/protected signatures and
   from the runtime classifier.
 
-This ADR does not admit other generated string or array `joinTo` families,
-compile Common abstract collection bases, add BCL collection adapters, or
-define general reflection over private CLR implementation fields. The typed
-collection-to-array representation is selected independently by
-[its own ADR](collection-to-array.md). This ADR also does not select the general
-enum or annotation-class representations required by the contract DSL; those
-hard-to-reverse language decisions remain separate prerequisites.
+This ADR does not admit other generated string or array `joinTo` families, add
+BCL collection adapters, or define general reflection over private CLR
+implementation fields. Common abstract collection bases consume this surface
+under the collections programme. The typed collection-to-array representation
+is selected independently by [its own ADR](collection-to-array.md). This ADR
+also does not select the general enum or contract representations required by
+the later `buildString` phase; those language products remain separate
+features.

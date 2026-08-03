@@ -134,8 +134,8 @@ following blockers remain independent and real:
 - `T::class` needs a Kotlin `KClass` identity and truthful `System.Type`
   bridge;
 - `typeOf<T>()` needs `KType`, type arguments, variance, and nullability;
-- enum intrinsics need the atomic enum/contracts/builder/`EnumEntries`
-  source cluster;
+- enum intrinsics need the selected builder/abstract-base foundation followed
+  by ordinary enums and the non-reified `EnumEntries` product;
 - annotation-associated operations need annotation-class representation and
   retention/association policy;
 - value-class and unsigned-array instantiations remain outside the current
