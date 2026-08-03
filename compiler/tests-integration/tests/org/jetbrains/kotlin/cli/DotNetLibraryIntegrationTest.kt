@@ -30970,7 +30970,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "indexOf" to 2,
                 "indexOfFirst" to 2,
                 "indexOfLast" to 2,
+                "last" to 4,
                 "lastIndexOf" to 2,
+                "lastOrNull" to 4,
                 "none" to 1,
                 "reduce" to 1,
                 "reduceIndexed" to 1,
@@ -31003,7 +31005,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         "indexOf",
                         "indexOfFirst",
                         "indexOfLast",
+                        "last",
                         "lastIndexOf",
+                        "lastOrNull",
                         "none",
                         "reduce",
                         "reduceIndexed",
@@ -31039,7 +31043,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "indexOf",
                 "indexOfFirst",
                 "indexOfLast",
+                "last",
                 "lastIndexOf",
+                "lastOrNull",
                 "none",
                 "reduce",
                 "reduceIndexed",
@@ -31334,6 +31340,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')" in il
         )
         assertTrue(
+            ".method public hidebysig static !!0 'last'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static !!0 'last'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static object 'lastOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static object 'lastOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
+        )
+        assertTrue(
             ".method public hidebysig static object 'firstOrNull'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
         )
@@ -31561,6 +31587,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     predicate: (T) -> Boolean,
                 ): T? = values.firstOrNull(predicate)
 
+                public fun <T> lastMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T = values.last(predicate)
+
+                public fun <T> lastMatchingOrNull(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.lastOrNull(predicate)
+
+                public fun <T> lastListMatching(
+                    values: List<T>,
+                    predicate: (T) -> Boolean,
+                ): T = values.last(predicate)
+
+                public fun <T> lastListMatchingOrNull(
+                    values: List<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.lastOrNull(predicate)
+
                 public fun <T> optionalAt(values: Iterable<T>, index: Int): T? =
                     values.elementAtOrNull(index)
 
@@ -31780,6 +31826,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ) {
             "The separate consumer must inline the Common firstOrNull(predicate) body:\n$il"
         }
+        for (receiverName in listOf("Iterable", "List")) {
+            assertTrue(
+                "::'last'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.$receiverName', " +
+                        "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+            ) {
+                "The separate consumer must inline the Common $receiverName.last(predicate) body:\n$il"
+            }
+            assertTrue(
+                "::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.$receiverName', " +
+                        "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+            ) {
+                "The separate consumer must inline the Common $receiverName.lastOrNull(predicate) body:\n$il"
+            }
+        }
         assertTrue(
             "::'elementAtOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32)" in il
         )
@@ -31967,6 +32027,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     values: Iterable<T>,
                     predicate: (T) -> Boolean,
                 ): T? = values.firstOrNull(predicate)
+
+                public fun <T> installedLastMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T = values.last(predicate)
+
+                public fun <T> installedLastMatchingOrNull(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.lastOrNull(predicate)
+
+                public fun <T> installedLastListMatching(
+                    values: List<T>,
+                    predicate: (T) -> Boolean,
+                ): T = values.last(predicate)
+
+                public fun <T> installedLastListMatchingOrNull(
+                    values: List<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.lastOrNull(predicate)
 
                 public fun <T> installedOptionalAt(values: Iterable<T>, index: Int): T? =
                     values.elementAtOrNull(index)
@@ -32221,6 +32301,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
         ) {
             "The installed consumer must inline the Common firstOrNull(predicate) body:\n$il"
+        }
+        for (receiverName in listOf("Iterable", "List")) {
+            assertTrue(
+                "::'last'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.$receiverName', " +
+                        "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+            ) {
+                "The installed consumer must inline the Common $receiverName.last(predicate) body:\n$il"
+            }
+            assertTrue(
+                "::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.$receiverName', " +
+                        "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+            ) {
+                "The installed consumer must inline the Common $receiverName.lastOrNull(predicate) body:\n$il"
+            }
         }
         assertTrue(
             "::'elementAtOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32)" in il
@@ -32553,6 +32647,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return -1
                 }
 
+                fun nonLocalLastMatch(values: Iterable<Int>): Int {
+                    values.last { value ->
+                        if (value == 2) return value
+                        false
+                    }
+                    return -1
+                }
+
                 fun main() {
                     print(false)
                     print("|")
@@ -32791,6 +32893,69 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             emptyFirstCalls == 0 &&
                             emptyFirstMessageIsCommon &&
                             nonLocalFirstMatch(arrayOf(1, 2, 3).asIterable()) == 2
+                    val lastMatching = CountingInts(arrayOf(1, 2, 3, 2))
+                    var lastPredicateTrace = 0
+                    val lastPredicate = lastMatching.last { value ->
+                        lastPredicateTrace = lastPredicateTrace * 10 + value
+                        value == 2
+                    }
+                    var lastOrNullPredicateTrace = 0
+                    val lastOrNullPredicate = lastMatching.lastOrNull { value ->
+                        lastOrNullPredicateTrace = lastOrNullPredicateTrace * 10 + value
+                        value == 2
+                    }
+                    val reverseLastMatching = ReverseOnlyIntList(arrayOf(1, 2, 3, 2))
+                    var reverseLastTrace = 0
+                    val reverseLast = reverseLastMatching.last { value ->
+                        reverseLastTrace = reverseLastTrace * 10 + value
+                        value == 2
+                    }
+                    var reverseLastOrNullTrace = 0
+                    val reverseLastOrNull = reverseLastMatching.lastOrNull { value ->
+                        reverseLastOrNullTrace = reverseLastOrNullTrace * 10 + value
+                        value == 2
+                    }
+                    var nullableLastCalls = 0
+                    val nullableLast: String? = arrayOf<String?>(null, "K", null).asIterable().last { value ->
+                        nullableLastCalls++
+                        value == null
+                    }
+                    var emptyLastCalls = 0
+                    var emptyIterableLastMessageIsCommon = false
+                    val emptyLastIterable: Iterable<Int> = emptyList()
+                    try {
+                        emptyLastIterable.last { value -> emptyLastCalls++; value == 1 }
+                    } catch (failure: NoSuchElementException) {
+                        emptyIterableLastMessageIsCommon =
+                            failure.message == "Collection contains no element matching the predicate."
+                    }
+                    var emptyListLastMessageIsCommon = false
+                    try {
+                        emptyList<Int>().last { value -> emptyLastCalls++; value == 1 }
+                    } catch (failure: NoSuchElementException) {
+                        emptyListLastMessageIsCommon =
+                            failure.message == "List contains no element matching the predicate."
+                    }
+                    val lastPredicateOk =
+                        lastPredicate == 2 &&
+                            lastOrNullPredicate == 2 &&
+                            lastPredicateTrace == 1232 &&
+                            lastOrNullPredicateTrace == 1232 &&
+                            lastMatching.iteratorCalls == 2 &&
+                            lastMatching.nextCalls == 8 &&
+                            reverseLast == 2 &&
+                            reverseLastOrNull == 2 &&
+                            reverseLastTrace == 2 &&
+                            reverseLastOrNullTrace == 2 &&
+                            reverseLastMatching.requestedListIteratorIndex == reverseLastMatching.size &&
+                            nullableLast == null &&
+                            nullableLastCalls == 3 &&
+                            emptyLastIterable.lastOrNull { value -> emptyLastCalls++; value == 1 } == null &&
+                            emptyList<Int>().lastOrNull { value -> emptyLastCalls++; value == 1 } == null &&
+                            emptyLastCalls == 0 &&
+                            emptyIterableLastMessageIsCommon &&
+                            emptyListLastMessageIsCommon &&
+                            nonLocalLastMatch(arrayOf(1, 2, 3).asIterable()) == 2
                     val empty = HostileEmptyCollection<Int>()
                     var emptyPredicateCalls = 0
                     val emptyFastPathOk =
@@ -32873,7 +33038,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         first + "|" + second + "|" + (atEof == null) + "|" +
                             readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk + "|" +
                             indexedOptionalOk + "|" + numericSumOk + "|" + foldOk + "|" + reduceOk + "|" +
-                            forEachOk + "|" + firstPredicateOk + "|" + inlinePredicatesOk
+                            forEachOk + "|" + firstPredicateOk + "|" + lastPredicateOk + "|" + inlinePredicatesOk
                     )
                 }
                 """.trimIndent()
@@ -32907,7 +33072,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }
@@ -33253,6 +33418,40 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ldstr "firstOrNull(predicate) fallback changed"
                     call void Program::Fail(string)
                 FIRST_OR_NULL_PREDICATE_OK:
+                    ldloc.2
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldc.i4.2
+                    beq.s ITERABLE_LAST_PREDICATE_OK
+                    ldstr "Iterable last(predicate) fallback changed"
+                    call void Program::Fail(string)
+                ITERABLE_LAST_PREDICATE_OK:
+                    ldloc.2
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call object [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'lastOrNull'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.2
+                    beq.s ITERABLE_LAST_OR_NULL_PREDICATE_OK
+                    ldstr "Iterable lastOrNull(predicate) fallback changed"
+                    call void Program::Fail(string)
+                ITERABLE_LAST_OR_NULL_PREDICATE_OK:
+                    ldloc.3
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldc.i4.2
+                    beq.s LIST_LAST_PREDICATE_OK
+                    ldstr "List last(predicate) fallback changed"
+                    call void Program::Fail(string)
+                LIST_LAST_PREDICATE_OK:
+                    ldloc.3
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call object [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'lastOrNull'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function1')
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.2
+                    beq.s LIST_LAST_OR_NULL_PREDICATE_OK
+                    ldstr "List lastOrNull(predicate) fallback changed"
+                    call void Program::Fail(string)
+                LIST_LAST_OR_NULL_PREDICATE_OK:
                     ldloc.2
                     newobj instance void EqualTwoPredicate::.ctor()
                     call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'indexOfFirst'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
