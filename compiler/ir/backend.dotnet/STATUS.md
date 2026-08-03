@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: generated Common collection single-match predicates
+- Last completed feature: generated Common predicate aggregates
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,9 +20,9 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 994 tests:
+The JUnit audit covered 16 fresh XML files and 998 tests:
 
-- 892 FIR, IL-text, and box tests
+- 896 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 81 library-integration tests
 - zero failures, errors, or skips
@@ -180,6 +180,17 @@ both bodies, while handwritten CIL executes both physical fallbacks on Framework
 CLR and CoreCLR. The existing open-`T` cast and boxed-or-null slot remain the
 only physical adaptation; LINQ defaults and target-authored traversal were not
 introduced.
+
+Common `Iterable.none(predicate)` and `count(predicate)` now complete the
+selected predicate-aggregate family alongside `all` and `any`. Exact Common
+empty-Collection fast paths avoid iterator construction; `none` stops at the
+first match, while predicate `count` consumes the receiver and calls Common
+`checkCountOverflow` after each matching increment. Adversarial execution pins
+fast paths, traversal/stopping counts, nullable and widened predicates, capture,
+predicate-failure identity/timing, and non-local return. Separate and installed
+consumers inline both bodies and retain exactly the required count-overflow
+helper call; handwritten CIL executes both physical fallbacks on Framework CLR
+and CoreCLR. No LINQ quantifier/count rewrite or target-owned loop was added.
 
 The post-substitution reified-array audit now proves that every admitted
 ordinary array carrier remains truthful after the shared inliner has replaced
