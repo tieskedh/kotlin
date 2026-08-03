@@ -28939,6 +28939,221 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testComparableAcrossPortableLibraryBoundary() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(frameworkCSharp != null, ".NET Framework C# compiler is not available")
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard facade is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "comparable-library").apply { mkdirs() }
+        val librarySource = libraryDirectory.resolve("comparableLibrary.kt").apply {
+            writeText(
+                """
+                package comparableabi
+
+                public class Rank(private val value: Int) : Comparable<Rank> {
+                    override fun compareTo(other: Rank): Int = value - other.value
+                }
+
+                public fun compareRanks(left: Comparable<Rank>, right: Rank): Int = left.compareTo(right)
+                public fun <T : Comparable<T>> compareGeneric(left: T, right: T): Int = left.compareTo(right)
+                public fun compareAnything(left: Comparable<Any>, right: Any): Int = left.compareTo(right)
+                public fun isComparable(value: Any): Boolean = value is Comparable<*>
+                public fun compareStrings(left: String, right: String): Int = left.compareTo(right)
+                public fun compareDoubles(left: Double, right: Double): Int = left.compareTo(right)
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Comparable.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val library = libraryDirectory.resolve("Comparable.Library.dll")
+        val libraryIl = libraryDirectory.resolve("Comparable.Library.il").readText()
+        assertTrue(
+            "implements [netstandard]'System.IComparable', " +
+                    "class [netstandard]'System.IComparable`1'<class 'comparableabi.Rank'>" in libraryIl
+        ) { libraryIl }
+        assertTrue(
+            ".override method instance int32 [netstandard]'System.IComparable'::'CompareTo'(object)" in libraryIl
+        ) { libraryIl }
+        assertTrue(
+            ".override method instance int32 class [netstandard]'System.IComparable`1'" in libraryIl
+        ) { libraryIl }
+        assertTrue(
+            "'compareGeneric'<(class [netstandard]'System.IComparable') 'T'>" in libraryIl
+        ) { libraryIl }
+        assertTrue("'ComparableCompareTo'(object, object)" in libraryIl) { libraryIl }
+
+        val csharpSource = libraryDirectory.resolve("ComparableConsumer.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Collections.Generic;
+
+                public static class ComparableConsumer
+                {
+                    private sealed class LegacyComparable : IComparable
+                    {
+                        private readonly int value;
+
+                        internal LegacyComparable(int value)
+                        {
+                            this.value = value;
+                        }
+
+                        public int CompareTo(object other)
+                        {
+                            return value - ((LegacyComparable)other).value;
+                        }
+                    }
+
+                    private sealed class TypedOnly : IComparable<TypedOnly>
+                    {
+                        private readonly int value;
+
+                        internal TypedOnly(int value)
+                        {
+                            this.value = value;
+                        }
+
+                        public int CompareTo(TypedOnly other)
+                        {
+                            return value - other.value;
+                        }
+                    }
+
+                    public static int Main()
+                    {
+                        var low = new comparableabi.Rank(2);
+                        var high = new comparableabi.Rank(5);
+                        IComparable erased = low;
+                        IComparable<comparableabi.Rank> typed = low;
+                        if (erased.CompareTo(high) >= 0) return 1;
+                        if (typed.CompareTo(high) >= 0) return 2;
+                        if (comparableabi.comparableLibraryKt.compareRanks(low, high) >= 0) return 3;
+                        if (comparableabi.comparableLibraryKt.compareStrings("ä", "z") <= 0) return 4;
+                        if (comparableabi.comparableLibraryKt.compareDoubles(
+                                Double.NaN, Double.PositiveInfinity) <= 0) return 5;
+                        if (comparableabi.comparableLibraryKt.compareAnything(
+                                new LegacyComparable(2), new LegacyComparable(5)) >= 0) return 6;
+                        if (comparableabi.comparableLibraryKt.compareGeneric(
+                                new LegacyComparable(2), new LegacyComparable(5)) >= 0) return 7;
+                        if (!comparableabi.comparableLibraryKt.isComparable(new LegacyComparable(1))) return 8;
+                        if (comparableabi.comparableLibraryKt.isComparable(new TypedOnly(1))) return 9;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpConsumer = libraryDirectory.resolve("ComparableConsumer.exe")
+        val csharpCompile = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            csharpSource,
+            csharpConsumer,
+            library,
+            checkNotNull(frameworkNetStandardFacade),
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package comparableconsumer
+
+                    import comparableabi.*
+
+                    private class LocalRank(private val value: Int) : Comparable<LocalRank> {
+                        override fun compareTo(other: LocalRank): Int = value - other.value
+                    }
+
+                    fun main() {
+                        val low = Rank(2)
+                        val high = Rank(5)
+                        if (compareRanks(low, high) >= 0) throw Error("portable canonical comparison")
+                        if (compareGeneric(low, high) >= 0) throw Error("portable recursive bound")
+                        if (compareGeneric(LocalRank(7), LocalRank(3)) <= 0) {
+                            throw Error("consumer implementation")
+                        }
+                        if (compareGeneric(3, 2) <= 0) throw Error("primitive substitution")
+                        if (compareStrings("ä", "z") <= 0) throw Error("ordinal String order")
+                        if (compareDoubles(Double.NaN, Double.POSITIVE_INFINITY) <= 0) {
+                            throw Error("Kotlin Double order")
+                        }
+                        val erased: Any = low
+                        if (erased !is Comparable<*>) throw Error("separate classifier")
+                        @Suppress("UNCHECKED_CAST")
+                        val wrong = "wrong" as Comparable<Int>
+                        try {
+                            wrong.compareTo(1)
+                            throw Error("delayed argument barrier")
+                        } catch (_: ClassCastException) {
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "ComparableKotlinConsumer.exe" else "ComparableKotlinConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, library.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "ComparableKotlinConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            if (target == "net48") {
+                val process = ProcessBuilder(frameworkExecutionCommand(checkNotNull(frameworkHost), application))
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Comparable Kotlin consumer failed for $target:\n$output")
+            } else {
+                runDotNet(dotnetHost, application, consumerDirectory, "Comparable Kotlin consumer failed for $target")
+            }
+
+            consumerDirectory.resolve("Kotlin.Runtime.dll")
+                .copyTo(libraryDirectory.resolve("Kotlin.Runtime.dll"), overwrite = true)
+            if (target == "net48") {
+                val process = ProcessBuilder(frameworkExecutionCommand(checkNotNull(frameworkHost), csharpConsumer))
+                    .directory(libraryDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Comparable C# consumer failed for $target:\n$output")
+            } else {
+                libraryDirectory.resolve("ComparableConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+                runDotNet(dotnetHost, csharpConsumer, libraryDirectory, "Comparable C# consumer failed for $target")
+            }
+        }
+    }
+
+    @Test
     fun testStarProjectedArraysAcrossPortableLibraryBoundary() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,

@@ -133,10 +133,12 @@ add a one-enum lowering, a target `EnumEntries` substitute, or a KLIB declaratio
 physical product. Until that atomic cluster is ready, reversible compiler breadth such as the
 selected-graph inline slice takes precedence.
 
-The audit must also include Common `Enum<E>`'s `Comparable<E>` supertype. A .NET representation
-must cover ordinary Kotlin implementations plus classified primitive and `String` carriers; it
-must not equate Kotlin comparison semantics wholesale with `System.IComparable<T>` or publish an
-enum-only substitute.
+Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
+`System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
+interface calls retain ordinal String and Kotlin floating ordering through one semantic helper.
+The later `Enum<E>` work must consume this general representation rather than publish an
+enum-only substitute. See
+[`../decisions/comparable-clr-views.md`](../decisions/comparable-clr-views.md).
 
 The bounded general annotation-class foundation is now selected: every supported parameterless
 marker is one concrete sealed `System.Attribute` subtype, retains authoritative Kotlin identity

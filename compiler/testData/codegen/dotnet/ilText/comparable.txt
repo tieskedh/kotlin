@@ -1,0 +1,102 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'comparable' {}
+.module 'main-comparable.il'
+
+.class public auto ansi sealed beforefieldinit 'Score'
+       extends [mscorlib]System.Object
+       implements [mscorlib]'System.IComparable', class [mscorlib]'System.IComparable`1'<class 'Score'>
+{
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Score'::'value'
+    ret
+  }
+  .method private hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Score'::'value'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'compareTo'(class 'Score' 'other') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 'Score'::'get_value'()
+    ldarg.1
+    call instance int32 'Score'::'get_value'()
+    sub
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.Comparable-compareTo-0f838f77390826ba738a927e521071fe>'(object 'other') cil managed
+  {
+    .override method instance int32 [mscorlib]'System.IComparable'::'CompareTo'(object)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    castclass class 'Score'
+    callvirt instance int32 'Score'::'compareTo'(class 'Score')
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.Comparable-compareTo-0f838f77390826ba738a927e521071fe>'(class 'Score' 'other') cil managed
+  {
+    .override method instance int32 class [mscorlib]'System.IComparable`1'<class 'Score'>::'CompareTo'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 'Score'::'compareTo'(class 'Score')
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'Score'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'comparableKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'compareThroughInterface'(class [mscorlib]'System.IComparable' 'left', class 'Score' 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ComparableCompareTo'(object, object)
+    ret
+  }
+  .method public hidebysig static int32 'compareThroughBound'<(class [mscorlib]'System.IComparable') 'T'>(!!0 'left', !!0 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    box !!0
+    ldarg.1
+    box !!0
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ComparableCompareTo'(object, object)
+    ret
+  }
+  .method public hidebysig static int32 'compareStrings'(string 'left', string 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ComparableCompareTo'(object, object)
+    ret
+  }
+  .method public hidebysig static int32 'compareDoubles'(float64 'left', float64 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CompareDouble'(float64, float64)
+    ret
+  }
+}

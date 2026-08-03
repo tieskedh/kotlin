@@ -34,6 +34,13 @@ Kotlin behavior. A .NET source file supplies narrow `actual` declarations and
 irreducible host operations; it does not fork a Common algorithm merely
 because a BCL equivalent exists.
 
+Common `Comparable<T>` uses the profile-selected CLR `System.IComparable` and
+`System.IComparable<T>` views on one object, but Kotlin interface calls retain
+ordinal String and Kotlin floating ordering through the runtime semantic
+boundary. Do not replace that boundary with host `CompareTo` wholesale or
+publish an enum-only comparison substitute. See
+[`docs/decisions/comparable-clr-views.md`](docs/decisions/comparable-clr-views.md).
+
 Kotlin metadata is authoritative for the logical Kotlin declaration. CLR
 metadata is authoritative for the physical CLR declaration. For a
 Kotlin-produced DLL, retain the complete KLIB contract and derive a truthful

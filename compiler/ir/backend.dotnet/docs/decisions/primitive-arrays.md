@@ -38,9 +38,16 @@ that is an interop hazard rather than a reason to weaken Kotlin variance.
 `Array<out T>` keeps the same vector carrier and records its projection in
 KLIB. Closed reference widening may use truthful CLR covariance. A value
 vector cannot widen to `object[]`; until an identity-preserving carrier exists,
-that boundary is rejected rather than copied or silently changed. `in` and
-star projections remain unsupported where no single truthful element token
-exists.
+that boundary is rejected rather than copied or silently changed. `in`
+projections remain unsupported where no single truthful element token exists;
+stars follow their separate classified `System.Array` decision.
+
+An inferred bounded output projection need not become a physical boundary when
+its only consumer already requests the separately selected `Array<*>` view. In
+that case codegen emits each child at the final `System.Array` boundary, so an
+`int32[]` and a `string[]` retain their exact carriers and identities. This
+expected-type elision does not admit the bounded projection in a signature,
+field, local, return, cast, or operation, and does not manufacture covariance.
 
 ### Specialized arrays are Kotlin-owned wrappers
 

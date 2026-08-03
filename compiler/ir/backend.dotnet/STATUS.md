@@ -11,8 +11,8 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: general parameterless Kotlin marker annotation
-  classes with exact runtime-retained CLR custom-attribute projection
+- Last completed feature: general Common `Comparable<T>` with canonical and
+  typed CLR interface views plus Kotlin-correct built-in ordering
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -26,18 +26,26 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The current post-rebase integration state passed:
+The current Common `Comparable` production head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 20 fresh XML files and 1029 tests:
+The JUnit audit covered 20 fresh XML files and 1036 tests:
 
-- 924 FIR, IL-text, and box tests
+- 930 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 84 library-integration tests
+- 85 library-integration tests
 - zero failures, errors, or skips
+
+An independent adversarial review then strengthened existing Comparable test
+methods without changing production sources. All four affected PSI/LightTree
+and Framework/CoreCLR box lanes plus the portable-library integration test
+passed again on the final test source. They additionally execute inherited
+interface dispatch, safe casts, a canonical-only C# `IComparable` through the
+emitted recursive generic constraint, and exclusion of a typed-only
+`IComparable<T>` from Kotlin's erased Comparable identity.
 
 All compiler-argument, API, configuration-key, Gradle-option, and test-runner
 generators owned by the affected upstream range were rerun through their
@@ -277,6 +285,21 @@ the public Common surface, and the retained `System.Type` bridge remains
 compiler ABI. `KType`, `typeOf`, member/annotation reflection, annotation-class
 code generation, and public reified declarations remain separate programmes.
 
+Common `Comparable<in T>` now retains its full logical identity and recursive
+bounds in KLIB while one object exposes the profile-selected canonical
+`System.IComparable` and truthful typed `System.IComparable<T>` views. Kotlin
+implementations fill both slots through the existing split-interface bridge
+lowering; ordinary C# consumes either interface without an adapter. Logical
+interface and type-parameter calls use one versioned semantic helper so String
+comparison remains ordinal and Float/Double retain Kotlin NaN and signed-zero
+ordering. Direct exact primitive operations keep their unboxed intrinsics.
+Tests cover every selected Common scalar, custom and inherited implementations,
+recursive bounds, contravariance, type tests, checked/safe/unchecked casts,
+delayed mismatches, exact carrier preservation through inferred array common
+types, physical MethodImpl rows, portable Kotlin consumers, and both canonical-
+only and typed CLR foreign boundaries on Framework CLR and CoreCLR. Runtime
+surface level 12 owns the helper; typed polymorphic fast paths remain unselected.
+
 ## Current architecture
 
 - `:core:language.targets.dotnet` owns the logical .NET platform and the
@@ -357,6 +380,11 @@ runners, plus target-owned CIL, C# reflection/application, and portable Kotlin
 producer/consumer evidence. Valued annotations and annotation discovery remain
 outside this foundation.
 
+The general Common Comparable mapping is now independently published. It is
+not an enum-private facility: the later `Enum<E>` product must consume the same
+KLIB identity, canonical classifier, typed C# view, and semantic operation
+boundary.
+
 The reified audit established that shared IR substitution is ready. Its
 ordinary runtime prerequisites now include declaration-erased Kotlin generic
 classes and classified star-projected arrays, and the complete admitted array-
@@ -408,13 +436,13 @@ processes and frontend order.
 ## Open architectural blockers
 
 - Exact Common `AbstractCollection`/`AbstractList` production still needs the
-  remaining `Appendable`/`StringBuilder` closure; do not fork its algorithms
-  into .NET. Modern enums, the public contract DSL, builders, Common abstract
-  collection bases, and `EnumEntries` form one atomic source bootstrap cluster;
-  do not break it with target substitutes or one-enum exceptions. Common
-  `Enum<E>` additionally requires a truthful `Comparable<E>` carrier; this must
-  cover Kotlin user implementations and classified primitive/string behavior,
-  not an enum-only interface stub.
+  remaining `Appendable`/`StringBuilder` and `joinTo` closure; do not fork its
+  algorithms into .NET. The source audit established that only top-level
+  `buildString` reaches the public contracts DSL, so the builder class and
+  abstract collection bases can land first through the existing exact,
+  fail-closed Common projection mechanism. Modern enums plus the non-reified
+  `EnumEntries` core form the next coherent language/product phase; contracts,
+  full `Standard.kt`, and `buildString` follow after `InvocationKind` exists.
 - KLIB-in-DLL and physical ABI codecs still need neutral serialization owners
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
@@ -427,19 +455,20 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Audit the complete coherent contracts/enum/builder/abstract-collections/
-   `EnumEntries` source/product closure now that its marker-annotation
-   prerequisite is complete. Mirror the mature targets' enum lowerings,
-   packages, runtime ownership, and generated stdlib sources; do not introduce
-   a target contract DSL, builder-only stub, or one-enum exception.
-2. If that audit exposes an unresolved hard-to-reverse enum decision, record
-   and lock the exact question, then advance independently unlocked Common
-   families such as signed `sumOf` or `allEqual` rather than inventing an enum
-   shortcut.
-3. Once the enum/product closure is selected, implement it and actualize the
-   complete Common `Appendable`/`StringBuilder`, generated
-   `joinTo`/`joinToString`, and Common `AbstractCollection`/`AbstractList`
-   sources as one truthful dependency sequence.
+1. Implement the complete Kotlin-owned Common `Appendable`/`StringBuilder`
+   class layer and non-contract extensions, exact generated
+   `joinTo`/`joinToString`, and Common `AbstractCollection`/`AbstractList`;
+   migrate the private direct `ArrayAsList` to the Common base. Leave only the
+   two contract-bearing `buildString` declarations outside this exact
+   fail-closed source projection.
+2. Implement ordinary Kotlin enums and the non-reified `EnumEntries` core as
+   one reference-class feature, including producer-recorded enum-entry field
+   binding, entry annotations, static initialization, separate compilation,
+   and Kotlin/C# consumption. Do not map Kotlin enums to CLR value-type enums
+   or open the general reified gate.
+3. Once `InvocationKind` exists, publish the exact contracts/`Standard.kt`/
+   `buildString` closure and replace the temporary StringBuilder projection
+   with the complete ordinary Common file.
 
 The post-rebase callable-reference probe found that common IR's new
 `addBoundValueAtOverride` helper cannot directly replace the .NET lowering:

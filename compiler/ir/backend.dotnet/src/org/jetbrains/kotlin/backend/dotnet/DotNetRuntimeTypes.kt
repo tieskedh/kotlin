@@ -374,6 +374,10 @@ internal object DotNetRuntimeTypes {
     fun genericInterfaceInfoFor(irClass: IrClass): DotNetGenericInterfaceInfo? =
         genericInterfaceDescriptorFor(irClass)?.info
 
+    /** Runtime-owned split interfaces plus profile-mapped Common interfaces handled by codegen. */
+    fun hasBuiltInGenericInterfaceMapping(irClass: IrClass): Boolean =
+        genericInterfaceDescriptorFor(irClass) != null || irClass.isDotNetComparableClass()
+
     /**
      * Runtime-owned Kotlin interfaces whose complete physical implementation contract is emitted
      * in Kotlin.Runtime's C# authoring manifest.
