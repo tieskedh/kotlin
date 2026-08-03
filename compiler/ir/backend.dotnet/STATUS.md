@@ -8,21 +8,29 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: generated Common signed numeric averages
-- Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
-  is promised
+- Last completed feature: Common `@InlineOnly` physical ABI and the generated
+  14-declaration collection delegator/accessor batch
+- Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
+  subset; no third-party binary compatibility is promised
+
+This maturity statement measures the coherence and adversarial verification of
+the admitted subset, not percentage completion of Kotlin as a language or
+stdlib. The target is not close to 98% feature-complete: enums, annotation
+classes, `KClass`/reflection, reified public APIs, value classes, coroutines,
+the contracts/builder/abstract-collections cluster, broad Set/Map production,
+and Gradle/KMP product integration remain substantial open programmes.
 
 ## Current green gate
 
 The last semantic head passed:
 
 ```text
-.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
+.\gradlew.bat :compiler:fir:fir2ir:dotNetTest :compiler:tests-integration:dn --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 1002 tests:
+The JUnit audit covered 16 fresh XML files and 1006 tests:
 
-- 900 FIR, IL-text, and box tests
+- 904 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 81 library-integration tests
 - zero failures, errors, or skips
@@ -152,8 +160,7 @@ capture, predicate-failure identity/timing, and non-local return. Separate and
 installed consumers inline only the predicate overloads while existing no-arg
 fallback calls remain; handwritten CIL executes both new physical overloads on
 Framework CLR and CoreCLR. Open `T` and boxed-or-null `T?` reuse their existing
-physical slots. `find` remains parked pending the separate `@InlineOnly`
-declaration-suppression and ABI audit.
+physical slots.
 
 Common last-match predicates now use all four exact generated bodies for
 `Iterable.last`/`lastOrNull` and their `List` overloads. Iterable receivers scan
@@ -166,8 +173,21 @@ and non-local return. Separate and installed consumers inline all four bodies,
 while handwritten CIL executes all four physical fallbacks on Framework CLR
 and CoreCLR. The open-`T` cast uses the existing checked generic result barrier;
 failed typed uses remain an exceptional correctness path and are not optimized.
-`findLast` remains parked with `find` behind the `@InlineOnly` declaration-
-suppression and ABI audit.
+
+The first Common `@InlineOnly` batch now publishes 14 exact generated
+declarations: List components 1 through 5, List `elementAt` and
+`elementAtOrNull`, Iterable `find`, Iterable/List `findLast`, the two
+first-non-null transforms, Collection `count`, and Iterable `asIterable`.
+Their public logical declarations and bodies remain authoritative in embedded
+KLIB, while each physical CLR MethodDef is assembly-visible and unavailable as
+C# or cross-assembly fallback API. Separate, packaged, and installed Kotlin
+consumers must inline every call. Tests prove direct/reverse access without
+the wrong iterator, traversal and callback order, nullable and exception
+behavior, object identity, non-local return, physical visibility, C#
+inaccessibility, and absence of external inline-only calls on Framework CLR
+and CoreCLR. The producer/consumer tests use an actual self-describing KLIB;
+the same-frontend bootstrap box harness is not misrepresented as an external
+library boundary.
 
 Common `Iterable.single(predicate)` and `singleOrNull(predicate)` now use their
 exact generated bodies; Common defines no distinct List predicate overload.
@@ -244,9 +264,12 @@ closed.
 
 ## Active state
 
-No implementation slice is half-landed. The generated Common signed numeric
-averages are published with all six bounded physical names and exact KLIB
-bodies. The generated Common first-match predicate pair remains published with
+No implementation slice is half-landed. The Common `@InlineOnly` physical ABI
+is selected and its first 14-declaration generated collection batch is
+published with assembly-visible physical bodies and mandatory external KLIB
+inlining. The generated Common signed numeric averages remain published with
+all six bounded physical names and exact KLIB bodies. The generated Common
+first-match predicate pair remains published with
 both physical fallbacks and inlinable KLIB bodies. The preceding iteration-
 action pair remains published with both void
 fallbacks and the authoritative `HidesMembers` compiler directive. The

@@ -141,6 +141,17 @@ exact capability, guard it at runtime, and otherwise use canonical dispatch.
 Arguments/results box, cast, or unbox only at the selected boundary. The
 receiver and arguments evaluate once.
 
+A canonical member result may pass through an object-typed compiler local
+before the frontend uses that local again where an open non-null type
+parameter is required. That local read is also an erased boundary: codegen
+emits `unbox.any !n`/`!!n` for that exact expected token. ECMA-335 defines the
+instruction for both reference and value-type instantiations; it is the CLR
+counterpart of the JVM backend's checkcast/unbox at a generic erased read. A
+bad value fails at that use, as Kotlin's erased model requires. The rule is
+limited to object-backed local reads whose concrete consumer requires an open
+type parameter. It is not a general object-to-arbitrary-type coercion and does
+not optimize or prevalidate a failing cast.
+
 Collection special bridge semantics remain Common-owned: wrong-shaped
 `contains` returns false and `indexOf`/`lastIndexOf` return `-1`. An ordinary
 user `@UnsafeVariance` member retains ordinary cast failure unless Common

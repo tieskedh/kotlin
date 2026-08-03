@@ -58,6 +58,7 @@ import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.isPropertyAccessor
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isInterface
@@ -66,6 +67,7 @@ import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isSubclassOf
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
+import org.jetbrains.kotlin.name.StandardClassIds
 
 /** A successfully rendered method and its complete IL text. */
 internal class DotNetIlRenderedMethod(val ilText: String)
@@ -289,6 +291,7 @@ internal class DotNetIlMethodCodegen(
         if (origin == DOTNET_GENERIC_CLASS_CANONICAL_BRIDGE) return "private"
         if (origin.isDotNetGenericInterfaceBridge) return "private"
         if (origin == DOTNET_COVARIANT_RETURN_BRIDGE) return "private"
+        if (isDotNetInlineOnly()) return "assembly"
         if (this is IrConstructor && constructedClass.isDotNetStdlibImplementation) {
             return if (constructedClass.isPublishedApi()) "public" else "assembly"
         }
@@ -334,6 +337,12 @@ internal class DotNetIlMethodCodegen(
         visibility == DescriptorVisibilities.INTERNAL &&
                 (isPublishedApi() ||
                         (this as? IrSimpleFunction)?.correspondingPropertySymbol?.owner?.isPublishedApi() == true)
+
+    /** Mirrors JVM's package-private physical treatment through CLR assembly visibility. */
+    private fun IrFunction.isDotNetInlineOnly(): Boolean =
+        (isInline && hasAnnotation(StandardClassIds.Annotations.InlineOnly)) ||
+                (this is IrSimpleFunction &&
+                        correspondingPropertySymbol?.owner?.hasAnnotation(StandardClassIds.Annotations.InlineOnly) == true)
 
     /** Maps a hidden helper-backed class or DIM bridge to every physical Kotlin interface slot. */
     private fun StringBuilder.appendInterfaceDefaultSlotOverrides() {

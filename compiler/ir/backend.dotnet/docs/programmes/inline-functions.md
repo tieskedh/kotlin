@@ -67,6 +67,22 @@ An ordinary physical CLR method remains for each supported inline declaration. I
 fallback and useful C# shape, but the tests require Kotlin call sites to disappear after IR
 inlining rather than relying on that method or on JIT heuristics.
 
+`@InlineOnly` is the deliberate exception documented by the
+[`@InlineOnly` physical ABI ADR](../decisions/inline-only-physical-abi.md). Its logical declaration
+and body remain public Kotlin KLIB API, while its physical CLR method is assembly-visible and not a
+C# or cross-assembly fallback. JVM uses package visibility for the same contract; JS, Wasm, and
+Native rely on KLIB linking/inlining rather than publishing an independently callable host-library
+method. A separate .NET consumer must inline the body, and the existing post-inlining validation
+rejects a call whose external body was unavailable.
+
+Non-linking deserialization treats compiler-owned IR operators as part of `IrBuiltIns`, not as
+library dependencies. It first matches their exact public signature and may use a unique
+compiler-owned `CallableId` only when that operator has no overload ambiguity; genuinely missing
+library declarations remain unbound and fail the selected-graph closure check. An inlined body's
+external `GET_OBJECT kotlin.Unit` likewise loads the already selected runtime `Unit.INSTANCE`;
+other object expressions must pass through the ordinary object lowering and remain rejected if
+they survive it. These are shared-IR reconstruction rules, not .NET source or ABI declarations.
+
 ## CLR constraints and non-constraints
 
 The CLR supplies ordinary generic methods, closures, arrays, exceptions, and public metadata
