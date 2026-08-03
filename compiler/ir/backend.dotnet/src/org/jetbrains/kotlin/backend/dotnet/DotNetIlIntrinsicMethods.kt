@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.types.classifierOrNull
 import org.jetbrains.kotlin.ir.types.isNullableNothing
+import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFileClass
 import org.jetbrains.kotlin.ir.util.isFakeOverride
@@ -32,7 +33,7 @@ import org.jetbrains.kotlin.name.FqName
  * FqNames. Mirrors the JVM backend's `IrIntrinsicMethods`: arithmetic, comparisons and number
  * conversions are registered programmatically by looping over the supported primitive types
  * (the JVM loops over all of `PrimitiveType.entries`; here the loop is restricted to the
- * landed scalar set plus Char special cases while Float support is deferred).
+ * landed signed Common scalar set, with nonnumeric cases registered separately).
  */
 internal class DotNetIlIntrinsicMethods(
     irBuiltIns: IrBuiltIns,
@@ -656,6 +657,12 @@ internal class DotNetIlIntrinsicMethods(
         }
         if (registered != null) return registered
 
+        // Comparable is physically backed by the BCL interfaces, but CLR String and floating
+        // comparison do not uniformly implement Kotlin ordering. Calls through the logical
+        // interface (including a type-parameter fake override) therefore share one semantic
+        // object boundary. Exact user implementations still call their own virtual member.
+        (function as? IrSimpleFunction)?.dotNetComparableIntrinsicOrNull()?.let { return it }
+
         // The logical CharSequence members are also declared/overridden on String, but sealed
         // System.String cannot implement the runtime capability interface. Match those two
         // builtin owners structurally and send both through the one classified operation
@@ -681,6 +688,28 @@ internal class DotNetIlIntrinsicMethods(
         val name: String,
         val valueParameterTypeNames: List<FqName?>,
     )
+}
+
+private fun IrSimpleFunction.dotNetComparableIntrinsicOrNull(): DotNetIlIntrinsicMethod? {
+    if (name.asString() != "compareTo") return null
+    val owner = parent as? IrClass ?: return null
+    val ownerFqName = owner.fqNameWhenAvailable?.asString()
+    val isBuiltinCarrier = ownerFqName in setOf(
+        "kotlin.Boolean",
+        "kotlin.Byte",
+        "kotlin.Short",
+        "kotlin.Int",
+        "kotlin.Long",
+        "kotlin.Float",
+        "kotlin.Double",
+        "kotlin.Char",
+        "kotlin.String",
+    )
+    val isComparableSlot = owner.isDotNetComparableClass() ||
+            isFakeOverride && allOverridden().any { overridden ->
+                (overridden.parent as? IrClass)?.isDotNetComparableClass() == true
+            }
+    return DotNetIlComparableCompareToIntrinsic.takeIf { isBuiltinCarrier || isComparableSlot }
 }
 
 private fun IrSimpleFunction.dotNetCharSequenceIntrinsicOrNull(): DotNetIlIntrinsicMethod? {
@@ -2465,6 +2494,34 @@ private class DotNetIlNumericCompareToIntrinsic(
                         computationType.nameInSignature
             )
         }
+        return true
+    }
+}
+
+/**
+ * Logical `Comparable<T>.compareTo` at the erased boundary. Both operands are boxed exactly once
+ * and the runtime distinguishes Kotlin's built-in carriers before falling through to the same
+ * object's canonical `System.IComparable` slot. This is semantic dispatch, not an adapter: the
+ * helper must preserve String's ordinal order and Kotlin's Float/Double NaN and signed-zero order.
+ */
+private object DotNetIlComparableCompareToIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Int32 || call.arguments.size != 2) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing receiver of 'Comparable.compareTo'")
+        val argument = call.arguments[1]
+            ?: dotNetUnsupported("missing argument of 'Comparable.compareTo'")
+        codegen.emitExpression(receiver, DotNetIlValueType.Object)
+        codegen.emitExpression(argument, DotNetIlValueType.Object)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.comparableCompareToCallInstruction,
+            pops = 2,
+            pushes = 1,
+        )
         return true
     }
 }

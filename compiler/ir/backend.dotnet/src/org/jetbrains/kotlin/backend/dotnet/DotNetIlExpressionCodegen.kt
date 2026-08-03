@@ -224,7 +224,15 @@ internal class DotNetIlExpressionCodegen(
         // materializes that checked CLR view change.
         if (expression != null) {
             val naturalType = mappedNaturalType(expression)
-            if (naturalType != null && naturalType != expectedType) {
+            // FIR may infer a bounded out-projected array as the transient common type of exact
+            // value/reference vectors. CLR value vectors cannot materialize that covariance.
+            // When the consumer already asks for the selected Array<*>/System.Array view, emit
+            // the child expression directly at that erased boundary so every branch retains its
+            // exact vector. This does not admit the bounded projection in a signature or local.
+            val eraseTransientArrayProjection =
+                expectedType is DotNetIlValueType.ErasedGenericArray &&
+                        expression.type.isDotNetOutProjectedGenericArray()
+            if (naturalType != null && naturalType != expectedType && !eraseTransientArrayProjection) {
                 val kFunctionArity = expression.type.dotNetKFunctionExecutionArityOrNull()
                 if (kFunctionArity != null && DotNetRuntimeTypes.isFixedFunctionType(expectedType, kFunctionArity)) {
                     // KFunctionN is a logical subtype of FunctionN, while the erased CLR views
@@ -2925,6 +2933,8 @@ internal fun storeLocalInstruction(index: Int): String =
  * - `T? -> Any?`: `box Nullable<T>` — the CLR collapses the result to boxed-`T`-or-null
  *   (boxprobe_s3, all five instantiations incl. the empty->null case nullprobe_s8);
  * - `T -> Any?` for plain primitives: `box <boxed T>` (nullprobe_s8).
+ * - a built-in scalar/String carrier to Common Comparable's canonical `System.IComparable`
+ *   view: exact primitive boxing or a checked same-object String interface view;
  * - constrained `!n`/`!!n -> bound/object`: `box !n`/`!!n`; this is a no-allocation identity
  *   conversion for reference instantiations and remains correct for an external value-type
  *   implementation of an interface bound (genconstraintprobe_s2).
@@ -2944,9 +2954,18 @@ internal fun dotNetWideningCoercionOrNull(
     to == DotNetIlValueType.Object && from is DotNetIlValueType.NullableValue -> from.boxInstruction
     from is DotNetIlValueType.TypeParameter && (to == DotNetIlValueType.Object || from.isConstrainedTo(to)) ->
         "box ${from.nameInSignature}"
+    to.isDotNetCanonicalComparable(coreLibraryReference) && from == DotNetIlValueType.String ->
+        "castclass ${to.nameInSignature}"
+    to.isDotNetCanonicalComparable(coreLibraryReference) ->
+        from.dotNetBoxedCorelibRefOrNull(coreLibraryReference)?.let { "box $it" }
     to == DotNetIlValueType.Object -> from.dotNetBoxedCorelibRefOrNull(coreLibraryReference)?.let { "box $it" }
     else -> null
 }
+
+private fun DotNetIlValueType.isDotNetCanonicalComparable(coreLibraryReference: String): Boolean =
+    this is DotNetIlValueType.UserClass &&
+            classInfo.ilClassName == "System.IComparable" &&
+            classInfo.assemblyName == coreLibraryReference.removePrefix("[").removeSuffix("]")
 
 /** The CLR conversion from an erased runtime object slot to one supported logical value type. */
 internal fun DotNetIlValueType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference: String): String? {

@@ -188,9 +188,9 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         val localGenericInterfaces = collected.interfaces.filterTo(hashSetOf()) {
             it.isDotNetGenericInterfaceDeclaration
         }
-        fun isKotlinOwnedGenericInterface(irClass: IrClass): Boolean =
+        fun isMappedKotlinGenericInterface(irClass: IrClass): Boolean =
             irClass in localGenericInterfaces ||
-                    DotNetRuntimeTypes.genericInterfaceInfoFor(irClass) != null ||
+                    DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass) ||
                     externalDeclarations.hasGenericInterface(irClass)
         val externalBindings = linkedMapOf<IrSimpleFunction, ExternalDefaultBinding>()
         fun externalBindingFor(member: IrSimpleFunction): ExternalDefaultBinding? {
@@ -260,7 +260,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                     val genericDefault = createGenericInterfaceDefaultPhysicalMethods(
                         irInterface,
                         member,
-                        ::isKotlinOwnedGenericInterface,
+                        ::isMappedKotlinGenericInterface,
                     )
                     genericDefaults[member] = genericDefault
                     context.genericInterfaceDefaults += genericDefault
@@ -359,9 +359,9 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                     if (binding.member.inheritedInterfaceSlots().isNotEmpty()) {
                         val genericDefault = genericDefaults[binding.member]
                         if (genericDefault == null) {
-                            createInterfaceSlotBridge(binding, ::isKotlinOwnedGenericInterface)
+                            createInterfaceSlotBridge(binding, ::isMappedKotlinGenericInterface)
                         } else {
-                            createGenericInterfaceSlotBridges(binding, genericDefault, ::isKotlinOwnedGenericInterface)
+                            createGenericInterfaceSlotBridges(binding, genericDefault, ::isMappedKotlinGenericInterface)
                         }
                     }
                 }
@@ -461,10 +461,10 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
     private fun createGenericInterfaceDefaultPhysicalMethods(
         owner: IrClass,
         source: IrSimpleFunction,
-        isKotlinOwnedGenericInterface: (IrClass) -> Boolean,
+        isMappedKotlinGenericInterface: (IrClass) -> Boolean,
     ): org.jetbrains.kotlin.backend.dotnet.DotNetLoweredGenericInterfaceDefault {
-        val canonicalView = source.dotNetGenericInterfaceMemberView(owner, isKotlinOwnedGenericInterface)
-        val allTypedViews = source.dotNetGenericInterfaceMemberViews(owner, isKotlinOwnedGenericInterface)
+        val canonicalView = source.dotNetGenericInterfaceMemberView(owner, isMappedKotlinGenericInterface)
+        val allTypedViews = source.dotNetGenericInterfaceMemberViews(owner, isMappedKotlinGenericInterface)
         val interfaceIdentity = owner.fqNameWhenAvailable?.asString() ?: owner.name.asString()
         val slotIdentity = source.dotNetGenericInterfaceCanonicalSlotId()
 
@@ -561,7 +561,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             val directParameter = simpleType.classifier as? IrTypeParameterSymbol
             if (directParameter?.owner?.parent == owner) return context.irBuiltIns.anyNType
             val carrier = (simpleType.classifier as? IrClassSymbol)?.owner
-            return if (carrier?.let(isKotlinOwnedGenericInterface) == true) {
+            return if (carrier?.let(isMappedKotlinGenericInterface) == true) {
                 canonicalSubstitutor.substitute(type)
             } else {
                 context.irBuiltIns.anyNType
@@ -934,9 +934,9 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             "Internal .NET backend error: '${owner.name}' is not a subtype of " +
                     "generic interface '${inheritedOwner.name}'"
         )
-        fun isKotlinOwnedGenericInterface(candidate: IrClass): Boolean =
+        fun isMappedKotlinGenericInterface(candidate: IrClass): Boolean =
             candidate == owner || candidate == inheritedOwner ||
-                    DotNetRuntimeTypes.genericInterfaceInfoFor(candidate) != null ||
+                    DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(candidate) ||
                     externalDeclarations.hasGenericInterface(candidate)
 
         fun IrType.referencesInheritedOwnerParameter(): Boolean {
@@ -961,7 +961,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             val directParameter = simpleType.classifier as? IrTypeParameterSymbol
             if (directParameter?.owner?.parent == inheritedOwner) return context.irBuiltIns.anyNType
             val carrier = (simpleType.classifier as? IrClassSymbol)?.owner
-            return if (carrier?.let(::isKotlinOwnedGenericInterface) == true) {
+            return if (carrier?.let(::isMappedKotlinGenericInterface) == true) {
                 canonicalSubstitutor.substitute(type)
             } else {
                 context.irBuiltIns.anyNType
@@ -1066,7 +1066,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
 
         val canonicalView = member.dotNetGenericInterfaceMemberView(
             inheritedOwner,
-            ::isKotlinOwnedGenericInterface,
+            ::isMappedKotlinGenericInterface,
         )
         val result = mutableListOf(
             createAdapter(
@@ -1080,7 +1080,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         )
         for (view in member.dotNetGenericInterfaceMemberViews(
             inheritedOwner,
-            ::isKotlinOwnedGenericInterface,
+            ::isMappedKotlinGenericInterface,
         )) {
             val implementationView = if (canonicalView == DotNetGenericInterfaceMemberView.EXACT) {
                 DotNetGenericInterfaceMemberView.EXACT
@@ -1285,7 +1285,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
     private fun createGenericInterfaceSlotBridges(
         binding: LocalDefaultBinding,
         genericDefault: DotNetLoweredGenericInterfaceDefault,
-        isKotlinOwnedGenericInterface: (IrClass) -> Boolean,
+        isMappedKotlinGenericInterface: (IrClass) -> Boolean,
     ) {
         val owner = binding.owner
         val source = binding.member
@@ -1297,7 +1297,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             val inheritedOwner = inherited.parent as? IrClass
                 ?: error("Internal .NET backend error: inherited generic interface slot has no owner")
             if (!inheritedOwner.isDotNetGenericInterfaceDeclaration ||
-                !isKotlinOwnedGenericInterface(inheritedOwner)
+                !isMappedKotlinGenericInterface(inheritedOwner)
             ) {
                 continue
             }
@@ -1312,7 +1312,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                 ?: inheritedOwner.name.asString()
             for (overriddenView in inherited.dotNetGenericInterfaceMemberViews(
                 inheritedOwner,
-                isKotlinOwnedGenericInterface,
+                isMappedKotlinGenericInterface,
             )) {
                 // An exact-only Kotlin member is not part of the partial declared capability.
                 // Its inherited declared-slot mapping therefore lives on the exact self view.
@@ -1425,14 +1425,14 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
      */
     private fun createInterfaceSlotBridge(
         binding: LocalDefaultBinding,
-        isKotlinOwnedGenericInterface: (IrClass) -> Boolean,
+        isMappedKotlinGenericInterface: (IrClass) -> Boolean,
     ) {
         val member = binding.member
         // Split generic slots have canonical/declared/exact signatures. Their adapters are owned
         // by DotNetGenericInterfaceBridgeLowering; the ordinary bridge has the source member's
         // signature and would create an invalid MethodImpl for an erased canonical slot.
         val inheritedSlots = member.inheritedInterfaceSlots().filterNot { inherited ->
-            (inherited.owner.parent as? IrClass)?.let(isKotlinOwnedGenericInterface) == true
+            (inherited.owner.parent as? IrClass)?.let(isMappedKotlinGenericInterface) == true
         }
         if (inheritedSlots.isEmpty()) return
         check(binding.owner.typeParameters.isEmpty() && member.typeParameters.isEmpty()) {

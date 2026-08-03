@@ -2344,6 +2344,51 @@ $kClassSupportTypesIl
             |      ret
             |    }
             |
+            |    .method public hidebysig static int32 'ComparableCompareTo'(object 'receiver', object 'other') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Single
+            |      brfalse.s IL_comparableDouble
+            |      ldarg.0
+            |      unbox.any ${coreLibraryReference}System.Single
+            |      ldarg.1
+            |      unbox.any ${coreLibraryReference}System.Single
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'CompareFloat'(float32, float32)
+            |      ret
+            |IL_comparableDouble:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Double
+            |      brfalse.s IL_comparableString
+            |      ldarg.0
+            |      unbox.any ${coreLibraryReference}System.Double
+            |      ldarg.1
+            |      unbox.any ${coreLibraryReference}System.Double
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'CompareDouble'(float64, float64)
+            |      ret
+            |IL_comparableString:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.String
+            |      brfalse.s IL_comparableInterface
+            |      ldarg.1
+            |      brtrue.s IL_comparableStringArgument
+            |      newobj instance void ${coreLibraryReference}System.NullReferenceException::.ctor()
+            |      throw
+            |IL_comparableStringArgument:
+            |      ldarg.0
+            |      castclass ${coreLibraryReference}System.String
+            |      ldarg.1
+            |      castclass ${coreLibraryReference}System.String
+            |      call int32 ${coreLibraryReference}System.String::CompareOrdinal(string, string)
+            |      ret
+            |IL_comparableInterface:
+            |      ldarg.0
+            |      castclass ${coreLibraryReference}System.IComparable
+            |      ldarg.1
+            |      callvirt instance int32 ${coreLibraryReference}System.IComparable::CompareTo(object)
+            |      ret
+            |    }
+            |
             |    .method public hidebysig static bool 'AreEqual'(object, object) cil managed
             |    {
             |      .maxstack 2
@@ -3642,6 +3687,12 @@ $kClassSupportTypesIl
         "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"CompareDouble".toIlIdentifier()}(float64, float64)"
+
+    /** Common Comparable dispatch with Kotlin built-in ordering and canonical CLR fallback. */
+    val comparableCompareToCallInstruction: String =
+        "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"ComparableCompareTo".toIlIdentifier()}(object, object)"
 
     /** The cross-assembly call emitted by compiled Kotlin code; one float64 in, one string out. */
     val doubleToStringCallInstruction: String =
