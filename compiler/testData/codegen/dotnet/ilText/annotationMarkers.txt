@@ -1,0 +1,266 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'annotationMarkers' {}
+.module 'main-annotationMarkers.il'
+
+.class public auto ansi sealed beforefieldinit 'test.RuntimeMarker'
+       extends [mscorlib]System.Attribute
+{
+  .custom instance void [mscorlib]System.AttributeUsageAttribute::.ctor(valuetype [mscorlib]System.AttributeTargets) = (01 00 fc 0d 00 00 02 00 54 02 0d 41 6c 6c 6f 77 4d 75 6c 74 69 70 6c 65 01 54 02 09 49 6e 68 65 72 69 74 65 64 00)
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Attribute::.ctor()
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'test.RuntimeMarker' 'tmp0_other_with_cast'
+    )
+    ldarg.1
+    isinst class 'test.RuntimeMarker'
+    ldnull
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    ret
+IL_whenNext_1:
+    ldarg.1
+    castclass class 'test.RuntimeMarker'
+    dup
+    brtrue IL_notNull_2
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    stloc.0
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 0
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 1
+    ldstr "@test.RuntimeMarker()"
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.BinaryMarker'
+       extends [mscorlib]System.Attribute
+{
+  .custom instance void [mscorlib]System.AttributeUsageAttribute::.ctor(valuetype [mscorlib]System.AttributeTargets) = (01 00 fc 0d 00 00 02 00 54 02 0d 41 6c 6c 6f 77 4d 75 6c 74 69 70 6c 65 00 54 02 09 49 6e 68 65 72 69 74 65 64 00)
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Attribute::.ctor()
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'test.BinaryMarker' 'tmp0_other_with_cast'
+    )
+    ldarg.1
+    isinst class 'test.BinaryMarker'
+    ldnull
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    ret
+IL_whenNext_1:
+    ldarg.1
+    castclass class 'test.BinaryMarker'
+    dup
+    brtrue IL_notNull_2
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    stloc.0
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 0
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 1
+    ldstr "@test.BinaryMarker()"
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.SourceMarker'
+       extends [mscorlib]System.Attribute
+{
+  .custom instance void [mscorlib]System.AttributeUsageAttribute::.ctor(valuetype [mscorlib]System.AttributeTargets) = (01 00 fc 0d 00 00 02 00 54 02 0d 41 6c 6c 6f 77 4d 75 6c 74 69 70 6c 65 00 54 02 09 49 6e 68 65 72 69 74 65 64 00)
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Attribute::.ctor()
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'test.SourceMarker' 'tmp0_other_with_cast'
+    )
+    ldarg.1
+    isinst class 'test.SourceMarker'
+    ldnull
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    ret
+IL_whenNext_1:
+    ldarg.1
+    castclass class 'test.SourceMarker'
+    dup
+    brtrue IL_notNull_2
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    stloc.0
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 0
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 1
+    ldstr "@test.SourceMarker()"
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.Annotated'
+       extends [mscorlib]System.Object
+{
+  .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
+  .field private int32 'state'
+  .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+  {
+    .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
+    .param [1]
+    .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'test.Annotated'::'state'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_state'() cil managed
+  {
+    .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'test.Annotated'::'state'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_state'(int32 '<set-?>') cil managed
+  {
+    .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'test.Annotated'::'state'
+    ret
+  }
+  .method public hidebysig instance void 'update'(int32 'value') cil managed
+  {
+    .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
+    .param [1]
+    .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'test.Annotated'::'set_state'(int32)
+    ret
+  }
+  .property instance int32 'state'()
+  {
+    .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
+    .get instance int32 'test.Annotated'::'get_state'()
+    .set instance void 'test.Annotated'::'set_state'(int32)
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'test.annotationMarkersKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static bool 'markerValueSemantics'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [mscorlib]System.Attribute 'first'
+    )
+    newobj instance void 'test.RuntimeMarker'::.ctor()
+    stloc.0
+    ldloc.0
+    isinst class 'test.RuntimeMarker'
+    ldnull
+    cgt.un
+    brfalse IL_whenNext_7
+    ldloc.0
+    newobj instance void 'test.RuntimeMarker'::.ctor()
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    br IL_whenEnd_6
+IL_whenNext_7:
+    ldc.i4.0
+IL_whenEnd_6:
+    brfalse IL_whenNext_5
+    ldloc.0
+    newobj instance void 'test.BinaryMarker'::.ctor()
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    ldc.i4.0
+    ceq
+    br IL_whenEnd_4
+IL_whenNext_5:
+    ldc.i4.0
+IL_whenEnd_4:
+    brfalse IL_whenNext_3
+    ldloc.0
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 0
+    ceq
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldc.i4.0
+IL_whenEnd_2:
+    brfalse IL_whenNext_1
+    ldloc.0
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    ldstr "@test.RuntimeMarker()"
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.i4.0
+IL_whenEnd_0:
+    ret
+  }
+}

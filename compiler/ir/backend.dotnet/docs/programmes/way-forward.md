@@ -133,14 +133,17 @@ add a one-enum lowering, a target `EnumEntries` substitute, or a KLIB declaratio
 physical product. Until that atomic cluster is ready, reversible compiler breadth such as the
 selected-graph inline slice takes precedence.
 
-Before entering that cycle, audit and implement a bounded general annotation-class foundation.
-The completed nominal `KClass` floor supplies class-literal identity, but it does not decide
-annotation constructors, legal values, targets, retention, KLIB application identity, CLR
-`CustomAttribute` emission, or reflection discovery. Follow mature-target compiler ownership and
-lowering boundaries, and select the broadest coherent subset that can preserve both Kotlin and CLR
-facts across separate compilation. A parameterless marker may be an admitted first shape only if
-it is a general language rule with explicit diagnostics for unsupported constructors, not a
-special case for the contracts package. Kotlin reflection discovery remains separate.
+The audit must also include Common `Enum<E>`'s `Comparable<E>` supertype. A .NET representation
+must cover ordinary Kotlin implementations plus classified primitive and `String` carriers; it
+must not equate Kotlin comparison semantics wholesale with `System.IComparable<T>` or publish an
+enum-only substitute.
+
+The bounded general annotation-class foundation is now selected: every supported parameterless
+marker is one concrete sealed `System.Attribute` subtype, retains authoritative Kotlin identity
+in KLIB, and projects only runtime-retained applications onto exact CLR metadata parents. The
+implementation follows the shared annotation member generator and covers separate compilation;
+valued constructors and Kotlin reflection discovery remain separate. See
+[`../decisions/marker-annotation-classes.md`](../decisions/marker-annotation-classes.md).
 
 Then audit the contracts side of the bootstrap cycle. Existing nullability and CodeAnalysis
 plumbing already distinguishes authoritative Kotlin facts from exact CLR projections. The audit
@@ -217,7 +220,8 @@ The current verified count and command belong only in [`../../STATUS.md`](../../
 Parking means “fail clearly and do not constrain a future ABI,” not “approximate now.”
 
 - enums, pending the atomic contracts/builder/abstract-collections/`EnumEntries` source cluster;
-- general annotation classes, use-site targets, retention, and runtime reflection;
+- valued annotation constructors and arguments, wider use-site targets, and runtime annotation
+  reflection; parameterless markers, retention, and their exact CLR-parent projection are selected;
 - `KType`, `typeOf`, and member/annotation reflection; the nominal `KClass`/class-literal floor is
   complete;
 - value/inline classes;
@@ -230,8 +234,8 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - broad Gradle/KMP distribution integration beyond the current target model.
 
 An adjacent feature must not assume a parked representation. In particular, value classes
-constrain generic interfaces; coroutines constrain callables and cancellation; annotation classes
-constrain reflection and custom-attribute emission; enums consume collection identity.
+constrain generic interfaces; coroutines constrain callables and cancellation; valued annotation
+arguments constrain reflection and custom-attribute emission; enums consume collection identity.
 
 ## Release gates
 

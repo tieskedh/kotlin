@@ -110,7 +110,7 @@ internal data class DotNetLoweredStaticInitializationFailure(
 internal class DotNetBackendContext(
     override val irBuiltIns: IrBuiltIns,
     override val configuration: CompilerConfiguration,
-    symbolTable: SymbolTable,
+    val symbolTable: SymbolTable,
     irModuleFragment: IrModuleFragment,
 ) : CommonBackendContext {
     override val irFactory: IrFactory = symbolTable.irFactory
