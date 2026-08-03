@@ -131,6 +131,8 @@ fun main(args: Array<String>) {
         Elements.f_single_predicate selectedFor setOf(Family.Iterables),
         Elements.f_singleOrNull selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_singleOrNull_predicate selectedFor setOf(Family.Iterables),
+        (Numeric.f_average selectedFor setOf(Family.Iterables))
+            .limitedTo(PrimitiveType.numericPrimitives),
         (Numeric.f_sum selectedFor setOf(Family.Iterables))
             .limitedTo(PrimitiveType.numericPrimitives),
     )

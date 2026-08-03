@@ -436,8 +436,8 @@ The admitted numeric closure is the complete signed Common `Numeric.f_sum` famil
 The bootstrap generator selects these six `PrimitiveType.numericPrimitives` variants from the
 same template object that generates `_Collections.kt`. Unsigned variants remain excluded because
 unsigned value classes are not a supported scalar family; `Sequence`, object-array,
-primitive-array, `sumOf`, and `average` variants are separate dependency closures. No body is
-copied or rewritten for .NET.
+primitive-array, and `sumOf` variants remain separate dependency closures. The signed Iterable
+average closure is selected independently below. No body is copied or rewritten for .NET.
 
 Each Common body initializes the result type's zero, requests one iterator, and performs
 `sum += element` in encounter order. Consequently empty identity, `Byte`/`Short` promotion to
@@ -471,6 +471,28 @@ Native compile the same generated bodies but their symbol/overload representatio
 the CLR/JVM physical method-name projection. A hash suffix, overload-set-dependent renaming,
 duplicated C# wrapper, or a target-authored `sum` implementation would be less stable or less
 interoperable than consuming the authoritative explicit platform names.
+
+### Signed numeric average
+
+The admitted average closure is the complete signed Common `Numeric.f_average` family for
+`Iterable`: Byte, Short, Int, Long, Float, and Double receivers all return `Double`. JVM, JS,
+Wasm, and Native consume these same generated bodies. Unsigned values remain excluded with their
+parked value classes; Sequence, object-array, and primitive-array variants remain distinct source
+and representation closures.
+
+Every body accumulates into `Double` in encounter order, increments an `Int` count through Common
+`checkCountOverflow`, and returns `Double.NaN` when the receiver is empty or `sum / count`
+otherwise. Existing scalar conversions/arithmetic, the Iterable carrier, the exact NaN constant,
+and the ordinary count-overflow compiler ABI close the implementation. LINQ `Average`, checked or
+wider counters, pairwise/vector summation, host enumeration, and target-authored empty handling are
+rejected because they change overflow, rounding, traversal, exception timing, or source ownership
+without a CLR requirement.
+
+The six physical methods use Common's platform names `averageOfByte`, `averageOfShort`,
+`averageOfInt`, `averageOfLong`, `averageOfFloat`, and `averageOfDouble`, while embedded KLIB keeps
+the logical overload name `average`. Completion must pin empty NaN, all six conversions, encounter-
+order floating behavior, full traversal and failure identity, physical signatures, portable
+library consumption, and direct fallback execution on Framework CLR and CoreCLR.
 
 ## Next selection rule
 
