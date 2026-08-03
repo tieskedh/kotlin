@@ -335,6 +335,31 @@ identity and stopping point, non-local return, hostile member resolution through
 packaged and installed KLIB inlining, physical fallback signatures, and direct fallback execution
 on Framework CLR and CoreCLR.
 
+### First-match predicates
+
+The selected first-match closure is exactly `Iterable<T>.first(predicate)` and
+`firstOrNull(predicate)`. JVM, JS, Wasm, and Native consume these same generated Common loops. Each
+tests elements in iterator order and returns immediately on the first match. The throwing form owns
+the exact Common `NoSuchElementException("Collection contains no element matching the
+predicate.")`; the nullable form returns null after complete exhaustion.
+
+The existing split Iterable/Iterator carrier, Function1 invocation, exact physical
+`Kotlin.NoSuchElementException`, open type-parameter return, boxed-or-null `T?` fallback,
+nullable-bottom emission, capture, non-local return, and packaged inliner close every dependency.
+No CLR representation constraint distinguishes this pair from the mature targets. LINQ `First`,
+`FirstOrDefault`, BCL enumeration, a Collection/List shortcut, or a target-authored body is
+rejected because each can change exception identity/message, null ambiguity, receiver admission,
+predicate timing, or non-local control flow.
+
+`find` is not silently folded into this slice even though its Common body delegates to
+`firstOrNull(predicate)`: it is an `@InlineOnly` declaration, so physical declaration suppression
+and the published .NET ABI must be audited together before admission. Adversarial completion for
+the selected pair covers empty and no-match behavior, exact exception text, first-match
+short-circuiting before hostile trailing elements, nullable matching versus no match, widened
+elements, predicate exception identity and stopping point, capture, non-local return, separate and
+installed KLIB inlining, physical fallback signatures, and direct fallback execution on Framework
+CLR and CoreCLR.
+
 ### Signed numeric sum
 
 The admitted numeric closure is the complete signed Common `Numeric.f_sum` family for `Iterable`:
