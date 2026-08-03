@@ -487,6 +487,12 @@ the CIL evaluation stack. Preserve Kotlin evaluation order: spill the return
 value, drain only those older operands, reload the result, and then `ret`, or
 drain before the existing protected-region `leave`. Never repair this by
 rewriting a Common body or evaluating the returning operand early.
+An `@InlineOnly` function remains logically public with its body authoritative
+in KLIB, but its CLR MethodDef is `assembly`-visible. Apply the same rule to an
+accessor whose property carries the annotation. A separate Kotlin consumer
+must inline it; never widen it into C# API, mark it as public compiler ABI, omit
+the physical body, or allow an external fallback call. See
+[the inline-only physical ABI ADR](docs/decisions/inline-only-physical-abi.md).
 Do not enable either reified-inline support gate until the complete operation
 closure in `docs/programmes/inline-functions.md` is truthful. In particular,
 never compile a Kotlin-owned generic-class type test/cast as closed CLR

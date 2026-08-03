@@ -519,8 +519,8 @@ silently switch to indexed access: Common specifies iteration for both overloads
 The audit deliberately excludes the rest of the nearby generator frontier:
 
 - `elementAtOrElse`, `getOrElse`, and therefore general `elementAt` reach the public contracts DSL;
-- `find`, `findLast`, `firstNotNullOf`, `componentN`, and `sumOf` require the still-unselected
-  `@InlineOnly` declaration-suppression and ABI contract;
+- `sumOf` is `@InlineOnly`, but additionally requires an explicit physical overload projection for
+  selectors whose return types erase behind the same CLR `Function1` signature;
 - mapping, filtering, snapshot, running-fold, and running-reduce families construct collection
   implementations that do not yet exist;
 - min/max families require truthful `Comparable`/`Comparator` representation plus their own
@@ -536,6 +536,53 @@ widened elements, capture/non-local return, callback failure identity and timing
 guard success, exact first-null stopping and message, hostile iterator behavior, both physical
 guard overloads, packaged inlining versus fallback calls, and direct execution on Framework CLR
 and CoreCLR.
+
+### Inline-only delegator and accessor batch
+
+The accepted [`@InlineOnly` physical ABI decision](../decisions/inline-only-physical-abi.md)
+unlocks one dependency-homogeneous Common batch. The bootstrap generator selects exactly:
+
+- `List.component1` through `component5`;
+- `List.elementAt` and `List.elementAtOrNull`;
+- `Iterable.find`;
+- `findLast` for `Iterable` and `List`;
+- `firstNotNullOf` and `firstNotNullOfOrNull` for `Iterable`;
+- `Collection.count`; and
+- `Iterable.asIterable`.
+
+These are 14 logical declarations from the authoritative `Elements`, `Aggregates`, and
+`SequenceOps` Common generator groups. JVM, JS, Wasm, and Native consume the same generated
+declarations. The .NET generator selects family variants; it does not copy bodies, remove
+annotations, or invent target overloads.
+
+Every dependency is already represented. Components and List `elementAt` call `get`; the List
+`elementAtOrNull` specialization calls the existing `getOrNull`; `find` and both `findLast` views
+delegate to the already selected predicate terminals; the first-non-null pair reuses ordinary
+inlining, `R : Any`, nullable flow, Elvis, and the Common exception; Collection `count` reads
+`size`; and `asIterable` returns the same Iterable object. General Iterable `elementAt` remains
+excluded because its body reaches contract-bearing `elementAtOrElse`; selecting only the List
+family is the exact Common specialization, not a target source fork.
+
+All 14 physical methods are assembly-visible. Their logical declarations remain public in KLIB,
+and same-module, separate, and installed Kotlin calls must inline them. A public physical fallback,
+EditorBrowsable-only hiding, body eviction, or C# wrapper under the same declaration identity would
+contradict Common and JVM without a CLR requirement. No overload in this batch collides after CLR
+receiver erasure; `sumOf` remains separate because it does.
+
+Completion must prove component indices and failures; List direct indexing without iteration;
+Iterable first-match and full last-match traversal; List reverse `listIterator(size)` traversal;
+nullable success, no-result, exact first-non-null failure message, callback failure identity and
+non-local return; Collection size access without iteration; `asIterable` identity; physical
+assembly visibility and C# inaccessibility; absence of external calls in every KLIB inliner mode;
+and execution through repository, packaged, installed, netstandard, Framework CLR, and CoreCLR
+products.
+
+The bootstrap box harness may exercise the ordinary public Iterable and `getOrNull` paths, but is
+not evidence for the List `@InlineOnly` overloads: it analyzes stdlib and test sources as one
+frontend module and only later emits two physical assemblies. The portable self-describing-stdlib
+test is the authoritative adversarial execution route for List `elementAtOrNull`, including direct
+indexing, bounds, and propagated `get` exception identity, because it compiles the consumer from
+the producer's embedded KLIB exactly as an external Kotlin user does.
 
 ## Next selection rule
 

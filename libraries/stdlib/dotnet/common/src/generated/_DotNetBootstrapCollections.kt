@@ -118,6 +118,14 @@ public inline fun <T> Iterable<T>.any(predicate: (T) -> Boolean): Boolean {
 }
 
 /**
+ * Returns this collection as an [Iterable].
+ */
+@kotlin.internal.InlineOnly
+public inline fun <T> Iterable<T>.asIterable(): Iterable<T> {
+    return this
+}
+
+/**
  * Returns an average value of elements in the collection.
  */
 @kotlin.jvm.JvmName("averageOfByte")
@@ -202,6 +210,56 @@ public fun Iterable<Double>.average(): Double {
 }
 
 /**
+ * Returns 1st *element* from the list.
+ *
+ * Throws an [IndexOutOfBoundsException] if the size of this list is less than 1.
+ */
+@kotlin.internal.InlineOnly
+public inline operator fun <T> List<T>.component1(): T {
+    return get(0)
+}
+
+/**
+ * Returns 2nd *element* from the list.
+ *
+ * Throws an [IndexOutOfBoundsException] if the size of this list is less than 2.
+ */
+@kotlin.internal.InlineOnly
+public inline operator fun <T> List<T>.component2(): T {
+    return get(1)
+}
+
+/**
+ * Returns 3rd *element* from the list.
+ *
+ * Throws an [IndexOutOfBoundsException] if the size of this list is less than 3.
+ */
+@kotlin.internal.InlineOnly
+public inline operator fun <T> List<T>.component3(): T {
+    return get(2)
+}
+
+/**
+ * Returns 4th *element* from the list.
+ *
+ * Throws an [IndexOutOfBoundsException] if the size of this list is less than 4.
+ */
+@kotlin.internal.InlineOnly
+public inline operator fun <T> List<T>.component4(): T {
+    return get(3)
+}
+
+/**
+ * Returns 5th *element* from the list.
+ *
+ * Throws an [IndexOutOfBoundsException] if the size of this list is less than 5.
+ */
+@kotlin.internal.InlineOnly
+public inline operator fun <T> List<T>.component5(): T {
+    return get(4)
+}
+
+/**
  * Returns `true` if [element] is found in the collection.
  */
 public operator fun <@kotlin.internal.OnlyInputTypes T> Iterable<T>.contains(element: T): Boolean {
@@ -221,6 +279,14 @@ public fun <T> Iterable<T>.count(): Int {
 }
 
 /**
+ * Returns the number of elements in this collection.
+ */
+@kotlin.internal.InlineOnly
+public inline fun <T> Collection<T>.count(): Int {
+    return size
+}
+
+/**
  * Returns the number of elements matching the given [predicate].
  */
 public inline fun <T> Iterable<T>.count(predicate: (T) -> Boolean): Int {
@@ -228,6 +294,16 @@ public inline fun <T> Iterable<T>.count(predicate: (T) -> Boolean): Int {
     var count = 0
     for (element in this) if (predicate(element)) checkCountOverflow(++count)
     return count
+}
+
+/**
+ * Returns an element at the given [index] or throws an [IndexOutOfBoundsException] if the [index] is out of bounds of this list.
+ *
+ * @sample samples.collections.Collections.Elements.elementAt
+ */
+@kotlin.internal.InlineOnly
+public inline fun <T> List<T>.elementAt(index: Int): T {
+    return get(index)
 }
 
 /**
@@ -248,6 +324,46 @@ public fun <T> Iterable<T>.elementAtOrNull(index: Int): T? {
             return element
     }
     return null
+}
+
+/**
+ * Returns an element at the given [index] or `null` if the [index] is out of bounds of this list.
+ *
+ * @sample samples.collections.Collections.Elements.elementAtOrNull
+ */
+@kotlin.internal.InlineOnly
+public inline fun <T> List<T>.elementAtOrNull(index: Int): T? {
+    return this.getOrNull(index)
+}
+
+/**
+ * Returns the first element matching the given [predicate], or `null` if no such element was found.
+ *
+ * @sample samples.collections.Collections.Elements.find
+ */
+@kotlin.internal.InlineOnly
+public inline fun <T> Iterable<T>.find(predicate: (T) -> Boolean): T? {
+    return firstOrNull(predicate)
+}
+
+/**
+ * Returns the last element matching the given [predicate], or `null` if no such element was found.
+ *
+ * @sample samples.collections.Collections.Elements.find
+ */
+@kotlin.internal.InlineOnly
+public inline fun <T> Iterable<T>.findLast(predicate: (T) -> Boolean): T? {
+    return lastOrNull(predicate)
+}
+
+/**
+ * Returns the last element matching the given [predicate], or `null` if no such element was found.
+ *
+ * @sample samples.collections.Collections.Elements.find
+ */
+@kotlin.internal.InlineOnly
+public inline fun <T> List<T>.findLast(predicate: (T) -> Boolean): T? {
+    return lastOrNull(predicate)
 }
 
 /**
@@ -285,6 +401,36 @@ public fun <T> List<T>.first(): T {
 public inline fun <T> Iterable<T>.first(predicate: (T) -> Boolean): T {
     for (element in this) if (predicate(element)) return element
     throw NoSuchElementException("Collection contains no element matching the predicate.")
+}
+
+/**
+ * Returns the first non-null value produced by [transform] function being applied to elements of this collection in iteration order,
+ * or throws [NoSuchElementException] if no non-null value was produced.
+ *
+ * @sample samples.collections.Collections.Transformations.firstNotNullOf
+ */
+@SinceKotlin("1.5")
+@kotlin.internal.InlineOnly
+public inline fun <T, R : Any> Iterable<T>.firstNotNullOf(transform: (T) -> R?): R {
+    return firstNotNullOfOrNull(transform) ?: throw NoSuchElementException("No element of the collection was transformed to a non-null value.")
+}
+
+/**
+ * Returns the first non-null value produced by [transform] function being applied to elements of this collection in iteration order,
+ * or `null` if no non-null value was produced.
+ *
+ * @sample samples.collections.Collections.Transformations.firstNotNullOf
+ */
+@SinceKotlin("1.5")
+@kotlin.internal.InlineOnly
+public inline fun <T, R : Any> Iterable<T>.firstNotNullOfOrNull(transform: (T) -> R?): R? {
+    for (element in this) {
+        val result = transform(element)
+        if (result != null) {
+            return result
+        }
+    }
+    return null
 }
 
 /**
