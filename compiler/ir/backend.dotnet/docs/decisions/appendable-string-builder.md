@@ -100,12 +100,13 @@ rewriting `buildString` in target source.
 
 Both Common files also declare contracts. Their exact dependency closure is
 the public `kotlin.contracts` source family, not a compiler-private stub. That
-family includes effect interfaces, binary-retained annotation classes, and
-the public `InvocationKind` enum. Kotlin/.NET must support and publish those
-declarations truthfully before publishing this builder surface. Resolution-
-only copies, omitted physical declarations, target-local contract shims, or a
-one-enum codegen exception would make the stdlib's own KLIB broader than its
-executable product and are forbidden.
+family includes effect interfaces, binary-retained parameterless annotation
+classes, and the public `InvocationKind` enum. The general marker-annotation
+foundation now covers those annotation declarations; Kotlin/.NET must still
+support and publish the enum and effect product truthfully before publishing
+this builder surface. Resolution-only copies, omitted physical declarations,
+target-local contract shims, or a one-enum codegen exception would make the
+stdlib's own KLIB broader than its executable product and are forbidden.
 
 Once that prerequisite is complete, the bootstrap collection generator admits the exact Common
 `Iterable.joinTo` and `Iterable.joinToString` template variants. It does not

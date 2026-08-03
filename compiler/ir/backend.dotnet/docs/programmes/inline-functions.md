@@ -385,7 +385,7 @@ index depend on which reified operations happened to occur.
 | `T::class` | nominal Kotlin `KClass` identity, classified runtime checks, and a truthful compiler-ABI `System.Type` bridge | execute substituted class literals through both inliner stages when the complete public reified gate is enabled |
 | `typeOf<T>()` | shared inliner preserves/substitutes its type argument | select `KType`, type arguments, variance, nullability, and reflection ownership |
 | `enumValues<T>`, `enumValueOf<T>`, `enumEntries<T>` | none | complete the atomic enum/contracts/builder/abstract-collections/`EnumEntries` cluster |
-| annotation-associated and other reflection operations | none | annotation classes, retention, reflection, and target-specific association policy |
+| annotation-associated and other reflection operations | parameterless annotation declarations, retention, and exact CLR-parent projection | valued annotations, reflection discovery, and target-specific association policy |
 | surviving physical reified declaration | real CLR generic-method carrier exists | choose and mark an uncallable/throwing compiler-ABI stub without weakening KLIB/physical coverage |
 
 The central generic-class representation constraint is now resolved by the
