@@ -439,6 +439,43 @@ public fun <T> List<T>.last(): T {
 }
 
 /**
+ * Returns the last element matching the given [predicate].
+ *
+ * @throws NoSuchElementException if no such element is found.
+ *
+ * @sample samples.collections.Collections.Elements.last
+ */
+public inline fun <T> Iterable<T>.last(predicate: (T) -> Boolean): T {
+    var last: T? = null
+    var found = false
+    for (element in this) {
+        if (predicate(element)) {
+            last = element
+            found = true
+        }
+    }
+    if (!found) throw NoSuchElementException("Collection contains no element matching the predicate.")
+    @Suppress("UNCHECKED_CAST")
+    return last as T
+}
+
+/**
+ * Returns the last element matching the given [predicate].
+ *
+ * @throws NoSuchElementException if no such element is found.
+ *
+ * @sample samples.collections.Collections.Elements.last
+ */
+public inline fun <T> List<T>.last(predicate: (T) -> Boolean): T {
+    val iterator = this.listIterator(size)
+    while (iterator.hasPrevious()) {
+        val element = iterator.previous()
+        if (predicate(element)) return element
+    }
+    throw NoSuchElementException("List contains no element matching the predicate.")
+}
+
+/**
  * Returns last index of [element], or -1 if the collection does not contain element.
  */
 public fun <@kotlin.internal.OnlyInputTypes T> Iterable<T>.lastIndexOf(element: T): Int {
@@ -489,6 +526,35 @@ public fun <T> Iterable<T>.lastOrNull(): T? {
  */
 public fun <T> List<T>.lastOrNull(): T? {
     return if (isEmpty()) null else this[size - 1]
+}
+
+/**
+ * Returns the last element matching the given [predicate], or `null` if no such element was found.
+ *
+ * @sample samples.collections.Collections.Elements.last
+ */
+public inline fun <T> Iterable<T>.lastOrNull(predicate: (T) -> Boolean): T? {
+    var last: T? = null
+    for (element in this) {
+        if (predicate(element)) {
+            last = element
+        }
+    }
+    return last
+}
+
+/**
+ * Returns the last element matching the given [predicate], or `null` if no such element was found.
+ *
+ * @sample samples.collections.Collections.Elements.last
+ */
+public inline fun <T> List<T>.lastOrNull(predicate: (T) -> Boolean): T? {
+    val iterator = this.listIterator(size)
+    while (iterator.hasPrevious()) {
+        val element = iterator.previous()
+        if (predicate(element)) return element
+    }
+    return null
 }
 
 /**

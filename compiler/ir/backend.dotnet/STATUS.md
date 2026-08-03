@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: generated Common collection first-match predicates
+- Last completed feature: generated Common collection last-match predicates
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,9 +20,9 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 986 tests:
+The JUnit audit covered 16 fresh XML files and 990 tests:
 
-- 884 FIR, IL-text, and box tests
+- 888 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 81 library-integration tests
 - zero failures, errors, or skips
@@ -154,6 +154,20 @@ fallback calls remain; handwritten CIL executes both new physical overloads on
 Framework CLR and CoreCLR. Open `T` and boxed-or-null `T?` reuse their existing
 physical slots. `find` remains parked pending the separate `@InlineOnly`
 declaration-suppression and ABI audit.
+
+Common last-match predicates now use all four exact generated bodies for
+`Iterable.last`/`lastOrNull` and their `List` overloads. Iterable receivers scan
+forward to exhaustion and preserve a separate found flag where Common requires
+one; List receivers request `listIterator(size)` and short-circuit in reverse.
+Adversarial execution pins both exact no-match exception messages, empty and
+nullable-match behavior, full versus reverse traversal, hostile iterator
+protocols, widened/value elements, capture, predicate-failure identity/timing,
+and non-local return. Separate and installed consumers inline all four bodies,
+while handwritten CIL executes all four physical fallbacks on Framework CLR
+and CoreCLR. The open-`T` cast uses the existing checked generic result barrier;
+failed typed uses remain an exceptional correctness path and are not optimized.
+`findLast` remains parked with `find` behind the `@InlineOnly` declaration-
+suppression and ABI audit.
 
 The post-substitution reified-array audit now proves that every admitted
 ordinary array carrier remains truthful after the shared inliner has replaced

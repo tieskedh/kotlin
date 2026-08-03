@@ -121,8 +121,10 @@ fun main(args: Array<String>) {
         Elements.f_indexOfFirst selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_indexOfLast selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_last selectedFor setOf(Family.Iterables, Family.Lists),
+        Elements.f_last_predicate selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_lastIndexOf selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_lastOrNull selectedFor setOf(Family.Iterables, Family.Lists),
+        Elements.f_lastOrNull_predicate selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_single selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_singleOrNull selectedFor setOf(Family.Iterables, Family.Lists),
         (Numeric.f_sum selectedFor setOf(Family.Iterables))
