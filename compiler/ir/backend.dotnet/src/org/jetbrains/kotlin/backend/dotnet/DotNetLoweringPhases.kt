@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.backend.common.phaser.KlibIrValidationBeforeLowering
 import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnnotationImplementationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCallableReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCompanionStaticsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializationFailureLowering
@@ -136,6 +137,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // wrappers, flatten IrLocalDelegatedProperty into its ordinary getter/setter/delegate
     // declarations before local closure conversion sees those accessors.
     ::LocalDelegatedPropertiesLowering,
+    // JS/Common precedent adapted to the CLR constraint: use the original parameterless marker
+    // as its concrete System.Attribute implementation and generate Common value members before
+    // varargs or constructor bodies are normalized. No synthetic second annotation identity.
+    ::DotNetAnnotationImplementationLowering,
     // Match the mature backends before closure conversion and default stubs: normalize concrete
     // vararg parameters to their vector ABI, materialize omitted arguments, and lower spread
     // copies to ordinary array operations. Open `vararg T` keeps its unsupported projection.

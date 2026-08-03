@@ -519,15 +519,16 @@ silently switch to indexed access: Common specifies iteration for both overloads
 The audit deliberately excludes the rest of the nearby generator frontier:
 
 - `elementAtOrElse`, `getOrElse`, and therefore general `elementAt` reach the public contracts DSL;
-- the Long and Double `sumOf` overloads publish the not-yet-selected
-  `ExperimentalTypeInference` and `OverloadResolutionByLambdaReturnType` annotation classes; the
-  unsigned overloads additionally require unsigned value classes;
+- the Long and Double `sumOf` overloads publish the now-admitted parameterless
+  `ExperimentalTypeInference` and `OverloadResolutionByLambdaReturnType` markers, so their
+  remaining prerequisite is the erased physical overload audit; the unsigned overloads
+  additionally require unsigned value classes;
 - mapping, filtering, snapshot, running-fold, and running-reduce families construct collection
   implementations that do not yet exist;
 - min/max families require truthful `Comparable`/`Comparator` representation plus their own
   erased physical overload audit;
-- `allEqual` publishes the not-yet-selected `ExperimentalStdlibApi` annotation contract, while
-  `allDistinct` additionally constructs `HashSet`;
+- `allEqual` publishes the now-admitted parameterless `ExperimentalStdlibApi` marker and can be
+  audited independently, while `allDistinct` additionally constructs `HashSet`;
 - `onEach` reaches `apply` and the public contracts DSL; and
 - random, Sequence, unsigned, array, Set, and Map variants retain their separate dependency and
   representation closures.
@@ -603,11 +604,10 @@ metadata or contradicts the accepted inline-only contract without a CLR necessit
 
 The Int overload is independently complete rather than a convenient subset of an otherwise
 available signed family. The Long and Double Common declarations carry
-`@OptIn(ExperimentalTypeInference::class)` and `@OverloadResolutionByLambdaReturnType`; their
-public annotation-class source closure reaches the parked annotation/enum foundation. Removing
-those annotations or publishing unresolved KLIB contracts would fork Common. UInt and ULong also
-require the parked unsigned value-class family. Those four overloads remain excluded until their
-own dependencies are truthful.
+`@OptIn(ExperimentalTypeInference::class)` and `@OverloadResolutionByLambdaReturnType`; the new
+general marker foundation now admits those exact parameterless annotation declarations without
+removing their metadata. Long and Double may therefore be audited next, including their stable
+physical overload names. UInt and ULong still require the parked unsigned value-class family.
 
 Completion must prove empty zero, signed overflow, encounter and callback order, nullable and
 widened receiver elements, callback failure identity and stopping point, non-local return,
@@ -616,6 +616,13 @@ separate and installed Kotlin consumers, C# inaccessibility, and execution throu
 stdlib on Framework CLR and CoreCLR.
 
 ## Next selection rule
+
+Reuse an upstream compiler box test directly whenever its complete dependency closure is already
+admitted. Do not copy bodies from `libraries/stdlib/test/generated`: those generated tests depend
+on the common `kotlin.test` runner and broader collection constructors/product. Wire their source
+directories into a real .NET stdlib-test product once those dependencies exist; until then,
+target-owned tests cover only portable packaging, CIL, CLR profiles, and other .NET-specific
+boundaries rather than pretending to be the authoritative Common suite.
 
 Select the next exact Common/generated family only when all of these are closed:
 
@@ -655,20 +662,26 @@ builders do not become a third `CharSequence` classifier arm.
 The source audit exposed a prerequisite that a partial builder must not hide: Common
 `StringBuilder.kt` and its exact `Standard.kt` dependency use the public `kotlin.contracts` source
 family. That family includes public effect interfaces, annotation classes, and the
-`InvocationKind` enum. The target cannot publish those KLIB declarations while omitting their
-physical product, and it cannot fake just enough contract declarations for builder compilation.
-Complete enum and annotation-class representation decisions therefore precede builder
-actualization. The independent typed collection-to-array prerequisite has now landed while that
-language foundation remains parked.
+`InvocationKind` enum. The parameterless annotation declarations now have a general physical
+representation, leaving the enum and contract-effect product as the unresolved part of this
+dependency. The target cannot fake just enough contract declarations for builder compilation.
+Complete enum representation therefore still precedes builder actualization. The independent
+typed collection-to-array prerequisite has now landed while that language foundation remains
+parked.
 
 Modern enum support cannot be used as a small cycle breaker. Every enum publishes `entries`, whose
 authoritative `EnumEntriesList` extends Common `AbstractList`; that abstract base needs this same
 builder closure. Conversely, the builder's contract source publishes the `InvocationKind` enum.
-The target must therefore admit enums, annotation classes, contracts, the builder, the abstract
-bases, and `EnumEntries` as one coherent bootstrap cluster unless upstream Common creates a smaller
-truthful closure. A one-enum exception, target-authored `EnumEntries` implementation, disabled
-`entries` member, or temporarily broader KLIB is rejected. Reversible compiler work should proceed
-while this atomic cluster is being designed.
+The Common `Enum<E>` base also implements `Comparable<E>`. That public generic interface must be
+selected for Kotlin classes and for the classified primitive/string carriers before enum product
+publication; an enum-private Comparable substitute would make the stdlib KLIB broader than the
+physical product.
+The target must therefore admit enums, contracts, the builder, the abstract bases, and
+`EnumEntries` as one coherent bootstrap cluster unless upstream Common creates a smaller truthful
+closure. Parameterless annotations are no longer part of that cycle. A one-enum exception,
+target-authored `EnumEntries` implementation, disabled `entries` member, or temporarily broader
+KLIB is rejected. Reversible compiler work should proceed while this atomic cluster is being
+designed.
 
 ### Typed collection-to-array prerequisite
 
@@ -692,8 +705,9 @@ reified `toTypedArray` remains outside this completed prerequisite.
 
 ## Programme order
 
-1. Complete the enum/annotation-class foundation required by the exact contract DSL, then
-   actualize the selected builder and generated join closure.
+1. Complete the enum and contract-effect foundation required by the exact contract DSL, then
+   actualize the selected builder and generated join closure; its parameterless marker prerequisite
+   is complete.
 2. Compile the exact Common abstract bases once the remaining builder prerequisite exists.
 3. Add mutable collection/list contracts and an ordinary implementation.
 4. Add sets and maps from their exact Common dependency closures.

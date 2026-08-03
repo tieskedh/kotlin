@@ -28406,6 +28406,223 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testMarkerAnnotationsAcrossPortableLibraryAndCSharpBoundaries() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard facade is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+
+        val libraryDirectory = File(tmpdir, "marker-annotation-library").apply { mkdirs() }
+        val librarySource = libraryDirectory.resolve("markerAnnotationLibrary.kt").apply {
+            writeText(
+                """
+                package markerabi
+
+                @Target(
+                    AnnotationTarget.CLASS,
+                    AnnotationTarget.CONSTRUCTOR,
+                    AnnotationTarget.FUNCTION,
+                    AnnotationTarget.PROPERTY,
+                    AnnotationTarget.FIELD,
+                    AnnotationTarget.VALUE_PARAMETER,
+                    AnnotationTarget.PROPERTY_GETTER,
+                    AnnotationTarget.PROPERTY_SETTER,
+                )
+                @Retention(AnnotationRetention.RUNTIME)
+                @Repeatable
+                public annotation class RuntimeMarker
+
+                @Retention(AnnotationRetention.BINARY)
+                public annotation class BinaryMarker
+
+                @Retention(AnnotationRetention.SOURCE)
+                public annotation class SourceMarker
+
+                @RuntimeMarker
+                @BinaryMarker
+                @SourceMarker
+                public class KotlinApplied @RuntimeMarker constructor(public var value: Int) {
+                    @RuntimeMarker
+                    public fun update(@RuntimeMarker next: Int) {
+                        value = next
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Marker.Annotation.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("Marker.Annotation.Library.dll")
+        assertTrue(metadataLibrary.isFile)
+        val libraryIl = libraryDirectory.resolve("Marker.Annotation.Library.il").readText()
+        assertTrue(
+            ".class public auto ansi sealed beforefieldinit 'markerabi.RuntimeMarker'" in libraryIl &&
+                    "extends [netstandard]System.Attribute" in libraryIl
+        ) { libraryIl }
+        assertTrue(
+            ".custom instance void [netstandard]System.AttributeUsageAttribute::.ctor(" +
+                    "valuetype [netstandard]System.AttributeTargets)" in libraryIl
+        ) { libraryIl }
+        assertTrue(".custom instance void 'markerabi.RuntimeMarker'::.ctor()" in libraryIl) { libraryIl }
+        assertFalse(".custom instance void 'markerabi.BinaryMarker'::.ctor()" in libraryIl) { libraryIl }
+        assertFalse(".custom instance void 'markerabi.SourceMarker'::.ctor()" in libraryIl) { libraryIl }
+
+        val csharpSource = libraryDirectory.resolve("MarkerAnnotationConsumer.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Reflection;
+
+                [markerabi.RuntimeMarker, markerabi.RuntimeMarker]
+                public sealed class CSharpApplied
+                {
+                    [markerabi.RuntimeMarker]
+                    public int Value;
+
+                    [markerabi.RuntimeMarker]
+                    public void Update([markerabi.RuntimeMarker] int next)
+                    {
+                        Value = next;
+                    }
+                }
+
+                public static class MarkerAnnotationConsumer
+                {
+                    private static int Count(MemberInfo member)
+                    {
+                        return member.GetCustomAttributes(typeof(markerabi.RuntimeMarker), false).Length;
+                    }
+
+                    public static int Main()
+                    {
+                        Type marker = typeof(markerabi.RuntimeMarker);
+                        if (marker.BaseType != typeof(Attribute)) return 1;
+                        AttributeUsageAttribute usage = (AttributeUsageAttribute)
+                            Attribute.GetCustomAttribute(marker, typeof(AttributeUsageAttribute));
+                        if (usage == null || !usage.AllowMultiple || usage.Inherited) return 2;
+                        if ((usage.ValidOn & AttributeTargets.Class) == 0 ||
+                            (usage.ValidOn & AttributeTargets.Method) == 0 ||
+                            (usage.ValidOn & AttributeTargets.Field) == 0 ||
+                            (usage.ValidOn & AttributeTargets.Parameter) == 0) return 3;
+                        if (Count(typeof(markerabi.KotlinApplied)) != 1) return 4;
+                        if (Count(typeof(CSharpApplied)) != 2) return 5;
+                        if (Count(typeof(CSharpApplied).GetField("Value")) != 1) return 6;
+                        MethodInfo update = typeof(CSharpApplied).GetMethod("Update");
+                        if (Count(update) != 1) return 7;
+                        if (update.GetParameters()[0].GetCustomAttributes(
+                                typeof(markerabi.RuntimeMarker), false).Length != 1) return 8;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpConsumer = libraryDirectory.resolve("MarkerAnnotationConsumer.exe")
+        val csharpCompile = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            csharpSource,
+            csharpConsumer,
+            metadataLibrary,
+            checkNotNull(frameworkNetStandardFacade),
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package markerconsumer
+
+                    import markerabi.RuntimeMarker
+
+                    @RuntimeMarker
+                    class DownstreamApplied
+
+                    fun main() {
+                        val first: Annotation = RuntimeMarker()
+                        val second = RuntimeMarker()
+                        if (first !is RuntimeMarker || first != second || first.hashCode() != 0 ||
+                            first.toString() != "@markerabi.RuntimeMarker()"
+                        ) {
+                            throw Error("external marker value semantics")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "MarkerKotlinConsumer.exe" else "MarkerKotlinConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "MarkerKotlinConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            val consumerIl = consumerDirectory.resolve("MarkerKotlinConsumer.il").readText()
+            assertTrue(
+                ".custom instance void [Marker.Annotation.Library]'markerabi.RuntimeMarker'::.ctor()" in consumerIl
+            ) { consumerIl }
+            if (target == "net10.0") {
+                runDotNet(dotnetHost, application, consumerDirectory, "Kotlin marker consumer failed for $target")
+            } else {
+                val kotlinProcess = ProcessBuilder(frameworkExecutionCommand(checkNotNull(frameworkHost), application))
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val kotlinOutput = kotlinProcess.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, kotlinProcess.waitFor(), "Kotlin marker consumer failed for $target:\n$kotlinOutput")
+
+                consumerDirectory.resolve("Kotlin.Runtime.dll")
+                    .copyTo(libraryDirectory.resolve("Kotlin.Runtime.dll"), overwrite = true)
+                val csharpProcess = ProcessBuilder(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), csharpConsumer)
+                )
+                    .directory(libraryDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val csharpOutput = csharpProcess.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, csharpProcess.waitFor(), "C# marker consumer failed on net48:\n$csharpOutput")
+            }
+            if (target == "net10.0") {
+                val modernCSharpConsumer = consumerDirectory.resolve(csharpConsumer.name)
+                csharpConsumer.copyTo(modernCSharpConsumer, overwrite = true)
+                consumerDirectory.resolve("MarkerKotlinConsumer.runtimeconfig.json")
+                    .copyTo(
+                        consumerDirectory.resolve("MarkerAnnotationConsumer.runtimeconfig.json"),
+                        overwrite = true,
+                    )
+                runDotNet(dotnetHost, modernCSharpConsumer, consumerDirectory, "C# marker consumer failed on $target")
+            }
+        }
+    }
+
+    @Test
     fun testGenericClassErasedIdentityAcrossPortableLibraryBoundary() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,

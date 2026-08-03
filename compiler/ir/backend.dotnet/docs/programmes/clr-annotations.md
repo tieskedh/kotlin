@@ -1,6 +1,6 @@
 # CLR annotation interoperability programme
 
-- Status: **Active — foreign import expansion; public Kotlin source annotations undecided**
+- Status: **Active — foreign import expansion; parameterless Kotlin marker foundation implemented**
 - Owner: .NET importer and foreign FIR integration
 - Governing decision:
   [`../decisions/draft-adr-clr-importer-boundary.md`](../decisions/draft-adr-clr-importer-boundary.md)
@@ -84,7 +84,8 @@ type.
 | Deprecation | Exact admitted targets closed | Extend alongside each new declaration family |
 | Required/init/read-only/ref-like | Physical evidence partly available | Specify profile usability and overrides |
 | Tooling markers | Retained selectively | Never infer a Kotlin role or hide ABI from a marker alone |
-| General user annotations | Parked | Needs annotation classes, targets, retention, and reflection |
+| Parameterless Kotlin marker annotations | Implemented | Extend only together with exact new declaration-parent mappings |
+| Valued user annotations | Parked | Needs the complete values/enums/arrays/defaults codec and later reflection |
 | Kotlin-to-.NET export controls | Undecided public API | Make one language-facing proposal |
 
 ## Ordered work
@@ -182,7 +183,7 @@ Do not omit the same fact from KLIB. A Kotlin-produced DLL remains self-describi
 are stripped by external tooling, and KLIB-only consumers must not need the PE attribute graph to
 recover Kotlin semantics.
 
-### 6. Treat general annotations and reflection as a separate prerequisite chain
+### 6. Grow general annotations and reflection as a separate prerequisite chain
 
 Known CLR attributes can be decoded and emitted without general Kotlin annotation-class support or
 runtime reflection. That is why this programme can progress now.
@@ -198,8 +199,11 @@ them through Kotlin reflection, or expose them naturally to C# requires a wider 
 5. CLR CustomAttribute emission and round-trip validation; and
 6. reflection enumeration and value reconstruction.
 
-That chain should reuse the importer value algebra, but it must not be smuggled in as one more
-standard-attribute mapping.
+The accepted first step is the general parameterless marker rule in
+[`../decisions/marker-annotation-classes.md`](../decisions/marker-annotation-classes.md). It emits
+only runtime-retained applications on exact CLR parents, keeps source/binary applications in
+KLIB, and deliberately provides no annotation discovery. The remaining chain should reuse the
+importer value algebra, but it must not be smuggled in as one more standard-attribute mapping.
 
 ## Public source-annotation decision
 

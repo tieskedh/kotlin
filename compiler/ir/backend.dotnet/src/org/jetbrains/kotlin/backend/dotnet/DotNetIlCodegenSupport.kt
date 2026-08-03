@@ -8,11 +8,15 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
+import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
+import org.jetbrains.kotlin.ir.util.isAnnotationClass
+import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isGetter
 import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
@@ -68,6 +72,18 @@ internal fun IrType.isDotNetCharSequenceType(): Boolean =
 /** Whether this declaration is the Common `CharSequence` interface. */
 internal fun IrClass.isDotNetCharSequenceClass(): Boolean =
     fqNameWhenAvailable == StandardNames.FqNames.charSequence.toSafe()
+
+/**
+ * The deliberately small first annotation-class ABI tranche. Keep this predicate shared by the
+ * lowering and shape validator: a declaration which receives a concrete runtime implementation
+ * must also be one the emitter can truthfully encode as a parameterless CLR custom attribute.
+ */
+internal fun IrClass.isSupportedDotNetMarkerAnnotationClass(): Boolean =
+    isAnnotationClass &&
+            !isExpect &&
+            typeParameters.isEmpty() &&
+            primaryConstructor?.parameters?.isEmpty() == true &&
+            declarations.filterIsInstance<IrProperty>().none { !it.isFakeOverride }
 
 /** The exact invariant element type used by the indexed-loop lowering, or null for projections. */
 internal fun IrType.dotNetInvariantArrayElementTypeOrNull(): IrType? {
@@ -741,6 +757,8 @@ internal class DotNetIlTypeMapper private constructor(
             // this arm is only the direct CharSequence classifier, never an arbitrary subtype or
             // a type parameter bounded by it (those retain their own physical token).
             type.isDotNetCharSequenceType() -> DotNetIlValueType.Object
+            type.isDotNetAnnotationBaseType() ->
+                DotNetIlValueType.MappedClass("${coreLibrary.reference}System.Attribute")
             type.isAny() || type.isNullableAny() -> DotNetIlValueType.Object
             type.isSupportedDotNetPrimitiveArray() -> toPrimitiveArrayType(type)
             type.isDotNetGenericArray() -> toGenericArrayTypeOrNull(type)
@@ -1251,8 +1269,18 @@ internal fun IrSimpleFunction.dotNetIlGenericAritySuffix(): String =
 internal fun IrClass.dotNetDirectInterfaceTypes(): List<IrSimpleType> =
     superTypes.mapNotNull { superType ->
         (superType as? IrSimpleType)
-            ?.takeIf { ((it.classifier as? IrClassSymbol)?.owner)?.isInterface == true }
+            ?.takeIf {
+                val owner = ((it.classifier as? IrClassSymbol)?.owner)
+                owner?.isInterface == true && !owner.isDotNetAnnotationBaseClass()
+            }
     }
+
+/** `kotlin.Annotation` is logical KLIB identity and the physical CLR System.Attribute base. */
+internal fun IrClass.isDotNetAnnotationBaseClass(): Boolean =
+    fqNameWhenAvailable?.asString() == "kotlin.Annotation"
+
+internal fun IrType.isDotNetAnnotationBaseType(): Boolean =
+    ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner?.isDotNetAnnotationBaseClass() == true
 
 /**
  * Whether [this] member occupies (or introduces) a CLR virtual slot, i.e. whether its

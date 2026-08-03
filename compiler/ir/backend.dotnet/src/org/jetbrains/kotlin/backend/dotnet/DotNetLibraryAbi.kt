@@ -29,6 +29,7 @@ import org.jetbrains.kotlin.ir.util.IdSignatureRenderer
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.isAnnotationClass
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
@@ -1354,7 +1355,15 @@ internal class DotNetExternalDeclarations(
 
         if (classLinksInProgress.add(logicalKey)) {
             try {
-                classInfo.baseType = irClass.dotNetBaseSuperTypeOrNull()?.let(typeMapper::toDotNetIlValueType)
+                classInfo.baseType = if (irClass.isAnnotationClass) {
+                    // KLIB authoritatively records kotlin.Annotation, while the producer's
+                    // physical CLR declaration derives from System.Attribute. Reconstruct that
+                    // physical edge for a separately compiled consumer just as the producer
+                    // emitter does for declarations in the current module.
+                    DotNetIlValueType.MappedClass("${typeMapper.coreLibrary.reference}System.Attribute")
+                } else {
+                    irClass.dotNetBaseSuperTypeOrNull()?.let(typeMapper::toDotNetIlValueType)
+                }
                 classInfo.interfaces = irClass.dotNetDirectInterfaceTypes()
                     .mapNotNull(typeMapper::toDotNetIlImplementedInterfaceType)
             } finally {

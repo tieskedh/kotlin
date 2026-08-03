@@ -62,6 +62,7 @@ import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.isPropertyAccessor
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.util.isAnnotationClass
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isSubclassOf
@@ -222,6 +223,19 @@ internal class DotNetIlMethodCodegen(
                     "    ${DotNetCompilerAbi.editorBrowsableNeverAttributeIl(typeMapper.coreLibrary.editorBrowsableReference)}"
                 )
             }
+            for (attribute in function.dotNetRuntimeMarkerAttributes(typeMapper)) {
+                appendLine("    $attribute")
+            }
+            function.parameters.zip(signature.parameterTypes)
+                .drop(if (signature.hasThis) 1 else 0)
+                .forEachIndexed { index, parameterAndType ->
+                    val parameter = parameterAndType.first
+                    val attributes = parameter.dotNetRuntimeMarkerAttributes(typeMapper)
+                    if (attributes.isNotEmpty()) {
+                        appendLine("    .param [${index + 1}]")
+                        for (attribute in attributes) appendLine("    $attribute")
+                    }
+                }
             if (function.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER || function.origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) {
                 appendInterfaceDefaultSlotOverrides()
             } else if (function.origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) {
@@ -930,8 +944,13 @@ internal class DotNetIlMethodCodegen(
         val targetClass = target.constructedClass
         methodContext.emit("ldarg.0", pushes = 1)
         if (targetClass.defaultType.isAny()) {
+            val physicalBase = if (function.constructedClass.isAnnotationClass) {
+                "${typeMapper.coreLibrary.reference}System.Attribute"
+            } else {
+                "${typeMapper.coreLibrary.reference}System.Object"
+            }
             methodContext.emit(
-                "call instance void ${typeMapper.coreLibrary.reference}System.Object::.ctor()",
+                "call instance void $physicalBase::.ctor()",
                 pops = 1,
             )
             return

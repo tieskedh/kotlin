@@ -59,6 +59,7 @@ import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isAnonymousObject
+import org.jetbrains.kotlin.ir.util.isAnnotationClass
 import org.jetbrains.kotlin.ir.util.isFunction
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isSubclassOf
@@ -679,17 +680,25 @@ internal class DotNetIlEmitter(
             val genericClassInfo = genericClasses[irClass]
             val physicalClassInfo = genericClassInfo?.typedClassInfo ?: classInfo
             val physicalMapper = if (genericClassInfo != null) typedGenericClassTypeMapper else typeMapper
-            physicalClassInfo.baseType = irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
-                val baseClass = (baseSuperType.classifier as? IrClassSymbol)?.owner
-                val baseMapper = if (baseClass != null && typeMapper.isSplitGenericClass(baseClass)) {
-                    typedGenericClassTypeMapper
-                } else {
-                    physicalMapper
-                }
-                try {
-                    baseMapper.toDotNetIlValueType(baseSuperType)
-                } catch (_: DotNetIlUnsupportedException) {
-                    null
+            physicalClassInfo.baseType = if (irClass.isAnnotationClass) {
+                // The logical KLIB edge is kotlin.Annotation, but the same declaration's
+                // physical class extends System.Attribute. Record that physical edge in the
+                // ordinary assignability graph as well as on the rendered `extends` line, so a
+                // freshly constructed marker widens to an Annotation-typed local without a cast.
+                DotNetIlValueType.MappedClass("${typeMapper.coreLibrary.reference}System.Attribute")
+            } else {
+                irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
+                    val baseClass = (baseSuperType.classifier as? IrClassSymbol)?.owner
+                    val baseMapper = if (baseClass != null && typeMapper.isSplitGenericClass(baseClass)) {
+                        typedGenericClassTypeMapper
+                    } else {
+                        physicalMapper
+                    }
+                    try {
+                        baseMapper.toDotNetIlValueType(baseSuperType)
+                    } catch (_: DotNetIlUnsupportedException) {
+                        null
+                    }
                 }
             }
             val canonicalInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
@@ -1889,7 +1898,7 @@ internal class DotNetIlEmitter(
                         val setter = property.setter
                         if ((getter != null || setter != null) && !property.isDotNetExtensionProperty()) {
                             facadePropertyBlocks +=
-                                renderPropertyBlock(property, getter, setter, availableFunctions, isStatic = true)
+                                renderPropertyBlock(property, getter, setter, availableFunctions, typeMapper, isStatic = true)
                         }
                         renderedPropertyExports[property]?.let { rendered ->
                             facadePropertyBlocks += rendered.propertyBlock
@@ -2130,7 +2139,8 @@ internal class DotNetIlEmitter(
         val enclosingClass = irClass.parent as? IrClass
         val isValidatedCompanion =
             enclosingClass != null && irClass.isCompanion && irClass.kind == ClassKind.OBJECT
-        val isNamedNestedClass = enclosingClass != null && irClass.kind == ClassKind.CLASS
+        val isNamedNestedClass = enclosingClass != null &&
+                (irClass.kind == ClassKind.CLASS || irClass.kind == ClassKind.ANNOTATION_CLASS)
         val isNamedNestedObject =
             enclosingClass != null && !irClass.isCompanion && irClass.kind == ClassKind.OBJECT
         when (irClass.kind) {
@@ -2139,7 +2149,13 @@ internal class DotNetIlEmitter(
                 return
             }
             ClassKind.ENUM_CLASS, ClassKind.ENUM_ENTRY -> dotNetUnsupported("enum class '$name' is not supported")
-            ClassKind.ANNOTATION_CLASS -> dotNetUnsupported("annotation class '$name' is not supported")
+            ClassKind.ANNOTATION_CLASS -> {
+                if (!irClass.isSupportedDotNetMarkerAnnotationClass()) {
+                    dotNetUnsupported(
+                        "annotation class '$name' has values; only parameterless marker annotations are supported"
+                    )
+                }
+            }
             ClassKind.CLASS, ClassKind.OBJECT -> Unit
         }
         if (irClass.isOriginallyLocalDeclaration) {
@@ -2164,7 +2180,8 @@ internal class DotNetIlEmitter(
             enclosingClass != null &&
             enclosingClass.kind != ClassKind.CLASS &&
             enclosingClass.kind != ClassKind.INTERFACE &&
-            enclosingClass.kind != ClassKind.OBJECT
+            enclosingClass.kind != ClassKind.OBJECT &&
+            enclosingClass.kind != ClassKind.ANNOTATION_CLASS
         ) {
             val kind = when {
                 isValidatedCompanion -> "companion object"
@@ -2174,7 +2191,7 @@ internal class DotNetIlEmitter(
             dotNetUnsupported(
                 "$kind '$name' is nested inside unsupported declaration " +
                         "'${enclosingClass.diagnosticName()}'; nested declarations are supported only inside " +
-                        "classes, interfaces, and objects"
+                        "classes, interfaces, objects, and annotation classes"
             )
         }
         if (enclosingClass != null && !isValidatedCompanion && !isNamedNestedClass && !isNamedNestedObject) {
@@ -2252,7 +2269,10 @@ internal class DotNetIlEmitter(
                 )
             }
         }
-        val superTypesExceptAny = irClass.superTypes.filterNot { it.isAny() }
+        val superTypesExceptAny = irClass.superTypes.filterNot { superType ->
+            superType.isAny() ||
+                    (irClass.isAnnotationClass && superType.isDotNetAnnotationBaseType())
+        }
         if (superTypesExceptAny.isNotEmpty()) {
             val superClasses = superTypesExceptAny.map { superType ->
                 ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
@@ -2845,7 +2865,9 @@ internal class DotNetIlEmitter(
         // with it — a derived class whose base does not exist cannot keep its `extends` line —
         // each warned with a reason carrying the base's own reason, the inheritance
         // counterpart of the nested class-subtree warnings.
-        val baseClassRef = irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
+        val baseClassRef = if (irClass.isAnnotationClass) {
+            "${coreLibrary.reference}System.Attribute"
+        } else irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
             val baseClass = (baseSuperType.classifier as IrClassSymbol).owner
             val mappedExceptionBase = DotNetMappedExceptions.mappedEntry(baseClass.fqNameWhenAvailable)
             if (mappedExceptionBase != null) {
@@ -3108,6 +3130,7 @@ internal class DotNetIlEmitter(
                                 getter,
                                 setter,
                                 classFunctions,
+                                physicalTypeMapper,
                                 isStatic = declaration.isDotNetStaticProperty(),
                             )
                         }
@@ -3122,7 +3145,7 @@ internal class DotNetIlEmitter(
                 renderedMethods,
                 renderedFields,
                 renderedProperties,
-                renderedAttributes = irClass.dotNetPhysicalTypeAttributes(),
+                renderedAttributes = irClass.dotNetPhysicalTypeAttributes(physicalTypeMapper),
                 isStaticHolder = irClass.origin == DOTNET_STATIC_HOLDER,
                 hasClassInitializer = hasClassInitializer,
                 isNested = classInfo.isNested,
@@ -3133,7 +3156,7 @@ internal class DotNetIlEmitter(
                 // An open class drops `sealed` (the CLR metadata form of Kotlin's modality, like
                 // the JVM's ACC_FINAL); companions and objects never reach here as open — the
                 // shape gate keeps them final-only.
-                isOpen = irClass.modality == Modality.OPEN,
+                isOpen = irClass.modality == Modality.OPEN && !irClass.isAnnotationClass,
                 // Kotlin abstract and sealed classes are non-instantiable. Sealing remains a
                 // frontend restriction, like the sealed-interface model (abstractprobe_s1).
                 isAbstract = irClass.modality == Modality.ABSTRACT || irClass.modality == Modality.SEALED,
@@ -3223,7 +3246,7 @@ internal class DotNetIlEmitter(
                 val getter = property.getter?.let(bridgesBySource::get)?.implementation
                 val setter = property.setter?.let(bridgesBySource::get)?.implementation
                 if (getter == null && setter == null) return@mapNotNull null
-                renderPropertyBlock(property, getter, setter, canonicalFunctions)
+                renderPropertyBlock(property, getter, setter, canonicalFunctions, typeMapper)
             }
         return buildString {
             DotNetIlClassCodegen(
@@ -3411,6 +3434,7 @@ internal class DotNetIlEmitter(
                             renderedGetter,
                             renderedSetter,
                             viewFunctions,
+                            viewTypeMapper,
                         )
                     }
                 }
@@ -3439,6 +3463,7 @@ internal class DotNetIlEmitter(
                     getter,
                     setter,
                     viewFunctions,
+                    viewTypeMapper,
                 )
             }
         genericInterfaceDefaults
@@ -3494,6 +3519,7 @@ internal class DotNetIlEmitter(
         getter: IrSimpleFunction?,
         setter: IrSimpleFunction?,
         availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
+        typeMapper: DotNetIlTypeMapper,
         isStatic: Boolean = false,
     ): String {
         val getterInfo = getter?.let(availableFunctions::getValue)
@@ -3509,6 +3535,9 @@ internal class DotNetIlEmitter(
             val instance = if (isStatic) "" else "instance "
             appendLine("  .property $instance${propertyType.nameInSignature} ${propertyName.toIlIdentifier()}()")
             appendLine("  {")
+            for (attribute in property.dotNetRuntimeMarkerAttributes(typeMapper)) {
+                appendLine("    $attribute")
+            }
             if (getter != null && getterInfo != null) {
                 val getterName = getterInfo.physicalMethodName ?: getter.dotNetIlMethodName()
                 appendLine("    .get ${getterInfo.renderMethodReference(getterName)}")
@@ -3557,8 +3586,10 @@ internal class DotNetIlEmitter(
      * contract explicitly on the physical runtime class instead of reverse-engineering a name.
      * This is runtime naming evidence only; KLIB remains authoritative declaration metadata.
      */
-    private fun IrClass.dotNetPhysicalTypeAttributes(): List<String> =
-        dotNetCompilerAbiTypeAttributes() + if (isOriginallyLocalDeclaration) {
+    private fun IrClass.dotNetPhysicalTypeAttributes(typeMapper: DotNetIlTypeMapper): List<String> =
+        dotNetCompilerAbiTypeAttributes() + dotNetRuntimeMarkerAttributes(typeMapper) +
+                (if (isAnnotationClass) listOf(dotNetAttributeUsageAttribute(typeMapper)) else emptyList()) +
+                if (isOriginallyLocalDeclaration) {
             listOf(
                 DotNetKClassRuntime.localClassNameAttributeIl(
                     name.asString().takeUnless { isAnonymousObject || isDotNetCallableObject }
@@ -3588,7 +3619,13 @@ internal class DotNetIlEmitter(
         val fieldType = typeMapper.toDotNetIlValueType(field.type)
             ?: dotNetUnsupported("field '${field.name.asString()}' has unsupported type ${field.type.render()}")
         val static = if (isStatic) "static " else ""
-        return ".field private $static${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
+        val declaration = ".field private $static${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
+        val attributes = field.dotNetRuntimeMarkerAttributes(typeMapper)
+        if (attributes.isEmpty()) return declaration
+        return buildString {
+            appendLine(declaration)
+            append(attributes.joinToString("\n"))
+        }
     }
 
     /**
@@ -3633,11 +3670,18 @@ internal class DotNetIlEmitter(
         val visibility = if (isCompilerAbi) "public" else property.visibility.dotNetIlVisibility(default = "private")
         val declaration = ".field $visibility static literal ${fieldType.nameInSignature} " +
                 "${field.name.asString().toIlIdentifier()} = ${renderConstFieldInitializer(constant, fieldType, name)}"
-        if (!isCompilerAbi) return declaration
+        val attributes = field.dotNetRuntimeMarkerAttributes(typeMapper)
+        if (!isCompilerAbi && attributes.isEmpty()) return declaration
+        val renderedAttributes = buildList {
+            if (isCompilerAbi) {
+                add(DotNetCompilerAbi.markerAttributeIl())
+                add(DotNetCompilerAbi.editorBrowsableNeverAttributeIl(coreLibrary.editorBrowsableReference))
+            }
+            addAll(attributes)
+        }
         return buildString {
             appendLine(declaration)
-            appendLine(DotNetCompilerAbi.markerAttributeIl())
-            append(DotNetCompilerAbi.editorBrowsableNeverAttributeIl(coreLibrary.editorBrowsableReference))
+            append(renderedAttributes.joinToString("\n"))
         }
     }
 

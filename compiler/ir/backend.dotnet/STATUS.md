@@ -8,31 +8,32 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: the Common `KClass` floor and static/dynamic class
-  literals over classified CLR type evidence
+- Last completed feature: general parameterless Kotlin marker annotation
+  classes with exact runtime-retained CLR custom-attribute projection
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
-stdlib. The target is not close to 98% feature-complete: enums, annotation
-classes, `KType`/member reflection, reified public APIs, value classes, coroutines,
-the contracts/builder/abstract-collections cluster, broad Set/Map production,
-and Gradle/KMP product integration remain substantial open programmes.
+stdlib. The target is not close to 98% feature-complete: enums, valued
+annotations and annotation reflection, `KType`/member reflection, reified
+public APIs, value classes, coroutines, the contracts/builder/abstract-
+collections cluster, broad Set/Map production, and Gradle/KMP product
+integration remain substantial open programmes.
 
 ## Current green gate
 
 The last semantic head passed:
 
 ```text
-.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun-tasks -q --no-daemon
+.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 1014 tests:
+The JUnit audit covered 20 fresh XML files and 1029 tests:
 
-- 910 FIR, IL-text, and box tests
+- 924 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 83 library-integration tests
+- 84 library-integration tests
 - zero failures, errors, or skips
 
 Focused evidence additionally covers component-complete packed-KLIB loading,
@@ -324,20 +325,36 @@ the admitted surface. The backend's
 explicit erased-object cast to an open type parameter uses `unbox.any`; safe
 generic casts remain unsupported. Builder storage is selected as a Kotlin-owned
 wrapper over private BCL storage, but implementation is parked: the exact Common
-source closure reaches the public contract DSL, including annotation classes
-and `InvocationKind`, whose general representations are not yet selected. The
+source closure reaches the public contract DSL. Its parameterless annotation
+classes are now admitted generally; `InvocationKind`, the enum product, and
+the complete contract-effect closure remain unresolved. The
 classified `CharSequence` carrier, Common collection predicates, and ordinary
 inline-function boundary remain intact; reified and suspend inline are still
 explicit errors. The nominal `KClass` floor is selected and published; it does
 not imply `KType`, member reflection, annotation discovery, or reified support.
+
+Parameterless marker annotation classes now use the shared Common annotation-
+member generator on one concrete sealed CLR `System.Attribute` subtype. KLIB
+remains authoritative for declaration identity, targets, retention, and
+applications; only runtime-retained applications receive an additional exact
+CLR row on class, constructor, method, property, field, parameter, getter, or
+setter parents. Source/binary applications remain absent from CLR reflection.
+Because every public declaration is one `System.Attribute` subtype, a C#-
+authored application of a non-runtime marker is foreign CLR metadata rather
+than a Kotlin-produced application; it does not alter KLIB retention. The gate
+includes two compatible shared upstream annotation box tests in all four .NET
+runners, plus target-owned CIL, C# reflection/application, and portable Kotlin
+producer/consumer evidence. Valued annotations and annotation discovery remain
+outside this foundation.
 
 The reified audit established that shared IR substitution is ready. Its
 ordinary runtime prerequisites now include declaration-erased Kotlin generic
 classes and classified star-projected arrays, and the complete admitted array-
 operation substitution matrix has passed without a target-specific reified
 representation. Public reified support remains parked while `KType`,
-enum/annotation, final substituted type-test/cast, and physical throwing-stub
-contracts remain unselected. Physically exact non-generic reference casts are
+enum/valued-annotation reflection, final substituted type-test/cast, and
+physical throwing-stub contracts remain unselected. Physically exact
+non-generic reference casts are
 complete for Kotlin classes/interfaces, imported CLR interfaces, strings,
 `Any`, primitive-array wrappers, and exact CLR vectors without admitting closed
 generic instances.
@@ -384,7 +401,10 @@ processes and frontend order.
   remaining `Appendable`/`StringBuilder` closure; do not fork its algorithms
   into .NET. Modern enums, the public contract DSL, builders, Common abstract
   collection bases, and `EnumEntries` form one atomic source bootstrap cluster;
-  do not break it with target substitutes or one-enum exceptions.
+  do not break it with target substitutes or one-enum exceptions. Common
+  `Enum<E>` additionally requires a truthful `Comparable<E>` carrier; this must
+  cover Kotlin user implementations and classified primitive/string behavior,
+  not an enum-only interface stub.
 - KLIB-in-DLL and physical ABI codecs still need neutral serialization owners
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
@@ -397,25 +417,19 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Audit a bounded general annotation-class foundation before entering the
-   atomic contracts/enum bootstrap cluster. Compare declaration ownership,
-   metadata production, lowerings, and test placement with JVM, JS, Wasm, and
-   Native; select the broadest coherent argument/target/retention slice whose
-   KLIB identity, CLR `Attribute` projection, separate compilation, and
-   unsupported-shape diagnostics are all truthful. Do not imply annotation
-   discovery through Kotlin reflection.
-2. Implement that selected annotation-class tranche when the audit proves no
-   unresolved hard-to-reverse representation decision. Adopt upstream Common
-   compiler or stdlib tests wherever the supported closure permits it, while
-   retaining .NET-owned tests only for CLR-specific semantics and boundaries.
-3. Audit and then implement the complete coherent
-   contracts/enum/builder/abstract-collections/`EnumEntries` source/product
-   closure. Keep compiler-consumed Kotlin effects authoritative in KLIB and
-   expose CLR/Roslyn attributes only as exact additional projections; do not
-   introduce a target contract DSL, builder-only stub, or one-enum exception.
-4. Actualize the selected complete Common `Appendable`/`StringBuilder` and
-   generated `joinTo`/`joinToString` closure once that foundation exists, then
-   compile the exact Common `AbstractCollection`/`AbstractList` sources.
+1. Audit the complete coherent contracts/enum/builder/abstract-collections/
+   `EnumEntries` source/product closure now that its marker-annotation
+   prerequisite is complete. Mirror the mature targets' enum lowerings,
+   packages, runtime ownership, and generated stdlib sources; do not introduce
+   a target contract DSL, builder-only stub, or one-enum exception.
+2. If that audit exposes an unresolved hard-to-reverse enum decision, record
+   and lock the exact question, then advance independently unlocked Common
+   families such as signed `sumOf` or `allEqual` rather than inventing an enum
+   shortcut.
+3. Once the enum/product closure is selected, implement it and actualize the
+   complete Common `Appendable`/`StringBuilder`, generated
+   `joinTo`/`joinToString`, and Common `AbstractCollection`/`AbstractList`
+   sources as one truthful dependency sequence.
 
 ## Navigation
 
