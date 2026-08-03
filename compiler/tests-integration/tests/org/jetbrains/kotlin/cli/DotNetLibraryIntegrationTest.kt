@@ -26782,6 +26782,58 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .start()
         val reflectionOutput = reflectionProcess.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, reflectionProcess.waitFor(), reflectionOutput)
+
+        val stdlibDirectory = produceSelfDescribingStdlib("net48", "inline-only-csharp")
+        val stdlib = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+        val stdlibRuntime = stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+        val publicStdlibConsumer = File(tmpdir, "PublicStdlibConsumer.cs").apply {
+            writeText(
+                """
+                public static class PublicStdlibConsumer
+                {
+                    public static int Count(Kotlin.Collections.Iterable values)
+                    {
+                        return Kotlin.Collections.CollectionsKt.count<int>(values);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val publicStdlibResult = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            publicStdlibConsumer,
+            File(tmpdir, "PublicStdlibConsumer.dll"),
+            stdlib,
+            stdlibRuntime,
+        )
+        assertEquals(0, publicStdlibResult.exitCode, publicStdlibResult.output)
+
+        val forbiddenInlineOnlyConsumer = File(tmpdir, "ForbiddenInlineOnlyConsumer.cs").apply {
+            writeText(
+                """
+                public static class ForbiddenInlineOnlyConsumer
+                {
+                    public static object Find(
+                        Kotlin.Collections.Iterable values,
+                        Kotlin.Function1 predicate)
+                    {
+                        return Kotlin.Collections.CollectionsKt.find<int>(values, predicate);
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val forbiddenInlineOnlyResult = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            forbiddenInlineOnlyConsumer,
+            File(tmpdir, "ForbiddenInlineOnlyConsumer.dll"),
+            stdlib,
+            stdlibRuntime,
+        )
+        assertTrue(forbiddenInlineOnlyResult.exitCode != 0) { forbiddenInlineOnlyResult.output }
+        assertTrue("find" in forbiddenInlineOnlyResult.output) {
+            "Expected C# accessibility diagnostic for @InlineOnly find:\n${forbiddenInlineOnlyResult.output}"
+        }
     }
 
     @Test
@@ -31051,11 +31103,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(
             mapOf(
                 "all" to 1,
+                "asIterable" to 1,
                 "any" to 2,
+                "component1" to 1,
+                "component2" to 1,
+                "component3" to 1,
+                "component4" to 1,
+                "component5" to 1,
                 "contains" to 1,
-                "count" to 2,
-                "elementAtOrNull" to 1,
+                "count" to 3,
+                "elementAt" to 1,
+                "elementAtOrNull" to 2,
+                "find" to 1,
+                "findLast" to 2,
                 "first" to 3,
+                "firstNotNullOf" to 1,
+                "firstNotNullOfOrNull" to 1,
                 "firstOrNull" to 3,
                 "fold" to 1,
                 "foldIndexed" to 1,
@@ -31089,11 +31152,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 .filter { declaration ->
                     declaration.methodName in setOf(
                         "all",
+                        "asIterable",
                         "any",
+                        "component1",
+                        "component2",
+                        "component3",
+                        "component4",
+                        "component5",
                         "contains",
                         "count",
+                        "elementAt",
                         "elementAtOrNull",
+                        "find",
+                        "findLast",
                         "first",
+                        "firstNotNullOf",
+                        "firstNotNullOfOrNull",
                         "firstOrNull",
                         "fold",
                         "foldIndexed",
@@ -31130,11 +31204,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(collectionFunctions.none { declaration ->
             declaration.methodName in setOf(
                 "all",
+                "asIterable",
                 "any",
+                "component1",
+                "component2",
+                "component3",
+                "component4",
+                "component5",
                 "contains",
                 "count",
+                "elementAt",
                 "elementAtOrNull",
+                "find",
+                "findLast",
                 "first",
+                "firstNotNullOf",
+                "firstNotNullOfOrNull",
                 "firstOrNull",
                 "fold",
                 "foldIndexed",
@@ -31217,6 +31302,50 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(".assembly extern $coreLibraryAssembly" in il)
         assertTrue("System.Runtime.Versioning.TargetFrameworkAttribute" in il)
         if (target == "netstandard2.0") assertTrue("[mscorlib]" !in il)
+        val inlineOnlyMethodHeaders = listOf(
+            ".method assembly hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterable' " +
+                    "'asIterable'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
+            ".method assembly hidebysig static !!0 'component1'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
+            ".method assembly hidebysig static !!0 'component2'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
+            ".method assembly hidebysig static !!0 'component3'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
+            ".method assembly hidebysig static !!0 'component4'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
+            ".method assembly hidebysig static !!0 'component5'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>')",
+            ".method assembly hidebysig static int32 'count'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<this>')",
+            ".method assembly hidebysig static !!0 'elementAt'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', int32 'index')",
+            ".method assembly hidebysig static object 'elementAtOrNull'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', int32 'index')",
+            ".method assembly hidebysig static object 'find'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')",
+            ".method assembly hidebysig static object 'findLast'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')",
+            ".method assembly hidebysig static object 'findLast'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')",
+            ".method assembly hidebysig static !!1 'firstNotNullOf'<'T', 'R'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'transform')",
+            ".method assembly hidebysig static object 'firstNotNullOfOrNull'<'T', 'R'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'transform')",
+        )
+        for (header in inlineOnlyMethodHeaders) {
+            val methodStart = il.indexOf(header)
+            assertTrue(methodStart >= 0) { "Missing assembly-visible @InlineOnly method '$header' in:\n$il" }
+            val methodEnd = il.indexOf("  .method", methodStart + header.length)
+                .takeIf { index -> index >= 0 } ?: il.length
+            val methodIl = il.substring(methodStart, methodEnd)
+            assertFalse("KotlinCompilerAbiAttribute" in methodIl) { methodIl }
+            assertFalse("EditorBrowsableAttribute" in methodIl) { methodIl }
+        }
         assertTrue(
             "implements 'Kotlin.Collections.ArrayIterator', " +
                     "[Kotlin.Runtime]'Kotlin.Collections.Iterator', " +
@@ -31796,6 +31925,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun <T> elementCount(values: Iterable<T>): Int = values.count()
 
+                public fun <T> inlineOnlyCollectionCount(values: Collection<T>): Int = values.count()
+
+                public fun <T> inlineOnlyIterableIdentity(values: Iterable<T>): Iterable<T> =
+                    values.asIterable()
+
+                public fun <T> inlineOnlyListElements(values: List<T>, index: Int): T? {
+                    values.component1()
+                    values.component2()
+                    values.component3()
+                    values.component4()
+                    values.component5()
+                    values.elementAt(index)
+                    return values.elementAtOrNull(index)
+                }
+
+                public fun <T> inlineOnlyFind(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.find(predicate)
+
+                public fun <T> inlineOnlyFindLast(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.findLast(predicate)
+
+                public fun <T> inlineOnlyListFindLast(
+                    values: List<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.findLast(predicate)
+
+                public fun <T, R : Any> inlineOnlyFirstNotNullOf(
+                    values: Iterable<T>,
+                    transform: (T) -> R?,
+                ): R = values.firstNotNullOf(transform)
+
+                public fun <T, R : Any> inlineOnlyFirstNotNullOfOrNull(
+                    values: Iterable<T>,
+                    transform: (T) -> R?,
+                ): R? = values.firstNotNullOfOrNull(transform)
+
                 public fun <T, R> foldLeft(
                     values: Iterable<T>,
                     initial: R,
@@ -32079,6 +32248,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "::'elementAtOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32)" in il
         )
         assertTrue("::'getOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List', int32)" in il)
+        assertTrue("::'asIterable'<" !in il) {
+            "The separate consumer must inline Iterable.asIterable():\n$il"
+        }
+        for (component in 1..5) {
+            assertTrue("::'component$component'<" !in il) {
+                "The separate consumer must inline List.component$component():\n$il"
+            }
+        }
+        assertTrue(
+            "::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Collection')" !in il
+        ) {
+            "The separate consumer must inline Collection.count():\n$il"
+        }
+        assertTrue("::'elementAt'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List'" !in il) {
+            "The separate consumer must inline List.elementAt():\n$il"
+        }
+        assertTrue(
+            "::'elementAtOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List'" !in il
+        ) {
+            "The separate consumer must inline List.elementAtOrNull():\n$il"
+        }
+        assertTrue("::'find'<" !in il) { "The separate consumer must inline find():\n$il" }
+        assertTrue("::'findLast'<" !in il) { "The separate consumer must inline findLast():\n$il" }
+        assertTrue("::'firstNotNullOf'<" !in il) {
+            "The separate consumer must inline firstNotNullOf():\n$il"
+        }
+        assertTrue("::'firstNotNullOfOrNull'<" !in il) {
+            "The separate consumer must inline firstNotNullOfOrNull():\n$il"
+        }
         assertTrue(
             "::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il
         )
@@ -32379,6 +32577,47 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun <T> installedElementCount(values: Iterable<T>): Int = values.count()
 
+                public fun <T> installedInlineOnlyCollectionCount(values: Collection<T>): Int =
+                    values.count()
+
+                public fun <T> installedInlineOnlyIterableIdentity(values: Iterable<T>): Iterable<T> =
+                    values.asIterable()
+
+                public fun <T> installedInlineOnlyListElements(values: List<T>, index: Int): T? {
+                    values.component1()
+                    values.component2()
+                    values.component3()
+                    values.component4()
+                    values.component5()
+                    values.elementAt(index)
+                    return values.elementAtOrNull(index)
+                }
+
+                public fun <T> installedInlineOnlyFind(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.find(predicate)
+
+                public fun <T> installedInlineOnlyFindLast(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.findLast(predicate)
+
+                public fun <T> installedInlineOnlyListFindLast(
+                    values: List<T>,
+                    predicate: (T) -> Boolean,
+                ): T? = values.findLast(predicate)
+
+                public fun <T, R : Any> installedInlineOnlyFirstNotNullOf(
+                    values: Iterable<T>,
+                    transform: (T) -> R?,
+                ): R = values.firstNotNullOf(transform)
+
+                public fun <T, R : Any> installedInlineOnlyFirstNotNullOfOrNull(
+                    values: Iterable<T>,
+                    transform: (T) -> R?,
+                ): R? = values.firstNotNullOfOrNull(transform)
+
                 public fun <T, R> installedFoldLeft(
                     values: Iterable<T>,
                     initial: R,
@@ -32659,11 +32898,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedSumSelectedNonLocal(arrayOf(1, 2, 3).asIterable()) == 23 &&
                             (guardedIterableResult as Any) === (guardedIterable as Any) &&
                             (guardedListResult as Any) === (guardedList as Any)
+                    val inlineOnlyList = arrayOf(1, 2, 3, 4, 5).asList()
+                    val inlineOnlyIterable = arrayOf(1, 2, 3, 2).asIterable()
+                    val installedIdentity = installedInlineOnlyIterableIdentity(inlineOnlyIterable)
+                    val inlineOnlyOk =
+                        (installedIdentity as Any) === (inlineOnlyIterable as Any) &&
+                            installedInlineOnlyCollectionCount(inlineOnlyList) == 5 &&
+                            installedInlineOnlyListElements(inlineOnlyList, 4) == 5 &&
+                            installedInlineOnlyFind(inlineOnlyIterable) { it == 2 } == 2 &&
+                            installedInlineOnlyFindLast(inlineOnlyIterable) { it == 2 } == 2 &&
+                            installedInlineOnlyListFindLast(inlineOnlyList) { it < 4 } == 3 &&
+                            installedInlineOnlyFirstNotNullOf(
+                                arrayOf("a", "bb").asIterable()
+                            ) { value -> if (value.length == 2) value.length else null } == 2 &&
+                            installedInlineOnlyFirstNotNullOfOrNull(
+                                arrayOf("a", "bb").asIterable()
+                            ) { value -> if (value.length == 3) value.length else null } == null
                     val throwableOk =
                         snapshot.size == 1 &&
                             snapshot[0] === suppressed &&
                             owner.stackTraceToString() != owner.toString()
-                    println(if (collectionsOk && sumsOk && averagesOk && frontierOk && throwableOk) "OK" else "FAIL")
+                    println(
+                        if (collectionsOk && sumsOk && averagesOk && frontierOk && inlineOnlyOk && throwableOk) {
+                            "OK"
+                        } else {
+                            "FAIL"
+                        }
+                    )
                 }
                 """.trimIndent()
             )
@@ -32727,6 +32988,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "::'elementAtOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', int32)" in il
         )
         assertTrue("::'getOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List', int32)" in il)
+        assertTrue("::'asIterable'<" !in il) {
+            "The installed consumer must inline Iterable.asIterable():\n$il"
+        }
+        for (component in 1..5) {
+            assertTrue("::'component$component'<" !in il) {
+                "The installed consumer must inline List.component$component():\n$il"
+            }
+        }
+        assertTrue(
+            "::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Collection')" !in il
+        ) {
+            "The installed consumer must inline Collection.count():\n$il"
+        }
+        assertTrue("::'elementAt'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List'" !in il) {
+            "The installed consumer must inline List.elementAt():\n$il"
+        }
+        assertTrue(
+            "::'elementAtOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List'" !in il
+        ) {
+            "The installed consumer must inline List.elementAtOrNull():\n$il"
+        }
+        assertTrue("::'find'<" !in il) { "The installed consumer must inline find():\n$il" }
+        assertTrue("::'findLast'<" !in il) { "The installed consumer must inline findLast():\n$il" }
+        assertTrue("::'firstNotNullOf'<" !in il) {
+            "The installed consumer must inline firstNotNullOf():\n$il"
+        }
+        assertTrue("::'firstNotNullOfOrNull'<" !in il) {
+            "The installed consumer must inline firstNotNullOfOrNull():\n$il"
+        }
         assertTrue("::'lastOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("::'any'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue(
@@ -33039,6 +33329,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         backing.subList(fromIndex, toIndex)
                 }
 
+                class FailingGetStringList(private val failure: Throwable) : List<String> {
+                    override val size: Int get() = 1
+
+                    override fun isEmpty(): Boolean = false
+
+                    override fun get(index: Int): String = throw failure
+
+                    override fun contains(element: String): Boolean = false
+
+                    override fun containsAll(elements: Collection<String>): Boolean = false
+
+                    override fun indexOf(element: String): Int = -1
+
+                    override fun lastIndexOf(element: String): Int = -1
+
+                    override fun iterator(): Iterator<String> =
+                        throw IllegalStateException("unexpected iterator")
+
+                    override fun listIterator(): ListIterator<String> =
+                        throw IllegalStateException("unexpected listIterator")
+
+                    override fun listIterator(index: Int): ListIterator<String> =
+                        throw IllegalStateException("unexpected listIterator(index)")
+
+                    override fun subList(fromIndex: Int, toIndex: Int): List<String> =
+                        throw IllegalStateException("unexpected subList")
+                }
+
                 fun nonLocalMatch(values: Iterable<Int>): Int {
                     values.any { value ->
                         if (value == 2) return value
@@ -33118,6 +33436,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return -1
                 }
 
+                fun nonLocalInlineFind(values: Iterable<Int>): Int {
+                    values.find { value ->
+                        if (value == 2) return 24
+                        false
+                    }
+                    return -1
+                }
+
+                fun nonLocalFirstNotNullOf(values: Iterable<Int>): Int {
+                    values.firstNotNullOfOrNull { value ->
+                        if (value == 2) return 25
+                        null
+                    }
+                    return -1
+                }
+
                 fun main() {
                     print(false)
                     print("|")
@@ -33153,6 +33487,91 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             view.getOrNull(2) == null &&
                             values.asIterable().elementAtOrNull(1) == 3 &&
                             values.asIterable().elementAtOrNull(2) == null
+                    val inlineOnlyList = arrayOf(1, 2, 3, 4, 5).asList()
+                    val (component1, component2, component3, component4, component5) = inlineOnlyList
+                    val inlineOnlyIterable = CountingInts(arrayOf(1, 2, 3, 2))
+                    val inlineOnlyIdentity: Iterable<Int> = inlineOnlyIterable.asIterable()
+                    var findTrace = 0
+                    val inlineFind = inlineOnlyIterable.find { value ->
+                        findTrace = findTrace * 10 + value
+                        value == 2
+                    }
+                    var findLastTrace = 0
+                    val inlineFindLast = inlineOnlyIterable.findLast { value ->
+                        findLastTrace = findLastTrace * 10 + value
+                        value == 2
+                    }
+                    val reverseInlineFind = ReverseOnlyIntList(arrayOf(1, 2, 3, 2))
+                    val inlineListFindLast = reverseInlineFind.findLast { it == 2 }
+                    var nullableFindCalls = 0
+                    val nullableFind: String? = arrayOf<String?>(null, "tail").asIterable().find { value ->
+                        nullableFindCalls++
+                        value == null
+                    }
+                    var noTransformMessageIsCommon = false
+                    try {
+                        arrayOf(1, 2).asIterable().firstNotNullOf { null as String? }
+                    } catch (failure: NoSuchElementException) {
+                        noTransformMessageIsCommon =
+                            failure.message ==
+                                "No element of the collection was transformed to a non-null value."
+                    }
+                    val transformFailure = IllegalStateException("inline transform failure")
+                    var transformFailureCalls = 0
+                    var transformFailureIdentity = false
+                    try {
+                        arrayOf(1, 2, 3).asIterable().firstNotNullOfOrNull { value ->
+                            transformFailureCalls++
+                            if (value == 2) throw transformFailure
+                            null as String?
+                        }
+                    } catch (failure: Throwable) {
+                        transformFailureIdentity = failure === transformFailure
+                    }
+                    @Suppress("UNCHECKED_CAST")
+                    val wrongInlineIterable = arrayOf("text").asIterable() as Iterable<Int>
+                    var wrongInlineTrace = 1
+                    var wrongInlineFailedAtUse = false
+                    try {
+                        wrongInlineIterable.find { value ->
+                            wrongInlineTrace += value
+                            true
+                        }
+                    } catch (_: ClassCastException) {
+                        wrongInlineFailedAtUse = wrongInlineTrace == 1
+                    }
+                    val inlineGetFailure = IllegalStateException("inline get failure")
+                    var inlineGetFailureIdentity = false
+                    try {
+                        FailingGetStringList(inlineGetFailure).elementAtOrNull(0)
+                    } catch (failure: Throwable) {
+                        inlineGetFailureIdentity = failure === inlineGetFailure
+                    }
+                    val inlineOnlyOk =
+                        (inlineOnlyIdentity as Any) === (inlineOnlyIterable as Any) &&
+                            inlineOnlyList.count() == 5 &&
+                            component1 == 1 && component2 == 2 && component3 == 3 &&
+                            component4 == 4 && component5 == 5 &&
+                            inlineOnlyList.elementAt(2) == 3 &&
+                            inlineOnlyList.elementAtOrNull(-1) == null &&
+                            inlineOnlyList.elementAtOrNull(4) == 5 &&
+                            inlineFind == 2 && findTrace == 12 &&
+                            inlineFindLast == 2 && findLastTrace == 1232 &&
+                            inlineListFindLast == 2 &&
+                            reverseInlineFind.requestedListIteratorIndex == reverseInlineFind.size &&
+                            nullableFind == null && nullableFindCalls == 1 &&
+                            arrayOf("a", "bb").asIterable().firstNotNullOf { value ->
+                                if (value.length == 2) value.length else null
+                            } == 2 &&
+                            arrayOf("a", "bb").asIterable().firstNotNullOfOrNull { value ->
+                                if (value.length == 3) value.length else null
+                            } == null &&
+                            nonLocalInlineFind(arrayOf(1, 2, 3).asIterable()) == 24 &&
+                            nonLocalFirstNotNullOf(arrayOf(1, 2, 3).asIterable()) == 25 &&
+                            noTransformMessageIsCommon &&
+                            transformFailureIdentity && transformFailureCalls == 2 &&
+                            inlineGetFailureIdentity &&
+                            wrongInlineFailedAtUse
                     val counting = CountingInts(arrayOf(1, 2, 3))
                     val countedSum = counting.sum()
                     val floatNaN = arrayOf(Float.NaN).asIterable().sum()
@@ -33624,7 +34043,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             indexedOptionalOk + "|" + numericSumOk + "|" + numericAverageOk + "|" +
                             provenFrontierOk + "|" + foldOk + "|" + reduceOk + "|" + forEachOk + "|" +
                             firstPredicateOk + "|" + lastPredicateOk + "|" +
-                            singlePredicateOk + "|" + inlinePredicatesOk
+                            singlePredicateOk + "|" + inlinePredicatesOk + "|" + inlineOnlyOk
                     )
                 }
                 """.trimIndent()
@@ -33658,7 +34077,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }

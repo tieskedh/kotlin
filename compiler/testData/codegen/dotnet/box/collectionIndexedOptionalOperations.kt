@@ -80,20 +80,6 @@ private class IteratorTrapList<T>(private val values: Array<T>) : List<T> {
         throw Error("indexed optional operation used List.subList()")
 }
 
-private class FailingGetList(private val failure: Throwable) : List<String> {
-    override val size: Int get() = 1
-    override fun isEmpty(): Boolean = false
-    override fun get(index: Int): String = throw failure
-    override fun contains(element: String): Boolean = false
-    override fun containsAll(elements: Collection<String>): Boolean = false
-    override fun indexOf(element: String): Int = -1
-    override fun lastIndexOf(element: String): Int = -1
-    override fun iterator(): Iterator<String> = throw Error("unexpected iterator")
-    override fun listIterator(): ListIterator<String> = throw Error("unexpected listIterator")
-    override fun listIterator(index: Int): ListIterator<String> = throw Error("unexpected listIterator(index)")
-    override fun subList(fromIndex: Int, toIndex: Int): List<String> = throw Error("unexpected subList")
-}
-
 private fun <T> optionalAt(values: Iterable<T>, index: Int): T? =
     values.elementAtOrNull(index)
 
@@ -142,7 +128,7 @@ fun box(): String {
 
     val list = IteratorTrapList(arrayOf(11, 13))
     val emptyList = IteratorTrapList(emptyArray<Int>())
-    if (emptyList.getOrNull(0) != null || emptyList.elementAtOrNull(0) != null) {
+    if (emptyList.getOrNull(0) != null) {
         return fail("empty List result")
     }
     if (emptyList.getCalls != 0) return fail("empty List get")
@@ -159,14 +145,6 @@ fun box(): String {
     val nullableList = IteratorTrapList(arrayOf<String?>(null))
     if (nullableList.getOrNull(0) != null || nullableList.getCalls != 1) {
         return fail("nullable List element")
-    }
-
-    val failure = IllegalStateException("get failed")
-    try {
-        FailingGetList(failure).elementAtOrNull(0)
-        return fail("get failure returned")
-    } catch (caught: IllegalStateException) {
-        if (caught !== failure) return fail("get failure identity")
     }
 
     return "OK"

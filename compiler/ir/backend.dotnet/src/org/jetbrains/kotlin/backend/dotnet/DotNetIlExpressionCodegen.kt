@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetField
+import org.jetbrains.kotlin.ir.expressions.IrGetObjectValue
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
@@ -246,6 +247,12 @@ internal class DotNetIlExpressionCodegen(
         when (expression) {
             null -> dotNetUnsupported("missing ${expectedType.nameInSignature} expression value")
             is IrConst -> emitConstant(expression, expectedType)
+            is IrGetObjectValue -> {
+                if (!expression.type.isUnit()) {
+                    dotNetUnsupported("unsupported object expression ${expression.render()}")
+                }
+                emitRuntimeUnitInstance()
+            }
             is IrGetValue -> emitGetValue(expression, expectedType)
             is IrGetField -> emitGetField(expression, expectedType)
             is IrConstructorCall -> emitConstructorCall(expression, expectedType)
@@ -268,7 +275,9 @@ internal class DotNetIlExpressionCodegen(
             // The safe-call/elvis desugaring: `IrBlock { val tmp = <receiver>; IrWhen }`.
             // Statement emission lives on the method codegen, hence the hook (like IrTry above).
             is IrContainerExpression -> statementScopeEmitter.emitBlockExpression(expression, expectedType)
-            else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} expression ${expression.javaClass.simpleName}")
+            else -> dotNetUnsupported(
+                "unsupported ${expectedType.nameInSignature} expression ${expression.javaClass.simpleName}: ${expression.render()}"
+            )
         }
     }
 
@@ -2581,6 +2590,24 @@ internal class DotNetIlExpressionCodegen(
                     )
                 emitLoadSlot(slot)
                 methodContext.emit(instruction, pops = 1, pushes = 1)
+                return
+            }
+            // A canonical generic-interface result can be stored in an object local while a
+            // concrete consumer later requires the enclosing function's open T. Materialize
+            // precisely that erased local-read boundary with `unbox.any !n/!!n`: ECMA-335 defines
+            // it for both reference and value substitutions. Restricting the rule to local slots
+            // and open type-parameter consumers prevents an object-to-arbitrary-type escape hatch.
+            // A corrupt value therefore still fails at first use.
+            if (slotType == DotNetIlValueType.Object &&
+                expectedType is DotNetIlValueType.TypeParameter &&
+                expression.symbol.owner is IrVariable
+            ) {
+                emitLoadSlot(slot)
+                methodContext.emit(
+                    "unbox.any ${expectedType.nameInSignature}",
+                    pops = 1,
+                    pushes = 1,
+                )
                 return
             }
             // A NARROWED read of a nullable-primitive slot: the frontend types a null-test-
