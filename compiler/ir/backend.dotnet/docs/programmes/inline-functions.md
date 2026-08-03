@@ -202,6 +202,35 @@ This matrix is green. Reified substitution, coroutine lowering, `lateinit`, refl
 adjacent parked features did not enter the slice. The selected Common collection inline families
 may now enter the stdlib product through their exact dependency closures.
 
+## Return control transfer from an expression operand
+
+The shared inliner may place a caller-targeted `IrReturn` at any source-valid inline-lambda use,
+including the right-hand side of an arithmetic expression or a later call argument. Kotlin
+evaluation order remains authoritative: operands before that return are evaluated, operands after
+it are not, and the return value leaves the caller immediately.
+
+The mature backends preserve that rule through their own control-flow representation. JVM emits
+the materialized return value and a typed JVM return (with its stack/frame machinery); JS emits a
+structured `return`; Wasm emits the expected result followed by `return`; and Native evaluates into
+the target return slot before generating the function return. None changes the Common inline body
+or treats a pending outer operand as part of the return value.
+
+CIL adds one physical constraint: `ret` must see only the method result, and `leave` requires an
+empty evaluation stack. Kotlin/.NET therefore normalizes every function return whose expression
+context has already pushed operands. It first evaluates and spills the return value, pops only the
+older pending operands, reloads the return value, and emits `ret`; a return crossing protected
+regions spills the same value, drains the older operands, and emits `leave` to the existing return
+join. A void return just drains the older operands. This is emitter-owned control-transfer cleanup,
+not an inline-only lowering and not permission to reorder or pre-spill ordinary expression
+evaluation.
+
+Rejected alternatives are changing a Common body such as `sum += selector(element)`, evaluating
+the returning operand first, or special-casing one stdlib function. Each either changes Kotlin
+side-effect order or leaves the same invalid-CIL shape available in another expression. Evidence
+must cover value and void returns with one and multiple pending operands, reference and value
+results, same- and cross-library inlining, protected-region transfer, skipped later operands, and
+both CLR execution profiles where the product slice is portable.
+
 ## Selected dependency-graph breadth
 
 The completed ordinary-inline breadth includes calls from a body serialized by Kotlin library A
