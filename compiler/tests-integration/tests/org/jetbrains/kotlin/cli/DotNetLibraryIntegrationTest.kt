@@ -30958,6 +30958,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "contains" to 1,
                 "count" to 1,
                 "elementAtOrNull" to 1,
+                "fold" to 1,
+                "foldIndexed" to 1,
+                "foldRight" to 1,
+                "foldRightIndexed" to 1,
                 "getOrNull" to 1,
                 "indexOf" to 2,
                 "indexOfFirst" to 2,
@@ -30975,6 +30979,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         "contains",
                         "count",
                         "elementAtOrNull",
+                        "fold",
+                        "foldIndexed",
+                        "foldRight",
+                        "foldRightIndexed",
                         "getOrNull",
                         "indexOf",
                         "indexOfFirst",
@@ -30995,6 +31003,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "contains",
                 "count",
                 "elementAtOrNull",
+                "fold",
+                "foldIndexed",
+                "foldRight",
+                "foldRightIndexed",
                 "getOrNull",
                 "indexOf",
                 "indexOfFirst",
@@ -31137,6 +31149,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             ".method public hidebysig static int32 'count'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static !!1 'fold'<'T', 'R'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', !!1 'initial', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function2' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static !!1 'foldIndexed'<'T', 'R'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', !!1 'initial', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function3' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static !!1 'foldRight'<'T', 'R'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', !!1 'initial', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function2' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static !!1 'foldRightIndexed'<'T', 'R'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', !!1 'initial', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function3' 'operation')" in il
         )
         assertTrue(
             ".method public hidebysig static int32 'sumOfByte'(" +
@@ -31434,6 +31466,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun <T> elementCount(values: Iterable<T>): Int = values.count()
 
+                public fun <T, R> foldLeft(
+                    values: Iterable<T>,
+                    initial: R,
+                    operation: (R, T) -> R,
+                ): R = values.fold(initial, operation)
+
+                public fun <T, R> foldLeftIndexed(
+                    values: Iterable<T>,
+                    initial: R,
+                    operation: (Int, R, T) -> R,
+                ): R = values.foldIndexed(initial, operation)
+
+                public fun <T, R> foldListRight(
+                    values: List<T>,
+                    initial: R,
+                    operation: (T, R) -> R,
+                ): R = values.foldRight(initial, operation)
+
+                public fun <T, R> foldListRightIndexed(
+                    values: List<T>,
+                    initial: R,
+                    operation: (Int, T, R) -> R,
+                ): R = values.foldRightIndexed(initial, operation)
+
                 public fun sumBytes(values: Iterable<Byte>): Int = values.sum()
 
                 public fun sumShorts(values: Iterable<Short>): Int = values.sum()
@@ -31580,6 +31636,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "The separate consumer must inline the Common any(predicate) body:\n$il"
         }
         assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'fold'<" !in il) {
+            "The separate consumer must inline the Common fold body:\n$il"
+        }
+        assertTrue("::'foldIndexed'<" !in il) {
+            "The separate consumer must inline the Common foldIndexed body:\n$il"
+        }
+        assertTrue("::'foldRight'<" !in il) {
+            "The separate consumer must inline the Common foldRight body:\n$il"
+        }
+        assertTrue("::'foldRightIndexed'<" !in il) {
+            "The separate consumer must inline the Common foldRightIndexed body:\n$il"
+        }
         assertTrue(
             "::'sumOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
         )
@@ -31617,12 +31685,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "The separate consumer must inline both Common indexOfLast bodies:\n$il"
         }
         assertEquals(
-            2,
+            3,
             Regex(
                 "\\[Kotlin\\.Stdlib]'Kotlin\\.Collections\\.CollectionsKt'::" +
                         "'checkIndexOverflow'\\(int32\\)"
             ).findAll(il).count(),
-            "Only the two inlined Iterable index-search bodies may retain overflow-helper calls",
+            "Only the two inlined Iterable index-search bodies and foldIndexed may retain overflow-helper calls",
         )
         assertTrue("::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
@@ -31712,6 +31780,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     values.elementAtOrNull(index)
 
                 public fun <T> installedElementCount(values: Iterable<T>): Int = values.count()
+
+                public fun <T, R> installedFoldLeft(
+                    values: Iterable<T>,
+                    initial: R,
+                    operation: (R, T) -> R,
+                ): R = values.fold(initial, operation)
+
+                public fun <T, R> installedFoldLeftIndexed(
+                    values: Iterable<T>,
+                    initial: R,
+                    operation: (Int, R, T) -> R,
+                ): R = values.foldIndexed(initial, operation)
+
+                public fun <T, R> installedFoldListRight(
+                    values: List<T>,
+                    initial: R,
+                    operation: (T, R) -> R,
+                ): R = values.foldRight(initial, operation)
+
+                public fun <T, R> installedFoldListRightIndexed(
+                    values: List<T>,
+                    initial: R,
+                    operation: (Int, T, R) -> R,
+                ): R = values.foldRightIndexed(initial, operation)
 
                 public fun installedSumBytes(values: Iterable<Byte>): Int = values.sum()
 
@@ -31892,6 +31984,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "The installed consumer must inline the Common any(predicate) body:\n$il"
         }
         assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
+        assertTrue("::'fold'<" !in il) {
+            "The installed consumer must inline the Common fold body:\n$il"
+        }
+        assertTrue("::'foldIndexed'<" !in il) {
+            "The installed consumer must inline the Common foldIndexed body:\n$il"
+        }
+        assertTrue("::'foldRight'<" !in il) {
+            "The installed consumer must inline the Common foldRight body:\n$il"
+        }
+        assertTrue("::'foldRightIndexed'<" !in il) {
+            "The installed consumer must inline the Common foldRightIndexed body:\n$il"
+        }
         assertTrue("::'sumOfByte'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'sumOfShort'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'sumOfInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
@@ -32120,6 +32224,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return -1
                 }
 
+                fun nonLocalFoldMatch(values: Iterable<Int>): Int {
+                    values.fold(0) { accumulator, value ->
+                        if (value == 2) return value
+                        accumulator + value
+                    }
+                    return -1
+                }
+
                 fun main() {
                     print(false)
                     print("|")
@@ -32171,6 +32283,52 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             countedSum == 6 &&
                             counting.iteratorCalls == 1 &&
                             counting.nextCalls == 3
+                    val folding = CountingInts(arrayOf(1, 2, 3))
+                    var leftTrace = 0
+                    val leftFold = folding.fold(4) { accumulator, value ->
+                        leftTrace = leftTrace * 10 + value
+                        accumulator + value
+                    }
+                    var indexedTrace = 0
+                    val indexedFold = folding.foldIndexed(0) { index, accumulator, value ->
+                        indexedTrace = indexedTrace * 10 + index
+                        accumulator + index * value
+                    }
+                    val reverseFold = ReverseOnlyIntList(arrayOf(1, 2, 3))
+                    var rightTrace = 0
+                    val rightFold = reverseFold.foldRight(0) { value, accumulator ->
+                        rightTrace = rightTrace * 10 + value
+                        value - accumulator
+                    }
+                    var rightIndexedTrace = 0
+                    val rightIndexedFold = reverseFold.foldRightIndexed(0) { index, value, accumulator ->
+                        rightIndexedTrace = rightIndexedTrace * 10 + index
+                        index + value + accumulator
+                    }
+                    val nullableFold: String? =
+                        arrayOf<String?>(null, "K").asIterable().fold(null as String?) { accumulator, value ->
+                            if (value == null) accumulator else value
+                        }
+                    var emptyFoldCalls = 0
+                    val foldOk =
+                        leftFold == 10 &&
+                            leftTrace == 123 &&
+                            indexedFold == 8 &&
+                            indexedTrace == 12 &&
+                            folding.iteratorCalls == 2 &&
+                            folding.nextCalls == 6 &&
+                            rightFold == 2 &&
+                            rightTrace == 321 &&
+                            rightIndexedFold == 9 &&
+                            rightIndexedTrace == 210 &&
+                            reverseFold.requestedListIteratorIndex == reverseFold.size &&
+                            nullableFold == "K" &&
+                            emptyList<Int>().fold(37) { accumulator, value ->
+                                emptyFoldCalls++
+                                accumulator + value
+                            } == 37 &&
+                            emptyFoldCalls == 0 &&
+                            nonLocalFoldMatch(arrayOf(1, 2, 3).asIterable()) == 2
                     val empty = HostileEmptyCollection<Int>()
                     var emptyPredicateCalls = 0
                     val emptyFastPathOk =
@@ -32252,7 +32410,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     println(
                         first + "|" + second + "|" + (atEof == null) + "|" +
                             readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk + "|" +
-                            indexedOptionalOk + "|" + numericSumOk + "|" + inlinePredicatesOk
+                            indexedOptionalOk + "|" + numericSumOk + "|" + foldOk + "|" + inlinePredicatesOk
                     )
                 }
                 """.trimIndent()
@@ -32286,7 +32444,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }
@@ -32354,6 +32512,59 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ldc.i4.2
                     ceq
                     box [mscorlib]System.Boolean
+                    ret
+                  }
+                }
+
+                .class public auto ansi sealed beforefieldinit SumOperation
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Function2'
+                {
+                  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'left', object 'right') cil managed
+                  {
+                    .maxstack 2
+                    ldarg.1
+                    unbox.any [mscorlib]System.Int32
+                    ldarg.2
+                    unbox.any [mscorlib]System.Int32
+                    add
+                    box [mscorlib]System.Int32
+                    ret
+                  }
+                }
+
+                .class public auto ansi sealed beforefieldinit SumIndexedOperation
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Function3'
+                {
+                  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'first', object 'second', object 'third') cil managed
+                  {
+                    .maxstack 2
+                    ldarg.1
+                    unbox.any [mscorlib]System.Int32
+                    ldarg.2
+                    unbox.any [mscorlib]System.Int32
+                    add
+                    ldarg.3
+                    unbox.any [mscorlib]System.Int32
+                    add
+                    box [mscorlib]System.Int32
                     ret
                   }
                 }
@@ -32521,8 +32732,44 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     newobj instance void EqualTwoPredicate::.ctor()
                     call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'indexOfLast'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function1')
                     ldc.i4.3
-                    beq.s DONE
+                    beq.s FOLD
                     ldstr "List indexOfLast fallback changed"
+                    call void Program::Fail(string)
+                FOLD:
+                    ldloc.2
+                    ldc.i4.s 10
+                    newobj instance void SumOperation::.ctor()
+                    call !!1 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'fold'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!1, class [Kotlin.Runtime]'Kotlin.Function2')
+                    ldc.i4.s 18
+                    beq.s FOLD_INDEXED
+                    ldstr "fold fallback changed"
+                    call void Program::Fail(string)
+                FOLD_INDEXED:
+                    ldloc.2
+                    ldc.i4.0
+                    newobj instance void SumIndexedOperation::.ctor()
+                    call !!1 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'foldIndexed'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', !!1, class [Kotlin.Runtime]'Kotlin.Function3')
+                    ldc.i4.s 14
+                    beq.s FOLD_RIGHT
+                    ldstr "foldIndexed fallback changed"
+                    call void Program::Fail(string)
+                FOLD_RIGHT:
+                    ldloc.3
+                    ldc.i4.s 10
+                    newobj instance void SumOperation::.ctor()
+                    call !!1 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'foldRight'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', !!1, class [Kotlin.Runtime]'Kotlin.Function2')
+                    ldc.i4.s 18
+                    beq.s FOLD_RIGHT_INDEXED
+                    ldstr "foldRight fallback changed"
+                    call void Program::Fail(string)
+                FOLD_RIGHT_INDEXED:
+                    ldloc.3
+                    ldc.i4.0
+                    newobj instance void SumIndexedOperation::.ctor()
+                    call !!1 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'foldRightIndexed'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', !!1, class [Kotlin.Runtime]'Kotlin.Function3')
+                    ldc.i4.s 14
+                    beq.s DONE
+                    ldstr "foldRightIndexed fallback changed"
                     call void Program::Fail(string)
                 DONE:
                     ret
