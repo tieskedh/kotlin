@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — runtime-typed array closure admitted; builder language prerequisites next**
+- Status: **Active — builder and Common abstract-base phase selected next**
 - ABI foundation: [`../decisions/draft-adr-generic-interface-abi.md`](../decisions/draft-adr-generic-interface-abi.md)
 
 ## Purpose
@@ -659,31 +659,29 @@ The carrier has landed and passed its representation gate. The selected
 identities Kotlin-owned and uses `System.Text.StringBuilder` only as private storage. Raw BCL
 builders do not become a third `CharSequence` classifier arm.
 
-The source audit exposed a prerequisite that a partial builder must not hide: Common
-`StringBuilder.kt` and its exact `Standard.kt` dependency use the public `kotlin.contracts` source
-family. That family includes public effect interfaces, annotation classes, and the
-`InvocationKind` enum. The parameterless annotation declarations now have a general physical
-representation, leaving the enum and contract-effect product as the unresolved part of this
-dependency. Common now also applies `returnsResultOf` to result-forwarding functions in
-`Standard.kt`; that effect has no exact Roslyn CodeAnalysis representation and must survive in
-KLIB. The target cannot fake just enough contract declarations for builder compilation.
-Complete enum representation therefore still precedes builder actualization. The independent
-typed collection-to-array prerequisite has now landed while that language foundation remains
-parked.
+The deeper source audit found a precise cut that the earlier cluster analysis missed. The complete
+Common `StringBuilder` expect class and its non-contract top-level extensions do not depend on
+contracts. Only the two top-level `buildString` declarations call `apply` and the contracts DSL.
+The existing fail-closed extraction mechanism can therefore publish the complete class/member
+surface plus every non-contract extension while omitting exactly those two declarations. KLIB and
+the physical stdlib remain equal; no body is copied or rewritten.
 
-Modern enum support cannot be used as a small cycle breaker. Every enum publishes `entries`, whose
-authoritative `EnumEntriesList` extends Common `AbstractList`; that abstract base needs this same
-builder closure. Conversely, the builder's contract source publishes the `InvocationKind` enum.
-The Common `Enum<E>` base also implements `Comparable<E>`. That public generic interface must be
-selected for Kotlin classes and for the classified primitive/string carriers before enum product
-publication; an enum-private Comparable substitute would make the stdlib KLIB broader than the
-physical product.
-The target must therefore admit enums, contracts, the builder, the abstract bases, and
-`EnumEntries` as one coherent bootstrap cluster unless upstream Common creates a smaller truthful
-closure. Parameterless annotations are no longer part of that cycle. A one-enum exception,
-target-authored `EnumEntries` implementation, disabled `entries` member, or temporarily broader
-KLIB is rejected. Reversible compiler work should proceed while this atomic cluster is being
-designed.
+The selected first phase combines that builder surface with exact generated `Iterable.joinTo` and
+`Iterable.joinToString`, then compiles Common `AbstractCollection` and `AbstractList`. The private
+direct `ArrayAsList` implementation migrates to the Common base in the same phase. The deprecated
+CharArray append extension brings exact Common `NotImplementedError`; it is not a reason to admit
+`Standard.kt` or contracts early.
+
+Modern enums and the non-reified `EnumEntries` core are the second coherent phase. They consume the
+now-complete general Comparable representation and Common abstract list substrate. A Kotlin enum
+is a Kotlin-owned reference class with static entry fields, not a CLR value-type enum. Reified
+`enumEntries`, `enumValues`, and `enumValueOf` remain behind the general reified gate.
+
+The third phase publishes exact contracts, `Standard.kt`, and the two `buildString` declarations
+once the ordinary `InvocationKind` enum exists. Common's `returnsResultOf` effect remains
+authoritative in KLIB even though it has no exact Roslyn CodeAnalysis representation. A one-enum
+exception, target-authored `EnumEntries`, contract shim, rewritten `buildString`, or temporarily
+broader KLIB remains rejected.
 
 ### Typed collection-to-array prerequisite
 
@@ -707,14 +705,15 @@ reified `toTypedArray` remains outside this completed prerequisite.
 
 ## Programme order
 
-1. Complete the enum and contract-effect foundation required by the exact contract DSL, then
-   actualize the selected builder and generated join closure; its parameterless marker prerequisite
-   is complete.
-2. Compile the exact Common abstract bases once the remaining builder prerequisite exists.
-3. Add mutable collection/list contracts and an ordinary implementation.
-4. Add sets and maps from their exact Common dependency closures.
-5. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-6. Let `EnumEntries` consume the established collection substrate.
+1. Actualize the complete Common `Appendable`/`StringBuilder` class layer and non-contract
+   extensions, generate exact `joinTo`/`joinToString`, compile Common `AbstractCollection` and
+   `AbstractList`, and migrate the private direct array-list view.
+2. Add ordinary Kotlin enums plus the non-reified `EnumEntries` core over that substrate, with
+   producer-recorded entry-field binding and no CLR value-type enum identity.
+3. Publish exact contracts, `Standard.kt`, and `buildString` once `InvocationKind` exists.
+4. Add mutable collection/list contracts and an ordinary implementation.
+5. Add sets and maps from their exact Common dependency closures.
+6. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
 7. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
