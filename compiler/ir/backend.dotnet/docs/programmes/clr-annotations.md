@@ -171,6 +171,13 @@ authoritative Kotlin declaration and validate it independently. Initial candidat
 nullable metadata, the exact CodeAnalysis contract subset, deprecation, target-framework facts,
 and friend access.
 
+The next Common-contract bootstrap audit must keep two paths explicit. Compiler-consumed Kotlin
+effects and calls-in-place information remain in KLIB even when no CLR carrier exists. An exact
+Roslyn attribute may additionally project the subset it can express, and the importer may decode
+that same standard attribute as foreign evidence under Common stability rules. Sharing the
+attribute codec does not make it the Kotlin contract authority and does not justify serializing the
+same representable effect twice inside Kotlin-owned metadata.
+
 Do not omit the same fact from KLIB. A Kotlin-produced DLL remains self-describing if attributes
 are stripped by external tooling, and KLIB-only consumers must not need the PE attribute graph to
 recover Kotlin semantics.
@@ -184,7 +191,8 @@ Allowing users to declare arbitrary Kotlin annotation classes, instantiate them 
 them through Kotlin reflection, or expose them naturally to C# requires a wider feature chain:
 
 1. annotation-class declaration and constructor semantics;
-2. legal argument constants, enums, arrays, class literals, and retention;
+2. legal argument constants, enums, arrays, and retention; the nominal class-literal/`KClass`
+   floor is already selected;
 3. use-site target to CLR-parent mapping;
 4. KLIB serialization and cross-module identity;
 5. CLR CustomAttribute emission and round-trip validation; and

@@ -11,7 +11,7 @@
 {
   .method public hidebysig static int32 'attempt'(bool 'flag') cil managed
   {
-    .maxstack 1
+    .maxstack 3
     .locals init (
       [0] int32 '<return>',
       [1] class [mscorlib]System.Exception 'e'
@@ -21,6 +21,9 @@
       brfalse IL_whenNext_2
       ldstr "boom"
       newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
+      dup
+      ldc.i4 6
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
       throw
 IL_whenNext_2:
       ldc.i4 1

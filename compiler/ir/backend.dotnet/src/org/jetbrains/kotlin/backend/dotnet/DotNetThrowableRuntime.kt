@@ -150,6 +150,7 @@ ${runtimeExceptionConstructorsIl("UninitializedPropertyAccessException", coreLib
          extends ${coreLibraryReference}System.Object
   {
     .field assembly initonly $listType 'suppressed'
+    .field assembly int32 'exactTypeId'
 
     .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
@@ -159,6 +160,9 @@ ${runtimeExceptionConstructorsIl("UninitializedPropertyAccessException", coreLib
       ldarg.0
       newobj instance void $listType::.ctor()
       stfld $listType Kotlin.Runtime.Internal.ThrowableState::'suppressed'
+      ldarg.0
+      ldc.i4.0
+      stfld int32 Kotlin.Runtime.Internal.ThrowableState::'exactTypeId'
       ret
     }
   }
@@ -176,6 +180,73 @@ ${runtimeExceptionConstructorsIl("UninitializedPropertyAccessException", coreLib
       .maxstack 1
       newobj instance void $tableType::.ctor()
       stsfld $tableType Kotlin.Runtime.Internal.ThrowableSupport::'states'
+      ret
+    }
+
+    // Records which logical Kotlin constructor allocated a classified System.Exception carrier.
+    // The original exception remains the weak-table key and is never wrapped or mutated.
+    .method public hidebysig static void 'SetExactTypeId'(
+        $exceptionType 'exception', int32 'exactTypeId') cil managed
+    {
+      .maxstack 3
+      .locals init ([0] $stateType 'state')
+      ldarg.0
+      brtrue.s TS_ExactExceptionReady
+      ldstr "exception"
+      newobj instance void ${coreLibraryReference}System.ArgumentNullException::.ctor(string)
+      throw
+    TS_ExactExceptionReady:
+      ldsfld $tableType Kotlin.Runtime.Internal.ThrowableSupport::'states'
+      call void ${coreLibraryReference}System.Threading.Monitor::Enter(object)
+      .try
+      {
+        ldsfld $tableType Kotlin.Runtime.Internal.ThrowableSupport::'states'
+        ldarg.0
+        ldloca.s 'state'
+        callvirt instance bool $tableType::TryGetValue(!0, !1&)
+        brtrue.s TS_ExactStateReady
+        newobj instance void Kotlin.Runtime.Internal.ThrowableState::.ctor()
+        stloc.0
+        ldsfld $tableType Kotlin.Runtime.Internal.ThrowableSupport::'states'
+        ldarg.0
+        ldloc.0
+        callvirt instance void $tableType::Add(!0, !1)
+      TS_ExactStateReady:
+        ldloc.0
+        ldarg.1
+        stfld int32 Kotlin.Runtime.Internal.ThrowableState::'exactTypeId'
+        leave.s TS_ExactStored
+      }
+      finally
+      {
+        ldsfld $tableType Kotlin.Runtime.Internal.ThrowableSupport::'states'
+        call void ${coreLibraryReference}System.Threading.Monitor::Exit(object)
+        endfinally
+      }
+    TS_ExactStored:
+      ret
+    }
+
+    .method public hidebysig static int32 'GetExactTypeId'(
+        $exceptionType 'exception') cil managed
+    {
+      .maxstack 3
+      .locals init ([0] $stateType 'state')
+      ldarg.0
+      brtrue.s TS_GetExact
+      ldc.i4.0
+      ret
+    TS_GetExact:
+      ldsfld $tableType Kotlin.Runtime.Internal.ThrowableSupport::'states'
+      ldarg.0
+      ldloca.s 'state'
+      callvirt instance bool $tableType::TryGetValue(!0, !1&)
+      brfalse.s TS_NoExact
+      ldloc.0
+      ldfld int32 Kotlin.Runtime.Internal.ThrowableState::'exactTypeId'
+      ret
+    TS_NoExact:
+      ldc.i4.0
       ret
     }
 
@@ -661,6 +732,11 @@ ${runtimeExceptionConstructorsIl("UninitializedPropertyAccessException", coreLib
                 "'Kotlin.Runtime.Internal.ThrowableSupport'::'AddSuppressed'(" +
                 "class ${coreLibraryReference}System.Exception, " +
                 "class ${coreLibraryReference}System.Exception)"
+
+    fun setExactTypeIdCallInstruction(coreLibraryReference: String): String =
+        "call void [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(" +
+                "class ${coreLibraryReference}System.Exception, int32)"
 
     fun getSuppressedCallInstruction(coreLibraryReference: String): String =
         "call class ${coreLibraryReference}System.Exception[] " +

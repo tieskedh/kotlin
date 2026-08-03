@@ -11,9 +11,12 @@
 {
   .method public hidebysig static class [mscorlib]System.ArgumentException 'asArgument'(string 'message') cil managed
   {
-    .maxstack 1
+    .maxstack 3
     ldarg.0
     newobj instance void [Kotlin.Runtime]'Kotlin.NumberFormatException'::.ctor(string)
+    dup
+    ldc.i4 11
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     ret
   }
   .method public hidebysig static string 'messageThroughParent'(string 'message') cil managed
@@ -26,7 +29,7 @@
   }
   .method public hidebysig static string 'exactCatch'(string 'message') cil managed
   {
-    .maxstack 1
+    .maxstack 3
     .locals init (
       [0] string '<try>',
       [1] class [Kotlin.Runtime]'Kotlin.NumberFormatException' 'failure'
@@ -34,6 +37,9 @@
     .try {
       ldarg.0
       newobj instance void [Kotlin.Runtime]'Kotlin.NumberFormatException'::.ctor(string)
+      dup
+      ldc.i4 11
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
       throw
     }
     catch [Kotlin.Runtime]'Kotlin.NumberFormatException' {
@@ -49,13 +55,16 @@ IL_tryEnd_0:
   }
   .method public hidebysig static string 'parentCatch'() cil managed
   {
-    .maxstack 1
+    .maxstack 3
     .locals init (
       [0] string '<try>',
       [1] class [mscorlib]System.ArgumentException '<unused var>'
     )
     .try {
       newobj instance void [Kotlin.Runtime]'Kotlin.NumberFormatException'::.ctor()
+      dup
+      ldc.i4 11
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
       throw
     }
     catch [mscorlib]System.ArgumentException {
@@ -70,18 +79,24 @@ IL_tryEnd_0:
   }
   .method public hidebysig static class [mscorlib]System.Exception 'asThrowable'() cil managed
   {
-    .maxstack 1
+    .maxstack 3
     ldstr "root"
     newobj instance void [Kotlin.Runtime]'Kotlin.NumberFormatException'::.ctor(string)
+    dup
+    ldc.i4 11
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     ret
   }
   .method public hidebysig static bool 'hasNoDefaultState'() cil managed
   {
-    .maxstack 2
+    .maxstack 3
     .locals init (
       [0] class [Kotlin.Runtime]'Kotlin.NumberFormatException' 'failure'
     )
     newobj instance void [Kotlin.Runtime]'Kotlin.NumberFormatException'::.ctor()
+    dup
+    ldc.i4 11
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     stloc.0
     ldloc.0
     callvirt instance string [mscorlib]System.Exception::get_Message()

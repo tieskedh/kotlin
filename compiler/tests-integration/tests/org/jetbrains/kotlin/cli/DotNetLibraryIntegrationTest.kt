@@ -18771,6 +18771,256 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testKClassIdentityAcrossLibraryBoundary() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val producerDirectory = File(tmpdir, "kclass-producer")
+        val producerSource = File(tmpdir, "KClassLibrary.kt").apply {
+            writeText(
+                """
+                package kclassboundary
+
+                import kotlin.reflect.KClass
+
+                public class LibraryToken
+
+                public class LibraryBox<T>(public val value: T)
+
+                public fun staticToken(): KClass<LibraryToken> = LibraryToken::class
+
+                public fun staticBox(): KClass<LibraryBox<*>> = LibraryBox::class
+
+                public fun runtimeToken(value: Any): KClass<out Any> = value::class
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "KClass.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val consumerDirectory = File(tmpdir, "kclass-consumer").apply { mkdirs() }
+        val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                import kclassboundary.*
+
+                fun main() {
+                    val intBox: Any = LibraryBox(1)
+                    val stringBox: Any = LibraryBox("value")
+                    if (staticToken() != LibraryToken::class) throw Error("static token identity")
+                    if (runtimeToken(LibraryToken()) != staticToken()) throw Error("dynamic token identity")
+                    if (runtimeToken(intBox) != runtimeToken(stringBox)) throw Error("generic erasure")
+                    if (runtimeToken(intBox) != staticBox()) throw Error("static generic identity")
+                    if (!staticBox().isInstance(stringBox)) throw Error("generic instance")
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("KClassConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            producerDirectory.resolve("KClass.Library.dll").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "KClassConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+
+        val consumerIl = consumerDirectory.resolve("KClassConsumer.il").readText()
+        assertTrue("[KClass.Library]'kclassboundary.KClassLibraryKt'::'staticToken'()" in consumerIl)
+        assertTrue("[KClass.Library]'kclassboundary.KClassLibraryKt'::'runtimeToken'(object)" in consumerIl)
+        runDotNet(
+            modernDotNetHostOrSkip(),
+            consumerAssembly,
+            consumerDirectory,
+            "KClass cross-module consumer failed",
+        )
+
+        val csharpSource = consumerDirectory.resolve("KClassConsumer.cs").apply {
+            writeText(
+                """
+                public static class KClassConsumer
+                {
+                    public static int Main()
+                    {
+                        Kotlin.KClass token = kclassboundary.KClassLibraryKt.staticToken();
+                        if (token.simpleName != "LibraryToken") return 1;
+                        if (!token.isInstance(new kclassboundary.LibraryToken())) return 2;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = consumerDirectory.resolve("KClassCSharpConsumer.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            checkNotNull(csharpToolchain),
+            csharpSource,
+            csharpAssembly,
+            producerDirectory.resolve("KClass.Library.dll"),
+            consumerDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME),
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        consumerDirectory.resolve("KClassCSharpConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            checkNotNull(csharpToolchain).dotNetHost,
+            csharpAssembly,
+            consumerDirectory,
+            "C# KClass consumer failed",
+        )
+    }
+
+    @Test
+    fun testKClassIdentityDistinguishesSameNamedClassesAcrossAssemblies() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val directory = File(tmpdir, "kclass-assembly-identity").apply { mkdirs() }
+        fun assembleSameNamedClass(assemblyName: String) {
+            val source = directory.resolve("$assemblyName.il").apply {
+                writeText(
+                    """
+                    .assembly extern mscorlib {}
+                    .assembly '$assemblyName' {}
+                    .module '$assemblyName.dll'
+
+                    .namespace duplicate
+                    {
+                      .class public auto ansi sealed beforefieldinit Same
+                             extends [mscorlib]System.Object
+                      {
+                        .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                        {
+                          .maxstack 1
+                          ldarg.0
+                          call instance void [mscorlib]System.Object::.ctor()
+                          ret
+                        }
+                      }
+                    }
+                    """.trimIndent()
+                )
+            }
+            assertTrue(
+                DotNetIlAssembler.assembleLibrary(
+                    source,
+                    directory.resolve("$assemblyName.dll"),
+                    DotNetTarget.NET10_0,
+                    MessageCollector.NONE,
+                )
+            )
+        }
+        assembleSameNamedClass("KClass.First")
+        assembleSameNamedClass("KClass.Second")
+        assertTrue(
+            DotNetIlAssembler.assembleRuntimeForTests(
+                directory,
+                DotNetTarget.NET10_0,
+                MessageCollector.NONE,
+            )?.isFile == true
+        )
+
+        val consumerIl = directory.resolve("KClassAssemblyIdentityConsumer.il").apply {
+            writeText(
+                """
+                .assembly extern mscorlib {}
+                .assembly extern Kotlin.Runtime {}
+                .assembly extern KClass.First {}
+                .assembly extern KClass.Second {}
+                .assembly KClassAssemblyIdentityConsumer {}
+                .module KClassAssemblyIdentityConsumer.dll
+
+                .method public static void Main() cil managed
+                {
+                  .entrypoint
+                  .maxstack 5
+                  .locals init (
+                    [0] class [Kotlin.Runtime]Kotlin.KClass first,
+                    [1] class [Kotlin.Runtime]Kotlin.KClass second,
+                    [2] class [Kotlin.Runtime]Kotlin.KClass dynamicAny,
+                    [3] class [Kotlin.Runtime]Kotlin.KClass staticAny
+                  )
+                  newobj instance void [KClass.First]duplicate.Same::.ctor()
+                  call class [Kotlin.Runtime]Kotlin.KClass
+                      [Kotlin.Runtime]Kotlin.Runtime.Internal.KClassFactory::GetClass(object)
+                  stloc.0
+                  newobj instance void [KClass.Second]duplicate.Same::.ctor()
+                  call class [Kotlin.Runtime]Kotlin.KClass
+                      [Kotlin.Runtime]Kotlin.Runtime.Internal.KClassFactory::GetClass(object)
+                  stloc.1
+                  ldloc.0
+                  ldloc.1
+                  callvirt instance bool [mscorlib]System.Object::Equals(object)
+                  brfalse.s Success
+                  ldstr "same-named classes from distinct assemblies became one KClass"
+                  newobj instance void [mscorlib]System.Exception::.ctor(string)
+                  throw
+                Success:
+                  newobj instance void [mscorlib]System.Object::.ctor()
+                  call class [Kotlin.Runtime]Kotlin.KClass
+                      [Kotlin.Runtime]Kotlin.Runtime.Internal.KClassFactory::GetClass(object)
+                  stloc.2
+                  ldtoken [mscorlib]System.Object
+                  call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(
+                      valuetype [mscorlib]System.RuntimeTypeHandle)
+                  ldstr "Any"
+                  ldstr "kotlin.Any"
+                  ldc.i4.0
+                  ldc.i4.0
+                  call class [Kotlin.Runtime]Kotlin.KClass
+                      [Kotlin.Runtime]Kotlin.Runtime.Internal.KClassFactory::Create(
+                          class [mscorlib]System.Type, string, string, int32, int32)
+                  stloc.3
+                  ldloc.2
+                  ldloc.3
+                  callvirt instance bool [mscorlib]System.Object::Equals(object)
+                  brtrue.s AnyIdentityReady
+                  ldstr "dynamic System.Object did not retain kotlin.Any identity"
+                  newobj instance void [mscorlib]System.Exception::.ctor(string)
+                  throw
+                AnyIdentityReady:
+                  ldloc.2
+                  newobj instance void [mscorlib]System.Object::.ctor()
+                  callvirt instance bool [Kotlin.Runtime]Kotlin.KClass::isInstance(object)
+                  brtrue.s Done
+                  ldstr "kotlin.Any KClass rejected System.Object"
+                  newobj instance void [mscorlib]System.Exception::.ctor(string)
+                  throw
+                Done:
+                  ret
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = directory.resolve("KClassAssemblyIdentityConsumer.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleExecutable(
+                consumerIl,
+                consumerAssembly,
+                DotNetTarget.NET10_0,
+                MessageCollector.NONE,
+            )
+        )
+        runDotNet(
+            modernDotNetHostOrSkip(),
+            consumerAssembly,
+            directory,
+            "KClass assembly-identity consumer failed",
+        )
+    }
+
+    @Test
     fun testCompanionStaticHoldersBindAcrossModules() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         requireOrAssumeToolchain(
@@ -31022,6 +31272,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val runtimeManifest = readCSharpImplementationManifestEnvelope(runtimeLibrary)
         assertEquals(DotNetRuntimeArtifact.ASSEMBLY_NAME, runtimeManifest.assemblyName)
         assertEquals(target, runtimeManifest.targetProfile)
+        val runtimeMetadata = DotNetClrMetadataReader.read(runtimeLibrary)
+        fun runtimeType(namespaceName: String, metadataName: String): DotNetClrTypeDefinition =
+            runtimeMetadata.typeDefinitions.single { type ->
+                type.namespaceName == namespaceName && type.metadataName == metadataName
+            }
+        val kClassifierType = runtimeType("Kotlin", "KClassifier")
+        val kClassType = runtimeType("Kotlin", "KClass")
+        val kClassImplType = runtimeType("Kotlin", "KClassImpl")
+        val kClassFactoryType = runtimeType("Kotlin.Runtime.Internal", "KClassFactory")
+        assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassifierType.visibility)
+        assertTrue(kClassifierType.isInterface)
+        assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassType.visibility)
+        assertTrue(kClassType.isInterface)
+        assertEquals(DotNetClrTypeVisibility.NOT_PUBLIC, kClassImplType.visibility)
+        assertTrue(kClassImplType.isSealed)
+        assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassFactoryType.visibility)
+        assertTrue(kClassFactoryType.isAbstract && kClassFactoryType.isSealed)
+        assertTrue(
+            setOf("get_simpleName", "get_qualifiedName", "isInstance").all { methodName ->
+                runtimeMetadata.methodDefinitions.any { method ->
+                    method.declaringType == kClassType.handle && method.name == methodName
+                }
+            }
+        )
+        assertTrue(
+            setOf("Create", "GetClass", "GetClrType").all { methodName ->
+                runtimeMetadata.methodDefinitions.any { method ->
+                    method.declaringType == kClassFactoryType.handle && method.name == methodName
+                }
+            }
+        )
         assertFalse(stdlibDirectory.resolve("Kotlin.Stdlib.klib").exists()) {
             "The stdlib producer must not write a sibling KLIB"
         }
@@ -31832,6 +32113,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ioH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClass.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClasses.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClassifier.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SharedVariableBox.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SyntheticConstructorMarker.kt").absoluteFile
@@ -32534,6 +32818,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 """
                 package consumer
 
+                public class InstalledToken
+
+                public class InstalledBox<T>(public val value: T)
+
+                public fun installedKClassFloor(): Boolean {
+                    val intBox: Any = InstalledBox(1)
+                    val stringBox: Any = InstalledBox("value")
+                    return InstalledToken::class.simpleName == "InstalledToken" &&
+                        InstalledToken()::class == InstalledToken::class &&
+                        intBox::class == stringBox::class &&
+                        intBox::class == InstalledBox::class &&
+                        InstalledBox::class.isInstance(stringBox)
+                }
+
                 public fun <T> installedFirstAndLast(values: Iterable<T>): T {
                     values.first()
                     return values.last()
@@ -32857,6 +33155,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 fun main() {
                     val values = Array<String>(2) { index -> if (index == 0) "O" else "K" }
+                    val kClassOk = installedKClassFloor()
                     val owner = RuntimeException("owner")
                     val suppressed = IllegalStateException("suppressed")
                     owner.addSuppressed(suppressed)
@@ -32953,7 +33252,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             snapshot[0] === suppressed &&
                             owner.stackTraceToString() != owner.toString()
                     println(
-                        if (collectionsOk && sumsOk && averagesOk && frontierOk && inlineOnlyOk && throwableOk) {
+                        if (kClassOk && collectionsOk && sumsOk && averagesOk && frontierOk &&
+                            inlineOnlyOk && throwableOk
+                        ) {
                             "OK"
                         } else {
                             "FAIL"
@@ -32973,6 +33274,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, outputFile.path,
         )
         val il = outputFile.readText()
+        assertTrue("[Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'" in il)
+        assertTrue("[Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'GetClass'(object)" in il)
+        assertTrue("[Kotlin.Runtime]'Kotlin.KClass'::'isInstance'(object)" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'" in il)
         assertTrue("::'first'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)

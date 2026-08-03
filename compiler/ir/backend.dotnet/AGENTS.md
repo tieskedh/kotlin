@@ -165,6 +165,14 @@ foreign import; they do not replace Kotlin nullability. CodeAnalysis contract
 attributes can reconstruct only the exact effects they express; Kotlin-only
 contracts and declaration identity remain in KLIB.
 
+The Common contracts DSL and compiler effect model remain authoritative for
+Kotlin data-flow and calls-in-place semantics. A CLR/Roslyn attribute is an
+additional exact projection or foreign-input fact, not a second Kotlin
+contract store. Import an attribute effect only where its target and effect
+algebra match Kotlin and still apply Kotlin stability rules; retain effects
+that CLR cannot express in KLIB alone. Do not infer Kotlin contracts merely
+because a C# analysis attribute is suggestive.
+
 C# authoring and export surfaces are explicit opt-in interop products.
 Properties, defaults, callable adapters, collisions, nullability, and
 implementation manifests are not inferred from ordinary Kotlin source names.
@@ -315,11 +323,21 @@ See the
   argument dispatchers are implementation helpers, not canonical source-member
   slots, and recover any exact typed owner only from authoritative IR.
   See [the generic-class ADR](docs/decisions/generic-class-erased-identity.md).
+- `KClass` is a nominal Kotlin runtime value over exact or classified CLR type
+  evidence. KLIB owns logical `KClass<T>` and declaration identity;
+  `System.Type` is a retained physical bridge and never becomes `KClass` or
+  `KType` authority. Static and dynamic literals share the ordinary runtime
+  classifiers, generic arguments do not participate in class identity, and
+  equality/hash never use names. Local/anonymous naming attributes carry only
+  nullable source names, while exact Kotlin exception-constructor ids reuse
+  weak identity-associated throwable state. Do not infer `KType`, member or
+  annotation reflection, or reified support from this floor. See
+  [the KClass decision](docs/decisions/kclass-and-class-literals.md).
 - Reified array construction, once enabled, must reuse the ordinary carrier
   selected after shared IR substitution. Do not add a reified-only array
   token/wrapper, fall back to `object[]` for an unsupported element, or use a
   closed typed CLR generic class as Kotlin element identity. Array-allocation
-  readiness does not enable either public reified gate: `KClass`, `KType`,
+  readiness does not enable either public reified gate: `KType`,
   enums, annotations, remaining classifier families, the final substituted
   type-operator matrix, and the physical throwing-stub contract stay one
   complete feature boundary. See
@@ -501,9 +519,11 @@ identity, and the private data-class equality view is not a general carrier.
 Physically exact non-generic casts and scalar/array prerequisites may land
 independently, but must reject rather than generalize to `GenericInstance`.
 Reified Common stdlib declarations remain outside the product meanwhile.
-Suspend inline functions, enums, annotation classes, value classes, reflection,
-coroutines, concurrency primitives, and broad KMP/Gradle product integration
-remain separate programmes until `STATUS.md` or the way forward selects one.
+Suspend inline functions, enums, annotation classes, value classes, `KType`,
+member/annotation reflection, coroutines, concurrency primitives, and broad
+KMP/Gradle product integration remain separate programmes until `STATUS.md` or
+the way forward selects one. The selected `KClass`/class-literal floor is not
+part of that parked reflection remainder.
 
 ## Verification contract
 
@@ -545,6 +565,21 @@ IL-text golden, change the `.kt`, run the scoped test with
 Focused compilation/tests are useful while iterating but never replace the
 strict gate for a completed semantic feature. Before committing, verify that
 status shows only intended files.
+
+Prefer existing Common compiler test data and the shared stdlib test corpus
+for Kotlin semantics once the admitted target closure can compile and execute
+them. Generated runner methods merely enumerate test-data files; they do not
+make target-owned duplicate assertions authoritative or cheaper. Keep .NET-
+owned tests for CIL, CLR profiles, physical ABI, self-describing DLLs, foreign
+interop, target diagnostics, and other genuinely target-specific boundaries.
+Do not remove a duplicate target behavior test until the upstream test itself
+executes through the supported .NET product on every applicable profile.
+
+During one coherent feature tranche, use focused tests for each internal
+slice and run the strict gate once against the final semantic head before its
+commit and push. Do not split a coherent feature into microcommits merely to
+repeat the full gate, and do not batch unrelated semantics merely to amortize
+test time.
 
 ## Box tests
 

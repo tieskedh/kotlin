@@ -172,8 +172,10 @@ eager symbol lookup.
 
 Remove the blanket rejection only for non-reified generic inline functions once both stages are
 active. They retain an ordinary CLR generic method as their non-inlined physical fallback. Keep
-reified type parameters rejected until type tests/casts, class literals, `KClass`, `typeOf`, array
-construction, and reflection-dependent substitutions form one complete feature.
+reified type parameters rejected until the remaining type-test/cast matrix, `KType`/`typeOf`,
+enum/annotation operations, all later classifier families, and the physical fallback contract form
+one complete feature. The selected class-literal/`KClass` and array-construction prerequisites do
+not open that gate by themselves.
 
 ## Design attack and rejected shortcuts
 
@@ -380,7 +382,7 @@ index depend on which reified operations happened to occur.
 | `value is T` / `!is T` | exact references, boxed scalars, arrays, open CLR parameters, classified exceptions/`CharSequence`, split generic interfaces, and declaration-erased Kotlin generic classes | execute the substituted cross-classifier matrix when the public reified gate is enabled; no closed `C<T>` identity is permitted |
 | `value as T` / `as? T` | the same classifier families, including identity-preserving generic-class checked/safe casts and typed-use barriers | execute checked, safe, nullable, failed, and later-member-use substitutions through both inliner stages |
 | `arrayOfNulls<T>`, `emptyArray<T>`, varargs, and array constructors | typed CLR-vector intrinsics and Common array-constructor lowering | prove nested generic element, nullability, projection, and cross-module substitutions without assuming closed CLR generic identity equals Kotlin runtime identity |
-| `T::class` | none | select a Kotlin `KClass` identity and its truthful `System.Type` bridge before emitting class literals |
+| `T::class` | nominal Kotlin `KClass` identity, classified runtime checks, and a truthful compiler-ABI `System.Type` bridge | execute substituted class literals through both inliner stages when the complete public reified gate is enabled |
 | `typeOf<T>()` | shared inliner preserves/substitutes its type argument | select `KType`, type arguments, variance, nullability, and reflection ownership |
 | `enumValues<T>`, `enumValueOf<T>`, `enumEntries<T>` | none | complete the atomic enum/contracts/builder/abstract-collections/`EnumEntries` cluster |
 | annotation-associated and other reflection operations | none | annotation classes, retention, reflection, and target-specific association policy |
@@ -430,7 +432,7 @@ The reversible prerequisite order is:
    reified declarations;
 4. design the general erased runtime view for Kotlin-owned generic classes, including typed use
    after a successful erased cast;
-5. select `KClass`/class literals, then `KType`/`typeOf`;
+5. use the selected `KClass`/class-literal floor, then select `KType`/`typeOf`;
 6. integrate the enum intrinsic family only after its atomic source cluster; and
 7. finally enable reified in both inliner stages, select the physical throwing-stub contract, and
    test source/library consumers over all three KLIB modes and both runtime profiles.
@@ -729,9 +731,10 @@ member relation explicitly.
 
 The next reversible work is to re-audit the remaining reified array-operation substitution matrix
 against the now-complete array and generic-class carriers. That audit must distinguish an operation
-which is already truthful after ordinary IR substitution from the still-unselected `KClass`,
-`KType`, enum, annotation, and physical throwing-stub contracts; it must not enable either public
-reified gate piecemeal.
+which is already truthful after ordinary IR substitution from the still-unselected `KType`, enum,
+annotation, and physical throwing-stub contracts; it must not enable either public reified gate
+piecemeal. The separately selected `KClass` floor is an ordinary language/runtime feature, not
+permission to expose a partial reified surface.
 
 ### Selected eighth prerequisite: post-substitution array operations
 
@@ -755,6 +758,17 @@ evidence for the underlying carriers. When the complete feature is enabled, an a
 producer/consumer test across all KLIB inliner modes remains mandatory; the concrete matrix is a
 prerequisite, not a substitute for that final gate.
 
-The next reversible language prerequisite is to select Kotlin `KClass`/class-literal identity and
-its truthful CLR `System.Type` bridge. That is a separate reflection decision; array readiness is
-not evidence that `System.Type` alone can replace Kotlin reflection identity.
+### Selected ninth prerequisite: nominal `KClass` and class literals
+
+The [KClass decision](../decisions/kclass-and-class-literals.md) selects the Common
+`KClassifier`/`KClass` floor as an ordinary language/runtime feature. Static and dynamic class
+literals now produce a Kotlin-owned value over exact or classified CLR evidence; `System.Type`
+remains a compiler-ABI bridge rather than Kotlin identity. Generic-class arguments remain erased,
+classified arrays/`CharSequence`/exceptions share the existing type-operator semantics, dynamic
+receivers are evaluated once, and local/anonymous source names use a narrow naming attribute.
+
+This closes the representation prerequisite for substituted `T::class`, but it still does not
+enable a public reified declaration. The remaining closure includes `KType`/`typeOf`, enum and
+annotation operations, the final substituted type-test/cast matrix, every later-admitted
+classifier, and the physical throwing-stub contract. An actual reified producer/consumer matrix
+through both inliner stages remains mandatory when that complete boundary is selected.

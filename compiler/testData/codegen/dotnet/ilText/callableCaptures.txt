@@ -50,6 +50,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private int32 '$value'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$value') cil managed
   {
@@ -81,6 +82,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value'
   .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value') cil managed
   {
@@ -121,6 +123,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function1'
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value'
   .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value') cil managed
   {
@@ -164,6 +167,7 @@
        extends [mscorlib]System.Object
        implements 'callableCapturesKt$genericMutableCapture$1', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<!0>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0> '$value'
   .field private !0 '$replacement'
   .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0> '$value', !0 '$replacement') cil managed
@@ -226,6 +230,7 @@
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private int32 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'p0') cil managed
   {
@@ -287,6 +292,7 @@
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
   .field private class 'Offset' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Offset' 'p0') cil managed
   {
