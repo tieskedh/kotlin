@@ -328,10 +328,10 @@ internal class DotNetIlEmitter(
         // that carrier-backed path too: a Kotlin class may implement the same closed abstract
         // interface that Kotlin code is allowed to call.
         val importedClrDeclarationsForShapeValidation = DotNetClrImportedDeclarations {}
-        fun isKotlinOwnedSplitGenericInterface(candidate: IrClass): Boolean =
+        fun isMappedKotlinSplitGenericInterface(candidate: IrClass): Boolean =
             candidate.isDotNetGenericInterfaceDeclaration &&
                     (candidate in moduleInterfaces ||
-                            DotNetRuntimeTypes.genericInterfaceInfoFor(candidate) != null ||
+                            DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(candidate) ||
                             externalDeclarations.hasClass(candidate))
 
         // A CLR nested type is registered independently for type/member resolution, while its
@@ -425,7 +425,7 @@ internal class DotNetIlEmitter(
                 }
                 exactClassInfo = if (
                     isSplitGenericInterface &&
-                    irClass.requiresDotNetExactGenericInterfaceView(::isKotlinOwnedSplitGenericInterface)
+                    irClass.requiresDotNetExactGenericInterfaceView(::isMappedKotlinSplitGenericInterface)
                 ) {
                     DotNetIlClassInfo(
                         dotNetExactGenericInterfaceName(disambiguatedBaseName, irClass.typeParameters.size),
@@ -2296,7 +2296,7 @@ internal class DotNetIlEmitter(
             // like an evicted base class.
             for (superInterface in superClasses.filter { it.isInterface }) {
                 if (superInterface !in moduleInterfaces &&
-                    DotNetRuntimeTypes.genericInterfaceInfoFor(superInterface) == null &&
+                    !DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(superInterface) &&
                     !superInterface.isDotNetCharSequenceClass() &&
                     !externalDeclarations.hasClass(superInterface) &&
                     importedClrDeclarations.classInfoOrNull(superInterface) == null &&
@@ -2481,7 +2481,7 @@ internal class DotNetIlEmitter(
             if (
                 !superInterface.isInterface ||
                 superInterface !in moduleInterfaces &&
-                DotNetRuntimeTypes.genericInterfaceInfoFor(superInterface) == null &&
+                !DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(superInterface) &&
                 !superInterface.isDotNetCharSequenceClass() &&
                 !externalDeclarations.hasClass(superInterface)
             ) {
