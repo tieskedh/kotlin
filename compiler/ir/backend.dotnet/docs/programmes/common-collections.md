@@ -360,6 +360,38 @@ elements, predicate exception identity and stopping point, capture, non-local re
 installed KLIB inlining, physical fallback signatures, and direct fallback execution on Framework
 CLR and CoreCLR.
 
+### Last-match predicates
+
+The selected last-match closure is the complete Common collection-facing pair:
+
+- `Iterable<T>.last(predicate)` and `lastOrNull(predicate)`; and
+- the corresponding `List<T>` overloads.
+
+JVM, JS, Wasm, and Native consume these same generated declarations. The Iterable bodies traverse
+forward to exhaustion and retain the last matching value. The non-null form uses a separate
+`found` flag, then performs Common's suppressed unchecked `last as T`; this is what distinguishes a
+found nullable null from absence. The List bodies request `listIterator(size)` and traverse
+backward, returning the first reverse match. Throwing forms own the exact Common
+`NoSuchElementException`: the Iterable form says `Collection contains no element matching the
+predicate.`, while the List form says `List contains no element matching the predicate.` Nullable
+forms return null.
+
+The existing Iterable/List/ListIterator carriers, Function1 invocation, exact physical exception,
+open-type-parameter cast barrier, boxed-or-null `T?` fallback, nullable-bottom handling, and
+cross-library inliner close the representation. In particular, the physical Iterable fallback for
+`T = Int` may retain its object-backed nullable accumulator and recover the successful result with
+the existing checked `unbox.any !!0`; this is Common's cast, not permission to optimize a failed
+cast. LINQ `Last`/`LastOrDefault`, reverse copies, indexing arbitrary Iterable, or one uniform
+forward loop are rejected because they change traversal capability, predicate order/timing,
+exception identity, or nullable-match semantics without a CLR necessity.
+
+`findLast` remains outside this slice because its delegating declaration is `@InlineOnly` and shares
+the separate physical-suppression audit with `find`. Adversarial completion covers empty/no-match
+message and null, Iterable full traversal, List reverse short-circuit and exact iterator protocol,
+nullable and widened matches, value-type cast recovery, predicate failure identity/stopping,
+capture, non-local return, separate/installed inlining, all four physical signatures, and direct
+fallback execution on Framework CLR and CoreCLR.
+
 ### Signed numeric sum
 
 The admitted numeric closure is the complete signed Common `Numeric.f_sum` family for `Iterable`:
