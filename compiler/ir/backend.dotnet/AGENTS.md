@@ -565,11 +565,17 @@ parked remainder.
 
 ## Verification contract
 
-The strict semantic commit gate is:
+Choose verification from the boundary changed, not from the number of source
+files. During local development, the full target aggregate is:
 
 ```text
-./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
+./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
+
+Use `--no-daemon` only for CI-equivalent clean-room evidence, after suspected
+daemon/toolchain contamination, or when an explicitly selected checkpoint
+requires it. The daemon does not weaken test isolation guaranteed by the test
+tasks and shared external-tool locks.
 
 Do not trust quiet Gradle success alone. Audit every JUnit XML file under:
 
@@ -600,9 +606,20 @@ IL-text golden, change the `.kt`, run the scoped test with
 `-Pkotlin.test.update.test.data=true`, then read and assemble the resulting
 `.txt`; generated goldens can faithfully preserve broken IL.
 
-Focused compilation/tests are useful while iterating but never replace the
-strict gate for a completed semantic feature. Before committing, verify that
-status shows only intended files.
+Focused compilation/tests are the commit gate for a bounded Common-stdlib
+source addition that changes no shared compiler representation, lowering,
+code generation, runtime surface or ABI. Its matrix must still cover every
+affected frontend, profile, runtime, artifact and separate-consumer boundary,
+and `STATUS.md` must distinguish that focused evidence from the last full
+checkpoint.
+
+Run and audit the full target aggregate after changes to type mapping, IR
+lowerings, CIL code generation, runtime helpers or surface levels, arrays or
+generic representation, physical ABI, artifacts, target profiles, toolchain
+integration or shared test infrastructure. Also run it for every periodic
+recorded checkpoint, after upstream integration, and before ABI-readiness
+work. When the boundary is unclear, use the full aggregate. Before committing,
+verify that status shows only intended files.
 
 Prefer existing Common compiler test data and the shared stdlib test corpus
 for Kotlin semantics once the admitted target closure can compile and execute
@@ -613,11 +630,11 @@ interop, target diagnostics, and other genuinely target-specific boundaries.
 Do not remove a duplicate target behavior test until the upstream test itself
 executes through the supported .NET product on every applicable profile.
 
-During one coherent feature tranche, use focused tests for each internal
-slice and run the strict gate once against the final semantic head before its
-commit and push. Do not split a coherent feature into microcommits merely to
-repeat the full gate, and do not batch unrelated semantics merely to amortize
-test time.
+During one coherent feature tranche, use focused tests for each internal slice
+and run the selected commit gate once against the final semantic head before
+its commit and push. Do not split a coherent feature into microcommits merely
+to repeat a gate, and do not batch unrelated semantics merely to amortize test
+time.
 
 ## Box tests
 
