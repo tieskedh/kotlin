@@ -3122,7 +3122,7 @@ internal class DotNetIlEmitter(
                 renderedMethods,
                 renderedFields,
                 renderedProperties,
-                renderedAttributes = irClass.dotNetCompilerAbiTypeAttributes(),
+                renderedAttributes = irClass.dotNetPhysicalTypeAttributes(),
                 isStaticHolder = irClass.origin == DOTNET_STATIC_HOLDER,
                 hasClassInitializer = hasClassInitializer,
                 isNested = classInfo.isNested,
@@ -3546,6 +3546,23 @@ internal class DotNetIlEmitter(
             listOf(
                 DotNetCompilerAbi.markerAttributeIl(),
                 DotNetCompilerAbi.editorBrowsableNeverAttributeIl(coreLibrary.editorBrowsableReference),
+            )
+        } else {
+            emptyList()
+        }
+
+    /**
+     * CLR names of local and anonymous implementation classes are compiler-generated and may
+     * contain characters that also occur in valid source names. Preserve the Common KClass name
+     * contract explicitly on the physical runtime class instead of reverse-engineering a name.
+     * This is runtime naming evidence only; KLIB remains authoritative declaration metadata.
+     */
+    private fun IrClass.dotNetPhysicalTypeAttributes(): List<String> =
+        dotNetCompilerAbiTypeAttributes() + if (isOriginallyLocalDeclaration) {
+            listOf(
+                DotNetKClassRuntime.localClassNameAttributeIl(
+                    name.asString().takeUnless { isAnonymousObject || isDotNetCallableObject }
+                )
             )
         } else {
             emptyList()

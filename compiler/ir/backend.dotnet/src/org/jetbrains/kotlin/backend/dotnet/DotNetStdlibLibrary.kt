@@ -48,6 +48,7 @@ internal object DotNetStdlibLibrary {
     const val THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME =
         "kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt"
     const val EXCEPTIONS_FACADE_IL_NAME = "Kotlin.DotNetExceptionsKt"
+    const val KCLASSES_FACADE_IL_NAME = "Kotlin.Reflection.KClasses"
     const val ARRAY_ITERATOR_FACTORY_NAME = "dotNetArrayIterator"
     const val ARRAY_ITERABLE_FACTORY_NAME = "dotNetArrayIterable"
     const val ERASED_ARRAY_ITERATOR_FACTORY_NAME = "dotNetErasedArrayIterator"
@@ -147,10 +148,13 @@ internal object DotNetStdlibLibrary {
         "kotlin.stackTraceToString" to EXCEPTIONS_FACADE_IL_NAME,
         "kotlin.printStackTrace" to EXCEPTIONS_FACADE_IL_NAME,
         "kotlin.addSuppressed" to EXCEPTIONS_FACADE_IL_NAME,
+        "kotlin.reflect.cast" to KCLASSES_FACADE_IL_NAME,
+        "kotlin.reflect.safeCast" to KCLASSES_FACADE_IL_NAME,
     )
     private val implementationPropertyFacadeIlNames = mapOf(
         "kotlin.collections.lastIndex" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.suppressedExceptions" to EXCEPTIONS_FACADE_IL_NAME,
+        "kotlin.reflect.qualifiedOrSimpleName" to KCLASSES_FACADE_IL_NAME,
     )
 
     fun hasImplementation(module: IrModuleFragment): Boolean =
@@ -470,11 +474,22 @@ internal object DotNetStdlibLibrary {
         ),
         "SharedVariableBox.kt" to ImplementationSource(packageFqName = "kotlin.internal"),
         "SyntheticConstructorMarker.kt" to ImplementationSource(packageFqName = "kotlin.internal"),
+        "KClasses.kt" to ImplementationSource(
+            packageFqName = "kotlin.reflect",
+            facadeIlName = KCLASSES_FACADE_IL_NAME,
+        ),
+        "DotNetKClasses.kt" to ImplementationSource(
+            packageFqName = "kotlin.reflect",
+            facadeIlName = KCLASSES_FACADE_IL_NAME,
+        ),
     )
     private val resolutionOnlySources = mapOf(
         "Annotations.kt" to "kotlin.internal",
         "JvmAnnotationsH.kt" to "kotlin.jvm",
         "Multiplatform.kt" to "kotlin",
+        "KClass.kt" to "kotlin.reflect",
+        "KClassifier.kt" to "kotlin.reflect",
+        "DotNetKClass.kt" to "kotlin.reflect",
     )
 
     internal fun isImplementationSource(file: IrFile): Boolean =

@@ -77,13 +77,16 @@
   }
   .method public hidebysig newslot virtual instance !0 'next'() cil managed
   {
-    .maxstack 2
+    .maxstack 3
     ldarg.0
     call instance bool class 'OneIterator`1'<!0>::'get_available'()
     ldc.i4.0
     ceq
     brfalse IL_whenNext_1
     newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    dup
+    ldc.i4 8
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     throw
 IL_whenNext_1:
     ldarg.0

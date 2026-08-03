@@ -1575,8 +1575,11 @@ IL_genericInterfaceJoin_1:
   }
   .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Nothing' 'neverReturns'() cil managed
   {
-    .maxstack 1
+    .maxstack 3
     newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    dup
+    ldc.i4 8
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
     throw
   }
   .method public hidebysig static string 'guardedNeverReturn'() cil managed

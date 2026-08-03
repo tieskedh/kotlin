@@ -228,6 +228,7 @@ internal object DotNetRuntimeLibrary {
             coreLibraryReference,
             coreLibrary.editorBrowsableReference,
         )
+        val kClassTypesIl = DotNetKClassRuntime.kotlinTypesIl(coreLibraryReference)
         val throwableExceptionTypesIl = DotNetThrowableRuntime.exceptionTypesIl(coreLibraryReference)
         return """
 $assemblyReferenceIl
@@ -257,6 +258,8 @@ $compilerAbiAttributeTypeIl
         .namespace Kotlin
         {
 $primitiveArrayTypesIl
+
+$kClassTypesIl
 
           .class public auto ansi beforefieldinit RuntimeException
                  extends ${coreLibraryReference}System.Exception

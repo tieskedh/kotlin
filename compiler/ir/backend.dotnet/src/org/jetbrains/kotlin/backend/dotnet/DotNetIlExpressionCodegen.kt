@@ -9,11 +9,13 @@ import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.IrClassReference
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetField
+import org.jetbrains.kotlin.ir.expressions.IrGetClass
 import org.jetbrains.kotlin.ir.expressions.IrGetObjectValue
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetField
@@ -30,12 +32,14 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
+import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFalseConst
+import org.jetbrains.kotlin.ir.util.isAnonymousObject
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isNullConst
 import org.jetbrains.kotlin.ir.util.isNullable
@@ -255,6 +259,8 @@ internal class DotNetIlExpressionCodegen(
             }
             is IrGetValue -> emitGetValue(expression, expectedType)
             is IrGetField -> emitGetField(expression, expectedType)
+            is IrClassReference -> emitClassReference(expression, expectedType)
+            is IrGetClass -> emitGetClass(expression, expectedType)
             is IrConstructorCall -> emitConstructorCall(expression, expectedType)
             is IrWhen -> emitWhenExpression(expression, expectedType)
             // `IrThrow` has type `kotlin.Nothing` and satisfies any expected type vacuously: the
@@ -279,6 +285,176 @@ internal class DotNetIlExpressionCodegen(
                 "unsupported ${expectedType.nameInSignature} expression ${expression.javaClass.simpleName}: ${expression.render()}"
             )
         }
+    }
+
+    /**
+     * Static and dynamic class literals both produce the same Kotlin-owned erased KClass view.
+     * The logical `KClass<T>` argument remains exclusively in IR/KLIB; the runtime object carries
+     * a System.Type only as physical evidence plus the smallest classifier kind needed when one
+     * CLR Type cannot express Kotlin identity (Array, Number, CharSequence, and exceptions).
+     */
+    private fun emitClassReference(expression: IrClassReference, expectedType: DotNetIlValueType) {
+        val resultType = DotNetIlValueType.UserClass(DotNetKClassRuntime.kClassClassInfo)
+        if (!resultType.isDotNetAssignableTo(expectedType)) {
+            dotNetUnsupported(
+                "class literal produces ${resultType.nameInSignature} " +
+                        "where ${expectedType.nameInSignature} is expected"
+            )
+        }
+        val simpleType = expression.classType as? IrSimpleType
+            ?: dotNetUnsupported("class literal of unsupported type ${expression.classType.render()}")
+        if (simpleType.classifier is IrTypeParameterSymbol) {
+            dotNetUnsupported("reified type-parameter class literals are not supported yet")
+        }
+        val irClass = (simpleType.classifier as? IrClassSymbol)?.owner
+            ?: dotNetUnsupported("class literal has no class declaration: ${expression.classType.render()}")
+        val classifier = staticKClassClassifier(expression.classType, irClass)
+        emitSystemTypeOrNull(classifier.clrTypeRef)
+        emitNullableString(classifier.simpleName)
+        emitNullableString(classifier.qualifiedName)
+        methodContext.emit("ldc.i4 ${classifier.kind.abiValue}", pushes = 1)
+        methodContext.emit("ldc.i4 ${classifier.classifierId}", pushes = 1)
+        methodContext.emit(
+            DotNetKClassRuntime.createCallInstruction(coreLibraryReference),
+            pops = 5,
+            pushes = 1,
+        )
+    }
+
+    private fun emitGetClass(expression: IrGetClass, expectedType: DotNetIlValueType) {
+        val resultType = DotNetIlValueType.UserClass(DotNetKClassRuntime.kClassClassInfo)
+        if (!resultType.isDotNetAssignableTo(expectedType)) {
+            dotNetUnsupported(
+                "dynamic class literal produces ${resultType.nameInSignature} " +
+                        "where ${expectedType.nameInSignature} is expected"
+            )
+        }
+        // Object widening performs the required boxing for scalar and nullable-value receivers.
+        // It also guarantees exactly one receiver evaluation before the runtime classification.
+        emitExpression(expression.argument, DotNetIlValueType.Object)
+        if (methodContext.isTerminated) return
+        methodContext.emit(
+            DotNetKClassRuntime.getClassCallInstruction(coreLibraryReference),
+            pops = 1,
+            pushes = 1,
+        )
+    }
+
+    private data class StaticKClassClassifier(
+        val clrTypeRef: String?,
+        val simpleName: String?,
+        val qualifiedName: String?,
+        val kind: DotNetKClassClassifierKind,
+        val classifierId: Int = 0,
+    )
+
+    private fun staticKClassClassifier(classType: IrType, irClass: IrClass): StaticKClassClassifier {
+        val sourceSimpleName = irClass.name.asString().takeUnless { irClass.isAnonymousObject }
+        val sourceQualifiedName = irClass.fqNameWhenAvailable?.asString()
+            ?.takeUnless { irClass.isAnonymousObject || irClass.isOriginallyLocalDeclaration }
+        val mappedException = DotNetMappedExceptions.mappedEntry(irClass.fqNameWhenAvailable)
+        if (mappedException != null) {
+            return StaticKClassClassifier(
+                clrTypeRef = mappedException.constructorTypeRef(coreLibraryReference),
+                simpleName = sourceSimpleName,
+                qualifiedName = sourceQualifiedName,
+                kind = DotNetKClassClassifierKind.EXCEPTION,
+                classifierId = mappedException.classifierTypeId.abiValue,
+            )
+        }
+        if (classType.isDotNetCharSequenceType()) {
+            return StaticKClassClassifier(
+                clrTypeRef = null,
+                simpleName = sourceSimpleName,
+                qualifiedName = sourceQualifiedName,
+                kind = DotNetKClassClassifierKind.CHAR_SEQUENCE,
+            )
+        }
+        if (irClass.fqNameWhenAvailable?.asString() == "kotlin.Number") {
+            return StaticKClassClassifier(
+                clrTypeRef = null,
+                simpleName = sourceSimpleName,
+                qualifiedName = sourceQualifiedName,
+                kind = DotNetKClassClassifierKind.NUMBER,
+            )
+        }
+        if (classType.isNothing()) {
+            return StaticKClassClassifier(
+                clrTypeRef = DotNetRuntimeTypes.nothingType.ilTypeRef,
+                simpleName = sourceSimpleName,
+                qualifiedName = sourceQualifiedName,
+                kind = DotNetKClassClassifierKind.NOTHING,
+            )
+        }
+        if (classType.isUnit()) {
+            return StaticKClassClassifier(
+                clrTypeRef = DotNetRuntimeTypes.unitType.ilTypeRef,
+                simpleName = sourceSimpleName,
+                qualifiedName = sourceQualifiedName,
+                kind = DotNetKClassClassifierKind.EXACT,
+            )
+        }
+        if (irClass.fqNameWhenAvailable?.asString() == "kotlin.Array") {
+            return StaticKClassClassifier(
+                clrTypeRef = "${coreLibraryReference}System.Array",
+                simpleName = sourceSimpleName,
+                qualifiedName = sourceQualifiedName,
+                kind = DotNetKClassClassifierKind.GENERIC_ARRAY,
+            )
+        }
+        typeMapper.genericClassInfoOrNull(irClass)?.let { genericClass ->
+            return StaticKClassClassifier(
+                clrTypeRef = genericClass.typedClassInfo.ilTypeRef,
+                simpleName = sourceSimpleName,
+                qualifiedName = sourceQualifiedName,
+                kind = DotNetKClassClassifierKind.OPEN_GENERIC,
+            )
+        }
+        val mappedType = typeMapper.toDotNetIlValueType(classType)
+            ?: dotNetUnsupported("class literal has no CLR evidence type: ${classType.render()}")
+        val clrTypeRef = when (mappedType) {
+            DotNetIlValueType.String -> "${coreLibraryReference}System.String"
+            DotNetIlValueType.Object -> "${coreLibraryReference}System.Object"
+            is DotNetIlValueType.UserClass -> mappedType.ilTypeRef
+            is DotNetIlValueType.MappedClass -> mappedType.ilTypeRef
+            is DotNetIlValueType.PrimitiveArray -> mappedType.abi.wrapperTypeRef
+            is DotNetIlValueType.GenericArray,
+            is DotNetIlValueType.ErasedGenericArray,
+                -> "${coreLibraryReference}System.Array"
+            is DotNetIlValueType.GenericInstance -> mappedType.classInfo.ilTypeRef
+            else -> mappedType.dotNetBoxedCorelibRefOrNull(coreLibraryReference)
+                ?: dotNetUnsupported("class literal has unsupported CLR evidence ${mappedType.nameInSignature}")
+        }
+        val kind = if (mappedType is DotNetIlValueType.GenericInstance) {
+            DotNetKClassClassifierKind.OPEN_GENERIC
+        } else {
+            DotNetKClassClassifierKind.EXACT
+        }
+        return StaticKClassClassifier(
+            clrTypeRef = clrTypeRef,
+            simpleName = sourceSimpleName,
+            qualifiedName = sourceQualifiedName,
+            kind = kind,
+        )
+    }
+
+    private fun emitSystemTypeOrNull(clrTypeRef: String?) {
+        if (clrTypeRef == null) {
+            methodContext.emit("ldnull", pushes = 1)
+            return
+        }
+        methodContext.emit("ldtoken $clrTypeRef", pushes = 1)
+        methodContext.emit(
+            "call class ${coreLibraryReference}System.Type " +
+                    "${coreLibraryReference}System.Type::GetTypeFromHandle(" +
+                    "valuetype ${coreLibraryReference}System.RuntimeTypeHandle)",
+            pops = 1,
+            pushes = 1,
+        )
+    }
+
+    private fun emitNullableString(value: String?) {
+        methodContext.emit(value?.let { "ldstr ${it.toIlStringLiteral()}" } ?: "ldnull", pushes = 1)
     }
 
     /**
@@ -1608,6 +1784,16 @@ internal class DotNetIlExpressionCodegen(
             "newobj instance void $constructorClrTypeRef::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})",
             pops = parameterTypes.size,
             pushes = 1,
+        )
+        // Several logical Kotlin exception classes deliberately share a broad CLR carrier. Keep
+        // the exact constructor identity on the original object in the same weak runtime state
+        // that owns suppressed exceptions, so dynamic `value::class` can distinguish (notably)
+        // Throwable() from Exception() without a wrapper or Exception.Data mutation.
+        methodContext.emit("dup", pops = 1, pushes = 2)
+        methodContext.emit("ldc.i4 ${entry.classifierTypeId.abiValue}", pushes = 1)
+        methodContext.emit(
+            DotNetThrowableRuntime.setExactTypeIdCallInstruction(coreLibraryReference),
+            pops = 2,
         )
     }
 
