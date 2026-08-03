@@ -238,6 +238,13 @@ See the
   `equals`, `hashCode`, and `toString` semantics remain explicit compiler or
   runtime behavior. See
   [the `Any` foundation ADR](docs/decisions/system-object-any.md).
+- An explicit generic upper bound `T : Any` remains authoritative in KLIB but
+  contributes no CLR `class`, `valuetype`, or `System.Object` constraint: the
+  Kotlin bound admits both non-null references and value types, which CLR
+  runtime constraint flags cannot express as one parameter. Preserve the real
+  generic token and every other supported bound. Roslyn `notnull` metadata is
+  an additive future warning view, not Kotlin authority. See
+  [the non-null generic-bound ADR](docs/decisions/non-null-generic-upper-bound.md).
 - `CharSequence` uses a classified `System.Object` carrier because sealed
   `System.String` cannot implement a Kotlin-owned interface. Strings retain
   identity; Kotlin implementations occupy the runtime capability interface;
@@ -475,6 +482,11 @@ external calls still bind only through the producer-recorded physical ABI.
 After the shared inline prefix, traverse the actual IR graph and reject every
 remaining unbound symbol before target lowerings; do not make an arbitrary
 lowering or the CIL emitter the missing-dependency detector.
+An inlined caller-targeted return may occur with older expression operands on
+the CIL evaluation stack. Preserve Kotlin evaluation order: spill the return
+value, drain only those older operands, reload the result, and then `ret`, or
+drain before the existing protected-region `leave`. Never repair this by
+rewriting a Common body or evaluating the returning operand early.
 Do not enable either reified-inline support gate until the complete operation
 closure in `docs/programmes/inline-functions.md` is truthful. In particular,
 never compile a Kotlin-owned generic-class type test/cast as closed CLR
