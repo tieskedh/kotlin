@@ -30962,6 +30962,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "foldIndexed" to 1,
                 "foldRight" to 1,
                 "foldRightIndexed" to 1,
+                "forEach" to 1,
+                "forEachIndexed" to 1,
                 "getOrNull" to 1,
                 "indexOf" to 2,
                 "indexOfFirst" to 2,
@@ -30991,6 +30993,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         "foldIndexed",
                         "foldRight",
                         "foldRightIndexed",
+                        "forEach",
+                        "forEachIndexed",
                         "getOrNull",
                         "indexOf",
                         "indexOfFirst",
@@ -31023,6 +31027,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "foldIndexed",
                 "foldRight",
                 "foldRightIndexed",
+                "forEach",
+                "forEachIndexed",
                 "getOrNull",
                 "indexOf",
                 "indexOfFirst",
@@ -31193,6 +31199,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".method public hidebysig static !!1 'foldRightIndexed'<'T', 'R'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.List' '<this>', !!1 'initial', " +
                     "class [Kotlin.Runtime]'Kotlin.Function3' 'operation')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static void 'forEach'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'action')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static void 'forEachIndexed'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function2' 'action')" in il
         )
         assertTrue(
             ".method public hidebysig static !!0 'reduce'<'S', (!!0) 'T'>(" +
@@ -31554,6 +31570,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     operation: (Int, T, R) -> R,
                 ): R = values.foldRightIndexed(initial, operation)
 
+                public fun <T> iterateAll(
+                    values: Iterable<T>,
+                    action: (T) -> Unit,
+                ): Unit = values.forEach(action)
+
+                public fun <T> iterateAllIndexed(
+                    values: Iterable<T>,
+                    action: (Int, T) -> Unit,
+                ): Unit = values.forEachIndexed(action)
+
                 public fun <S, T : S> reduceLeft(
                     values: Iterable<T>,
                     operation: (S, T) -> S,
@@ -31752,6 +31778,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'foldRightIndexed'<" !in il) {
             "The separate consumer must inline the Common foldRightIndexed body:\n$il"
         }
+        assertTrue("::'forEach'<" !in il) {
+            "The separate consumer must inline the Common forEach body:\n$il"
+        }
+        assertTrue("::'forEachIndexed'<" !in il) {
+            "The separate consumer must inline the Common forEachIndexed body:\n$il"
+        }
         for (functionName in listOf(
             "reduce",
             "reduceIndexed",
@@ -31803,12 +31835,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "The separate consumer must inline both Common indexOfLast bodies:\n$il"
         }
         assertEquals(
-            5,
+            6,
             Regex(
                 "\\[Kotlin\\.Stdlib]'Kotlin\\.Collections\\.CollectionsKt'::" +
                         "'checkIndexOverflow'\\(int32\\)"
             ).findAll(il).count(),
-            "Only indexed Iterable search, fold, and reduction bodies may retain overflow-helper calls",
+            "Only indexed Iterable search, fold, reduction, and action bodies may retain overflow-helper calls",
         )
         assertTrue("::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'single'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
@@ -31922,6 +31954,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     initial: R,
                     operation: (Int, T, R) -> R,
                 ): R = values.foldRightIndexed(initial, operation)
+
+                public fun <T> installedIterateAll(
+                    values: Iterable<T>,
+                    action: (T) -> Unit,
+                ): Unit = values.forEach(action)
+
+                public fun <T> installedIterateAllIndexed(
+                    values: Iterable<T>,
+                    action: (Int, T) -> Unit,
+                ): Unit = values.forEachIndexed(action)
 
                 public fun <S, T : S> installedReduceLeft(
                     values: Iterable<T>,
@@ -32154,6 +32196,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'foldRightIndexed'<" !in il) {
             "The installed consumer must inline the Common foldRightIndexed body:\n$il"
         }
+        assertTrue("::'forEach'<" !in il) {
+            "The installed consumer must inline the Common forEach body:\n$il"
+        }
+        assertTrue("::'forEachIndexed'<" !in il) {
+            "The installed consumer must inline the Common forEachIndexed body:\n$il"
+        }
         for (functionName in listOf(
             "reduce",
             "reduceIndexed",
@@ -32342,6 +32390,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                 }
 
+                class HostileForEachInts(private val values: Array<Int>) : Iterable<Int> {
+                    public var memberCalls: Int = 0
+
+                    override fun iterator(): Iterator<Int> = values.asIterable().iterator()
+
+                    public fun forEach(action: (Int) -> Unit): Unit {
+                        memberCalls++
+                        action(9)
+                    }
+                }
+
                 class HostileEmptyCollection<T> : Collection<T> {
                     override val size: Int get() = 0
 
@@ -32408,6 +32467,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     values.reduce { accumulator, value ->
                         if (value == 2) return value
                         accumulator + value
+                    }
+                    return -1
+                }
+
+                fun nonLocalForEachMatch(values: Iterable<Int>): Int {
+                    values.forEach { value ->
+                        if (value == 2) return value
+                    }
+                    return -1
+                }
+
+                fun nonLocalForEachIndexedMatch(values: Iterable<Int>): Int {
+                    values.forEachIndexed { index, value ->
+                        if (value == 2) return index
                     }
                     return -1
                 }
@@ -32585,6 +32658,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             emptyNullableReductions &&
                             emptyReduceCalls == 0 &&
                             nonLocalReduceMatch(arrayOf(1, 2, 3).asIterable()) == 2
+                    val iterating = CountingInts(arrayOf(1, 2, 3))
+                    var forEachTrace = 0
+                    iterating.forEach { value -> forEachTrace = forEachTrace * 10 + value }
+                    var forEachIndexedTrace = 0
+                    iterating.forEachIndexed { index, value ->
+                        forEachIndexedTrace = forEachIndexedTrace * 100 + index * 10 + value
+                    }
+                    var nullableForEachTrace = 0
+                    arrayOf<Int?>(null, 2).asIterable().forEach { value ->
+                        nullableForEachTrace = nullableForEachTrace * 10 + (value ?: 7)
+                    }
+                    val hostileForEach = HostileForEachInts(arrayOf(1, 2, 3))
+                    var hostileForEachTrace = 0
+                    hostileForEach.forEach { value -> hostileForEachTrace = hostileForEachTrace * 10 + value }
+                    var emptyForEachCalls = 0
+                    emptyList<Int>().forEach { emptyForEachCalls++ }
+                    emptyList<Int>().forEachIndexed { _, _ -> emptyForEachCalls++ }
+                    val forEachOk =
+                        forEachTrace == 123 &&
+                            forEachIndexedTrace == 11223 &&
+                            iterating.iteratorCalls == 2 &&
+                            iterating.nextCalls == 6 &&
+                            nullableForEachTrace == 72 &&
+                            hostileForEach.memberCalls == 0 &&
+                            hostileForEachTrace == 123 &&
+                            emptyForEachCalls == 0 &&
+                            nonLocalForEachMatch(arrayOf(1, 2, 3).asIterable()) == 2 &&
+                            nonLocalForEachIndexedMatch(arrayOf(1, 2, 3).asIterable()) == 1
                     val empty = HostileEmptyCollection<Int>()
                     var emptyPredicateCalls = 0
                     val emptyFastPathOk =
@@ -32667,7 +32768,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         first + "|" + second + "|" + (atEof == null) + "|" +
                             readlnEofIsCommon + "|" + arrayViewOk + "|" + cardinalityOk + "|" +
                             indexedOptionalOk + "|" + numericSumOk + "|" + foldOk + "|" + reduceOk + "|" +
-                            inlinePredicatesOk
+                            forEachOk + "|" + inlinePredicatesOk
                     )
                 }
                 """.trimIndent()
@@ -32701,7 +32802,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }
@@ -32798,6 +32899,73 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   }
                 }
 
+                .class public auto ansi sealed beforefieldinit ForEachAction
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Function1'
+                {
+                  .field public int32 Trace
+
+                  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+                  {
+                    .maxstack 3
+                    ldarg.0
+                    dup
+                    ldfld int32 ForEachAction::Trace
+                    ldc.i4.s 10
+                    mul
+                    ldarg.1
+                    unbox.any [mscorlib]System.Int32
+                    add
+                    stfld int32 ForEachAction::Trace
+                    ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
+                    ret
+                  }
+                }
+
+                .class public auto ansi sealed beforefieldinit ForEachIndexedAction
+                       extends [mscorlib]System.Object
+                       implements [Kotlin.Runtime]'Kotlin.Function2'
+                {
+                  .field public int32 Trace
+
+                  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ret
+                  }
+
+                  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'index', object 'value') cil managed
+                  {
+                    .maxstack 4
+                    ldarg.0
+                    dup
+                    ldfld int32 ForEachIndexedAction::Trace
+                    ldc.i4.s 100
+                    mul
+                    ldarg.1
+                    unbox.any [mscorlib]System.Int32
+                    ldc.i4.s 10
+                    mul
+                    add
+                    ldarg.2
+                    unbox.any [mscorlib]System.Int32
+                    add
+                    stfld int32 ForEachIndexedAction::Trace
+                    ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
+                    ret
+                  }
+                }
+
                 .class public auto ansi sealed beforefieldinit SumIndexedOperation
                        extends [mscorlib]System.Object
                        implements [Kotlin.Runtime]'Kotlin.Function3'
@@ -32845,7 +33013,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                       [0] class [mscorlib]System.ArithmeticException failure,
                       [1] int32[] values,
                       [2] class [Kotlin.Runtime]'Kotlin.Collections.Iterable' iterable,
-                      [3] class [Kotlin.Runtime]'Kotlin.Collections.List' list
+                      [3] class [Kotlin.Runtime]'Kotlin.Collections.List' list,
+                      [4] class ForEachAction forEachAction,
+                      [5] class ForEachIndexedAction forEachIndexedAction
                     )
 
                     ldc.i4.0
@@ -32989,8 +33159,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     newobj instance void EqualTwoPredicate::.ctor()
                     call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'indexOfLast'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function1')
                     ldc.i4.3
-                    beq.s FOLD
+                    beq.s FOR_EACH
                     ldstr "List indexOfLast fallback changed"
+                    call void Program::Fail(string)
+                FOR_EACH:
+                    newobj instance void ForEachAction::.ctor()
+                    stloc.s 4
+                    ldloc.2
+                    ldloc.s 4
+                    call void [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'forEach'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldloc.s 4
+                    ldfld int32 ForEachAction::Trace
+                    ldc.i4 1232
+                    beq.s FOR_EACH_INDEXED
+                    ldstr "forEach fallback changed"
+                    call void Program::Fail(string)
+                FOR_EACH_INDEXED:
+                    newobj instance void ForEachIndexedAction::.ctor()
+                    stloc.s 5
+                    ldloc.2
+                    ldloc.s 5
+                    call void [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'forEachIndexed'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function2')
+                    ldloc.s 5
+                    ldfld int32 ForEachIndexedAction::Trace
+                    ldc.i4 1122332
+                    beq.s FOLD
+                    ldstr "forEachIndexed fallback changed"
                     call void Program::Fail(string)
                 FOLD:
                     ldloc.2

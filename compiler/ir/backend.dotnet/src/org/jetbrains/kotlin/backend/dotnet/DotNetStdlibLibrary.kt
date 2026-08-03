@@ -97,6 +97,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.foldIndexed" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.foldRight" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.foldRightIndexed" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.forEach" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.forEachIndexed" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.getOrNull" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.indexOf" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.indexOfFirst" to COLLECTIONS_FACADE_IL_NAME,

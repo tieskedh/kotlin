@@ -304,6 +304,37 @@ value, nullable, and widened `S`; exact left/right order and indices; hostile it
 failure identity and stopping point; non-local return; the physical `T : S` constraint and `S?`
 slot; packaged KLIB inlining; and direct fallback execution on both supported CLR families.
 
+### Iteration actions
+
+The selected action closure is exactly `Iterable<T>.forEach` and `forEachIndexed`. JVM, JS, Wasm,
+and Native consume the same generated Common declarations: `forEach` invokes the action once for
+each iterator element in encounter order, while `forEachIndexed` increments from zero and passes
+every index through the Common `checkIndexOverflow` operation before invoking the action with that
+index and its already-retrieved element. Both functions are inline and return Unit; no
+target-authored loop or BCL enumeration path is selected.
+
+`forEach` retains Common's binary `@kotlin.internal.HidesMembers` compiler directive. Its
+annotation class already belongs to the authoritative Common stdlib source closure, and embedded
+KLIB preserves the annotation for Kotlin overload resolution. It is not a user runtime annotation
+and therefore does not require a CLR custom-attribute representation. A separate consumer with a
+hostile same-signature member must still resolve the annotated Common extension, proving the
+published KLIB behavior rather than merely the source spelling.
+
+The existing split Iterable/Iterator carrier, Function1/Function2 invocation, Unit carrier,
+`checkIndexOverflow`, capture, non-local return, and cross-library inliner close the physical
+dependencies. LINQ `ForEach`, a Collection/List shortcut, BCL `IEnumerable<T>`, or a target body is
+rejected because each would change receiver admission, traversal or inline control flow without a
+CLR necessity. `onEach` and `onEachIndexed` are deliberately not rewritten as convenient variants:
+their exact Common bodies use `apply`, whose authoritative `Standard.kt` closure introduces the
+public contracts DSL and `InvocationKind`. They remain parked until that language/stdlib feature is
+selected on its own merits.
+
+Adversarial completion covers empty and singleton protocols, exact order and zero-based indices,
+overflow checking, nullable and value elements, Unit callbacks, mutation/capture, exception
+identity and stopping point, non-local return, hostile member resolution through `HidesMembers`,
+packaged and installed KLIB inlining, physical fallback signatures, and direct fallback execution
+on Framework CLR and CoreCLR.
+
 ### Signed numeric sum
 
 The admitted numeric closure is the complete signed Common `Numeric.f_sum` family for `Iterable`:

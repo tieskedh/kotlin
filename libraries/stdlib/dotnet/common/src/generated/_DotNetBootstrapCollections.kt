@@ -282,6 +282,24 @@ public inline fun <T, R> List<T>.foldRightIndexed(initial: R, operation: (index:
 }
 
 /**
+ * Performs the given [action] on each element.
+ */
+@kotlin.internal.HidesMembers
+public inline fun <T> Iterable<T>.forEach(action: (T) -> Unit): Unit {
+    for (element in this) action(element)
+}
+
+/**
+ * Performs the given [action] on each element, providing sequential index with the element.
+ * @param [action] function that takes the index of an element and the element itself
+ * and performs the action on the element.
+ */
+public inline fun <T> Iterable<T>.forEachIndexed(action: (index: Int, T) -> Unit): Unit {
+    var index = 0
+    for (item in this) action(checkIndexOverflow(index++), item)
+}
+
+/**
  * Returns an element at the given [index] or `null` if the [index] is out of bounds of this list.
  *
  * @sample samples.collections.Collections.Elements.getOrNull
