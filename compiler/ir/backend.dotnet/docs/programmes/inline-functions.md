@@ -390,7 +390,7 @@ index depend on which reified operations happened to occur.
 | `arrayOfNulls<T>`, `emptyArray<T>`, varargs, and array constructors | typed CLR-vector intrinsics and Common array-constructor lowering | prove nested generic element, nullability, projection, and cross-module substitutions without assuming closed CLR generic identity equals Kotlin runtime identity |
 | `T::class` | nominal Kotlin `KClass` identity, classified runtime checks, and a truthful compiler-ABI `System.Type` bridge | execute substituted class literals through both inliner stages when the complete public reified gate is enabled |
 | `typeOf<T>()` | shared inliner preserves/substitutes its type argument | select `KType`, type arguments, variance, nullability, and reflection ownership |
-| `enumValues<T>`, `enumValueOf<T>`, `enumEntries<T>` | none | complete the atomic enum/contracts/builder/abstract-collections/`EnumEntries` cluster |
+| `enumValues<T>`, `enumValueOf<T>`, `enumEntries<T>` | selected builder/abstract-base phase followed by ordinary enums and non-reified `EnumEntries` | implement their reified intrinsic bodies without opening unrelated reified operations |
 | annotation-associated and other reflection operations | parameterless annotation declarations, retention, and exact CLR-parent projection | valued annotations, reflection discovery, and target-specific association policy |
 | surviving physical reified declaration | real CLR generic-method carrier exists | choose and mark an uncallable/throwing compiler-ABI stub without weakening KLIB/physical coverage |
 
@@ -439,7 +439,8 @@ The reversible prerequisite order is:
 4. design the general erased runtime view for Kotlin-owned generic classes, including typed use
    after a successful erased cast;
 5. use the selected `KClass`/class-literal floor, then select `KType`/`typeOf`;
-6. integrate the enum intrinsic family only after its atomic source cluster; and
+6. integrate the enum intrinsic family only after ordinary enums and the non-reified
+   `EnumEntries` product; and
 7. finally enable reified in both inliner stages, select the physical throwing-stub contract, and
    test source/library consumers over all three KLIB modes and both runtime profiles.
 
