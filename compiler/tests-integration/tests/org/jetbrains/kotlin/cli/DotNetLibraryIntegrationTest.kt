@@ -30956,7 +30956,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "all" to 1,
                 "any" to 2,
                 "contains" to 1,
-                "count" to 1,
+                "count" to 2,
                 "elementAtOrNull" to 1,
                 "first" to 3,
                 "firstOrNull" to 3,
@@ -30973,7 +30973,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "last" to 4,
                 "lastIndexOf" to 2,
                 "lastOrNull" to 4,
-                "none" to 1,
+                "none" to 2,
                 "reduce" to 1,
                 "reduceIndexed" to 1,
                 "reduceIndexedOrNull" to 1,
@@ -31191,6 +31191,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             ".method public hidebysig static int32 'count'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static int32 'count'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
         )
         assertTrue(
             ".method public hidebysig static !!1 'fold'<'T', 'R'>(" +
@@ -31419,6 +31424,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             ".method public hidebysig static bool 'none'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static bool 'none'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'predicate')" in il
         )
         assertTrue(
             ".method public hidebysig static !!0 'single'<'T'>(" +
@@ -31737,6 +31747,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     predicate: (T) -> Boolean,
                 ): Boolean = values.any(predicate)
 
+                public fun <T> noneMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Boolean = values.none(predicate)
+
+                public fun <T> countMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Int = values.count(predicate)
+
                 public fun <T> firstElementIndex(values: Iterable<T>, element: T): Int =
                     values.indexOf(element)
 
@@ -31895,6 +31915,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ) {
             "The separate consumer must inline the Common any(predicate) body:\n$il"
         }
+        assertTrue(
+            "::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The separate consumer must inline the Common none(predicate) body:\n$il"
+        }
+        assertTrue(
+            "::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The separate consumer must inline the Common count(predicate) body:\n$il"
+        }
+        assertEquals(
+            1,
+            Regex("::'checkCountOverflow'\\(int32\\)").findAll(il).count(),
+            "Only the inlined Common count(predicate) body may retain the count-overflow helper",
+        )
         assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'fold'<" !in il) {
             "The separate consumer must inline the Common fold body:\n$il"
@@ -32200,6 +32237,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     predicate: (T) -> Boolean,
                 ): Boolean = values.any(predicate)
 
+                public fun <T> installedNoneMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Boolean = values.none(predicate)
+
+                public fun <T> installedCountMatching(
+                    values: Iterable<T>,
+                    predicate: (T) -> Boolean,
+                ): Int = values.count(predicate)
+
                 public fun <T> installedFirstElementIndex(values: Iterable<T>, element: T): Int =
                     values.indexOf(element)
 
@@ -32391,6 +32438,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ) {
             "The installed consumer must inline the Common any(predicate) body:\n$il"
         }
+        assertTrue(
+            "::'none'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The installed consumer must inline the Common none(predicate) body:\n$il"
+        }
+        assertTrue(
+            "::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+        ) {
+            "The installed consumer must inline the Common count(predicate) body:\n$il"
+        }
+        assertEquals(
+            1,
+            Regex("::'checkCountOverflow'\\(int32\\)").findAll(il).count(),
+            "Only the inlined Common count(predicate) body may retain the count-overflow helper",
+        )
         assertTrue("::'count'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'fold'<" !in il) {
             "The installed consumer must inline the Common fold body:\n$il"
@@ -32657,6 +32721,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 fun nonLocalMatch(values: Iterable<Int>): Int {
                     values.any { value ->
+                        if (value == 2) return value
+                        false
+                    }
+                    return -1
+                }
+
+                fun nonLocalPredicateCount(values: Iterable<Int>): Int {
+                    values.count { value ->
                         if (value == 2) return value
                         false
                     }
@@ -33083,6 +33155,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val emptyFastPathOk =
                         empty.all { emptyPredicateCalls++; false } &&
                             !empty.any { emptyPredicateCalls++; true } &&
+                            empty.none { emptyPredicateCalls++; true } &&
+                            empty.count { emptyPredicateCalls++; true } == 0 &&
                             emptyPredicateCalls == 0
                     val anyCounting = CountingInts(arrayOf(1, 2, 3, 4))
                     var anyPredicateCalls = 0
@@ -33104,6 +33178,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             allPredicateCalls == 3 &&
                             allCounting.iteratorCalls == 1 &&
                             allCounting.nextCalls == 3
+                    val noneCounting = CountingInts(arrayOf(1, 2, 3, 4))
+                    var nonePredicateCalls = 0
+                    val noneShortCircuitOk =
+                        !noneCounting.none { value ->
+                            nonePredicateCalls++
+                            value == 2
+                        } &&
+                            nonePredicateCalls == 2 &&
+                            noneCounting.iteratorCalls == 1 &&
+                            noneCounting.nextCalls == 2
+                    val countCounting = CountingInts(arrayOf(1, 2, 3, 2))
+                    var countPredicateCalls = 0
+                    val predicateCountOk =
+                        countCounting.count { value ->
+                            countPredicateCalls++
+                            value == 2
+                        } == 2 &&
+                            countPredicateCalls == 4 &&
+                            countCounting.iteratorCalls == 1 &&
+                            countCounting.nextCalls == 4
                     val indexed = CountingInts(arrayOf(1, 2, 3, 2))
                     var firstPredicateCalls = 0
                     val firstMatch = indexed.indexOfFirst { value ->
@@ -33143,12 +33237,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val nullableWidenedOk =
                         widened.any { it == null } &&
                             widened.all { it == null || it == "K" } &&
+                            widened.none { it == "missing" } &&
+                            widened.count { it == null } == 1 &&
                             widened.indexOfFirst { it == null } == 0 &&
                             widened.indexOfLast { it == "K" } == 1
                     val inlinePredicatesOk =
-                        emptyFastPathOk && anyShortCircuitOk && allShortCircuitOk &&
+                        emptyFastPathOk && anyShortCircuitOk && allShortCircuitOk && noneShortCircuitOk &&
+                            predicateCountOk &&
                             iterableIndexOk && listIndexOk && captureOk && nullableWidenedOk &&
-                            nonLocalMatch(arrayOf(1, 2, 3).asIterable()) == 2
+                            nonLocalMatch(arrayOf(1, 2, 3).asIterable()) == 2 &&
+                            nonLocalPredicateCount(arrayOf(1, 2, 3).asIterable()) == 2
                     var readlnEofIsCommon = false
                     try {
                         readln()
@@ -33548,6 +33646,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ldstr "any fallback changed"
                     call void Program::Fail(string)
                 ANY_OK:
+                    ldloc.2
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call bool [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'none'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    brfalse.s NONE_PREDICATE_OK
+                    ldstr "none(predicate) fallback changed"
+                    call void Program::Fail(string)
+                NONE_PREDICATE_OK:
+                    ldloc.2
+                    newobj instance void EqualTwoPredicate::.ctor()
+                    call int32 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'count'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')
+                    ldc.i4.2
+                    beq.s COUNT_PREDICATE_OK
+                    ldstr "count(predicate) fallback changed"
+                    call void Program::Fail(string)
+                COUNT_PREDICATE_OK:
                     ldloc.2
                     newobj instance void EqualTwoPredicate::.ctor()
                     call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', class [Kotlin.Runtime]'Kotlin.Function1')

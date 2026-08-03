@@ -137,6 +137,16 @@ public fun <T> Iterable<T>.count(): Int {
 }
 
 /**
+ * Returns the number of elements matching the given [predicate].
+ */
+public inline fun <T> Iterable<T>.count(predicate: (T) -> Boolean): Int {
+    if (this is Collection && isEmpty()) return 0
+    var count = 0
+    for (element in this) if (predicate(element)) checkCountOverflow(++count)
+    return count
+}
+
+/**
  * Returns an element at the given [index] or `null` if the [index] is out of bounds of this collection.
  *
  * @sample samples.collections.Collections.Elements.elementAtOrNull
@@ -565,6 +575,17 @@ public inline fun <T> List<T>.lastOrNull(predicate: (T) -> Boolean): T? {
 public fun <T> Iterable<T>.none(): Boolean {
     if (this is Collection) return isEmpty()
     return !iterator().hasNext()
+}
+
+/**
+ * Returns `true` if no elements match the given [predicate].
+ *
+ * @sample samples.collections.Collections.Aggregates.noneWithPredicate
+ */
+public inline fun <T> Iterable<T>.none(predicate: (T) -> Boolean): Boolean {
+    if (this is Collection && isEmpty()) return true
+    for (element in this) if (predicate(element)) return false
+    return true
 }
 
 /**
