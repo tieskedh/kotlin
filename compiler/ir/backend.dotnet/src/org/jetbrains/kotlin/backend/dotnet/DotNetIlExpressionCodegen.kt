@@ -468,6 +468,14 @@ internal class DotNetIlExpressionCodegen(
             ?: dotNetUnsupported("implicit cast of a value of unsupported type ${expression.argument.type.render()}")
         val castType = typeMapper.toDotNetIlValueType(expression.typeOperand)
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
+        if (expression.operator == IrTypeOperator.IMPLICIT_CAST && expression.argument.type.isNullableNothing()) {
+            // Binary inlining can make an inline function's `return null` branch explicit as
+            // Nothing? followed by an IMPLICIT_CAST to its substituted nullable result. Reuse the
+            // ordinary bottom-type path so reference results receive null and Nullable<V>
+            // results receive their existing empty carrier; no runtime cast is required.
+            emitExpression(expression.argument, expectedType)
+            return
+        }
         if (expression.operator == IrTypeOperator.CAST || expression.operator == IrTypeOperator.SAFE_CAST) {
             if (expression.operator == IrTypeOperator.CAST && castType is DotNetIlValueType.TypeParameter) {
                 emitExpression(expression.argument, DotNetIlValueType.Object)
