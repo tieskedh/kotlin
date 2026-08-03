@@ -223,6 +223,11 @@ raw bytes.
 Validation follows the documented ordinary CLR attribute contract. Runtime quirks that happen to
 accept malformed attribute metadata are not imported as language semantics.
 
+When an interop producer constructs Kotlin metadata from foreign declarations, a KLIB
+annotation-read callback may normalize an already decoded recognized annotation. It does not
+replace the retained CLR row/value evidence, carry the physical ABI index, or reinterpret a
+Kotlin-produced library from its projected custom attributes.
+
 Generic attributes are physically retained profile-neutrally and projected only when the selected
 profile proves a complete, closed, legal attribute type and constructor.
 
@@ -359,6 +364,13 @@ physical method/accessor linkage survives FIR2IR and code generation.
 Provider growth must proceed by complete declaration families with adversarial metadata, separate
 producer/consumer compilation, and physical binding tests. A successful FIR call may reach the
 backend only when its retained signature grammar is also implemented there.
+
+CLR overridability conditions are target-owned FIR import policy. Field/property/event shadowing,
+MethodSemantics, explicit implementations, and hide-by-name/signature must be derived from CLR
+metadata; a Java/JKLIB field-shadowing condition is not reusable merely because both are foreign
+imports. A later delegate/SAM mapping likewise filters selected `System.Object` obligations through
+an explicit CLR rule rather than importing Java `Object` handling or patching backend call
+emission.
 
 ### 13. Retained declaration linkage is a shared, versioned compiler carrier
 
