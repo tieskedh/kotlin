@@ -333,14 +333,24 @@ See the
   weak identity-associated throwable state. Do not infer `KType`, member or
   annotation reflection, or reified support from this floor. See
   [the KClass decision](docs/decisions/kclass-and-class-literals.md).
+- A supported parameterless Kotlin marker annotation is one concrete sealed
+  CLR `System.Attribute` subtype. KLIB owns its logical declaration, targets,
+  retention, and applications; only runtime-retained applications on exact
+  metadata parents receive an additional CLR custom-attribute row. Reuse the
+  common annotation member generator, reject valued annotation shapes
+  explicitly, and do not infer annotation reflection or arbitrary foreign
+  annotation declarations from this floor. A C#-authored application of a
+  non-runtime Kotlin marker is foreign runtime-visible CLR metadata, not a
+  Kotlin application reconstructed from retention. See
+  [the marker-annotation decision](docs/decisions/marker-annotation-classes.md).
 - Reified array construction, once enabled, must reuse the ordinary carrier
   selected after shared IR substitution. Do not add a reified-only array
   token/wrapper, fall back to `object[]` for an unsupported element, or use a
   closed typed CLR generic class as Kotlin element identity. Array-allocation
   readiness does not enable either public reified gate: `KType`,
-  enums, annotations, remaining classifier families, the final substituted
-  type-operator matrix, and the physical throwing-stub contract stay one
-  complete feature boundary. See
+  enums, valued annotations and annotation reflection, remaining classifier
+  families, the final substituted type-operator matrix, and the physical
+  throwing-stub contract stay one complete feature boundary. See
   [the reified-array decision](docs/decisions/reified-array-operations.md).
 - Ordinary runtime type tests evaluate their operand once at the erased object
   boundary, implement Kotlin nullable-target semantics before the non-null
@@ -519,11 +529,12 @@ identity, and the private data-class equality view is not a general carrier.
 Physically exact non-generic casts and scalar/array prerequisites may land
 independently, but must reject rather than generalize to `GenericInstance`.
 Reified Common stdlib declarations remain outside the product meanwhile.
-Suspend inline functions, enums, annotation classes, value classes, `KType`,
-member/annotation reflection, coroutines, concurrency primitives, and broad
-KMP/Gradle product integration remain separate programmes until `STATUS.md` or
-the way forward selects one. The selected `KClass`/class-literal floor is not
-part of that parked reflection remainder.
+Suspend inline functions, enums, valued annotation classes, value classes,
+`KType`, member/annotation reflection, coroutines, concurrency primitives, and
+broad KMP/Gradle product integration remain separate programmes until
+`STATUS.md` or the way forward selects one. Parameterless marker annotation
+classes and the selected `KClass`/class-literal floor are not part of that
+parked remainder.
 
 ## Verification contract
 

@@ -52,24 +52,28 @@ fun main(args: Array<String>) {
             }
 
             testClass<AbstractFirLightTreeDotNetBoxTest> {
+                model("box/annotations", pattern = "^(intrinsicConstEvaluationInSources|nestedAnnotation)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
             }
 
             testClass<AbstractFirPsiDotNetBoxTest> {
+                model("box/annotations", pattern = "^(intrinsicConstEvaluationInSources|nestedAnnotation)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
             }
 
             testClass<AbstractFirLightTreeDotNetFrameworkBoxTest> {
+                model("box/annotations", pattern = "^(intrinsicConstEvaluationInSources|nestedAnnotation)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
             }
 
             testClass<AbstractFirPsiDotNetFrameworkBoxTest> {
+                model("box/annotations", pattern = "^(intrinsicConstEvaluationInSources|nestedAnnotation)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
