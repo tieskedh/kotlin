@@ -8,7 +8,7 @@ verification, and work state.
 
 - Branch: `dotnet`
 - Upstream base: `origin/master` at `733a49b39`
-- Last completed feature: generated Common predicate aggregates
+- Last completed feature: generated Common signed numeric averages
 - Maturity: high-quality pre-ABI prototype; no third-party binary compatibility
   is promised
 
@@ -20,9 +20,9 @@ The last semantic head passed:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
 ```
 
-The JUnit audit covered 16 fresh XML files and 998 tests:
+The JUnit audit covered 16 fresh XML files and 1002 tests:
 
-- 896 FIR, IL-text, and box tests
+- 900 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 81 library-integration tests
 - zero failures, errors, or skips
@@ -192,6 +192,19 @@ consumers inline both bodies and retain exactly the required count-overflow
 helper call; handwritten CIL executes both physical fallbacks on Framework CLR
 and CoreCLR. No LINQ quantifier/count rewrite or target-owned loop was added.
 
+The complete signed Common `Iterable.average` family now uses all six exact
+generated bodies for Byte, Short, Int, Long, Float, and Double receivers. Each
+physical fallback accumulates into `Double` in encounter order, increments an
+`Int` count through Common `checkCountOverflow`, and returns `Double.NaN` for an
+empty receiver. The logical overloads bind to the bounded Common/JVM platform
+names `averageOfByte` through `averageOfDouble`; embedded KLIB remains the
+authoritative logical `average` contract and no general .NET meaning was given
+to `@JvmName`. Adversarial execution pins all six conversions, empty NaN,
+floating-point order, full traversal, and iterator-failure identity. Separate
+and installed consumers bind all six physical names, while handwritten CIL
+executes every fallback on Framework CLR and CoreCLR. LINQ `Average`, wider or
+checked counters, reordered summation, and target-owned bodies were not added.
+
 The post-substitution reified-array audit now proves that every admitted
 ordinary array carrier remains truthful after the shared inliner has replaced
 a type parameter with a concrete type. The adversarial matrix covers reference,
@@ -231,9 +244,11 @@ closed.
 
 ## Active state
 
-No implementation slice is half-landed. The generated Common first-match
-predicate pair is published with both physical fallbacks and inlinable KLIB
-bodies. The preceding iteration-action pair remains published with both void
+No implementation slice is half-landed. The generated Common signed numeric
+averages are published with all six bounded physical names and exact KLIB
+bodies. The generated Common first-match predicate pair remains published with
+both physical fallbacks and inlinable KLIB bodies. The preceding iteration-
+action pair remains published with both void
 fallbacks and the authoritative `HidesMembers` compiler directive. The
 receiver-seeded reduction family remains published with all eight fallbacks;
 an inlined empty nullable branch uses the existing nullable-bottom carrier
@@ -326,12 +341,14 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Audit the complete generated Common collection-facing reduce family:
-   `Iterable.reduce`/`reduceIndexed` and nullable variants plus the matching
-   `List.reduceRight`/`reduceRightIndexed` variants. Admit it only if empty
-   failure, generic-super bounds, iterator order, nullable results, packaged
-   fallback, and cross-library inline closure are already truthful; do not
-   replace its Common bodies or enter the parked builder cluster.
+1. Perform a generator-frontier audit and select the largest coherent batch of
+   still-missing Common/generated collection declarations whose complete type,
+   helper, inline, physical-name, packaging, and runtime dependencies are
+   already proven. Generate the batch from the authoritative owners and test
+   each behavior family adversarially; remove any declaration that crosses a
+   new representation or language-feature boundary and document that boundary
+   before proceeding. Do not shrink the batch merely to preserve historical
+   micro-slice size, and do not enter the parked builder cluster implicitly.
 2. Audit and select the complete Common `KClass` and class-literal contract as
    the next reified prerequisite. Keep Kotlin logical classifier identity
    authoritative where `System.Type` is only physical evidence, compare the

@@ -118,6 +118,90 @@ public inline fun <T> Iterable<T>.any(predicate: (T) -> Boolean): Boolean {
 }
 
 /**
+ * Returns an average value of elements in the collection.
+ */
+@kotlin.jvm.JvmName("averageOfByte")
+public fun Iterable<Byte>.average(): Double {
+    var sum: Double = 0.0
+    var count: Int = 0
+    for (element in this) {
+        sum += element
+        checkCountOverflow(++count)
+    }
+    return if (count == 0) Double.NaN else sum / count
+}
+
+/**
+ * Returns an average value of elements in the collection.
+ */
+@kotlin.jvm.JvmName("averageOfShort")
+public fun Iterable<Short>.average(): Double {
+    var sum: Double = 0.0
+    var count: Int = 0
+    for (element in this) {
+        sum += element
+        checkCountOverflow(++count)
+    }
+    return if (count == 0) Double.NaN else sum / count
+}
+
+/**
+ * Returns an average value of elements in the collection.
+ */
+@kotlin.jvm.JvmName("averageOfInt")
+public fun Iterable<Int>.average(): Double {
+    var sum: Double = 0.0
+    var count: Int = 0
+    for (element in this) {
+        sum += element
+        checkCountOverflow(++count)
+    }
+    return if (count == 0) Double.NaN else sum / count
+}
+
+/**
+ * Returns an average value of elements in the collection.
+ */
+@kotlin.jvm.JvmName("averageOfLong")
+public fun Iterable<Long>.average(): Double {
+    var sum: Double = 0.0
+    var count: Int = 0
+    for (element in this) {
+        sum += element
+        checkCountOverflow(++count)
+    }
+    return if (count == 0) Double.NaN else sum / count
+}
+
+/**
+ * Returns an average value of elements in the collection.
+ */
+@kotlin.jvm.JvmName("averageOfFloat")
+public fun Iterable<Float>.average(): Double {
+    var sum: Double = 0.0
+    var count: Int = 0
+    for (element in this) {
+        sum += element
+        checkCountOverflow(++count)
+    }
+    return if (count == 0) Double.NaN else sum / count
+}
+
+/**
+ * Returns an average value of elements in the collection.
+ */
+@kotlin.jvm.JvmName("averageOfDouble")
+public fun Iterable<Double>.average(): Double {
+    var sum: Double = 0.0
+    var count: Int = 0
+    for (element in this) {
+        sum += element
+        checkCountOverflow(++count)
+    }
+    return if (count == 0) Double.NaN else sum / count
+}
+
+/**
  * Returns `true` if [element] is found in the collection.
  */
 public operator fun <@kotlin.internal.OnlyInputTypes T> Iterable<T>.contains(element: T): Boolean {
