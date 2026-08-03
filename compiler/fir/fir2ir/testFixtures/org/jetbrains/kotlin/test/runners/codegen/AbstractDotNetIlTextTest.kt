@@ -68,7 +68,7 @@ import org.jetbrains.kotlin.test.model.DependencyKind
 import org.jetbrains.kotlin.test.model.FrontendKinds
 import org.jetbrains.kotlin.test.model.TestFile
 import org.jetbrains.kotlin.test.model.TestModule
-import org.jetbrains.kotlin.test.runners.AbstractKotlinCompilerWithTargetBackendTest
+import org.jetbrains.kotlin.test.runners.AbstractKotlinCompilerDotNetTest
 import org.jetbrains.kotlin.test.services.AdditionalSourceProvider
 import org.jetbrains.kotlin.test.services.EnvironmentConfigurator
 import org.jetbrains.kotlin.test.services.TestModuleStructure
@@ -96,7 +96,7 @@ import java.util.concurrent.TimeUnit
 @ResourceLock("kotlin-dotnet-framework-toolchain")
 abstract class AbstractDotNetIlTextTestBase(
     private val parser: FirParser,
-) : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.DOTNET) {
+) : AbstractKotlinCompilerDotNetTest() {
     override fun configure(builder: TestConfigurationBuilder): Unit = with(builder) {
         configureDotNetBase(parser, outputExtension = "il")
 
@@ -113,7 +113,7 @@ open class AbstractFirPsiDotNetIlTextTest : AbstractDotNetIlTextTestBase(FirPars
 
 abstract class AbstractDotNetBoxTestBase(
     private val parser: FirParser,
-) : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.DOTNET) {
+) : AbstractKotlinCompilerDotNetTest() {
     override fun configure(builder: TestConfigurationBuilder): Unit = with(builder) {
         // The box suite targets modern .NET: the artifact is a dll launched via the signed
         // `dotnet` host (`dotnet exec`), never a directly executed unsigned .exe (see
@@ -152,7 +152,7 @@ open class AbstractFirPsiDotNetBoxTest : AbstractDotNetBoxTestBase(FirParser.Psi
 @ResourceLock("kotlin-dotnet-framework-toolchain")
 abstract class AbstractDotNetFrameworkBoxTestBase(
     private val parser: FirParser,
-) : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.DOTNET) {
+) : AbstractKotlinCompilerDotNetTest() {
     override fun configure(builder: TestConfigurationBuilder): Unit = with(builder) {
         configureDotNetBase(
             parser,
