@@ -481,7 +481,7 @@ internal class DotNetIlIntrinsicMethods(
      * Primitive-specialized iterator calls retain their abstract stdlib class as the static IR
      * owner. Those classes still alias the canonical Iterator identity until they are produced as
      * ordinary target-stdlib classes; generic Iterator/Iterable calls already use the general
-     * split-interface call path and therefore need no intrinsic entries here.
+     * erased-interface call path and therefore need no intrinsic entries here.
      */
     private fun primitiveIteratorIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         for (info in listOf(

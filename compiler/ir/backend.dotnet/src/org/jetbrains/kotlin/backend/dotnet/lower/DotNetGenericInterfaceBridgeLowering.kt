@@ -22,10 +22,10 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetDirectOwnerRelativeMethodBoundsOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
-import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnsupported
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
+import org.jetbrains.kotlin.backend.dotnet.isDotNetComparableClass
 import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
 import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
 import org.jetbrains.kotlin.config.DotNetTarget
@@ -116,6 +116,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     override fun lower(irModule: IrModuleFragment) {
         val bridgeOwners = mutableListOf<IrClass>()
         val genericInterfaces = hashSetOf<IrClass>()
+        val genericClasses = hashSetOf<IrClass>()
         val externalDeclarations = DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
         irModule.acceptVoid(object : IrVisitorVoid() {
             override fun visitElement(element: IrElement) {
@@ -131,6 +132,9 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     }
                 } else {
                     bridgeOwners += declaration
+                    if (declaration.typeParameters.isNotEmpty()) {
+                        genericClasses += declaration
+                    }
                 }
                 declaration.acceptChildrenVoid(this)
             }
@@ -139,8 +143,17 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             irClass in genericInterfaces ||
                     DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass) ||
                     externalDeclarations.hasGenericInterface(irClass)
+        fun isErasedKotlinCarrier(irClass: IrClass): Boolean =
+            isMappedKotlinGenericInterface(irClass) ||
+                    irClass in genericClasses ||
+                    externalDeclarations.hasGenericClass(irClass)
         for (irClass in bridgeOwners.sortedBy { it.classInheritanceDepth() }) {
-            addBridges(irClass, ::isMappedKotlinGenericInterface, externalDeclarations)
+            addBridges(
+                irClass,
+                ::isMappedKotlinGenericInterface,
+                ::isErasedKotlinCarrier,
+                externalDeclarations,
+            )
         }
     }
 
@@ -158,6 +171,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     private fun addBridges(
         irClass: IrClass,
         isMappedKotlinGenericInterface: (IrClass) -> Boolean,
+        isErasedKotlinCarrier: (IrClass) -> Boolean,
         externalDeclarations: DotNetExternalDeclarations,
     ) {
         val implementationFunctions = irClass.declarations.flatMap { declaration ->
@@ -223,23 +237,24 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 slotIdentity = slot.dotNetGenericInterfaceCanonicalSlotId(),
                 typedSubstitutor = typedSubstitutor,
                 typedViews = if (
-                    irClass.isDotNetGenericClassDeclaration &&
-                    typedSubstitutor.substitute(interfaceClass.symbol.defaultType)
-                        .referencesTypeParameterOf(irClass)
+                    interfaceClass.isDotNetComparableClass() &&
+                    !irClass.isDotNetGenericClassDeclaration
                 ) {
-                    // The erased class owner has no CLR `T` with which to spell `I<T>`. Its
-                    // canonical MethodImpl is the complete Kotlin dispatch path; emitting
-                    // `I<object>` plus typed bridges would create a false physical obligation.
-                    emptyList()
+                    // Comparable is an explicit BCL mapping rather than an ordinary
+                    // Kotlin-owned generic-interface sibling. A non-generic implementor can
+                    // truthfully name its exact IComparable<T> capability; an erased generic
+                    // class cannot and must not fabricate IComparable<object>.
+                    listOf(DotNetGenericInterfaceMemberView.DECLARED)
                 } else {
-                    slot.dotNetGenericInterfaceMemberViews(
-                        interfaceClass,
-                        isMappedKotlinGenericInterface,
-                    )
+                    emptyList()
                 },
             )
             if (irClass.inheritsGenericInterfaceBridge(plan, externalDeclarations)) continue
-            val canonicalBridge = createCanonicalBridge(plan, isMappedKotlinGenericInterface)
+            val canonicalBridge = createCanonicalBridge(
+                plan,
+                isMappedKotlinGenericInterface,
+                isErasedKotlinCarrier,
+            )
             val typedBridges = plan.typedViews.associateWith { view ->
                 createTypedBridge(plan, view)
             }
@@ -346,6 +361,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     private fun createCanonicalBridge(
         plan: BridgePlan,
         isMappedKotlinGenericInterface: (IrClass) -> Boolean,
+        isErasedKotlinCarrier: (IrClass) -> Boolean,
     ): IrSimpleFunction {
         val canonicalSubstitution = plan.interfaceClass.typeParameters.associate { typeParameter ->
             typeParameter.symbol to context.irBuiltIns.anyNType
@@ -382,6 +398,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     "${plan.slot.name.asString()}-${plan.slotIdentity}>",
             bridgeTypeTransform = ::canonicalType,
             ownerConstraintTypeTransform = plan.typedSubstitutor::substitute,
+            isErasedKotlinCarrier = isErasedKotlinCarrier,
             specialMethodInfo = specialBridgeMethods.findSpecialWithOverride(
                 plan.slot,
                 includeSelf = true,
@@ -425,6 +442,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         bridgeName: String,
         bridgeTypeTransform: (IrType) -> IrType,
         ownerConstraintTypeTransform: (IrType) -> IrType,
+        isErasedKotlinCarrier: (IrClass) -> Boolean = { false },
         specialMethodInfo: SpecialMethodWithDefaultInfo? = null,
     ): IrSimpleFunction {
         val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
@@ -453,7 +471,10 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     .ifEmpty { listOf(context.irBuiltIns.anyNType) }
             }
             val ownerBoundMethodArguments =
-                slot.dotNetDirectOwnerRelativeMethodBoundsOrNull(slotOwner)
+                slot.dotNetDirectOwnerRelativeMethodBoundsOrNull(
+                    slotOwner,
+                    isErasedKotlinCarrier,
+                )
                     ?.map { bound -> bound?.let(ownerConstraintTypeTransform) }
                     ?: dotNetUnsupported(
                         "generic interface member '${slot.name.asString()}' requires an " +

@@ -209,23 +209,18 @@ technically visible to raw CLR tooling, but it is not a supported typed C#
 contract.
 
 The same rule applies when the class implements a Kotlin-owned generic
-interface. Under the currently implemented, separately governed interface
-candidate, `class C<T> : I<T>` physically implements only the canonical erased
-`I`, because the class has no CLR `T` with which to name a truthful `I<T>`.
-Mapping it to `I<object>` would add a different interface, not preserve the
-logical edge. A closed edge such as `C<T> : I<String>` may retain a truthful
-exact constructed interface capability because it is independent of the
-erased class parameter. This does not decide whether the split-interface
-candidate itself remains the final interface ABI. Method bounds such as
-`<R : T>` remain authoritative in KLIB and omit the unrepresentable CLR
-relational constraint on the erased owner.
+interface. `class C<T> : I<T>` physically implements the one erased `I`,
+because neither declaration has a CLR owner parameter. Mapping it to
+`I<object>` would add a different foreign capability, not preserve the logical
+edge. A closed edge such as `C<T> : I<String>` still implements that same
+erased Kotlin-owned `I`; a truthful typed capability exists only through an
+explicit built-in mapping or export governed by the generic-interface ADR.
+Method bounds such as `<R : T>` remain authoritative in KLIB and omit the
+unrepresentable CLR relational constraint on the erased owner.
 
-On a profile with default interface methods, a default body physically hosted
-by the typed `I<T>` sibling cannot satisfy canonical `I` for that erased
-`C<T>`. The class therefore receives one helper-backed canonical `MethodImpl`
-forwarder for the owner-dependent edge. This is required dispatch, not a
-revived typed class capability. A closed `I<String>` edge still inherits its
-truthful native DIM without that class forwarder.
+On a profile with default interface methods, the default body is hosted by the
+one erased Kotlin-owned `I`. Portable profiles retain their accepted helper
+and class-forwarder policy; no typed-sibling correction is required.
 
 Imported CLR `Foreign<T>` declarations are unaffected. Their constructed CLR
 identity, constraints, typed fields, inheritance, and C# subclassing remain

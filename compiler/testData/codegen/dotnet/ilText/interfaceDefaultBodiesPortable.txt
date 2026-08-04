@@ -132,29 +132,9 @@
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .maxstack 1
-      .locals init (
-        [0] class 'GenericBody' '<genericInterfaceReceiver>',
-        [1] class 'GenericBody`1'<!!0> '<genericInterfaceCapability>',
-        [2] !!0 '<genericInterfaceResult>'
-      )
       ldarg.0
-      stloc.0
-      ldloc.0
-      isinst class 'GenericBody`1'<!!0>
-      stloc.1
-      ldloc.1
-      brfalse IL_genericInterfaceErasedFallback_0
-      ldloc.1
-      callvirt instance !0 class 'GenericBody`1'<!!0>::'seed'()
-      stloc.2
-      br IL_genericInterfaceJoin_1
-  IL_genericInterfaceErasedFallback_0:
-      ldloc.0
       callvirt instance object 'GenericBody'::'seed__KotlinErased__516885e6a7a8f6bb5e78212d9923bbda'()
       unbox.any !!0
-      stloc.2
-  IL_genericInterfaceJoin_1:
-      ldloc.2
       ret
     }
     .method public hidebysig static !!1 'echo'<'T', 'R'>(class 'GenericBody' '$this', !!1 'value') cil managed
@@ -170,29 +150,9 @@
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .maxstack 2
-      .locals init (
-        [0] class 'GenericBody' '<genericInterfaceReceiver>',
-        [1] class 'GenericBody`1'<!!0> '<genericInterfaceCapability>',
-        [2] !!0 '<genericInterfaceResult>'
-      )
       ldarg.0
-      stloc.0
-      ldloc.0
-      isinst class 'GenericBody`1'<!!0>
-      stloc.1
-      ldloc.1
-      brfalse IL_genericInterfaceErasedFallback_0
-      ldloc.1
-      callvirt instance !0 class 'GenericBody`1'<!!0>::'seed'()
-      stloc.2
-      br IL_genericInterfaceJoin_1
-  IL_genericInterfaceErasedFallback_0:
-      ldloc.0
       callvirt instance object 'GenericBody'::'seed__KotlinErased__516885e6a7a8f6bb5e78212d9923bbda'()
       unbox.any !!0
-      stloc.2
-  IL_genericInterfaceJoin_1:
-      ldloc.2
       box !!0
       ldarg.1
       box !!0
@@ -213,29 +173,9 @@
   {
   }
 }
-.class interface public abstract auto ansi 'GenericBody`1'<+ 'T'>
-       implements 'GenericBody'
-{
-  .method public hidebysig newslot abstract virtual instance !0 'seed'() cil managed
-  {
-  }
-  .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
-  {
-  }
-}
-.class interface public abstract auto ansi 'GenericBody__KotlinExact`1'<'T'>
-       implements class 'GenericBody`1'<!0>
-{
-  .method public hidebysig newslot abstract virtual instance !!0 'echo'<'R'>(!!0 'value') cil managed
-  {
-  }
-  .method public hidebysig newslot abstract virtual instance bool 'same'(!0 'value') cil managed
-  {
-  }
-}
 .class public auto ansi sealed beforefieldinit 'GenericBodyImpl'
        extends [mscorlib]System.Object
-       implements 'GenericBody', class 'GenericBody__KotlinExact`1'<int32>, class 'GenericBody`1'<int32>
+       implements 'GenericBody'
 {
   .field private int32 'current'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'current') cil managed
@@ -294,14 +234,6 @@
     box [mscorlib]System.Int32
     ret
   }
-  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-GenericBody-seed-516885e6a7a8f6bb5e78212d9923bbda>'() cil managed
-  {
-    .override method instance !0 class 'GenericBody`1'<int32>::'seed'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance int32 'GenericBodyImpl'::'seed'()
-    ret
-  }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-GenericBody-value-6f13fa675e812ad2e30fd8035b2caa96>'() cil managed
   {
     .override method instance object 'GenericBody'::'value__KotlinErased__6f13fa675e812ad2e30fd8035b2caa96'()
@@ -311,26 +243,9 @@
     box [mscorlib]System.Int32
     ret
   }
-  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-GenericBody-value-6f13fa675e812ad2e30fd8035b2caa96>'() cil managed
-  {
-    .override method instance !0 class 'GenericBody`1'<int32>::'value'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance int32 'GenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-GenericBody-value-6f13fa675e812ad2e30fd8035b2caa96>'()
-    ret
-  }
   .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-GenericBody-echo-15187c83a0ad8f557afa2cfd5f24eb99>'<'R'>(!!0 'value') cil managed
   {
     .override method instance !!0 'GenericBody'::'echo__KotlinErased__15187c83a0ad8f557afa2cfd5f24eb99'<[1]>(!!0)
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    callvirt instance !!0 'GenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-GenericBody-echo-15187c83a0ad8f557afa2cfd5f24eb99>'<!!0>(!!0)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceExactBridge-GenericBody-echo-15187c83a0ad8f557afa2cfd5f24eb99>'<'R'>(!!0 'value') cil managed
-  {
-    .override method instance !!0 class 'GenericBody__KotlinExact`1'<int32>::'echo'<[1]>(!!0)
     .maxstack 2
     ldarg.0
     ldarg.1
@@ -344,15 +259,6 @@
     ldarg.0
     ldarg.1
     unbox.any [mscorlib]System.Int32
-    callvirt instance bool 'GenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-GenericBody-same-4e9f162987f57afd95ce144c7840ec06>'(int32)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceExactBridge-GenericBody-same-4e9f162987f57afd95ce144c7840ec06>'(int32 'value') cil managed
-  {
-    .override method instance bool class 'GenericBody__KotlinExact`1'<int32>::'same'(!0)
-    .maxstack 2
-    ldarg.0
-    ldarg.1
     callvirt instance bool 'GenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-GenericBody-same-4e9f162987f57afd95ce144c7840ec06>'(int32)
     ret
   }
@@ -381,16 +287,9 @@
   {
   }
 }
-.class interface public abstract auto ansi 'InvariantGenericBody`1'<'T'>
-       implements 'InvariantGenericBody'
-{
-  .method public hidebysig newslot abstract virtual instance !!0 'echo'<'R'>(!!0 'value') cil managed
-  {
-  }
-}
 .class public auto ansi sealed beforefieldinit 'InvariantGenericBodyImpl'
        extends [mscorlib]System.Object
-       implements 'InvariantGenericBody', class 'InvariantGenericBody`1'<int32>
+       implements 'InvariantGenericBody'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
@@ -410,15 +309,6 @@
   .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-InvariantGenericBody-echo-d5f3d5de759468f228c143b033b83c29>'<'R'>(!!0 'value') cil managed
   {
     .override method instance !!0 'InvariantGenericBody'::'echo__KotlinErased__d5f3d5de759468f228c143b033b83c29'<[1]>(!!0)
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    callvirt instance !!0 'InvariantGenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-InvariantGenericBody-echo-d5f3d5de759468f228c143b033b83c29>'<!!0>(!!0)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDeclaredBridge-InvariantGenericBody-echo-d5f3d5de759468f228c143b033b83c29>'<'R'>(!!0 'value') cil managed
-  {
-    .override method instance !!0 class 'InvariantGenericBody`1'<int32>::'echo'<[1]>(!!0)
     .maxstack 2
     ldarg.0
     ldarg.1

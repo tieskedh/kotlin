@@ -12,13 +12,6 @@
   {
   }
 }
-.class interface public abstract auto ansi 'View`1'<'T'>
-       implements 'View'
-{
-  .method public hidebysig newslot abstract virtual instance !0 'first'() cil managed
-  {
-  }
-}
 .class public auto ansi beforefieldinit 'Base'
        extends [mscorlib]System.Object
 {
@@ -429,23 +422,17 @@
       [0] class 'Leaf' 'leaf',
       [1] class 'Base' 'base',
       [2] class 'View' 'view',
-      [3] class 'View' '<genericInterfaceReceiver>',
-      [4] class 'View`1'<string> '<genericInterfaceCapability>',
-      [5] string '<genericInterfaceResult>',
-      [6] class 'View' '<genericInterfaceReceiver>@6',
-      [7] class 'View`1'<string> '<genericInterfaceCapability>@7',
-      [8] string '<genericInterfaceResult>@8',
-      [9] class 'Base' 'swapped',
-      [10] class 'Wrapped' 'wrapped',
-      [11] class 'Fixed' 'fixed',
-      [12] class 'ArrayWrapped' 'arrayWrapped',
-      [13] string[] '<arrayOfStorage>',
-      [14] string '<arrayElement>',
-      [15] string[] '<arrayGet>',
-      [16] int32 '<arrayIndex>',
-      [17] class 'NullableFixed' 'nullableFixed',
-      [18] valuetype [mscorlib]System.Nullable`1<int32> '<str>',
-      [19] class 'ConstrainedDerived' 'constrained'
+      [3] class 'Base' 'swapped',
+      [4] class 'Wrapped' 'wrapped',
+      [5] class 'Fixed' 'fixed',
+      [6] class 'ArrayWrapped' 'arrayWrapped',
+      [7] string[] '<arrayOfStorage>',
+      [8] string '<arrayElement>',
+      [9] string[] '<arrayGet>',
+      [10] int32 '<arrayIndex>',
+      [11] class 'NullableFixed' 'nullableFixed',
+      [12] valuetype [mscorlib]System.Nullable`1<int32> '<str>',
+      [13] class 'ConstrainedDerived' 'constrained'
     )
     ldstr "left"
     ldc.i4 7
@@ -489,23 +476,8 @@
     ldloc.0
     stloc.2
     ldloc.2
-    stloc.3
-    ldloc.3
-    isinst class 'View`1'<string>
-    stloc 4
-    ldloc 4
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc 4
-    callvirt instance !0 class 'View`1'<string>::'first'()
-    stloc 5
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.3
     callvirt instance object 'View'::'first__KotlinErased__c3acfb3c7d811a0f954025950ac2e9cc'()
     castclass [mscorlib]System.String
-    stloc 5
-IL_genericInterfaceJoin_1:
-    ldloc 5
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
     call class 'Base' 'genericInheritanceChainsKt'::'baseView__KotlinErased__2492e62a430416260b5d6b3fc27ba008'<string, int32>(class 'Leaf')
@@ -518,23 +490,8 @@ IL_genericInterfaceJoin_1:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
     call class 'View' 'genericInheritanceChainsKt'::'interfaceView__KotlinErased__6e78b4741a541554fa308f7cd4899818'<string, int32>(class 'Leaf')
-    stloc 6
-    ldloc 6
-    isinst class 'View`1'<string>
-    stloc 7
-    ldloc 7
-    brfalse IL_genericInterfaceErasedFallback_2
-    ldloc 7
-    callvirt instance !0 class 'View`1'<string>::'first'()
-    stloc 8
-    br IL_genericInterfaceJoin_3
-IL_genericInterfaceErasedFallback_2:
-    ldloc 6
     callvirt instance object 'View'::'first__KotlinErased__c3acfb3c7d811a0f954025950ac2e9cc'()
     castclass [mscorlib]System.String
-    stloc 8
-IL_genericInterfaceJoin_3:
-    ldloc 8
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
     ldstr "open"
@@ -545,8 +502,8 @@ IL_genericInterfaceJoin_3:
     box [mscorlib]System.Int32
     ldstr "right"
     newobj instance void 'Leaf'::.ctor(object, object)
-    stloc 9
-    ldloc 9
+    stloc.3
+    ldloc.3
     callvirt instance object 'Base'::'first'()
     unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
@@ -554,32 +511,32 @@ IL_genericInterfaceJoin_3:
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 9
+    ldloc.3
     callvirt instance object 'Base'::'second'()
     castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "nested"
     newobj instance void 'Wrapped'::.ctor(object)
-    stloc 10
-    ldloc 10
+    stloc 4
+    ldloc 4
     callvirt instance object 'Base'::'first'()
     castclass 'Holder'
     call instance object 'Holder'::'get_value'()
     castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 10
+    ldloc 4
     callvirt instance object 'Base'::'second'()
     castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 17
     box [mscorlib]System.Int32
     newobj instance void 'Fixed'::.ctor(object)
-    stloc 11
-    ldloc 11
+    stloc 5
+    ldloc 5
     callvirt instance object 'Base'::'first'()
     castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 11
+    ldloc 5
     callvirt instance object 'Base'::'second'()
     unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
@@ -589,66 +546,66 @@ IL_genericInterfaceJoin_3:
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 1
     newarr string
-    stloc 13
+    stloc 7
     ldstr "array"
-    stloc 14
-    ldloc 13
+    stloc 8
+    ldloc 7
     ldc.i4 0
-    ldloc 14
+    ldloc 8
     stelem string
-    ldloc 13
+    ldloc 7
     ldstr "array"
     newobj instance void 'ArrayWrapped'::.ctor(class [mscorlib]System.Array, object)
-    stloc 12
-    ldloc 12
+    stloc 6
+    ldloc 6
     callvirt instance object 'Base'::'first'()
     castclass string[]
-    stloc 15
+    stloc 9
     ldc.i4 0
-    stloc 16
-    ldloc 15
-    ldloc 16
+    stloc 10
+    ldloc 9
+    ldloc 10
     ldelem string
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 12
+    ldloc 6
     callvirt instance object 'Base'::'second'()
     castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "nullable"
     newobj instance void 'NullableFixed'::.ctor(object)
-    stloc 17
-    ldloc 17
+    stloc 11
+    ldloc 11
     callvirt instance object 'Base'::'first'()
     unbox.any valuetype [mscorlib]System.Nullable`1<int32>
-    stloc 18
-    ldloca 18
+    stloc 12
+    ldloca 12
     call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
-    brtrue IL_strValueNotNull_4
+    brtrue IL_strValueNotNull_0
     ldstr "null"
-    br IL_strValueEnd_5
-IL_strValueNotNull_4:
-    ldloca 18
+    br IL_strValueEnd_1
+IL_strValueNotNull_0:
+    ldloca 12
     call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
-IL_strValueEnd_5:
+IL_strValueEnd_1:
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 17
+    ldloc 11
     callvirt instance object 'Base'::'second'()
     castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "constrained"
     newobj instance void 'Token'::.ctor(string)
     newobj instance void 'ConstrainedDerived'::.ctor(class 'Marked')
-    stloc 19
-    ldloc 19
+    stloc 13
+    ldloc 13
     call instance class 'Marked' 'ConstrainedBase'::'current'()
     castclass 'Token'
     callvirt instance string 'Token'::'label'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 19
+    ldloc 13
     call instance string 'ConstrainedBase'::'label'()
     call void [mscorlib]System.Console::WriteLine(string)
     ret
