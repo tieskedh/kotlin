@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — builder and Common abstract-base phase selected next**
+- Status: **Active — builder/Common abstract-base foundation complete; enums selected next**
 - ABI foundation: [`../decisions/draft-adr-generic-interface-abi.md`](../decisions/draft-adr-generic-interface-abi.md)
 
 ## Purpose
@@ -56,6 +56,33 @@ state owners require a separately designed initialization order and are rejected
 
 ## Current admitted product
 
+### Builder and Common abstract-base foundation
+
+The completed implementation tranche compiles the authoritative Common `Appendable`
+interface, the complete non-contract `StringBuilder` class/extension surface, exact generated
+`Iterable.joinTo`/`joinToString`, and Common `AbstractCollection` and `AbstractList`. Its widened
+`containsAll` regression belongs to the shared semantic matrix and must pass through the one
+owner-erased virtual route; no collection-specific bridge is permitted. The fail-closed
+StringBuilder projection omits exactly the two
+contract-bearing `buildString` declarations; nothing else in that Common file
+is missing or target-authored.
+
+`StringBuilder` is a Kotlin-owned `CharSequence` and `Appendable` over private
+BCL storage. The public ABI does not expose the BCL type. Common `RandomAccess`
+is the authoritative expect declaration and a narrow .NET actual supplies the
+physical marker.
+
+`AbstractCollection<out E>` and `AbstractList<out E>` keep logical covariance in KLIB. Their
+physical Kotlin runtime representation is one non-generic erased CLR class per declaration; the
+superseded invariant typed classes and canonical identities no longer participate. Source-built and
+actualized/deserialized inner-class parameter forms normalize to the same outer-first logical
+arity; Common `AbstractList.IteratorImpl`, `ListIteratorImpl`, and `SubList` exercise that path.
+
+Common `AbstractCollection` has an optional valued `@JsName("toArray")`
+expectation. The .NET bootstrap declaration is resolution-only and is erased
+before product IR: it neither admits valued annotation classes nor emits a CLR
+attribute.
+
 ### Generated terminal and cardinality operations
 
 The admitted Common template variants are:
@@ -77,10 +104,9 @@ The exact Common `Array<out T>.asList(): List<T>` declaration is paired with a n
 The Kotlin-owned `List<T>, RandomAccess` view retains the original array and observes later element
 replacement. Empty arrays also receive backed views; they are not redirected to `EmptyList`.
 
-Until Common `AbstractList` and its complete closure are available, the private view implements the
-current List surface directly, including backed sublists, iterators, and structural
-equality/hash/text. This is bounded representation code, not a target copy of a Common algorithm
-family, and should disappear when the shared abstract base becomes available.
+The private view now extends authoritative Common `AbstractList`; its former direct iterator,
+sublist, equality, hash, and rendering algorithms have been removed. It owns only the retained
+array, size, and checked indexed access required by that representation.
 
 The view implements no BCL collection interface. Reusing a BCL wrapper would still not implement
 the Kotlin canonical/declared/exact interfaces and would add another identity layer.
@@ -635,16 +661,14 @@ Select the next exact Common/generated family only when all of these are closed:
 
 Do not choose a family solely because one downstream feature, such as enums, needs it.
 
-## Abstract collection/list blockers
+## Implemented abstract collection/list foundation
 
-All mature targets compile the shared `AbstractCollection.kt` and `AbstractList.kt`. Kotlin/.NET
-must do the same once their exact closure exists. The remaining source-product blockers are:
-
-- `joinToString` and its `CharSequence`/`Appendable`/`StringBuilder` closure.
-
-Importing the abstract bases early would require declaration eviction, copied Common algorithms,
-or unjustified .NET intrinsics. All three are rejected. The private direct List view remains until
-these prerequisites are genuinely supported.
+All mature targets compile shared `AbstractCollection.kt` and `AbstractList.kt`; the current
+Kotlin/.NET worktree can compile them too. Their `joinToString` and
+`CharSequence`/`Appendable`/`StringBuilder` closure is present in the same stdlib product, without
+declaration eviction, copied algorithms, or BCL collection substitution. The shared erased-class
+matrix now covers widened `containsAll`, same-object mutation, portable overrides, and the private
+Common helper classes without a collection-specific workaround.
 
 ### String-building prerequisite
 
@@ -666,14 +690,13 @@ The existing fail-closed extraction mechanism can therefore publish the complete
 surface plus every non-contract extension while omitting exactly those two declarations. KLIB and
 the physical stdlib remain equal; no body is copied or rewritten.
 
-The selected first phase combines that builder surface with exact generated `Iterable.joinTo` and
-`Iterable.joinToString`, then compiles Common `AbstractCollection` and `AbstractList`. The private
-direct `ArrayAsList` implementation migrates to the Common base in the same phase. The deprecated
-CharArray append extension brings exact Common `NotImplementedError`; it is not a reason to admit
-`Standard.kt` or contracts early.
+The completed first phase combines that builder surface with exact generated `Iterable.joinTo` and
+`Iterable.joinToString`, Common `AbstractCollection` and `AbstractList`, and the migrated
+`ArrayAsList` representation. The deprecated CharArray append extension brings exact Common
+`NotImplementedError`; it is not a reason to admit `Standard.kt` or contracts early.
 
-Modern enums and the non-reified `EnumEntries` core are the second coherent phase. They consume the
-now-complete general Comparable representation and Common abstract list substrate. A Kotlin enum
+Modern enums and the non-reified `EnumEntries` core are the next coherent phase. They consume the
+completed general Comparable representation and Common abstract-list substrate. A Kotlin enum
 is a Kotlin-owned reference class with static entry fields, not a CLR value-type enum. Reified
 `enumEntries`, `enumValues`, and `enumValueOf` remain behind the general reified gate.
 
@@ -705,9 +728,9 @@ reified `toTypedArray` remains outside this completed prerequisite.
 
 ## Programme order
 
-1. Actualize the complete Common `Appendable`/`StringBuilder` class layer and non-contract
+1. **Completed:** actualize the Common `Appendable`/`StringBuilder` class layer and non-contract
    extensions, generate exact `joinTo`/`joinToString`, compile Common `AbstractCollection` and
-   `AbstractList`, and migrate the private direct array-list view.
+   `AbstractList`, and migrate the private direct array-list view over the erased class ABI.
 2. Add ordinary Kotlin enums plus the non-reified `EnumEntries` core over that substrate, with
    producer-recorded entry-field binding and no CLR value-type enum identity.
 3. Publish exact contracts, `Standard.kt`, and `buildString` once `InvocationKind` exists.

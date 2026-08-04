@@ -43,6 +43,7 @@ internal class DotNetIlIntrinsicMethods(
     private val kotlinInternalFqn = FqName("kotlin.internal")
     private val kotlinIoFqn = FqName("kotlin.io")
     private val kotlinCollectionsFqn = FqName("kotlin.collections")
+    private val kotlinTextFqn = FqName("kotlin.text")
 
     private val anyFqn = StandardNames.FqNames.any.toSafe()
     private val arrayFqn = StandardNames.FqNames.array.toSafe()
@@ -194,8 +195,96 @@ internal class DotNetIlIntrinsicMethods(
     ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
             conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
             genericArrayIntrinsics() + arrayCopyIntrinsics() + arrayContentIntrinsics() +
-            arrayAsIterableIntrinsics() + primitiveIteratorIntrinsics() +
+            arrayAsIterableIntrinsics() + primitiveIteratorIntrinsics() + stringBuilderStorageIntrinsics() +
             if (emissionScope == DotNetIlEmissionScope.USER) stdlibFunctionIntrinsics() else emptyList()
+
+    /** Private storage mechanics for the Kotlin-owned `kotlin.text.StringBuilder` wrapper. */
+    private fun stringBuilderStorageIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = listOf(
+        Key(kotlinTextFqn, null, "dotNetStringBuilderCreate", emptyList()) to
+                DotNetIlStringBuilderConstructorIntrinsic(emptyList()),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderCreate", listOf(intFqn)) to
+                DotNetIlStringBuilderConstructorIntrinsic(listOf(DotNetIlValueType.Int32)),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderCreate", listOf(stringFqn)) to
+                DotNetIlStringBuilderConstructorIntrinsic(listOf(DotNetIlValueType.String)),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderThrowCapacityOverflow", emptyList()) to
+                DotNetIlStringBuilderCapacityOverflowIntrinsic,
+        Key(kotlinTextFqn, null, "dotNetStringBuilderLength", listOf(anyFqn)) to
+                DotNetIlStringBuilderValueIntrinsic(
+                    resultType = DotNetIlValueType.Int32,
+                    parameterTypes = emptyList(),
+                    memberReference = "callvirt instance int32 %sSystem.Text.StringBuilder::get_Length()",
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderGet", listOf(anyFqn, intFqn)) to
+                DotNetIlStringBuilderValueIntrinsic(
+                    resultType = DotNetIlValueType.Char,
+                    parameterTypes = listOf(DotNetIlValueType.Int32),
+                    memberReference = "callvirt instance char %sSystem.Text.StringBuilder::get_Chars(int32)",
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderCapacity", listOf(anyFqn)) to
+                DotNetIlStringBuilderValueIntrinsic(
+                    resultType = DotNetIlValueType.Int32,
+                    parameterTypes = emptyList(),
+                    memberReference = "callvirt instance int32 %sSystem.Text.StringBuilder::get_Capacity()",
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderSubstring", listOf(anyFqn, intFqn, intFqn)) to
+                DotNetIlStringBuilderValueIntrinsic(
+                    resultType = DotNetIlValueType.String,
+                    parameterTypes = listOf(DotNetIlValueType.Int32, DotNetIlValueType.Int32),
+                    memberReference = "callvirt instance string %sSystem.Text.StringBuilder::ToString(int32, int32)",
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderToString", listOf(anyFqn)) to
+                DotNetIlStringBuilderValueIntrinsic(
+                    resultType = DotNetIlValueType.String,
+                    parameterTypes = emptyList(),
+                    memberReference = "callvirt instance string %sSystem.Text.StringBuilder::ToString()",
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderSet", listOf(anyFqn, intFqn, charFqn)) to
+                DotNetIlStringBuilderVoidIntrinsic(
+                    parameterTypes = listOf(DotNetIlValueType.Int32, DotNetIlValueType.Char),
+                    memberReference = "callvirt instance void %sSystem.Text.StringBuilder::set_Chars(int32, char)",
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderAppend", listOf(anyFqn, charFqn)) to
+                DotNetIlStringBuilderVoidIntrinsic(
+                    parameterTypes = listOf(DotNetIlValueType.Char),
+                    memberReference = "callvirt instance class %sSystem.Text.StringBuilder %sSystem.Text.StringBuilder::Append(char)",
+                    discardResult = true,
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderAppend", listOf(anyFqn, stringFqn)) to
+                DotNetIlStringBuilderVoidIntrinsic(
+                    parameterTypes = listOf(DotNetIlValueType.String),
+                    memberReference = "callvirt instance class %sSystem.Text.StringBuilder %sSystem.Text.StringBuilder::Append(string)",
+                    discardResult = true,
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderInsert", listOf(anyFqn, intFqn, charFqn)) to
+                DotNetIlStringBuilderVoidIntrinsic(
+                    parameterTypes = listOf(DotNetIlValueType.Int32, DotNetIlValueType.Char),
+                    memberReference = "callvirt instance class %sSystem.Text.StringBuilder %sSystem.Text.StringBuilder::Insert(int32, char)",
+                    discardResult = true,
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderInsert", listOf(anyFqn, intFqn, stringFqn)) to
+                DotNetIlStringBuilderVoidIntrinsic(
+                    parameterTypes = listOf(DotNetIlValueType.Int32, DotNetIlValueType.String),
+                    memberReference = "callvirt instance class %sSystem.Text.StringBuilder %sSystem.Text.StringBuilder::Insert(int32, string)",
+                    discardResult = true,
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderSetLength", listOf(anyFqn, intFqn)) to
+                DotNetIlStringBuilderVoidIntrinsic(
+                    parameterTypes = listOf(DotNetIlValueType.Int32),
+                    memberReference = "callvirt instance void %sSystem.Text.StringBuilder::set_Length(int32)",
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderEnsureCapacity", listOf(anyFqn, intFqn)) to
+                DotNetIlStringBuilderVoidIntrinsic(
+                    parameterTypes = listOf(DotNetIlValueType.Int32),
+                    memberReference = "callvirt instance int32 %sSystem.Text.StringBuilder::EnsureCapacity(int32)",
+                    discardResult = true,
+                ),
+        Key(kotlinTextFqn, null, "dotNetStringBuilderRemove", listOf(anyFqn, intFqn, intFqn)) to
+                DotNetIlStringBuilderVoidIntrinsic(
+                    parameterTypes = listOf(DotNetIlValueType.Int32, DotNetIlValueType.Int32),
+                    memberReference = "callvirt instance class %sSystem.Text.StringBuilder %sSystem.Text.StringBuilder::Remove(int32, int32)",
+                    discardResult = true,
+                ),
+    )
 
     /**
      * The same constructor/member registry shape as JVM `IrIntrinsicMethods.arrayMethods`, plus
@@ -523,6 +612,38 @@ internal class DotNetIlIntrinsicMethods(
             )
             add(Key(receiverFqn, null, "inc", emptyList()) to DotNetIlNumericIncrementIntrinsic("add", receiverType))
             add(Key(receiverFqn, null, "dec", emptyList()) to DotNetIlNumericIncrementIntrinsic("sub", receiverType))
+        }
+        for (integralEntry in listOf(
+            intFqn to DotNetIlValueType.Int32,
+            longFqn to DotNetIlValueType.Int64,
+        )) {
+            val integralFqn = integralEntry.first
+            val integralType = integralEntry.second
+            for (operatorEntry in listOf("and" to "and", "or" to "or", "xor" to "xor")) {
+                val name = operatorEntry.first
+                val instruction = operatorEntry.second
+                add(
+                    Key(integralFqn, null, name, listOf(integralFqn)) to
+                            DotNetIlNumericBinaryOperatorIntrinsic(
+                                instruction,
+                                integralType,
+                                integralType,
+                                integralType,
+                            )
+                )
+            }
+            add(
+                Key(integralFqn, null, "inv", emptyList()) to
+                        DotNetIlNumericUnaryOperatorIntrinsic("not", integralType, integralType)
+            )
+            for (operatorEntry in listOf("shl" to "shl", "shr" to "shr", "ushr" to "shr.un")) {
+                val name = operatorEntry.first
+                val instruction = operatorEntry.second
+                add(
+                    Key(integralFqn, null, name, listOf(intFqn)) to
+                            DotNetIlIntegralShiftIntrinsic(instruction, integralType)
+                )
+            }
         }
     }
 
@@ -1198,7 +1319,6 @@ private object DotNetIlGenericArrayGetIntrinsic : DotNetIlIntrinsicMethod() {
             is DotNetIlValueType.ErasedGenericArray -> DotNetIlValueType.Object
             else -> error("Internal .NET backend error: non-array receiver ${arrayType.nameInSignature}")
         }
-        if (expectedType != elementType) return false
         val index = call.arguments[1]
             ?: dotNetUnsupported("missing generic-array index for 'get'")
         codegen.emitExpression(receiver, arrayType)
@@ -1213,14 +1333,57 @@ private object DotNetIlGenericArrayGetIntrinsic : DotNetIlIntrinsicMethod() {
                 pops = 2,
                 pushes = 1,
             )
+            if (expectedType != DotNetIlValueType.Object) {
+                val narrowing = expectedType.dotNetObjectNarrowingInstructionOrNull(codegen.coreLibraryReference)
+                    ?: dotNetUnsupported(
+                        "projected generic-array element cannot be recovered as ${expectedType.nameInSignature}"
+                    )
+                codegen.emit(narrowing, pops = 1, pushes = 1)
+            }
         } else {
             codegen.emit((arrayType as DotNetIlValueType.GenericArray).loadElementInstruction, pops = 2, pushes = 1)
+            if (!elementType.isDotNetAssignableTo(expectedType)) {
+                val widening = dotNetWideningCoercionOrNull(
+                    elementType,
+                    expectedType,
+                    codegen.coreLibraryReference,
+                )
+                if (widening != null) {
+                    codegen.emit(widening, pops = 1, pushes = 1)
+                } else {
+                    // Projected and captured Array.get calls can expose two logically equivalent
+                    // open type parameters that occupy different physical CLR slots. Kotlin's
+                    // type checker already proved the result view. Route only that view change
+                    // through object: reference instantiations preserve identity, value
+                    // instantiations box and are immediately recovered, and malformed foreign
+                    // input still fails at the checked cast/unbox boundary.
+                    if (elementType != DotNetIlValueType.Object) {
+                        val toObject = dotNetWideningCoercionOrNull(
+                            elementType,
+                            DotNetIlValueType.Object,
+                            codegen.coreLibraryReference,
+                        ) ?: dotNetUnsupported(
+                            "generic-array element ${elementType.nameInSignature} cannot be viewed as " +
+                                    expectedType.nameInSignature
+                        )
+                        codegen.emit(toObject, pops = 1, pushes = 1)
+                    }
+                    val narrowing = expectedType.dotNetObjectNarrowingInstructionOrNull(codegen.coreLibraryReference)
+                        ?: dotNetUnsupported(
+                            "generic-array element object cannot be recovered as ${expectedType.nameInSignature}"
+                        )
+                    codegen.emit(narrowing, pops = 1, pushes = 1)
+                }
+            }
         }
         return true
     }
 }
 
-/** Generic-array indexed write -> `stelem E`, including an open `!n`/`!!n` token. */
+/**
+ * Generic-array indexed write. Exact vectors use `stelem E`; an owner-erased `Array<T>` uses
+ * `System.Array.SetValue` and lets the original runtime vector enforce its component type.
+ */
 private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsStatement(
         call: IrCall,
@@ -1228,10 +1391,6 @@ private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
     ): Boolean {
         if (call.arguments.size != 3) return false
         val [receiver, arrayType] = call.genericArrayReceiver(codegen, "set")
-        if (arrayType is DotNetIlValueType.ErasedGenericArray) {
-            dotNetUnsupported("star-projected generic-array set must remain projected out by the frontend")
-        }
-        arrayType as DotNetIlValueType.GenericArray
         val index = call.arguments[1]
             ?: dotNetUnsupported("missing generic-array index for 'set'")
         val value = call.arguments[2]
@@ -1240,12 +1399,33 @@ private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
         val receiverSlot = codegen.spillToSyntheticLocal(arrayType, "<arraySet>")
         codegen.emitExpression(index, DotNetIlValueType.Int32)
         val indexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<arrayIndex>")
-        codegen.emitExpression(value, arrayType.elementType)
-        val valueSlot = codegen.spillToSyntheticLocal(arrayType.elementType, "<arrayValue>")
+        val elementType = when (arrayType) {
+            is DotNetIlValueType.GenericArray -> arrayType.elementType
+            is DotNetIlValueType.ErasedGenericArray -> {
+                if (!codegen.permitsErasedGenericArrayElementWrite(receiver.type)) {
+                    dotNetUnsupported("star-projected generic-array set must remain projected out by the frontend")
+                }
+                DotNetIlValueType.Object
+            }
+            else -> error("Internal .NET backend error: non-array receiver ${arrayType.nameInSignature}")
+        }
+        codegen.emitExpression(value, elementType)
+        val valueSlot = codegen.spillToSyntheticLocal(elementType, "<arrayValue>")
         codegen.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
-        codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
-        codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
-        codegen.emit(arrayType.storeElementInstruction, pops = 3)
+        if (arrayType is DotNetIlValueType.ErasedGenericArray) {
+            // Preserve Kotlin's receiver/index/value evaluation order through the spills, then
+            // reorder only the reloads to the CLR instance-method stack order.
+            codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
+            codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+            codegen.emit(
+                "callvirt instance void ${codegen.coreLibraryReference}System.Array::SetValue(object, int32)",
+                pops = 3,
+            )
+        } else {
+            codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+            codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
+            codegen.emit((arrayType as DotNetIlValueType.GenericArray).storeElementInstruction, pops = 3)
+        }
         return true
     }
 }
@@ -2106,10 +2286,23 @@ private class DotNetIlEqualityIntrinsic(
         val rightType = codegen.toDotNetIlValueType(right.type)
         // Structural equality on an open T uses the universal object fallback: each value is
         // boxed if its CLR instantiation is value-shaped, then AreEqual dispatches its Equals
-        // implementation. Identity remains rejected because boxing would manufacture references
-        // rather than preserve a stable identity for value-type instantiations.
+        // implementation. For identity, one open T against one stable reference has an exact
+        // representation too: `box !T` preserves a reference instantiation and creates a fresh,
+        // necessarily non-identical object for a value instantiation. Common AbstractCollection's
+        // `element === this` recursion guard is the canonical shape. Two open operands remain
+        // rejected because independently manufactured value boxes cannot model source identity.
         if (leftType is DotNetIlValueType.TypeParameter || rightType is DotNetIlValueType.TypeParameter) {
             if (referenceEquality) {
+                val exactlyOneOpenOperand =
+                    (leftType is DotNetIlValueType.TypeParameter) !=
+                            (rightType is DotNetIlValueType.TypeParameter)
+                val otherType = if (leftType is DotNetIlValueType.TypeParameter) rightType else leftType
+                if (exactlyOneOpenOperand && otherType?.isDotNetReferenceShaped() == true) {
+                    codegen.emitExpression(left, DotNetIlValueType.Object)
+                    codegen.emitExpression(right, DotNetIlValueType.Object)
+                    codegen.emit("ceq", pops = 2, pushes = 1)
+                    return true
+                }
                 dotNetUnsupported(
                     "identity comparison with a type-parameter-typed operand is not supported " +
                             "(a CLR value-type instantiation has no stable reference identity)"
@@ -2554,6 +2747,33 @@ private class DotNetIlNumericBinaryOperatorIntrinsic(
 }
 
 /**
+ * Kotlin `Int`/`Long` shifts. ECMA-335 `shl`/`shr`/`shr.un` mask the count to five or six bits,
+ * respectively, which is the same modulo-32/modulo-64 rule as Kotlin/JVM. The count remains an
+ * int32 even for a long receiver; widening it with the ordinary numeric binary path would produce
+ * an invalid CIL stack shape.
+ */
+private class DotNetIlIntegralShiftIntrinsic(
+    private val instruction: String,
+    private val receiverType: DotNetIlValueType,
+) : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != receiverType || call.arguments.size != 2) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing receiver of an integral '$instruction' operator")
+        val count = call.arguments[1]
+            ?: dotNetUnsupported("missing count of an integral '$instruction' operator")
+        codegen.emitExpression(receiver, receiverType)
+        codegen.emitExpression(count, DotNetIlValueType.Int32)
+        codegen.emit(instruction, pops = 2, pushes = 1)
+        return true
+    }
+}
+
+/**
  * `div`/`rem` over the numeric types.
  *
  * Integral (`int32`/`int64`) results: CIL `div`/`rem` truncate toward zero like Kotlin, but they
@@ -2972,6 +3192,132 @@ private class DotNetIlUnsupportedIntrinsic(
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
     ): Boolean = dotNetUnsupported(reason)
+}
+
+/** Constructors for the private BCL storage of the Kotlin-owned StringBuilder wrapper. */
+private class DotNetIlStringBuilderConstructorIntrinsic(
+    private val parameterTypes: List<DotNetIlValueType>,
+) : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Object || call.arguments.size != parameterTypes.size) return false
+        for (index in parameterTypes.indices) {
+            codegen.emitExpression(
+                call.arguments[index]
+                    ?: dotNetUnsupported("missing private StringBuilder constructor argument"),
+                parameterTypes[index],
+            )
+        }
+        val parameters = parameterTypes.joinToString(", ") { it.nameInSignature }
+        codegen.emit(
+            "newobj instance void ${codegen.coreLibraryReference}System.Text.StringBuilder::.ctor($parameters)",
+            pops = parameterTypes.size,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Deterministic CLR capacity-overflow failure without publishing a .NET-only Kotlin exception. */
+private object DotNetIlStringBuilderCapacityOverflowIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (call.arguments.isNotEmpty()) return false
+        codegen.emitParameterlessExceptionThrow(
+            exceptionTypeRef = "${codegen.coreLibraryReference}System.OutOfMemoryException",
+            valuePosition = true,
+        )
+        return true
+    }
+
+    override fun tryEmitAsStatement(call: IrCall, codegen: DotNetIlExpressionCodegen): Boolean {
+        if (call.arguments.isNotEmpty()) return false
+        codegen.emitParameterlessExceptionThrow(
+            exceptionTypeRef = "${codegen.coreLibraryReference}System.OutOfMemoryException",
+            valuePosition = false,
+        )
+        return true
+    }
+}
+
+/** Value-returning members on the private BCL StringBuilder storage. */
+private class DotNetIlStringBuilderValueIntrinsic(
+    private val resultType: DotNetIlValueType,
+    private val parameterTypes: List<DotNetIlValueType>,
+    private val memberReference: String,
+) : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != resultType || call.arguments.size != parameterTypes.size + 1) return false
+        emitPrivateStringBuilderReceiver(call, codegen)
+        for (index in parameterTypes.indices) {
+            codegen.emitExpression(
+                call.arguments[index + 1]
+                    ?: dotNetUnsupported("missing private StringBuilder member argument"),
+                parameterTypes[index],
+            )
+        }
+        codegen.emit(
+            memberReference.replace("%s", codegen.coreLibraryReference),
+            pops = parameterTypes.size + 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Effect-only members on the private BCL StringBuilder storage. */
+private class DotNetIlStringBuilderVoidIntrinsic(
+    private val parameterTypes: List<DotNetIlValueType>,
+    private val memberReference: String,
+    private val discardResult: Boolean = false,
+) : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsStatement(call: IrCall, codegen: DotNetIlExpressionCodegen): Boolean {
+        if (call.arguments.size != parameterTypes.size + 1) return false
+        emitPrivateStringBuilderReceiver(call, codegen)
+        for (index in parameterTypes.indices) {
+            codegen.emitExpression(
+                call.arguments[index + 1]
+                    ?: dotNetUnsupported("missing private StringBuilder member argument"),
+                parameterTypes[index],
+            )
+        }
+        codegen.emit(
+            memberReference.replace("%s", codegen.coreLibraryReference),
+            pops = parameterTypes.size + 1,
+            pushes = if (discardResult) 1 else 0,
+        )
+        if (discardResult) codegen.emit("pop", pops = 1)
+        return true
+    }
+}
+
+private fun emitPrivateStringBuilderReceiver(call: IrCall, codegen: DotNetIlExpressionCodegen) {
+    val storage = call.arguments.firstOrNull()
+        ?: dotNetUnsupported("missing private StringBuilder storage receiver")
+    codegen.emitExpression(storage, DotNetIlValueType.Object)
+    codegen.emit(
+        "castclass ${codegen.coreLibraryReference}System.Text.StringBuilder",
+        pops = 1,
+        pushes = 1,
+    )
 }
 
 /**

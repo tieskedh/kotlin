@@ -115,6 +115,16 @@ interface ResultSource<out T> {
     fun result(): T
 }
 
+class Payload<T>(val value: T)
+
+interface PayloadFactory<T> {
+    fun makePayload(): Payload<T>
+}
+
+class IntPayloadFactory : PayloadFactory<Int> {
+    override fun makePayload(): Payload<Int> = Payload(19)
+}
+
 open class InheritedSource {
     open fun result(): Special = Special("inherited")
 }
@@ -210,4 +220,5 @@ fun main() {
     println(safeProducer(Item("not a producer")) == null)
     println(isProducer(castOperand))
     println(isNullableProducer(null))
+    println(IntPayloadFactory().makePayload().value)
 }

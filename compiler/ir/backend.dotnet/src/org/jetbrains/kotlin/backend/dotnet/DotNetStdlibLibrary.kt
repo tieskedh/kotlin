@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
@@ -14,6 +15,7 @@ import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isPublishedApi
+import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.render
 import java.io.File
 
@@ -32,10 +34,11 @@ internal object DotNetStdlibLibrary {
     const val ASSEMBLY_IL_FILE_NAME = "$ASSEMBLY_NAME.il"
     const val ASSEMBLY_VERSION = DotNetStdlibArtifact.ASSEMBLY_VERSION
     const val ASSEMBLY_VERSION_IL = "1:0:0:0"
-    const val ARRAY_AS_LIST_IL_NAME = "Kotlin.Collections.ArrayAsList`1"
-    const val ARRAY_AS_LIST_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayAsListIterator`1"
-    const val ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayIterator`1"
-    const val ARRAY_ITERABLE_IL_NAME = "Kotlin.Collections.ArrayIterable`1"
+    const val ARRAY_AS_LIST_IL_NAME = "Kotlin.Collections.ArrayAsList"
+    const val ABSTRACT_COLLECTION_IL_NAME = "Kotlin.Collections.AbstractCollection"
+    const val ABSTRACT_LIST_IL_NAME = "Kotlin.Collections.AbstractList"
+    const val ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayIterator"
+    const val ARRAY_ITERABLE_IL_NAME = "Kotlin.Collections.ArrayIterable"
     const val ERASED_ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ErasedArrayIterator"
     const val ERASED_ARRAY_ITERABLE_IL_NAME = "Kotlin.Collections.ErasedArrayIterable"
     const val EMPTY_ITERATOR_IL_NAME = "Kotlin.Collections.EmptyIterator"
@@ -44,6 +47,7 @@ internal object DotNetStdlibLibrary {
     const val SERIALIZABLE_IL_NAME = "Kotlin.Io.Serializable"
     const val READ_AFTER_EOF_EXCEPTION_IL_NAME = "Kotlin.Io.ReadAfterEOFException"
     const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
+    const val TEXT_FACADE_IL_NAME = "Kotlin.Text.StringsKt"
     const val IO_FACADE_IL_NAME = "Kotlin.Io.ConsoleKt"
     const val THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME =
         "kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt"
@@ -56,7 +60,8 @@ internal object DotNetStdlibLibrary {
 
     private val implementationClassIlNames = mapOf(
         "kotlin.collections.ArrayAsList" to ARRAY_AS_LIST_IL_NAME,
-        "kotlin.collections.ArrayAsListIterator" to ARRAY_AS_LIST_ITERATOR_IL_NAME,
+        "kotlin.collections.AbstractCollection" to ABSTRACT_COLLECTION_IL_NAME,
+        "kotlin.collections.AbstractList" to ABSTRACT_LIST_IL_NAME,
         "kotlin.collections.ArrayIterator" to ARRAY_ITERATOR_IL_NAME,
         "kotlin.collections.ArrayIterable" to ARRAY_ITERABLE_IL_NAME,
         "kotlin.collections.ErasedArrayIterator" to ERASED_ARRAY_ITERATOR_IL_NAME,
@@ -66,9 +71,12 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.RandomAccess" to RANDOM_ACCESS_IL_NAME,
         "kotlin.io.Serializable" to SERIALIZABLE_IL_NAME,
         "kotlin.io.ReadAfterEOFException" to READ_AFTER_EOF_EXCEPTION_IL_NAME,
+        "kotlin.text.Appendable" to "Kotlin.Text.Appendable",
+        "kotlin.text.StringBuilder" to "Kotlin.Text.StringBuilder",
+        "kotlin.NotImplementedError" to "Kotlin.NotImplementedError",
         "kotlin.SuppressedExceptionList" to "Kotlin.SuppressedExceptionList",
         "kotlin.SuppressedExceptionIterator" to "Kotlin.SuppressedExceptionIterator",
-        "kotlin.internal.SharedVariableBox" to "Kotlin.Internal.SharedVariableBox`1",
+        "kotlin.internal.SharedVariableBox" to "Kotlin.Internal.SharedVariableBox",
         "kotlin.internal.SharedVariableBoxBoolean" to "Kotlin.Internal.SharedVariableBoxBoolean",
         "kotlin.internal.SharedVariableBoxByte" to "Kotlin.Internal.SharedVariableBoxByte",
         "kotlin.internal.SharedVariableBoxShort" to "Kotlin.Internal.SharedVariableBoxShort",
@@ -119,6 +127,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.last" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.lastIndexOf" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.lastOrNull" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.joinTo" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.joinToString" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.none" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.reduce" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.reduceIndexed" to COLLECTIONS_FACADE_IL_NAME,
@@ -142,6 +152,18 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.$ARRAY_ITERABLE_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ERASED_ARRAY_ITERATOR_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.$ERASED_ARRAY_ITERABLE_FACTORY_NAME" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.text.append" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.appendElement" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.appendLine" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.appendRange" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.clear" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.deleteAt" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.deleteRange" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.insert" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.insertRange" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.set" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.setRange" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.toCharArray" to TEXT_FACADE_IL_NAME,
         "kotlin.io.readln" to IO_FACADE_IL_NAME,
         "kotlin.io.readlnOrNull" to IO_FACADE_IL_NAME,
         "kotlin.internal.throwNoWhenBranchMatchedException" to THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,
@@ -245,14 +267,35 @@ internal object DotNetStdlibLibrary {
         val ilName = implementationClassIlName(irClass) ?: return null
         return DotNetIlClassInfo(
             ilName,
-            typeParameterVariances = irClass.typeParameters.map { it.variance },
+            typeParameterVariances = if (!irClass.isInterface && irClass.typeParameters.isNotEmpty()) {
+                emptyList()
+            } else {
+                irClass.typeParameters.map { it.variance }
+            },
             assemblyName = ASSEMBLY_NAME,
+        )
+    }
+
+    /** The single erased owner of a public generic stdlib class in bootstrap USER emission. */
+    fun publicGenericImplementationClassInfoOrNull(irClass: IrClass): DotNetGenericClassInfo? {
+        if (irClass.isInterface || irClass.typeParameters.isEmpty()) return null
+        val ilName = implementationClassIlName(irClass) ?: return null
+        return DotNetGenericClassInfo(
+            classInfo = DotNetIlClassInfo(
+                ilClassName = ilName,
+                assemblyName = ASSEMBLY_NAME,
+            ),
         )
     }
 
     fun implementationFunctionFacadeIlName(function: IrSimpleFunction): String? {
         if ((function.parent as? IrFile)?.isDotNetStdlibImplementationSource != true) return null
-        return function.fqNameWhenAvailable?.asString()?.let(implementationFunctionFacadeIlNames::get)
+        val functionFqName = function.fqNameWhenAvailable?.asString()
+        return functionFqName?.let(implementationFunctionFacadeIlNames::get)
+            ?: functionFqName
+                ?.takeIf { function.origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER }
+                ?.removeSuffix("\$default")
+                ?.let(implementationFunctionFacadeIlNames::get)
             ?: function.correspondingPropertySymbol?.owner?.let(::implementationPropertyFacadeIlName)
     }
 
@@ -263,6 +306,7 @@ internal object DotNetStdlibLibrary {
 
     /** Selects a pinned Common-generator spelling for a bounded erased stdlib overload family. */
     fun implementationPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
+        stringBuilderPlatformMethodNameOrNull(function)?.let { return it }
         val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
         val elementPlatformNames = signedIterableNumericPlatformNames[functionFqName]
         val selectorPlatformNames = signedIterableSelectorSumPlatformNames[functionFqName]
@@ -329,12 +373,48 @@ internal object DotNetStdlibLibrary {
             )
     }
 
+    /**
+     * CLR carries classified `CharSequence` as `object`, so the Common StringBuilder `Any?`
+     * overloads would otherwise collide with their `CharSequence?` siblings. Keep the interface
+     * slot's source spelling and pin only the Kotlin-owned Any overloads to stable C#-spellable
+     * physical names. This is an explicit stdlib ABI projection, not collision-order naming.
+     */
+    private fun stringBuilderPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
+        val regularParameterFqNames = function.parameters
+            .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+            .map { parameter -> parameter.type.classFqName?.asString() }
+        val owner = function.parent as? IrClass
+        if (owner?.fqNameWhenAvailable?.asString() == "kotlin.text.StringBuilder") {
+            return when {
+                function.name.asString() == "append" &&
+                        regularParameterFqNames == listOf("kotlin.Any") -> "appendAny"
+                function.name.asString() == "insert" &&
+                        regularParameterFqNames == listOf("kotlin.Int", "kotlin.Any") -> "insertAny"
+                else -> null
+            }
+        }
+        if (
+            function.fqNameWhenAvailable?.asString() == "kotlin.text.appendLine" &&
+            implementationFunctionFacadeIlName(function) == TEXT_FACADE_IL_NAME &&
+            function.parameters.singleOrNull { parameter ->
+                parameter.kind == IrParameterKind.ExtensionReceiver
+            }?.type?.classFqName?.asString() == "kotlin.text.StringBuilder" &&
+            regularParameterFqNames == listOf("kotlin.Any")
+        ) {
+            return "appendLineAny"
+        }
+        return null
+    }
+
     /** Crosses from a bootstrap user assembly to an ordinary function emitted in Kotlin.Stdlib. */
     fun implementationFunctionInfoOrNull(
         function: IrSimpleFunction,
         typeMapper: DotNetIlTypeMapper,
     ): DotNetIlFunctionInfo? {
-        val owner = (function.parent as? IrClass)?.let(::publicImplementationClassInfoOrNull)
+        val containingClass = function.parent as? IrClass
+        val genericClassInfo = containingClass?.let(typeMapper::genericClassInfoOrNull)
+        val owner = genericClassInfo?.classInfo
+            ?: containingClass?.let(::publicImplementationClassInfoOrNull)
             ?: implementationFunctionFacadeIlName(function)?.let { facadeName ->
                 DotNetIlClassInfo(facadeName, assemblyName = ASSEMBLY_NAME)
             }
@@ -343,7 +423,7 @@ internal object DotNetStdlibLibrary {
             owner = owner,
             signature = function.dotNetSignature(typeMapper),
             physicalMethodName = function.dotNetAbiMethodName(
-                isSplitGenericClass = typeMapper::isSplitGenericClass,
+                isErasedGenericClass = typeMapper::isErasedGenericClass,
             ),
         )
     }
@@ -447,6 +527,21 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
+        "AbstractCollection.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "AbstractList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "_DotNetBootstrapAppendable.kt" to ImplementationSource(
+            packageFqName = "kotlin.text",
+            facadeIlName = TEXT_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapStringBuilder.kt" to ImplementationSource(
+            packageFqName = "kotlin.text",
+            facadeIlName = TEXT_FACADE_IL_NAME,
+        ),
+        "DotNetStringBuilder.kt" to ImplementationSource(
+            packageFqName = "kotlin.text",
+            facadeIlName = TEXT_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapKotlin.kt" to ImplementationSource(packageFqName = "kotlin"),
         "DotNetStdlibIo.kt" to ImplementationSource(
             packageFqName = "kotlin.io",
             facadeIlName = IO_FACADE_IL_NAME,
@@ -490,6 +585,7 @@ internal object DotNetStdlibLibrary {
         "KClass.kt" to "kotlin.reflect",
         "KClassifier.kt" to "kotlin.reflect",
         "DotNetKClass.kt" to "kotlin.reflect",
+        "_DotNetBootstrapJsName.kt" to "kotlin.js",
     )
 
     internal fun isImplementationSource(file: IrFile): Boolean =
