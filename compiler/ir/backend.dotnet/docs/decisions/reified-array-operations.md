@@ -88,7 +88,7 @@ ordinary shapes:
 | nested generic array | the selected inner vector or classified `System.Array` view |
 | signed specialized primitive array | Kotlin.Runtime wrapper class |
 | Kotlin generic interface | its non-generic canonical interface |
-| Kotlin generic class | its non-generic canonical interface |
+| Kotlin generic class | its one non-generic physical class owner |
 | `CharSequence` | classified `System.Object` carrier |
 | `Any` / `Any?` | `System.Object` |
 
@@ -175,9 +175,9 @@ existing generic-array decisions.
 ### Use closed `C<T>[]` for Kotlin generic-class elements
 
 Rejected. Kotlin generic-class identity erases type arguments. Arrays of a
-Kotlin generic class therefore use the class's canonical declaration carrier,
-not the invariant typed CLR implementation class. Typed construction and
-member capabilities remain on each same object.
+Kotlin generic class therefore use its one non-generic physical owner, not an
+invariant typed CLR construction. Logical element arguments remain in KLIB and
+element reads narrow at their ordinary use sites.
 
 ### Treat the concrete carrier matrix as public reified support
 
@@ -205,7 +205,7 @@ must execute on both FIR frontends and both runtime profiles and cover:
 
 - reference, scalar, nullable-scalar, `Any?`, and classified
   `CharSequence` elements;
-- generic-class and generic-interface canonical element identity;
+- the one erased generic-class owner and generic-interface canonical element identity;
 - nested exact arrays, nested `Array<*>`, and specialized-array wrapper
   elements;
 - literal, empty, null-initialized, initializer, vararg, and spread paths;

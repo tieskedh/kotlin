@@ -1,9 +1,4 @@
 .assembly extern mscorlib {}
-.assembly extern System
-{
-  .ver 4:0:0:0
-  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
-}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -115,84 +110,49 @@
       ret
     }
   }
-  .class nested public interface abstract auto ansi 'Generic'
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .method public hidebysig newslot abstract virtual instance object 'item__KotlinErased__a51081732eeefdac398e7579e0a38bb1'() cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    }
-    .method public hidebysig newslot abstract virtual instance int32 'outerSeed__KotlinErased__1a08e0acb39ade0e4d8ca03a7df074d6'() cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    }
-  }
-  .class nested public auto ansi sealed beforefieldinit 'Generic`1'<'T'>
+  .class nested public auto ansi sealed beforefieldinit 'Generic'
          extends [mscorlib]System.Object
-         implements 'InnerOuter'/'Generic'
   {
-    .field private !0 'item'
+    .field private object 'item'
     .field private class 'InnerOuter' 'this$0'
-    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0', !0 'item') cil managed
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0', object 'item') cil managed
     {
       .maxstack 2
       ldarg.0
       ldarg.1
-      stfld class 'InnerOuter' class 'InnerOuter'/'Generic`1'<!0>::'this$0'
+      stfld class 'InnerOuter' 'InnerOuter'/'Generic'::'this$0'
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ldarg.0
       ldarg.2
-      stfld !0 class 'InnerOuter'/'Generic`1'<!0>::'item'
+      stfld object 'InnerOuter'/'Generic'::'item'
       ret
     }
-    .method private hidebysig specialname instance !0 'get_item'() cil managed
+    .method private hidebysig specialname instance object 'get_item'() cil managed
     {
       .maxstack 1
       ldarg.0
-      ldfld !0 class 'InnerOuter'/'Generic`1'<!0>::'item'
+      ldfld object 'InnerOuter'/'Generic'::'item'
       ret
     }
-    .method public hidebysig instance !0 'item'() cil managed
+    .method public hidebysig instance object 'item'() cil managed
     {
       .maxstack 1
       ldarg.0
-      call instance !0 class 'InnerOuter'/'Generic`1'<!0>::'get_item'()
+      call instance object 'InnerOuter'/'Generic'::'get_item'()
       ret
     }
     .method public hidebysig instance int32 'outerSeed'() cil managed
     {
       .maxstack 1
       ldarg.0
-      ldfld class 'InnerOuter' class 'InnerOuter'/'Generic`1'<!0>::'this$0'
+      ldfld class 'InnerOuter' 'InnerOuter'/'Generic'::'this$0'
       call instance int32 'InnerOuter'::'get_seed'()
       ret
     }
-    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-item>'() cil managed
+    .property instance object 'item'()
     {
-      .override method instance object 'InnerOuter'/'Generic'::'item__KotlinErased__a51081732eeefdac398e7579e0a38bb1'()
-      .maxstack 1
-      ldarg.0
-      castclass class 'InnerOuter'/'Generic`1'<!0>
-      call instance !0 class 'InnerOuter'/'Generic`1'<!0>::'item'()
-      box !0
-      ret
-    }
-    .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-outerSeed>'() cil managed
-    {
-      .override method instance int32 'InnerOuter'/'Generic'::'outerSeed__KotlinErased__1a08e0acb39ade0e4d8ca03a7df074d6'()
-      .maxstack 1
-      ldarg.0
-      castclass class 'InnerOuter'/'Generic`1'<!0>
-      call instance int32 class 'InnerOuter'/'Generic`1'<!0>::'outerSeed'()
-      ret
-    }
-    .property instance !0 'item'()
-    {
-      .get instance !0 'InnerOuter'/'Generic`1'::'get_item'()
+      .get instance object 'InnerOuter'/'Generic'::'get_item'()
     }
   }
   .class nested public auto ansi sealed beforefieldinit 'First'
@@ -565,7 +525,7 @@
     stloc.2
     ldloc.0
     ldstr "generic"
-    newobj instance void class 'InnerOuter'/'Generic`1'<string>::.ctor(class 'InnerOuter', !0)
+    newobj instance void 'InnerOuter'/'Generic'::.ctor(class 'InnerOuter', object)
     stloc.3
     ldloc.1
     callvirt instance int32 'InnerValue'::'value'()
@@ -592,12 +552,11 @@ IL_boolStrTrue_0:
 IL_boolStrEnd_1:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
-    castclass class 'InnerOuter'/'Generic`1'<string>
-    call instance !0 class 'InnerOuter'/'Generic`1'<string>::'item'()
+    call instance object 'InnerOuter'/'Generic'::'item'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
-    castclass class 'InnerOuter'/'Generic`1'<string>
-    call instance int32 class 'InnerOuter'/'Generic`1'<string>::'outerSeed'()
+    call instance int32 'InnerOuter'/'Generic'::'outerSeed'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

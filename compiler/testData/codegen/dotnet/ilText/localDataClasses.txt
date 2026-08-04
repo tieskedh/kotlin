@@ -151,107 +151,56 @@ IL_whenNext_5:
     .get instance int32 'localDataClassesKt$localData$Local'::'get_value'()
   }
 }
-.class interface private abstract auto ansi 'localDataClassesKt$genericLocalData$Local'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__5fd2e8e0b22cfd6677037c523fb9471a'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance int32 'captured__KotlinErased__a36763d77e351977c5e5fcabe7707328'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance object 'component1__KotlinErased__ad5d782f528bfc44171279fb20494464'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance class 'localDataClassesKt$genericLocalData$Local' 'copy__KotlinErased__95b133a3f9cd72d13421b3060db792db'(object 'value') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance string 'ToString__KotlinErased__28226ed0640d5050d6ef181970ea46f2'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance int32 'GetHashCode__KotlinErased__c22ca3f1efff434e7d2b4fb4c58cdd2e'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance bool 'Equals__KotlinErased__0ed16e0c20d6b0cc90ed17582c0678da'(object 'other') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'value__KotlinErased__5fd2e8e0b22cfd6677037c523fb9471a'()
-  {
-    .get instance object 'localDataClassesKt$genericLocalData$Local'::'get_value__KotlinErased__5fd2e8e0b22cfd6677037c523fb9471a'()
-  }
-}
-.class private auto ansi sealed beforefieldinit 'localDataClassesKt$genericLocalData$Local`1'<'T'>
+.class private auto ansi sealed beforefieldinit 'localDataClassesKt$genericLocalData$Local'
        extends [mscorlib]System.Object
-       implements 'localDataClassesKt$genericLocalData$Local', 'localDataClassesKt$genericLocalData$Local`1'/'<DataClassErasedView>'
 {
   .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 05 4c 6f 63 61 6c 00 00)
-  .class nested private interface abstract auto ansi '<DataClassErasedView>'
-  {
-    .method public hidebysig newslot abstract virtual instance object '<DataClassComponent0>'() cil managed
-    {
-    }
-  }
-  .field private !0 'value'
+  .field private object 'value'
   .field private int32 '$seed'
-  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed', !0 'value') cil managed
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed', object 'value') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    stfld int32 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'$seed'
+    stfld int32 'localDataClassesKt$genericLocalData$Local'::'$seed'
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.2
-    stfld !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'value'
+    stfld object 'localDataClassesKt$genericLocalData$Local'::'value'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  .method public hidebysig specialname instance object 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'value'
+    ldfld object 'localDataClassesKt$genericLocalData$Local'::'value'
     ret
   }
   .method public hidebysig instance int32 'captured'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld int32 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'$seed'
+    ldfld int32 'localDataClassesKt$genericLocalData$Local'::'$seed'
     ret
   }
-  .method public hidebysig instance !0 'component1'() cil managed
+  .method public hidebysig instance object 'component1'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'value'
+    ldfld object 'localDataClassesKt$genericLocalData$Local'::'value'
     ret
   }
-  .method public hidebysig instance class 'localDataClassesKt$genericLocalData$Local`1'<!0> 'copy'(!0 'value') cil managed
+  .method public hidebysig instance class 'localDataClassesKt$genericLocalData$Local' 'copy'(object 'value') cil managed
   {
     .maxstack 2
     ldarg.0
-    ldfld int32 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'$seed'
+    ldfld int32 'localDataClassesKt$genericLocalData$Local'::'$seed'
     ldarg.1
-    newobj instance void class 'localDataClassesKt$genericLocalData$Local`1'<!0>::.ctor(int32, !0)
+    newobj instance void 'localDataClassesKt$genericLocalData$Local'::.ctor(int32, object)
     ret
   }
-  .method public hidebysig instance class 'localDataClassesKt$genericLocalData$Local`1'<!0> 'copy$default'(!0 'value', int32 '$mask0') cil managed
+  .method public hidebysig instance class 'localDataClassesKt$genericLocalData$Local' 'copy$default'(object 'value', int32 '$mask0') cil managed
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
@@ -265,14 +214,14 @@ IL_whenNext_5:
     ceq
     brfalse IL_whenNext_1
     ldarg.0
-    ldfld !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'value'
+    ldfld object 'localDataClassesKt$genericLocalData$Local'::'value'
     starg 1
     br IL_whenEnd_0
 IL_whenNext_1:
 IL_whenEnd_0:
     ldarg.0
     ldarg.1
-    call instance class 'localDataClassesKt$genericLocalData$Local`1'<!0> class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'copy'(!0)
+    call instance class 'localDataClassesKt$genericLocalData$Local' 'localDataClassesKt$genericLocalData$Local'::'copy'(object)
     ret
   }
   .method public hidebysig virtual instance string 'ToString'() cil managed
@@ -280,8 +229,7 @@ IL_whenEnd_0:
     .maxstack 2
     ldstr "Local(value="
     ldarg.0
-    ldfld !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'value'
-    box !0
+    ldfld object 'localDataClassesKt$genericLocalData$Local'::'value'
     call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
     call string [mscorlib]System.String::Concat(string, string)
     ldstr ")"
@@ -292,17 +240,15 @@ IL_whenEnd_0:
   {
     .maxstack 2
     ldarg.0
-    ldfld !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'value'
-    box !0
+    ldfld object 'localDataClassesKt$genericLocalData$Local'::'value'
     ldnull
-    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    ceq
     brfalse IL_whenNext_1
     ldc.i4 0
     br IL_whenEnd_0
 IL_whenNext_1:
     ldarg.0
-    ldfld !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'value'
-    box !0
+    ldfld object 'localDataClassesKt$genericLocalData$Local'::'value'
     call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
 IL_whenEnd_0:
     ret
@@ -311,7 +257,7 @@ IL_whenEnd_0:
   {
     .maxstack 2
     .locals init (
-      [0] class 'localDataClassesKt$genericLocalData$Local`1'/'<DataClassErasedView>' 'tmp0_other_erased_view'
+      [0] class 'localDataClassesKt$genericLocalData$Local' 'tmp0_other_with_cast'
     )
     ldarg.0
     ldarg.1
@@ -321,7 +267,7 @@ IL_whenEnd_0:
     ret
 IL_whenNext_1:
     ldarg.1
-    isinst class 'localDataClassesKt$genericLocalData$Local`1'/'<DataClassErasedView>'
+    isinst class 'localDataClassesKt$genericLocalData$Local'
     ldnull
     ceq
     brfalse IL_whenNext_3
@@ -329,13 +275,12 @@ IL_whenNext_1:
     ret
 IL_whenNext_3:
     ldarg.1
-    castclass class 'localDataClassesKt$genericLocalData$Local`1'/'<DataClassErasedView>'
+    castclass class 'localDataClassesKt$genericLocalData$Local'
     stloc.0
     ldarg.0
-    ldfld !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'value'
-    box !0
+    ldfld object 'localDataClassesKt$genericLocalData$Local'::'value'
     ldloc.0
-    callvirt instance object 'localDataClassesKt$genericLocalData$Local`1'/'<DataClassErasedView>'::'<DataClassComponent0>'()
+    ldfld object 'localDataClassesKt$genericLocalData$Local'::'value'
     call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
     ldc.i4.0
     ceq
@@ -346,86 +291,9 @@ IL_whenNext_5:
     ldc.i4.1
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<DataClassComponent0>'() cil managed
+  .property instance object 'value'()
   {
-    .override method instance object 'localDataClassesKt$genericLocalData$Local`1'/'<DataClassErasedView>'::'<DataClassComponent0>'()
-    .maxstack 1
-    ldarg.0
-    ldfld !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'value'
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
-  {
-    .override method instance object 'localDataClassesKt$genericLocalData$Local'::'get_value__KotlinErased__5fd2e8e0b22cfd6677037c523fb9471a'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'localDataClassesKt$genericLocalData$Local`1'<!0>
-    call instance !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'get_value'()
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-captured>'() cil managed
-  {
-    .override method instance int32 'localDataClassesKt$genericLocalData$Local'::'captured__KotlinErased__a36763d77e351977c5e5fcabe7707328'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'localDataClassesKt$genericLocalData$Local`1'<!0>
-    call instance int32 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'captured'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-component1>'() cil managed
-  {
-    .override method instance object 'localDataClassesKt$genericLocalData$Local'::'component1__KotlinErased__ad5d782f528bfc44171279fb20494464'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'localDataClassesKt$genericLocalData$Local`1'<!0>
-    call instance !0 class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'component1'()
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance class 'localDataClassesKt$genericLocalData$Local' '<GenericClassCanonicalBridge-copy>'(object 'value') cil managed
-  {
-    .override method instance class 'localDataClassesKt$genericLocalData$Local' 'localDataClassesKt$genericLocalData$Local'::'copy__KotlinErased__95b133a3f9cd72d13421b3060db792db'(object)
-    .maxstack 2
-    ldarg.0
-    castclass class 'localDataClassesKt$genericLocalData$Local`1'<!0>
-    ldarg.1
-    unbox.any !0
-    call instance class 'localDataClassesKt$genericLocalData$Local`1'<!0> class 'localDataClassesKt$genericLocalData$Local`1'<!0>::'copy'(!0)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-toString>'() cil managed
-  {
-    .override method instance string 'localDataClassesKt$genericLocalData$Local'::'ToString__KotlinErased__28226ed0640d5050d6ef181970ea46f2'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'localDataClassesKt$genericLocalData$Local`1'<!0>
-    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-hashCode>'() cil managed
-  {
-    .override method instance int32 'localDataClassesKt$genericLocalData$Local'::'GetHashCode__KotlinErased__c22ca3f1efff434e7d2b4fb4c58cdd2e'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'localDataClassesKt$genericLocalData$Local`1'<!0>
-    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-equals>'(object 'other') cil managed
-  {
-    .override method instance bool 'localDataClassesKt$genericLocalData$Local'::'Equals__KotlinErased__0ed16e0c20d6b0cc90ed17582c0678da'(object)
-    .maxstack 2
-    ldarg.0
-    castclass class 'localDataClassesKt$genericLocalData$Local`1'<!0>
-    ldarg.1
-    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
-    ret
-  }
-  .property instance !0 'value'()
-  {
-    .get instance !0 'localDataClassesKt$genericLocalData$Local`1'::'get_value'()
+    .get instance object 'localDataClassesKt$genericLocalData$Local'::'get_value'()
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'localDataClassesKt'
@@ -445,17 +313,13 @@ IL_whenNext_5:
   .method public hidebysig static object 'genericLocalData'<'T'>(int32 'seed', !!0 'value') cil managed
   {
     .maxstack 3
-    .locals init (
-      [0] !!0 '<default>'
-    )
     ldarg.0
     ldarg.1
-    newobj instance void class 'localDataClassesKt$genericLocalData$Local`1'<!!0>::.ctor(int32, !0)
-    ldloca 0
-    initobj !!0
-    ldloc.0
+    box !!0
+    newobj instance void 'localDataClassesKt$genericLocalData$Local'::.ctor(int32, object)
+    ldnull
     ldc.i4 1
-    call instance class 'localDataClassesKt$genericLocalData$Local`1'<!0> class 'localDataClassesKt$genericLocalData$Local`1'<!!0>::'copy$default'(!0, int32)
+    call instance class 'localDataClassesKt$genericLocalData$Local' 'localDataClassesKt$genericLocalData$Local'::'copy$default'(object, int32)
     ret
   }
   .method public hidebysig static void 'main'() cil managed

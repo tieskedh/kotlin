@@ -11,28 +11,8 @@
 .assembly 'companionStaticHolders' {}
 .module 'main-companionStaticHolders.il'
 
-.class interface public abstract auto ansi 'GenericHolderOwner'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance int32 'get_value__KotlinErased__d489093cac4e75e6539d68aea2bb8f82'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance int32 'reveal__KotlinErased__37a08abdccb652cbb9fa5039fb6ee063'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance int32 'value__KotlinErased__d489093cac4e75e6539d68aea2bb8f82'()
-  {
-    .get instance int32 'GenericHolderOwner'::'get_value__KotlinErased__d489093cac4e75e6539d68aea2bb8f82'()
-  }
-}
-.class public auto ansi sealed beforefieldinit 'GenericHolderOwner`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'GenericHolderOwner'
        extends [mscorlib]System.Object
-       implements 'GenericHolderOwner'
 {
   .class nested public abstract sealed auto ansi beforefieldinit '<CompanionStatics>'
          extends [mscorlib]System.Object
@@ -56,7 +36,7 @@
     {
       .maxstack 1
       ldarg.0
-      newobj instance void class 'GenericHolderOwner`1'<string>::.ctor(int32)
+      newobj instance void 'GenericHolderOwner'::.ctor(int32)
       ret
     }
     .method public hidebysig static class 'GenericHolderOwner' 'create$default'(int32 'value', int32 '$mask0') cil managed
@@ -78,8 +58,7 @@
   IL_whenNext_1:
   IL_whenEnd_0:
       ldarg.0
-      call class 'GenericHolderOwner' 'GenericHolderOwner`1'/'<CompanionStatics>'::'create'(int32)
-      castclass class 'GenericHolderOwner'
+      call class 'GenericHolderOwner' 'GenericHolderOwner'/'<CompanionStatics>'::'create'(int32)
       ret
     }
     .method public hidebysig static !!0 'echo'<'R'>(!!0 'value') cil managed
@@ -99,12 +78,12 @@
     .method assembly hidebysig static int32 'access$secret'() cil managed
     {
       .maxstack 1
-      call int32 'GenericHolderOwner`1'/'<CompanionStatics>'::'secret'()
+      call int32 'GenericHolderOwner'/'<CompanionStatics>'::'secret'()
       ret
     }
     .property int32 'answer'()
     {
-      .get int32 'GenericHolderOwner`1'/'<CompanionStatics>'::'get_answer'()
+      .get int32 'GenericHolderOwner'/'<CompanionStatics>'::'get_answer'()
     }
   }
   .field private int32 'value'
@@ -115,43 +94,25 @@
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld int32 class 'GenericHolderOwner`1'<!0>::'value'
+    stfld int32 'GenericHolderOwner'::'value'
     ret
   }
   .method public hidebysig specialname instance int32 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld int32 class 'GenericHolderOwner`1'<!0>::'value'
+    ldfld int32 'GenericHolderOwner'::'value'
     ret
   }
   .method public hidebysig instance int32 'reveal'() cil managed
   {
     .maxstack 1
-    call int32 'GenericHolderOwner`1'/'<CompanionStatics>'::'access$secret'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-<get-value>>'() cil managed
-  {
-    .override method instance int32 'GenericHolderOwner'::'get_value__KotlinErased__d489093cac4e75e6539d68aea2bb8f82'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericHolderOwner`1'<!0>
-    call instance int32 class 'GenericHolderOwner`1'<!0>::'get_value'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-reveal>'() cil managed
-  {
-    .override method instance int32 'GenericHolderOwner'::'reveal__KotlinErased__37a08abdccb652cbb9fa5039fb6ee063'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericHolderOwner`1'<!0>
-    call instance int32 class 'GenericHolderOwner`1'<!0>::'reveal'()
+    call int32 'GenericHolderOwner'/'<CompanionStatics>'::'access$secret'()
     ret
   }
   .property instance int32 'value'()
   {
-    .get instance int32 'GenericHolderOwner`1'::'get_value'()
+    .get instance int32 'GenericHolderOwner'::'get_value'()
   }
 }
 .class interface public abstract auto ansi 'GenericHolderInterface'
@@ -192,58 +153,21 @@
     .entrypoint
     .maxstack 3
     .locals init (
-      [0] class 'GenericHolderOwner' 'owner',
-      [1] class 'GenericHolderOwner' '<genericClassReceiver>',
-      [2] class 'GenericHolderOwner`1'<string> '<genericClassCapability>',
-      [3] int32 '<genericClassResult>',
-      [4] class 'GenericHolderOwner' '<genericClassReceiver>@4',
-      [5] class 'GenericHolderOwner`1'<string> '<genericClassCapability>@5',
-      [6] int32 '<genericClassResult>@6'
+      [0] class 'GenericHolderOwner' 'owner'
     )
     ldc.i4 0
     ldc.i4 1
-    call class 'GenericHolderOwner' 'GenericHolderOwner`1'/'<CompanionStatics>'::'create$default'(int32, int32)
-    castclass class 'GenericHolderOwner'
+    call class 'GenericHolderOwner' 'GenericHolderOwner'/'<CompanionStatics>'::'create$default'(int32, int32)
     stloc.0
     ldloc.0
-    stloc.1
-    ldloc.1
-    isinst class 'GenericHolderOwner`1'<string>
-    stloc.2
-    ldloc.2
-    brfalse IL_genericClassCanonicalFallback_0
-    ldloc.2
-    call instance int32 class 'GenericHolderOwner`1'<string>::'get_value'()
-    stloc.3
-    br IL_genericClassJoin_1
-IL_genericClassCanonicalFallback_0:
-    ldloc.1
-    callvirt instance int32 'GenericHolderOwner'::'get_value__KotlinErased__d489093cac4e75e6539d68aea2bb8f82'()
-    stloc.3
-IL_genericClassJoin_1:
-    ldloc.3
+    call instance int32 'GenericHolderOwner'::'get_value'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    stloc 4
-    ldloc 4
-    isinst class 'GenericHolderOwner`1'<string>
-    stloc 5
-    ldloc 5
-    brfalse IL_genericClassCanonicalFallback_2
-    ldloc 5
-    call instance int32 class 'GenericHolderOwner`1'<string>::'reveal'()
-    stloc 6
-    br IL_genericClassJoin_3
-IL_genericClassCanonicalFallback_2:
-    ldloc 4
-    callvirt instance int32 'GenericHolderOwner'::'reveal__KotlinErased__37a08abdccb652cbb9fa5039fb6ee063'()
-    stloc 6
-IL_genericClassJoin_3:
-    ldloc 6
+    call instance int32 'GenericHolderOwner'::'reveal'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -251,14 +175,14 @@ IL_genericClassJoin_3:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "7"
     call void [mscorlib]System.Console::WriteLine(string)
-    call int32 'GenericHolderOwner`1'/'<CompanionStatics>'::'get_answer'()
+    call int32 'GenericHolderOwner'/'<CompanionStatics>'::'get_answer'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "OK"
-    call !!0 'GenericHolderOwner`1'/'<CompanionStatics>'::'echo'<string>(!!0)
+    call !!0 'GenericHolderOwner'/'<CompanionStatics>'::'echo'<string>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "9"
     call void [mscorlib]System.Console::WriteLine(string)

@@ -28,7 +28,9 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberView
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
+import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
+import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
 import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.config.dotNetTarget
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -820,7 +822,10 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                             )
                 val local = localBindings[selected]
                 val binding = when {
-                    local != null && bodyPlacement == DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY ->
+                    local != null && (
+                            bodyPlacement == DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY ||
+                                    irClass.requiresCanonicalErasedDefaultForwarder(local.owner)
+                    ) ->
                         local.asDefaultCallBinding()
                     local != null ->
                         if (inheritedForwarderMasksSelectedDefault) local.asDefaultCallBinding() else null
@@ -828,7 +833,14 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                         val external = externalBindingFor(selected) ?: continue
                         when (external.bound.implementation.bodyPlacement) {
                             DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER ->
-                                if (inheritedForwarderMasksSelectedDefault) external.asDefaultCallBinding() else null
+                                if (
+                                    inheritedForwarderMasksSelectedDefault ||
+                                    irClass.requiresCanonicalErasedDefaultForwarder(external.owner)
+                                ) {
+                                    external.asDefaultCallBinding()
+                                } else {
+                                    null
+                                }
                             DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY -> {
                                 val providers = if (bodyPlacement == DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER) {
                                     irClass.directInterfaces().flatMapTo(linkedSetOf()) { interfaceClass ->
@@ -864,6 +876,21 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                 createClassForwarder(irClass, binding)
             }
         }
+    }
+
+    /**
+     * A DIM on the typed sibling `I<T>` cannot satisfy canonical `I` for an erased `C<T>` which
+     * has no truthful typed interface edge. Materialize the existing helper as one canonical
+     * class-side implementation in precisely that owner-dependent case. A closed `I<String>`
+     * edge still names the typed sibling and inherits its native DIM without a forwarder.
+     */
+    private fun IrClass.requiresCanonicalErasedDefaultForwarder(interfaceClass: IrClass): Boolean {
+        if (!isDotNetGenericClassDeclaration || !interfaceClass.isDotNetGenericInterfaceDeclaration) return false
+        val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
+            interfaceClass.symbol,
+            symbol.defaultType,
+        ) ?: return false
+        return substitutor.substitute(interfaceClass.symbol.defaultType).referencesTypeParameterOf(this)
     }
 
     private fun hasExternalBaseClassForwarderFor(

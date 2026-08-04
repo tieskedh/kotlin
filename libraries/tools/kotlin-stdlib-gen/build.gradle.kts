@@ -40,10 +40,16 @@ tasks {
         classpath = sourceSets.main.get().runtimeClasspath
         args = listOf("$rootDir")
         systemProperty("line.separator", "\n")
-        outputs.file(
-            rootProject.file(
-                "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapCollections.kt"
-            )
+        outputs.files(
+            listOf(
+                "_DotNetBootstrapCollections.kt",
+                "_DotNetBootstrapAppendable.kt",
+                "_DotNetBootstrapStringBuilder.kt",
+                "_DotNetBootstrapKotlin.kt",
+                "_DotNetBootstrapJsName.kt",
+            ).map { fileName ->
+                rootProject.file("libraries/stdlib/dotnet/common/src/generated/$fileName")
+            }
         )
         inputs.file(
             rootProject.file("libraries/stdlib/src/kotlin/collections/Collections.kt")
@@ -53,6 +59,12 @@ tasks {
         )
         inputs.file(
             rootProject.file("libraries/stdlib/common/src/generated/_Arrays.kt")
+        )
+        inputs.files(
+            rootProject.file("libraries/stdlib/src/kotlin/text/Appendable.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/text/StringBuilder.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/util/Standard.kt"),
+            rootProject.file("libraries/stdlib/common/src/kotlin/JsAnnotationsH.kt"),
         )
     }
 

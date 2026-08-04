@@ -230,8 +230,9 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     }
 
     /**
-     * An INSTANTIATION of a generic user class or interface of this module (`Box<String>`,
-     * `Producer<Item>`): real CLR reified generics, the Roslyn shape — never erasure.
+     * An instantiation of a genuinely reified CLR owner: an imported CLR generic or one of the
+     * separately selected typed generic-interface capabilities. Kotlin-owned ordinary generic
+     * classes never use this type; their physical owner is a [UserClass].
      * [nameInSignature] is the instantiation token
      * `class 'demo.Box`1'<string>` (the arity suffix lives INSIDE the quoted identifier, see
      * [DotNetIlClassInfo.ilTypeRef]; a suffix outside the quotes is an ilasm syntax error —
@@ -239,10 +240,8 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
      * position: locals, fields, params, returns, `newobj`, `ldfld`/`stfld` owner tokens and
      * `call`/`callvirt` owner tokens (`genprobe_s2`/`_s3`), composing with [NullableValue]
      * arguments (`genprobe_s4`) and nesting arbitrarily (`Box<Box<String>>`, `genprobe_s3`).
-     * Inside the declaring class's own bodies the self-reference is the OPEN instantiation
-     * (`class 'Box`1'<!0>`, `genprobe_s2`/`_s7`), which falls out of mapping the class's own
-     * `defaultType` — the [arguments] are then [TypeParameter]s. Like [UserClass], equality is
-     * the rendered token. Generic classes stay structurally invariant; [isDotNetAssignableTo]
+     * An open owner view may contain [TypeParameter] arguments. Like [UserClass], equality is the
+     * rendered token. CLR generic classes stay structurally invariant; [isDotNetAssignableTo]
      * additionally interprets a generic interface's recorded declaration-site variance for
      * reference-shaped arguments.
      */
@@ -315,14 +314,11 @@ internal fun DotNetIlValueType.dotNetAllSupertypes(): Sequence<DotNetIlValueType
 }
 
 /**
- * This type's view AS the generic class [owner] — itself when it is an instantiation of [owner],
- * otherwise the (unique) instantiated-[owner] entry of its supertype walk: the member-reference
- * owner token for calls to and field accesses on members a generic class DECLARES, reached
- * through any receiver (its own instantiations, open or closed, and derived classes — the
- * operand must name the DECLARING class with its instantiation, `genprobe_s2`/`_s5`). Null when
- * this type does not widen to [owner] at all. A constrained type parameter also walks its
- * module-local upper bounds, allowing a bound that inherits an instantiated generic owner to
- * provide the correct member-reference token.
+ * This type's view as the genuinely generic CLR [owner] — itself when it is an instantiation of
+ * [owner], otherwise the unique instantiated-owner entry of its supertype walk. It supplies the
+ * declaring-owner token for imported generic members and typed interface capabilities. Kotlin-
+ * owned generic classes have arity-zero owners and never need this recovery. A constrained type
+ * parameter also walks its module-local upper bounds.
  */
 internal fun DotNetIlValueType.dotNetViewAsGenericOwner(
     owner: DotNetIlClassInfo,
@@ -365,8 +361,8 @@ internal fun DotNetIlValueType.dotNetBoxedCorelibRefOrNull(coreLibraryReference:
  * and [DotNetIlValueType.TypeParameter] — an unconstrained or interface-bound `T` may instantiate
  * to a value type, so a `!n`-typed value is neither reference- nor value-shaped statically.
  * Bound widening therefore uses `box !n` even when every Kotlin-side instantiation is a
- * reference. An INSTANTIATED generic class ([DotNetIlValueType.GenericInstance]) is an ordinary
- * reference type.
+ * reference. A genuinely instantiated CLR generic ([DotNetIlValueType.GenericInstance]) is an
+ * ordinary reference type.
  */
 internal fun DotNetIlValueType.isDotNetReferenceShaped(): Boolean = when (this) {
     DotNetIlValueType.String, DotNetIlValueType.Object,
@@ -444,10 +440,9 @@ internal class DotNetIlFunctionInfo(
      * The signature slots are always the DECLARED (open) ones — `!n`/`!!n` stay verbatim in
      * member references per CLR member-ref rules (probe-verified, `genprobe_s1`/`_s2`) — while
      * generic contexts substitute only the tokens around them: [ownerToken] carries the
-     * instantiated owner for members of a generic class (`class 'Box`1'<string>` at external
-     * call sites, the open `class 'Box`1'<!0>` inside the class's own bodies; the default is the
-     * established bare non-generic spelling, which `.property` accessor references also require
-     * for generic owners — bare name, NO type-arguments list, `genprobe_s2`), and
+     * instantiated owner for members of a genuinely generic CLR declaration; the default is the
+     * established bare non-generic spelling, which `.property` accessor references also require,
+     * and
      * [methodInstantiation] renders the `<inst>` list of a generic METHOD between its name and
      * parameter list (`'id'<string>(!!0)`, `genprobe_s1`; `!!0` itself is a legal instantiation
      * argument at generic→generic call sites). A generic owner and generic member compose those
@@ -553,11 +548,9 @@ internal class DotNetIlClassInfo(
 
     /**
      * The base TYPE of this class as a full type token — a [DotNetIlValueType.UserClass] for a
-     * plain base, a [DotNetIlValueType.GenericInstance] for an instantiated generic base
-     * (`class D : Box<Int>()` links `class 'Box`1'<int32>`; `class D<T> : Box<T>()` links the
-     * open `class 'Box`1'<!0>`). The instantiation must be part of the link because assignability
-     * is INVARIANT — `D` widens only to its exact base view — or null when the class extends
-     * `kotlin.Any` (IL `System.Object`). Linked
+     * plain or Kotlin-erased base, and a [DotNetIlValueType.GenericInstance] only for a genuinely
+     * reified CLR base. Any CLR instantiation must be part of the link because assignability is
+     * invariant, or null when the class extends `kotlin.Any` (IL `System.Object`). Linked
      * by [DotNetIlEmitter]'s pre-pass after ALL gate-passing classes are registered (a base may
      * be declared after its derived class — forward references are legal IL, probe-verified
      * `inheritprobe_s1`) and consumed by [isDotNetAssignableTo]'s upcast walk. Deliberately NOT
@@ -589,18 +582,28 @@ internal class DotNetIlClassInfo(
      * `ifaceprobe_s6`/`_s7`; the instantiated-generic-base widening `genprobe_s5`). A
      * breadth-first walk over the supertype DAG (diamonds are legal Kotlin and legal IL),
      * deduplicated by the rendered token like [DotNetIlValueType.UserClass]/
-     * [DotNetIlValueType.GenericInstance] equality. [selfArguments] is this class's own
-     * instantiation, substituted into every base/interface link that mentions its parameters;
-     * this is active machinery for generic-to-generic class inheritance, generic classes
-     * implementing open generic interfaces, and generic-interface inheritance. A non-generic
-     * class's own links are always closed.
+     * [DotNetIlValueType.GenericInstance] equality. [selfArguments] is this CLR TypeDef's own
+     * instantiation, substituted into every base/interface link that mentions its parameters.
+     * This remains active for imported/reified CLR inheritance and generic-interface
+     * capabilities; Kotlin-owned generic classes pass an empty list because their physical owner
+     * is non-generic.
      */
     fun allSupertypes(selfArguments: List<DotNetIlValueType> = emptyList()): Sequence<DotNetIlValueType> = sequence {
         val visited = hashSetOf<String>()
         val queue = ArrayDeque<DotNetIlValueType>()
         fun enqueueSupertypesOf(classInfo: DotNetIlClassInfo, arguments: List<DotNetIlValueType>) {
-            classInfo.baseType?.let { queue.add(it.substituteDotNetTypeParameters(arguments)) }
-            classInfo.interfaces.mapTo(queue) { it.substituteDotNetTypeParameters(arguments) }
+            fun substitute(linkKind: String, link: DotNetIlValueType): DotNetIlValueType =
+                try {
+                    link.substituteDotNetTypeParameters(arguments)
+                } catch (failure: IllegalStateException) {
+                    error(
+                        "Internal .NET backend error: cannot instantiate $linkKind " +
+                                "${link.nameInSignature} of ${classInfo.ilTypeRef} with " +
+                                "[${arguments.joinToString { it.nameInSignature }}]: ${failure.message}"
+                    )
+                }
+            classInfo.baseType?.let { queue.add(substitute("base", it)) }
+            classInfo.interfaces.mapTo(queue) { substitute("interface", it) }
         }
         enqueueSupertypesOf(this@DotNetIlClassInfo, selfArguments)
         while (queue.isNotEmpty()) {
@@ -642,18 +645,16 @@ internal class DotNetIlClassInfo(
      * The `instance void 'C'::.ctor(<params>)` member reference shared by every constructor use:
      * prefixed with `newobj` at instantiation sites and with `call` in `this(...)` and base
      * delegations (`.ctor` is a bare keyword, not a quoted identifier; both spellings are
-     * probe-verified). For a generic class, [ownerToken] carries the instantiation
-     * (`newobj instance void class 'Box`1'<string>::.ctor(!0)` — the parameter slots stay OPEN,
-     * probe-verified `genprobe_s2`; base-ctor chaining `genprobe_s5`).
+     * probe-verified). For a genuinely generic CLR owner, [ownerToken] carries its instantiation;
+     * a Kotlin-owned generic class passes its one erased owner token.
      */
     fun renderConstructorReference(parameterTypes: List<DotNetIlValueType>, ownerToken: String = ilTypeRef): String =
         "instance void ${ownerToken}::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})"
 
     /**
      * The `<type> 'C'::'name'` field reference `ldfld`/`stfld` instructions take as operand.
-     * [fieldType] is the DECLARED (open) field type and [ownerToken] the instantiated owner for
-     * fields of a generic class (`ldfld !0 class 'Box`1'<string>::'value'` — open type slot,
-     * closed owner; probe-verified `genprobe_s2`/`_s3`, the derived-receiver flavor `_s5`).
+     * [fieldType] is the declared field type and [ownerToken] may be an instantiated genuinely
+     * generic CLR owner. Kotlin-owned generic-class fields use their erased owner and carrier.
      */
     fun renderFieldReference(fieldType: DotNetIlValueType, fieldName: String, ownerToken: String = ilTypeRef): String =
         "${fieldType.nameInSignature} ${ownerToken}::${fieldName.toIlIdentifier()}"

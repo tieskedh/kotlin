@@ -43,6 +43,7 @@ import org.jetbrains.kotlin.ir.types.isString
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.defaultType
+import org.jetbrains.kotlin.ir.util.erasedUpperBound
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
@@ -239,24 +240,24 @@ internal fun IrSimpleFunction.dotNetExceptionCarrierMethodNameOrNull(
  * selected only when no classified exception already requires the older ABI spelling.
  */
 internal fun IrSimpleFunction.dotNetErasedCarrierMethodNameOrNull(
-    isSplitGenericClass: (IrClass) -> Boolean,
+    isErasedGenericClass: (IrClass) -> Boolean,
     baseMethodName: String = dotNetIlMethodName(),
 ): String? {
     dotNetExceptionCarrierMethodNameOrNull(baseMethodName)?.let { return it }
 
-    fun IrType.containsSplitGenericClass(): Boolean {
+    fun IrType.containsErasedGenericClass(): Boolean {
         val simpleType = this as? IrSimpleType ?: return false
         val classifier = (simpleType.classifier as? IrClassSymbol)?.owner
-        if (classifier?.let(isSplitGenericClass) == true) return true
+        if (classifier?.let(isErasedGenericClass) == true) return true
         return simpleType.arguments.any { argument ->
-            (argument as? IrTypeProjection)?.type?.containsSplitGenericClass() == true
+            (argument as? IrTypeProjection)?.type?.containsErasedGenericClass() == true
         }
     }
 
     fun IrSimpleFunction.logicalErasedSignatureOrNull(): String? {
         val requiresLogicalName = parameters.any { parameter ->
             parameter.kind != IrParameterKind.DispatchReceiver &&
-                    parameter.type.containsSplitGenericClass()
+                    parameter.type.containsErasedGenericClass()
         }
         if (!requiresLogicalName) return null
         return with(DotNetIrMangler) {
@@ -293,18 +294,18 @@ internal fun IrSimpleFunction.dotNetErasedCarrierMethodNameOrNull(
  */
 internal fun IrSimpleFunction.dotNetAbiMethodName(
     baseMethodName: String? = null,
-    isSplitGenericClass: (IrClass) -> Boolean = { false },
-): String = dotNetAbiMethodNameOrNull(baseMethodName, isSplitGenericClass) ?: dotNetIlMethodName()
+    isErasedGenericClass: (IrClass) -> Boolean = { false },
+): String = dotNetAbiMethodNameOrNull(baseMethodName, isErasedGenericClass) ?: dotNetIlMethodName()
 
 /** A non-default ABI spelling, or null when the ordinary Kotlin/CLR method name is sufficient. */
 internal fun IrSimpleFunction.dotNetAbiMethodNameOrNull(
     baseMethodName: String? = null,
-    isSplitGenericClass: (IrClass) -> Boolean = { false },
+    isErasedGenericClass: (IrClass) -> Boolean = { false },
 ): String? {
     val selectedBaseMethodName = baseMethodName
         ?: DotNetStdlibLibrary.implementationPlatformMethodNameOrNull(this)
     val physicalBaseMethodName = selectedBaseMethodName ?: dotNetIlMethodName()
-    return dotNetErasedCarrierMethodNameOrNull(isSplitGenericClass, physicalBaseMethodName)
+    return dotNetErasedCarrierMethodNameOrNull(isErasedGenericClass, physicalBaseMethodName)
         ?: selectedBaseMethodName
 }
 
@@ -463,7 +464,9 @@ internal class DotNetIlTypeMapper private constructor(
     private val genericClasses: Map<IrClass, DotNetGenericClassInfo>,
     private val comparableInterfaceInfo: DotNetGenericInterfaceInfo,
     private val genericInterfaceMapping: DotNetGenericInterfaceMapping,
-    private val mapGenericClassesToTypedCapability: Boolean,
+    private val stdlibClasses: MutableMap<IrClass, DotNetIlClassInfo>,
+    private val stdlibGenericClasses: MutableMap<IrClass, DotNetGenericClassInfo>,
+    private val stdlibClassLinksInProgress: MutableSet<IrClass>,
     private val assemblyReferenceSink: (String) -> Unit,
 ) {
     constructor(
@@ -483,7 +486,9 @@ internal class DotNetIlTypeMapper private constructor(
         genericClasses,
         dotNetComparableInterfaceInfo(coreLibrary),
         DotNetGenericInterfaceMapping.CANONICAL,
-        false,
+        mutableMapOf(),
+        mutableMapOf(),
+        mutableSetOf(),
         assemblyReferenceSink,
     )
 
@@ -497,37 +502,9 @@ internal class DotNetIlTypeMapper private constructor(
             genericClasses,
             comparableInterfaceInfo,
             mapping,
-            mapGenericClassesToTypedCapability,
-            assemblyReferenceSink,
-        )
-
-    /** Maps ordinary Kotlin generic classes to their invariant CLR implementation capability. */
-    fun typedGenericClassView(): DotNetIlTypeMapper =
-        DotNetIlTypeMapper(
-            availableClasses,
-            coreLibrary,
-            externalDeclarations,
-            importedClrDeclarations,
-            genericInterfaces,
-            genericClasses,
-            comparableInterfaceInfo,
-            genericInterfaceMapping,
-            true,
-            assemblyReferenceSink,
-        )
-
-    /** Restores the stable Kotlin ABI view after mapping a typed implementation body. */
-    fun canonicalGenericClassView(): DotNetIlTypeMapper =
-        DotNetIlTypeMapper(
-            availableClasses,
-            coreLibrary,
-            externalDeclarations,
-            importedClrDeclarations,
-            genericInterfaces,
-            genericClasses,
-            comparableInterfaceInfo,
-            genericInterfaceMapping,
-            false,
+            stdlibClasses,
+            stdlibGenericClasses,
+            stdlibClassLinksInProgress,
             assemblyReferenceSink,
         )
 
@@ -566,32 +543,75 @@ internal class DotNetIlTypeMapper private constructor(
                 DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass) ||
                 externalDeclarations.hasGenericInterface(irClass))
 
-    fun isSplitGenericClass(irClass: IrClass): Boolean =
-        genericClasses.containsKey(irClass) || externalDeclarations.hasGenericClass(irClass)
+    fun isErasedGenericClass(irClass: IrClass): Boolean =
+        genericClasses.containsKey(irClass) ||
+                DotNetRuntimeTypes.erasedGenericClassInfoFor(irClass) != null ||
+                stdlibGenericClassInfoOrNull(irClass) != null ||
+                externalDeclarations.hasGenericClass(irClass)
 
-    fun isSplitGenericClassType(type: IrType): Boolean {
+    fun isErasedGenericClassType(type: IrType): Boolean {
         val simpleType = type as? IrSimpleType ?: return false
         val irClass = (simpleType.classifier as? IrClassSymbol)?.owner ?: return false
-        return isSplitGenericClass(irClass)
+        return isErasedGenericClass(irClass)
+    }
+
+    /**
+     * Whether a `System.Array` carrier still has a source-legal element-write contract.
+     * `Array<T>` on an erased owner does; `Array<*>` does not. Both share one physical IL type,
+     * so authoritative IR retains this distinction.
+     */
+    fun permitsErasedGenericArrayElementWrite(type: IrType): Boolean {
+        val simpleType = type as? IrSimpleType ?: return false
+        val projection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return false
+        return projection.variance == Variance.INVARIANT &&
+                type.referencesErasedOwnerParameterForCurrentView()
     }
 
     fun genericClassInfoOrNull(irClass: IrClass): DotNetGenericClassInfo? =
-        (genericClasses[irClass] ?: externalDeclarations.genericClassInfoOrNull(irClass, this))
+        (genericClasses[irClass]
+            ?: DotNetRuntimeTypes.erasedGenericClassInfoFor(irClass)
+            // A loaded library's recorded physical ABI is authoritative for owner paths, method
+            // names, and graph links. The stdlib reconstruction exists only for same-module
+            // bootstrap sources, where no external physical record can exist yet.
+            ?: externalDeclarations.genericClassInfoOrNull(irClass, this)
+            ?: stdlibGenericClassInfoOrNull(irClass))
             ?.also(::recordAssemblyReferences)
 
-    /** Exact invariant CLR capability of one Kotlin generic-class type, when fully representable. */
-    fun genericClassCapabilityTypeOrNull(type: IrType): DotNetIlValueType.GenericInstance? {
-        val simpleType = type as? IrSimpleType ?: return null
-        val irClass = (simpleType.classifier as? IrClassSymbol)?.owner ?: return null
-        val info = genericClassInfoOrNull(irClass) ?: return null
-        if (simpleType.arguments.size != info.typedClassInfo.typeParameterCount) return null
-        val typedMapper = typedGenericClassView()
-        val arguments = simpleType.arguments.map { argument ->
-            val projection = argument as? IrTypeProjection ?: return null
-            if (projection.variance != Variance.INVARIANT || projection.type.isOpenNullableTypeParameter()) return null
-            typedMapper.toDotNetIlValueType(projection.type) ?: return null
+    /** Same-module bootstrap lookup for one erased stdlib generic-class owner. */
+    private fun stdlibGenericClassInfoOrNull(irClass: IrClass): DotNetGenericClassInfo? {
+        stdlibGenericClasses[irClass]?.let { return it }
+        val info = DotNetStdlibLibrary.publicGenericImplementationClassInfoOrNull(irClass) ?: return null
+        stdlibGenericClasses[irClass] = info
+        if (stdlibClassLinksInProgress.add(irClass)) {
+            try {
+                val baseType = irClass.dotNetBaseSuperTypeOrNull()
+                info.classInfo.baseType = baseType?.let(::toDotNetIlValueType)
+                info.classInfo.interfaces = irClass.dotNetDirectInterfaceTypes()
+                    .mapNotNull(::toDotNetIlImplementedInterfaceType)
+                    .distinct()
+            } finally {
+                stdlibClassLinksInProgress.remove(irClass)
+            }
         }
-        return DotNetIlValueType.GenericInstance(info.typedClassInfo, arguments)
+        return info
+    }
+
+    /** Same-module or fallback class graph for a public non-generic stdlib implementation. */
+    private fun stdlibClassInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
+        stdlibClasses[irClass]?.let { return it }
+        val info = DotNetStdlibLibrary.publicImplementationClassInfoOrNull(irClass) ?: return null
+        stdlibClasses[irClass] = info
+        if (stdlibClassLinksInProgress.add(irClass)) {
+            try {
+                info.baseType = irClass.dotNetBaseSuperTypeOrNull()?.let(::toDotNetIlValueType)
+                info.interfaces = irClass.dotNetDirectInterfaceTypes()
+                    .mapNotNull(::toDotNetIlImplementedInterfaceType)
+                    .distinct()
+            } finally {
+                stdlibClassLinksInProgress.remove(irClass)
+            }
+        }
+        return info
     }
 
     fun isSplitGenericInterfaceType(type: IrType): Boolean {
@@ -640,7 +660,7 @@ internal class DotNetIlTypeMapper private constructor(
             } else {
                 DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(member) ?: member.dotNetIlMethodName()
             },
-            ::isSplitGenericClass,
+            ::isErasedGenericClass,
         )
 
     /**
@@ -681,10 +701,7 @@ internal class DotNetIlTypeMapper private constructor(
         val runtimeGenericInfo = DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)
         val mappedComparableInfo = comparableInterfaceInfo.takeIf { irClass.isDotNetComparableClass() }
         val genericClassInfo = genericClassInfoOrNull(irClass)
-        return ((if (genericClassInfo != null) {
-            if (mapGenericClassesToTypedCapability) genericClassInfo.typedClassInfo
-            else genericClassInfo.canonicalClassInfo
-        } else null) ?: when (genericInterfaceMapping.physicalView) {
+        return (genericClassInfo?.classInfo ?: when (genericInterfaceMapping.physicalView) {
             DotNetGenericInterfaceView.CANONICAL ->
                 genericInterfaces[irClass]?.canonicalClassInfo
                     ?: mappedComparableInfo?.canonicalClassInfo
@@ -705,8 +722,8 @@ internal class DotNetIlTypeMapper private constructor(
                     ?: availableClasses[irClass]
         }
             ?: DotNetRuntimeTypes.classInfoFor(irClass)
-            ?: DotNetStdlibLibrary.publicImplementationClassInfoOrNull(irClass)
             ?: externalDeclarations.classInfoOrNull(irClass, this)
+            ?: stdlibClassInfoOrNull(irClass)
             ?: importedClrDeclarations.classInfoOrNull(irClass)).also { classInfo ->
             classInfo?.let(::recordAssemblyReference)
         }
@@ -715,8 +732,8 @@ internal class DotNetIlTypeMapper private constructor(
     fun referencedFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? =
         (comparableFunctionInfoOrNull(function)
             ?: DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
-            ?: DotNetStdlibLibrary.implementationFunctionInfoOrNull(function, this)
             ?: externalDeclarations.functionInfoOrNull(function, this)
+            ?: DotNetStdlibLibrary.implementationFunctionInfoOrNull(function, this)
             ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->
             functionInfo?.owner?.let(::recordAssemblyReference)
         }
@@ -729,25 +746,6 @@ internal class DotNetIlTypeMapper private constructor(
             signature = function.dotNetSignature(canonicalGenericInterfaceSignatureView()),
             physicalMethodName = "CompareTo",
         )
-    }
-
-    /** Exact typed generic-class source slot used only where Kotlin requires non-virtual `super`. */
-    fun typedGenericClassFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
-        val owner = function.parent as? IrClass ?: return null
-        val genericClassInfo = genericClassInfoOrNull(owner) ?: return null
-        val info = if (genericClasses.containsKey(owner)) {
-            DotNetIlFunctionInfo(
-                owner = genericClassInfo.typedClassInfo,
-                signature = function.dotNetSignature(typedGenericClassView()),
-                physicalMethodName = function.dotNetErasedCarrierMethodNameOrNull(::isSplitGenericClass)
-                    ?: function.dotNetIlMethodName(),
-            )
-        } else {
-            externalDeclarations.typedGenericClassFunctionInfoOrNull(function, this)
-        }
-        return info?.also { functionInfo ->
-            functionInfo.owner.let(::recordAssemblyReference)
-        }
     }
 
     /** Maps [type] in return position; CLR `void` is the return encoding of Kotlin `Unit`. */
@@ -794,13 +792,24 @@ internal class DotNetIlTypeMapper private constructor(
 
     private fun mapDotNetIlValueType(type: IrType): DotNetIlValueType? {
         DotNetRuntimeTypes.mapCompilerRuntimeType(type)?.let { return it }
-        if (
-            genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL &&
-            type.referencesErasedOwnerParameterForCurrentView()
-        ) {
-            val topClass = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
-            if (topClass == null || (!isSplitGenericInterface(topClass) && !isSplitGenericClass(topClass))) {
-                // A reified carrier such as Holder<T>, Array<T>, or T? has no single closed CLR
+        if (type.referencesErasedOwnerParameterForCurrentView()) {
+            if (type.isDotNetGenericArray()) {
+                // An erased class owner cannot choose one CLR vector element type for Array<T>.
+                // Preserve the actual vector object through the classified System.Array carrier;
+                // indexed operations already recover Kotlin reads/writes through its runtime path.
+                return DotNetIlValueType.ErasedGenericArray(coreLibrary.reference)
+            }
+            val simpleType = type as? IrSimpleType
+            val directParameterOwner = (simpleType?.classifier as? IrTypeParameterSymbol)
+                ?.owner
+                ?.parent as? IrClass
+            val isDirectErasedClassParameter =
+                directParameterOwner?.let(::isErasedGenericClass) == true
+            val topClass = (simpleType?.classifier as? IrClassSymbol)?.owner
+            if (!isDirectErasedClassParameter &&
+                (topClass == null || (!isSplitGenericInterface(topClass) && !isErasedGenericClass(topClass)))
+            ) {
+                // A reified carrier such as Holder<T> or T? has no single closed CLR
                 // instantiation once T belongs to a canonical non-generic interface. Object is
                 // the only identity-preserving universal carrier at this boundary.
                 return DotNetIlValueType.Object
@@ -924,25 +933,24 @@ internal class DotNetIlTypeMapper private constructor(
     /**
      * A class-like type maps while its user class is available or when it is a registered runtime
      * classifier; `C?` maps to the same
-     * `class 'C'` as `C` (the classifier lookup ignores nullability, like `string`). A GENERIC
-     * generic class or non-split CLR interface maps to a full
+     * `class 'C'` as `C` (the classifier lookup ignores nullability, like `string`). A
+     * Kotlin-owned generic class takes the erased-owner arm below. An imported generic class or
+     * non-split CLR interface maps to a full
      * [instantiation][DotNetIlValueType.GenericInstance] (a real CLR reified-generic shape), with
      * each type argument mapped recursively through this same mapper. An argument mentioning an
      * evicted class therefore fails the whole instantiation (the normal fixpoint-eviction rule).
      * Use-site variance projections (`Box<out T>`) and star projections remain unsupported for
-     * those reified shapes because ECMA-335 has no use-site variance. Kotlin-owned generic
-     * interfaces take the earlier split-interface arm instead: their canonical storage identity
+     * those foreign reified shapes because ECMA-335 has no use-site variance. Kotlin-owned
+     * generic interfaces take the earlier split-interface arm instead: their canonical storage identity
      * is non-generic, so projections and stars do not alter its CLR type and remain Kotlin
      * metadata rather than CLR generic conversions. Declaration-site variance is used only by
-     * the optional declared capability; generic classes stay structurally invariant.
+     * the optional declared interface capability.
      */
     private fun toUserClassTypeOrNull(type: IrType): DotNetIlValueType? {
         if (type !is IrSimpleType) return null
         val irClass = (type.classifier as? IrClassSymbol)?.owner ?: return null
         val genericClassInfo = genericClassInfoOrNull(irClass)
-        if (genericClassInfo != null && !mapGenericClassesToTypedCapability) {
-            return DotNetIlValueType.UserClass(genericClassInfo.canonicalClassInfo)
-        }
+        if (genericClassInfo != null) return DotNetIlValueType.UserClass(genericClassInfo.classInfo)
         if (
             isSplitGenericInterface(irClass) &&
             (genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL ||
@@ -1007,11 +1015,21 @@ internal class DotNetIlTypeMapper private constructor(
         }
         val parentGenericInterface = (typeParameter.parent as? IrClass)
             ?.takeIf(::isSplitGenericInterface)
+        val parentGenericClass = (typeParameter.parent as? IrClass)
+            ?.takeIf(::isErasedGenericClass)
         if (
             genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL &&
             parentGenericInterface != null
         ) {
             return DotNetIlValueType.Object
+        }
+        if (parentGenericClass != null) {
+            val erasedUpperBound = type.erasedUpperBound
+            return if (erasedUpperBound == parentGenericClass || erasedUpperBound.defaultType == type) {
+                DotNetIlValueType.Object
+            } else {
+                toDotNetIlValueType(erasedUpperBound.defaultType) ?: DotNetIlValueType.Object
+            }
         }
         return DotNetIlValueType.TypeParameter(
             typeParameter.index,
@@ -1037,10 +1055,15 @@ internal class DotNetIlTypeMapper private constructor(
     private fun IrType.referencesErasedOwnerParameterForCurrentView(): Boolean {
         val simpleType = this as? IrSimpleType ?: return false
         val parameterOwner = (simpleType.classifier as? IrTypeParameterSymbol)?.owner?.parent as? IrClass
-        if (parameterOwner != null &&
-            (isSplitGenericInterface(parameterOwner) ||
-                    !mapGenericClassesToTypedCapability && isSplitGenericClass(parameterOwner))
-        ) return true
+        if (parameterOwner != null) {
+            if (isErasedGenericClass(parameterOwner)) return true
+            if (
+                genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL &&
+                isSplitGenericInterface(parameterOwner)
+            ) {
+                return true
+            }
+        }
         return simpleType.arguments.any { argument ->
             (argument as? IrTypeProjection)?.type?.referencesErasedOwnerParameterForCurrentView() == true
         }
@@ -1061,8 +1084,7 @@ internal class DotNetIlTypeMapper private constructor(
     }
 
     private fun recordAssemblyReferences(info: DotNetGenericClassInfo) {
-        recordAssemblyReference(info.canonicalClassInfo)
-        recordAssemblyReference(info.typedClassInfo)
+        recordAssemblyReference(info.classInfo)
     }
 
     private fun recordAssemblyReferences(type: DotNetIlValueType) {
@@ -1105,9 +1127,11 @@ internal class DotNetIlTypeMapper private constructor(
  * `System.String` cannot implement that interface. KLIB retains the authoritative bound and
  * member operations classify the boxed/widened value at runtime.
  * A bound on another type parameter is normally retained as its positional `!n`/`!!n` TypeSpec.
- * The exception is a method bound which depends on a type parameter of a split Kotlin generic
- * interface. Such a relationship remains part of the logical Kotlin signature, but is omitted
- * from every executable CLR view of that member. A CLR variant interface containing `R : T`
+ * The exceptions are method bounds which depend on a type parameter of a split Kotlin generic
+ * interface or of a declaration-erased Kotlin class. Such a relationship remains part of the
+ * logical Kotlin signature, but the erased physical owner has no CLR `T` token with which to
+ * encode it. It is therefore omitted from that owner's executable metadata while the structural
+ * codegen model retains the available erased carrier. A CLR variant interface containing `R : T`
  * load-fails when `T` is variant, while retaining the constraint only on an invariant exact DIM
  * rejects valid Kotlin calls through a widened declaration-site-variance view. Portable closed
  * value-type views cannot express the substituted relationship either. The exact view still
@@ -1154,10 +1178,19 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
                 return@mapIndexedNotNull Triple(1, index, mappedBound)
             }
             val boundParameter = (simpleBound.classifier as? IrTypeParameterSymbol)?.owner
+            val erasedClassOwner = (boundParameter?.parent as? IrClass)
+                ?.takeIf(typeMapper::isErasedGenericClass)
+            if (erasedClassOwner != null) {
+                if (forMetadata) return@mapIndexedNotNull null
+                val carrier = typeMapper.toDotNetIlValueType(bound) ?: DotNetIlValueType.Object
+                return@mapIndexedNotNull Triple(2, index, carrier)
+            }
             if (
                 forMetadata && boundParameter != null &&
                 (origin == DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER ||
-                        (boundParameter.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true)
+                        (boundParameter.parent as? IrClass)?.let { owner ->
+                            typeMapper.isSplitGenericInterface(owner) || typeMapper.isErasedGenericClass(owner)
+                        } == true)
             ) {
                 return@mapIndexedNotNull null
             }
@@ -1244,15 +1277,15 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
  * The shared generic type-parameter gate: a supported parameter is non-reified and is either
  * unconstrained (`Any?`), logically non-null but physically unconstrained (`Any`), or has direct
  * non-null type-parameter or non-generic class/interface bounds.
- * [allowDeclarationSiteVariance] is true only for generic interfaces, the sole Kotlin
- * declaration kind in this backend that has a direct CLR `+`/`-` metadata representation;
- * classes and functions remain invariant. [dotNetConstraintTypes] performs the live
+ * [allowDeclarationSiteVariance] is true for generic interfaces, which preserve it directly in
+ * CLR metadata, and for erased Kotlin-owned generic classes, whose variance remains in KLIB and
+ * compiler assignability without producing CLR class variance. Functions remain invariant.
+ * [dotNetConstraintTypes] performs the live
  * module-local mapping later, once the class registry exists. Everything else is rejected loudly
  * at the declaration (never erased):
  * - `reified` requires target support for the reified operations that can survive ordinary inlining;
- * - declaration-site variance (`out`/`in`) is rejected outside interfaces because ECMA-335
- *   (II.10.1.7) allows variance only on interfaces and delegates; emitting a Kotlin class's
- *   variance as invariant would silently change assignability;
+ * - declaration-site variance (`out`/`in`) is rejected unless the owner has either the direct
+ *   interface representation or the erased Kotlin class representation above;
  * - nullable and generic-instantiation constraints stay outside this stage; direct bounds on
  *   another owner or method type parameter are represented by CLR VAR/MVAR TypeSpecs. ONE
  *   pre-existing exception, enabled by

@@ -84,11 +84,10 @@ internal class DotNetIlClassCodegen(
             isAbstract -> "$visibility abstract auto ansi$beforeFieldInit"
             else -> "$visibility auto ansi$sealed$beforeFieldInit"
         }
-        // A generic class appends its formal type-parameter list right after the (arity-
-        // suffixed) name: `.class ... 'demo.Box`1'<'T'>` — quoted parameter names probe-verified
-        // (genprobe_s8; the bare spelling genprobe_s2). [baseClassRef] then carries a full
-        // instantiation token when the base is generic (`extends class 'demo.Box`1'<int32>`,
-        // genprobe_s5).
+        // A reified CLR TypeDef (for example a split-interface capability) appends its formal
+        // type-parameter list right after the arity-suffixed name. Kotlin-owned ordinary generic
+        // classes pass no list here: their one physical owner is declaration-erased. A genuinely
+        // generic CLR base reference still carries its complete instantiation token.
         builder.appendLine(".class $flags ${className.toIlIdentifier()}${genericParameters.orEmpty()}")
         if (!isInterface) {
             builder.appendLine("       extends ${baseClassRef ?: "${coreLibraryReference}System.Object"}")

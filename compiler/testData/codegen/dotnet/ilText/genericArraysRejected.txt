@@ -17,6 +17,32 @@
     ret
   }
 }
+.class public auto ansi sealed beforefieldinit 'test.genericarrays.rejected.NullableElements'
+       extends [mscorlib]System.Object
+{
+  .field private class [mscorlib]System.Array 'values'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Array 'values') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class [mscorlib]System.Array 'test.genericarrays.rejected.NullableElements'::'values'
+    ret
+  }
+  .method public hidebysig specialname instance class [mscorlib]System.Array 'get_values'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class [mscorlib]System.Array 'test.genericarrays.rejected.NullableElements'::'values'
+    ret
+  }
+  .property instance class [mscorlib]System.Array 'values'()
+  {
+    .get instance class [mscorlib]System.Array 'test.genericarrays.rejected.NullableElements'::'get_values'()
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'test.genericarrays.rejected.genericArraysRejectedKt'
        extends [mscorlib]System.Object
 {

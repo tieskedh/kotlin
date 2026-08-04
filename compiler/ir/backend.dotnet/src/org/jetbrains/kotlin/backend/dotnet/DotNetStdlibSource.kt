@@ -18,6 +18,10 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/collections/DotNetStdlibCollections.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetStringBuilder.kt",
+        "dotnet/src/kotlin/text/DotNetStringBuilder.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetStdlibKotlin.kt",
         "dotnet/src/kotlin/DotNetStdlibKotlin.kt",
     ),
@@ -44,6 +48,26 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "_DotNetBootstrapCollections.kt",
         "dotnet/common/src/generated/_DotNetBootstrapCollections.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapAppendable.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapAppendable.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapStringBuilder.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapStringBuilder.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapKotlin.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapKotlin.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapJsName.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapJsName.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
@@ -101,6 +125,16 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "throwNoWhenBranchMatchedException.kt",
         "src/kotlin/internal/throwNoWhenBranchMatchedException.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "AbstractCollection.kt",
+        "src/kotlin/collections/AbstractCollection.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "AbstractList.kt",
+        "src/kotlin/collections/AbstractList.kt",
         isCommon = true,
     ),
 ).sortedBy(DotNetStdlibSourceResource::path)

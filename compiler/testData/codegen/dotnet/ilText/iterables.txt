@@ -260,7 +260,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'ViewedIterable'
        extends [mscorlib]System.Object
-       implements 'IterableView', class 'IterableView`1'<string>
+       implements 'IterableView', class 'IterableView`1'<string>, class [Kotlin.Runtime]'Kotlin.Collections.Iterable`1'<string>
 {
   .field private string 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed

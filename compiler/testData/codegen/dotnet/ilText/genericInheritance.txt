@@ -1,9 +1,4 @@
 .assembly extern mscorlib {}
-.assembly extern System
-{
-  .ver 4:0:0:0
-  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
-}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -11,109 +6,84 @@
 .assembly 'genericInheritance' {}
 .module 'main-genericInheritance.il'
 
-.class interface public abstract auto ansi 'Box'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance object 'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance object 'describe__KotlinErased__95219811e487b87dcf8b73f6e6fe2f63'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-}
-.class public auto ansi beforefieldinit 'Box`1'<'T'>
+.class public auto ansi beforefieldinit 'Box'
        extends [mscorlib]System.Object
-       implements 'Box'
 {
-  .field private !0 'value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  .field private object 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'value') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'Box`1'<!0>::'value'
+    stfld object 'Box'::'value'
     ret
   }
-  .method private hidebysig specialname instance !0 'get_value'() cil managed
+  .method private hidebysig specialname instance object 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'Box`1'<!0>::'value'
+    ldfld object 'Box'::'value'
     ret
   }
-  .method private hidebysig specialname instance void 'set_value'(!0 '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_value'(object '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    stfld !0 class 'Box`1'<!0>::'value'
+    stfld object 'Box'::'value'
     ret
   }
-  .method public hidebysig instance !0 'get'() cil managed
+  .method public hidebysig instance object 'get'() cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance !0 class 'Box`1'<!0>::'get_value'()
+    call instance object 'Box'::'get_value'()
     ret
   }
-  .method public hidebysig newslot virtual instance !0 'describe'() cil managed
+  .method public hidebysig newslot virtual instance object 'describe'() cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance !0 class 'Box`1'<!0>::'get_value'()
+    call instance object 'Box'::'get_value'()
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-get>'() cil managed
+  .property instance object 'value'()
   {
-    .override method instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'Box`1'<!0>
-    call instance !0 class 'Box`1'<!0>::'get'()
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-describe>'() cil managed
-  {
-    .override method instance object 'Box'::'describe__KotlinErased__95219811e487b87dcf8b73f6e6fe2f63'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'Box`1'<!0>
-    callvirt instance !0 class 'Box`1'<!0>::'describe'()
-    box !0
-    ret
-  }
-  .property instance !0 'value'()
-  {
-    .get instance !0 'Box`1'::'get_value'()
-    .set instance void 'Box`1'::'set_value'(!0)
+    .get instance object 'Box'::'get_value'()
+    .set instance void 'Box'::'set_value'(object)
   }
 }
 .class public auto ansi sealed beforefieldinit 'IntBox'
-       extends class 'Box`1'<int32>
+       extends 'Box'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'v') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    call instance void class 'Box`1'<int32>::.ctor(!0)
+    box [mscorlib]System.Int32
+    call instance void 'Box'::.ctor(object)
     ret
   }
-  .method public hidebysig virtual instance int32 'describe'() cil managed
+  .method public hidebysig newslot virtual instance int32 'describe'() cil managed
   {
     .maxstack 2
     ldarg.0
-    call instance !0 class 'Box`1'<int32>::'describe'()
+    call instance object 'Box'::'describe'()
+    unbox.any [mscorlib]System.Int32
     ldc.i4 1000
     add
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<CovariantReturnBridge-Box-describe-4a0e3dd3ca9d28f4d740bbd39ba1f6e3>'() cil managed
+  {
+    .override method instance object 'Box'::'describe'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'IntBox'::'describe'()
+    box [mscorlib]System.Int32
     ret
   }
 }
@@ -124,7 +94,7 @@
   }
 }
 .class public auto ansi sealed beforefieldinit 'LabeledBox'
-       extends class 'Box`1'<int32>
+       extends 'Box'
        implements 'Labeled'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'v') cil managed
@@ -132,7 +102,8 @@
     .maxstack 2
     ldarg.0
     ldarg.1
-    call instance void class 'Box`1'<int32>::.ctor(!0)
+    box [mscorlib]System.Int32
+    call instance void 'Box'::.ctor(object)
     ret
   }
   .method public hidebysig newslot virtual instance string 'label'() cil managed
@@ -159,45 +130,25 @@
     ret
   }
 }
-.class interface public abstract auto ansi 'GDerived'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_payload__KotlinErased__e06f1124dba8d319b17c498ccc18f701'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance string 'name__KotlinErased__cad25d5f011470ca03fb979c257bf817'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'payload__KotlinErased__e06f1124dba8d319b17c498ccc18f701'()
-  {
-    .get instance object 'GDerived'::'get_payload__KotlinErased__e06f1124dba8d319b17c498ccc18f701'()
-  }
-}
-.class public auto ansi sealed beforefieldinit 'GDerived`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'GDerived'
        extends 'PlainBase'
-       implements 'GDerived'
 {
-  .field private !0 'payload'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'payload') cil managed
+  .field private object 'payload'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'payload') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void 'PlainBase'::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'GDerived`1'<!0>::'payload'
+    stfld object 'GDerived'::'payload'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_payload'() cil managed
+  .method public hidebysig specialname instance object 'get_payload'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'GDerived`1'<!0>::'payload'
+    ldfld object 'GDerived'::'payload'
     ret
   }
   .method public hidebysig virtual instance string 'name'() cil managed
@@ -206,28 +157,9 @@
     ldstr "generic-derived"
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-payload>>'() cil managed
+  .property instance object 'payload'()
   {
-    .override method instance object 'GDerived'::'get_payload__KotlinErased__e06f1124dba8d319b17c498ccc18f701'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GDerived`1'<!0>
-    call instance !0 class 'GDerived`1'<!0>::'get_payload'()
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-name>'() cil managed
-  {
-    .override method instance string 'GDerived'::'name__KotlinErased__cad25d5f011470ca03fb979c257bf817'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GDerived`1'<!0>
-    callvirt instance string class 'GDerived`1'<!0>::'name'()
-    ret
-  }
-  .property instance !0 'payload'()
-  {
-    .get instance !0 'GDerived`1'::'get_payload'()
+    .get instance object 'GDerived'::'get_payload'()
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'genericInheritanceKt'
@@ -240,19 +172,16 @@
     .locals init (
       [0] class 'IntBox' 'ib',
       [1] class 'Box' 'asBase',
-      [2] class 'Box' '<genericClassReceiver>',
-      [3] class 'Box`1'<int32> '<genericClassCapability>',
-      [4] int32 '<genericClassResult>',
-      [5] class 'LabeledBox' 'lb',
-      [6] class 'Labeled' 'asLabeled',
-      [7] class 'GDerived' 'g',
-      [8] class 'PlainBase' 'asPlain'
+      [2] class 'LabeledBox' 'lb',
+      [3] class 'Labeled' 'asLabeled',
+      [4] class 'GDerived' 'g',
+      [5] class 'PlainBase' 'asPlain'
     )
     ldc.i4 42
     newobj instance void 'IntBox'::.ctor(int32)
     stloc.0
     ldloc.0
-    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
+    call instance object 'Box'::'get'()
     unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
@@ -269,23 +198,8 @@
     ldloc.0
     stloc.1
     ldloc.1
-    stloc.2
-    ldloc.2
-    isinst class 'Box`1'<int32>
-    stloc.3
-    ldloc.3
-    brfalse IL_genericClassCanonicalFallback_0
-    ldloc.3
-    callvirt instance !0 class 'Box`1'<int32>::'describe'()
-    stloc 4
-    br IL_genericClassJoin_1
-IL_genericClassCanonicalFallback_0:
-    ldloc.2
-    callvirt instance object 'Box'::'describe__KotlinErased__95219811e487b87dcf8b73f6e6fe2f63'()
+    callvirt instance object 'Box'::'describe'()
     unbox.any [mscorlib]System.Int32
-    stloc 4
-IL_genericClassJoin_1:
-    ldloc 4
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -293,14 +207,14 @@ IL_genericClassJoin_1:
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 5
     newobj instance void 'LabeledBox'::.ctor(int32)
-    stloc 5
-    ldloc 5
-    stloc 6
-    ldloc 6
+    stloc.2
+    ldloc.2
+    stloc.3
+    ldloc.3
     callvirt instance string 'Labeled'::'label'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 5
-    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
+    ldloc.2
+    call instance object 'Box'::'get'()
     unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
@@ -308,21 +222,19 @@ IL_genericClassJoin_1:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "p"
-    newobj instance void class 'GDerived`1'<string>::.ctor(!0)
-    stloc 7
-    ldloc 7
-    castclass class 'GDerived`1'<string>
-    callvirt instance string class 'GDerived`1'<string>::'name'()
+    newobj instance void 'GDerived'::.ctor(object)
+    stloc 4
+    ldloc 4
+    callvirt instance string 'GDerived'::'name'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 7
-    castclass class 'PlainBase'
-    stloc 8
-    ldloc 8
+    ldloc 4
+    stloc 5
+    ldloc 5
     callvirt instance string 'PlainBase'::'name'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 7
-    castclass class 'GDerived`1'<string>
-    call instance !0 class 'GDerived`1'<string>::'get_payload'()
+    ldloc 4
+    call instance object 'GDerived'::'get_payload'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

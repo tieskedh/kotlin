@@ -11,88 +11,25 @@
 .assembly 'genericDataClassDefaults' {}
 .module 'main-genericDataClassDefaults.il'
 
-.class interface public abstract auto ansi 'GenericDefaultData'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__2267b7411070548175de0c159685540c'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig specialname newslot abstract virtual instance string 'get_label__KotlinErased__3e97eb3d903b4fddf10e9d3aef1d5c63'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance object 'component1__KotlinErased__4d00dcbd055b719bcaffbcaebe2ff29f'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance string 'component2__KotlinErased__0d12068468fda01414c065737cfe5db9'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance class 'GenericDefaultData' 'copy__KotlinErased__ff1f9c30ff0f31a7d72b89a4673a0a82'(object 'value', string 'label') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance string 'ToString__KotlinErased__ee3975f3d1ec5fd5b7f2ddd9b36bdb1c'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance int32 'GetHashCode__KotlinErased__95e1aecbd3c282230347a3f34235aa08'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance bool 'Equals__KotlinErased__8d5deedbda77c03395700c77a6283088'(object 'other') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'value__KotlinErased__2267b7411070548175de0c159685540c'()
-  {
-    .get instance object 'GenericDefaultData'::'get_value__KotlinErased__2267b7411070548175de0c159685540c'()
-  }
-  .property instance string 'label__KotlinErased__3e97eb3d903b4fddf10e9d3aef1d5c63'()
-  {
-    .get instance string 'GenericDefaultData'::'get_label__KotlinErased__3e97eb3d903b4fddf10e9d3aef1d5c63'()
-  }
-}
-.class public auto ansi sealed beforefieldinit 'GenericDefaultData`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'GenericDefaultData'
        extends [mscorlib]System.Object
-       implements 'GenericDefaultData', 'GenericDefaultData`1'/'<DataClassErasedView>'
 {
-  .class nested private interface abstract auto ansi '<DataClassErasedView>'
-  {
-    .method public hidebysig newslot abstract virtual instance object '<DataClassComponent0>'() cil managed
-    {
-    }
-    .method public hidebysig newslot abstract virtual instance object '<DataClassComponent1>'() cil managed
-    {
-    }
-  }
-  .field private !0 'value'
+  .field private object 'value'
   .field private string 'label'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value', string 'label') cil managed
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'value', string 'label') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'GenericDefaultData`1'<!0>::'value'
+    stfld object 'GenericDefaultData'::'value'
     ldarg.0
     ldarg.2
-    stfld string class 'GenericDefaultData`1'<!0>::'label'
+    stfld string 'GenericDefaultData'::'label'
     ret
   }
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value', string 'label', int32 '$mask0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.DefaultConstructorMarker' '$marker') cil managed
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'value', string 'label', int32 '$mask0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.DefaultConstructorMarker' '$marker') cil managed
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
@@ -113,46 +50,46 @@ IL_whenEnd_0:
     ldarg.0
     ldarg.1
     ldarg.2
-    call instance void class 'GenericDefaultData`1'<!0>::.ctor(!0, string)
+    call instance void 'GenericDefaultData'::.ctor(object, string)
     ret
   }
-  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  .method public hidebysig specialname instance object 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'GenericDefaultData`1'<!0>::'value'
+    ldfld object 'GenericDefaultData'::'value'
     ret
   }
   .method public hidebysig specialname instance string 'get_label'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld string class 'GenericDefaultData`1'<!0>::'label'
+    ldfld string 'GenericDefaultData'::'label'
     ret
   }
-  .method public hidebysig instance !0 'component1'() cil managed
+  .method public hidebysig instance object 'component1'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'GenericDefaultData`1'<!0>::'value'
+    ldfld object 'GenericDefaultData'::'value'
     ret
   }
   .method public hidebysig instance string 'component2'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld string class 'GenericDefaultData`1'<!0>::'label'
+    ldfld string 'GenericDefaultData'::'label'
     ret
   }
-  .method public hidebysig instance class 'GenericDefaultData`1'<!0> 'copy'(!0 'value', string 'label') cil managed
+  .method public hidebysig instance class 'GenericDefaultData' 'copy'(object 'value', string 'label') cil managed
   {
     .maxstack 2
     ldarg.1
     ldarg.2
-    newobj instance void class 'GenericDefaultData`1'<!0>::.ctor(!0, string)
+    newobj instance void 'GenericDefaultData'::.ctor(object, string)
     ret
   }
-  .method public hidebysig instance class 'GenericDefaultData`1'<!0> 'copy$default'(!0 'value', string 'label', int32 '$mask0') cil managed
+  .method public hidebysig instance class 'GenericDefaultData' 'copy$default'(object 'value', string 'label', int32 '$mask0') cil managed
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
@@ -166,7 +103,7 @@ IL_whenEnd_0:
     ceq
     brfalse IL_whenNext_1
     ldarg.0
-    ldfld !0 class 'GenericDefaultData`1'<!0>::'value'
+    ldfld object 'GenericDefaultData'::'value'
     starg 1
     br IL_whenEnd_0
 IL_whenNext_1:
@@ -180,7 +117,7 @@ IL_whenEnd_0:
     ceq
     brfalse IL_whenNext_3
     ldarg.0
-    ldfld string class 'GenericDefaultData`1'<!0>::'label'
+    ldfld string 'GenericDefaultData'::'label'
     starg 2
     br IL_whenEnd_2
 IL_whenNext_3:
@@ -188,7 +125,7 @@ IL_whenEnd_2:
     ldarg.0
     ldarg.1
     ldarg.2
-    call instance class 'GenericDefaultData`1'<!0> class 'GenericDefaultData`1'<!0>::'copy'(!0, string)
+    call instance class 'GenericDefaultData' 'GenericDefaultData'::'copy'(object, string)
     ret
   }
   .method public hidebysig virtual instance string 'ToString'() cil managed
@@ -196,14 +133,13 @@ IL_whenEnd_2:
     .maxstack 2
     ldstr "GenericDefaultData(value="
     ldarg.0
-    ldfld !0 class 'GenericDefaultData`1'<!0>::'value'
-    box !0
+    ldfld object 'GenericDefaultData'::'value'
     call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
     call string [mscorlib]System.String::Concat(string, string)
     ldstr ", label="
     call string [mscorlib]System.String::Concat(string, string)
     ldarg.0
-    ldfld string class 'GenericDefaultData`1'<!0>::'label'
+    ldfld string 'GenericDefaultData'::'label'
     call string [mscorlib]System.String::Concat(string, string)
     ldstr ")"
     call string [mscorlib]System.String::Concat(string, string)
@@ -216,17 +152,15 @@ IL_whenEnd_2:
       [0] int32 'result'
     )
     ldarg.0
-    ldfld !0 class 'GenericDefaultData`1'<!0>::'value'
-    box !0
+    ldfld object 'GenericDefaultData'::'value'
     ldnull
-    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    ceq
     brfalse IL_whenNext_1
     ldc.i4 0
     br IL_whenEnd_0
 IL_whenNext_1:
     ldarg.0
-    ldfld !0 class 'GenericDefaultData`1'<!0>::'value'
-    box !0
+    ldfld object 'GenericDefaultData'::'value'
     call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
 IL_whenEnd_0:
     stloc.0
@@ -234,7 +168,7 @@ IL_whenEnd_0:
     ldc.i4 31
     mul
     ldarg.0
-    ldfld string class 'GenericDefaultData`1'<!0>::'label'
+    ldfld string 'GenericDefaultData'::'label'
     call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
     add
     stloc.0
@@ -245,7 +179,7 @@ IL_whenEnd_0:
   {
     .maxstack 2
     .locals init (
-      [0] class 'GenericDefaultData`1'/'<DataClassErasedView>' 'tmp0_other_erased_view'
+      [0] class 'GenericDefaultData' 'tmp0_other_with_cast'
     )
     ldarg.0
     ldarg.1
@@ -255,7 +189,7 @@ IL_whenEnd_0:
     ret
 IL_whenNext_1:
     ldarg.1
-    isinst class 'GenericDefaultData`1'/'<DataClassErasedView>'
+    isinst class 'GenericDefaultData'
     ldnull
     ceq
     brfalse IL_whenNext_3
@@ -263,13 +197,12 @@ IL_whenNext_1:
     ret
 IL_whenNext_3:
     ldarg.1
-    castclass class 'GenericDefaultData`1'/'<DataClassErasedView>'
+    castclass class 'GenericDefaultData'
     stloc.0
     ldarg.0
-    ldfld !0 class 'GenericDefaultData`1'<!0>::'value'
-    box !0
+    ldfld object 'GenericDefaultData'::'value'
     ldloc.0
-    callvirt instance object 'GenericDefaultData`1'/'<DataClassErasedView>'::'<DataClassComponent0>'()
+    ldfld object 'GenericDefaultData'::'value'
     call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
     ldc.i4.0
     ceq
@@ -278,10 +211,10 @@ IL_whenNext_3:
     ret
 IL_whenNext_5:
     ldarg.0
-    ldfld string class 'GenericDefaultData`1'<!0>::'label'
+    ldfld string 'GenericDefaultData'::'label'
     ldloc.0
-    callvirt instance object 'GenericDefaultData`1'/'<DataClassErasedView>'::'<DataClassComponent1>'()
-    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    ldfld string 'GenericDefaultData'::'label'
+    call bool [mscorlib]System.String::op_Equality(string, string)
     ldc.i4.0
     ceq
     brfalse IL_whenNext_7
@@ -291,108 +224,13 @@ IL_whenNext_7:
     ldc.i4.1
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<DataClassComponent0>'() cil managed
+  .property instance object 'value'()
   {
-    .override method instance object 'GenericDefaultData`1'/'<DataClassErasedView>'::'<DataClassComponent0>'()
-    .maxstack 1
-    ldarg.0
-    ldfld !0 class 'GenericDefaultData`1'<!0>::'value'
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<DataClassComponent1>'() cil managed
-  {
-    .override method instance object 'GenericDefaultData`1'/'<DataClassErasedView>'::'<DataClassComponent1>'()
-    .maxstack 1
-    ldarg.0
-    ldfld string class 'GenericDefaultData`1'<!0>::'label'
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
-  {
-    .override method instance object 'GenericDefaultData'::'get_value__KotlinErased__2267b7411070548175de0c159685540c'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericDefaultData`1'<!0>
-    call instance !0 class 'GenericDefaultData`1'<!0>::'get_value'()
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-<get-label>>'() cil managed
-  {
-    .override method instance string 'GenericDefaultData'::'get_label__KotlinErased__3e97eb3d903b4fddf10e9d3aef1d5c63'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericDefaultData`1'<!0>
-    call instance string class 'GenericDefaultData`1'<!0>::'get_label'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-component1>'() cil managed
-  {
-    .override method instance object 'GenericDefaultData'::'component1__KotlinErased__4d00dcbd055b719bcaffbcaebe2ff29f'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericDefaultData`1'<!0>
-    call instance !0 class 'GenericDefaultData`1'<!0>::'component1'()
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-component2>'() cil managed
-  {
-    .override method instance string 'GenericDefaultData'::'component2__KotlinErased__0d12068468fda01414c065737cfe5db9'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericDefaultData`1'<!0>
-    call instance string class 'GenericDefaultData`1'<!0>::'component2'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance class 'GenericDefaultData' '<GenericClassCanonicalBridge-copy>'(object 'value', string 'label') cil managed
-  {
-    .override method instance class 'GenericDefaultData' 'GenericDefaultData'::'copy__KotlinErased__ff1f9c30ff0f31a7d72b89a4673a0a82'(object, string)
-    .maxstack 3
-    ldarg.0
-    castclass class 'GenericDefaultData`1'<!0>
-    ldarg.1
-    unbox.any !0
-    ldarg.2
-    call instance class 'GenericDefaultData`1'<!0> class 'GenericDefaultData`1'<!0>::'copy'(!0, string)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-toString>'() cil managed
-  {
-    .override method instance string 'GenericDefaultData'::'ToString__KotlinErased__ee3975f3d1ec5fd5b7f2ddd9b36bdb1c'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericDefaultData`1'<!0>
-    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance int32 '<GenericClassCanonicalBridge-hashCode>'() cil managed
-  {
-    .override method instance int32 'GenericDefaultData'::'GetHashCode__KotlinErased__95e1aecbd3c282230347a3f34235aa08'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericDefaultData`1'<!0>
-    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-equals>'(object 'other') cil managed
-  {
-    .override method instance bool 'GenericDefaultData'::'Equals__KotlinErased__8d5deedbda77c03395700c77a6283088'(object)
-    .maxstack 2
-    ldarg.0
-    castclass class 'GenericDefaultData`1'<!0>
-    ldarg.1
-    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
-    ret
-  }
-  .property instance !0 'value'()
-  {
-    .get instance !0 'GenericDefaultData`1'::'get_value'()
+    .get instance object 'GenericDefaultData'::'get_value'()
   }
   .property instance string 'label'()
   {
-    .get instance string 'GenericDefaultData`1'::'get_label'()
+    .get instance string 'GenericDefaultData'::'get_label'()
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'genericDataClassDefaultsKt'
@@ -402,53 +240,35 @@ IL_whenNext_7:
   {
     .maxstack 4
     ldc.i4 3
+    box [mscorlib]System.Int32
     ldnull
     ldc.i4 2
     ldnull
-    newobj instance void class 'GenericDefaultData`1'<int32>::.ctor(!0, string, int32, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.DefaultConstructorMarker')
+    newobj instance void 'GenericDefaultData'::.ctor(object, string, int32, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.DefaultConstructorMarker')
     ret
   }
   .method public hidebysig static class 'GenericDefaultData' 'copiedGenericData'() cil managed
   {
     .maxstack 4
     ldc.i4 3
+    box [mscorlib]System.Int32
     ldnull
     ldc.i4 2
     ldnull
-    newobj instance void class 'GenericDefaultData`1'<int32>::.ctor(!0, string, int32, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.DefaultConstructorMarker')
+    newobj instance void 'GenericDefaultData'::.ctor(object, string, int32, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.DefaultConstructorMarker')
     ldc.i4 4
+    box [mscorlib]System.Int32
     ldnull
     ldc.i4 2
-    call instance class 'GenericDefaultData`1'<!0> class 'GenericDefaultData`1'<int32>::'copy$default'(!0, string, int32)
+    call instance class 'GenericDefaultData' 'GenericDefaultData'::'copy$default'(object, string, int32)
     ret
   }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
     .maxstack 1
-    .locals init (
-      [0] class 'GenericDefaultData' '<genericClassReceiver>',
-      [1] class 'GenericDefaultData`1'<int32> '<genericClassCapability>',
-      [2] string '<genericClassResult>'
-    )
     call class 'GenericDefaultData' 'genericDataClassDefaultsKt'::'defaultGenericData'()
-    castclass class 'GenericDefaultData'
-    stloc.0
-    ldloc.0
-    isinst class 'GenericDefaultData`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericClassCanonicalFallback_0
-    ldloc.1
-    call instance string class 'GenericDefaultData`1'<int32>::'get_label'()
-    stloc.2
-    br IL_genericClassJoin_1
-IL_genericClassCanonicalFallback_0:
-    ldloc.0
-    callvirt instance string 'GenericDefaultData'::'get_label__KotlinErased__3e97eb3d903b4fddf10e9d3aef1d5c63'()
-    stloc.2
-IL_genericClassJoin_1:
-    ldloc.2
+    call instance string 'GenericDefaultData'::'get_label'()
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

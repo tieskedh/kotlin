@@ -1,363 +1,254 @@
-# ADR: erased identity and typed capability for generic classes
+# ADR: erased ABI for Kotlin-owned generic classes
 
 - Status: **Accepted — pre-ABI**
-- Date: 2026-08-01
-- Scope: Kotlin-owned ordinary generic classes, projections, casts, runtime
-  identity, member dispatch, inheritance, and CLR consumption
-
-This is the selected direction for the experimental target. It is not a
-public KEEP or an official Kotlin target commitment. Generic interfaces keep
-their separate split-interface decision; arrays keep their structural vector
-decisions.
-
-KLIB metadata remains authoritative for the Kotlin declaration, arguments,
-variance, projections, nullability, and bounds. The physical binding records
-every CLR view explicitly.
-
-## Common contract
-
-Kotlin runtime class identity erases generic arguments. For one Kotlin class
-declaration `Box<T>`:
-
-- `Box<String>`, `Box<Int>`, and `Box<*>` share one runtime classifier;
-- `value is Box<*>` tests the declaration and not a constructed type;
-- an unchecked `value as Box<Int>` accepts a `Box<String>` object, while a
-  later read or call may fail when the erased result or argument is narrowed;
-- declaration- and use-site variance change the legal operations, not object
-  identity;
-- casts and projected views preserve `===`, mutation, virtual dispatch, and
-  the original object; and
-- subclasses satisfy erased tests of every generic base declaration in their
-  Kotlin inheritance chain.
-
-The representation must therefore support typed use after a successful
-erased cast. A predicate which reports success but leaves a physically
-incompatible `C<U>` receiver is not an implementation of the Common contract.
-
-## Mature-target evidence
-
-- JVM emits one raw class identity. Generic signatures describe source-facing
-  constructions, while `instanceof` and `checkcast` use the erased class and
-  bridge/member boundaries cast erased values as required.
-- JS tests the one generated Kotlin constructor/class identity. Type
-  arguments do not produce JavaScript constructors or participate in
-  `instanceof`; member bodies operate on the same object.
-- Native's type-operator lowering explicitly erases type parameters before
-  checked and safe casts. Runtime subtype tests use declaration type
-  information, while generic call results are narrowed at their use boundary.
-- Wasm maps a Kotlin type to its `erasedUpperBound` runtime class. Reference
-  storage and `ref.test`/`ref.cast` therefore name the declaration class, not
-  a constructed generic runtime type.
-
-All four models separate logical generic construction from runtime class
-identity. None makes a closed target-generic instantiation Kotlin identity.
-
-## CLR constraint
-
-CLR constructed classes are reified and invariant. `Box<String>` and
-`Box<Int32>` are distinct runtime types, and neither is assignable to
-`Box<Object>`. A CLR check against any one construction is consequently too
-narrow for Kotlin.
-
-The CLR also provides valuable facilities which Kotlin need not discard:
-typed generic classes, unboxed value arguments, typed fields and methods,
-native generic inheritance, and natural C# construction/subclassing. Those
-facilities are truthful capabilities for an object created as `Box<T>`; they
-are not a truthful universal Kotlin cast identity.
-
-CLR has one base-class slot, so a non-generic canonical base cannot be added
-to every generic class without breaking Kotlin inheritance. A non-generic
-interface can be implemented alongside the real base class.
+- Date: 2026-08-04
+- Scope: Kotlin-owned ordinary generic classes, including their storage,
+  member ABI, inheritance, casts, runtime identity, separate compilation, and
+  default CLR surface
 
 ## Decision
 
-### Canonical Kotlin view
+A Kotlin-owned ordinary generic class has one physical CLR class and one
+runtime/virtual ABI. The CLR class is non-generic:
 
-Every Kotlin-owned ordinary generic class declaration gets one non-generic
-canonical CLR interface. It uses the declaration's unsuffixed physical base
-name; the typed class retains the normal arity-suffixed name. Thus logical
-`sample.Box<T>` is recorded as both `sample.Box` and `sample.Box`1`, without
-reconstructing either name from the other.
+```text
+Kotlin:  class Box<T>(var value: T)
+CLR:     class Box { object value; object get_value(); void set_value(object); }
+```
 
-Every Kotlin ABI value position for that declaration uses the canonical
-interface, regardless of its logical arguments or projection. This includes
-fields, parameters, returns, locals, ordinary upcasts, checked/safe casts, and
-star projections. KLIB retains the exact logical type.
+KLIB remains authoritative for `T`, its bounds and variance, every use-site
+argument or projection, and nullability. The versioned physical binding stores
+the one non-generic CLR owner; it does not store a typed sibling, canonical
+interface, class-member bridge family, or open-generic classifier token.
 
-The canonical interface owns one deterministic erased slot for every
-non-private Kotlin member callable through such a value. Private members stay
-only on the typed implementation: no legal external Kotlin call needs them,
-and publishing an erased slot would widen the metadata surface. Arguments are
-boxed/widened at the call boundary; results are narrowed or unboxed at the
-logical use site.
-Projected-out members remain unavailable because FIR/Common, not the CLR
-interface, decides which source call is legal.
+This rule applies only to Kotlin-owned classes. Imported CLR generics remain
+native reified CLR types. A future typed C# surface is a separate explicit,
+fail-closed export product and must not redefine Kotlin runtime identity.
+Internal specialization is permitted only when it is invisible behind this
+one ABI.
 
-The direct carrier of an owner type parameter is `object`, matching the
-existing split-interface barrier and admitting every truthful CLR
-construction. Nested split Kotlin classifiers retain their own canonical
-identity; a nested carrier without such an identity erases as a whole rather
-than selecting one closed CLR construction.
+This is the Kotlin/.NET target authors' pre-ABI decision. It follows the
+architecture of mature Kotlin targets, but it is not a Kotlin core-team
+decision, a public KEEP, or an official target commitment.
 
-The canonical class interface inherits only direct interface views that map
-to a truthful class-like canonical carrier without inventing an
-owner-dependent construction. An interface capability whose physical shape
-still mentions the class's `T` remains on typed `C<T>` only. The typed class
-retains its complete exact interface set; the canonical sibling must not turn
-an exact `I<T>` capability into a fictitious `I<object>` edge. Common/FIR
-still determines which interface operation is legal through the logical
-receiver.
+## Why
 
-Canonical member names derive from complete logical identities and are
-recorded in the physical ABI. They do not depend on declaration order or the
-current overload set. Erasure collisions must receive deterministic physical
-names or reject the whole declaration; CLR construction types must never be
-substituted merely to keep overloads distinct.
+Kotlin runtime identity is declaration-erased on the mature targets:
 
-Cross-module declarations derive that identity from the authoritative public
-KLIB `IdSignature`. A member below a private or local owner must not reuse its
-file-local IR symbol signature: lowered type-parameter identities in that
-signature are process-local. Such owner-scoped slots use an explicit
-structural codec of stable classifier names, projections, nullability,
-parameter kinds, and owner/method type-parameter indices. Type rendering,
-object hashes, declaration order, and source offsets are forbidden inputs.
+- JVM uses one raw class for `C<A>`, `C<B>`, and `C<*>`;
+- JS uses one constructor/class identity;
+- Native erases type parameters before checked and safe runtime casts; and
+- Wasm maps runtime tests and casts to an erased upper-bound class.
 
-This also applies outside the class itself. If an ordinary Kotlin callable has
-a parameter containing a split generic class, its canonical CLR parameter no
-longer contains that class's arguments. The callable therefore receives a
-stable `__KotlinErased__<digest>` physical suffix derived from its complete
-Kotlin signature, even before a colliding overload exists. Existing classified
-exception carriers retain their older `__KotlinException__<digest>` spelling.
-KLIB and the physical function record restore the source name; an explicit C#
-export product may later provide source-named typed overload adapters.
+CLR constructed generic classes instead have distinct invariant runtime
+identities. `Box<string>` and `Box<int32>` cannot both be the physical identity
+of Kotlin `Box<*>`. Retaining `C<T>` therefore required a second erased
+canonical interface, duplicate member families, `MethodImpl` bridges, an
+ancestry classifier, additional ABI records, and two dispatch paths.
 
-### Typed CLR implementation and capability
+That hybrid design also failed ordinary Common behavior. A widened
+`AbstractCollection<Int>.containsAll(Collection<Any?>)` may legally inspect a
+`String` candidate and return `false`; forwarding its erased signature into an
+`AbstractCollection<int>` body narrowed the candidate too early and threw.
+Unchecked mutation exposed the deeper conflict: a physical `Box<string>` field
+cannot accept an `Int` through an unchecked `Box<Int>` view without either
+rejecting the write early or duplicating storage.
 
-The existing invariant CLR generic class remains the physical implementation.
-It owns constructors, backing fields, typed source members, class generic
-parameters and constraints, the real base-class edge, and the natural C#
-subclassing surface. CLR classes remain invariant even when the Kotlin
-declaration parameter is `in` or `out`; Kotlin variance lives in KLIB and
-canonical conversions.
+The target has no hard requirement that every arbitrary Kotlin-created object
+also expose natural same-object CLR `C<T>` identity. Without that requirement,
+the permanent dual ABI and storage analysis are not justified.
 
-The typed class implements its canonical interface on the same object.
-Generated forwarding members and explicit `MethodImpl` rows adapt canonical
-erased slots to typed virtual/source members. They cast or unbox an erased
-input before dispatch and box or widen a typed result afterward. A cast never
-allocates an adapter, wrapper, proxy, or copy.
+## Semantic contract
 
-Canonical dispatch remains the stable semantic fallback for Kotlin calls. A
-call may use the typed `C<T>` member directly when the receiver's physical
-capability is proven, or probe that capability once with `isinst C<T>` and use
-canonical dispatch when the probe misses. The receiver and arguments are
-evaluated once in Kotlin order, typed virtual calls retain CLR override
-dispatch, and both paths return the same logical Kotlin value. The probe never
-turns `C<T>` into Kotlin runtime identity: it selects an optional execution
-capability on the same object.
+For a Kotlin-owned `Box<T>`:
 
-The first provenance boundary is deliberately local and conservative. A
-fresh `C<T>` construction and immutable local aliases which lead directly to
-that construction have a guaranteed capability. A static Kotlin `C<T>` type,
-parameter, field, mutable local, control-flow join, or cast does not: an
-unchecked Kotlin cast can produce that logical view while the object remains a
-different CLR construction. Such receivers take the guarded path. When a
-guard misses, the canonical call preserves Kotlin's required delayed failure
-at the later argument/result use barrier. That exceptional path is a
-correctness path, not an optimization target.
+- `Box<String>`, `Box<Int>`, and `Box<*>` have one runtime classifier;
+- `is Box<*>`, checked casts, and safe casts test only that classifier;
+- projections and declaration-site variance change legal source operations,
+  not physical identity;
+- casts preserve the original object, mutation, synchronization, and virtual
+  dispatch;
+- a subclass satisfies erased tests of every Kotlin-owned generic base in its
+  inheritance chain; and
+- generic results are narrowed or unboxed only at their logical use site.
 
-C# may construct, call, and derive from the typed `C<T>` class directly.
-Kotlin functions expose their canonical Kotlin ABI unless an explicit C#
-export product later emits a typed adapter.
+Kotlin/.NET deliberately selects classifier-only behavior for unchecked casts:
 
-Compiler-generated default-argument dispatchers are not source members and
-do not acquire canonical member slots of their own. Their exact logical
-receiver type in IR is the authority for recovering the typed owner needed by
-the helper body; its arguments and result then cross the same ordinary
-canonical boxing/narrowing barriers as every other call. This preserves Common
-default-expression semantics without publishing a second erased class
-contract or deriving a closed owner from the canonical CLR interface.
+```kotlin
+val original = Box("text")
+@Suppress("UNCHECKED_CAST")
+val wrong = original as Any as Box<Int>
 
-### Runtime classification and casts
+wrong.value = 7        // mutates the same erased object
+val star: Box<*> = original
+check(star.value == 7)
+original.value         // fails when the result is consumed as String
+```
 
-The canonical interface is necessary for storage and dispatch but is not by
-itself Kotlin class identity: public compiler ABI can be named and implemented
-by foreign CLR code.
+The Kotlin language permits a platform to fail a not-fully-checkable cast
+earlier. This target nevertheless chooses the familiar erased, delayed-use
+behavior because the CLR does not force an earlier failure and mature Kotlin
+targets establish that user expectation.
 
-One runtime classifier therefore receives the original object and the exact
-producer-recorded open generic class TypeDef. It walks the object's CLR base
-class chain and succeeds when a constructed base has that exact generic type
-definition. This admits Kotlin classes and ordinary C# subclasses of the
-typed class, rejects an unrelated implementation of the canonical interface,
-and ignores constructed arguments.
+The Common `containsAll` case is stronger: it is ordinary source-legal
+behavior, not an unchecked-cast preference. The target must execute the Common
+element-wise algorithm without narrowing a complete nested carrier such as
+`Collection<object>` to `Collection<int>`.
 
-`is`, `!is`, `as`, and `as?` share that classifier. Successful casts return
-the original reference through the canonical interface. Non-null checked
-casts apply the existing Kotlin null barrier; safe casts return null on a
-wrong declaration. The operand is evaluated once.
+## Physical mapping
 
-The open TypeDef identity comes from the producer's physical binding. A
-consumer never searches assemblies or reconstructs a name. Nested generic
-classes record both complete owner paths, and the runtime token names the
-typed definition at that path.
+An owner type parameter in class storage, a constructor, or an instance member
+maps to:
 
-### Inheritance and dispatch
+1. its already accepted erased Kotlin carrier, when one exists;
+2. an exactly representable erased upper bound; or
+3. `System.Object`.
 
-A typed generic class keeps its exact CLR base instantiation and implements
-its own canonical interface. Its base class supplies the base declaration's
-canonical interface and bridge set. A non-generic subclass of `Base<String>`
-therefore satisfies `Base<*>` without adding an adapter.
+An array whose element is an erased owner parameter uses the accepted erased
+`System.Array` carrier. This does not change the separately accepted exact
+array rules for concrete element types.
 
-A canonical interface cannot inherit a non-generic CLR base class. When Kotlin
-upcasts a canonical generic-class value to such a base, code generation first
-proves that the producer-recorded typed capability is assignable to the base
-and then emits a same-object checked reference cast. This is a representation
-bridge, not a second Kotlin runtime classifier; a hostile value which violates
-the compiler-owned canonical contract fails rather than acquiring false base
-identity.
+Methods may retain their own CLR method type parameters. Only type parameters
+owned by the erased class lose physical CLR generic slots. Imported CLR types
+nested in a signature remain reified only where their complete construction is
+truthfully representable; an unsupported open carrier fails closed.
 
-Canonical bridges dispatch virtually to the typed source slot. A C# subclass
-override of an open Kotlin typed member remains observable through Kotlin
-canonical calls. Abstract obligations remain abstract until a concrete class
-supplies a body; inherited bridge reuse must not duplicate state or bypass an
-override.
+Logical overloads which collide after class erasure keep deterministic
+physical names derived from the complete Kotlin signature. KLIB and the
+physical function record restore their Kotlin names. Name allocation must not
+depend on declaration order or the current overload set.
 
-`super` calls, constructor delegation, backing-field access, and private or
-protected implementation code continue to use the exact typed owner inside
-the implementation. They are not rewritten into public canonical calls.
+## Inheritance and dispatch
 
-### Physical ABI and foreign boundaries
+The emitted CLR class retains its ordinary non-generic base-class edge. A
+Kotlin subclass of `Base<T>` therefore physically extends the one erased
+`Base`, while KLIB retains the substituted logical base type.
 
-The class binding records:
+CLR method slots include their physical parameter and return types. When a
+subclass narrows a logically substituted member, the backend emits an erased
+override bridge against the base slot, following the JVM bridge direction:
 
-- the canonical interface owner path;
-- the typed class owner path and invariant generic arity;
-- canonical member slots and typed implementation members;
-- every forwarding method and `MethodImpl` relationship; and
-- the open typed TypeDef used by the runtime classifier.
+```text
+Base<T>.read(): object
+Derived : Base<String>
+    read(): string
+    synthetic bridge read(): object -> Derived.read(): string
+```
 
-This expands the meaning of the versioned class-view schema and therefore
-requires an ABI-version bump. A stale producer is rejected; no compatibility
-shim infers views from arity or spelling.
+The bridge is one adapter inside the single class hierarchy, not a second
+class ABI. It preserves most-derived dispatch through base-typed receivers and
+is recorded through normal function/override metadata rather than the removed
+generic-class bridge schema.
 
-The canonical interface and its slots are marked as compiler ABI and hidden
-from normal completion. They are not permission for C# to author a Kotlin
-class. Direct foreign calls can physically pass an implementation of
-that interface, just as a `System.Array` signature is broader than KLIB's
-`Array<*>` contract. Kotlin runtime tests/casts still reject it. Explicit C#
-authoring of a Kotlin class means subclassing the typed CLR class where Kotlin
-modality permits it.
+`super` calls, constructor delegation, fields, nested and inner classes, and
+default dispatchers all reference the same erased owner. Inner-class lowering
+may copy logical outer parameters while normalizing IR, but emitted
+Kotlin-owned class TypeDefs do not regain CLR class generic arity.
 
-## Scope boundary
+## CLR and C# boundaries
 
-This decision covers ordinary Kotlin-owned generic classes already admitted
-by the class model and establishes the representation needed to admit their
-stars, projections, and erased casts. It does not by itself enable:
+The erased CLR class is a truthful low-level view: C# can see and, where CLR
+visibility/modality permit, subclass its `object`-based members. That is not a
+typed Kotlin export contract.
 
-- value/inline classes;
-- annotation or enum classes;
-- reflection, `KClass`, `KType`, or `typeOf`;
-- generic interfaces beyond their existing split-interface ABI;
-- foreign CLR generic classes as Kotlin-owned declarations;
-- currently rejected nested open-nullable carriers whose typed construction
-  needs an additional erased implementation choice; or
-- either public reified-inline support gate.
+Ordinary Kotlin compilation must not silently publish `Box<T>`. A future typed
+C# export must be opt-in and state, per declaration, whether it emits an
+adapter, facade, wrapper, or producer-owned derived class. It must diagnose
+unrepresentable construction, identity, mutation, inheritance, override,
+projection, collision, and nullability shapes rather than falling back to a
+misleading typed ABI.
 
-Reified substitution may use this classifier only after the remaining
-operation closure is complete.
+The same rule applies when the class implements a Kotlin-owned generic
+interface. `class C<T> : I<T>` physically implements only the canonical erased
+`I`, because the class has no CLR `T` with which to name a truthful `I<T>`.
+Mapping it to `I<object>` would add a different interface, not preserve the
+logical edge. A closed edge such as `C<T> : I<String>` may retain an already
+selected typed interface capability because it is independent of the erased
+class parameter. Method bounds such as `<R : T>` remain authoritative in KLIB
+and omit the unrepresentable CLR relational constraint on the erased owner.
 
-## Decision evidence
+On a profile with default interface methods, a default body physically hosted
+by the typed `I<T>` sibling cannot satisfy canonical `I` for that erased
+`C<T>`. The class therefore receives one helper-backed canonical `MethodImpl`
+forwarder for the owner-dependent edge. This is required dispatch, not a
+revived typed class capability. A closed `I<String>` edge still inherits its
+truthful native DIM without that class forwarder.
 
-A representative .NET 10 microbenchmark over two million `Box<Int>` operations
-measured the permanent cost which motivated this bounded path. Canonical reads
-allocated about 48 MB and took 11.77 ms; a capability probe at every read
-allocated 64 bytes and took 1.75 ms, while an explicitly hoisted probe and a
-direct typed call both took about 0.97 ms. Canonical read/write allocated about
-96 MB and took 19.05 ms; a probe at every update allocated 64 bytes and took
-3.49 ms, compared with 3.63 ms for the explicitly hoisted form and 3.10 ms for
-the direct typed form.
+Imported CLR `Foreign<T>` declarations are unaffected. Their constructed CLR
+identity, constraints, typed fields, inheritance, and C# subclassing remain
+native platform facts.
 
-These are microbenchmark observations rather than language semantics, but they
-show that one ordinary per-call probe already removes the boxing and allocation
-problem and recovers most of the typed route's throughput. Committed IL tests
-therefore pin allocation-free value-type fast branches and canonical fallback
-branches, while runtime and separate-library tests pin behavior. The residual
-gap does not justify compiler-managed loop versioning or global provenance
-analysis without further measurements from actual target programs.
+## Metadata and migration
 
-## Design attack
+The pre-ABI migration:
 
-- **Keep only closed CLR `C<T>` types.** Rejected. Runtime checks become too
-  strict and unchecked Kotlin casts fail before the first typed use.
-- **Map `C<*>` to `C<object>`.** Rejected. CLR classes are invariant, and
-  value/reference constructions are unrelated to that type.
-- **Add only a reflection predicate.** Rejected. A successful cast still has
-  no physical receiver on which projected or mismatched typed members can be
-  called.
-- **Reinterpret one constructed reference as another.** Rejected. Unverifiable
-  type confusion can dispatch against the wrong field/method instantiation
-  and is not Kotlin erasure.
-- **Wrap or copy after a cast.** Rejected. It changes identity, state,
-  synchronization, virtual dispatch, and foreign subclass behavior.
-- **Erase the CLR class completely.** Semantically valid but rejected for the
-  selected .NET target. It discards truthful CLR generic storage, value
-  specialization, inheritance, and C# usability even though the split view
-  can preserve Kotlin semantics.
-- **Use a canonical marker without erased members.** Rejected. Smart-cast and
-  post-cast typed use would require reflection or an incompatible closed
-  receiver.
-- **Trust the canonical interface as class identity.** Rejected. Foreign code
-  could implement it without inheriting the Kotlin class. Runtime operations
-  must verify the typed class ancestry.
-- **Choose canonical versus typed storage by local provenance.** Rejected.
-  Values cross fields, joins, libraries, unchecked casts, and foreign calls;
-  one logical Kotlin ABI type cannot have a flow-dependent physical contract.
-- **Treat a static `C<T>` receiver type as exact physical provenance.**
-  Rejected. Unchecked casts deliberately allow a mismatched construction to
-  retain the declaration-erased Kotlin view until a typed member use.
-- **Optimize a failed typed-capability probe.** Rejected. The miss must execute
-  canonical semantics and normally reaches an exceptional typed-use barrier;
-  making that already exceptional path faster does not justify more state or
-  control-flow complexity.
+- bumps the physical ABI schema;
+- records one owner path for a Kotlin-owned generic class;
+- removes class-only declared/exact owner paths;
+- removes generic-class member-bridge records;
+- removes canonical class interfaces and their compiler-only members;
+- removes typed-class capability probes and open-ancestry classifiers; and
+- rejects artifacts written with the superseded schema.
 
-## On hold
+No compatibility shim infers the old dual view from arity or names. Nothing
+has shipped, so every producer and consumer moves together.
 
-The bounded dispatch optimization does not select any of these larger
-programmes:
+## Rejected alternatives
 
-- global SSA/CFG provenance or interprocedural exactness analysis;
-- cached probes, explicit loop versioning, or compiler-managed guard hoisting
-  beyond ordinary CLR JIT/AOT optimization;
-- a distinct fully erased physical representation for private or local generic
-  classes based on visibility; or
-- profile-specific specialization policy for ReadyToRun or NativeAOT.
+- **Closed CLR `C<T>` only.** Runtime identity and unchecked casts become too
+  strict.
+- **Treat `C<object>` as `C<*>`.** CLR classes are invariant; value and
+  reference constructions are unrelated to that type.
+- **Hybrid typed class plus canonical interface.** Rejected because canonical
+  dispatch is an ordinary correctness path, mutable state still needs erasure,
+  and the second TypeDef/member/metadata/runtime system has no hard product
+  requirement.
+- **Wrap, copy, or proxy on casts.** Breaks identity, mutation, dispatch, and
+  synchronization.
+- **Maintain typed and erased storage.** Creates an incoherent aliasing and
+  synchronization model.
+- **Choose physical representation from local provenance or visibility.** A
+  single logical ABI cannot vary across fields, joins, casts, libraries, and
+  foreign calls.
+- **Special-case `containsAll`.** Other nested carriers, overrides, and
+  separate compilation require the general erased rule.
 
-They require actual generated-code measurements which remain material after
-the direct/guarded typed path. None may change canonical storage, runtime
-classification, casts, identity, or the published ABI.
+## Explicitly on hold
 
-## Completion gate
+This decision does not authorize:
 
-The first complete implementation must cover final, open, abstract, and
-sealed generic classes already admitted by the target; reference, value,
-nullable-value, and multiple type arguments; generic inheritance and a
-non-generic derived class; fields, properties, ordinary/generic methods,
-virtual overrides, constructor delegation, and projected typed use.
+- typed C# generic-class export;
+- SSA/CFG provenance analysis, capability guards, or loop versioning;
+- profile-specific ReadyToRun or NativeAOT specialization;
+- a visibility-dependent mix of erased and reified Kotlin-owned class ABIs;
+- value/inline classes, enum classes, valued annotations, or reflection;
+- changes to the separately selected generic-interface or array ABIs; or
+- public reified-inline support.
 
-Executable tests must prove star tests/smart casts, checked and safe casts,
-argument-erased unchecked casts whose failure occurs inside the later member
-barrier, nullable behavior, single evaluation, unchanged identity and mutable
-state, nested and inner open-TypeDef identity, default-argument dispatch,
-parameter overloads which differ only in erased class arguments, and rejection
-of unrelated canonical-interface implementors. Separate
-netstandard2.0 producers must execute from Kotlin consumers on Framework CLR
-and CoreCLR. Roslyn must construct and subclass the typed class, observe
-canonical Kotlin function signatures, and preserve virtual dispatch through
-the canonical bridge. Metadata tests must pin both TypeDefs, invariant typed
-generic parameters, InterfaceImpl/MethodImpl rows, and the versioned physical
-bindings. Compiling an identical producer twice must produce identical CIL,
-including private/local canonical slot names.
+These may be considered after the semantic ABI and representative target
+programs provide measurements. An optimization may not change observable
+classifier identity or the delayed-use contract.
 
-Existing generic classes, generic inheritance, nullable/scalar members,
-initialization, friends/compiler ABI, and split generic-interface suites must
-remain green. Unsupported open-nullable constructions and parked language
-families must continue to fail explicitly rather than losing declarations.
+## Verification gate
+
+The accepted ABI must cover:
+
+- final, open, abstract, and sealed generic classes;
+- reference, value, nullable-value, bounded, and multiple owner parameters;
+- fields, properties, constructors, ordinary and method-generic members;
+- one- and multi-level inheritance, overrides, `super`, nested and inner
+  classes, and default arguments;
+- stars, projections, `is`, checked/safe/unchecked casts, same-object mutation,
+  and delayed incompatible reads;
+- widened direct and nested generic-bearing inputs, including Common
+  `containsAll` true/false/null/empty cases;
+- deterministic erased overload names and physical IL shape;
+- a netstandard2.0 producer consumed by Kotlin on Framework CLR and CoreCLR;
+- absence of an implicit CLR `C<T>` surface and continued reification of
+  imported CLR generics; and
+- unchanged generic-interface, array, nullability, friend/compiler-ABI, and
+  stdlib behavior.
+
+The implementation is complete only when the old class-only runtime helpers,
+bridges, metadata records, TypeDefs, and tests no longer survive as active
+behavior or documentation.

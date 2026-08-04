@@ -2,12 +2,36 @@ private open class ProjectedBase(val value: String)
 
 private class ProjectedDerived(value: String) : ProjectedBase(value)
 
+private class UserList<T>(private val values: Array<out T>) : AbstractList<T>() {
+    override val size: Int
+        get() = values.size
+
+    override fun get(index: Int): T = values[index]
+}
+
 private fun projectedView(values: Array<out ProjectedBase>): List<ProjectedBase> =
     values.asList()
 
 private fun fail(message: String): String = "fail: $message"
 
 fun box(): String {
+    val userList = UserList(arrayOf("left", "middle", "right"))
+    if (userList.iterator().next() != "left") return fail("AbstractList iterator")
+    val userIterator = userList.listIterator(2)
+    if (userIterator.previous() != "middle" || userIterator.next() != "middle") {
+        return fail("AbstractList listIterator")
+    }
+    if (userList.subList(1, 3).toString() != "[middle, right]") {
+        return fail("AbstractList subList")
+    }
+    if (userList != arrayOf("left", "middle", "right").asList()) {
+        return fail("AbstractList equality")
+    }
+    if (userList.hashCode() != arrayOf("left", "middle", "right").asList().hashCode()) {
+        return fail("AbstractList hashCode")
+    }
+    if (userList.toString() != "[left, middle, right]") return fail("AbstractList toString")
+
     val values = arrayOf(7, 9, 7)
     val list = values.asList()
     if (list.size != 3 || list.isEmpty()) return fail("size")
@@ -23,6 +47,12 @@ fun box(): String {
     if (widened.contains("7") || widened.contains(null)) return fail("contains barrier")
     if (widened.indexOf("9") != -1 || widened.lastIndexOf(null) != -1) {
         return fail("search barrier")
+    }
+    if (!widened.containsAll(arrayOf<Any?>(7).asList())) {
+        return fail("containsAll widened true")
+    }
+    if (!widened.containsAll(emptyArray<Any?>().asList())) {
+        return fail("containsAll widened empty")
     }
     if (
         widened.containsAll(arrayOf<Any?>(7, "wrong").asList()) ||

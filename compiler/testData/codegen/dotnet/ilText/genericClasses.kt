@@ -1,7 +1,6 @@
-// Kotlin generic-class identity is a non-generic canonical interface. The Roslyn-shaped
-// `Box`1<T>` remains as the same object's invariant implementation capability, with `!0` fields
-// and member bodies. Canonical ABI signatures therefore erase class arguments; overloads whose
-// parameters differ only by those arguments receive stable Kotlin-logical physical names.
+// Kotlin-owned generic classes have one non-generic physical owner. Owner type parameters are
+// erased from fields and members; KLIB retains the complete logical types. Overloads whose
+// parameters differ only by erased class arguments receive stable Kotlin-logical physical names.
 
 class Box<T>(private var value: T) {
     fun get(): T = value
@@ -26,9 +25,8 @@ class ErasedMemberOverloads {
     fun select(value: Box<String>): String = "string"
 }
 
-// Kotlin class identity is erased even though the companion CLR capability remains reified.
-// These operations must classify the exact producer-recorded open Box`1 ancestry, then return
-// the same object through the non-generic canonical view.
+// Runtime checks classify the one producer-recorded non-generic Box owner and return the same
+// object. Logical arguments never become CLR runtime identity.
 @Suppress("UNCHECKED_CAST")
 fun erasedGenericCast(value: Any): Box<String> = value as Box<String>
 
@@ -36,16 +34,16 @@ fun erasedGenericTest(value: Any): Boolean = value is Box<*>
 
 fun erasedGenericSafeCast(value: Any): Box<*>? = value as? Box<*>
 
-// A fresh construction and immutable aliases are the deliberately bounded proof set. These calls
-// must target Box`1<int32> directly and must not box the value result.
+// A statically exact source construction still uses the erased owner and object-backed storage;
+// the Int result is unboxed only at this logical use site.
 fun guaranteedAliasRead(): Int {
     val constructed = Box(40)
     val alias = constructed
     return alias.get()
 }
 
-// A Kotlin Box<Int> parameter is not physical proof: unchecked casts can forge this logical view.
-// The fast branch probes Box`1<int32>; the miss must retain canonical delayed-failure semantics.
+// A Kotlin Box<Int> parameter is only a logical view: unchecked casts can forge it. Calls use the
+// erased owner and recover Int at the result boundary, preserving delayed-use failure semantics.
 fun guardedIntRead(value: Box<Int>): Int = value.get()
 
 fun guardedIntWrite(value: Box<Int>, replacement: Int) {

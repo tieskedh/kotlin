@@ -316,14 +316,8 @@
     ret
   }
 }
-.class interface public abstract auto ansi 'GenericAncestor'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-}
-.class public auto ansi sealed beforefieldinit 'GenericAncestor`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'GenericAncestor'
        extends [mscorlib]System.Object
-       implements 'GenericAncestor'
 {
   .class nested public auto ansi sealed 'CompanionHolder'
          extends [mscorlib]System.Object
@@ -339,29 +333,29 @@
         call instance void [mscorlib]System.Object::.ctor()
         ldarg.0
         call int32 'nestedSingletonsKt'::'nextInitialization'()
-        stfld int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'captured'
+        stfld int32 'GenericAncestor'/'CompanionHolder'/'Companion'::'captured'
         ret
       }
       .method public hidebysig specialname instance int32 'get_captured'() cil managed
       {
         .maxstack 1
         ldarg.0
-        ldfld int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'captured'
+        ldfld int32 'GenericAncestor'/'CompanionHolder'/'Companion'::'captured'
         ret
       }
       .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
       {
         .maxstack 1
         ldarg.0
-        call instance void 'GenericAncestor`1'/'CompanionHolder'/'Companion'::.ctor()
+        call instance void 'GenericAncestor'/'CompanionHolder'/'Companion'::.ctor()
         ret
       }
       .property instance int32 'captured'()
       {
-        .get instance int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'get_captured'()
+        .get instance int32 'GenericAncestor'/'CompanionHolder'/'Companion'::'get_captured'()
       }
     }
-    .field public static initonly class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'Companion'
+    .field public static initonly class 'GenericAncestor'/'CompanionHolder'/'Companion' 'Companion'
     .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
@@ -371,15 +365,15 @@
       )
       .try {
         ldnull
-        newobj instance void 'GenericAncestor`1'/'CompanionHolder'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-        stsfld class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'GenericAncestor`1'/'CompanionHolder'::'Companion'
+        newobj instance void 'GenericAncestor'/'CompanionHolder'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'GenericAncestor'/'CompanionHolder'/'Companion' 'GenericAncestor'/'CompanionHolder'::'Companion'
         leave IL_tryEnd_0
       }
       catch [mscorlib]System.Exception {
         stloc.0
         ldloc.0
         call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
-        stsfld object 'GenericAncestor`1'/'CompanionHolder'::'<static-initialization-failure>'
+        stsfld object 'GenericAncestor'/'CompanionHolder'::'<static-initialization-failure>'
         leave IL_tryEnd_0
       }
   IL_tryEnd_0:
@@ -390,13 +384,13 @@
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .maxstack 2
-      ldsfld object 'GenericAncestor`1'/'CompanionHolder'::'<static-initialization-failure>'
+      ldsfld object 'GenericAncestor'/'CompanionHolder'::'<static-initialization-failure>'
       ldnull
       ceq
       ldc.i4.0
       ceq
       brfalse IL_whenNext_1
-      ldsfld object 'GenericAncestor`1'/'CompanionHolder'::'<static-initialization-failure>'
+      ldsfld object 'GenericAncestor'/'CompanionHolder'::'<static-initialization-failure>'
       call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
       ldstr "GenericAncestor.CompanionHolder"
       call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
@@ -408,7 +402,7 @@
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
-      call void 'GenericAncestor`1'/'CompanionHolder'::'<EnsureInitialized>'()
+      call void 'GenericAncestor'/'CompanionHolder'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
@@ -420,7 +414,7 @@
     .class nested public auto ansi sealed 'Singleton'
            extends [mscorlib]System.Object
     {
-      .field public static initonly class 'GenericAncestor`1'/'ObjectHolder'/'Singleton' 'INSTANCE'
+      .field public static initonly class 'GenericAncestor'/'ObjectHolder'/'Singleton' 'INSTANCE'
       .field private int32 'captured'
       .field private static object '<static-initialization-failure>'
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -430,15 +424,15 @@
           [0] class [mscorlib]System.Exception 'reason'
         )
         .try {
-          newobj instance void 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::.ctor()
-          stsfld class 'GenericAncestor`1'/'ObjectHolder'/'Singleton' 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'INSTANCE'
+          newobj instance void 'GenericAncestor'/'ObjectHolder'/'Singleton'::.ctor()
+          stsfld class 'GenericAncestor'/'ObjectHolder'/'Singleton' 'GenericAncestor'/'ObjectHolder'/'Singleton'::'INSTANCE'
           leave IL_tryEnd_0
         }
         catch [mscorlib]System.Exception {
           stloc.0
           ldloc.0
           call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
-          stsfld object 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'<static-initialization-failure>'
+          stsfld object 'GenericAncestor'/'ObjectHolder'/'Singleton'::'<static-initialization-failure>'
           leave IL_tryEnd_0
         }
     IL_tryEnd_0:
@@ -449,13 +443,13 @@
         .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
         .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
         .maxstack 2
-        ldsfld object 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'<static-initialization-failure>'
+        ldsfld object 'GenericAncestor'/'ObjectHolder'/'Singleton'::'<static-initialization-failure>'
         ldnull
         ceq
         ldc.i4.0
         ceq
         brfalse IL_whenNext_1
-        ldsfld object 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'<static-initialization-failure>'
+        ldsfld object 'GenericAncestor'/'ObjectHolder'/'Singleton'::'<static-initialization-failure>'
         call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
         ldstr "GenericAncestor.ObjectHolder.Singleton"
         call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
@@ -467,24 +461,24 @@
       .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 2
-        call void 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'<EnsureInitialized>'()
+        call void 'GenericAncestor'/'ObjectHolder'/'Singleton'::'<EnsureInitialized>'()
         ldarg.0
         call instance void [mscorlib]System.Object::.ctor()
         ldarg.0
         call int32 'nestedSingletonsKt'::'nextInitialization'()
-        stfld int32 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'captured'
+        stfld int32 'GenericAncestor'/'ObjectHolder'/'Singleton'::'captured'
         ret
       }
       .method public hidebysig specialname instance int32 'get_captured'() cil managed
       {
         .maxstack 1
         ldarg.0
-        ldfld int32 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'captured'
+        ldfld int32 'GenericAncestor'/'ObjectHolder'/'Singleton'::'captured'
         ret
       }
       .property instance int32 'captured'()
       {
-        .get instance int32 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'get_captured'()
+        .get instance int32 'GenericAncestor'/'ObjectHolder'/'Singleton'::'get_captured'()
       }
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -503,19 +497,13 @@
     ret
   }
 }
-.class interface public abstract auto ansi 'DirectGenericObjectOwner'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-}
-.class public auto ansi sealed beforefieldinit 'DirectGenericObjectOwner`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'DirectGenericObjectOwner'
        extends [mscorlib]System.Object
-       implements 'DirectGenericObjectOwner'
 {
   .class nested public auto ansi sealed 'Singleton'
          extends [mscorlib]System.Object
   {
-    .field public static initonly class 'DirectGenericObjectOwner`1'/'Singleton' 'INSTANCE'
+    .field public static initonly class 'DirectGenericObjectOwner'/'Singleton' 'INSTANCE'
     .field private int32 'captured'
     .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -525,15 +513,15 @@
         [0] class [mscorlib]System.Exception 'reason'
       )
       .try {
-        newobj instance void 'DirectGenericObjectOwner`1'/'Singleton'::.ctor()
-        stsfld class 'DirectGenericObjectOwner`1'/'Singleton' 'DirectGenericObjectOwner`1'/'Singleton'::'INSTANCE'
+        newobj instance void 'DirectGenericObjectOwner'/'Singleton'::.ctor()
+        stsfld class 'DirectGenericObjectOwner'/'Singleton' 'DirectGenericObjectOwner'/'Singleton'::'INSTANCE'
         leave IL_tryEnd_0
       }
       catch [mscorlib]System.Exception {
         stloc.0
         ldloc.0
         call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
-        stsfld object 'DirectGenericObjectOwner`1'/'Singleton'::'<static-initialization-failure>'
+        stsfld object 'DirectGenericObjectOwner'/'Singleton'::'<static-initialization-failure>'
         leave IL_tryEnd_0
       }
   IL_tryEnd_0:
@@ -544,13 +532,13 @@
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .maxstack 2
-      ldsfld object 'DirectGenericObjectOwner`1'/'Singleton'::'<static-initialization-failure>'
+      ldsfld object 'DirectGenericObjectOwner'/'Singleton'::'<static-initialization-failure>'
       ldnull
       ceq
       ldc.i4.0
       ceq
       brfalse IL_whenNext_1
-      ldsfld object 'DirectGenericObjectOwner`1'/'Singleton'::'<static-initialization-failure>'
+      ldsfld object 'DirectGenericObjectOwner'/'Singleton'::'<static-initialization-failure>'
       call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
       ldstr "DirectGenericObjectOwner.Singleton"
       call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
@@ -562,24 +550,24 @@
     .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 2
-      call void 'DirectGenericObjectOwner`1'/'Singleton'::'<EnsureInitialized>'()
+      call void 'DirectGenericObjectOwner'/'Singleton'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ldarg.0
       call int32 'nestedSingletonsKt'::'nextInitialization'()
-      stfld int32 'DirectGenericObjectOwner`1'/'Singleton'::'captured'
+      stfld int32 'DirectGenericObjectOwner'/'Singleton'::'captured'
       ret
     }
     .method public hidebysig specialname instance int32 'get_captured'() cil managed
     {
       .maxstack 1
       ldarg.0
-      ldfld int32 'DirectGenericObjectOwner`1'/'Singleton'::'captured'
+      ldfld int32 'DirectGenericObjectOwner'/'Singleton'::'captured'
       ret
     }
     .property instance int32 'captured'()
     {
-      .get instance int32 'DirectGenericObjectOwner`1'/'Singleton'::'get_captured'()
+      .get instance int32 'DirectGenericObjectOwner'/'Singleton'::'get_captured'()
     }
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -593,19 +581,13 @@
 .class public auto ansi sealed beforefieldinit 'GenericNestedObjectOwner'
        extends [mscorlib]System.Object
 {
-  .class nested public interface abstract auto ansi 'Generic'
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .class nested public auto ansi sealed beforefieldinit 'Generic`1'<'T'>
+  .class nested public auto ansi sealed beforefieldinit 'Generic'
          extends [mscorlib]System.Object
-         implements 'GenericNestedObjectOwner'/'Generic'
   {
     .class nested public auto ansi sealed 'Singleton'
            extends [mscorlib]System.Object
     {
-      .field public static initonly class 'GenericNestedObjectOwner'/'Generic`1'/'Singleton' 'INSTANCE'
+      .field public static initonly class 'GenericNestedObjectOwner'/'Generic'/'Singleton' 'INSTANCE'
       .field private int32 'captured'
       .field private static object '<static-initialization-failure>'
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -615,15 +597,15 @@
           [0] class [mscorlib]System.Exception 'reason'
         )
         .try {
-          newobj instance void 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::.ctor()
-          stsfld class 'GenericNestedObjectOwner'/'Generic`1'/'Singleton' 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'INSTANCE'
+          newobj instance void 'GenericNestedObjectOwner'/'Generic'/'Singleton'::.ctor()
+          stsfld class 'GenericNestedObjectOwner'/'Generic'/'Singleton' 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'INSTANCE'
           leave IL_tryEnd_0
         }
         catch [mscorlib]System.Exception {
           stloc.0
           ldloc.0
           call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
-          stsfld object 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'<static-initialization-failure>'
+          stsfld object 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'<static-initialization-failure>'
           leave IL_tryEnd_0
         }
     IL_tryEnd_0:
@@ -634,13 +616,13 @@
         .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
         .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
         .maxstack 2
-        ldsfld object 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'<static-initialization-failure>'
+        ldsfld object 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'<static-initialization-failure>'
         ldnull
         ceq
         ldc.i4.0
         ceq
         brfalse IL_whenNext_1
-        ldsfld object 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'<static-initialization-failure>'
+        ldsfld object 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'<static-initialization-failure>'
         call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
         ldstr "GenericNestedObjectOwner.Generic.Singleton"
         call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
@@ -652,24 +634,24 @@
       .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 2
-        call void 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'<EnsureInitialized>'()
+        call void 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'<EnsureInitialized>'()
         ldarg.0
         call instance void [mscorlib]System.Object::.ctor()
         ldarg.0
         call int32 'nestedSingletonsKt'::'nextInitialization'()
-        stfld int32 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'captured'
+        stfld int32 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'captured'
         ret
       }
       .method public hidebysig specialname instance int32 'get_captured'() cil managed
       {
         .maxstack 1
         ldarg.0
-        ldfld int32 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'captured'
+        ldfld int32 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'captured'
         ret
       }
       .property instance int32 'captured'()
       {
-        .get instance int32 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'get_captured'()
+        .get instance int32 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'get_captured'()
       }
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -1384,33 +1366,33 @@ IL_tryEnd_0:
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    call void 'GenericAncestor`1'/'CompanionHolder'::'<EnsureInitialized>'()
-    ldsfld class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'GenericAncestor`1'/'CompanionHolder'::'Companion'
-    call instance int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'get_captured'()
+    call void 'GenericAncestor'/'CompanionHolder'::'<EnsureInitialized>'()
+    ldsfld class 'GenericAncestor'/'CompanionHolder'/'Companion' 'GenericAncestor'/'CompanionHolder'::'Companion'
+    call instance int32 'GenericAncestor'/'CompanionHolder'/'Companion'::'get_captured'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    call void 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'<EnsureInitialized>'()
-    ldsfld class 'GenericAncestor`1'/'ObjectHolder'/'Singleton' 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'INSTANCE'
-    call instance int32 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'get_captured'()
+    call void 'GenericAncestor'/'ObjectHolder'/'Singleton'::'<EnsureInitialized>'()
+    ldsfld class 'GenericAncestor'/'ObjectHolder'/'Singleton' 'GenericAncestor'/'ObjectHolder'/'Singleton'::'INSTANCE'
+    call instance int32 'GenericAncestor'/'ObjectHolder'/'Singleton'::'get_captured'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    call void 'DirectGenericObjectOwner`1'/'Singleton'::'<EnsureInitialized>'()
-    ldsfld class 'DirectGenericObjectOwner`1'/'Singleton' 'DirectGenericObjectOwner`1'/'Singleton'::'INSTANCE'
-    call instance int32 'DirectGenericObjectOwner`1'/'Singleton'::'get_captured'()
+    call void 'DirectGenericObjectOwner'/'Singleton'::'<EnsureInitialized>'()
+    ldsfld class 'DirectGenericObjectOwner'/'Singleton' 'DirectGenericObjectOwner'/'Singleton'::'INSTANCE'
+    call instance int32 'DirectGenericObjectOwner'/'Singleton'::'get_captured'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    call void 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'<EnsureInitialized>'()
-    ldsfld class 'GenericNestedObjectOwner'/'Generic`1'/'Singleton' 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'INSTANCE'
-    call instance int32 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'get_captured'()
+    call void 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'<EnsureInitialized>'()
+    ldsfld class 'GenericNestedObjectOwner'/'Generic'/'Singleton' 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'INSTANCE'
+    call instance int32 'GenericNestedObjectOwner'/'Generic'/'Singleton'::'get_captured'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
