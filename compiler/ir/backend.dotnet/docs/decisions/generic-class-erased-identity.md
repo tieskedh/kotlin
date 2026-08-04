@@ -144,6 +144,15 @@ physical names derived from the complete Kotlin signature. KLIB and the
 physical function record restore their Kotlin names. Name allocation must not
 depend on declaration order or the current overload set.
 
+A generic upper bound whose classifier is a Kotlin-owned erased class keeps
+that one non-generic owner as a necessarily true CLR constraint, while KLIB
+retains the complete arguments and recursive relation. Thus Common's
+`E : Enum<E>` is physically `E : Enum`, never `Enum<E>` and never an omitted
+class relationship. This is a truthful weakening: it rejects values outside
+the erased class hierarchy without pretending CLR can encode Kotlin's exact
+self-bound. Imported CLR generic bounds are not erased by this rule; their
+native constructed identity must be represented exactly or rejected.
+
 ## Inheritance and dispatch
 
 The emitted CLR class retains its ordinary non-generic base-class edge. A

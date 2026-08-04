@@ -183,6 +183,7 @@ object DotNetBackend {
                 staticInitializations = context.staticInitializations,
                 staticInitializationFailures = context.staticInitializationFailures,
                 objectInstanceFields = context.objectInstanceFields,
+                enumEntryFields = context.enumEntryFields,
                 cSharpImplementationManifestTarget = target,
                 hasKotlinMetadataResource = producesStdlib && kotlinMetadataResourceFactory != null,
             ).emit(irModuleFragment) ?: return result(ilTarget)
@@ -279,6 +280,7 @@ object DotNetBackend {
             staticInitializations = context.staticInitializations,
             staticInitializationFailures = context.staticInitializationFailures,
             objectInstanceFields = context.objectInstanceFields,
+            enumEntryFields = context.enumEntryFields,
             externalStaticInitializations = context.externalStaticInitializations,
             interfaceDefaultPromotions = context.interfaceDefaultPromotions,
             genericInterfaceViewBridges = context.genericInterfaceViewBridges,

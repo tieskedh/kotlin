@@ -26,6 +26,18 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/DotNetStdlibKotlin.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetEnum.kt",
+        "dotnet/src/kotlin/DotNetEnum.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetEnumEntriesSerializationProxy.kt",
+        "dotnet/src/kotlin/enums/DotNetEnumEntriesSerializationProxy.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetSerializationUtil.kt",
+        "dotnet/src/kotlin/internal/DotNetSerializationUtil.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetStdlibCancellation.kt",
         "dotnet/src/kotlin/coroutines/cancellation/DotNetStdlibCancellation.kt",
     ),
@@ -63,6 +75,16 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "_DotNetBootstrapKotlin.kt",
         "dotnet/common/src/generated/_DotNetBootstrapKotlin.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapEnum.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapEnum.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapEnumEntries.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapEnumEntries.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
@@ -105,6 +127,21 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "Annotations.kt",
         "src/kotlin/internal/Annotations.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "AnnotationsBuiltin.kt",
+        "src/kotlin/internal/AnnotationsBuiltin.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "WasExperimental.kt",
+        "src/kotlin/annotations/WasExperimental.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "serializationUtil.kt",
+        "src/kotlin/internal/serializationUtil.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

@@ -791,6 +791,10 @@ internal class DotNetIlTypeMapper private constructor(
     }
 
     private fun mapDotNetIlValueType(type: IrType): DotNetIlValueType? {
+        // `void` is legal only in a CLR method's return slot. Every other occurrence of
+        // Kotlin `Unit` is the ordinary singleton reference value, matching the JVM's
+        // `kotlin.Unit` parameter/field representation and the expression codegen contract.
+        if (type.isUnit()) return DotNetRuntimeTypes.unitType
         DotNetRuntimeTypes.mapCompilerRuntimeType(type)?.let { return it }
         if (type.referencesErasedOwnerParameterForCurrentView()) {
             if (type.isDotNetGenericArray()) {
@@ -1136,10 +1140,13 @@ internal class DotNetIlTypeMapper private constructor(
  * rejects valid Kotlin calls through a widened declaration-site-variance view. Portable closed
  * value-type views cannot express the substituted relationship either. The exact view still
  * keeps the strongly typed parameters and result; only the incompatible physical constraint is
- * weakened. A future C# export facade may publish a convenience constraint, but that facade must
- * not become Kotlin's virtual dispatch slot. Other constraints remain direct, non-null, and
- * non-generic; accepting a mapped or external type without a complete member model would publish
- * metadata the backend cannot use.
+ * weakened. A bound whose classifier is a declaration-erased Kotlin class retains that one
+ * non-generic physical owner as a necessarily true CLR constraint; KLIB keeps its exact type
+ * arguments and recursive relationship. This is weaker but truthful (`E : Enum<E>` becomes
+ * physical `E : Enum`) and never reintroduces a closed CLR generic identity. A future C# export
+ * facade may publish a convenience constraint, but that facade must not become Kotlin's virtual
+ * dispatch slot. Other constraints remain direct and non-null; accepting a mapped or external
+ * type without a complete member model would publish metadata the backend cannot use.
  * A class constraint is sorted before interface constraints, matching the ECMA/Roslyn canonical
  * order regardless of source `where`-clause order. Type-parameter constraints retain their source
  * position after concrete constraints; GenericParamConstraint row order has no semantic effect.
@@ -1164,7 +1171,12 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
                             "constraints must be non-null type parameters or non-generic module-local classes/interfaces"
                 )
             val isComparableSelfBound = bound.isDotNetComparableSelfBound(this)
-            if (simpleBound.isMarkedNullable() || (simpleBound.arguments.isNotEmpty() && !isComparableSelfBound)) {
+            val erasedGenericClassBound = (simpleBound.classifier as? IrClassSymbol)?.owner
+                ?.let(typeMapper::isErasedGenericClass) == true
+            if (
+                simpleBound.isMarkedNullable() ||
+                (simpleBound.arguments.isNotEmpty() && !isComparableSelfBound && !erasedGenericClassBound)
+            ) {
                 dotNetUnsupported(
                     "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
                             "constraints must be non-null type parameters or non-generic module-local classes/interfaces"
@@ -1176,6 +1188,14 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
                         "type parameter '${name.asString()}' has no canonical CLR Comparable constraint"
                     )
                 return@mapIndexedNotNull Triple(1, index, mappedBound)
+            }
+            if (erasedGenericClassBound) {
+                val classifier = simpleBound.classifier as IrClassSymbol
+                val mappedBound = typeMapper.toDotNetIlValueType(bound) as? DotNetIlValueType.UserClass
+                    ?: dotNetUnsupported(
+                        "type parameter '${name.asString()}' has no erased CLR class constraint for ${bound.render()}"
+                    )
+                return@mapIndexedNotNull Triple(if (classifier.owner.isInterface) 1 else 0, index, mappedBound)
             }
             val boundParameter = (simpleBound.classifier as? IrTypeParameterSymbol)?.owner
             val erasedClassOwner = (boundParameter?.parent as? IrClass)
@@ -1276,7 +1296,8 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
 /**
  * The shared generic type-parameter gate: a supported parameter is non-reified and is either
  * unconstrained (`Any?`), logically non-null but physically unconstrained (`Any`), or has direct
- * non-null type-parameter or non-generic class/interface bounds.
+ * non-null type-parameter, non-generic class/interface, or declaration-erased Kotlin class
+ * bounds.
  * [allowDeclarationSiteVariance] is true for generic interfaces, which preserve it directly in
  * CLR metadata, and for erased Kotlin-owned generic classes, whose variance remains in KLIB and
  * compiler assignability without producing CLR class variance. Functions remain invariant.
@@ -1331,7 +1352,8 @@ internal fun checkDotNetTypeParametersSupported(
                 else -> {
                     val simpleType = superType as? IrSimpleType
                     simpleType == null || simpleType.isMarkedNullable() ||
-                            simpleType.arguments.isNotEmpty() ||
+                            (simpleType.arguments.isNotEmpty() &&
+                                    !simpleType.isPotentialErasedKotlinClassBound()) ||
                             (simpleType.classifier !is IrClassSymbol &&
                                     simpleType.classifier !is IrTypeParameterSymbol)
                 }
@@ -1345,6 +1367,20 @@ internal fun checkDotNetTypeParametersSupported(
             )
         }
     }
+}
+
+/**
+ * Shape-gate candidate for a Kotlin-owned generic-class bound. The live mapper later proves that
+ * this classifier has the accepted erased class ABI; foreign CLR generic instances therefore
+ * still fail instead of being silently erased.
+ */
+private fun IrSimpleType.isPotentialErasedKotlinClassBound(): Boolean {
+    val irClass = (classifier as? IrClassSymbol)?.owner ?: return false
+    // The projected stdlib declaration may already have had its owner's physical class
+    // parameters erased before this early shape gate runs. Arguments on the logical bound are
+    // the stable evidence (`Enum<E>`); the live mapper still has to prove that the classifier is
+    // a registered erased Kotlin class, so a foreign CLR generic class cannot pass accidentally.
+    return !irClass.isInterface && arguments.isNotEmpty()
 }
 
 /**
@@ -1414,8 +1450,12 @@ internal fun IrSimpleFunction.isDotNetVirtual(): Boolean {
     if ((parent as? IrClass)?.isInterface == true) return true
     if (dotNetAnyMethodOrNull() != null) return true
     if (overriddenSymbols.isNotEmpty()) return true
+    // An abstract MethodDef is necessarily a CLR virtual slot. Keep this independent of the
+    // logical owner's modality: a Kotlin enum is source-final in serialized KLIB while its
+    // abstract entry contract is physically implemented by private entry subclasses.
+    if (modality == Modality.ABSTRACT) return true
     val ownerModality = (parent as? IrClass)?.modality
-    return (modality == Modality.OPEN || modality == Modality.ABSTRACT) &&
+    return modality == Modality.OPEN &&
             (ownerModality == Modality.OPEN ||
                     ownerModality == Modality.ABSTRACT ||
                     ownerModality == Modality.SEALED)

@@ -32,6 +32,7 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithName
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithVisibility
+import org.jetbrains.kotlin.ir.declarations.IrEnumEntry
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
@@ -103,6 +104,8 @@ internal class DotNetIlEmitter(
             Map<IrDeclarationParent, DotNetLoweredStaticInitializationFailure> = emptyMap(),
     private val objectInstanceFields:
             Map<IrClass, IrField> = emptyMap(),
+    private val enumEntryFields:
+            Map<IrEnumEntry, IrField> = emptyMap(),
     private val externalStaticInitializations:
             Map<IrSimpleFunction, DotNetBoundStaticInitialization> = emptyMap(),
     private val interfaceDefaultPromotions:
@@ -1485,6 +1488,7 @@ internal class DotNetIlEmitter(
             interfaceDefaultClassForwarders = interfaceDefaultClassForwarders,
             staticInitializations = staticInitializations,
             objectInstanceFields = objectInstanceFields,
+            enumEntryFields = enumEntryFields,
             typeMapper = typeMapper,
         )
         val managedResources = cSharpImplementationManifestTarget?.let { target ->
@@ -2600,6 +2604,10 @@ internal class DotNetIlEmitter(
                     when (declaration.origin) {
                         IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE ->
                             renderedFields += renderObjectInstanceField(declaration, physicalTypeMapper)
+                        IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRY ->
+                            renderedFields += renderEnumEntryField(declaration, physicalTypeMapper)
+                        IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRIES ->
+                            renderedFields += renderField(declaration, physicalTypeMapper)
                         DOTNET_STATIC_INITIALIZATION_FAILURE_STATE ->
                             renderedFields += renderField(declaration, physicalTypeMapper)
                         IrDeclarationOrigin.DELEGATE,
@@ -2872,6 +2880,20 @@ internal class DotNetIlEmitter(
         return ".field $visibility static initonly ${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
     }
 
+    /** One public readonly CLR field carrying a Kotlin enum-entry singleton. */
+    private fun renderEnumEntryField(field: IrField, typeMapper: DotNetIlTypeMapper): String {
+        val fieldType = typeMapper.toDotNetIlValueType(field.type)
+            ?: dotNetUnsupported("enum-entry field '${field.name.asString()}' has unsupported type ${field.type.render()}")
+        val declaration =
+            ".field public static initonly ${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
+        val attributes = field.dotNetRuntimeMarkerAttributes(typeMapper)
+        if (attributes.isEmpty()) return declaration
+        return buildString {
+            appendLine(declaration)
+            append(attributes.joinToString("\n"))
+        }
+    }
+
     /**
      * The CLR `literal` field of a `const val` — the ConstantValue-attribute analogue the JVM
      * emits (JVM precedent: `StaticInitializersLowering` excludes fields with a `constantValue()`
@@ -3052,6 +3074,8 @@ internal class DotNetIlEmitter(
      */
     private fun IrField.dotNetFieldDescription(): String = when {
         origin == IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE -> "the synthesized '${name.asString()}' singleton field"
+        origin == IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRY -> "the synthesized '${name.asString()}' enum-entry field"
+        origin == IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRIES -> "the synthesized enum-entries cache field"
         origin == IrDeclarationOrigin.FIELD_FOR_OUTER_THIS -> "the synthesized outer-instance field"
         origin == LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE ->
             "the synthesized captured-value field '${name.asString()}'"

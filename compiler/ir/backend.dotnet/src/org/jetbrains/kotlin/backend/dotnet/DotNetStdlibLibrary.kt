@@ -49,8 +49,10 @@ internal object DotNetStdlibLibrary {
     const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
     const val TEXT_FACADE_IL_NAME = "Kotlin.Text.StringsKt"
     const val IO_FACADE_IL_NAME = "Kotlin.Io.ConsoleKt"
+    const val ENUM_ENTRIES_FACADE_IL_NAME = "Kotlin.Enums.EnumEntriesKt"
     const val THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME =
         "kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt"
+    const val SERIALIZATION_UTIL_FACADE_IL_NAME = "Kotlin.Internal.SerializationUtilKt"
     const val EXCEPTIONS_FACADE_IL_NAME = "Kotlin.DotNetExceptionsKt"
     const val KCLASSES_FACADE_IL_NAME = "Kotlin.Reflection.KClasses"
     const val ARRAY_ITERATOR_FACTORY_NAME = "dotNetArrayIterator"
@@ -59,6 +61,10 @@ internal object DotNetStdlibLibrary {
     const val ERASED_ARRAY_ITERABLE_FACTORY_NAME = "dotNetErasedArrayIterable"
 
     private val implementationClassIlNames = mapOf(
+        "kotlin.Enum" to "Kotlin.Enum",
+        "kotlin.enums.EnumEntries" to "Kotlin.Enums.EnumEntries",
+        "kotlin.enums.EnumEntriesList" to "Kotlin.Enums.EnumEntriesList",
+        "kotlin.enums.EnumEntriesSerializationProxy" to "Kotlin.Enums.EnumEntriesSerializationProxy",
         "kotlin.collections.ArrayAsList" to ARRAY_AS_LIST_IL_NAME,
         "kotlin.collections.AbstractCollection" to ABSTRACT_COLLECTION_IL_NAME,
         "kotlin.collections.AbstractList" to ABSTRACT_LIST_IL_NAME,
@@ -88,6 +94,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.internal.SyntheticConstructorMarker" to "Kotlin.Internal.SyntheticConstructorMarker",
     )
     private val implementationFunctionFacadeIlNames = mapOf(
+        "kotlin.enums.enumEntries" to ENUM_ENTRIES_FACADE_IL_NAME,
         "kotlin.collections.all" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.any" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.asIterable" to COLLECTIONS_FACADE_IL_NAME,
@@ -167,6 +174,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.io.readln" to IO_FACADE_IL_NAME,
         "kotlin.io.readlnOrNull" to IO_FACADE_IL_NAME,
         "kotlin.internal.throwNoWhenBranchMatchedException" to THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,
+        "kotlin.internal.throwReadObjectNotSupported" to SERIALIZATION_UTIL_FACADE_IL_NAME,
+        "kotlin.internal.wrapAsDeserializationException" to SERIALIZATION_UTIL_FACADE_IL_NAME,
         "kotlin.stackTraceToString" to EXCEPTIONS_FACADE_IL_NAME,
         "kotlin.printStackTrace" to EXCEPTIONS_FACADE_IL_NAME,
         "kotlin.addSuppressed" to EXCEPTIONS_FACADE_IL_NAME,
@@ -519,6 +528,17 @@ internal object DotNetStdlibLibrary {
     )
 
     private val implementationSources = mapOf(
+        // FIR actualization may retain either source file as the physical Enum declaration
+        // owner, depending on which member is observed. Both names designate the same one
+        // Kotlin.Stdlib class; recognizing both keeps partitioning independent of that FIR
+        // implementation detail and never emits a second type.
+        "_DotNetBootstrapEnum.kt" to ImplementationSource(packageFqName = "kotlin"),
+        "DotNetEnum.kt" to ImplementationSource(packageFqName = "kotlin"),
+        "_DotNetBootstrapEnumEntries.kt" to ImplementationSource(
+            packageFqName = "kotlin.enums",
+            facadeIlName = ENUM_ENTRIES_FACADE_IL_NAME,
+        ),
+        "DotNetEnumEntriesSerializationProxy.kt" to ImplementationSource(packageFqName = "kotlin.enums"),
         "DotNetStdlibCollections.kt" to ImplementationSource(
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
@@ -567,6 +587,10 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.internal",
             facadeIlName = THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,
         ),
+        "DotNetSerializationUtil.kt" to ImplementationSource(
+            packageFqName = "kotlin.internal",
+            facadeIlName = SERIALIZATION_UTIL_FACADE_IL_NAME,
+        ),
         "SharedVariableBox.kt" to ImplementationSource(packageFqName = "kotlin.internal"),
         "SyntheticConstructorMarker.kt" to ImplementationSource(packageFqName = "kotlin.internal"),
         "KClasses.kt" to ImplementationSource(
@@ -580,6 +604,8 @@ internal object DotNetStdlibLibrary {
     )
     private val resolutionOnlySources = mapOf(
         "Annotations.kt" to "kotlin.internal",
+        "AnnotationsBuiltin.kt" to "kotlin.internal",
+        "WasExperimental.kt" to "kotlin",
         "JvmAnnotationsH.kt" to "kotlin.jvm",
         "Multiplatform.kt" to "kotlin",
         "KClass.kt" to "kotlin.reflect",

@@ -104,7 +104,7 @@ post-substitution array-operation audit is complete as well: array construction 
 ordinary carriers and needs no reified-only representation. Do not flip either inliner capability
 gate or mistake that allocation readiness for the whole language feature. Kotlin `KClass` and
 class literals now form a completed nominal floor over classified CLR evidence. `KType`, the
-phased enum/`EnumEntries` and contracts products, the final substituted type-operator matrix, and
+contracts product, reified enum helpers, the final substituted type-operator matrix, and
 the physical reified throwing-stub contract remain separate boundaries.
 
 ### 2. Expand Common collections by exact dependency closure
@@ -113,7 +113,7 @@ Use [`common-collections.md`](common-collections.md). Its builder and Common abs
 foundation now composes with the selected erased generic-class ABI without a target-authored
 algorithm or collection-specific bridge.
 
-The collection work provides ordinary user value and foundations for enums, while exercising
+The collection work provides ordinary user value and the foundation now consumed by enums, while exercising
 generic interfaces, arrays, separate products, and profile-compatible stdlib publication.
 
 The erased physical generic-class route is selected in
@@ -131,19 +131,19 @@ Common abstract collection bases while omitting precisely those two declarations
 closure is complete over the erased generic-class representation; it is not a target stub or
 rewritten algorithm.
 
-Modern enums plus the non-reified `EnumEntries` core now form the next coherent language/product
-phase. They use
+Modern enums plus the non-reified `EnumEntries` core are now complete as one coherent
+language/product phase. They use
 Kotlin-owned reference classes, the general Comparable mapping, producer-recorded entry-field
-binding, and the existing static-initialization machinery; they are not CLR value-type enums. Once
-`InvocationKind` exists, the exact
-contracts/`Standard.kt`/`buildString` closure can land and the temporary projection can give way to
-the full ordinary Common file. General reified
+binding, and the existing static-initialization machinery; they are not CLR value-type enums. The
+next bounded language/product phase is ordinary `InvocationKind`, followed by the exact
+contracts/`Standard.kt`/`buildString` closure and replacement of the temporary projection with the
+full ordinary Common file. General reified
 enum functions remain behind the reified gate throughout.
 
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
 interface calls retain ordinal String and Kotlin floating ordering through one semantic helper.
-The later `Enum<E>` work must consume this general representation rather than publish an
+The completed `Enum<E>` work consumes this general representation rather than publishing an
 enum-only substitute. See
 [`../decisions/comparable-clr-views.md`](../decisions/comparable-clr-views.md).
 
@@ -227,14 +227,13 @@ The current verified count and command belong only in [`../../STATUS.md`](../../
 
 Parking means “fail clearly and do not constrain a future ABI,” not “approximate now.”
 
-- enums and the coherent non-reified `EnumEntries` product, selected as the next bounded phase over
-  the erased generic-class and Common abstract-list foundations;
 - valued annotation constructors and arguments, wider use-site targets, and runtime annotation
   reflection; parameterless markers, retention, and their exact CLR-parent projection are selected;
 - `KType`, `typeOf`, and member/annotation reflection; the nominal `KClass`/class-literal floor is
   complete;
 - value/inline classes;
-- reified functions, `typeOf`, and reflection-dependent inline substitution;
+- reified functions, including `enumValues`, `enumValueOf`, and `enumEntries`, plus `typeOf` and
+  reflection-dependent inline substitution;
 - suspend inline functions until coroutine state machines are supported;
 - coroutine state machines and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;
@@ -245,6 +244,32 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 An adjacent feature must not assume a parked representation. In particular, value classes
 constrain generic interfaces; coroutines constrain callables and cancellation; valued annotation
 arguments constrain reflection and custom-attribute emission; enums consume collection identity.
+
+## Post-core wrapper minimization
+
+After the supported core language and stdlib feature closure is complete, run
+one dedicated wrapper-reduction programme. Do not interleave speculative
+wrapper micro-optimizations with unfinished semantic foundations: first make
+the complete object, generic, collection, reflection, enum, annotation,
+coroutine, and interop rules observable and testable; then measure the actual
+boundary costs.
+
+The programme must inventory runtime carriers, collection/array adapters,
+foreign-import bridges, callable adapters, and explicit C# export facades. For
+each wrapper, record allocation frequency, lifetime, identity behavior,
+dispatch path, reflection surface, and cross-assembly role. Eliminate, fuse,
+or cache it whenever that change can be disabled without changing Kotlin
+`is`, `as`, `===`, mutation, virtual dispatch, reflection, separate
+compilation, or DLL signatures. Retain wrappers that carry a real semantic
+boundary, and document why they are irreducible rather than hiding them as an
+implementation accident.
+
+This programme may use CLR generics, structs, delegates, interface views, and
+escape analysis as implementation optimizations. It may not introduce a
+second observable representation for a Kotlin-owned object or make C# export
+shape determine Kotlin runtime identity. Benchmark allocation, steady-state
+runtime, ReadyToRun/NativeAOT size, and wrapper crossings before and after each
+accepted reduction.
 
 ## Release gates
 

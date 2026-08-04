@@ -10278,7 +10278,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("19", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("20", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -16836,6 +16836,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
         assertTrue("call to unsupported function 'isType'" in diagnostics) { diagnostics }
         assertFalse(output.exists()) { "A rejected reified program must not leave a runnable artifact" }
+
+        val enumSource = File(tmpdir, "inline-reified-enum.kt").apply {
+            writeText(
+                """
+                package inline.reified.enums
+
+                enum class State { READY }
+
+                fun main() {
+                    val values = enumValues<State>()
+                    if (values.size != 1 || values[0] !== State.READY) throw Error("enumValues")
+                    if (enumValueOf<State>("READY") !== State.READY) throw Error("enumValueOf")
+                }
+                """.trimIndent()
+            )
+        }
+        val enumOutput = File(tmpdir, "InlineReifiedEnum.dll")
+        val [enumDiagnostics, enumExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                enumSource.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+                K2DotNetCompilerArguments::moduleName.cliArgument, "InlineReifiedEnum",
+                K2DotNetCompilerArguments::destination.cliArgument, enumOutput.path,
+            ),
+        )
+
+        assertEquals(ExitCode.COMPILATION_ERROR, enumExitCode, enumDiagnostics)
+        assertTrue("call to unsupported function 'enumValues'" in enumDiagnostics) { enumDiagnostics }
+        assertFalse(enumOutput.exists()) { "Rejected reified enum helpers must not leave a runnable artifact" }
     }
 
     @Test
@@ -25530,6 +25560,229 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testOrdinaryEnumsAcrossPortableLibraryBoundary() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard facade is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "ordinary-enum-library").apply { mkdirs() }
+        val librarySource = libraryDirectory.resolve("ordinaryEnumLibrary.kt").apply {
+            writeText(
+                """
+                package enumabi
+
+                public annotation class EntryMarker
+
+                public enum class State(public val code: Int) {
+                    @EntryMarker
+                    READY(1) {
+                        override fun label(): String = "ready"
+                    },
+                    BUSY(2) {
+                        override fun label(): String = "busy"
+                    },
+                    DONE(3) {
+                        override fun label(): String = "done"
+                    };
+
+                    public abstract fun label(): String
+                }
+
+                public fun selected(): State = State.READY
+                public fun selectedName(): String = State.READY.name
+                public fun byName(name: String): State = State.valueOf(name)
+                public fun allStates(): Array<State> = State.values()
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Ordinary.Enum.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val library = libraryDirectory.resolve("Ordinary.Enum.Library.dll")
+        val libraryIl = libraryDirectory.resolve("Ordinary.Enum.Library.il").readText()
+        assertTrue(
+            Regex(
+                """\.class public[^\n]*'enumabi\.State'\s+extends \[Kotlin\.Stdlib]'Kotlin\.Enum'"""
+            ).containsMatchIn(libraryIl)
+        ) { libraryIl }
+        assertTrue(Regex("""\.class public abstract[^\n]*'enumabi\.State'""").containsMatchIn(libraryIl)) {
+            libraryIl
+        }
+        for (entryName in listOf("READY", "BUSY", "DONE")) {
+            assertTrue(".field public static initonly class 'enumabi.State' '$entryName'" in libraryIl) { libraryIl }
+        }
+        assertTrue(".custom instance void 'enumabi.EntryMarker'::.ctor()" in libraryIl) { libraryIl }
+        assertFalse("System.Enum" in libraryIl) { libraryIl }
+        assertFalse("value__" in libraryIl) { libraryIl }
+        assertFalse(" static literal " in libraryIl) { libraryIl }
+
+        val physicalDeclarations = DotNetLibraryAbiCodec.decode(library.readKlibManifest()).values
+        val entryDeclarations = physicalDeclarations.filterIsInstance<DotNetPhysicalDeclaration.EnumEntry>()
+        assertEquals(setOf("READY", "BUSY", "DONE"), entryDeclarations.map { it.fieldName }.toSet())
+        assertTrue(entryDeclarations.all { it.ownerPath.last() == "enumabi.State" }) {
+            entryDeclarations.toString()
+        }
+
+        val csharpSource = libraryDirectory.resolve("OrdinaryEnumConsumer.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Reflection;
+
+                public static class OrdinaryEnumConsumer
+                {
+                    public static int Main()
+                    {
+                        enumabi.State ready = enumabi.State.READY;
+                        if (ready.name != "READY" || ready.ordinal != 0) return 1;
+                        if (ready.code != 1 || ready.label() != "ready") return 2;
+                        if (!Object.ReferenceEquals(ready, enumabi.State.valueOf("READY"))) return 3;
+                        enumabi.State[] first = enumabi.State.values();
+                        enumabi.State[] second = enumabi.State.values();
+                        if (Object.ReferenceEquals(first, second) || first.Length != 3) return 4;
+                        if (!Object.ReferenceEquals(first[2], enumabi.State.DONE)) return 5;
+                        if (typeof(enumabi.State).IsEnum) return 6;
+                        FieldInfo readyField = typeof(enumabi.State).GetField("READY");
+                        if (readyField == null || !readyField.IsInitOnly || readyField.IsLiteral) return 7;
+                        if (readyField.GetCustomAttributes(typeof(enumabi.EntryMarker), false).Length != 1) return 8;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpConsumer = libraryDirectory.resolve("OrdinaryEnumConsumer.exe")
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package enumconsumer
+
+                    import enumabi.*
+
+                    private fun describe(state: State): String = when (state) {
+                        State.READY -> "ready"
+                        State.BUSY -> "busy"
+                        State.DONE -> "done"
+                    }
+
+                    fun main() {
+                        val selected = selected()
+                        if (selected !== State.READY || selectedName() != "READY") {
+                            throw Error("external entry binding")
+                        }
+                        if (byName("BUSY") !== State.BUSY || describe(State.DONE) != "done") {
+                            throw Error("external synthetic members")
+                        }
+                        if (State.READY.label() != "ready" || State.BUSY.code != 2) {
+                            throw Error("external entry subclass dispatch")
+                        }
+                        val first = allStates()
+                        val second = State.values()
+                        if (first === second || first.size != 3 || first[1] !== State.BUSY) {
+                            throw Error("external values")
+                        }
+                        val entries = State.entries
+                        if (entries !== State.entries || entries.size != 3 || entries[2] !== State.DONE) {
+                            throw Error("external entries")
+                        }
+                        val widened: Enum<*> = State.BUSY
+                        if (widened.name != "BUSY" || widened.ordinal != 1) {
+                            throw Error("external widened enum")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "OrdinaryEnumKotlinConsumer.exe" else "OrdinaryEnumKotlinConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, library.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "OrdinaryEnumKotlinConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            val consumerIl = consumerDirectory.resolve("OrdinaryEnumKotlinConsumer.il").readText()
+            assertTrue(
+                "callvirt instance string [Ordinary.Enum.Library]'enumabi.State'::'label'()" in consumerIl
+            ) { consumerIl }
+            if (target == "net10.0") {
+                runDotNet(dotnetHost, application, consumerDirectory, "Kotlin enum consumer failed for $target")
+            } else {
+                val process = ProcessBuilder(frameworkExecutionCommand(checkNotNull(frameworkHost), application))
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Kotlin enum consumer failed for $target:\n$output")
+                val csharpCompile = runCSharpCompiler(
+                    checkNotNull(csharpCompiler),
+                    csharpSource,
+                    csharpConsumer,
+                    library,
+                    consumerDirectory.resolve("Kotlin.Stdlib.dll"),
+                    consumerDirectory.resolve("Kotlin.Runtime.dll"),
+                    checkNotNull(frameworkNetStandardFacade),
+                    target = "exe",
+                )
+                assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+                consumerDirectory.resolve("Kotlin.Stdlib.dll")
+                    .copyTo(libraryDirectory.resolve("Kotlin.Stdlib.dll"), overwrite = true)
+                consumerDirectory.resolve("Kotlin.Runtime.dll")
+                    .copyTo(libraryDirectory.resolve("Kotlin.Runtime.dll"), overwrite = true)
+                val csharpProcess = ProcessBuilder(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), csharpConsumer)
+                )
+                    .directory(libraryDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val csharpOutput = csharpProcess.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, csharpProcess.waitFor(), "C# enum consumer failed on net48:\n$csharpOutput")
+            }
+            if (target == "net10.0") {
+                val modernCSharpConsumer = consumerDirectory.resolve(csharpConsumer.name)
+                csharpConsumer.copyTo(modernCSharpConsumer, overwrite = true)
+                consumerDirectory.resolve("OrdinaryEnumKotlinConsumer.runtimeconfig.json")
+                    .copyTo(
+                        consumerDirectory.resolve("OrdinaryEnumConsumer.runtimeconfig.json"),
+                        overwrite = true,
+                    )
+                runDotNet(
+                    dotnetHost,
+                    modernCSharpConsumer,
+                    consumerDirectory,
+                    "C# enum consumer failed on net10",
+                )
+            }
+        }
+    }
+
+    @Test
     fun testComparableAcrossPortableLibraryBoundary() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,
@@ -28543,7 +28796,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "foldRightIndexed" to 1,
                 "forEach" to 1,
                 "forEachIndexed" to 1,
-                "getOrNull" to 1,
+                "getOrNull" to 2,
                 "indexOf" to 2,
                 "indexOfFirst" to 2,
                 "indexOfLast" to 2,
@@ -29277,6 +29530,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .filter(File::isFile)
             .filter { it.extension == "kt" }
         sourceFiles += File("libraries/stdlib/src/kotlin/internal/Annotations.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/internal/AnnotationsBuiltin.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/internal/serializationUtil.kt").absoluteFile
         sourceFiles +=
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt").absoluteFile
@@ -29285,6 +29540,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ioH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/annotations/WasExperimental.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClass.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClasses.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClassifier.kt").absoluteFile

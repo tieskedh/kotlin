@@ -155,6 +155,16 @@ internal class DotNetIlIntrinsicMethods(
         // fir2ir appends this synthetic call as the final branch of an exhaustive `when`
         // without a source `else`, exactly the symbol the JVM backend intrinsifies.
         irBuiltIns.noWhenBranchMatchedExceptionSymbol.toKey()!! to DotNetIlNoWhenBranchMatchedIntrinsic,
+        irBuiltIns.illegalArgumentExceptionSymbol.toKey()!! to DotNetIlIllegalArgumentExceptionIntrinsic,
+        // The bootstrap stdlib keeps the authoritative Common Array.getOrNull body, whose
+        // `index in indices` is erased by shared RangeContainsLowering. A private target marker
+        // lets FIR resolve that exact body without publishing Array.indices/IntRange yet. It has
+        // no physical declaration, and any surviving call proves the shared lowering missed it.
+        Key(kotlinCollectionsFqn, arrayFqn, "<get-indices>", emptyList())
+                to DotNetIlUnsupportedIntrinsic(
+            reason = "private Array.indices bootstrap marker survived RangeContainsLowering",
+            excludesDeclarationFromCodegen = true,
+        ),
         Key(kotlinInternalFqn, null, "throwKotlinNothingValueException", emptyList())
                 to DotNetIlThrowKotlinNothingValueExceptionIntrinsic,
         Key(kotlinInternalFqn, null, "captureStaticInitializationFailure", listOf(throwableFqn))
@@ -2126,6 +2136,29 @@ private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() 
     }
 }
 
+/** Common IR synthetic used by shared lowerings and by enum `valueOf`. */
+private object DotNetIlIllegalArgumentExceptionIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        codegen.emitIllegalArgumentExceptionThrow(message(call), valuePosition = true)
+        return true
+    }
+
+    override fun tryEmitAsStatement(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+    ): Boolean {
+        codegen.emitIllegalArgumentExceptionThrow(message(call), valuePosition = false)
+        return true
+    }
+
+    private fun message(call: IrCall) = call.arguments.singleOrNull()
+        ?: dotNetUnsupported("illegalArgumentException has an unsupported argument shape")
+}
+
 /** Mature-backend guard for a call whose statically impossible `Nothing` result returned. */
 private object DotNetIlThrowKotlinNothingValueExceptionIntrinsic : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(
@@ -3175,6 +3208,7 @@ private class DotNetIlFloatingToIntegralIntrinsic(
  */
 private class DotNetIlUnsupportedIntrinsic(
     private val reason: String,
+    override val excludesDeclarationFromCodegen: Boolean = false,
 ) : DotNetIlIntrinsicMethod() {
     override fun tryEmitConstructorAsExpression(
         call: IrConstructorCall,

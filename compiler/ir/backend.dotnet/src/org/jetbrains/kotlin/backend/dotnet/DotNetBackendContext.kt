@@ -16,12 +16,15 @@ import org.jetbrains.kotlin.ir.InternalSymbolFinderAPI
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.IrDiagnosticReporter
 import org.jetbrains.kotlin.ir.KtDiagnosticReporterWithImplicitIrBasedContext
+import org.jetbrains.kotlin.ir.classSymbol
+import org.jetbrains.kotlin.ir.functionSymbol
 import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
+import org.jetbrains.kotlin.ir.declarations.IrEnumEntry
 import org.jetbrains.kotlin.ir.declarations.IrFactory
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
@@ -33,11 +36,16 @@ import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContext
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
+import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.makeNullable
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
+import org.jetbrains.kotlin.ir.util.hasShape
 import org.jetbrains.kotlin.ir.util.SymbolTable
+import org.jetbrains.kotlin.name.CallableId
+import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.name.StandardClassIds
 
 internal data class DotNetLoweredInterfaceDefaultImplementation(
     val helper: IrSimpleFunction,
@@ -131,6 +139,8 @@ internal class DotNetBackendContext(
     val companionStaticOwners: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Kotlin object declaration to the synthesized field carrying its one CLR instance. */
     val objectInstanceFields: MutableMap<IrClass, IrField> = linkedMapOf()
+    /** Logical enum entry to the synthesized public static field carrying its singleton. */
+    val enumEntryFields: MutableMap<IrEnumEntry, IrField> = linkedMapOf()
     /** Logical classifier to its stable, producer-recorded static-initialization entry. */
     val staticInitializations:
         MutableMap<IrClass, DotNetLoweredStaticInitialization> = linkedMapOf()
@@ -199,6 +209,16 @@ internal class DotNetSymbols(
         )
 
     override val getProgressionLastElementByReturnType: Map<IrClassifierSymbol, IrSimpleFunctionSymbol> = emptyMap()
+    val enumEntries: IrClassSymbol by lazy {
+        with(irBuiltIns) {
+            ClassId(StandardClassIds.BASE_ENUMS_PACKAGE, Name.identifier("EnumEntries")).classSymbol()
+        }
+    }
+    val createEnumEntries: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(StandardClassIds.BASE_ENUMS_PACKAGE, Name.identifier("enumEntries")).functionSymbol {
+            it.hasShape(regularParameters = 1) && it.parameters[0].type.classOrNull == irBuiltIns.arrayClass
+        }
+    }
     override val syntheticConstructorMarker: IrClassSymbol = run {
         val fqName = DotNetRuntimeTypes.SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME
         val markerPackage = createEmptyExternalPackageFragment(irModuleFragment, fqName.parent())
