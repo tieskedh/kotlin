@@ -1,16 +1,27 @@
 # ADR: DLL manifest and Roslyn tooling for C# interface implementations
 
-- Status: **Accepted direction; manifest schema remains experimental**
-- Scope: C# source implementations of Kotlin-owned interfaces on `net48`,
-  `netstandard2.0`, and `net10.0`
+- Status: **Accepted for non-generic interfaces; generic split-surface design superseded**
+- Scope: C# source implementations of non-generic Kotlin-owned interfaces on
+  `net48`, `netstandard2.0`, and `net10.0`; historical evidence for the removed
+  implicit generic authoring prototype
+
+The generic canonical/declared/exact design recorded below is no longer
+normative. [Erased generic-interface identity](generic-interface-erased-identity.md)
+removed those typed siblings, and
+[explicit C# export](draft-adr-explicit-csharp-export-surface.md) owns any future
+typed generic authoring surface. The manifest and analyzer remain applicable to
+non-generic Kotlin interfaces only. Historical generic sections are retained as
+design evidence until the explicit export programme selects its own contracts;
+they must not be used to reconstruct or extend the removed split ABI.
 
 ## Context
 
-A Kotlin-owned generic interface may have a non-generic canonical identity, a
-declaration-variant CLR view, an invariant exact view, generated intersection slots, and
-profile-dependent default-body placement. Those physical types are one Kotlin declaration and
-one logical contract. A handwritten C# implementation must currently discover every physical
-slot and keep its typed and erased behavior coordinated.
+A non-generic Kotlin-owned interface has one physical CLR identity but may still
+need producer-recorded member identity, default-body ownership, and special
+bridge policy for safe C# implementation. A Kotlin-owned generic interface has
+one erased runtime identity and is deliberately absent from this implicit
+source-authoring product; C# receives a typed generic contract only through a
+future explicit export.
 
 The private `Kotlin.Metadata` resource contains Kotlin logical metadata, but ordinary C# builds and
 Roslyn source generators should consume the deliberately exported authoring contract rather than

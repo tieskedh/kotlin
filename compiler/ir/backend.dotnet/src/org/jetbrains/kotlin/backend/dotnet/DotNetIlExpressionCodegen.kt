@@ -1,8 +1,6 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_EXACT_CALL
-import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_VIRTUAL_CALL
-import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceDefaultBodyViewOrNull
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
@@ -123,7 +121,7 @@ internal class DotNetIlExpressionCodegen(
             expression is IrCall &&
             intrinsicMethods.getIntrinsic(expression.symbol) == null &&
             !expression.symbol.owner.isDotNetErasedObjectResult() &&
-            !expression.symbol.owner.isSplitGenericInterfaceMember() &&
+            !expression.symbol.owner.isErasedGenericInterfaceMember() &&
             !expression.symbol.owner.isErasedGenericClassMember()
         ) {
             val returnType = resolveCall(expression).returnType
@@ -643,8 +641,8 @@ internal class DotNetIlExpressionCodegen(
      * - IMPLICIT_CAST from a reference-shaped value to such a class: CLR `castclass`. Fir2ir
      *   emits this checked downcast after a successful smartcast test, including generated data
      *   class `equals` bodies.
-     * - [IrTypeOperator.CAST]/[IrTypeOperator.SAFE_CAST] to a Kotlin-owned split generic
-     *   interface: box/widen the operand to object and cast/test only the non-generic canonical
+     * - [IrTypeOperator.CAST]/[IrTypeOperator.SAFE_CAST] to a Kotlin-owned generic
+     *   interface: box/widen the operand to object and cast/test only its non-generic erased
      *   identity. Logical arguments, projections, and stars are deliberately absent from the
      *   CLR check, following JVM/Native erasure. A non-null `as` additionally rejects null with
      *   the mapped Kotlin NPE; `as?` uses `isinst` and therefore returns null on either failure.
@@ -779,8 +777,8 @@ internal class DotNetIlExpressionCodegen(
                 }
                 return
             }
-            val isSplitGenericInterfaceCast =
-                typeMapper.isSplitGenericInterfaceType(expression.typeOperand) &&
+            val isErasedGenericInterfaceCast =
+                typeMapper.isErasedGenericInterfaceType(expression.typeOperand) &&
                         castType is DotNetIlValueType.UserClass
             val isPhysicallyExactReferenceCast = when (castType) {
                 DotNetIlValueType.Object,
@@ -791,7 +789,7 @@ internal class DotNetIlExpressionCodegen(
                     -> true
                 else -> false
             }
-            if (!isSplitGenericInterfaceCast && !isPhysicallyExactReferenceCast) {
+            if (!isErasedGenericInterfaceCast && !isPhysicallyExactReferenceCast) {
                 dotNetUnsupported("type operator ${expression.operator} is not supported")
             }
             if (!castType.isDotNetAssignableTo(expectedType)) {
@@ -1345,7 +1343,6 @@ internal class DotNetIlExpressionCodegen(
         // abstract member is inherited from several unrelated super-interfaces at once, any of
         // them is a correct operand: the implementing class's single member fills every
         // same-signature interface slot (probe-verified, ifaceprobe_s9).
-        resolveGenericInterfaceDefaultBodyCallOrNull(call, call.symbol.owner)?.let { return it }
         val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
         val calleeName = callee.name.asString()
         val info = availableFunctions[callee] ?: typeMapper.referencedFunctionInfoOrNull(callee)
@@ -1461,62 +1458,6 @@ internal class DotNetIlExpressionCodegen(
         )
     }
 
-    /** Resolves compiler-generated calls to the one typed semantic DIM of a generic default. */
-    private fun resolveGenericInterfaceDefaultBodyCallOrNull(
-        call: IrCall,
-        callee: IrSimpleFunction,
-    ): ResolvedCall? {
-        val bodyView = callee.origin.dotNetGenericInterfaceDefaultBodyViewOrNull ?: return null
-        val virtual = when (call.origin) {
-            DOTNET_GENERIC_INTERFACE_DEFAULT_VIRTUAL_CALL -> true
-            DOTNET_INTERFACE_DEFAULT_EXACT_CALL -> false
-            else -> dotNetUnsupported("generic interface-default body call has no dispatch-selection origin")
-        }
-        val source = callee.overriddenSymbols.singleOrNull()?.owner
-            ?: error("Internal .NET backend error: generic interface-default body has no logical source slot")
-        val owner = source.parent as? IrClass
-            ?: error("Internal .NET backend error: generic interface-default source has no interface owner")
-        val receiver = call.arguments.firstOrNull()
-            ?: dotNetUnsupported("generic interface-default body call has no receiver")
-        val capability = typeMapper.genericInterfaceCapabilityTypeOrNull(receiver.type, bodyView.physicalView)
-            ?: dotNetUnsupported(
-                "generic interface-default body receiver is not available through its ${bodyView.name.lowercase()} view"
-            )
-        val signatureMapper = typeMapper.genericInterfaceSignatureView(bodyView)
-        val info = DotNetIlFunctionInfo(
-            capability.classInfo,
-            callee.dotNetSignature(signatureMapper),
-            typeMapper.genericInterfaceTypedMethodName(source),
-        )
-        val methodInstantiation = if (callee.typeParameters.isEmpty()) {
-            emptyList()
-        } else {
-            if (call.typeArguments.size != callee.typeParameters.size) {
-                dotNetUnsupported("generic interface-default body call has an unsupported method instantiation")
-            }
-            call.typeArguments.map { argument ->
-                argument?.let(signatureMapper::toDotNetIlValueType)
-                    ?: dotNetUnsupported("generic interface-default body call has an unsupported type argument")
-            }
-        }
-        val parameterTypes = info.signature.parameterTypes.map { parameterType ->
-            parameterType.substituteDotNetTypeParameters(capability.arguments, methodInstantiation)
-        }
-        return ResolvedCall(
-            callee = callee,
-            calleeName = source.name.asString(),
-            info = info,
-            methodInstantiation = methodInstantiation,
-            receiverType = capability,
-            ownerToken = capability.nameInSignature,
-            parameterTypes = parameterTypes,
-            virtual = virtual,
-            returnType = info.signature.returnType.substituteDotNetTypeParameters(
-                capability.arguments,
-                methodInstantiation,
-            ),
-        )
-    }
     private data class ResolvedCall(
         val callee: IrSimpleFunction,
         val calleeName: String,
@@ -1938,7 +1879,7 @@ internal class DotNetIlExpressionCodegen(
             producedType != null &&
             !producedType.isDotNetAssignableTo(expectedType) &&
             (call.symbol.owner.isDotNetErasedObjectResult() ||
-                    call.symbol.owner.isSplitGenericInterfaceMember() ||
+                    call.symbol.owner.isErasedGenericInterfaceMember() ||
                     call.symbol.owner.isErasedGenericClassMember() ||
                     call.symbol.owner.hasErasedNullableTypeParameterResult())
         ) {
@@ -1962,10 +1903,10 @@ internal class DotNetIlExpressionCodegen(
         }
     }
 
-    private fun IrSimpleFunction.isSplitGenericInterfaceMember(): Boolean =
-        (parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true ||
+    private fun IrSimpleFunction.isErasedGenericInterfaceMember(): Boolean =
+        (parent as? IrClass)?.let(typeMapper::isErasedGenericInterface) == true ||
                 allOverridden().any { overridden ->
-                    (overridden.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true
+                    (overridden.parent as? IrClass)?.let(typeMapper::isErasedGenericInterface) == true
                 }
 
     private fun IrSimpleFunction.isErasedGenericClassMember(): Boolean =
@@ -1985,19 +1926,18 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * Probes the member's legal typed home, then falls back to the canonical erased slot.
-     * Receiver and arguments are each evaluated exactly once. A primitive/reference widening
-     * that CLR generic variance cannot express simply misses the probe and uses the same object's
-     * canonical slot; no adapter or identity substitution is involved.
+     * Uses an independently mapped typed host capability when the receiver can name it, then
+     * falls back to the erased Kotlin slot. Ordinary Kotlin-owned generic interfaces have no
+     * typed capability and take the erased route immediately. Receiver and arguments are each
+     * evaluated exactly once; no adapter or identity substitution is involved.
      */
     private fun emitGenericInterfaceCapabilityCallOrNull(
         call: IrCall,
         expectedType: DotNetIlValueType?,
     ): Boolean {
-        if (call.symbol.owner.origin.dotNetGenericInterfaceDefaultBodyViewOrNull != null) return false
         val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
         val interfaceClass = callee.parent as? IrClass ?: return false
-        if (!typeMapper.isSplitGenericInterface(interfaceClass)) return false
+        if (!typeMapper.isErasedGenericInterface(interfaceClass)) return false
         val receiver = call.arguments.firstOrNull() ?: return false
         val receiverType = receiver.type as? IrSimpleType ?: return false
         if ((receiverType.classifier as? IrClassSymbol)?.owner != interfaceClass) return false

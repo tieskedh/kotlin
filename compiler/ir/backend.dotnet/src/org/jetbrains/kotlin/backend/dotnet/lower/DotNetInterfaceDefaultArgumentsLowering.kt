@@ -18,8 +18,6 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
 import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
-import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredGenericInterfaceDefault
-import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredGenericInterfaceDefaultSlotAdapter
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultClassForwarder
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultPromotion
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
@@ -28,9 +26,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberView
 import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
-import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
-import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
 import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.config.dotNetTarget
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -102,59 +98,15 @@ internal val DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE: IrDeclarationOrigin =
 internal val DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET")
 
-internal val DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_BODY: IrDeclarationOrigin =
-    IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_BODY")
-
-internal val DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_BODY: IrDeclarationOrigin =
-    IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_BODY")
-
 internal val DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER")
 
-internal val DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_ADAPTER: IrDeclarationOrigin =
-    IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_ADAPTER")
-
-internal val DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_ADAPTER: IrDeclarationOrigin =
-    IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_ADAPTER")
-
-internal val DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_SLOT_ADAPTER: IrDeclarationOrigin =
-    IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_SLOT_ADAPTER")
-
-internal val DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_SLOT_ADAPTER: IrDeclarationOrigin =
-    IrDeclarationOriginImpl("DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_SLOT_ADAPTER")
-
-internal val IrDeclarationOrigin.dotNetGenericInterfaceDefaultBodyViewOrNull: DotNetGenericInterfaceMemberView?
-    get() = when (this) {
-        DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_BODY -> DotNetGenericInterfaceMemberView.DECLARED
-        DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_BODY -> DotNetGenericInterfaceMemberView.EXACT
-        else -> null
-    }
-
-internal val IrDeclarationOrigin.dotNetGenericInterfaceDefaultAdapterViewOrNull: DotNetGenericInterfaceMemberView?
-    get() = when (this) {
-        DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_ADAPTER -> DotNetGenericInterfaceMemberView.DECLARED
-        DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_ADAPTER -> DotNetGenericInterfaceMemberView.EXACT
-        else -> null
-    }
-
-internal val IrDeclarationOrigin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull: DotNetGenericInterfaceMemberView?
-    get() = when (this) {
-        DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_SLOT_ADAPTER -> DotNetGenericInterfaceMemberView.DECLARED
-        DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_SLOT_ADAPTER -> DotNetGenericInterfaceMemberView.EXACT
-        else -> null
-    }
-
 internal val IrDeclarationOrigin.isDotNetGenericInterfaceDefaultPhysicalMethod: Boolean
-    get() = this == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER ||
-            dotNetGenericInterfaceDefaultBodyViewOrNull != null ||
-            dotNetGenericInterfaceDefaultAdapterViewOrNull != null ||
-            dotNetGenericInterfaceDefaultSlotAdapterViewOrNull != null
+    get() = this == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
 
 
 internal val DOTNET_INTERFACE_DEFAULT_EXACT_CALL: IrStatementOrigin =
     IrStatementOriginImpl("DOTNET_INTERFACE_DEFAULT_EXACT_CALL")
-internal val DOTNET_GENERIC_INTERFACE_DEFAULT_VIRTUAL_CALL: IrStatementOrigin =
-    IrStatementOriginImpl("DOTNET_GENERIC_INTERFACE_DEFAULT_VIRTUAL_CALL")
 
 /**
  * Selects the physical representation of Kotlin-owned interface implementations per CLR profile.
@@ -219,7 +171,6 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         }
 
         val defaultBindings = linkedMapOf<IrSimpleFunction, LocalDefaultBinding>()
-        val genericDefaults = linkedMapOf<IrSimpleFunction, org.jetbrains.kotlin.backend.dotnet.DotNetLoweredGenericInterfaceDefault>()
         val defaultStubReplacements = mutableMapOf<IrSimpleFunctionSymbol, Replacement>()
         val helperPlans = mutableListOf<HelperPlan>()
 
@@ -256,17 +207,9 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                         helperFunction,
                         bodyPlacement,
                     )
-                if (bodyPlacement == DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER &&
-                    irInterface.isDotNetGenericInterfaceDeclaration
-                ) {
-                    val genericDefault = createGenericInterfaceDefaultPhysicalMethods(
-                        irInterface,
-                        member,
-                        ::isMappedKotlinGenericInterface,
-                    )
-                    genericDefaults[member] = genericDefault
-                    context.genericInterfaceDefaults += genericDefault
-                }
+                // Generic Kotlin interfaces now use the same single erased DIM owner as their
+                // abstract slots. The ordinary path below keeps the Kotlin body on that slot and
+                // emits a generic compatibility helper; no typed sibling or adapter is created.
                 plan.defaults += binding
             }
 
@@ -335,19 +278,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                         binding.member.modality = Modality.ABSTRACT
                     }
                     DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER -> {
-                        val genericDefault = genericDefaults[binding.member]
-                        if (genericDefault == null) {
-                            binding.helper.body = createExactDimForwardingBody(binding, binding.member)
-                        } else {
-                            genericDefault.canonicalBody.body =
-                                binding.member.moveBodyTo(genericDefault.canonicalBody)?.also { body ->
-                                    remapSiblingBodyTypes(binding.member, genericDefault.canonicalBody, body)
-                                }
-                            binding.member.body = null
-                            binding.member.modality = Modality.ABSTRACT
-                            binding.helper.body =
-                                createExactDimForwardingBody(binding, genericDefault.canonicalBody)
-                        }
+                        binding.helper.body = createExactDimForwardingBody(binding, binding.member)
                     }
                 }
             }
@@ -359,12 +290,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             if (bodyPlacement == DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER) {
                 plan.defaults.forEach { binding ->
                     if (binding.member.inheritedInterfaceSlots().isNotEmpty()) {
-                        val genericDefault = genericDefaults[binding.member]
-                        if (genericDefault == null) {
-                            createInterfaceSlotBridge(binding, ::isMappedKotlinGenericInterface)
-                        } else {
-                            createGenericInterfaceSlotBridges(binding, genericDefault, ::isMappedKotlinGenericInterface)
-                        }
+                        createInterfaceSlotBridge(binding, ::isMappedKotlinGenericInterface)
                     }
                 }
             }
@@ -450,209 +376,6 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         }
         source.typeParameters.zip(helper.typeParameters.drop(owner.typeParameters.size)).forEach { pair ->
             typeParameterMap[pair.first] = pair.second
-        }
-        body.remapTypes(IrTypeParameterRemapper(typeParameterMap))
-    }
-
-    /**
-     * Splits one modern generic default into one strongly typed semantic DIM and adapters.
-     * The erased identity slot remains abstract. A hidden MethodImpl on the typed body owner
-     * implements that erased slot by virtually invoking the canonical typed body; any secondary
-     * typed view does the same. No adapter owns a lowered copy of the Kotlin body.
-     */
-    private fun createGenericInterfaceDefaultPhysicalMethods(
-        owner: IrClass,
-        source: IrSimpleFunction,
-        isMappedKotlinGenericInterface: (IrClass) -> Boolean,
-    ): org.jetbrains.kotlin.backend.dotnet.DotNetLoweredGenericInterfaceDefault {
-        val canonicalView = source.dotNetGenericInterfaceMemberView(owner, isMappedKotlinGenericInterface)
-        val allTypedViews = source.dotNetGenericInterfaceMemberViews(owner, isMappedKotlinGenericInterface)
-        val interfaceIdentity = owner.fqNameWhenAvailable?.asString() ?: owner.name.asString()
-        val slotIdentity = source.dotNetGenericInterfaceCanonicalSlotId()
-
-        fun createTypedSibling(
-            origin: IrDeclarationOrigin,
-            role: String,
-        ): IrSimpleFunction = owner.addFunction {
-            startOffset = source.startOffset
-            endOffset = source.endOffset
-            this.origin = origin
-            name = Name.special(
-                "<GenericInterfaceDefault$role-$interfaceIdentity-${source.name.asString()}-$slotIdentity>"
-            )
-            visibility = DescriptorVisibilities.PUBLIC
-            modality = Modality.OPEN
-            returnType = source.returnType
-        }.apply sibling@{
-            correspondingPropertySymbol = source.correspondingPropertySymbol
-            overriddenSymbols = listOf(source.symbol)
-            parameters += createDispatchReceiverParameterWithClassParent()
-            val siblingTypeParameters = copyTypeParametersFrom(source)
-            val methodSubstitution = source.typeParameters.zip(siblingTypeParameters).associate { pair ->
-                pair.first.symbol to pair.second.symbol.defaultType
-            }
-            val methodSubstitutor = IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
-            fun siblingType(type: IrType): IrType = methodSubstitutor.substitute(type)
-
-            returnType = siblingType(source.returnType)
-            source.parameters
-                .dropWhile { it.kind == IrParameterKind.DispatchReceiver }
-                .forEach { parameter ->
-                    parameters += parameter.copyTo(
-                        this,
-                        type = siblingType(parameter.type),
-                        defaultValue = null,
-                    )
-                }
-        }
-
-        val canonicalBody = createTypedSibling(
-            origin = when (canonicalView) {
-                DotNetGenericInterfaceMemberView.DECLARED -> DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_BODY
-                DotNetGenericInterfaceMemberView.EXACT -> DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_BODY
-            },
-            role = "CanonicalBody",
-        )
-
-        fun createTypedAdapter(view: DotNetGenericInterfaceMemberView): IrSimpleFunction {
-            val adapter = createTypedSibling(
-                origin = when (view) {
-                    DotNetGenericInterfaceMemberView.DECLARED ->
-                        DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_ADAPTER
-                    DotNetGenericInterfaceMemberView.EXACT ->
-                        DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_ADAPTER
-                },
-                role = "${view.name.lowercase().replaceFirstChar(Char::uppercaseChar)}Adapter",
-            )
-            adapter.body = context.createIrBuilder(adapter.symbol).irBlockBody {
-                val call = irCall(
-                    canonicalBody.symbol,
-                    adapter.returnType,
-                    origin = DOTNET_GENERIC_INTERFACE_DEFAULT_VIRTUAL_CALL,
-                ).apply {
-                    arguments[0] = irGet(adapter.parameters[0])
-                    adapter.typeParameters.forEachIndexed { index, parameter ->
-                        typeArguments[index] = parameter.symbol.defaultType
-                    }
-                    adapter.parameters.drop(1).forEachIndexed { index, parameter ->
-                        arguments[index + 1] = irGet(parameter)
-                    }
-                }
-                +irReturn(call)
-            }
-            return adapter
-        }
-
-        fun IrType.referencesOwnerParameter(): Boolean {
-            val simpleType = this as? IrSimpleType ?: return false
-            val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
-            if (parameter?.parent == owner) return true
-            return simpleType.arguments.any { argument ->
-                (argument as? org.jetbrains.kotlin.ir.types.IrTypeProjection)?.type?.referencesOwnerParameter() == true
-            }
-        }
-        val canonicalSubstitutor = IrTypeSubstitutor(
-            owner.typeParameters.associate { parameter ->
-                parameter.symbol to context.irBuiltIns.anyNType
-            },
-            allowEmptySubstitution = true,
-        )
-        fun canonicalType(type: IrType): IrType {
-            if (!type.referencesOwnerParameter()) return type
-            val simpleType = type as? IrSimpleType ?: return context.irBuiltIns.anyNType
-            val directParameter = simpleType.classifier as? IrTypeParameterSymbol
-            if (directParameter?.owner?.parent == owner) return context.irBuiltIns.anyNType
-            val carrier = (simpleType.classifier as? IrClassSymbol)?.owner
-            return if (carrier?.let(isMappedKotlinGenericInterface) == true) {
-                canonicalSubstitutor.substitute(type)
-            } else {
-                context.irBuiltIns.anyNType
-            }
-        }
-
-        val erasedAdapter = owner.addFunction {
-            startOffset = source.startOffset
-            endOffset = source.endOffset
-            origin = DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
-            name = Name.special(
-                "<GenericInterfaceDefaultErasedAdapter-$interfaceIdentity-${source.name.asString()}-$slotIdentity>"
-            )
-            visibility = DescriptorVisibilities.PRIVATE
-            modality = Modality.FINAL
-            returnType = context.irBuiltIns.anyNType
-        }.apply adapter@{
-            overriddenSymbols = listOf(source.symbol) + source.inheritedInterfaceSlots()
-            parameters += createDispatchReceiverParameterWithClassParent()
-            val adapterTypeParameters = copyTypeParametersFrom(source)
-            val methodSubstitution = source.typeParameters.zip(adapterTypeParameters).associate { pair ->
-                pair.first.symbol to pair.second.symbol.defaultType
-            }
-            val methodSubstitutor = IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
-            fun erasedType(type: IrType): IrType = methodSubstitutor.substitute(canonicalType(type))
-            fun typedType(type: IrType): IrType = methodSubstitutor.substitute(type)
-
-            adapterTypeParameters.forEach { parameter ->
-                parameter.superTypes = parameter.superTypes.map(::erasedType)
-            }
-            returnType = erasedType(source.returnType)
-            source.parameters
-                .dropWhile { it.kind == IrParameterKind.DispatchReceiver }
-                .forEach { parameter ->
-                    parameters += parameter.copyTo(
-                        this,
-                        type = erasedType(parameter.type),
-                        defaultValue = null,
-                    )
-                }
-            body = context.createIrBuilder(symbol).irBlockBody {
-                val call = irCall(
-                    canonicalBody.symbol,
-                    typedType(source.returnType),
-                    origin = DOTNET_GENERIC_INTERFACE_DEFAULT_VIRTUAL_CALL,
-                ).apply {
-                    arguments[0] = irGet(this@adapter.parameters[0])
-                    adapterTypeParameters.forEachIndexed { index, parameter ->
-                        typeArguments[index] = parameter.symbol.defaultType
-                    }
-                    this@adapter.parameters.drop(1).forEachIndexed { index, parameter ->
-                        val argument = irGet(parameter)
-                        val targetType = typedType(
-                            source.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }[index].type
-                        )
-                        arguments[index + 1] = if (argument.type == targetType) {
-                            argument
-                        } else {
-                            irImplicitCast(argument, targetType)
-                        }
-                    }
-                }
-                val result = if (call.type == this@adapter.returnType) {
-                    call
-                } else {
-                    irImplicitCast(call, this@adapter.returnType)
-                }
-                +irReturn(result)
-            }
-        }
-
-        val typedAdapters = allTypedViews
-            .filter { it != canonicalView }
-            .associateWith(::createTypedAdapter)
-        return org.jetbrains.kotlin.backend.dotnet.DotNetLoweredGenericInterfaceDefault(
-            source = source,
-            canonicalBody = canonicalBody,
-            canonicalView = canonicalView,
-            erasedAdapter = erasedAdapter,
-            typedAdapters = typedAdapters,
-        )
-    }
-    private fun remapSiblingBodyTypes(
-        source: IrSimpleFunction,
-        target: IrSimpleFunction,
-        body: org.jetbrains.kotlin.ir.expressions.IrBody,
-    ) {
-        val typeParameterMap = source.typeParameters.zip(target.typeParameters).associate { pair ->
-            pair.first to pair.second
         }
         body.remapTypes(IrTypeParameterRemapper(typeParameterMap))
     }
@@ -822,10 +545,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                             )
                 val local = localBindings[selected]
                 val binding = when {
-                    local != null && (
-                            bodyPlacement == DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY ||
-                                    irClass.requiresCanonicalErasedDefaultForwarder(local.owner)
-                    ) ->
+                    local != null && bodyPlacement == DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY ->
                         local.asDefaultCallBinding()
                     local != null ->
                         if (inheritedForwarderMasksSelectedDefault) local.asDefaultCallBinding() else null
@@ -833,10 +553,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                         val external = externalBindingFor(selected) ?: continue
                         when (external.bound.implementation.bodyPlacement) {
                             DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER ->
-                                if (
-                                    inheritedForwarderMasksSelectedDefault ||
-                                    irClass.requiresCanonicalErasedDefaultForwarder(external.owner)
-                                ) {
+                                if (inheritedForwarderMasksSelectedDefault) {
                                     external.asDefaultCallBinding()
                                 } else {
                                     null
@@ -876,21 +593,6 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                 createClassForwarder(irClass, binding)
             }
         }
-    }
-
-    /**
-     * A DIM on the typed sibling `I<T>` cannot satisfy canonical `I` for an erased `C<T>` which
-     * has no truthful typed interface edge. Materialize the existing helper as one canonical
-     * class-side implementation in precisely that owner-dependent case. A closed `I<String>`
-     * edge still names the typed sibling and inherits its native DIM without a forwarder.
-     */
-    private fun IrClass.requiresCanonicalErasedDefaultForwarder(interfaceClass: IrClass): Boolean {
-        if (!isDotNetGenericClassDeclaration || !interfaceClass.isDotNetGenericInterfaceDeclaration) return false
-        val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
-            interfaceClass.symbol,
-            symbol.defaultType,
-        ) ?: return false
-        return substitutor.substitute(interfaceClass.symbol.defaultType).referencesTypeParameterOf(this)
     }
 
     private fun hasExternalBaseClassForwarderFor(
@@ -941,10 +643,9 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         }
 
     /**
-     * Promotes a portable generic default without copying its semantic body. Every emitted DIM is
-     * a final MethodImpl adapter which calls the producer-recorded helper with the derived
-     * interface's owner arguments. The canonical adapter erases only its own physical ABI; the
-     * declared/exact adapters retain their strongly typed signatures.
+     * Promotes a portable generic default without copying its semantic body. The emitted erased
+     * DIM is a final MethodImpl adapter which calls the producer-recorded helper with the derived
+     * interface's logical owner arguments. No typed sibling adapter is created.
      */
     private fun createExternalGenericPromotions(
         owner: IrClass,
@@ -1095,7 +796,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             inheritedOwner,
             ::isMappedKotlinGenericInterface,
         )
-        val result = mutableListOf(
+        return listOf(
             createAdapter(
                 origin = DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER,
                 role = "Canonical",
@@ -1105,35 +806,6 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                 signatureTransform = ::canonicalType,
             )
         )
-        for (view in member.dotNetGenericInterfaceMemberViews(
-            inheritedOwner,
-            ::isMappedKotlinGenericInterface,
-        )) {
-            val implementationView = if (canonicalView == DotNetGenericInterfaceMemberView.EXACT) {
-                DotNetGenericInterfaceMemberView.EXACT
-            } else {
-                view
-            }
-            result += createAdapter(
-                origin = when (view) {
-                    DotNetGenericInterfaceMemberView.DECLARED ->
-                        DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_SLOT_ADAPTER
-                    DotNetGenericInterfaceMemberView.EXACT ->
-                        DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_SLOT_ADAPTER
-                },
-                role = view.name.lowercase().replaceFirstChar(Char::uppercaseChar),
-                implementationView = implementationView,
-                physicalView = when (view) {
-                    DotNetGenericInterfaceMemberView.DECLARED ->
-                        DotNetInterfaceDefaultPromotionView.DECLARED
-                    DotNetGenericInterfaceMemberView.EXACT ->
-                        DotNetInterfaceDefaultPromotionView.EXACT
-                },
-                overriddenSymbols = listOf(member.symbol),
-                signatureTransform = ownerSubstitutor::substitute,
-            )
-        }
-        return result
     }
     private fun createExternalPromotionBridge(
         owner: IrClass,
@@ -1305,148 +977,6 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         )
     }
     /**
-     * Binds every inherited typed capability slot to the single typed semantic DIM. The erased
-     * adapter already maps the source and inherited canonical identities; these view-specific
-     * adapters exist only where the inherited CLR declaration has a typed physical signature.
-     */
-    private fun createGenericInterfaceSlotBridges(
-        binding: LocalDefaultBinding,
-        genericDefault: DotNetLoweredGenericInterfaceDefault,
-        isMappedKotlinGenericInterface: (IrClass) -> Boolean,
-    ) {
-        val owner = binding.owner
-        val source = binding.member
-        val sourceParameters = source.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
-        val interfaceIdentity = owner.fqNameWhenAvailable?.asString() ?: owner.name.asString()
-
-        for (inheritedSymbol in source.inheritedInterfaceSlots()) {
-            val inherited = inheritedSymbol.owner
-            val inheritedOwner = inherited.parent as? IrClass
-                ?: error("Internal .NET backend error: inherited generic interface slot has no owner")
-            if (!inheritedOwner.isDotNetGenericInterfaceDeclaration ||
-                !isMappedKotlinGenericInterface(inheritedOwner)
-            ) {
-                continue
-            }
-            val ownerSubstitutor = AbstractIrTypeSubstitutor.forSuperClass(
-                inheritedOwner.symbol,
-                owner.symbol.defaultType,
-            ) ?: error(
-                "Internal .NET backend error: '${owner.name}' is not a subtype of " +
-                        "generic interface '${inheritedOwner.name}'"
-            )
-            val inheritedIdentity = inheritedOwner.fqNameWhenAvailable?.asString()
-                ?: inheritedOwner.name.asString()
-            for (overriddenView in inherited.dotNetGenericInterfaceMemberViews(
-                inheritedOwner,
-                isMappedKotlinGenericInterface,
-            )) {
-                // An exact-only Kotlin member is not part of the partial declared capability.
-                // Its inherited declared-slot mapping therefore lives on the exact self view.
-                val implementationView = if (
-                    genericDefault.canonicalView == DotNetGenericInterfaceMemberView.EXACT
-                ) {
-                    DotNetGenericInterfaceMemberView.EXACT
-                } else {
-                    overriddenView
-                }
-                val adapter = owner.addFunction {
-                    startOffset = source.startOffset
-                    endOffset = source.endOffset
-                    origin = when (overriddenView) {
-                        DotNetGenericInterfaceMemberView.DECLARED ->
-                            DOTNET_GENERIC_INTERFACE_DEFAULT_DECLARED_SLOT_ADAPTER
-                        DotNetGenericInterfaceMemberView.EXACT ->
-                            DOTNET_GENERIC_INTERFACE_DEFAULT_EXACT_SLOT_ADAPTER
-                    }
-                    name = Name.special(
-                        "<GenericInterfaceDefault${overriddenView.name.lowercase().replaceFirstChar(Char::uppercaseChar)}" +
-                                "SlotAdapter-$interfaceIdentity-$inheritedIdentity-${inherited.name.asString()}-" +
-                                "${inherited.dotNetGenericInterfaceCanonicalSlotId()}>"
-                    )
-                    visibility = DescriptorVisibilities.PRIVATE
-                    modality = Modality.FINAL
-                    returnType = inherited.returnType
-                }.apply adapter@{
-                    overriddenSymbols = listOf(inherited.symbol)
-                    parameters += createDispatchReceiverParameterWithClassParent()
-                    val adapterTypeParameters = copyTypeParametersFrom(inherited)
-                    val inheritedMethodSubstitution = inherited.typeParameters
-                        .zip(adapterTypeParameters)
-                        .associate { pair -> pair.first.symbol to pair.second.symbol.defaultType }
-                    val inheritedMethodSubstitutor = IrTypeSubstitutor(
-                        inheritedMethodSubstitution,
-                        allowEmptySubstitution = true,
-                    )
-                    fun adapterType(type: IrType): IrType = inheritedMethodSubstitutor.substitute(
-                        ownerSubstitutor.substitute(type)
-                    )
-                    adapterTypeParameters.forEach { parameter ->
-                        parameter.superTypes = parameter.superTypes.map(::adapterType)
-                    }
-                    returnType = adapterType(inherited.returnType)
-                    inherited.parameters
-                        .dropWhile { it.kind == IrParameterKind.DispatchReceiver }
-                        .forEach { parameter ->
-                            parameters += parameter.copyTo(
-                                this,
-                                type = adapterType(parameter.type),
-                                defaultValue = null,
-                            )
-                        }
-
-                    check(source.typeParameters.size == adapterTypeParameters.size) {
-                        "Internal .NET backend error: generic interface-default override changed method arity"
-                    }
-                    val sourceMethodSubstitution = source.typeParameters
-                        .zip(adapterTypeParameters)
-                        .associate { pair -> pair.first.symbol to pair.second.symbol.defaultType }
-                    val sourceMethodSubstitutor = IrTypeSubstitutor(
-                        sourceMethodSubstitution,
-                        allowEmptySubstitution = true,
-                    )
-                    fun targetType(type: IrType): IrType = sourceMethodSubstitutor.substitute(type)
-                    val targetParameterTypes = sourceParameters.map { parameter -> targetType(parameter.type) }
-                    val targetReturnType = targetType(source.returnType)
-                    check(targetParameterTypes.size == parameters.size - 1) {
-                        "Internal .NET backend error: generic interface-default override changed parameter count"
-                    }
-                    body = context.createIrBuilder(symbol).irBlockBody {
-                        val call = irCall(
-                            genericDefault.canonicalBody.symbol,
-                            targetReturnType,
-                            origin = DOTNET_GENERIC_INTERFACE_DEFAULT_VIRTUAL_CALL,
-                        ).apply {
-                            arguments[0] = irGet(this@adapter.parameters[0])
-                            adapterTypeParameters.forEachIndexed { index, parameter ->
-                                typeArguments[index] = parameter.symbol.defaultType
-                            }
-                            this@adapter.parameters.drop(1).forEachIndexed { index, parameter ->
-                                val argument = irGet(parameter)
-                                arguments[index + 1] = if (argument.type == targetParameterTypes[index]) {
-                                    argument
-                                } else {
-                                    irImplicitCast(argument, targetParameterTypes[index])
-                                }
-                            }
-                        }
-                        val result = if (call.type == this@adapter.returnType) {
-                            call
-                        } else {
-                            irImplicitCast(call, this@adapter.returnType)
-                        }
-                        +irReturn(result)
-                    }
-                }
-                genericDefault.inheritedSlotAdapters += DotNetLoweredGenericInterfaceDefaultSlotAdapter(
-                    function = adapter,
-                    implementationView = implementationView,
-                )
-            }
-        }
-    }
-
-    /**
      * A CLR MethodImpl declared by an interface must be final. Keep the Kotlin-visible DIM
      * overridable and bind inherited physical slots through this private final adapter instead.
      */
@@ -1455,9 +985,9 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         isMappedKotlinGenericInterface: (IrClass) -> Boolean,
     ) {
         val member = binding.member
-        // Split generic slots have canonical/declared/exact signatures. Their adapters are owned
-        // by DotNetGenericInterfaceBridgeLowering; the ordinary bridge has the source member's
-        // signature and would create an invalid MethodImpl for an erased canonical slot.
+        // Generic Kotlin slots have erased signatures. Their adapters are owned by
+        // DotNetGenericInterfaceBridgeLowering; the ordinary bridge has the source member's
+        // signature and could create an invalid MethodImpl for the erased slot.
         val inheritedSlots = member.inheritedInterfaceSlots().filterNot { inherited ->
             (inherited.owner.parent as? IrClass)?.let(isMappedKotlinGenericInterface) == true
         }

@@ -9,7 +9,6 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
-import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
@@ -24,26 +23,27 @@ import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.types.Variance
 
 /**
- * The physical CLR views of one logical Kotlin generic interface.
+ * The physical CLR identity and any independently truthful mapped host capabilities of one
+ * logical Kotlin generic interface.
  *
- * For Kotlin-owned interfaces, [canonicalClassInfo] is the non-generic Kotlin identity used by
- * every Kotlin ABI position and [declaredClassInfo] is its source-friendly CLR generic view. A
- * mapped Common interface such as Comparable may instead reuse two truthful host interfaces.
- * [exactClassInfo], when present, is an all-invariant capability containing members that cannot
- * legally be declared on the variant CLR view. All views describe the same object; none is an
- * adapter representation. A host declared view need not inherit the canonical host view, so an
- * implementation can name both interfaces explicitly.
+ * An ordinary Kotlin-owned interface has only [canonicalClassInfo], its non-generic erased
+ * runtime identity. [declaredClassInfo] and [exactClassInfo] are reserved for explicit mappings
+ * such as Common `Comparable<T>` to `System.IComparable<T>`; they are not implicit siblings of
+ * Kotlin declarations and never redefine Kotlin cast or dispatch identity.
  */
 internal data class DotNetGenericInterfaceInfo(
     val canonicalClassInfo: DotNetIlClassInfo,
-    val declaredClassInfo: DotNetIlClassInfo,
-    val exactClassInfo: DotNetIlClassInfo?,
+    val declaredClassInfo: DotNetIlClassInfo? = null,
+    val exactClassInfo: DotNetIlClassInfo? = null,
 ) {
-    val mostSpecificCapabilityView: DotNetGenericInterfaceView
-        get() = if (exactClassInfo != null) DotNetGenericInterfaceView.EXACT
-        else DotNetGenericInterfaceView.DECLARED
+    val mostSpecificCapabilityView: DotNetGenericInterfaceView?
+        get() = when {
+            exactClassInfo != null -> DotNetGenericInterfaceView.EXACT
+            declaredClassInfo != null -> DotNetGenericInterfaceView.DECLARED
+            else -> null
+        }
 
-    val mostSpecificCapabilityClassInfo: DotNetIlClassInfo
+    val mostSpecificCapabilityClassInfo: DotNetIlClassInfo?
         get() = exactClassInfo ?: declaredClassInfo
 
     fun classInfo(view: DotNetGenericInterfaceView): DotNetIlClassInfo? = when (view) {
@@ -59,28 +59,10 @@ internal enum class DotNetGenericInterfaceView {
     EXACT,
 }
 
-/** Which typed capability owns a Kotlin interface member in addition to its canonical slot. */
+/** Which explicitly mapped host capability owns a member in addition to its erased Kotlin slot. */
 internal enum class DotNetGenericInterfaceMemberView {
     DECLARED,
     EXACT,
-}
-
-/**
- * One bodyless typed slot unifying a directly inherited Kotlin intersection for CLR consumers.
- * [implementationMember] is the deterministic contributor whose resolved signature matches the
- * Kotlin-selected slot and whose existing bridge receives the additional `MethodImpl` mapping.
- */
-internal data class DotNetGenericInterfaceIntersectionSlot(
-    val owner: IrClass,
-    val signatureSource: IrSimpleFunction,
-    val contributingMembers: List<IrSimpleFunction>,
-    val implementationMember: IrSimpleFunction,
-    val memberView: DotNetGenericInterfaceMemberView,
-    val physicalMethodName: String,
-) {
-    init {
-        require(implementationMember in contributingMembers)
-    }
 }
 
 internal val DotNetGenericInterfaceMemberView.physicalView: DotNetGenericInterfaceView
@@ -120,19 +102,24 @@ internal fun IrType.isDotNetOwnerDependentConstraint(interfaceClass: IrClass): B
 }
 
 /**
- * Returns the direct owner-relative bound for each method parameter, or `null` when the erased
- * CLR slot would need a representation-changing generic adapter. A direct `R : T` used as a
- * complete parameter/result can be adapted by instantiating the implementation at `T` and
- * casting at the bridge boundary. Nested uses such as `Box<R>` cannot use that conversion.
+ * Returns the owner-relative bound for each method parameter, or `null` when the erased CLR slot
+ * would need a representation-changing generic adapter. A direct `R : T` can be adapted by
+ * instantiating the implementation at `T` and casting at the bridge boundary. A nested occurrence
+ * is equally safe when every carrier that observes it has one erased Kotlin runtime identity;
+ * `Box<R>` and `Box<T>` then have the same physical signature. A native CLR generic carrier still
+ * observes `R` and therefore remains unsupported at this boundary.
  */
 internal fun IrSimpleFunction.dotNetDirectOwnerRelativeMethodBoundsOrNull(
     interfaceClass: IrClass,
+    isPhysicallyErasedCarrier: (IrClass) -> Boolean = { false },
 ): List<IrType?>? {
-    fun IrType.references(parameter: IrTypeParameterSymbol): Boolean {
+    fun IrType.referencesPhysically(parameter: IrTypeParameterSymbol): Boolean {
         val simpleType = this as? IrSimpleType ?: return false
         if (simpleType.classifier == parameter) return true
+        val carrier = (simpleType.classifier as? IrClassSymbol)?.owner
+        if (carrier?.let(isPhysicallyErasedCarrier) == true) return false
         return simpleType.arguments.any { argument ->
-            (argument as? IrTypeProjection)?.type?.references(parameter) == true
+            (argument as? IrTypeProjection)?.type?.referencesPhysically(parameter) == true
         }
     }
 
@@ -152,7 +139,7 @@ internal fun IrSimpleFunction.dotNetDirectOwnerRelativeMethodBoundsOrNull(
         val boundParameter = (ownerBound as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
         if (boundParameter?.owner?.parent != interfaceClass) return null
         if (signatureTypes.any { type ->
-                type.references(parameter.symbol) && !type.isDirect(parameter.symbol)
+                type.referencesPhysically(parameter.symbol) && !type.isDirect(parameter.symbol)
             }
         ) {
             return null
@@ -160,7 +147,7 @@ internal fun IrSimpleFunction.dotNetDirectOwnerRelativeMethodBoundsOrNull(
         if (typeParameters.asSequence()
                 .filterNot { it == parameter }
                 .flatMap { it.superTypes.asSequence() }
-                .any { bound -> bound.references(parameter.symbol) }
+                .any { bound -> bound.referencesPhysically(parameter.symbol) }
         ) {
             return null
         }
@@ -227,14 +214,14 @@ internal fun IrType.isDotNetVariantOwnerDependentConstraint(interfaceClass: IrCl
  */
 internal fun IrSimpleFunction.dotNetGenericInterfaceMemberView(
     interfaceClass: IrClass,
-    isSplitGenericInterface: (IrClass) -> Boolean,
+    isErasedGenericInterface: (IrClass) -> Boolean,
 ): DotNetGenericInterfaceMemberView {
     require(interfaceClass.isDotNetGenericInterfaceDeclaration)
     fun IrType.isLegalAt(polarity: TypePolarity): Boolean = isClrLegalAtDeclaredVariance(
         interfaceClass,
         polarity,
-        isSplitGenericInterface,
-        preserveCurrentSplitInterface = false,
+        isErasedGenericInterface,
+        preserveCurrentGenericInterface = false,
     )
     val safeReturn = returnType.isLegalAt(TypePolarity.OUT)
     val safeParameters = parameters
@@ -259,15 +246,15 @@ internal fun IrSimpleFunction.dotNetGenericInterfaceMemberView(
  */
 internal fun IrSimpleFunction.dotNetGenericInterfaceMemberViews(
     interfaceClass: IrClass,
-    isSplitGenericInterface: (IrClass) -> Boolean,
+    isErasedGenericInterface: (IrClass) -> Boolean,
 ): List<DotNetGenericInterfaceMemberView> {
-    val primaryView = dotNetGenericInterfaceMemberView(interfaceClass, isSplitGenericInterface)
+    val primaryView = dotNetGenericInterfaceMemberView(interfaceClass, isErasedGenericInterface)
     if (primaryView == DotNetGenericInterfaceMemberView.EXACT) {
         return listOf(DotNetGenericInterfaceMemberView.EXACT)
     }
     val property = correspondingPropertySymbol?.owner ?: return listOf(primaryView)
     val requiresCompleteExactProperty = listOfNotNull(property.getter, property.setter).any { accessor ->
-        accessor.dotNetGenericInterfaceMemberView(interfaceClass, isSplitGenericInterface) ==
+        accessor.dotNetGenericInterfaceMemberView(interfaceClass, isErasedGenericInterface) ==
                 DotNetGenericInterfaceMemberView.EXACT
     }
     return if (requiresCompleteExactProperty) {
@@ -277,56 +264,16 @@ internal fun IrSimpleFunction.dotNetGenericInterfaceMemberViews(
     }
 }
 
-private fun IrClass.hasDotNetExactGenericInterfaceMembers(
-    isSplitGenericInterface: (IrClass) -> Boolean,
-): Boolean =
-    declaredGenericInterfaceFunctions().any { member ->
-        !member.isFakeOverride &&
-                member.dotNetGenericInterfaceMemberView(this, isSplitGenericInterface) ==
-                DotNetGenericInterfaceMemberView.EXACT
-    }
-
-internal fun IrClass.requiresDotNetExactGenericInterfaceView(
-    isSplitGenericInterface: (IrClass) -> Boolean,
-): Boolean = requiresDotNetExactGenericInterfaceView(isSplitGenericInterface, hashSetOf())
-
-private fun IrClass.requiresDotNetExactGenericInterfaceView(
-    isSplitGenericInterface: (IrClass) -> Boolean,
-    visited: MutableSet<IrClass>,
-): Boolean {
-    if (!visited.add(this)) return false
-    if (hasDotNetExactGenericInterfaceMembers(isSplitGenericInterface)) return true
-    return superTypes.any { superType ->
-        val superInterface = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
-        superInterface?.let(isSplitGenericInterface) == true &&
-                (!superType.isDotNetClrLegalDeclaredSupertype(this, isSplitGenericInterface) ||
-                        superInterface.requiresDotNetExactGenericInterfaceView(isSplitGenericInterface, visited))
-    }
-}
-
 /** Whether this direct typed super-interface edge is legal on the declaration-variant CLR view. */
 internal fun IrType.isDotNetClrLegalDeclaredSupertype(
     owner: IrClass,
-    isSplitGenericInterface: (IrClass) -> Boolean,
+    isErasedGenericInterface: (IrClass) -> Boolean,
 ): Boolean = isClrLegalAtDeclaredVariance(
     owner,
     TypePolarity.OUT,
-    isSplitGenericInterface,
-    preserveCurrentSplitInterface = true,
+    isErasedGenericInterface,
+    preserveCurrentGenericInterface = true,
 )
-
-private fun IrClass.declaredGenericInterfaceFunctions(): Sequence<IrSimpleFunction> =
-    declarations.asSequence().flatMap { declaration ->
-        when (declaration) {
-            is IrSimpleFunction -> sequenceOf(declaration)
-            is IrProperty -> sequenceOf(declaration.getter, declaration.setter).filterNotNull()
-            else -> emptySequence()
-        }
-    }
-
-/** A stable, C#-spellable generated name. The physical KLIB index records it explicitly. */
-internal fun dotNetExactGenericInterfaceName(canonicalName: String, parameterCount: Int): String =
-    canonicalName + "__KotlinExact" + parameterCount.takeIf { it > 0 }?.let { "`$it" }.orEmpty()
 
 private enum class TypePolarity {
     OUT,
@@ -350,8 +297,8 @@ private enum class TypePolarity {
 private fun IrType.isClrLegalAtDeclaredVariance(
     owner: IrClass,
     polarity: TypePolarity,
-    isSplitGenericInterface: (IrClass) -> Boolean,
-    preserveCurrentSplitInterface: Boolean,
+    isErasedGenericInterface: (IrClass) -> Boolean,
+    preserveCurrentGenericInterface: Boolean,
 ): Boolean {
     val simpleType = this as? IrSimpleType ?: return true
     val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
@@ -364,7 +311,7 @@ private fun IrType.isClrLegalAtDeclaredVariance(
     }
 
     val classifier = (simpleType.classifier as? IrClassSymbol)?.owner ?: return true
-    if (!preserveCurrentSplitInterface && isSplitGenericInterface(classifier)) {
+    if (!preserveCurrentGenericInterface && isErasedGenericInterface(classifier)) {
         // A Kotlin-owned generic interface nested in a typed member or supertype argument maps to
         // its non-generic canonical identity. Its logical arguments are absent from the physical
         // signature, so they cannot make that signature illegal under CLR variance. A direct
@@ -393,8 +340,8 @@ private fun IrType.isClrLegalAtDeclaredVariance(
         projection.type.isClrLegalAtDeclaredVariance(
             owner,
             polarity.through(effectiveVariance),
-            isSplitGenericInterface,
-            preserveCurrentSplitInterface = false,
+            isErasedGenericInterface,
+            preserveCurrentGenericInterface = false,
         )
     }
 }

@@ -319,7 +319,7 @@ vector; no Kotlin primitive-array wrapper is introduced.
 
 The closed imported interface is also a legal Kotlin superinterface. A Kotlin implementation binds
 directly to the retained CLR TypeDef and its exact abstract MethodDef slots, including array
-accessors; it does not acquire a Kotlin split-interface family or a C# implementation-manifest
+accessors; it does not acquire a Kotlin erased-interface identity or a C# implementation-manifest
 record. Those mechanisms describe Kotlin-owned logical contracts. Inventing them for a native CLR
 interface would replace, rather than preserve, the foreign declaration's authoritative identity.
 The target FIR2IR extension retains FIR's accepted override relationship when a rigid Kotlin

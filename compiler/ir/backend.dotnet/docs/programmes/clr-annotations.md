@@ -110,7 +110,7 @@ constraint, not a relaxation of Common array semantics.
 
 The implementation direction stays symmetric for the admitted grammar: Kotlin classes may
 implement these exact native CLR interfaces, and foreign callers dispatch through the original
-MethodDefs. This is deliberately not routed through the Kotlin-owned split-interface ABI or its
+MethodDefs. This is deliberately not routed through the Kotlin-owned erased-interface ABI or its
 C# authoring manifest.
 
 A classifier with one unsupported public obligation remains withheld. Classpath order never chooses

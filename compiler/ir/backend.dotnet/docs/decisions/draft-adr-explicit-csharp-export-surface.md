@@ -1,6 +1,6 @@
 # Draft ADR: Explicit C# export surface
 
-- Status: **Draft — bounded top-level POC surface**
+- Status: **Accepted architectural direction; concrete surface and DSL remain draft**
 - Dates: 2026-07-15 through 2026-07-16
 - Scope: explicit function/property aliases, delegate adaptation, nullability,
   defaults, naming, and collision policy
@@ -22,6 +22,25 @@ evaluate representation before a source annotation or typed Gradle DSL is
 chosen. Their text is not public Kotlin metadata or stable ABI.
 
 ## Decision
+
+### Architectural direction
+
+Kotlin/.NET follows the same dependency direction as Kotlin/Native export:
+
+```text
+Kotlin semantics and runtime ABI
+        -> explicit foreign-language export
+        -> host-native API only where the representation is exact
+```
+
+The desired C# shape never drives Kotlin runtime identity in the reverse
+direction. Kotlin-owned generic classes and interfaces therefore remain erased
+implementation types. A future typed class/interface export is a separately
+generated facade, interface, or adapter contract and may not alter Kotlin
+casts, reflection, object identity, virtual dispatch, or cross-module ABI.
+Unsupported generic, inheritance, mutation, variance, or identity shapes fail
+closed. This direction is accepted; the concrete generic export forms and
+source-selection mechanism remain on hold.
 
 ### One C# authoring rule
 

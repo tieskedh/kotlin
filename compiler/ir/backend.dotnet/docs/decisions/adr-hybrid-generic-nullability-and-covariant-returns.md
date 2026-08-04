@@ -47,7 +47,7 @@ An occurrence nested as an argument of a different invariant reified carrier, su
 `Array<T?>` or `ForeignBox<T?>`, is not made `Array<object>`/`ForeignBox<object>` silently. Such a
 carrier would not accept the natural closed `Array<Int?>`/`ForeignBox<Int?>` representation at a
 call site. Those nested shapes remain rejected until that carrier has a deliberate erased view or
-generated adapter. Callable and split-interface carriers may erase it only where their accepted
+generated adapter. Callable and erased-interface carriers may erase it only where their accepted
 ABI already defines an object-shaped execution view.
 
 This is deliberate local erasure, not blanket generic erasure. Non-null `T` remains a reified CLR

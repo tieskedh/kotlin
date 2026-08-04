@@ -65,7 +65,7 @@ generic-interface representation boundary. Inlined Common loops can store an
 erased canonical iterator result in an object local and later read it as the
 function's open non-null `T`. That read uses the narrowly specified
 `unbox.any !n`/`!!n` rule in the
-[generic-interface ABI](draft-adr-generic-interface-abi.md). It is independent
+[generic-interface ABI](generic-interface-erased-identity.md). It is independent
 of inline-only visibility: the same Common body must behave identically when
 materialized inside its assembly or inside a separate KLIB consumer.
 

@@ -385,7 +385,7 @@ index depend on which reified operations happened to occur.
 | Reified use | Existing foundation | Remaining requirement |
 | --- | --- | --- |
 | call-site type substitution and nested reified calls | shared first-/second-stage IR inliner and selected dependency graph | enable only after every surviving substituted operation is truthful |
-| `value is T` / `!is T` | exact references, boxed scalars, arrays, open CLR parameters, classified exceptions/`CharSequence`, split generic interfaces, and declaration-erased Kotlin generic classes | execute the substituted cross-classifier matrix when the public reified gate is enabled; no closed `C<T>` identity is permitted |
+| `value is T` / `!is T` | exact references, boxed scalars, arrays, open CLR parameters, classified exceptions/`CharSequence`, and declaration-erased Kotlin generic classes/interfaces | execute the substituted cross-classifier matrix when the public reified gate is enabled; no closed `C<T>` identity is permitted |
 | `value as T` / `as? T` | the same classifier families, including identity-preserving generic-class checked/safe casts and typed-use barriers | execute checked, safe, nullable, failed, and later-member-use substitutions through both inliner stages |
 | `arrayOfNulls<T>`, `emptyArray<T>`, varargs, and array constructors | typed CLR-vector intrinsics and Common array-constructor lowering | prove nested generic element, nullability, projection, and cross-module substitutions without assuming closed CLR generic identity equals Kotlin runtime identity |
 | `T::class` | nominal Kotlin `KClass` identity, classified runtime checks, and a truthful compiler-ABI `System.Type` bridge | execute substituted class literals through both inliner stages when the complete public reified gate is enabled |
@@ -470,7 +470,7 @@ operation is only the physical realization:
 - a wrong non-null cast throws CLR `InvalidCastException`, the target's exact physical carrier for
   Kotlin `ClassCastException`.
 
-The slice reuses the existing classified `CharSequence` and split generic-interface branches; it
+The slice reuses the existing classified `CharSequence` and erased generic-interface branches; it
 does not replace them. It excluded mapped Kotlin exception classifiers because broad Kotlin
 exception relationships require the versioned classifier, boxed scalar casts because their stack
 and nullable-result shapes are different, open type parameters beyond the existing checked-cast
@@ -578,7 +578,7 @@ accepts null exactly when the target is nullable, and checks a non-null value th
 existing Kotlin classifier (`CharSequence` and mapped exceptions) or one physically exact carrier.
 The exact ordinary set is `Any`, `String`, non-generic Kotlin/foreign classes and interfaces, the
 eight exact boxed Common scalars, supported primitive-array wrappers, and a CLR vector whose full
-element token is already known. Split generic interfaces retain their existing canonical erased
+element token is already known. Generic Kotlin interfaces use their one declaration-erased
 identity.
 
 Two convenient CLR checks were deliberately outside this slice:
@@ -611,7 +611,7 @@ remains in the later array/reified prerequisite.
   operands need one adversarial matrix so later reified work cannot regress them independently.
 
 The bounded implementation makes accepted carrier kinds explicit in the emitter and retains the
-classified exception/`CharSequence` and split-interface paths. Its executable matrix covers all
+classified exception/`CharSequence` and erased-interface paths. Its executable matrix covers all
 eight scalar boxes, ordinary class and
 interface inheritance, `Any`/`String`, every currently selected primitive-array wrapper, nullable
 and negative tests, distinct-carrier failures, smart-cast use, and single evaluation on both CLR
@@ -745,7 +745,7 @@ and the shared inliner remain authoritative: once a valid call site has replaced
 allocation must use the same ordinary `Array<E>` mapping as non-inline Kotlin. The current
 `arrayOf`, generic-vararg, `emptyArray`, `arrayOfNulls`, and Common `Array(size) { ... }` paths are
 representation-ready for every classifier already admitted by the target. Nested exact vectors,
-nullable scalar vectors, specialized-array wrappers, `Array<*>` element views, split generic
+nullable scalar vectors, specialized-array wrappers, `Array<*>` element views, erased generic
 interfaces, and declaration-erased generic classes need no reified-only carrier.
 
 This finding narrows the blocker; it does not enable support. Actual reified call sites still need

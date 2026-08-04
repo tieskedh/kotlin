@@ -38,13 +38,6 @@
   {
   }
 }
-.class interface public abstract auto ansi 'test.constraints.NonNullValue`1'<'T'>
-       implements 'test.constraints.NonNullValue'
-{
-  .method public hidebysig newslot abstract virtual instance !0 'read'() cil managed
-  {
-  }
-}
 .class public auto ansi beforefieldinit 'test.constraints.Base'
        extends [mscorlib]System.Object
 {

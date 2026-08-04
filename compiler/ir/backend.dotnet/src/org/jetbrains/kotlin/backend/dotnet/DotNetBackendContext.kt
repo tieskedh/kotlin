@@ -44,20 +44,6 @@ internal data class DotNetLoweredInterfaceDefaultImplementation(
     val bodyPlacement: DotNetInterfaceDefaultBodyPlacement,
 )
 
-internal data class DotNetLoweredGenericInterfaceDefault(
-    val source: IrSimpleFunction,
-    val canonicalBody: IrSimpleFunction,
-    val canonicalView: DotNetGenericInterfaceMemberView,
-    val erasedAdapter: IrSimpleFunction,
-    val typedAdapters: Map<DotNetGenericInterfaceMemberView, IrSimpleFunction>,
-    val inheritedSlotAdapters: MutableList<DotNetLoweredGenericInterfaceDefaultSlotAdapter> = mutableListOf(),
-)
-
-internal data class DotNetLoweredGenericInterfaceDefaultSlotAdapter(
-    val function: IrSimpleFunction,
-    val implementationView: DotNetGenericInterfaceMemberView,
-)
-
 internal data class DotNetLoweredInterfaceDefaultPromotion(
     val owner: IrClass,
     val inheritedMember: IrSimpleFunction,
@@ -123,9 +109,6 @@ internal class DotNetBackendContext(
     /** Source function to its final physical masked default-argument dispatcher. */
     val defaultArgumentDispatchers:
         MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
-    /** One typed semantic DIM plus its erased and less-precise physical adapters. */
-    val genericInterfaceDefaults:
-        MutableList<DotNetLoweredGenericInterfaceDefault> = mutableListOf()
     /** Synthetic static helper call targets bound directly to producer-recorded CLR identities. */
     val externalInterfaceDefaultHelpers:
         MutableMap<IrSimpleFunction, DotNetBoundInterfaceDefaultImplementation> = linkedMapOf()

@@ -6,8 +6,6 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
-import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeDefaultValueKind
-import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceDefaultPhysicalMethod
 import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -17,13 +15,10 @@ import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
-import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
-import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isPublishedApi
-import org.jetbrains.kotlin.types.Variance
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.charset.CharacterCodingException
@@ -161,7 +156,7 @@ data class DotNetCSharpMethodLocator(
 
 /** Deterministic versioned records and their self-contained managed-resource carrier. */
 object DotNetCSharpImplementationManifestCodec {
-    const val CURRENT_SCHEMA_VERSION = 7
+    const val CURRENT_SCHEMA_VERSION = 8
     const val MANAGED_RESOURCE_NAME = "Kotlin.CSharpImplementationManifest"
 
     private const val HEADER_RECORD = "H"
@@ -584,35 +579,24 @@ object DotNetCSharpImplementationManifestCodec {
             require(contract.canonicalOwnerPath.isNotEmpty()) {
                 "C# implementation interface '${contract.logicalKey}' has an empty canonical owner"
             }
-            if (contract.typeParameters.isEmpty()) {
-                require(contract.declaredOwnerPath == null && contract.exactOwnerPath == null) {
-                    "Non-generic C# implementation interface '${contract.logicalKey}' has a split owner"
-                }
-                require(contract.members.all { member ->
-                    member.authoringView == DotNetCSharpInterfaceView.CANONICAL &&
-                            member.slots.any { slot ->
-                                slot.role == DotNetCSharpSlotRole.CANONICAL
-                            } &&
-                            member.slots.none { slot ->
-                                slot.role == DotNetCSharpSlotRole.ERASED ||
-                                        slot.role == DotNetCSharpSlotRole.DECLARED ||
-                                        slot.role == DotNetCSharpSlotRole.EXACT
-                            }
-                }) {
-                    "Non-generic C# implementation interface '${contract.logicalKey}' has split member views"
-                }
-            } else {
-                require(contract.declaredOwnerPath?.isNotEmpty() == true) {
-                    "Generic C# implementation interface '${contract.logicalKey}' has no declared owner"
-                }
-                require(contract.members.all { member ->
-                    member.slots.any { slot -> slot.role == DotNetCSharpSlotRole.ERASED } &&
-                            member.slots.none { slot ->
-                                slot.role == DotNetCSharpSlotRole.CANONICAL
-                            }
-                }) {
-                    "Generic C# implementation interface '${contract.logicalKey}' has a non-erased canonical slot"
-                }
+            require(contract.typeParameters.isEmpty()) {
+                "Generic Kotlin interface '${contract.logicalKey}' requires an explicit .NET export"
+            }
+            require(contract.declaredOwnerPath == null && contract.exactOwnerPath == null) {
+                "C# implementation interface '${contract.logicalKey}' has an alternate runtime owner"
+            }
+            require(contract.members.all { member ->
+                member.authoringView == DotNetCSharpInterfaceView.CANONICAL &&
+                        member.slots.any { slot ->
+                            slot.role == DotNetCSharpSlotRole.CANONICAL
+                        } &&
+                        member.slots.none { slot ->
+                            slot.role == DotNetCSharpSlotRole.ERASED ||
+                                    slot.role == DotNetCSharpSlotRole.DECLARED ||
+                                    slot.role == DotNetCSharpSlotRole.EXACT
+                        }
+            }) {
+                "C# implementation interface '${contract.logicalKey}' has split member views"
             }
             require(contract.sourceAuthoringSupported == contract.unsupportedReasons.isEmpty()) {
                 "C# implementation interface '${contract.logicalKey}' has inconsistent support status"
@@ -898,19 +882,19 @@ internal fun collectDotNetCSharpImplementationManifest(
     target: DotNetTarget,
     files: Set<IrFile>,
     availableClasses: Map<IrClass, DotNetIlClassInfo>,
-    genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo>,
     externalLibraries: List<DotNetExternalLibrary>,
     availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     typeMapper: DotNetIlTypeMapper,
     preLoweringDeclarationKeys: Map<IrDeclaration, String>,
     interfaceDefaultImplementations:
             Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation>,
-    genericInterfaceDefaults: List<DotNetLoweredGenericInterfaceDefault>,
-    genericInterfaceIntersectionSlots: List<DotNetGenericInterfaceIntersectionSlot>,
-    wrongShapePolicies: Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy>,
 ): DotNetCSharpImplementationManifest {
     fun IrClass.isCSharpSourceAuthorableInterface(): Boolean {
         if (!isInterface || fileOrNull !in files || this !in preLoweringDeclarationKeys) return false
+        // A Kotlin-owned generic interface has one erased implementation ABI. A typed C#
+        // authoring contract is an explicit export product and must not be inferred merely from
+        // a public Kotlin declaration.
+        if (typeParameters.isNotEmpty()) return false
         var owner: IrClass? = this
         while (owner != null) {
             when (owner.visibility) {
@@ -921,23 +905,6 @@ internal fun collectDotNetCSharpImplementationManifest(
             owner = owner.parent as? IrClass
         }
         return true
-    }
-
-    fun erasedOwnerRelativeConstraints(
-        function: IrSimpleFunction,
-        interfaceClass: IrClass,
-    ): List<DotNetCSharpErasedOwnerRelativeConstraint> {
-        val directBounds = function.dotNetDirectOwnerRelativeMethodBoundsOrNull(interfaceClass)
-            ?: return emptyList()
-        return directBounds.mapIndexedNotNull { methodIndex, bound ->
-            val ownerParameter = ((bound as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner
-                ?: return@mapIndexedNotNull null
-            val ownerIndex = interfaceClass.typeParameters.indexOf(ownerParameter)
-            require(ownerIndex >= 0) {
-                "Erased owner-relative constraint does not name a parameter of its interface"
-            }
-            DotNetCSharpErasedOwnerRelativeConstraint(methodIndex, ownerIndex)
-        }
     }
 
     fun IrSimpleFunction.memberKind(): DotNetCSharpMemberKind {
@@ -971,7 +938,6 @@ internal fun collectDotNetCSharpImplementationManifest(
         .asSequence()
         .filter(IrClass::isCSharpSourceAuthorableInterface)
         .map { irClass ->
-            val interfaceInfo = genericInterfaces[irClass]
             val canonicalClassInfo = availableClasses.getValue(irClass)
             val interfaceKey = checkNotNull(preLoweringDeclarationKeys[irClass]) {
                 "Source-authorable interface has no pre-lowering logical key"
@@ -1015,30 +981,6 @@ internal fun collectDotNetCSharpImplementationManifest(
                 )
             }
 
-            fun typedPropertyName(
-                source: IrSimpleFunction,
-                memberView: DotNetGenericInterfaceMemberView,
-                fallbackMethodName: String,
-            ): String? {
-                val property = source.correspondingPropertySymbol?.owner ?: return null
-                val getter = property.getter
-                    ?.takeUnless { accessor -> accessor.isFakeOverride }
-                    ?.takeIf { accessor ->
-                        memberView in typeMapper.genericInterfaceMemberViews(accessor, irClass)
-                    }
-                val getterMethodName = getter?.let { accessor ->
-                    val getterDefault = genericInterfaceDefaults.singleOrNull { it.source == accessor }
-                    getterDefault
-                        ?.let { typeMapper.genericInterfaceTypedMethodName(accessor) }
-                        ?: accessor.dotNetErasedCarrierMethodNameOrNull(typeMapper::isErasedGenericClass)
-                        ?: accessor.dotNetIlMethodName()
-                }
-                return dotNetPhysicalPropertyName(
-                    property.name.asString(),
-                    getterMethodName ?: fallbackMethodName,
-                )
-            }
-
             fun overriddenLogicalMemberKeys(source: IrSimpleFunction): List<String> =
                 source.overriddenSymbols
                     .mapNotNull { overridden ->
@@ -1064,14 +1006,7 @@ internal fun collectDotNetCSharpImplementationManifest(
                 }
                 .map { source ->
                     val memberKey = checkNotNull(preLoweringDeclarationKeys[source])
-                    val genericDefault = genericInterfaceDefaults.singleOrNull { it.source == source }
-                    val authoringView = if (interfaceInfo == null) {
-                        DotNetCSharpInterfaceView.CANONICAL
-                    } else {
-                        val authoringMemberView = genericDefault?.canonicalView
-                            ?: typeMapper.genericInterfaceMemberView(source, irClass)
-                        authoringMemberView.toManifestView()
-                    }
+                    val authoringView = DotNetCSharpInterfaceView.CANONICAL
                     val canonicalInfo = checkNotNull(availableFunctions[source]) {
                         "C# implementation manifest source member did not survive physical emission"
                     }
@@ -1079,48 +1014,12 @@ internal fun collectDotNetCSharpImplementationManifest(
                         canonicalInfo.physicalMethodName ?: source.dotNetIlMethodName()
                     val slots = buildList {
                         add(locator(
-                            if (interfaceInfo == null) {
-                                DotNetCSharpSlotRole.CANONICAL
-                            } else {
-                                DotNetCSharpSlotRole.ERASED
-                            },
+                            DotNetCSharpSlotRole.CANONICAL,
                             source,
                             canonicalInfo,
                             canonicalMethodName,
                             canonicalPropertyName(source, canonicalMethodName),
                         ))
-                        val memberViews = if (interfaceInfo == null) {
-                            emptySet()
-                        } else {
-                            typeMapper.genericInterfaceMemberViews(source, irClass)
-                        }
-                        for (memberView in memberViews) {
-                            val physicalMember = when {
-                                genericDefault == null -> source
-                                genericDefault.canonicalView == memberView -> genericDefault.canonicalBody
-                                else -> checkNotNull(genericDefault.typedAdapters[memberView])
-                            }
-                            val signatureMapper = typeMapper.genericInterfaceSignatureView(memberView)
-                            val physicalMethodName = genericDefault
-                                ?.let { typeMapper.genericInterfaceTypedMethodName(source) }
-                                ?: source.dotNetErasedCarrierMethodNameOrNull(typeMapper::isErasedGenericClass)
-                                ?: source.dotNetIlMethodName()
-                            val owner = checkNotNull(
-                                checkNotNull(interfaceInfo).classInfo(memberView.physicalView)
-                            )
-                            val info = DotNetIlFunctionInfo(
-                                owner,
-                                physicalMember.dotNetSignature(signatureMapper),
-                                physicalMethodName,
-                            )
-                            add(locator(
-                                memberView.toManifestSlotRole(),
-                                physicalMember,
-                                info,
-                                physicalMethodName,
-                                typedPropertyName(source, memberView, physicalMethodName),
-                            ))
-                        }
                         interfaceDefaultImplementations[source]?.let { lowered ->
                             val helperInfo = checkNotNull(availableFunctions[lowered.helper]) {
                                 "C# implementation manifest default helper did not survive physical emission"
@@ -1156,129 +1055,24 @@ internal fun collectDotNetCSharpImplementationManifest(
                         } else {
                             null
                         },
-                        wrongShapePolicy = if (interfaceInfo == null) {
-                            null
-                        } else {
-                            wrongShapePolicies[source]
-                        },
-                        erasedOwnerRelativeConstraints = if (interfaceInfo == null) {
-                            emptyList()
-                        } else {
-                            erasedOwnerRelativeConstraints(source, irClass)
-                        },
+                        wrongShapePolicy = null,
+                        erasedOwnerRelativeConstraints = emptyList(),
                         overriddenLogicalMemberKeys = overriddenLogicalMemberKeys(source),
                         slots = slots,
                     )
                 }
                 .sortedBy(DotNetCSharpMemberContract::logicalKey)
                 .toList()
-            val ownerIntersectionSlots = if (interfaceInfo == null) {
-                emptyList()
-            } else {
-                genericInterfaceIntersectionSlots.filter { slot -> slot.owner == irClass }
-            }
-            val intersections = ownerIntersectionSlots
-                .asSequence()
-                .groupBy { slot -> slot.signatureSource.symbol }
-                .values
-                .map { intersectionSlots ->
-                    val source = intersectionSlots.first().signatureSource
-                    require(intersectionSlots.all { slot -> slot.signatureSource == source })
-                    val contributorKeys = intersectionSlots
-                        .flatMap { slot -> slot.contributingMembers }
-                        .map { contributor ->
-                            preLoweringDeclarationKeys[contributor]
-                                ?: contributor.dotNetLibraryAbiKeyOrNull("F")
-                                ?: error(
-                                    "C# implementation intersection contributor has no logical identity"
-                                )
-                        }
-                        .distinct()
-                        .sorted()
-                    require(contributorKeys.size >= 2) {
-                        "C# implementation intersection has fewer than two logical contributors"
-                    }
-                    val kind = source.memberKind()
-                    val intersectionKey = buildString {
-                        append("X:")
-                        append(interfaceKey)
-                        append(':')
-                        append(kind.name)
-                        append(':')
-                        append(
-                            DotNetLibraryAbiCodec.logicalIdentityDigest(
-                                contributorKeys.joinToString("\u0000")
-                            )
-                        )
-                    }
-                    val slots = intersectionSlots.map { intersection ->
-                        val memberView = intersection.memberView
-                        val signatureMapper = typeMapper.genericInterfaceSignatureView(memberView)
-                        val owner = checkNotNull(
-                            checkNotNull(interfaceInfo).classInfo(memberView.physicalView)
-                        )
-                        val info = DotNetIlFunctionInfo(
-                            owner,
-                            source.dotNetSignature(signatureMapper),
-                            intersection.physicalMethodName,
-                        )
-                        val propertyName = source.correspondingPropertySymbol?.owner?.let { property ->
-                            val getterMethodName = ownerIntersectionSlots.singleOrNull { candidate ->
-                                candidate.memberView == memberView &&
-                                        candidate.signatureSource == property.getter
-                            }?.physicalMethodName
-                            dotNetPhysicalPropertyName(
-                                property.name.asString(),
-                                getterMethodName ?: intersection.physicalMethodName,
-                            )
-                        }
-                        locator(
-                            memberView.toManifestSlotRole(),
-                            source,
-                            info,
-                            intersection.physicalMethodName,
-                            propertyName,
-                        )
-                    }.sortedBy(DotNetCSharpMethodLocator::role)
-                    val authoringView = if (
-                        slots.any { slot -> slot.role == DotNetCSharpSlotRole.EXACT }
-                    ) {
-                        DotNetCSharpInterfaceView.EXACT
-                    } else {
-                        DotNetCSharpInterfaceView.DECLARED
-                    }
-                    DotNetCSharpIntersectionContract(
-                        logicalKey = intersectionKey,
-                        kind = kind,
-                        sourceName = source.correspondingPropertySymbol?.owner?.name?.asString()
-                            ?: source.name.asString(),
-                        authoringView = authoringView,
-                        contributingLogicalMemberKeys = contributorKeys,
-                        erasedOwnerRelativeConstraints =
-                            erasedOwnerRelativeConstraints(source, irClass),
-                        slots = slots,
-                    )
-                }
-                .sortedBy(DotNetCSharpIntersectionContract::logicalKey)
             DotNetCSharpInterfaceContract(
                 logicalKey = interfaceKey,
                 canonicalOwnerPath = canonicalClassInfo.physicalPathComponents(),
-                declaredOwnerPath = interfaceInfo?.declaredClassInfo?.physicalPathComponents(),
-                exactOwnerPath = interfaceInfo?.exactClassInfo?.physicalPathComponents(),
-                typeParameters = irClass.typeParameters.map { parameter ->
-                    DotNetCSharpTypeParameter(
-                        parameter.name.asString(),
-                        when (parameter.variance) {
-                            Variance.INVARIANT -> DotNetCSharpTypeParameterVariance.INVARIANT
-                            Variance.IN_VARIANCE -> DotNetCSharpTypeParameterVariance.IN
-                            Variance.OUT_VARIANCE -> DotNetCSharpTypeParameterVariance.OUT
-                        },
-                    )
-                },
+                declaredOwnerPath = null,
+                exactOwnerPath = null,
+                typeParameters = emptyList(),
                 sourceAuthoringSupported = unsupportedReasons.isEmpty(),
                 unsupportedReasons = unsupportedReasons,
                 members = members,
-                intersections = intersections,
+                intersections = emptyList(),
             )
         }
         .sortedBy(DotNetCSharpInterfaceContract::logicalKey)
@@ -1304,14 +1098,7 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
     target: DotNetTarget,
 ): DotNetCSharpImplementationManifest {
     val irBuiltIns = context.irBuiltIns
-    val runtimeInterfaces = listOf(
-        irBuiltIns.charSequenceClass.owner,
-        irBuiltIns.iteratorClass.owner,
-        irBuiltIns.listIteratorClass.owner,
-        irBuiltIns.iterableClass.owner,
-        irBuiltIns.collectionClass.owner,
-        irBuiltIns.listClass.owner,
-    )
+    val runtimeInterfaces = listOf(irBuiltIns.charSequenceClass.owner)
     val typeMapper = DotNetIlTypeMapper(
         availableClasses = emptyMap(),
         coreLibrary = target.coreLibrary,
@@ -1325,10 +1112,6 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
             }
         }.filterNot { function -> function.isFakeOverride }
     }
-    val wrongShapePolicies = collectDotNetCSharpWrongShapePolicies(
-        context,
-        sourceMembers.values.flatten().toSet(),
-    )
 
     fun IrSimpleFunction.memberKind(): DotNetCSharpMemberKind {
         val property = correspondingPropertySymbol?.owner ?: return DotNetCSharpMemberKind.METHOD
@@ -1362,12 +1145,11 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
     }
 
     val contracts = runtimeInterfaces.map { irClass ->
-        val interfaceInfo = DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)
-        val charSequenceInfo = DotNetRuntimeTypes.charSequenceImplementationClassInfo(irClass)
-        val canonicalClassInfo = interfaceInfo?.canonicalClassInfo
-            ?: checkNotNull(charSequenceInfo) {
-                "Runtime C# interface contract has no physical interface registry entry"
-            }
+        val canonicalClassInfo = checkNotNull(
+            DotNetRuntimeTypes.charSequenceImplementationClassInfo(irClass)
+        ) {
+            "Runtime C# interface contract has no physical interface registry entry"
+        }
         val interfaceKey = checkNotNull(irClass.dotNetLibraryAbiKeyOrNull("C")) {
             "Runtime C# interface contract has no Kotlin public identity"
         }
@@ -1375,68 +1157,17 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
             val memberKey = checkNotNull(source.dotNetLibraryAbiKeyOrNull("F")) {
                 "Runtime C# interface member has no Kotlin public identity"
             }
-            val slots: List<DotNetCSharpMethodLocator>
-            val authoringView: DotNetCSharpInterfaceView
-            if (charSequenceInfo != null) {
-                authoringView = DotNetCSharpInterfaceView.CANONICAL
-                slots = listOf(
-                    locator(
-                        DotNetCSharpSlotRole.CANONICAL,
-                        source,
-                        charSequenceInfo,
-                        typeMapper,
-                        source.dotNetIlMethodName(),
-                        source.correspondingPropertySymbol?.owner?.name?.asString(),
-                    )
+            val authoringView = DotNetCSharpInterfaceView.CANONICAL
+            val slots = listOf(
+                locator(
+                    DotNetCSharpSlotRole.CANONICAL,
+                    source,
+                    canonicalClassInfo,
+                    typeMapper,
+                    source.dotNetIlMethodName(),
+                    source.correspondingPropertySymbol?.owner?.name?.asString(),
                 )
-            } else {
-                checkNotNull(interfaceInfo)
-                val canonicalMethodName = checkNotNull(
-                    DotNetRuntimeTypes.genericInterfaceCanonicalMethodNameOrNull(source)
-                ) {
-                    "Runtime C# interface member '${source.name}' has no canonical physical name"
-                }
-                val memberViews = typeMapper.genericInterfaceMemberViews(source, irClass)
-                authoringView = typeMapper.genericInterfaceMemberView(source, irClass).toManifestView()
-                slots = buildList {
-                    add(
-                        locator(
-                            DotNetCSharpSlotRole.ERASED,
-                            source,
-                            interfaceInfo.canonicalClassInfo,
-                            typeMapper,
-                            canonicalMethodName,
-                            source.correspondingPropertySymbol?.owner?.let {
-                                checkNotNull(DotNetRuntimeTypes.genericInterfacePropertyNameOrNull(source)) {
-                                    "Runtime C# property accessor '${source.name}' has no physical Property name"
-                                }
-                            },
-                        )
-                    )
-                    for (memberView in memberViews) {
-                        val owner = checkNotNull(interfaceInfo.classInfo(memberView.physicalView))
-                        val typedMethodName = checkNotNull(
-                            DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(source)
-                        ) {
-                            "Runtime C# interface member '${source.name}' has no typed physical name"
-                        }
-                        add(
-                            locator(
-                                memberView.toManifestSlotRole(),
-                                source,
-                                owner,
-                                typeMapper.genericInterfaceSignatureView(memberView),
-                                typedMethodName,
-                                source.correspondingPropertySymbol?.owner?.let {
-                                    checkNotNull(DotNetRuntimeTypes.genericInterfacePropertyNameOrNull(source)) {
-                                        "Runtime C# property accessor '${source.name}' has no physical Property name"
-                                    }
-                                },
-                            )
-                        )
-                    }
-                }
-            }
+            )
             DotNetCSharpMemberContract(
                 logicalKey = memberKey,
                 kind = source.memberKind(),
@@ -1445,7 +1176,7 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
                 authoringView = authoringView,
                 defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
                 semanticBodyView = null,
-                wrongShapePolicy = wrongShapePolicies[source],
+                wrongShapePolicy = null,
                 overriddenLogicalMemberKeys = source.overriddenSymbols
                     .mapNotNull { overridden ->
                         overridden.owner.dotNetLibraryAbiKeyOrNull("F")
@@ -1459,18 +1190,9 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
         DotNetCSharpInterfaceContract(
             logicalKey = interfaceKey,
             canonicalOwnerPath = canonicalClassInfo.physicalPathComponents(),
-            declaredOwnerPath = interfaceInfo?.declaredClassInfo?.physicalPathComponents(),
-            exactOwnerPath = interfaceInfo?.exactClassInfo?.physicalPathComponents(),
-            typeParameters = irClass.typeParameters.map { parameter ->
-                DotNetCSharpTypeParameter(
-                    parameter.name.asString(),
-                    when (parameter.variance) {
-                        Variance.INVARIANT -> DotNetCSharpTypeParameterVariance.INVARIANT
-                        Variance.IN_VARIANCE -> DotNetCSharpTypeParameterVariance.IN
-                        Variance.OUT_VARIANCE -> DotNetCSharpTypeParameterVariance.OUT
-                    },
-                )
-            },
+            declaredOwnerPath = null,
+            exactOwnerPath = null,
+            typeParameters = emptyList(),
             sourceAuthoringSupported = true,
             unsupportedReasons = emptyList(),
             members = members,
@@ -1485,50 +1207,6 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
         logicalIdentityScheme = DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
         interfaces = contracts,
     )
-}
-
-internal fun collectDotNetCSharpWrongShapePolicies(
-    context: DotNetBackendContext,
-    declarations: Set<IrDeclaration>,
-): Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy> {
-    val specialBridgeMethods = SpecialBridgeMethods(context)
-    return declarations.asSequence()
-        .filterIsInstance<IrSimpleFunction>()
-        .mapNotNull { function ->
-            val info = specialBridgeMethods.findSpecialWithOverride(
-                function,
-                includeSelf = true,
-            )?.second ?: return@mapNotNull null
-            val fallback = when (info.defaultValueKind) {
-                SpecialBridgeDefaultValueKind.FALSE -> DotNetCSharpWrongShapeFallback.FALSE
-                SpecialBridgeDefaultValueKind.NULL -> DotNetCSharpWrongShapeFallback.NULL
-                SpecialBridgeDefaultValueKind.MINUS_ONE -> DotNetCSharpWrongShapeFallback.MINUS_ONE
-                SpecialBridgeDefaultValueKind.SECOND_ARGUMENT ->
-                    DotNetCSharpWrongShapeFallback.ARGUMENT
-            }
-            function to DotNetCSharpWrongShapePolicy(
-                checkedParameterCount = info.argumentsToCheck,
-                fallback = fallback,
-                fallbackParameterIndex = if (
-                    info.defaultValueKind == SpecialBridgeDefaultValueKind.SECOND_ARGUMENT
-                ) {
-                    1
-                } else {
-                    null
-                },
-            )
-        }
-        .toMap()
-}
-
-private fun DotNetGenericInterfaceMemberView.toManifestView(): DotNetCSharpInterfaceView = when (this) {
-    DotNetGenericInterfaceMemberView.DECLARED -> DotNetCSharpInterfaceView.DECLARED
-    DotNetGenericInterfaceMemberView.EXACT -> DotNetCSharpInterfaceView.EXACT
-}
-
-private fun DotNetGenericInterfaceMemberView.toManifestSlotRole(): DotNetCSharpSlotRole = when (this) {
-    DotNetGenericInterfaceMemberView.DECLARED -> DotNetCSharpSlotRole.DECLARED
-    DotNetGenericInterfaceMemberView.EXACT -> DotNetCSharpSlotRole.EXACT
 }
 
 private fun DotNetCSharpSlotRole.toManifestView(): DotNetCSharpInterfaceView = when (this) {

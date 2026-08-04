@@ -240,14 +240,6 @@
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .maxstack 2
-      .locals init (
-        [0] class 'GenericDefaults' '<genericInterfaceReceiver>',
-        [1] class 'GenericDefaults`1'<!!0> '<genericInterfaceCapability>',
-        [2] !!0 '<genericInterfaceResult>',
-        [3] class 'GenericDefaults' '<genericInterfaceReceiver>@3',
-        [4] class 'GenericDefaults`1'<!!0> '<genericInterfaceCapability>@4',
-        [5] !!0 '<genericInterfaceResult>@5'
-      )
       ldarg.2
       ldc.i4 1
       and
@@ -257,48 +249,17 @@
       ceq
       brfalse IL_whenNext_1
       ldarg.0
-      stloc.0
-      ldloc.0
-      isinst class 'GenericDefaults`1'<!!0>
-      stloc.1
-      ldloc.1
-      brfalse IL_genericInterfaceErasedFallback_2
-      ldloc.1
-      callvirt instance !0 class 'GenericDefaults`1'<!!0>::'fallback'()
-      stloc.2
-      br IL_genericInterfaceJoin_3
-  IL_genericInterfaceErasedFallback_2:
-      ldloc.0
       callvirt instance object 'GenericDefaults'::'fallback__KotlinErased__e568c61f44d0d42ddc5ef7625f15b87b'()
       unbox.any !!0
-      stloc.2
-  IL_genericInterfaceJoin_3:
-      ldloc.2
       starg 1
       br IL_whenEnd_0
   IL_whenNext_1:
   IL_whenEnd_0:
       ldarg.0
-      stloc.3
-      ldloc.3
-      isinst class 'GenericDefaults`1'<!!0>
-      stloc 4
-      ldloc 4
-      brfalse IL_genericInterfaceErasedFallback_4
-      ldloc 4
-      ldarg.1
-      callvirt instance !0 class 'GenericDefaults`1'<!!0>::'choose'(!0)
-      stloc 5
-      br IL_genericInterfaceJoin_5
-  IL_genericInterfaceErasedFallback_4:
-      ldloc.3
       ldarg.1
       box !!0
       callvirt instance object 'GenericDefaults'::'choose__KotlinErased__4a52d4bebb1297af29fdeb5943675b2e'(object)
       unbox.any !!0
-      stloc 5
-  IL_genericInterfaceJoin_5:
-      ldloc 5
       ret
     }
     .method public hidebysig static !!1 'echo$default'<'T', 'R'>(class 'GenericDefaults' '$this', !!1 'value', !!1 'selected', int32 '$mask0') cil managed
@@ -306,11 +267,6 @@
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .maxstack 3
-      .locals init (
-        [0] class 'GenericDefaults' '<genericInterfaceReceiver>',
-        [1] class 'GenericDefaults`1'<!!0> '<genericInterfaceCapability>',
-        [2] !!1 '<genericInterfaceResult>'
-      )
       ldarg.3
       ldc.i4 2
       and
@@ -325,26 +281,9 @@
   IL_whenNext_1:
   IL_whenEnd_0:
       ldarg.0
-      stloc.0
-      ldloc.0
-      isinst class 'GenericDefaults`1'<!!0>
-      stloc.1
-      ldloc.1
-      brfalse IL_genericInterfaceErasedFallback_2
-      ldloc.1
-      ldarg.1
-      ldarg.2
-      callvirt instance !!0 class 'GenericDefaults`1'<!!0>::'echo'<!!1>(!!0, !!0)
-      stloc.2
-      br IL_genericInterfaceJoin_3
-  IL_genericInterfaceErasedFallback_2:
-      ldloc.0
       ldarg.1
       ldarg.2
       callvirt instance !!0 'GenericDefaults'::'echo__KotlinErased__cfdf24969acfe1d9107243bb0eb76cb7'<!!1>(!!0, !!0)
-      stloc.2
-  IL_genericInterfaceJoin_3:
-      ldloc.2
       ret
     }
   }
@@ -355,19 +294,6 @@
   {
   }
   .method public hidebysig newslot abstract virtual instance !!0 'echo__KotlinErased__cfdf24969acfe1d9107243bb0eb76cb7'<'R'>(!!0 'value', !!0 'selected') cil managed
-  {
-  }
-}
-.class interface public abstract auto ansi 'GenericDefaults`1'<'T'>
-       implements 'GenericDefaults'
-{
-  .method public hidebysig newslot abstract virtual instance !0 'fallback'() cil managed
-  {
-  }
-  .method public hidebysig newslot abstract virtual instance !0 'choose'(!0 'value') cil managed
-  {
-  }
-  .method public hidebysig newslot abstract virtual instance !!0 'echo'<'R'>(!!0 'value', !!0 'selected') cil managed
   {
   }
 }
@@ -445,7 +371,7 @@
   }
 }
 .class interface public abstract auto ansi 'StringDefaults'
-       implements 'GenericDefaults', class 'GenericDefaults`1'<string>
+       implements 'GenericDefaults'
 {
   .method public hidebysig newslot abstract virtual instance string 'choose'(string 'value') cil managed
   {
@@ -453,7 +379,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'StringDefaultsImpl'
        extends [mscorlib]System.Object
-       implements 'StringDefaults', class 'GenericDefaults`1'<string>
+       implements 'StringDefaults'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
@@ -490,14 +416,6 @@
     callvirt instance string 'StringDefaultsImpl'::'fallback'()
     ret
   }
-  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-GenericDefaults-fallback-e568c61f44d0d42ddc5ef7625f15b87b>'() cil managed
-  {
-    .override method instance !0 class 'GenericDefaults`1'<string>::'fallback'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance string 'StringDefaultsImpl'::'fallback'()
-    ret
-  }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-GenericDefaults-choose-4a52d4bebb1297af29fdeb5943675b2e>'(object 'value') cil managed
   {
     .override method instance object 'GenericDefaults'::'choose__KotlinErased__4a52d4bebb1297af29fdeb5943675b2e'(object)
@@ -508,28 +426,9 @@
     callvirt instance string 'StringDefaultsImpl'::'choose'(string)
     ret
   }
-  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-GenericDefaults-choose-4a52d4bebb1297af29fdeb5943675b2e>'(string 'value') cil managed
-  {
-    .override method instance !0 class 'GenericDefaults`1'<string>::'choose'(!0)
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    callvirt instance string 'StringDefaultsImpl'::'choose'(string)
-    ret
-  }
   .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-GenericDefaults-echo-cfdf24969acfe1d9107243bb0eb76cb7>'<'R'>(!!0 'value', !!0 'selected') cil managed
   {
     .override method instance !!0 'GenericDefaults'::'echo__KotlinErased__cfdf24969acfe1d9107243bb0eb76cb7'<[1]>(!!0, !!0)
-    .maxstack 3
-    ldarg.0
-    ldarg.1
-    ldarg.2
-    callvirt instance !!0 'StringDefaultsImpl'::'echo'<!!0>(!!0, !!0)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDeclaredBridge-GenericDefaults-echo-cfdf24969acfe1d9107243bb0eb76cb7>'<'R'>(!!0 'value', !!0 'selected') cil managed
-  {
-    .override method instance !!0 class 'GenericDefaults`1'<string>::'echo'<[1]>(!!0, !!0)
     .maxstack 3
     ldarg.0
     ldarg.1
@@ -550,11 +449,6 @@
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .maxstack 2
-      .locals init (
-        [0] class 'VariantDefaults' '<genericInterfaceReceiver>',
-        [1] class 'VariantDefaults`1'<!!0> '<genericInterfaceCapability>',
-        [2] !!0 '<genericInterfaceResult>'
-      )
       ldarg.2
       ldc.i4 1
       and
@@ -569,25 +463,9 @@
   IL_whenNext_1:
   IL_whenEnd_0:
       ldarg.0
-      stloc.0
-      ldloc.0
-      isinst class 'VariantDefaults`1'<!!0>
-      stloc.1
-      ldloc.1
-      brfalse IL_genericInterfaceErasedFallback_2
-      ldloc.1
-      ldarg.1
-      callvirt instance !0 class 'VariantDefaults`1'<!!0>::'value'(int32)
-      stloc.2
-      br IL_genericInterfaceJoin_3
-  IL_genericInterfaceErasedFallback_2:
-      ldloc.0
       ldarg.1
       callvirt instance object 'VariantDefaults'::'value__KotlinErased__aea780ea979bd30ce22e7e456d287fe9'(int32)
       unbox.any !!0
-      stloc.2
-  IL_genericInterfaceJoin_3:
-      ldloc.2
       ret
     }
   }
@@ -595,16 +473,9 @@
   {
   }
 }
-.class interface public abstract auto ansi 'VariantDefaults`1'<+ 'T'>
-       implements 'VariantDefaults'
-{
-  .method public hidebysig newslot abstract virtual instance !0 'value'(int32 'index') cil managed
-  {
-  }
-}
 .class public auto ansi sealed beforefieldinit 'StringVariantDefaults'
        extends [mscorlib]System.Object
-       implements 'VariantDefaults', class 'VariantDefaults`1'<string>
+       implements 'VariantDefaults'
 {
   .field private string 'text'
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'text') cil managed
@@ -640,15 +511,6 @@
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-VariantDefaults-value-aea780ea979bd30ce22e7e456d287fe9>'(int32 'index') cil managed
   {
     .override method instance object 'VariantDefaults'::'value__KotlinErased__aea780ea979bd30ce22e7e456d287fe9'(int32)
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    callvirt instance string 'StringVariantDefaults'::'value'(int32)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-VariantDefaults-value-aea780ea979bd30ce22e7e456d287fe9>'(int32 'index') cil managed
-  {
-    .override method instance !0 class 'VariantDefaults`1'<string>::'value'(int32)
     .maxstack 2
     ldarg.0
     ldarg.1
@@ -712,14 +574,6 @@
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .maxstack 2
-      .locals init (
-        [0] class 'BoundedDefaults' '<genericInterfaceReceiver>',
-        [1] class 'BoundedDefaults`1'<!!0> '<genericInterfaceCapability>',
-        [2] !!0 '<genericInterfaceResult>',
-        [3] class 'BoundedDefaults' '<genericInterfaceReceiver>@3',
-        [4] class 'BoundedDefaults`1'<!!0> '<genericInterfaceCapability>@4',
-        [5] !!0 '<genericInterfaceResult>@5'
-      )
       ldarg.2
       ldc.i4 1
       and
@@ -729,48 +583,17 @@
       ceq
       brfalse IL_whenNext_1
       ldarg.0
-      stloc.0
-      ldloc.0
-      isinst class 'BoundedDefaults`1'<!!0>
-      stloc.1
-      ldloc.1
-      brfalse IL_genericInterfaceErasedFallback_2
-      ldloc.1
-      callvirt instance !0 class 'BoundedDefaults`1'<!!0>::'fallback'()
-      stloc.2
-      br IL_genericInterfaceJoin_3
-  IL_genericInterfaceErasedFallback_2:
-      ldloc.0
       callvirt instance object 'BoundedDefaults'::'fallback__KotlinErased__965b163591a237ab8086bada78f6318d'()
       unbox.any !!0
-      stloc.2
-  IL_genericInterfaceJoin_3:
-      ldloc.2
       starg 1
       br IL_whenEnd_0
   IL_whenNext_1:
   IL_whenEnd_0:
       ldarg.0
-      stloc.3
-      ldloc.3
-      isinst class 'BoundedDefaults`1'<!!0>
-      stloc 4
-      ldloc 4
-      brfalse IL_genericInterfaceErasedFallback_4
-      ldloc 4
-      ldarg.1
-      callvirt instance !0 class 'BoundedDefaults`1'<!!0>::'choose'(!0)
-      stloc 5
-      br IL_genericInterfaceJoin_5
-  IL_genericInterfaceErasedFallback_4:
-      ldloc.3
       ldarg.1
       box !!0
       callvirt instance object 'BoundedDefaults'::'choose__KotlinErased__4835a5ee62dbd7c09c6d5e77e232c149'(object)
       unbox.any !!0
-      stloc 5
-  IL_genericInterfaceJoin_5:
-      ldloc 5
       ret
     }
   }
@@ -778,16 +601,6 @@
   {
   }
   .method public hidebysig newslot abstract virtual instance object 'choose__KotlinErased__4835a5ee62dbd7c09c6d5e77e232c149'(object 'value') cil managed
-  {
-  }
-}
-.class interface public abstract auto ansi 'BoundedDefaults`1'<(class 'BoundValue') 'T'>
-       implements 'BoundedDefaults'
-{
-  .method public hidebysig newslot abstract virtual instance !0 'fallback'() cil managed
-  {
-  }
-  .method public hidebysig newslot abstract virtual instance !0 'choose'(!0 'value') cil managed
   {
   }
 }

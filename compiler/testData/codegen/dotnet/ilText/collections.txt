@@ -186,81 +186,27 @@ IL_whenEnd_0:
   {
     .maxstack 2
     .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterator',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>',
-      [2] class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<object> '<genericInterfaceCapability>',
-      [3] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceResult>',
-      [4] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>@4',
-      [5] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object> '<genericInterfaceCapability>@5',
-      [6] bool '<genericInterfaceResult>@6',
-      [7] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>@7',
-      [8] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object> '<genericInterfaceCapability>@8',
-      [9] object '<genericInterfaceResult>@9'
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterator'
     )
     ldarg.1
-    stloc.1
-    ldloc.1
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<object>
-    stloc.2
-    ldloc.2
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.2
-    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<object>::'GetIterator'()
-    stloc.3
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.1
     callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Collection'::'GetIterator'()
-    stloc.3
-IL_genericInterfaceJoin_1:
-    ldloc.3
     stloc.0
-IL_whileCond_2:
+IL_whileCond_0:
     ldloc.0
-    stloc 4
-    ldloc 4
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object>
-    stloc 5
-    ldloc 5
-    brfalse IL_genericInterfaceErasedFallback_4
-    ldloc 5
-    callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object>::'HasNext'()
-    stloc 6
-    br IL_genericInterfaceJoin_5
-IL_genericInterfaceErasedFallback_4:
-    ldloc 4
     callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
-    stloc 6
-IL_genericInterfaceJoin_5:
-    ldloc 6
-    brfalse IL_whileEnd_3
+    brfalse IL_whileEnd_1
     ldarg.0
     ldloc.0
-    stloc 7
-    ldloc 7
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object>
-    stloc 8
-    ldloc 8
-    brfalse IL_genericInterfaceErasedFallback_8
-    ldloc 8
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object>::'Next'()
-    stloc 9
-    br IL_genericInterfaceJoin_9
-IL_genericInterfaceErasedFallback_8:
-    ldloc 7
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
-    stloc 9
-IL_genericInterfaceJoin_9:
-    ldloc 9
     callvirt instance bool 'OneCollection'::'contains'(object)
     ldc.i4.0
     ceq
-    brfalse IL_whenNext_7
+    brfalse IL_whenNext_3
     ldc.i4.0
     ret
-IL_whenNext_7:
-    br IL_whileCond_2
-IL_whileEnd_3:
+IL_whenNext_3:
+    br IL_whileCond_0
+IL_whileEnd_1:
     ldc.i4.1
     ret
   }
@@ -350,243 +296,56 @@ IL_whenNext_1:
   .method public hidebysig static bool 'exactContains'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'collection') cil managed
   {
     .maxstack 2
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<int32> '<genericInterfaceCapability>',
-      [2] bool '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    ldc.i4 7
-    callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<int32>::'Contains'(!0)
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     ldc.i4 7
     box [mscorlib]System.Int32
     callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsErased'(object)
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static bool 'wideContains'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'collection') cil managed
   {
     .maxstack 2
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<object> '<genericInterfaceCapability>',
-      [2] bool '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<object>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    ldc.i4 7
-    box [mscorlib]System.Int32
-    callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<object>::'Contains'(!0)
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     ldc.i4 7
     box [mscorlib]System.Int32
     callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsErased'(object)
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static int32 'exactFirst'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'collection') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<int32> '<genericInterfaceCapability>',
-      [2] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceResult>',
-      [3] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>@3',
-      [4] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32> '<genericInterfaceCapability>@4',
-      [5] int32 '<genericInterfaceResult>@5'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<int32>::'GetIterator'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Collection'::'GetIterator'()
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
-    stloc.3
-    ldloc.3
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>
-    stloc 4
-    ldloc 4
-    brfalse IL_genericInterfaceErasedFallback_2
-    ldloc 4
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>::'Next'()
-    stloc 5
-    br IL_genericInterfaceJoin_3
-IL_genericInterfaceErasedFallback_2:
-    ldloc.3
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     unbox.any [mscorlib]System.Int32
-    stloc 5
-IL_genericInterfaceJoin_3:
-    ldloc 5
     ret
   }
   .method public hidebysig static object 'wideFirst'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'collection') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<object> '<genericInterfaceCapability>',
-      [2] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceResult>',
-      [3] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>@3',
-      [4] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object> '<genericInterfaceCapability>@4',
-      [5] object '<genericInterfaceResult>@5'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<object>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<object>::'GetIterator'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Collection'::'GetIterator'()
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
-    stloc.3
-    ldloc.3
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object>
-    stloc 4
-    ldloc 4
-    brfalse IL_genericInterfaceErasedFallback_2
-    ldloc 4
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object>::'Next'()
-    stloc 5
-    br IL_genericInterfaceJoin_3
-IL_genericInterfaceErasedFallback_2:
-    ldloc.3
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
-    stloc 5
-IL_genericInterfaceJoin_3:
-    ldloc 5
     ret
   }
   .method public hidebysig static bool 'exactContainsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'collection', class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
   {
     .maxstack 2
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<int32> '<genericInterfaceCapability>',
-      [2] bool '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    ldarg.1
-    callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<int32>::'ContainsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     ldarg.1
     callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static bool 'openCalls'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'collection', !!0 'value') cil managed
   {
     .maxstack 2
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!!0> '<genericInterfaceCapability>',
-      [2] int32 '<genericInterfaceResult>',
-      [3] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>@3',
-      [4] class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!!0> '<genericInterfaceCapability>@4',
-      [5] bool '<genericInterfaceResult>@5',
-      [6] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>@6',
-      [7] class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<!!0> '<genericInterfaceCapability>@7',
-      [8] bool '<genericInterfaceResult>@8',
-      [9] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>@9',
-      [10] class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!!0> '<genericInterfaceCapability>@10',
-      [11] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceResult>@11',
-      [12] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>@12',
-      [13] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0> '<genericInterfaceCapability>@13',
-      [14] !!0 '<genericInterfaceResult>@14'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!!0>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_6
-    ldloc.1
-    callvirt instance int32 class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!!0>::'get_Size'()
-    stloc.2
-    br IL_genericInterfaceJoin_7
-IL_genericInterfaceErasedFallback_6:
-    ldloc.0
     callvirt instance int32 [Kotlin.Runtime]'Kotlin.Collections.Collection'::'get_Size'()
-    stloc.2
-IL_genericInterfaceJoin_7:
-    ldloc.2
     ldc.i4 1
     ceq
     brfalse IL_whenNext_5
     ldarg.0
-    stloc.3
-    ldloc.3
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!!0>
-    stloc 4
-    ldloc 4
-    brfalse IL_genericInterfaceErasedFallback_8
-    ldloc 4
-    callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!!0>::'IsEmpty'()
-    stloc 5
-    br IL_genericInterfaceJoin_9
-IL_genericInterfaceErasedFallback_8:
-    ldloc.3
     callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'IsEmpty'()
-    stloc 5
-IL_genericInterfaceJoin_9:
-    ldloc 5
     ldc.i4.0
     ceq
     br IL_whenEnd_4
@@ -595,64 +354,18 @@ IL_whenNext_5:
 IL_whenEnd_4:
     brfalse IL_whenNext_3
     ldarg.0
-    stloc 6
-    ldloc 6
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<!!0>
-    stloc 7
-    ldloc 7
-    brfalse IL_genericInterfaceErasedFallback_10
-    ldloc 7
-    ldarg.1
-    callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<!!0>::'Contains'(!0)
-    stloc 8
-    br IL_genericInterfaceJoin_11
-IL_genericInterfaceErasedFallback_10:
-    ldloc 6
     ldarg.1
     box !!0
     callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsErased'(object)
-    stloc 8
-IL_genericInterfaceJoin_11:
-    ldloc 8
     br IL_whenEnd_2
 IL_whenNext_3:
     ldc.i4.0
 IL_whenEnd_2:
     brfalse IL_whenNext_1
     ldarg.0
-    stloc 9
-    ldloc 9
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!!0>
-    stloc 10
-    ldloc 10
-    brfalse IL_genericInterfaceErasedFallback_12
-    ldloc 10
-    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!!0>::'GetIterator'()
-    stloc 11
-    br IL_genericInterfaceJoin_13
-IL_genericInterfaceErasedFallback_12:
-    ldloc 9
     callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Collection'::'GetIterator'()
-    stloc 11
-IL_genericInterfaceJoin_13:
-    ldloc 11
-    stloc 12
-    ldloc 12
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0>
-    stloc 13
-    ldloc 13
-    brfalse IL_genericInterfaceErasedFallback_14
-    ldloc 13
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0>::'Next'()
-    stloc 14
-    br IL_genericInterfaceJoin_15
-IL_genericInterfaceErasedFallback_14:
-    ldloc 12
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     unbox.any !!0
-    stloc 14
-IL_genericInterfaceJoin_15:
-    ldloc 14
     box !!0
     ldarg.1
     box !!0

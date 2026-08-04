@@ -152,19 +152,8 @@
   {
   }
 }
-.class interface public abstract auto ansi 'GenericPicker`1'<'C'>
-       implements 'GenericPicker'
-{
-  .method public hidebysig newslot abstract virtual instance !!0 'pick'<'M'>(!0 'context', !!0 'value') cil managed
-  {
-  }
-}
 .class interface public abstract auto ansi 'ChildPicker'
        implements 'GenericPicker'
-{
-}
-.class interface public abstract auto ansi 'ChildPicker`1'<'C'>
-       implements 'ChildPicker', class 'GenericPicker`1'<!0>
 {
 }
 .class public auto ansi sealed beforefieldinit 'Picker'

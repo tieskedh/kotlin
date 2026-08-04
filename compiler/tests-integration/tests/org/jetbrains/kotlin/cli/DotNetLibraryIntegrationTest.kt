@@ -10199,20 +10199,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testGenericInterfacePhysicalViewsRoundTrip() {
+    fun testKotlinClassifierPhysicalOwnersRoundTrip() {
         val declarations = mapOf(
             "C:sample/Producer" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Producer"),
-                declaredOwnerPath = listOf("sample.Producer`1"),
-                exactOwnerPath = listOf("sample.Producer\$Exact`1"),
             ),
             "C:sample/Consumer" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Consumer"),
-                declaredOwnerPath = listOf("sample.Consumer`1"),
             ),
             "C:sample/Box" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Box"),
-                declaredOwnerPath = listOf("sample.Box`1"),
             ),
             "C:sample/Counter" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Counter"),
@@ -10261,14 +10257,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
                         implementationMethodName = "<GenericInterfaceCanonicalBridge-defaultWithDefaults>",
                     ),
-            "I:C:sample/Intersection:DECLARED:4b2bc8eaf1471267b878d9c25980804d" to
-                    DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot(
-                        ownerPath = listOf("sample.Intersection`1"),
-                        ownerLogicalKey = "C:sample/Intersection",
-                        contributingLogicalMemberKeys = listOf("F:sample/left", "F:sample/right"),
-                        physicalView = DotNetInterfaceDefaultPromotionView.DECLARED,
-                        methodName = "read",
-                    ),
             "R:C:sample/Contract:F:sample/baseValue" to
                     DotNetPhysicalDeclaration.CovariantReturnBridge(
                         ownerPath = listOf("sample.Contract"),
@@ -10290,7 +10278,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("18", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("19", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -10313,7 +10301,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testDllManifestGeneratesCSharpImplementorsWithoutKlib() {
+    fun testDllManifestExposesOnlyNonGenericInterfacesWithoutKlib() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,
@@ -10944,7 +10932,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
             runtimeManifest.logicalIdentityScheme,
         )
-        assertEquals(6, runtimeManifest.interfaces.size)
+        assertEquals(1, runtimeManifest.interfaces.size)
         assertTrue(runtimeManifest.interfaces.all { contract ->
             contract.logicalKey.startsWith("C:") &&
                     !contract.logicalKey.startsWith("runtime:") &&
@@ -10953,20 +10941,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 !member.logicalKey.startsWith("runtime:")
                     }
         })
-        val runtimeCollectionContract = runtimeManifest.interfaces.single { contract ->
-            contract.canonicalOwnerPath.last() == "Kotlin.Collections.Collection"
-        }
-        val runtimeListContract = runtimeManifest.interfaces.single { contract ->
-            contract.canonicalOwnerPath.last() == "Kotlin.Collections.List"
-        }
-        val runtimeIterableContract = runtimeManifest.interfaces.single { contract ->
-            contract.canonicalOwnerPath.last() == "Kotlin.Collections.Iterable"
-        }
         val runtimeCharSequenceContract = runtimeManifest.interfaces.single { contract ->
             contract.canonicalOwnerPath.last() == "Kotlin.CharSequence"
         }
-        assertTrue(runtimeCollectionContract.sourceAuthoringSupported)
-        assertTrue(runtimeListContract.sourceAuthoringSupported)
         assertTrue(runtimeCharSequenceContract.sourceAuthoringSupported)
         assertEquals(null, runtimeCharSequenceContract.declaredOwnerPath)
         assertEquals(null, runtimeCharSequenceContract.exactOwnerPath)
@@ -11002,18 +10979,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 assertEquals("object", slot.returnType)
                 assertEquals(listOf("int32", "int32"), slot.parameterTypes)
             }
-        assertEquals(
-            DotNetCSharpWrongShapeFallback.FALSE,
-            runtimeCollectionContract.members.single { member ->
-                member.sourceName == "contains"
-            }.wrongShapePolicy?.fallback,
-        )
-        assertEquals(
-            DotNetCSharpWrongShapeFallback.MINUS_ONE,
-            runtimeListContract.members.single { member ->
-                member.sourceName == "indexOf"
-            }.wrongShapePolicy?.fallback,
-        )
         val runtimeContractsByProfile = DotNetTarget.entries.associateWith { target ->
             val assembly = if (target == DotNetTarget.NET10_0) {
                 runtimeAssembly
@@ -11063,2706 +11028,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(
                 modernRuntimeContracts,
                 runtimeContractsByProfile.getValue(portableTarget).interfaces,
-            )
-        }
-
-        val parentDeclarationText = """
-            public interface ManifestMarker
-
-            public interface OwnerBound<out T> {
-                public fun <R : @UnsafeVariance T> retain(value: R): R
-            }
-
-            public interface OwnerBoundLeft<out T> {
-                public fun <R : @UnsafeVariance T> retainBoth(value: R): R
-            }
-
-            public interface OwnerBoundRight<out T> {
-                public fun <R : @UnsafeVariance T> retainBoth(value: R): R
-            }
-
-            public interface SubstitutedLeft<T> {
-                public fun select(value: T): Int
-            }
-
-            public interface SubstitutedRight {
-                public fun select(value: String): Int
-            }
-
-            public interface OrdinaryParent {
-                public val displayName: String
-                public fun fallbackName(): String = displayName
-            }
-
-            public interface Reabstractable {
-                public fun selected(): String = "inherited-default"
-            }
-
-            public interface DefaultConflictLeft {
-                public fun resolvedDefault(): String = "left-default"
-            }
-
-            public interface DefaultConflictRight {
-                public fun resolvedDefault(): String = "right-default"
-            }
-
-            public interface DefaultPropertyConflictLeft {
-                public val resolvedProperty: String
-                    get() = "left-property"
-            }
-
-            public interface DefaultPropertyConflictRight {
-                public val resolvedProperty: String
-                    get() = "right-property"
-            }
-
-            public var leftMutableDefaultState: String = "left-initial"
-            public var rightMutableDefaultState: String = "right-initial"
-
-            public interface DefaultMutablePropertyConflictLeft {
-                public var resolvedMutableProperty: String
-                    get() = leftMutableDefaultState
-                    set(value) {
-                        leftMutableDefaultState = value
-                    }
-            }
-
-            public interface DefaultMutablePropertyConflictRight {
-                public var resolvedMutableProperty: String
-                    get() = rightMutableDefaultState
-                    set(value) {
-                        rightMutableDefaultState = value
-                    }
-            }
-
-            public interface GenericDefaultConflictLeft<out T> {
-                public val leftConflictValue: T
-                public fun resolvedGenericDefault(): T = leftConflictValue
-            }
-
-            public interface GenericDefaultConflictRight<out T> {
-                public val rightConflictValue: T
-                public fun resolvedGenericDefault(): T = rightConflictValue
-            }
-
-            public interface GenericDefaultPropertyConflictLeft<out T> {
-                public val leftPropertyConflictValue: T
-                public val resolvedGenericProperty: T
-                    get() = leftPropertyConflictValue
-            }
-
-            public interface GenericDefaultPropertyConflictRight<out T> {
-                public val rightPropertyConflictValue: T
-                public val resolvedGenericProperty: T
-                    get() = rightPropertyConflictValue
-            }
-
-            public var leftGenericMutableWrite: Any? = null
-            public var rightGenericMutableWrite: Any? = null
-
-            public interface GenericDefaultMutablePropertyConflictLeft<out T> {
-                public val leftMutablePropertyConflictValue: T
-                public var resolvedGenericMutableProperty: @UnsafeVariance T
-                    get() = leftMutablePropertyConflictValue
-                    set(value) {
-                        leftGenericMutableWrite = value
-                    }
-            }
-
-            public interface GenericDefaultMutablePropertyConflictRight<out T> {
-                public val rightMutablePropertyConflictValue: T
-                public var resolvedGenericMutableProperty: @UnsafeVariance T
-                    get() = rightMutablePropertyConflictValue
-                    set(value) {
-                        rightGenericMutableWrite = value
-                    }
-            }
-
-            public interface ShapeRoot<out T> {
-                public val value: T
-                public fun fallback(): T = value
-            }
-
-            public interface ShapeParent<out T> : ShapeRoot<T> {
-                public var label: String
-            }
-
-            public interface ShapeSibling<out T> : ShapeRoot<T> {
-                public val secondary: T
-            }
-
-            public interface IntersectionLeft<out T> {
-                public fun overlap(): T
-            }
-
-            public interface IntersectionRight<out T> {
-                public fun overlap(): T
-            }
-
-            public interface MutableLeft<out T> {
-                public var merged: @UnsafeVariance T
-            }
-
-            public interface MutableRight<out T> {
-                public var merged: @UnsafeVariance T
-            }
-        """.trimIndent()
-        val childDeclarationText = """
-            public interface OrdinaryShape : OrdinaryParent {
-                public var count: Int
-                public fun format(prefix: String): String
-            }
-
-            public interface ReabstractedShape : Reabstractable {
-                public override fun selected(): String
-            }
-
-            public interface GenericReabstractedShape<out T> : ShapeRoot<T> {
-                public override fun fallback(): T
-            }
-
-            public interface ResolvedDefaultConflict :
-                DefaultConflictLeft, DefaultConflictRight {
-                public override fun resolvedDefault(): String =
-                    super<DefaultConflictLeft>.resolvedDefault()
-            }
-
-            public interface ResolvedDefaultPropertyConflict :
-                DefaultPropertyConflictLeft, DefaultPropertyConflictRight {
-                public override val resolvedProperty: String
-                    get() = super<DefaultPropertyConflictLeft>.resolvedProperty
-            }
-
-            public interface ResolvedDefaultMutablePropertyConflict :
-                DefaultMutablePropertyConflictLeft, DefaultMutablePropertyConflictRight {
-                public override var resolvedMutableProperty: String
-                    get() = super<DefaultMutablePropertyConflictLeft>.resolvedMutableProperty
-                    set(value) {
-                        super<DefaultMutablePropertyConflictRight>.resolvedMutableProperty =
-                            "selected:${'$'}value"
-                    }
-            }
-
-            public interface ResolvedGenericDefaultConflict<out T> :
-                GenericDefaultConflictLeft<T>, GenericDefaultConflictRight<T> {
-                public override fun resolvedGenericDefault(): T =
-                    super<GenericDefaultConflictLeft>.resolvedGenericDefault()
-            }
-
-            public interface ResolvedGenericDefaultPropertyConflict<out T> :
-                GenericDefaultPropertyConflictLeft<T>,
-                GenericDefaultPropertyConflictRight<T> {
-                public override val resolvedGenericProperty: T
-                    get() =
-                        super<GenericDefaultPropertyConflictLeft>.resolvedGenericProperty
-            }
-
-            public interface ResolvedGenericDefaultMutablePropertyConflict<out T> :
-                GenericDefaultMutablePropertyConflictLeft<T>,
-                GenericDefaultMutablePropertyConflictRight<T> {
-                public override var resolvedGenericMutableProperty: @UnsafeVariance T
-                    get() = super<GenericDefaultMutablePropertyConflictLeft>.resolvedGenericMutableProperty
-                    set(value) {
-                        super<GenericDefaultMutablePropertyConflictRight>.resolvedGenericMutableProperty = value
-                    }
-            }
-
-            public interface BarrierShape<out T> : Collection<T> {
-                override fun contains(element: @UnsafeVariance T): Boolean
-            }
-
-            public interface SearchBarrier<out T> : List<T> {
-                override fun indexOf(element: @UnsafeVariance T): Int
-            }
-
-            internal interface FriendShape {
-                public val code: Int
-                public fun fallbackCode(): Int = code
-            }
-
-            internal class FriendContainer {
-                public interface NestedShape {
-                    public val nestedCode: Int
-                }
-
-                public interface NestedGeneric<out T> {
-                    public val nestedValue: T
-                }
-
-                private interface HiddenShape {
-                    public val hiddenCode: Int
-                }
-            }
-
-            @PublishedApi
-            internal interface PublishedInternalShape {
-                public val compilerCode: Int
-            }
-
-            public interface Shape<out T> : ShapeParent<T>, ShapeSibling<T> {
-                public fun <R : ManifestMarker> map(input: R): T
-                public fun accepts(input: @UnsafeVariance T): Boolean
-            }
-
-            private object Marker : ManifestMarker
-
-            public interface ResolvedIntersection<out T> :
-                IntersectionLeft<T>, IntersectionRight<T>
-
-            public interface ResolvedMutable<out T> :
-                MutableLeft<T>, MutableRight<T>
-
-            public interface ResolvedOwnerBound<out T> :
-                OwnerBoundLeft<T>, OwnerBoundRight<T>
-
-            public interface SubstitutedPair<T> :
-                SubstitutedLeft<T>, SubstitutedRight
-
-            public fun verifyOrdinary(value: OrdinaryShape): Int {
-                if (value.displayName != "ordinary") return 1
-                if (value.count != 3) return 2
-                if (value.format("value:") != "value:ordinary") return 3
-                if (value.fallbackName() != "ordinary") return 4
-                value.count = 7
-                return if (value.count == 7) 0 else 5
-            }
-
-            public fun verifyReabstracted(value: ReabstractedShape): Int =
-                if (value.selected() == "csharp-reabstracted") 0 else 1
-
-            public fun verifyGenericReabstracted(
-                value: GenericReabstractedShape<String>
-            ): Int {
-                val root: ShapeRoot<String> = value
-                if (value.value != "generic-value") return 1
-                if (value.fallback() != "generic-reabstracted") return 2
-                return if (root.fallback() == "generic-reabstracted") 0 else 3
-            }
-
-            public fun verifyResolvedDefaultConflict(
-                value: ResolvedDefaultConflict
-            ): Int {
-                val left: DefaultConflictLeft = value
-                val right: DefaultConflictRight = value
-                if (value.resolvedDefault() != "left-default") return 1
-                if (left.resolvedDefault() != "left-default") return 2
-                return if (right.resolvedDefault() == "left-default") 0 else 3
-            }
-
-            public fun verifyResolvedGenericDefaultConflict(
-                value: ResolvedGenericDefaultConflict<String>
-            ): Int {
-                val left: GenericDefaultConflictLeft<String> = value
-                val right: GenericDefaultConflictRight<String> = value
-                val wide: GenericDefaultConflictRight<Any?> = value
-                if (value.resolvedGenericDefault() != "left-generic") return 1
-                if (left.resolvedGenericDefault() != "left-generic") return 2
-                if (right.resolvedGenericDefault() != "left-generic") return 3
-                return if (wide.resolvedGenericDefault() == "left-generic") 0 else 4
-            }
-
-            public fun verifyResolvedDefaultPropertyConflict(
-                value: ResolvedDefaultPropertyConflict
-            ): Int {
-                val left: DefaultPropertyConflictLeft = value
-                val right: DefaultPropertyConflictRight = value
-                if (value.resolvedProperty != "left-property") return 1
-                if (left.resolvedProperty != "left-property") return 2
-                return if (right.resolvedProperty == "left-property") 0 else 3
-            }
-
-            public fun verifyResolvedDefaultMutablePropertyConflict(
-                value: ResolvedDefaultMutablePropertyConflict
-            ): Int {
-                val left: DefaultMutablePropertyConflictLeft = value
-                val right: DefaultMutablePropertyConflictRight = value
-                if (value.resolvedMutableProperty != "left-initial") return 1
-                if (left.resolvedMutableProperty != "left-initial") return 2
-                if (right.resolvedMutableProperty != "left-initial") return 3
-                value.resolvedMutableProperty = "child-set"
-                if (value.resolvedMutableProperty != "left-initial") return 4
-                if (rightMutableDefaultState != "selected:child-set") return 5
-                right.resolvedMutableProperty = "right-view-set"
-                if (rightMutableDefaultState != "selected:right-view-set") return 6
-                if (leftMutableDefaultState != "left-initial") return 7
-                left.resolvedMutableProperty = "left-view-set"
-                return if (
-                    value.resolvedMutableProperty == "left-initial" &&
-                    right.resolvedMutableProperty == "left-initial" &&
-                    rightMutableDefaultState == "selected:left-view-set"
-                ) 0 else 8
-            }
-
-            public fun verifyResolvedGenericDefaultPropertyConflict(
-                value: ResolvedGenericDefaultPropertyConflict<String>
-            ): Int {
-                val left: GenericDefaultPropertyConflictLeft<String> = value
-                val right: GenericDefaultPropertyConflictRight<String> = value
-                val wide: GenericDefaultPropertyConflictRight<Any?> = value
-                if (value.resolvedGenericProperty != "left-generic-property") return 1
-                if (left.resolvedGenericProperty != "left-generic-property") return 2
-                if (right.resolvedGenericProperty != "left-generic-property") return 3
-                return if (
-                    wide.resolvedGenericProperty == "left-generic-property"
-                ) 0 else 4
-            }
-
-            public fun verifyResolvedGenericDefaultMutablePropertyConflict(
-                value: ResolvedGenericDefaultMutablePropertyConflict<String>
-            ): Int {
-                val left: GenericDefaultMutablePropertyConflictLeft<String> = value
-                val right: GenericDefaultMutablePropertyConflictRight<String> = value
-                val wide: GenericDefaultMutablePropertyConflictRight<Any?> = value
-                if (value.resolvedGenericMutableProperty != "left-generic-mutable") return 1
-                if (left.resolvedGenericMutableProperty != "left-generic-mutable") return 2
-                if (right.resolvedGenericMutableProperty != "left-generic-mutable") return 3
-                if (wide.resolvedGenericMutableProperty != "left-generic-mutable") return 4
-                value.resolvedGenericMutableProperty = "child-generic-write"
-                if (rightGenericMutableWrite != "child-generic-write") return 5
-                if (leftGenericMutableWrite != null) return 6
-                left.resolvedGenericMutableProperty = "left-view-generic-write"
-                if (rightGenericMutableWrite != "left-view-generic-write") return 7
-                wide.resolvedGenericMutableProperty = "wide-generic-write"
-                if (rightGenericMutableWrite != "wide-generic-write") return 8
-                try {
-                    wide.resolvedGenericMutableProperty = 42
-                    return 9
-                } catch (_: ClassCastException) {
-                    // Ordinary @UnsafeVariance keeps cast failure at the erased boundary.
-                }
-                return if (
-                    rightGenericMutableWrite == "wide-generic-write" &&
-                    leftGenericMutableWrite == null
-                ) 0 else 10
-            }
-
-            public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
-                val left: IntersectionLeft<String> = value
-                val right: IntersectionRight<String> = value
-                return if (
-                    value.overlap() == "intersection" &&
-                    left.overlap() == "intersection" &&
-                    right.overlap() == "intersection"
-                ) 0 else 1
-            }
-
-            public fun verifyMutable(value: ResolvedMutable<String>): Int {
-                val left: MutableLeft<String> = value
-                val right: MutableRight<String> = value
-                if (value.merged != "mutable" || left.merged != "mutable" ||
-                    right.merged != "mutable"
-                ) return 1
-                left.merged = "left"
-                if (value.merged != "left" || right.merged != "left") return 2
-                right.merged = "right"
-                return if (value.merged == "right" && left.merged == "right") 0 else 3
-            }
-
-            public fun verifyBarrier(value: BarrierShape<String>): Int {
-                if (!value.contains("typed")) return 1
-                val wide: Collection<Any?> = value
-                if (!wide.contains("typed")) return 2
-                if (wide.contains(42) || wide.contains(null)) return 3
-                return 0
-            }
-
-            public fun verifySearchBarrier(value: SearchBarrier<String>): Int {
-                if (value.indexOf("typed") != 0) return 1
-                val wide: List<Any?> = value
-                if (wide.indexOf("typed") != 0) return 2
-                if (wide.indexOf(42) != -1 || wide.indexOf(null) != -1) return 3
-                return 0
-            }
-
-            internal fun verifyFriend(value: FriendShape): Int =
-                if (value.code == 41 && value.fallbackCode() == 41) 0 else 1
-
-            internal fun verifyNestedFriend(value: FriendContainer.NestedShape): Int =
-                if (value.nestedCode == 42) 0 else 1
-
-            internal fun verifyNestedGeneric(
-                value: FriendContainer.NestedGeneric<String>
-            ): Int = if (value.nestedValue == "nested") 0 else 1
-
-            public fun verify(value: Shape<String>): Int {
-                if (value.value != "typed") return 1
-                if (value.secondary != "secondary") return 2
-                if (value.map(Marker) != "typed") return 3
-                if (!value.accepts("typed")) return 4
-                if (value.fallback() != "typed") return 5
-                if (value.label != "initial") return 6
-                value.label = "changed"
-                val wide: Shape<Any?> = value
-                if (wide.value != "typed" || wide.secondary != "secondary") return 7
-                if (wide.map(Marker) != "typed") return 8
-                if (wide.fallback() != "typed") return 9
-                if (wide.label != "changed") return 10
-                wide.label = "wide"
-                if (value.label != "wide") return 11
-                try {
-                    wide.accepts(42)
-                    return 12
-                } catch (_: ClassCastException) {
-                    return 0
-                }
-            }
-
-            public fun verifyInt(value: Shape<Int>): Int {
-                if (value.value != 42) return 1
-                if (value.secondary != 43) return 2
-                if (value.map(Marker) != 42) return 3
-                if (!value.accepts(42)) return 4
-                if (value.fallback() != 42) return 5
-                val wide: Shape<Any?> = value
-                if (wide.value != 42 || wide.secondary != 43) return 6
-                if (wide.map(Marker) != 42 || wide.fallback() != 42) return 7
-                try {
-                    wide.accepts("wrong")
-                    return 8
-                } catch (_: ClassCastException) {
-                    return 0
-                }
-            }
-
-            public fun verifyOwnerBound(value: OwnerBound<ManifestMarker>): Int =
-                if (value.retain(Marker) === Marker) 0 else 1
-
-            public fun verifyResolvedOwnerBound(
-                value: ResolvedOwnerBound<ManifestMarker>
-            ): Int {
-                val left: OwnerBoundLeft<ManifestMarker> = value
-                val right: OwnerBoundRight<ManifestMarker> = value
-                if (value.retainBoth(Marker) !== Marker) return 1
-                if (left.retainBoth(Marker) !== Marker) return 2
-                return if (right.retainBoth(Marker) === Marker) 0 else 3
-            }
-
-            public fun verifySubstitutedPair(value: SubstitutedPair<String>): Int {
-                val left: SubstitutedLeft<String> = value
-                val right: SubstitutedRight = value
-                if (left.select("left") != 4) return 1
-                return if (right.select("right") == 5) 0 else 2
-            }
-        """.trimIndent()
-
-        data class ManifestScenario(
-            val name: String,
-            val childProfile: String,
-            val parentProfile: String = childProfile,
-            val externalParent: Boolean = true,
-        )
-
-        val scenarios = listOf(
-            ManifestScenario("net48", "net48", externalParent = false),
-            ManifestScenario("netstandard2.0", "netstandard2.0"),
-            ManifestScenario("net10.0", "net10.0"),
-            ManifestScenario(
-                name = "net10.0-promoted-portable-parent",
-                childProfile = "net10.0",
-                parentProfile = "netstandard2.0",
-            ),
-        )
-        val contractsByProfile = linkedMapOf<String, List<DotNetCSharpInterfaceContract>>()
-        for (scenario in scenarios) {
-            val targetProfile = scenario.childProfile
-            val profileDirectory = File(tmpdir, "csharp-implementation-${scenario.name}").apply { mkdirs() }
-            val externalParent = scenario.externalParent
-            val parentModuleName = when {
-                !externalParent -> "Manifest.Parent.Portable"
-                scenario.parentProfile == "net10.0" -> "Manifest.Parent.Modern"
-                scenario.childProfile == "net10.0" -> "Manifest.Parent.CrossProfile"
-                else -> "Manifest.Parent.Portable"
-            }
-            val parentMetadata = if (externalParent) {
-                val parentSource = profileDirectory.resolve("parent.kt").apply {
-                    writeText("package manifest\n\n$parentDeclarationText")
-                }
-                compileInProcess(
-                    K2DotNetCompiler(),
-                    parentSource.path,
-                    K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
-                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, scenario.parentProfile,
-                    K2DotNetCompilerArguments::moduleName.cliArgument, parentModuleName,
-                    K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
-                )
-                profileDirectory.resolve("$parentModuleName.dll")
-            } else {
-                null
-            }
-            val source = profileDirectory.resolve("api.kt").apply {
-                val declarations = if (externalParent) {
-                    childDeclarationText
-                } else {
-                    "$parentDeclarationText\n\n$childDeclarationText"
-                }
-                writeText("package manifest\n\n$declarations")
-            }
-            val moduleName = when (scenario.name) {
-                "net10.0" -> "Manifest.Modern"
-                "net10.0-promoted-portable-parent" -> "Manifest.Promoted"
-                else -> "Manifest.Portable"
-            }
-            if (parentMetadata == null) {
-                compileInProcess(
-                    K2DotNetCompiler(),
-                    source.path,
-                    K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
-                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, targetProfile,
-                    K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
-                    "${K2DotNetCompilerArguments::dotNetFriendAssemblies.cliArgument}=GeneratedShape",
-                    K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
-                )
-            } else {
-                compileInProcess(
-                    K2DotNetCompiler(),
-                    source.path,
-                    K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
-                    K2DotNetCompilerArguments::classpath.cliArgument, parentMetadata.path,
-                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, targetProfile,
-                    K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
-                    "${K2DotNetCompilerArguments::dotNetFriendAssemblies.cliArgument}=GeneratedShape",
-                    K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
-                )
-            }
-            val producerAssembly = profileDirectory.resolve("$moduleName.dll")
-            val producerKlib = profileDirectory.resolve("$moduleName.klib")
-            assertTrue(producerAssembly.isFile)
-            assertFalse(producerKlib.exists()) { "The DLL-only producer wrote $producerKlib" }
-            val parentAssembly = parentMetadata?.let { metadata ->
-                assertTrue(metadata.isFile)
-                assertFalse(profileDirectory.resolve("$parentModuleName.klib").exists())
-                metadata
-            }
-
-            val manifest = readCSharpImplementationManifestFromDll(
-                modernCSharp,
-                readerAssembly,
-                readerDirectory,
-                producerAssembly,
-            )
-            assertEquals(moduleName, manifest.assemblyName)
-            assertEquals(targetProfile, manifest.targetProfile)
-            assertEquals(
-                DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
-                manifest.logicalIdentityScheme,
-            )
-            val parentManifest = parentAssembly?.let { assembly ->
-                readCSharpImplementationManifestFromDll(
-                    modernCSharp,
-                    readerAssembly,
-                    readerDirectory,
-                    assembly,
-                )
-            } ?: manifest
-
-            val contract = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.Shape"
-            }
-            val markerContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.ManifestMarker"
-            }
-            val ordinaryParentContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.OrdinaryParent"
-            }
-            val reabstractableContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.Reabstractable"
-            }
-            val defaultConflictLeftContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.DefaultConflictLeft"
-                }
-            val defaultConflictRightContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.DefaultConflictRight"
-                }
-            val defaultPropertyConflictLeftContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.DefaultPropertyConflictLeft"
-                }
-            val defaultPropertyConflictRightContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.DefaultPropertyConflictRight"
-                }
-            val defaultMutablePropertyConflictLeftContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.DefaultMutablePropertyConflictLeft"
-                }
-            val defaultMutablePropertyConflictRightContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.DefaultMutablePropertyConflictRight"
-                }
-            val genericDefaultConflictLeftContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.GenericDefaultConflictLeft"
-                }
-            val genericDefaultConflictRightContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.GenericDefaultConflictRight"
-                }
-            val genericDefaultPropertyConflictLeftContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.GenericDefaultPropertyConflictLeft"
-                }
-            val genericDefaultPropertyConflictRightContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.GenericDefaultPropertyConflictRight"
-                }
-            val genericDefaultMutablePropertyConflictLeftContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.GenericDefaultMutablePropertyConflictLeft"
-                }
-            val genericDefaultMutablePropertyConflictRightContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.GenericDefaultMutablePropertyConflictRight"
-                }
-            val ownerBoundContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBound"
-            }
-            val ownerBoundLeftContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBoundLeft"
-            }
-            val ownerBoundRightContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBoundRight"
-            }
-            val substitutedLeftContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.SubstitutedLeft"
-                }
-            val substitutedRightContract =
-                parentManifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.SubstitutedRight"
-                }
-            val ordinaryContract = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.OrdinaryShape"
-            }
-            val reabstractedContract = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.ReabstractedShape"
-            }
-            val genericReabstractedContract =
-                manifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.GenericReabstractedShape"
-                }
-            val resolvedDefaultConflictContract =
-                manifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.ResolvedDefaultConflict"
-                }
-            val resolvedDefaultPropertyConflictContract =
-                manifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.ResolvedDefaultPropertyConflict"
-                }
-            val resolvedDefaultMutablePropertyConflictContract =
-                manifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.ResolvedDefaultMutablePropertyConflict"
-                }
-            val resolvedGenericDefaultConflictContract =
-                manifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.ResolvedGenericDefaultConflict"
-                }
-            val resolvedGenericDefaultPropertyConflictContract =
-                manifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.ResolvedGenericDefaultPropertyConflict"
-                }
-            val resolvedGenericDefaultMutablePropertyConflictContract =
-                manifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.ResolvedGenericDefaultMutablePropertyConflict"
-                }
-            val barrierContract = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.BarrierShape"
-            }
-            val searchBarrierContract = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.SearchBarrier"
-            }
-            val friendContract = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.FriendShape"
-            }
-            val nestedFriendContract = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "NestedShape"
-            }
-            val nestedGenericFriendContract =
-                manifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "NestedGeneric"
-                }
-            assertTrue(manifest.interfaces.none { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "HiddenShape" ||
-                        interfaceContract.canonicalOwnerPath.last() ==
-                        "manifest.PublishedInternalShape"
-            })
-            val assemblyAttributes =
-                readCSharpPhysicalAssemblyAttributesFromDll(
-                    modernCSharp,
-                    readerAssembly,
-                    readerDirectory,
-                    producerAssembly,
-                )
-            assertTrue(assemblyAttributes.none { attribute ->
-                attribute.ownerPath ==
-                        listOf("System.Reflection.AssemblyMetadataAttribute") &&
-                        DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME in
-                        attribute.value.toString(Charsets.UTF_8)
-            }) {
-                "The C# implementation manifest leaked into AssemblyMetadataAttribute"
-            }
-            val friendAttribute = assemblyAttributes.single { attribute ->
-                attribute.ownerPath ==
-                        listOf(
-                            "System.Runtime.CompilerServices." +
-                                    "InternalsVisibleToAttribute"
-                        )
-            }
-            val friendAssemblyName = "GeneratedShape"
-            val expectedFriendBlob =
-                byteArrayOf(
-                    0x01,
-                    0x00,
-                    friendAssemblyName.length.toByte(),
-                ) +
-                        friendAssemblyName.toByteArray(Charsets.UTF_8) +
-                        byteArrayOf(0x00, 0x00)
-            assertTrue(friendAttribute.value.contentEquals(expectedFriendBlob)) {
-                "Unexpected InternalsVisibleTo blob for $moduleName: " +
-                        friendAttribute.value.joinToString(" ") { value ->
-                            "%02x".format(value)
-                        }
-            }
-
-            val physicalTypes = readCSharpPhysicalTypeDefinitionsFromDll(
-                modernCSharp,
-                readerAssembly,
-                readerDirectory,
-                producerAssembly,
-            ).associateBy(CSharpPhysicalTypeDefinition::ownerPath)
-            assertEquals(
-                0,
-                physicalTypes.getValue(friendContract.canonicalOwnerPath).visibility,
-                "An ordinary internal interface must be a non-public top-level TypeDef",
-            )
-            val friendContainerPath =
-                nestedFriendContract.canonicalOwnerPath.dropLast(1)
-            assertEquals(
-                0,
-                physicalTypes.getValue(friendContainerPath).visibility,
-                "The containing internal class must be a non-public top-level TypeDef",
-            )
-            assertEquals(
-                2,
-                physicalTypes.getValue(
-                    nestedFriendContract.canonicalOwnerPath
-                ).visibility,
-                "A public nested interface must remain NestedPublic inside its internal owner",
-            )
-            val nestedGenericOwners = buildSet {
-                add(nestedGenericFriendContract.canonicalOwnerPath)
-                nestedGenericFriendContract.declaredOwnerPath?.let(::add)
-                nestedGenericFriendContract.exactOwnerPath?.let(::add)
-            }
-            assertTrue(nestedGenericOwners.isNotEmpty())
-            nestedGenericOwners.forEach { ownerPath ->
-                assertEquals(
-                    2,
-                    physicalTypes.getValue(ownerPath).visibility,
-                    "Every nested generic view must remain NestedPublic inside its internal owner",
-                )
-            }
-            assertEquals(
-                3,
-                physicalTypes.getValue(
-                    friendContainerPath + "HiddenShape"
-                ).visibility,
-                "A private nested interface must remain NestedPrivate",
-            )
-            assertEquals(
-                1,
-                physicalTypes.getValue(
-                    listOf("manifest.PublishedInternalShape")
-                ).visibility,
-                "@PublishedApi internal compiler ABI must remain physically public",
-            )
-            val declarationAttributes =
-                readCSharpPhysicalDeclarationAttributesFromDll(
-                    modernCSharp,
-                    readerAssembly,
-                    readerDirectory,
-                    producerAssembly,
-                )
-            val compilerAbiAttributePath =
-                listOf(
-                    "Kotlin.Runtime.Internal." +
-                            "KotlinCompilerAbiAttribute"
-                )
-            val ordinaryFriendAttributes =
-                declarationAttributes.filter { attribute ->
-                    attribute.declarationOwnerPath ==
-                            friendContract.canonicalOwnerPath
-                }
-            assertTrue(ordinaryFriendAttributes.none { attribute ->
-                attribute.attributeOwnerPath == compilerAbiAttributePath
-            }) {
-                "Ordinary internal source API must not be marked as public compiler ABI"
-            }
-            val publishedAttributes =
-                declarationAttributes.filter { attribute ->
-                    attribute.declarationOwnerPath ==
-                            listOf("manifest.PublishedInternalShape")
-                }
-            val compilerAbiAttribute =
-                publishedAttributes.single { attribute ->
-                    attribute.attributeOwnerPath == compilerAbiAttributePath
-                }
-            assertEquals(
-                "Kotlin.Runtime",
-                compilerAbiAttribute.attributeAssemblyName,
-            )
-            assertTrue(
-                compilerAbiAttribute.value.contentEquals(
-                    byteArrayOf(0x01, 0x00, 0x00, 0x00)
-                )
-            ) {
-                "Unexpected KotlinCompilerAbiAttribute blob"
-            }
-            val editorBrowsableAttribute =
-                publishedAttributes.single { attribute ->
-                    attribute.attributeOwnerPath ==
-                            listOf(
-                                "System.ComponentModel." +
-                                        "EditorBrowsableAttribute"
-                            )
-                }
-            assertTrue(
-                editorBrowsableAttribute.value.contentEquals(
-                    byteArrayOf(
-                        0x01,
-                        0x00,
-                        0x01,
-                        0x00,
-                        0x00,
-                        0x00,
-                        0x00,
-                        0x00,
-                    )
-                )
-            ) {
-                "Unexpected EditorBrowsable(Never) blob"
-            }
-            val rootContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeRoot"
-            }
-            val parentContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeParent"
-            }
-            val siblingContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeSibling"
-            }
-            val leftContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.IntersectionLeft"
-            }
-            val rightContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.IntersectionRight"
-            }
-            val mutableLeftContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.MutableLeft"
-            }
-            val mutableRightContract = parentManifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.MutableRight"
-            }
-            val resolvedIntersection = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.ResolvedIntersection"
-            }
-            val resolvedMutable = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.ResolvedMutable"
-            }
-            val resolvedOwnerBound = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.ResolvedOwnerBound"
-            }
-            val substitutedPairContract =
-                manifest.interfaces.single { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.last() ==
-                            "manifest.SubstitutedPair"
-                }
-            assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
-            assertTrue(markerContract.sourceAuthoringSupported)
-            assertTrue(ordinaryParentContract.sourceAuthoringSupported)
-            assertTrue(reabstractableContract.sourceAuthoringSupported)
-            assertTrue(defaultConflictLeftContract.sourceAuthoringSupported)
-            assertTrue(defaultConflictRightContract.sourceAuthoringSupported)
-            assertTrue(defaultPropertyConflictLeftContract.sourceAuthoringSupported)
-            assertTrue(defaultPropertyConflictRightContract.sourceAuthoringSupported)
-            assertTrue(defaultMutablePropertyConflictLeftContract.sourceAuthoringSupported)
-            assertTrue(defaultMutablePropertyConflictRightContract.sourceAuthoringSupported)
-            assertTrue(genericDefaultConflictLeftContract.sourceAuthoringSupported)
-            assertTrue(genericDefaultConflictRightContract.sourceAuthoringSupported)
-            assertTrue(genericDefaultPropertyConflictLeftContract.sourceAuthoringSupported)
-            assertTrue(genericDefaultPropertyConflictRightContract.sourceAuthoringSupported)
-            assertTrue(genericDefaultMutablePropertyConflictLeftContract.sourceAuthoringSupported)
-            assertTrue(genericDefaultMutablePropertyConflictRightContract.sourceAuthoringSupported)
-            assertTrue(ownerBoundContract.sourceAuthoringSupported)
-            assertTrue(ownerBoundLeftContract.sourceAuthoringSupported)
-            assertTrue(ownerBoundRightContract.sourceAuthoringSupported)
-            assertTrue(substitutedLeftContract.sourceAuthoringSupported)
-            assertTrue(substitutedRightContract.sourceAuthoringSupported)
-            assertTrue(ordinaryContract.sourceAuthoringSupported)
-            assertTrue(reabstractedContract.sourceAuthoringSupported)
-            assertTrue(genericReabstractedContract.sourceAuthoringSupported)
-            assertTrue(resolvedDefaultConflictContract.sourceAuthoringSupported)
-            assertTrue(resolvedDefaultPropertyConflictContract.sourceAuthoringSupported)
-            assertTrue(resolvedDefaultMutablePropertyConflictContract.sourceAuthoringSupported)
-            assertTrue(resolvedGenericDefaultConflictContract.sourceAuthoringSupported)
-            assertTrue(resolvedGenericDefaultPropertyConflictContract.sourceAuthoringSupported)
-            assertTrue(resolvedGenericDefaultMutablePropertyConflictContract.sourceAuthoringSupported)
-            assertTrue(barrierContract.sourceAuthoringSupported)
-            assertTrue(barrierContract.unsupportedReasons.isEmpty())
-            assertTrue(searchBarrierContract.sourceAuthoringSupported)
-            assertTrue(searchBarrierContract.unsupportedReasons.isEmpty())
-            assertTrue(friendContract.sourceAuthoringSupported)
-            assertTrue(friendContract.unsupportedReasons.isEmpty())
-            assertTrue(nestedFriendContract.sourceAuthoringSupported)
-            assertTrue(nestedFriendContract.unsupportedReasons.isEmpty())
-            assertTrue(nestedGenericFriendContract.sourceAuthoringSupported)
-            assertTrue(nestedGenericFriendContract.unsupportedReasons.isEmpty())
-            assertTrue(rootContract.sourceAuthoringSupported, rootContract.unsupportedReasons.joinToString())
-            assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
-            assertTrue(siblingContract.sourceAuthoringSupported, siblingContract.unsupportedReasons.joinToString())
-            assertTrue(leftContract.sourceAuthoringSupported, leftContract.unsupportedReasons.joinToString())
-            assertTrue(rightContract.sourceAuthoringSupported, rightContract.unsupportedReasons.joinToString())
-            assertTrue(
-                resolvedIntersection.sourceAuthoringSupported,
-                resolvedIntersection.unsupportedReasons.joinToString(),
-            )
-            assertTrue(mutableLeftContract.sourceAuthoringSupported)
-            assertTrue(mutableRightContract.sourceAuthoringSupported)
-            assertTrue(resolvedMutable.sourceAuthoringSupported)
-            assertTrue(resolvedOwnerBound.sourceAuthoringSupported)
-            assertTrue(substitutedPairContract.sourceAuthoringSupported)
-            assertTrue(substitutedPairContract.intersections.isEmpty()) {
-                "The producer must not invent an open-declaration intersection for " +
-                        "a collision created only by the consumer's T = String substitution"
-            }
-            val intersection = resolvedIntersection.intersections.single()
-            assertEquals("overlap", intersection.sourceName)
-            assertEquals(DotNetCSharpMemberKind.METHOD, intersection.kind)
-            assertEquals(DotNetCSharpInterfaceView.DECLARED, intersection.authoringView)
-            assertEquals(
-                setOf(
-                    leftContract.members.single().logicalKey,
-                    rightContract.members.single().logicalKey,
-                ),
-                intersection.contributingLogicalMemberKeys.toSet(),
-            )
-            assertEquals(
-                listOf(DotNetCSharpSlotRole.DECLARED),
-                intersection.slots.map { slot -> slot.role },
-            )
-            val mutableGetter = resolvedMutable.intersections.single { candidate ->
-                candidate.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
-            }
-            val mutableSetter = resolvedMutable.intersections.single { candidate ->
-                candidate.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
-            }
-            assertEquals(DotNetCSharpInterfaceView.EXACT, mutableGetter.authoringView)
-            assertEquals(DotNetCSharpInterfaceView.EXACT, mutableSetter.authoringView)
-            assertEquals(
-                listOf(DotNetCSharpSlotRole.DECLARED, DotNetCSharpSlotRole.EXACT),
-                mutableGetter.slots.map { slot -> slot.role }.sorted(),
-            )
-            assertEquals(
-                listOf(DotNetCSharpSlotRole.EXACT),
-                mutableSetter.slots.map { slot -> slot.role },
-            )
-            assertEquals(
-                mutableGetter.slots.single { slot -> slot.role == DotNetCSharpSlotRole.EXACT }
-                    .propertyName,
-                mutableSetter.slots.single().propertyName,
-            )
-            val inheritedSelected = reabstractableContract.members.single { member ->
-                member.sourceName == "selected"
-            }
-            val reabstractedSelected = reabstractedContract.members.single { member ->
-                member.sourceName == "selected"
-            }
-            assertEquals(
-                if (parentManifest.targetProfile == "net10.0") {
-                    DotNetCSharpDefaultKind.DIM_WITH_HELPER
-                } else {
-                    DotNetCSharpDefaultKind.PORTABLE_HELPER
-                },
-                inheritedSelected.defaultKind,
-            )
-            assertEquals(DotNetCSharpDefaultKind.ABSTRACT, reabstractedSelected.defaultKind)
-            assertTrue(reabstractedSelected.semanticBodyView == null)
-            assertTrue(reabstractedSelected.slots.none { slot ->
-                slot.role == DotNetCSharpSlotRole.HELPER
-            })
-            assertEquals(
-                listOf(inheritedSelected.logicalKey),
-                reabstractedSelected.overriddenLogicalMemberKeys,
-            )
-            val genericReabstractedFallback =
-                genericReabstractedContract.members.single { member ->
-                    member.sourceName == "fallback"
-                }
-            assertEquals(
-                DotNetCSharpInterfaceView.DECLARED,
-                genericReabstractedFallback.authoringView,
-            )
-            assertEquals(
-                DotNetCSharpDefaultKind.ABSTRACT,
-                genericReabstractedFallback.defaultKind,
-            )
-            assertTrue(genericReabstractedFallback.semanticBodyView == null)
-            assertTrue(genericReabstractedFallback.slots.none { slot ->
-                slot.role == DotNetCSharpSlotRole.HELPER
-            })
-            assertEquals(
-                listOf(
-                    rootContract.members.single { member ->
-                        member.sourceName == "fallback"
-                    }.logicalKey
-                ),
-                genericReabstractedFallback.overriddenLogicalMemberKeys,
-            )
-            val resolvedDefault =
-                resolvedDefaultConflictContract.members.single { member ->
-                    member.sourceName == "resolvedDefault"
-                }
-            assertEquals(
-                if (targetProfile == "net10.0") {
-                    DotNetCSharpDefaultKind.DIM_WITH_HELPER
-                } else {
-                    DotNetCSharpDefaultKind.PORTABLE_HELPER
-                },
-                resolvedDefault.defaultKind,
-            )
-            assertEquals(
-                setOf(
-                    defaultConflictLeftContract.members.single().logicalKey,
-                    defaultConflictRightContract.members.single().logicalKey,
-                ),
-                resolvedDefault.overriddenLogicalMemberKeys.toSet(),
-            )
-            val resolvedDefaultProperty =
-                resolvedDefaultPropertyConflictContract.members.single { member ->
-                    member.sourceName == "resolvedProperty"
-                }
-            assertEquals(
-                DotNetCSharpMemberKind.PROPERTY_GETTER,
-                resolvedDefaultProperty.kind,
-            )
-            assertEquals(
-                if (targetProfile == "net10.0") {
-                    DotNetCSharpDefaultKind.DIM_WITH_HELPER
-                } else {
-                    DotNetCSharpDefaultKind.PORTABLE_HELPER
-                },
-                resolvedDefaultProperty.defaultKind,
-            )
-            assertEquals(
-                setOf(
-                    defaultPropertyConflictLeftContract.members.single().logicalKey,
-                    defaultPropertyConflictRightContract.members.single().logicalKey,
-                ),
-                resolvedDefaultProperty.overriddenLogicalMemberKeys.toSet(),
-            )
-            val defaultPropertyHelperNames =
-                listOf(
-                    defaultPropertyConflictLeftContract,
-                    defaultPropertyConflictRightContract,
-                    resolvedDefaultPropertyConflictContract,
-                ).map { interfaceContract ->
-                    interfaceContract.members.single().slots.single { slot ->
-                        slot.role == DotNetCSharpSlotRole.HELPER
-                    }.methodName
-                }
-            assertTrue(defaultPropertyHelperNames.all { helperName ->
-                helperName.matches(
-                    Regex("get_resolvedProperty__KotlinDefault__[0-9a-f]{32}")
-                )
-            }) {
-                "Default-property helper names must be C#-expressible and identity-derived: " +
-                        defaultPropertyHelperNames
-            }
-            assertEquals(defaultPropertyHelperNames.size, defaultPropertyHelperNames.toSet().size)
-            assertTrue(
-                resolvedDefaultProperty.slots
-                    .filter { slot -> slot.role != DotNetCSharpSlotRole.HELPER }
-                    .all { slot ->
-                        slot.methodName == "get_resolvedProperty" &&
-                                slot.propertyName == "resolvedProperty"
-                    }
-            ) {
-                "Compiler-only helper naming leaked into the ordinary CLR property surface"
-            }
-            val resolvedDefaultMutableGetter =
-                resolvedDefaultMutablePropertyConflictContract.members.single { member ->
-                    member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
-                }
-            val resolvedDefaultMutableSetter =
-                resolvedDefaultMutablePropertyConflictContract.members.single { member ->
-                    member.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
-                }
-            for (member in listOf(
-                resolvedDefaultMutableGetter,
-                resolvedDefaultMutableSetter,
-            )) {
-                assertEquals(
-                    if (targetProfile == "net10.0") {
-                        DotNetCSharpDefaultKind.DIM_WITH_HELPER
-                    } else {
-                        DotNetCSharpDefaultKind.PORTABLE_HELPER
-                    },
-                    member.defaultKind,
-                )
-                assertEquals(
-                    setOf(
-                        defaultMutablePropertyConflictLeftContract.members.single { parent ->
-                            parent.kind == member.kind
-                        }.logicalKey,
-                        defaultMutablePropertyConflictRightContract.members.single { parent ->
-                            parent.kind == member.kind
-                        }.logicalKey,
-                    ),
-                    member.overriddenLogicalMemberKeys.toSet(),
-                )
-            }
-            val defaultMutablePropertyHelperNames =
-                listOf(
-                    defaultMutablePropertyConflictLeftContract,
-                    defaultMutablePropertyConflictRightContract,
-                    resolvedDefaultMutablePropertyConflictContract,
-                ).flatMap { interfaceContract ->
-                    interfaceContract.members.map { member ->
-                        member.slots.single { slot ->
-                            slot.role == DotNetCSharpSlotRole.HELPER
-                        }.methodName
-                    }
-                }
-            assertTrue(defaultMutablePropertyHelperNames.all { helperName ->
-                helperName.matches(
-                    Regex("(get|set)_resolvedMutableProperty__KotlinDefault__[0-9a-f]{32}")
-                )
-            }) {
-                "Mutable-default helper names must be C#-expressible and identity-derived: " +
-                        defaultMutablePropertyHelperNames
-            }
-            assertEquals(
-                defaultMutablePropertyHelperNames.size,
-                defaultMutablePropertyHelperNames.toSet().size,
-            )
-            assertTrue(
-                resolvedDefaultMutablePropertyConflictContract.members
-                    .flatMap { member ->
-                        member.slots.filter { slot ->
-                            slot.role != DotNetCSharpSlotRole.HELPER
-                        }
-                    }
-                    .all { slot ->
-                        slot.methodName in setOf(
-                            "get_resolvedMutableProperty",
-                            "set_resolvedMutableProperty",
-                        ) && slot.propertyName == "resolvedMutableProperty"
-                    }
-            ) {
-                "Mutable helper naming leaked into the ordinary CLR property surface"
-            }
-            val resolvedGenericDefault =
-                resolvedGenericDefaultConflictContract.members.single { member ->
-                    member.sourceName == "resolvedGenericDefault"
-                }
-            assertEquals(
-                DotNetCSharpInterfaceView.DECLARED,
-                resolvedGenericDefault.authoringView,
-            )
-            assertEquals(
-                if (targetProfile == "net10.0") {
-                    DotNetCSharpDefaultKind.DIM_WITH_HELPER
-                } else {
-                    DotNetCSharpDefaultKind.PORTABLE_HELPER
-                },
-                resolvedGenericDefault.defaultKind,
-            )
-            assertEquals(
-                setOf(
-                    genericDefaultConflictLeftContract.members.single { member ->
-                        member.sourceName == "resolvedGenericDefault"
-                    }.logicalKey,
-                    genericDefaultConflictRightContract.members.single { member ->
-                        member.sourceName == "resolvedGenericDefault"
-                    }.logicalKey,
-                ),
-                resolvedGenericDefault.overriddenLogicalMemberKeys.toSet(),
-            )
-            val resolvedGenericDefaultProperty =
-                resolvedGenericDefaultPropertyConflictContract.members.single { member ->
-                    member.sourceName == "resolvedGenericProperty"
-                }
-            assertEquals(
-                DotNetCSharpInterfaceView.DECLARED,
-                resolvedGenericDefaultProperty.authoringView,
-            )
-            assertEquals(
-                DotNetCSharpMemberKind.PROPERTY_GETTER,
-                resolvedGenericDefaultProperty.kind,
-            )
-            assertEquals(
-                if (targetProfile == "net10.0") {
-                    DotNetCSharpDefaultKind.DIM_WITH_HELPER
-                } else {
-                    DotNetCSharpDefaultKind.PORTABLE_HELPER
-                },
-                resolvedGenericDefaultProperty.defaultKind,
-            )
-            assertEquals(
-                setOf(
-                    genericDefaultPropertyConflictLeftContract.members.single { member ->
-                        member.sourceName == "resolvedGenericProperty"
-                    }.logicalKey,
-                    genericDefaultPropertyConflictRightContract.members.single { member ->
-                        member.sourceName == "resolvedGenericProperty"
-                    }.logicalKey,
-                ),
-                resolvedGenericDefaultProperty.overriddenLogicalMemberKeys.toSet(),
-            )
-            val genericDefaultPropertyHelperNames =
-                listOf(
-                    genericDefaultPropertyConflictLeftContract,
-                    genericDefaultPropertyConflictRightContract,
-                    resolvedGenericDefaultPropertyConflictContract,
-                ).map { interfaceContract ->
-                    interfaceContract.members.single { member ->
-                        member.sourceName == "resolvedGenericProperty"
-                    }.slots.single { slot ->
-                        slot.role == DotNetCSharpSlotRole.HELPER
-                    }.methodName
-                }
-            assertTrue(genericDefaultPropertyHelperNames.all { helperName ->
-                helperName.matches(
-                    Regex(
-                        "get_resolvedGenericProperty__KotlinDefault__[0-9a-f]{32}"
-                    )
-                )
-            })
-            assertEquals(
-                genericDefaultPropertyHelperNames.size,
-                genericDefaultPropertyHelperNames.toSet().size,
-            )
-            val resolvedGenericDefaultMutableGetter =
-                resolvedGenericDefaultMutablePropertyConflictContract.members.single { member ->
-                    member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
-                }
-            val resolvedGenericDefaultMutableSetter =
-                resolvedGenericDefaultMutablePropertyConflictContract.members.single { member ->
-                    member.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
-                }
-            assertEquals(
-                DotNetCSharpInterfaceView.DECLARED,
-                resolvedGenericDefaultMutableGetter.authoringView,
-            )
-            assertEquals(
-                DotNetCSharpInterfaceView.EXACT,
-                resolvedGenericDefaultMutableSetter.authoringView,
-            )
-            for (member in listOf(
-                resolvedGenericDefaultMutableGetter,
-                resolvedGenericDefaultMutableSetter,
-            )) {
-                assertEquals(
-                    if (targetProfile == "net10.0") {
-                        DotNetCSharpDefaultKind.DIM_WITH_HELPER
-                    } else {
-                        DotNetCSharpDefaultKind.PORTABLE_HELPER
-                    },
-                    member.defaultKind,
-                )
-                assertEquals(
-                    if (targetProfile == "net10.0") {
-                        member.authoringView
-                    } else {
-                        null
-                    },
-                    member.semanticBodyView,
-                )
-                assertEquals(
-                    setOf(
-                        genericDefaultMutablePropertyConflictLeftContract.members.single { parent ->
-                            parent.kind == member.kind &&
-                                    parent.sourceName == "resolvedGenericMutableProperty"
-                        }.logicalKey,
-                        genericDefaultMutablePropertyConflictRightContract.members.single { parent ->
-                            parent.kind == member.kind &&
-                                    parent.sourceName == "resolvedGenericMutableProperty"
-                        }.logicalKey,
-                    ),
-                    member.overriddenLogicalMemberKeys.toSet(),
-                )
-            }
-            val genericDefaultMutablePropertyHelperNames =
-                listOf(
-                    genericDefaultMutablePropertyConflictLeftContract,
-                    genericDefaultMutablePropertyConflictRightContract,
-                    resolvedGenericDefaultMutablePropertyConflictContract,
-                ).flatMap { interfaceContract ->
-                    interfaceContract.members
-                        .filter { member ->
-                            member.sourceName == "resolvedGenericMutableProperty"
-                        }
-                        .map { member ->
-                            member.slots.single { slot ->
-                                slot.role == DotNetCSharpSlotRole.HELPER
-                            }.methodName
-                        }
-                }
-            assertTrue(genericDefaultMutablePropertyHelperNames.all { helperName ->
-                helperName.matches(
-                    Regex(
-                        "(get|set)_resolvedGenericMutableProperty" +
-                                "__KotlinDefault__[0-9a-f]{32}"
-                    )
-                )
-            })
-            assertEquals(
-                genericDefaultMutablePropertyHelperNames.size,
-                genericDefaultMutablePropertyHelperNames.toSet().size,
-            )
-            assertEquals(if (externalParent) 19 else 46, manifest.interfaces.size)
-            assertEquals(if (externalParent) 27 else 46, parentManifest.interfaces.size)
-            if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
-                contractsByProfile[scenario.name] =
-                    listOf(
-                        markerContract,
-                        ownerBoundContract,
-                        ownerBoundLeftContract,
-                        ownerBoundRightContract,
-                        substitutedLeftContract,
-                        substitutedRightContract,
-                        substitutedPairContract,
-                        ordinaryParentContract,
-                        ordinaryContract,
-                        reabstractableContract,
-                        reabstractedContract,
-                        genericReabstractedContract,
-                        defaultConflictLeftContract,
-                        defaultConflictRightContract,
-                        resolvedDefaultConflictContract,
-                        defaultPropertyConflictLeftContract,
-                        defaultPropertyConflictRightContract,
-                        resolvedDefaultPropertyConflictContract,
-                        defaultMutablePropertyConflictLeftContract,
-                        defaultMutablePropertyConflictRightContract,
-                        resolvedDefaultMutablePropertyConflictContract,
-                        genericDefaultConflictLeftContract,
-                        genericDefaultConflictRightContract,
-                        resolvedGenericDefaultConflictContract,
-                        genericDefaultPropertyConflictLeftContract,
-                        genericDefaultPropertyConflictRightContract,
-                        resolvedGenericDefaultPropertyConflictContract,
-                        genericDefaultMutablePropertyConflictLeftContract,
-                        genericDefaultMutablePropertyConflictRightContract,
-                        resolvedGenericDefaultMutablePropertyConflictContract,
-                        barrierContract,
-                        searchBarrierContract,
-                        friendContract,
-                        nestedFriendContract,
-                        nestedGenericFriendContract,
-                        rootContract,
-                        parentContract,
-                        siblingContract,
-                        leftContract,
-                        rightContract,
-                        mutableLeftContract,
-                        mutableRightContract,
-                        contract,
-                        resolvedIntersection,
-                        resolvedMutable,
-                        resolvedOwnerBound,
-                    )
-                        .sortedBy(DotNetCSharpInterfaceContract::logicalKey)
-            }
-            assertEquals(listOf("T"), contract.typeParameters.map { it.name })
-            assertTrue(markerContract.typeParameters.isEmpty())
-            assertEquals(listOf("T"), ownerBoundContract.typeParameters.map { it.name })
-            assertTrue(ordinaryContract.typeParameters.isEmpty())
-            assertEquals(null, markerContract.declaredOwnerPath)
-            assertEquals(null, markerContract.exactOwnerPath)
-            assertTrue(markerContract.members.isEmpty())
-            assertEquals(null, ordinaryParentContract.declaredOwnerPath)
-            assertEquals(null, ordinaryParentContract.exactOwnerPath)
-            assertEquals(null, ordinaryContract.declaredOwnerPath)
-            assertEquals(null, ordinaryContract.exactOwnerPath)
-            assertEquals(listOf("manifest.Shape`1"), contract.declaredOwnerPath)
-            assertEquals(listOf("manifest.Shape__KotlinExact`1"), contract.exactOwnerPath)
-            assertEquals(listOf("manifest.ShapeRoot`1"), rootContract.declaredOwnerPath)
-            assertEquals(listOf("manifest.ShapeParent`1"), parentContract.declaredOwnerPath)
-            assertEquals(listOf("manifest.ShapeSibling`1"), siblingContract.declaredOwnerPath)
-            assertEquals(null, rootContract.exactOwnerPath)
-            assertEquals(null, parentContract.exactOwnerPath)
-            assertEquals(null, siblingContract.exactOwnerPath)
-
-            val stdlibAssembly = profileDirectory.resolve("Kotlin.Stdlib.dll")
-            if (stdlibAssembly.isFile) {
-                val stdlibManifest = readCSharpImplementationManifestFromDll(
-                    modernCSharp,
-                    readerAssembly,
-                    readerDirectory,
-                    stdlibAssembly,
-                )
-                assertTrue(stdlibManifest.interfaces.none { interfaceContract ->
-                    interfaceContract.canonicalOwnerPath.lastOrNull() == "manifest.Shape"
-                })
-            }
-
-            val value = rootContract.members.single { member ->
-                member.sourceName == "value" && member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
-            }
-            val labelGetter = parentContract.members.single { member ->
-                member.sourceName == "label" && member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
-            }
-            val labelSetter = parentContract.members.single { member ->
-                member.sourceName == "label" && member.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
-            }
-            val secondary = siblingContract.members.single { member ->
-                member.sourceName == "secondary" &&
-                        member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
-            }
-            val map = contract.members.single { member -> member.sourceName == "map" }
-            val accepts = contract.members.single { member -> member.sourceName == "accepts" }
-            val retain = ownerBoundContract.members.single { member ->
-                member.sourceName == "retain"
-            }
-            val retainBoth = resolvedOwnerBound.intersections.single { intersectionContract ->
-                intersectionContract.sourceName == "retainBoth"
-            }
-            val barrierContains = barrierContract.members.single { member ->
-                member.sourceName == "contains"
-            }
-            val barrierIndexOf = searchBarrierContract.members.single { member ->
-                member.sourceName == "indexOf"
-            }
-            val fallback = rootContract.members.single { member -> member.sourceName == "fallback" }
-            val ordinaryDisplayName = ordinaryParentContract.members.single { member ->
-                member.sourceName == "displayName" &&
-                        member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
-            }
-            val ordinaryFallback = ordinaryParentContract.members.single { member ->
-                member.sourceName == "fallbackName"
-            }
-            val ordinaryCountGetter = ordinaryContract.members.single { member ->
-                member.sourceName == "count" &&
-                        member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
-            }
-            val ordinaryCountSetter = ordinaryContract.members.single { member ->
-                member.sourceName == "count" &&
-                        member.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
-            }
-            val ordinaryFormat = ordinaryContract.members.single { member ->
-                member.sourceName == "format"
-            }
-            val ordinaryMembers = listOf(
-                ordinaryDisplayName,
-                ordinaryFallback,
-                ordinaryCountGetter,
-                ordinaryCountSetter,
-                ordinaryFormat,
-            )
-            assertTrue(ordinaryMembers.all { member ->
-                member.authoringView == DotNetCSharpInterfaceView.CANONICAL &&
-                        member.slots.count { slot ->
-                            slot.role == DotNetCSharpSlotRole.CANONICAL
-                        } == 1 &&
-                        member.slots.none { slot ->
-                            slot.role == DotNetCSharpSlotRole.ERASED ||
-                                    slot.role == DotNetCSharpSlotRole.DECLARED ||
-                                    slot.role == DotNetCSharpSlotRole.EXACT
-                        }
-            })
-            assertEquals(
-                ordinaryCountGetter.slots.single {
-                    it.role == DotNetCSharpSlotRole.CANONICAL
-                }.propertyName,
-                ordinaryCountSetter.slots.single {
-                    it.role == DotNetCSharpSlotRole.CANONICAL
-                }.propertyName,
-            )
-            assertEquals(DotNetCSharpInterfaceView.DECLARED, value.authoringView)
-            assertEquals(DotNetCSharpInterfaceView.DECLARED, labelGetter.authoringView)
-            assertEquals(DotNetCSharpInterfaceView.DECLARED, labelSetter.authoringView)
-            assertEquals(DotNetCSharpInterfaceView.DECLARED, secondary.authoringView)
-            assertEquals(DotNetCSharpInterfaceView.DECLARED, map.authoringView)
-            assertEquals(DotNetCSharpInterfaceView.EXACT, accepts.authoringView)
-            assertEquals(DotNetCSharpInterfaceView.EXACT, retain.authoringView)
-            assertEquals(
-                listOf(DotNetCSharpErasedOwnerRelativeConstraint(0, 0)),
-                retain.erasedOwnerRelativeConstraints,
-            )
-            assertEquals(DotNetCSharpInterfaceView.EXACT, retainBoth.authoringView)
-            assertEquals(
-                listOf(DotNetCSharpErasedOwnerRelativeConstraint(0, 0)),
-                retainBoth.erasedOwnerRelativeConstraints,
-            )
-            assertEquals(null, accepts.wrongShapePolicy)
-            assertEquals(
-                DotNetCSharpWrongShapeFallback.FALSE,
-                checkNotNull(barrierContains.wrongShapePolicy).fallback,
-            )
-            assertEquals(1, barrierContains.wrongShapePolicy?.checkedParameterCount)
-            assertEquals(null, barrierContains.wrongShapePolicy?.fallbackParameterIndex)
-            assertEquals(
-                DotNetCSharpWrongShapeFallback.MINUS_ONE,
-                checkNotNull(barrierIndexOf.wrongShapePolicy).fallback,
-            )
-            assertEquals(1, barrierIndexOf.wrongShapePolicy?.checkedParameterCount)
-            assertEquals(null, barrierIndexOf.wrongShapePolicy?.fallbackParameterIndex)
-            assertEquals(
-                labelGetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }.propertyName,
-                labelSetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }.propertyName,
-            )
-            assertEquals(1, map.slots.single { it.role == DotNetCSharpSlotRole.DECLARED }.genericArity)
-            assertEquals(
-                listOf(DotNetCSharpSlotRole.ERASED, DotNetCSharpSlotRole.EXACT),
-                accepts.slots.map { it.role }.sorted(),
-            )
-            val genericParameters = readCSharpPhysicalGenericParametersFromDll(
-                modernCSharp,
-                readerAssembly,
-                readerDirectory,
-                producerAssembly,
-            )
-            val mapParameters = map.slots
-                .filter { slot ->
-                    slot.role == DotNetCSharpSlotRole.ERASED ||
-                            slot.role == DotNetCSharpSlotRole.DECLARED
-                }
-                .map { slot ->
-                    genericParameters.singleOrNull { parameter ->
-                        parameter.ownerPath == slot.ownerPath &&
-                                parameter.methodName == slot.methodName &&
-                                parameter.index == 0
-                    } ?: error(
-                        "Missing physical generic parameter for constrained map slot $slot:\n" +
-                                genericParameters.joinToString("\n")
-                    )
-                }
-            assertTrue(mapParameters.all { parameter -> parameter.attributes == 0 })
-            val ownerBoundGenericParameters = parentAssembly?.let { assembly ->
-                readCSharpPhysicalGenericParametersFromDll(
-                    modernCSharp,
-                    readerAssembly,
-                    readerDirectory,
-                    assembly,
-                )
-            } ?: genericParameters
-            val retainParameters = retain.slots
-                .filter { slot ->
-                    slot.role == DotNetCSharpSlotRole.ERASED ||
-                            slot.role == DotNetCSharpSlotRole.EXACT
-                }
-                .map { slot ->
-                    ownerBoundGenericParameters.singleOrNull { parameter ->
-                        parameter.ownerPath == slot.ownerPath &&
-                                parameter.methodName == slot.methodName &&
-                                parameter.index == 0
-                    } ?: error(
-                        "Missing physical generic parameter for erased owner-relative slot $slot:\n" +
-                                ownerBoundGenericParameters.joinToString("\n")
-                    )
-                }
-            assertTrue(retainParameters.all { parameter ->
-                parameter.constraints.isEmpty()
-            }) {
-                "A tooling guidance record must not reconstruct the erased constraint in CLR metadata"
-            }
-            val retainBothParameters = retainBoth.slots.map { slot ->
-                genericParameters.singleOrNull { parameter ->
-                    parameter.ownerPath == slot.ownerPath &&
-                            parameter.methodName == slot.methodName &&
-                            parameter.index == 0
-                } ?: error(
-                    "Missing physical generic parameter for erased owner-relative intersection $slot:\n" +
-                            genericParameters.joinToString("\n")
-                )
-            }
-            assertTrue(retainBothParameters.all { parameter ->
-                parameter.constraints.isEmpty()
-            }) {
-                "Intersection tooling guidance must not reconstruct the erased CLR constraint"
-            }
-            val mapConstraint = mapParameters
-                .flatMap { parameter -> parameter.constraints }
-                .distinct()
-                .single()
-            assertEquals(listOf("manifest.ManifestMarker"), mapConstraint.ownerPath)
-            assertEquals(
-                if (externalParent) parentModuleName else moduleName,
-                mapConstraint.assemblyName,
-            )
-            val mapConstraintType = mapConstraint.ownerPath.joinToString(".") { component ->
-                component.substringBefore('`')
-            }
-            val helper = fallback.slots.single { it.role == DotNetCSharpSlotRole.HELPER }
-            assertEquals("__KotlinDefaultImpls", helper.ownerPath.last())
-            if (parentManifest.targetProfile == "net10.0") {
-                assertEquals(DotNetCSharpDefaultKind.DIM_WITH_HELPER, fallback.defaultKind)
-                assertEquals(DotNetCSharpInterfaceView.DECLARED, fallback.semanticBodyView)
-                assertEquals(
-                    DotNetCSharpDefaultKind.DIM_WITH_HELPER,
-                    ordinaryFallback.defaultKind,
-                )
-                assertEquals(
-                    DotNetCSharpInterfaceView.CANONICAL,
-                    ordinaryFallback.semanticBodyView,
-                )
-            } else {
-                assertEquals(DotNetCSharpDefaultKind.PORTABLE_HELPER, fallback.defaultKind)
-                assertEquals(null, fallback.semanticBodyView)
-                assertEquals(
-                    DotNetCSharpDefaultKind.PORTABLE_HELPER,
-                    ordinaryFallback.defaultKind,
-                )
-                assertEquals(null, ordinaryFallback.semanticBodyView)
-            }
-
-            val methodImpls = readCSharpPhysicalMethodImplsFromDll(
-                modernCSharp,
-                readerAssembly,
-                readerDirectory,
-                producerAssembly,
-            )
-            val promotedDim = hasEffectivePromotedDim(
-                contract,
-                parentManifest,
-                fallback,
-                methodImpls,
-            )
-            val ordinaryPromotedDim = hasEffectivePromotedDim(
-                ordinaryContract,
-                parentManifest,
-                ordinaryFallback,
-                methodImpls,
-            )
-            if (scenario.name == "net10.0-promoted-portable-parent") {
-                assertTrue(promotedDim) {
-                    "The child DLL does not expose a complete CLR MethodImpl promotion bundle:\n" +
-                            methodImpls.joinToString("\n")
-                }
-                assertTrue(ordinaryPromotedDim) {
-                    "The ordinary child DLL does not expose its promoted CLR DIM:\n" +
-                            methodImpls.joinToString("\n")
-                }
-                val fallbackSlots = fallback.slots.filter { slot ->
-                    slot.role != DotNetCSharpSlotRole.HELPER
-                }
-                var tampered = false
-                val wrongReturnMethodImpls = methodImpls.map { implementation ->
-                    val matchesLocator = fallbackSlots.any { slot ->
-                        implementation.declarationAssemblyName.equals(
-                            parentManifest.assemblyName,
-                            ignoreCase = true,
-                        ) &&
-                                implementation.declarationOwnerPath == slot.ownerPath &&
-                                implementation.declarationMethodName == slot.methodName &&
-                                implementation.declarationGenericArity == slot.genericArity
-                    }
-                    if (!tampered && matchesLocator) {
-                        tampered = true
-                        implementation.copy(
-                            declarationReturnType =
-                                implementation.declarationReturnType + "[]"
-                        )
-                    } else {
-                        implementation
-                    }
-                }
-                assertTrue(tampered) {
-                    "No promoted MethodImpl was available for signature-integrity testing"
-                }
-                assertFalse(
-                    hasEffectivePromotedDim(
-                        contract,
-                        parentManifest,
-                        fallback,
-                        wrongReturnMethodImpls,
-                    )
-                ) {
-                    "A MethodImpl with the wrong return signature satisfied the promotion contract"
-                }
-            } else {
-                assertFalse(promotedDim) {
-                    "Only the cross-profile scenario should require a child-owned promotion:\n" +
-                            methodImpls.joinToString("\n")
-                }
-                assertFalse(ordinaryPromotedDim) {
-                    "Only the cross-profile ordinary child should require a promoted DIM:\n" +
-                            methodImpls.joinToString("\n")
-                }
-            }
-            val generatedSource = profileDirectory.resolve("generated.cs").apply {
-                writeText(
-                    generateShapeImplementation(
-                        contract,
-                        rootContract,
-                        parentContract,
-                        siblingContract,
-                        leftContract,
-                        rightContract,
-                        resolvedIntersection,
-                        intersection,
-                        mutableLeftContract,
-                        mutableRightContract,
-                        resolvedMutable,
-                        mutableGetter,
-                        mutableSetter,
-                        mapConstraintType,
-                        ordinaryParentContract,
-                        ordinaryContract,
-                        barrierContract,
-                        searchBarrierContract,
-                        friendContract,
-                        nestedFriendContract,
-                        runtimeIterableContract,
-                        runtimeCollectionContract,
-                        runtimeListContract,
-                        inheritedDefaultHasEffectiveDim =
-                            fallback.defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER ||
-                                    promotedDim,
-                        ordinaryDefaultHasEffectiveDim =
-                            ordinaryFallback.defaultKind ==
-                                    DotNetCSharpDefaultKind.DIM_WITH_HELPER ||
-                                    ordinaryPromotedDim,
-                    )
-                )
-            }
-            if (scenario.name == "net10.0-promoted-portable-parent") {
-                assertFalse("__KotlinDefaultImpls" in generatedSource.readText()) {
-                    "A physically promoted DIM must suppress generated helper forwarders"
-                }
-            }
-            val generatedAssembly = profileDirectory.resolve("GeneratedShape.dll")
-            val generatedCompile = if (parentAssembly == null) {
-                runModernCSharpCompiler(
-                    modernCSharp,
-                    generatedSource,
-                    generatedAssembly,
-                    producerAssembly,
-                    runtimeAssembly,
-                    target = "exe",
-                )
-            } else {
-                runModernCSharpCompiler(
-                    modernCSharp,
-                    generatedSource,
-                    generatedAssembly,
-                    producerAssembly,
-                    parentAssembly,
-                    runtimeAssembly,
-                    target = "exe",
-                )
-            }
-            assertEquals(0, generatedCompile.exitCode, generatedCompile.output)
-            runtimeAssembly.copyTo(profileDirectory.resolve(runtimeAssembly.name), overwrite = true)
-            profileDirectory.resolve("GeneratedShape.runtimeconfig.json").writeText(net10RuntimeConfig())
-            runDotNet(
-                modernCSharp.dotNetHost,
-                generatedAssembly,
-                profileDirectory,
-                "Manifest-generated C# implementation failed for ${scenario.name}",
-            )
-
-            val friendType = friendContract.canonicalOwnerPath.joinToString(".") { component ->
-                component.substringBefore('`')
-            }
-            val unauthorizedSource = profileDirectory.resolve("unauthorized.cs").apply {
-                writeText(
-                    """
-                    internal static class UnauthorizedReference
-                    {
-                        internal static $friendType Value;
-                    }
-                    """.trimIndent()
-                )
-            }
-            val unauthorizedCompile = runModernCSharpCompiler(
-                modernCSharp,
-                unauthorizedSource,
-                profileDirectory.resolve("UnauthorizedShape.dll"),
-                producerAssembly,
-                runtimeAssembly,
-            )
-            assertTrue(unauthorizedCompile.exitCode != 0) {
-                "An unauthorized C# assembly consumed internal contract '$friendType'"
-            }
-            assertTrue("CS0122" in unauthorizedCompile.output) { unauthorizedCompile.output }
-
-            val nestedFriendType =
-                nestedFriendContract.canonicalOwnerPath.joinToString(".") {
-                    component -> component.substringBefore('`')
-                }
-            val unauthorizedNestedSource =
-                profileDirectory.resolve("unauthorized-nested.cs").apply {
-                    writeText(
-                        """
-                        internal static class UnauthorizedNestedReference
-                        {
-                            internal static $nestedFriendType Value;
-                        }
-                        """.trimIndent()
-                    )
-                }
-            val unauthorizedNestedCompile = runModernCSharpCompiler(
-                modernCSharp,
-                unauthorizedNestedSource,
-                profileDirectory.resolve("UnauthorizedNestedShape.dll"),
-                producerAssembly,
-                runtimeAssembly,
-            )
-            assertTrue(unauthorizedNestedCompile.exitCode != 0) {
-                "An unauthorized C# assembly consumed nested internal contract " +
-                        "'$nestedFriendType'"
-            }
-            assertTrue("CS0122" in unauthorizedNestedCompile.output) {
-                unauthorizedNestedCompile.output
-            }
-
-            val baseListProbe = profileDirectory.resolve("base-list-probe.cs").apply {
-                writeText(
-                    """
-                    public sealed partial class BaseListProbe : manifest.OrdinaryShape
-                    {
-                        public string DisplayName { get { return "ordinary"; } }
-                        public int Count { get; set; } = 3;
-                        public string Format(string prefix) { return prefix + DisplayName; }
-                    }
-
-                    public sealed partial class ReabstractedBaseListProbe :
-                        manifest.ReabstractedShape
-                    {
-                        public string Selected() { return "csharp-reabstracted"; }
-                    }
-
-                    public sealed partial class GenericReabstractedBaseListProbe :
-                        manifest.GenericReabstractedShape<string>
-                    {
-                        public string Value { get { return "generic-value"; } }
-                        public string Fallback() { return "generic-reabstracted"; }
-                    }
-
-                    public sealed partial class ResolvedDefaultConflictBaseListProbe :
-                        manifest.ResolvedDefaultConflict
-                    {
-                    }
-
-                    public sealed partial class ResolvedDefaultPropertyConflictBaseListProbe :
-                        manifest.ResolvedDefaultPropertyConflict
-                    {
-                    }
-
-                    public sealed partial class ResolvedDefaultMutablePropertyConflictBaseListProbe :
-                        manifest.ResolvedDefaultMutablePropertyConflict
-                    {
-                    }
-
-                    public sealed partial class ResolvedGenericDefaultConflictBaseListProbe :
-                        manifest.ResolvedGenericDefaultConflict<string>
-                    {
-                        public string LeftConflictValue
-                        {
-                            get { return "left-generic"; }
-                        }
-
-                        public string RightConflictValue
-                        {
-                            get { return "right-generic"; }
-                        }
-                    }
-
-                    public sealed partial class ResolvedGenericDefaultPropertyConflictBaseListProbe :
-                        manifest.ResolvedGenericDefaultPropertyConflict<string>
-                    {
-                        public string LeftPropertyConflictValue
-                        {
-                            get { return "left-generic-property"; }
-                        }
-
-                        public string RightPropertyConflictValue
-                        {
-                            get { return "right-generic-property"; }
-                        }
-                    }
-
-                    public sealed partial class ResolvedGenericDefaultMutablePropertyConflictBaseListProbe :
-                        manifest.ResolvedGenericDefaultMutablePropertyConflict<string>
-                    {
-                        public string LeftMutablePropertyConflictValue
-                        {
-                            get { return "left-generic-mutable"; }
-                        }
-
-                        public string RightMutablePropertyConflictValue
-                        {
-                            get { return "right-generic-mutable"; }
-                        }
-                    }
-
-                    internal sealed partial class FriendBaseListProbe : manifest.FriendShape
-                    {
-                        internal int Code { get { return 41; } }
-                    }
-
-                    internal sealed partial class NestedFriendBaseListProbe :
-                        manifest.FriendContainer.NestedShape
-                    {
-                        internal int NestedCode { get { return 42; } }
-                    }
-
-                    internal sealed partial class NestedGenericFriendBaseListProbe :
-                        manifest.FriendContainer.NestedGeneric<string>
-                    {
-                        internal string NestedValue { get { return "nested"; } }
-                    }
-
-                    public sealed partial class GenericBaseListProbe<T> : manifest.Shape<T>
-                        where T : class
-                    {
-                        public GenericBaseListProbe(T value, T secondary)
-                        {
-                            Value = value;
-                            Secondary = secondary;
-                        }
-
-                        public T Value { get; }
-                        public T Secondary { get; }
-                        public string Label { get; set; } = "initial";
-
-                        public T Map<R>(R input)
-                            where R : manifest.ManifestMarker
-                        {
-                            return Value;
-                        }
-
-                        public bool Accepts(T input)
-                        {
-                            return object.Equals(input, Value);
-                        }
-                    }
-
-                    public sealed partial class IntGenericBaseListProbe :
-                        manifest.Shape<int>
-                    {
-                        public int Value { get { return 42; } }
-                        public int Secondary { get { return 43; } }
-                        public string Label { get; set; } = "initial";
-
-                        public int Map<R>(R input)
-                            where R : manifest.ManifestMarker
-                        {
-                            return Value;
-                        }
-
-                        public bool Accepts(int input)
-                        {
-                            return input == Value;
-                        }
-                    }
-
-                    public sealed partial class OwnerBoundBaseListProbe<T> :
-                        manifest.OwnerBound<T>
-                    {
-                        public R Retain<R>(R value)
-                        {
-                            return value;
-                        }
-                    }
-
-                    public abstract class ExistingCSharpBase
-                    {
-                        protected ExistingCSharpBase(int baseValue)
-                        {
-                            BaseValue = baseValue;
-                        }
-
-                        public int BaseValue { get; }
-                    }
-
-                    public sealed partial class MultiRootBaseListProbe :
-                        ExistingCSharpBase,
-                        manifest.OrdinaryShape,
-                        manifest.OwnerBound<manifest.ManifestMarker>
-                    {
-                        public MultiRootBaseListProbe() : base(42) {}
-
-                        public string DisplayName { get { return "ordinary"; } }
-                        public int Count { get; set; } = 3;
-                        public string Format(string prefix)
-                        {
-                            return prefix + DisplayName;
-                        }
-
-                        public R Retain<R>(R value)
-                        {
-                            return value;
-                        }
-                    }
-
-                    public sealed partial class IntersectionBaseListProbe :
-                        manifest.ResolvedIntersection<string>
-                    {
-                        public string Overlap()
-                        {
-                            return "intersection";
-                        }
-                    }
-
-                    public sealed partial class MutableIntersectionBaseListProbe :
-                        manifest.ResolvedMutable<string>
-                    {
-                        public string Merged { get; set; } = "mutable";
-                    }
-
-                    public sealed partial class OwnerBoundIntersectionBaseListProbe<T> :
-                        manifest.ResolvedOwnerBound<T>
-                    {
-                        public R RetainBoth<R>(R value)
-                        {
-                            return value;
-                        }
-                    }
-
-                    public sealed partial class SubstitutedPairBaseListProbe :
-                        manifest.SubstitutedPair<string>
-                    {
-                        public int Select(string value)
-                        {
-                            return value.Length;
-                        }
-                    }
-
-                    public sealed partial class BarrierBaseListProbe :
-                        manifest.BarrierShape<string>
-                    {
-                        public int Size { get { return 1; } }
-                        public bool IsEmpty() { return false; }
-                        public Kotlin.Collections.Iterator Iterator() { return null; }
-                        public bool ContainsAll(Kotlin.Collections.Collection elements)
-                        {
-                            return false;
-                        }
-                        public bool Contains(string element)
-                        {
-                            return element == "typed";
-                        }
-                    }
-
-                    public sealed partial class SearchBarrierBaseListProbe :
-                        manifest.SearchBarrier<string>
-                    {
-                        public int Size { get { return 1; } }
-                        public bool IsEmpty() { return false; }
-                        public Kotlin.Collections.Iterator Iterator() { return null; }
-                        public bool ContainsAll(Kotlin.Collections.Collection elements)
-                        {
-                            return false;
-                        }
-                        public bool Contains(string element)
-                        {
-                            return element == "typed";
-                        }
-                        public string Get(int index)
-                        {
-                            return index == 0 ? "typed" : null;
-                        }
-                        public int IndexOf(string element)
-                        {
-                            return Contains(element) ? 0 : -1;
-                        }
-                        public int LastIndexOf(string element)
-                        {
-                            return IndexOf(element);
-                        }
-                        public Kotlin.Collections.ListIterator ListIterator()
-                        {
-                            return null;
-                        }
-                        public Kotlin.Collections.ListIterator ListIterator(int index)
-                        {
-                            return null;
-                        }
-                        public Kotlin.Collections.List SubList(int fromIndex, int toIndex)
-                        {
-                            return null;
-                        }
-                    }
-
-                    public static class BaseListProgram
-                    {
-                        public static int Main()
-                        {
-                            int result = manifest.apiKt.verifyOrdinary(new BaseListProbe());
-                            if (result != 0)
-                                throw new System.Exception(
-                                    "Generated base-list implementation failed: " + result);
-                            int reabstractedResult =
-                                manifest.apiKt.verifyReabstracted(
-                                    new ReabstractedBaseListProbe());
-                            if (reabstractedResult != 0)
-                                throw new System.Exception(
-                                    "Generated reabstracted implementation failed: " +
-                                    reabstractedResult);
-                            int genericReabstractedResult =
-                                manifest.apiKt.verifyGenericReabstracted(
-                                    new GenericReabstractedBaseListProbe());
-                            if (genericReabstractedResult != 0)
-                                throw new System.Exception(
-                                    "Generated generic reabstracted implementation failed: " +
-                                    genericReabstractedResult);
-                            int resolvedDefaultConflictResult =
-                                manifest.apiKt.verifyResolvedDefaultConflict(
-                                    new ResolvedDefaultConflictBaseListProbe());
-                            if (resolvedDefaultConflictResult != 0)
-                                throw new System.Exception(
-                                    "Generated resolved-default conflict failed: " +
-                                    resolvedDefaultConflictResult);
-                            int resolvedDefaultPropertyConflictResult =
-                                manifest.apiKt.verifyResolvedDefaultPropertyConflict(
-                                    new ResolvedDefaultPropertyConflictBaseListProbe());
-                            if (resolvedDefaultPropertyConflictResult != 0)
-                                throw new System.Exception(
-                                    "Generated resolved-property conflict failed: " +
-                                    resolvedDefaultPropertyConflictResult);
-                            int resolvedDefaultMutablePropertyConflictResult =
-                                manifest.apiKt.verifyResolvedDefaultMutablePropertyConflict(
-                                    new ResolvedDefaultMutablePropertyConflictBaseListProbe());
-                            if (resolvedDefaultMutablePropertyConflictResult != 0)
-                                throw new System.Exception(
-                                    "Generated resolved-mutable-property conflict failed: " +
-                                    resolvedDefaultMutablePropertyConflictResult);
-                            int resolvedGenericDefaultConflictResult =
-                                manifest.apiKt.verifyResolvedGenericDefaultConflict(
-                                    new ResolvedGenericDefaultConflictBaseListProbe());
-                            if (resolvedGenericDefaultConflictResult != 0)
-                                throw new System.Exception(
-                                    "Generated generic resolved-default conflict failed: " +
-                                    resolvedGenericDefaultConflictResult);
-                            int resolvedGenericDefaultPropertyConflictResult =
-                                manifest.apiKt.verifyResolvedGenericDefaultPropertyConflict(
-                                    new ResolvedGenericDefaultPropertyConflictBaseListProbe());
-                            if (resolvedGenericDefaultPropertyConflictResult != 0)
-                                throw new System.Exception(
-                                    "Generated generic resolved-property conflict failed: " +
-                                    resolvedGenericDefaultPropertyConflictResult);
-                            int resolvedGenericDefaultMutablePropertyConflictResult =
-                                manifest.apiKt.verifyResolvedGenericDefaultMutablePropertyConflict(
-                                    new ResolvedGenericDefaultMutablePropertyConflictBaseListProbe());
-                            if (resolvedGenericDefaultMutablePropertyConflictResult != 0)
-                                throw new System.Exception(
-                                    "Generated generic mutable-property conflict failed: " +
-                                    resolvedGenericDefaultMutablePropertyConflictResult);
-                            int friendResult =
-                                manifest.apiKt.verifyFriend(new FriendBaseListProbe());
-                            if (friendResult != 0)
-                                throw new System.Exception(
-                                    "Generated friend implementation failed: " + friendResult);
-                            int nestedFriendResult =
-                                manifest.apiKt.verifyNestedFriend(
-                                    new NestedFriendBaseListProbe());
-                            if (nestedFriendResult != 0)
-                                throw new System.Exception(
-                                    "Generated nested friend implementation failed: " +
-                                    nestedFriendResult);
-                            int nestedGenericFriendResult =
-                                manifest.apiKt.verifyNestedGeneric(
-                                    new NestedGenericFriendBaseListProbe());
-                            if (nestedGenericFriendResult != 0)
-                                throw new System.Exception(
-                                    "Generated nested generic friend implementation failed: " +
-                                    nestedGenericFriendResult);
-                            int genericResult =
-                                manifest.apiKt.verify(
-                                    new GenericBaseListProbe<string>(
-                                        "typed",
-                                        "secondary"));
-                            if (genericResult != 0)
-                                throw new System.Exception(
-                                    "Generated generic implementation failed: " + genericResult);
-                            int intResult =
-                                manifest.apiKt.verifyInt(new IntGenericBaseListProbe());
-                            if (intResult != 0)
-                                throw new System.Exception(
-                                    "Generated value-type implementation failed: " + intResult);
-                            int ownerBoundResult =
-                                manifest.apiKt.verifyOwnerBound(
-                                    new OwnerBoundBaseListProbe<manifest.ManifestMarker>());
-                            if (ownerBoundResult != 0)
-                                throw new System.Exception(
-                                    "Generated owner-bound implementation failed: " +
-                                    ownerBoundResult);
-                            var multiRoot = new MultiRootBaseListProbe();
-                            int multiOrdinaryResult =
-                                manifest.apiKt.verifyOrdinary(multiRoot);
-                            int multiOwnerBoundResult =
-                                manifest.apiKt.verifyOwnerBound(multiRoot);
-                            if (multiRoot.BaseValue != 42 ||
-                                    multiOrdinaryResult != 0 ||
-                                    multiOwnerBoundResult != 0)
-                                throw new System.Exception(
-                                    "Generated multi-root/base-class implementation failed");
-                            int intersectionResult =
-                                manifest.apiKt.verifyIntersection(
-                                    new IntersectionBaseListProbe());
-                            if (intersectionResult != 0)
-                                throw new System.Exception(
-                                    "Generated intersection failed: " +
-                                    intersectionResult);
-                            int mutableIntersectionResult =
-                                manifest.apiKt.verifyMutable(
-                                    new MutableIntersectionBaseListProbe());
-                            if (mutableIntersectionResult != 0)
-                                throw new System.Exception(
-                                    "Generated mutable intersection failed: " +
-                                    mutableIntersectionResult);
-                            int ownerBoundIntersectionResult =
-                                manifest.apiKt.verifyResolvedOwnerBound(
-                                    new OwnerBoundIntersectionBaseListProbe<
-                                        manifest.ManifestMarker>());
-                            if (ownerBoundIntersectionResult != 0)
-                                throw new System.Exception(
-                                    "Generated owner-bound intersection failed: " +
-                                    ownerBoundIntersectionResult);
-                            int substitutedPairResult =
-                                manifest.apiKt.verifySubstitutedPair(
-                                    new SubstitutedPairBaseListProbe());
-                            if (substitutedPairResult != 0)
-                                throw new System.Exception(
-                                    "Generated substituted inherited overload family failed: " +
-                                    substitutedPairResult);
-                            int barrierResult =
-                                manifest.apiKt.verifyBarrier(new BarrierBaseListProbe());
-                            if (barrierResult != 0)
-                                throw new System.Exception(
-                                    "Generated collection barrier failed: " +
-                                    barrierResult);
-                            int searchBarrierResult =
-                                manifest.apiKt.verifySearchBarrier(
-                                    new SearchBarrierBaseListProbe());
-                            if (searchBarrierResult != 0)
-                                throw new System.Exception(
-                                    "Generated list barrier failed: " +
-                                    searchBarrierResult);
-                            return 0;
-                        }
-                    }
-                    """.trimIndent()
-                )
-            }
-            val generatedFiles =
-                profileDirectory.resolve("roslyn-generated").apply { mkdirs() }
-            val baseListCompileReferences = buildList {
-                add(producerAssembly)
-                parentAssembly?.let(::add)
-                add(runtimeAssembly)
-            }
-            val baseListCompile = runModernCSharpCompiler(
-                modernCSharp,
-                baseListProbe,
-                profileDirectory.resolve("GeneratedShape.dll"),
-                *baseListCompileReferences.toTypedArray(),
-                target = "exe",
-                analyzers = listOf(csharpAuthoringTooling),
-                generatedFilesDirectory = generatedFiles,
-            )
-            assertEquals(0, baseListCompile.exitCode, baseListCompile.output)
-            val missingReabstractedSource =
-                profileDirectory.resolve("missing-reabstracted.cs").apply {
-                    writeText(
-                        """
-                        public sealed partial class MissingReabstractedProbe :
-                            manifest.ReabstractedShape
-                        {
-                        }
-                        """.trimIndent()
-                    )
-                }
-            val missingReabstractedCompile = runModernCSharpCompiler(
-                modernCSharp,
-                missingReabstractedSource,
-                profileDirectory.resolve("MissingReabstractedShape.dll"),
-                *baseListCompileReferences.toTypedArray(),
-                analyzers = listOf(csharpAuthoringTooling),
-            )
-            assertTrue(missingReabstractedCompile.exitCode != 0) {
-                "A C# implementor silently inherited the default reabstracted by Kotlin"
-            }
-            assertTrue("KDNCS008" in missingReabstractedCompile.output) {
-                "The missing reabstracted C# body was not diagnosed:\n" +
-                        missingReabstractedCompile.output
-            }
-            val missingGenericReabstractedSource =
-                profileDirectory.resolve("missing-generic-reabstracted.cs").apply {
-                    writeText(
-                        """
-                        public sealed partial class MissingGenericReabstractedProbe :
-                            manifest.GenericReabstractedShape<string>
-                        {
-                            public string Value { get { return "generic-value"; } }
-                        }
-                        """.trimIndent()
-                    )
-                }
-            val missingGenericReabstractedCompile = runModernCSharpCompiler(
-                modernCSharp,
-                missingGenericReabstractedSource,
-                profileDirectory.resolve("MissingGenericReabstractedShape.dll"),
-                *baseListCompileReferences.toTypedArray(),
-                analyzers = listOf(csharpAuthoringTooling),
-            )
-            assertTrue(missingGenericReabstractedCompile.exitCode != 0) {
-                "A C# implementor silently inherited a reabstracted generic default"
-            }
-            assertTrue("KDNCS008" in missingGenericReabstractedCompile.output) {
-                "The missing generic reabstracted C# body was not diagnosed:\n" +
-                        missingGenericReabstractedCompile.output
-            }
-            val generatedAuthoringSources = generatedFiles.walkTopDown().filter { file ->
-                file.isFile &&
-                        file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
-            }.toList()
-            assertTrue(generatedAuthoringSources.isNotEmpty()) {
-                "The production Kotlin C# generator did not recognize a real Kotlin base list"
-            }
-            val generatedAuthoringText =
-                generatedAuthoringSources.joinToString("\n", transform = File::readText)
-            assertTrue("this.DisplayName" in generatedAuthoringText) {
-                generatedAuthoringText
-            }
-            assertTrue("this.Count" in generatedAuthoringText) {
-                generatedAuthoringText
-            }
-            assertTrue("this.Format" in generatedAuthoringText) {
-                generatedAuthoringText
-            }
-            assertTrue("this.Selected" in generatedAuthoringText) {
-                "The reabstracted CLR slots did not converge on the C# source body:\n" +
-                        generatedAuthoringText
-            }
-            assertFalse(
-                "DefaultConflictRight.__KotlinDefaultImpls.resolvedDefault" in
-                        generatedAuthoringText
-            ) {
-                "The rejected right-parent default leaked into generated adapters:\n" +
-                        generatedAuthoringText
-            }
-            if (targetProfile != "net10.0") {
-                assertTrue(
-                    "ResolvedDefaultConflict.__KotlinDefaultImpls.resolvedDefault" in
-                            generatedAuthoringText
-                ) {
-                    "Portable conflict adapters did not use the Kotlin-selected child helper:\n" +
-                    generatedAuthoringText
-                }
-            }
-            val rejectedPropertyHelperName =
-                defaultPropertyConflictRightContract.members.single().slots.single { slot ->
-                    slot.role == DotNetCSharpSlotRole.HELPER
-                }.methodName
-            assertFalse(
-                "DefaultPropertyConflictRight.__KotlinDefaultImpls.$rejectedPropertyHelperName" in
-                        generatedAuthoringText
-            ) {
-                "The rejected right-parent property helper leaked into generated adapters:\n" +
-                        generatedAuthoringText
-            }
-            if (targetProfile != "net10.0") {
-                val selectedPropertyHelperName =
-                    resolvedDefaultProperty.slots.single { slot ->
-                        slot.role == DotNetCSharpSlotRole.HELPER
-                    }.methodName
-                assertTrue(
-                    "ResolvedDefaultPropertyConflict.__KotlinDefaultImpls." +
-                            selectedPropertyHelperName in generatedAuthoringText
-                ) {
-                    "Portable property conflict adapters did not use the selected child helper:\n" +
-                            generatedAuthoringText
-                }
-            }
-            val rejectedMutablePropertyHelperNames =
-                defaultMutablePropertyConflictRightContract.members.map { member ->
-                    member.slots.single { slot ->
-                        slot.role == DotNetCSharpSlotRole.HELPER
-                    }.methodName
-                }
-            for (helperName in rejectedMutablePropertyHelperNames) {
-                assertFalse(
-                    "DefaultMutablePropertyConflictRight.__KotlinDefaultImpls.$helperName" in
-                            generatedAuthoringText
-                ) {
-                    "A rejected right-parent mutable-property helper leaked into adapters:\n" +
-                            generatedAuthoringText
-                }
-            }
-            val selectedMutablePropertyHelperNames =
-                resolvedDefaultMutablePropertyConflictContract.members.map { member ->
-                    member.slots.single { slot ->
-                        slot.role == DotNetCSharpSlotRole.HELPER
-                    }.methodName
-                }
-            if (targetProfile != "net10.0") {
-                for (helperName in selectedMutablePropertyHelperNames) {
-                    assertTrue(
-                        "ResolvedDefaultMutablePropertyConflict.__KotlinDefaultImpls." +
-                                helperName in generatedAuthoringText
-                    ) {
-                        "Portable mutable-property adapters did not use the selected helper:\n" +
-                                generatedAuthoringText
-                    }
-                }
-            } else {
-                assertTrue(
-                    "((global::manifest.ResolvedDefaultMutablePropertyConflict)this)." +
-                            "resolvedMutableProperty" in generatedAuthoringText
-                ) {
-                    "Modern mutable-property adapters did not dispatch through the selected DIM:\n" +
-                            generatedAuthoringText
-                }
-                for (helperName in selectedMutablePropertyHelperNames) {
-                    assertFalse(helperName in generatedAuthoringText) {
-                        "A modern mutable-property adapter called the compatibility helper:\n" +
-                                generatedAuthoringText
-                    }
-                }
-            }
-            assertFalse(
-                "GenericDefaultConflictRight.__KotlinDefaultImpls.resolvedGenericDefault" in
-                        generatedAuthoringText
-            ) {
-                "The rejected generic right-parent default leaked into generated adapters:\n" +
-                        generatedAuthoringText
-            }
-            if (targetProfile != "net10.0") {
-                assertTrue(
-                    "ResolvedGenericDefaultConflict.__KotlinDefaultImpls." +
-                            "resolvedGenericDefault" in generatedAuthoringText
-                ) {
-                    "Portable generic conflict adapters did not use the selected child helper:\n" +
-                            generatedAuthoringText
-                }
-            }
-            val rejectedGenericPropertyHelperName =
-                genericDefaultPropertyConflictRightContract.members.single { member ->
-                    member.sourceName == "resolvedGenericProperty"
-                }.slots.single { slot ->
-                    slot.role == DotNetCSharpSlotRole.HELPER
-                }.methodName
-            assertFalse(
-                "GenericDefaultPropertyConflictRight.__KotlinDefaultImpls." +
-                        rejectedGenericPropertyHelperName in generatedAuthoringText
-            ) {
-                "The rejected generic property helper leaked into generated adapters:\n" +
-                        generatedAuthoringText
-            }
-            val selectedGenericPropertyHelperName =
-                resolvedGenericDefaultProperty.slots.single { slot ->
-                    slot.role == DotNetCSharpSlotRole.HELPER
-                }.methodName
-            if (targetProfile != "net10.0") {
-                val selectedGenericPropertyHelper =
-                    "ResolvedGenericDefaultPropertyConflict.__KotlinDefaultImpls." +
-                            selectedGenericPropertyHelperName
-                assertTrue(selectedGenericPropertyHelper in generatedAuthoringText) {
-                    "Portable generic property adapters did not use the selected child helper:\n" +
-                            generatedAuthoringText
-                }
-                assertFalse("(string)$selectedGenericPropertyHelper" in generatedAuthoringText) {
-                    "A strongly typed generic property helper result was routed through a cast:\n" +
-                            generatedAuthoringText
-                }
-            } else {
-                assertTrue(
-                    "ResolvedGenericDefaultPropertyConflict<string>)this)." +
-                            "resolvedGenericProperty" in generatedAuthoringText
-                ) {
-                    "Modern generic property adapters did not dispatch through the selected DIM:\n" +
-                            generatedAuthoringText
-                }
-                assertFalse(selectedGenericPropertyHelperName in generatedAuthoringText) {
-                    "A modern generic property adapter called the compatibility helper:\n" +
-                            generatedAuthoringText
-                }
-            }
-            val rejectedGenericMutablePropertyHelperNames =
-                genericDefaultMutablePropertyConflictRightContract.members
-                    .filter { member ->
-                        member.sourceName == "resolvedGenericMutableProperty"
-                    }
-                    .map { member ->
-                        member.slots.single { slot ->
-                            slot.role == DotNetCSharpSlotRole.HELPER
-                        }.methodName
-                    }
-            for (helperName in rejectedGenericMutablePropertyHelperNames) {
-                assertFalse(
-                    "GenericDefaultMutablePropertyConflictRight.__KotlinDefaultImpls." +
-                            helperName in generatedAuthoringText
-                ) {
-                    "A rejected generic mutable-property helper leaked into adapters:\n" +
-                            generatedAuthoringText
-                }
-            }
-            val selectedGenericMutablePropertyHelperNames =
-                resolvedGenericDefaultMutablePropertyConflictContract.members
-                    .filter { member ->
-                        member.sourceName == "resolvedGenericMutableProperty"
-                    }
-                    .map { member ->
-                        member.slots.single { slot ->
-                            slot.role == DotNetCSharpSlotRole.HELPER
-                        }.methodName
-                    }
-            if (targetProfile != "net10.0") {
-                for (helperName in selectedGenericMutablePropertyHelperNames) {
-                    assertTrue(
-                        "ResolvedGenericDefaultMutablePropertyConflict.__KotlinDefaultImpls." +
-                                helperName in generatedAuthoringText
-                    ) {
-                        "Portable generic mutable-property adapters missed the selected helper:\n" +
-                                generatedAuthoringText
-                    }
-                }
-            } else {
-                for (helperName in selectedGenericMutablePropertyHelperNames) {
-                    assertFalse(helperName in generatedAuthoringText) {
-                        "A modern generic mutable-property adapter called a compatibility helper:\n" +
-                                generatedAuthoringText
-                    }
-                }
-            }
-            assertTrue(
-                checkNotNull(contract.exactOwnerPath)
-                    .last()
-                    .substringBefore('`') in generatedAuthoringText
-            ) {
-                "The generated partial did not add the exact generic view:\n" +
-                        generatedAuthoringText
-            }
-            assertTrue("this.Map<R>" in generatedAuthoringText) {
-                generatedAuthoringText
-            }
-            assertTrue("this.Retain<R>" in generatedAuthoringText) {
-                generatedAuthoringText
-            }
-            assertTrue("this.Overlap()" in generatedAuthoringText) {
-                "Intersection adapters did not converge on the C# source body:\n" +
-                        generatedAuthoringText
-            }
-            assertTrue("this.Merged" in generatedAuthoringText) {
-                "Mutable intersection adapters did not share the C# property:\n" +
-                        generatedAuthoringText
-            }
-            assertTrue("this.RetainBoth<R>" in generatedAuthoringText) {
-                "Generic intersection adapters did not share the C# method:\n" +
-                        generatedAuthoringText
-            }
-            assertTrue(
-                checkNotNull(resolvedMutable.exactOwnerPath)
-                    .last()
-                    .substringBefore('`') in generatedAuthoringText
-            ) {
-                "The generated partial did not add the mutable exact view:\n" +
-                        generatedAuthoringText
-            }
-            assertTrue("(object)" in generatedAuthoringText) {
-                "The erased value-type result was not boxed:\n$generatedAuthoringText"
-            }
-            assertTrue("(int)" in generatedAuthoringText) {
-                "The erased value-type argument was not unboxed:\n$generatedAuthoringText"
-            }
-            assertTrue("p0 is string" in generatedAuthoringText) {
-                "The erased collection barriers do not check their typed input:\n" +
-                        generatedAuthoringText
-            }
-            assertTrue("return false" in generatedAuthoringText) {
-                "The Collection.contains wrong-shape fallback was not generated:\n" +
-                        generatedAuthoringText
-            }
-            assertTrue("return -1" in generatedAuthoringText) {
-                "The List.indexOf wrong-shape fallback was not generated:\n" +
-                        generatedAuthoringText
-            }
-            assertTrue("KDNCS009" in baseListCompile.output) {
-                "The analyzer did not explain the erased R : T boundary:\n" +
-                        baseListCompile.output
-            }
-            val shouldForwardPortableDefault =
-                targetProfile != "net10.0"
-            assertEquals(
-                shouldForwardPortableDefault,
-                "__KotlinDefaultImpls" in generatedAuthoringText,
-                generatedAuthoringText,
-            )
-            profileDirectory.resolve("GeneratedShape.runtimeconfig.json")
-                .writeText(net10RuntimeConfig())
-            runDotNet(
-                modernCSharp.dotNetHost,
-                profileDirectory.resolve("GeneratedShape.dll"),
-                profileDirectory,
-                "Production base-list C# implementation failed for ${scenario.name}",
-            )
-        }
-
-        val modern = contractsByProfile.getValue("net10.0")
-        for (portableProfile in listOf("net48", "netstandard2.0")) {
-            val portable = contractsByProfile.getValue(portableProfile)
-            assertEquals(
-                portable.map { contract ->
-                    Triple(
-                        contract.logicalKey,
-                        contract.members.map { member ->
-                            member.logicalKey to member.overriddenLogicalMemberKeys
-                        },
-                        contract.intersections.map { intersection ->
-                            intersection.logicalKey to intersection.contributingLogicalMemberKeys
-                        },
-                    )
-                },
-                modern.map { contract ->
-                    Triple(
-                        contract.logicalKey,
-                        contract.members.map { member ->
-                            member.logicalKey to member.overriddenLogicalMemberKeys
-                        },
-                        contract.intersections.map { intersection ->
-                            intersection.logicalKey to intersection.contributingLogicalMemberKeys
-                        },
-                    )
-                },
-            )
-            assertEquals(
-                portable.flatMap { contract ->
-                    contract.members.mapNotNull { member ->
-                        member.slots.singleOrNull { it.role == DotNetCSharpSlotRole.HELPER }
-                    }
-                },
-                modern.flatMap { contract ->
-                    contract.members.mapNotNull { member ->
-                        member.slots.singleOrNull { it.role == DotNetCSharpSlotRole.HELPER }
-                    }
-                },
             )
         }
     }
@@ -15289,51 +12554,43 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         val metadataLibrary = libraryDirectory.resolve("Cross.Library.dll")
         val libraryIl = libraryDirectory.resolve("Cross.Library.il").readText()
-        assertTrue(
-            "implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', " +
-                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>" in libraryIl
-        )
+        assertTrue("implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'" in libraryIl)
+        assertFalse("Kotlin.Collections.Iterator`1" in libraryIl)
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-" in libraryIl)
-        assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-" in libraryIl)
-        assertTrue(
-            "implements [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
-                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable`1'<int32>" in libraryIl
-        )
+        assertFalse("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-" in libraryIl)
+        assertTrue("implements [Kotlin.Runtime]'Kotlin.Collections.Iterable'" in libraryIl)
+        assertFalse("Kotlin.Collections.Iterable`1" in libraryIl)
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.Iterable-iterator-" in libraryIl)
-        assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterable-iterator-" in libraryIl)
+        assertFalse("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterable-iterator-" in libraryIl)
         assertTrue(
             "static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'libraryIterator'()" in libraryIl
         )
         assertTrue(
             "static class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'libraryIterable'()" in libraryIl
         )
-        assertTrue(
-            "implements [Kotlin.Runtime]'Kotlin.Collections.Collection', " +
-                    "class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<int32>" in libraryIl
-        )
+        assertTrue("implements [Kotlin.Runtime]'Kotlin.Collections.Collection'" in libraryIl)
+        assertFalse("Kotlin.Collections.Collection`1" in libraryIl)
+        assertFalse("Kotlin.Collections.Collection__KotlinExact" in libraryIl)
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.Collection-contains-" in libraryIl)
-        assertTrue("<GenericInterfaceExactBridge-kotlin.collections.Collection-contains-" in libraryIl)
+        assertFalse("<GenericInterfaceExactBridge-kotlin.collections.Collection-contains-" in libraryIl)
         assertTrue("::'ContainsErased'(object" in libraryIl)
         assertTrue(
             "static class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'libraryCollection'()" in libraryIl
         )
-        assertTrue(
-            "implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', " +
-                    "class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>" in libraryIl
-        )
+        assertTrue("implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator'" in libraryIl)
+        assertFalse("Kotlin.Collections.ListIterator`1" in libraryIl)
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-previous-" in libraryIl)
-        assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-previous-" in libraryIl)
+        assertFalse("<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-previous-" in libraryIl)
         assertTrue(
             "static class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'libraryListIterator'()" in libraryIl
         )
-        assertTrue(
-            "implements [Kotlin.Runtime]'Kotlin.Collections.List', " +
-                    "class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<int32>" in libraryIl
-        )
+        assertTrue("implements [Kotlin.Runtime]'Kotlin.Collections.List'" in libraryIl)
+        assertFalse("Kotlin.Collections.List`1" in libraryIl)
+        assertFalse("Kotlin.Collections.List__KotlinExact" in libraryIl)
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.List-get-" in libraryIl)
-        assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.List-get-" in libraryIl)
+        assertFalse("<GenericInterfaceDeclaredBridge-kotlin.collections.List-get-" in libraryIl)
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.List-indexOf-" in libraryIl)
-        assertTrue("<GenericInterfaceExactBridge-kotlin.collections.List-indexOf-" in libraryIl)
+        assertFalse("<GenericInterfaceExactBridge-kotlin.collections.List-indexOf-" in libraryIl)
         assertTrue("::'IndexOfErased'(object" in libraryIl)
         assertTrue("::'GetListIterator'(" in libraryIl)
         assertTrue(
@@ -15343,12 +12600,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val declarationIndex = DotNetLibraryAbiCodec.decode(manifest)
         val physicalDeclarations = declarationIndex.values
             .filterIsInstance<DotNetPhysicalDeclaration.Class>()
-        val producer = physicalDeclarations.single { it.ownerPath.last() == "cross.Producer" }
-        assertTrue(producer.declaredOwnerPath?.last() == "cross.Producer`1")
-        assertTrue(producer.exactOwnerPath == null)
-        val variantCell = physicalDeclarations.single { it.ownerPath.last() == "cross.VariantCell" }
-        assertTrue(variantCell.declaredOwnerPath?.last() == "cross.VariantCell`1")
-        assertTrue(variantCell.exactOwnerPath?.last() == "cross.VariantCell__KotlinExact`1")
+        physicalDeclarations.single { it.ownerPath.last() == "cross.Producer" }
+        physicalDeclarations.single { it.ownerPath.last() == "cross.VariantCell" }
 
         val consumerDirectory = libraryDirectory.resolve("consumer").apply { mkdirs() }
         val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
@@ -15570,7 +12823,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   newobj instance void [Cross.Library]'cross.LibraryIterator'::.ctor(int32)
                   stloc.0
                   ldloc.0
-                  callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>::'Next'()
+                  callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+                  unbox.any [mscorlib]System.Int32
                   ldc.i4.8
                   bne.un IL_failure
                   ldloc.0
@@ -15586,7 +12840,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   stloc.2
                   ldloc.1
                   ldc.i4.s 41
-                  callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<int32>::'Contains'(!0)
+                  box [mscorlib]System.Int32
+                  callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsErased'(object)
                   brfalse IL_failure
                   ldloc.1
                   ldc.i4.s 41
@@ -15602,29 +12857,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsErased'(object)
                   brtrue IL_failure
                   ldloc.1
-                  callvirt instance int32 class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<int32>::'get_Size'()
+                  callvirt instance int32 [Kotlin.Runtime]'Kotlin.Collections.Collection'::'get_Size'()
                   ldc.i4.1
                   bne.un IL_failure
                   ldloc.1
-                  callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<int32>::'IsEmpty'()
+                  callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'IsEmpty'()
                   brtrue IL_failure
                   ldloc.1
                   ldloc.2
-                  callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<int32>::'ContainsAll'(
+                  callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsAll'(
                     class [Kotlin.Runtime]'Kotlin.Collections.Collection'
                   )
                   brfalse IL_failure
                   ldloc.1
-                  callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<int32>::'GetIterator'()
-                  castclass class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>
-                  callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>::'Next'()
+                  callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Collection'::'GetIterator'()
+                  callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+                  unbox.any [mscorlib]System.Int32
                   ldc.i4.s 41
                   bne.un IL_failure
                   ldloc.1
-                  castclass class [Kotlin.Runtime]'Kotlin.Collections.Iterable`1'<int32>
-                  callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class [Kotlin.Runtime]'Kotlin.Collections.Iterable`1'<int32>::'GetIterator'()
-                  castclass class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>
-                  callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>::'Next'()
+                  callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+                  callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+                  unbox.any [mscorlib]System.Int32
                   ldc.i4.s 41
                   bne.un IL_failure
                   ldc.i4.s 41
@@ -15633,7 +12887,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   newobj instance void [Cross.Library]'cross.LibraryListIterator'::.ctor(int32, int32, int32)
                   stloc.3
                   ldloc.3
-                  callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>::'Next'()
+                  callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
+                  unbox.any [mscorlib]System.Int32
                   ldc.i4.s 41
                   bne.un IL_failure
                   ldloc.3
@@ -15646,7 +12901,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   stloc.s 4
                   ldloc.s 4
                   ldc.i4.0
-                  callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>::'Get'(int32)
+                  callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.List'::'Get'(int32)
+                  unbox.any [mscorlib]System.Int32
                   ldc.i4.s 41
                   bne.un IL_failure
                   ldloc.s 4
@@ -15657,7 +12913,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   bne.un IL_failure
                   ldloc.s 4
                   ldc.i4.s 41
-                  callvirt instance int32 class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<int32>::'IndexOf'(!0)
+                  box [mscorlib]System.Int32
+                  callvirt instance int32 [Kotlin.Runtime]'Kotlin.Collections.List'::'IndexOfErased'(object)
                   brtrue IL_failure
                   ldloc.s 4
                   ldstr "wrong"
@@ -15670,23 +12927,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   ldc.i4.m1
                   bne.un IL_failure
                   ldloc.s 4
-                  callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>::'GetListIterator'()
-                  castclass class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>
-                  callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>::'Next'()
+                  callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' [Kotlin.Runtime]'Kotlin.Collections.List'::'GetListIterator'()
+                  callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
+                  unbox.any [mscorlib]System.Int32
                   ldc.i4.s 41
                   bne.un IL_failure
                   ldloc.s 4
                   ldc.i4.0
                   ldc.i4.1
-                  callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.List' class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>::'SubList'(int32, int32)
-                  castclass class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>
+                  callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Collections.List'::'SubList'(int32, int32)
                   ldc.i4.0
-                  callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>::'Get'(int32)
+                  callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.List'::'Get'(int32)
+                  unbox.any [mscorlib]System.Int32
                   ldc.i4.s 41
                   bne.un IL_failure
                   ldloc.s 4
                   ldc.i4.s 41
-                  callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<int32>::'Contains'(!0)
+                  box [mscorlib]System.Int32
+                  callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.List'::'ContainsErased'(object)
                   brfalse IL_failure
                   ldloc.s 4
                   ldstr "wrong"
@@ -15694,7 +12952,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   brtrue IL_failure
                   ldloc.s 4
                   ldc.i4.s 41
-                  callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<int32>::'Contains'(!0)
+                  box [mscorlib]System.Int32
+                  callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsErased'(object)
                   brtrue IL_success
                 IL_failure:
                   ldstr "Canonical-only generic-interface fallback returned an unexpected result."
@@ -16094,165 +13353,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val metadataLibrary = libraryDirectory.resolve("Wide.Generic.dll")
         val libraryAssembly = libraryDirectory.resolve("Wide.Generic.dll")
         val libraryIl = libraryDirectory.resolve("Wide.Generic.il").readText()
-        assertTrue("'wide.Wide`65'" in libraryIl) { libraryIl }
-        assertTrue("'wide.Wide__KotlinExact`65'" in libraryIl) { libraryIl }
-        assertTrue("'wide.Quad`4'<- 'I', + 'O', 'X', + 'N'>" in libraryIl) { libraryIl }
-        assertTrue("'wide.Quad__KotlinExact`4'<'I', 'O', 'X', 'N'>" in libraryIl) { libraryIl }
+        assertTrue(".class interface public abstract auto ansi 'wide.Wide'" in libraryIl) { libraryIl }
+        assertTrue(".class interface public abstract auto ansi 'wide.Quad'" in libraryIl) { libraryIl }
+        assertFalse("wide.Wide`" in libraryIl) { libraryIl }
+        assertFalse("wide.Quad`" in libraryIl) { libraryIl }
+        assertFalse("__KotlinExact" in libraryIl) { libraryIl }
+        assertTrue("<GenericInterfaceCanonicalBridge-wide.IntersectionLeft-read-" in libraryIl) { libraryIl }
+        assertTrue("<GenericInterfaceCanonicalBridge-wide.IntersectionRight-read-" in libraryIl) { libraryIl }
+        assertFalse("<GenericInterfaceDeclaredBridge-" in libraryIl) { libraryIl }
+        assertFalse("<GenericInterfaceExactBridge-" in libraryIl) { libraryIl }
         assertTrue(
-            "implements 'wide.Intersection', class 'wide.IntersectionLeft`1'<!0>, " +
-                    "class 'wide.IntersectionRight`1'<!0>" in libraryIl
-        ) { libraryIl }
-        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-read-" in libraryIl) { libraryIl }
-        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-read-" in libraryIl) { libraryIl }
-        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-<get-label>-" in libraryIl) { libraryIl }
-        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-<get-label>-" in libraryIl) { libraryIl }
-        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-readAt-" in libraryIl) { libraryIl }
-        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-readAt-" in libraryIl) { libraryIl }
-        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-readGeneric-" in libraryIl) { libraryIl }
-        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-readGeneric-" in libraryIl) { libraryIl }
-        assertTrue(
-            ".override method instance !0 class 'wide.Intersection`1'<int32>::'read'()" in libraryIl
-        ) { libraryIl }
-        assertTrue(
-            ".override method instance !0 class 'wide.Intersection`1'<int32>::'get_label'()" in libraryIl
-        ) { libraryIl }
-        assertTrue(".property instance !0 'label'()" in libraryIl) { libraryIl }
-        assertTrue(
-            ".override method instance !0 class 'wide.Intersection`1'<int32>::'readAt'(int32)" in libraryIl
-        ) { libraryIl }
-        assertTrue(
-            ".override method instance !0 class 'wide.Intersection`1'<int32>::'readGeneric'<[1]>(!!0)" in libraryIl
-        ) { libraryIl }
-        assertTrue(
-            "'readGeneric'<(class 'wide.IntersectionMarker') 'R'>(!!0 'value')" in libraryIl
-        ) { libraryIl }
-        val allIntersectionSlots = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest())
-            .values
-            .filterIsInstance<DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot>()
-        val ownerBoundSlots = allIntersectionSlots.filter { slot ->
-            slot.ownerPath == listOf("wide.OwnerBoundIntersection`1")
-        }
-        assertEquals(setOf("retain"), ownerBoundSlots.map { slot -> slot.methodName }.toSet())
-        assertEquals(DotNetInterfaceDefaultPromotionView.DECLARED, ownerBoundSlots.single().physicalView)
-        assertEquals(2, ownerBoundSlots.single().contributingLogicalMemberKeys.size)
-        assertTrue(
-            ".override method instance !!0 class 'wide.OwnerBoundIntersection`1'<" +
-                    "class 'wide.IntersectionMarker'>::'retain'<[1]>(!!0)" in libraryIl
-        ) { libraryIl }
-        val variantOwnerBoundSlots = allIntersectionSlots.filter { slot ->
-            slot.ownerPath == listOf("wide.VariantOwnerBoundIntersection__KotlinExact`1")
-        }
-        assertEquals(setOf("retainVariant"), variantOwnerBoundSlots.map { slot -> slot.methodName }.toSet())
-        assertEquals(DotNetInterfaceDefaultPromotionView.EXACT, variantOwnerBoundSlots.single().physicalView)
-        assertEquals(2, variantOwnerBoundSlots.single().contributingLogicalMemberKeys.size)
-        assertTrue(allIntersectionSlots.none { slot ->
-            slot.ownerPath == listOf("wide.VariantOwnerBoundIntersection`1")
-        })
-        assertTrue(
-            ".override method instance !!0 class 'wide.VariantOwnerBoundIntersection__KotlinExact`1'<" +
-                    "class 'wide.IntersectionMarker'>::'retainVariant'<[1]>(!!0)" in libraryIl
-        ) { libraryIl }
-        assertTrue("'retain'<(!0)" !in libraryIl && "'retainVariant'<(!0)" !in libraryIl) {
-            "Owner-relative constraints must remain erased from split-interface CLR metadata:\n$libraryIl"
-        }
-        val covariantSlots = allIntersectionSlots.filter { slot ->
-            slot.ownerPath == listOf("wide.CovariantIntersection`1")
-        }
-        assertEquals(setOf("covariantResult"), covariantSlots.map { slot -> slot.methodName }.toSet())
-        assertEquals(DotNetInterfaceDefaultPromotionView.DECLARED, covariantSlots.single().physicalView)
-        assertEquals(2, covariantSlots.single().contributingLogicalMemberKeys.size)
-        assertTrue(
-            ".override method instance !0 class 'wide.CovariantIntersection`1'<" +
-                    "class 'wide.IntersectionMarker'>::'covariantResult'()" in libraryIl
-        ) { libraryIl }
-        val intersectionSlots = allIntersectionSlots.filter { slot ->
-            slot.ownerPath == listOf("wide.Intersection`1")
-        }
-        assertEquals(
-            setOf("get_label", "read", "readAt", "readGeneric"),
-            intersectionSlots.map { slot -> slot.methodName }.toSet(),
+            DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest())
+                .values
+                .none { it is DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot }
         )
-        intersectionSlots.forEach { intersectionSlot ->
-            assertEquals(listOf("wide.Intersection`1"), intersectionSlot.ownerPath)
-            assertEquals(DotNetInterfaceDefaultPromotionView.DECLARED, intersectionSlot.physicalView)
-            assertEquals(2, intersectionSlot.contributingLogicalMemberKeys.size)
-        }
-        val mutableIntersectionSlots = allIntersectionSlots.filter { slot ->
-            slot.ownerPath == listOf("wide.MutableIntersection`1")
-        }
-        assertEquals(
-            setOf("get_mutableLabel", "set_mutableLabel"),
-            mutableIntersectionSlots.map { slot -> slot.methodName }.toSet(),
-        )
-        mutableIntersectionSlots.forEach { slot ->
-            assertEquals(DotNetInterfaceDefaultPromotionView.DECLARED, slot.physicalView)
-            assertEquals(2, slot.contributingLogicalMemberKeys.size)
-        }
-        assertTrue(".property instance !0 'mutableLabel'()" in libraryIl) { libraryIl }
-        assertTrue(
-            ".override method instance !0 class 'wide.MutableIntersection`1'<string>::'get_mutableLabel'()" in
-                    libraryIl
-        ) { libraryIl }
-        assertTrue(
-            ".override method instance void class 'wide.MutableIntersection`1'<string>::" +
-                    "'set_mutableLabel'(!0)" in libraryIl
-        ) { libraryIl }
-        val splitMutableIntersectionSlots = allIntersectionSlots.filter { slot ->
-            slot.ownerPath.single() in setOf(
-                "wide.SplitMutableIntersection`1",
-                "wide.SplitMutableIntersection__KotlinExact`1",
-            )
-        }
-        assertEquals(3, splitMutableIntersectionSlots.size, splitMutableIntersectionSlots.joinToString("\n"))
-        assertEquals(
-            setOf("get_splitLabel"),
-            splitMutableIntersectionSlots
-                .filter { slot -> slot.physicalView == DotNetInterfaceDefaultPromotionView.DECLARED }
-                .mapTo(hashSetOf()) { slot -> slot.methodName },
-        )
-        assertEquals(
-            setOf("get_splitLabel", "set_splitLabel"),
-            splitMutableIntersectionSlots
-                .filter { slot -> slot.physicalView == DotNetInterfaceDefaultPromotionView.EXACT }
-                .mapTo(hashSetOf()) { slot -> slot.methodName },
-        )
-        assertTrue(splitMutableIntersectionSlots.all { slot ->
-            slot.contributingLogicalMemberKeys.size == 2
-        })
-        val exactIntersectionSlots = allIntersectionSlots.filter { slot ->
-            slot.ownerPath == listOf("wide.ExactIntersection__KotlinExact`1")
-        }
-        assertEquals(setOf("acceptsExact"), exactIntersectionSlots.map { slot -> slot.methodName }.toSet())
-        assertEquals(DotNetInterfaceDefaultPromotionView.EXACT, exactIntersectionSlots.single().physicalView)
-        assertEquals(2, exactIntersectionSlots.single().contributingLogicalMemberKeys.size)
-        assertTrue(allIntersectionSlots.none { slot ->
-            slot.ownerPath == listOf("wide.ExactIntersection`1")
-        })
-        assertTrue(
-            ".override method instance bool class 'wide.ExactIntersection__KotlinExact`1'<int32>::" +
-                    "'acceptsExact'(!0)" in libraryIl
-        ) { libraryIl }
-        val permutedIntersectionSlots = allIntersectionSlots.filter { slot ->
-            slot.ownerPath == listOf("wide.PermutedIntersection`2")
-        }
-        assertEquals(setOf("permute"), permutedIntersectionSlots.map { slot -> slot.methodName }.toSet())
-        assertEquals(2, permutedIntersectionSlots.single().contributingLogicalMemberKeys.size)
-        assertTrue(
-            ".override method instance !1 class 'wide.PermutedIntersection`2'<string, int32>::" +
-                    "'permute'(!0)" in libraryIl
-        ) { libraryIl }
-        val indirectIntersectionSlots = allIntersectionSlots.filter { slot ->
-            slot.ownerPath == listOf("wide.IndirectIntersection`1")
-        }
-        assertEquals(setOf("indirect"), indirectIntersectionSlots.map { slot -> slot.methodName }.toSet())
-        assertEquals(2, indirectIntersectionSlots.single().contributingLogicalMemberKeys.size)
-        assertTrue(
-            ".override method instance !0 class 'wide.IndirectIntersection`1'<int32>::'indirect'()" in libraryIl
-        ) { libraryIl }
-        assertTrue(allIntersectionSlots.none { slot ->
-            slot.ownerPath == listOf("wide.IndirectIntersectionDescendant`1")
-        })
-
         for (target in listOf("net48", "net10.0")) {
             val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
             val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
@@ -16497,78 +13611,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 K2DotNetCompilerArguments::destination.cliArgument, application.path,
             )
             val consumerIl = consumerDirectory.resolve("WideConsumer.il").readText()
-            assertTrue(
-                ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::'read'()" in
-                        consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::'get_label'()" in
-                        consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::'readAt'(int32)" in
-                        consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::" +
-                        "'readGeneric'<[1]>(!!0)" in consumerIl
-            ) { consumerIl }
-            val localOwnerBoundIl = consumerIl
-                .substringAfter(".class public auto ansi sealed beforefieldinit 'wideconsumer.LocalOwnerBound'")
-                .substringBefore("\n.class ")
-            assertTrue(
-                ".override method instance !!0 [Wide.Generic]'wide.OwnerBoundLeft'::" +
-                        "'retain__KotlinErased__" in localOwnerBoundIl
-            ) { localOwnerBoundIl }
-            assertFalse("'wide.OwnerBoundIntersection`1'" in localOwnerBoundIl) { localOwnerBoundIl }
-            val localVariantOwnerBoundIl = consumerIl
-                .substringAfter(".class public auto ansi sealed beforefieldinit 'wideconsumer.LocalVariantOwnerBound'")
-                .substringBefore("\n.class ")
-            assertTrue(
-                ".override method instance !!0 [Wide.Generic]'wide.VariantOwnerBoundLeft'::" +
-                        "'retainVariant__KotlinErased__" in localVariantOwnerBoundIl
-            ) { localVariantOwnerBoundIl }
-            assertFalse("'wide.VariantOwnerBoundIntersection`1'" in localVariantOwnerBoundIl) {
-                localVariantOwnerBoundIl
+            assertTrue("<GenericInterfaceCanonicalBridge-wide.IntersectionLeft-read-" in consumerIl) {
+                consumerIl
             }
-            assertTrue(
-                ".override method instance !0 class [Wide.Generic]" +
-                        "'wide.CovariantIntersection`1'<class [Wide.Generic]" +
-                        "'wide.IntersectionMarker'>::'covariantResult'()" in consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance !0 class [Wide.Generic]'wide.MutableIntersection`1'<string>::" +
-                        "'get_mutableLabel'()" in consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance void class [Wide.Generic]'wide.MutableIntersection`1'<string>::" +
-                        "'set_mutableLabel'(!0)" in consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance !0 class [Wide.Generic]" +
-                        "'wide.SplitMutableIntersection`1'<string>::'get_splitLabel'()" in consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance !0 class [Wide.Generic]" +
-                        "'wide.SplitMutableIntersection__KotlinExact`1'<string>::'get_splitLabel'()" in consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance void class [Wide.Generic]" +
-                        "'wide.SplitMutableIntersection__KotlinExact`1'<string>::'set_splitLabel'(!0)" in consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance bool class [Wide.Generic]" +
-                        "'wide.ExactIntersection__KotlinExact`1'<object>::'acceptsExact'(!0)" in consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance !1 class [Wide.Generic]" +
-                        "'wide.PermutedIntersection`2'<object, object>::'permute'(!0)" in consumerIl
-            ) { consumerIl }
-            assertTrue(
-                ".override method instance !0 class [Wide.Generic]" +
-                        "'wide.IndirectIntersection`1'<object>::'indirect'()" in consumerIl
-            ) { consumerIl }
-
+            assertTrue("<GenericInterfaceCanonicalBridge-wide.IntersectionRight-read-" in consumerIl) {
+                consumerIl
+            }
+            assertFalse("__KotlinExact" in consumerIl) { consumerIl }
+            assertFalse("<GenericInterfaceDeclaredBridge-" in consumerIl) { consumerIl }
+            assertFalse("<GenericInterfaceExactBridge-" in consumerIl) { consumerIl }
             if (target == "net10.0") {
                 runDotNet(dotnetHost, application, consumerDirectory, "High-arity Kotlin consumer failed for $target")
             } else {
@@ -16580,394 +13631,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 assertEquals(0, process.waitFor(), "High-arity Kotlin consumer failed for $target:\n$output")
             }
 
-            libraryAssembly.copyTo(consumerDirectory.resolve(libraryAssembly.name), overwrite = true)
-            val verifierSource = consumerDirectory.resolve("WideVerifier.cs").apply {
-                writeText(
-                    """
-                    using System;
-                    using System.Reflection;
-
-                    public struct MarkerValue : wide.IntersectionMarker
-                    {
-                    }
-
-                    public static class WideVerifier
-                    {
-                        private static void Require(bool condition, string message)
-                        {
-                            if (!condition) throw new Exception(message);
-                        }
-
-                        private static MethodInfo RequireMethod(Type facade, string name)
-                        {
-                            MethodInfo method = facade.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
-                            Require(method != null, name + " is unavailable");
-                            return method;
-                        }
-
-                        public static int Main()
-                        {
-                            Assembly library = Assembly.LoadFrom("Wide.Generic.dll");
-                            Type canonical = library.GetType("wide.Wide", true);
-                            Type declared = library.GetType("wide.Wide`65", true);
-                            Type exact = library.GetType("wide.Wide__KotlinExact`65", true);
-                            Type implementation = library.GetType("wide.WideImpl", true);
-                            Type quadCanonical = library.GetType("wide.Quad", true);
-                            Type quadDeclared = library.GetType("wide.Quad`4", true);
-                            Type quadExact = library.GetType("wide.Quad__KotlinExact`4", true);
-                            Type quadImplementation = library.GetType("wide.QuadImpl", true);
-                            Type intersectionCanonical = library.GetType("wide.Intersection", true);
-                            Type facade = library.GetType("wide.wideLibraryKt", true);
-
-                            Type[] declaredParameters = declared.GetGenericArguments();
-                            Type[] exactParameters = exact.GetGenericArguments();
-                            Require(declaredParameters.Length == 65, "declared arity");
-                            Require(exactParameters.Length == 65, "exact arity");
-                            Require(
-                                (declaredParameters[0].GenericParameterAttributes &
-                                    GenericParameterAttributes.VarianceMask) == GenericParameterAttributes.Covariant,
-                                "first declared parameter variance");
-                            Require(
-                                (declaredParameters[64].GenericParameterAttributes &
-                                    GenericParameterAttributes.VarianceMask) == GenericParameterAttributes.Covariant,
-                                "last declared parameter variance");
-                            Require(
-                                (exactParameters[64].GenericParameterAttributes &
-                                    GenericParameterAttributes.VarianceMask) == GenericParameterAttributes.None,
-                                "exact parameter must be invariant");
-
-                            bool hasExact = false;
-                            foreach (Type implemented in implementation.GetInterfaces())
-                            {
-                                if (implemented.IsGenericType && implemented.GetGenericTypeDefinition() == exact)
-                                    hasExact = true;
-                            }
-                            Require(hasExact, "implementation has no 65-parameter exact capability");
-
-                            Type[] quadDeclaredParameters = quadDeclared.GetGenericArguments();
-                            Type[] quadExactParameters = quadExact.GetGenericArguments();
-                            GenericParameterAttributes varianceMask = GenericParameterAttributes.VarianceMask;
-                            Require(quadDeclaredParameters.Length == 4, "quad declared arity");
-                            Require(quadExactParameters.Length == 4, "quad exact arity");
-                            Require(
-                                (quadDeclaredParameters[0].GenericParameterAttributes & varianceMask) ==
-                                    GenericParameterAttributes.Contravariant,
-                                "quad input variance");
-                            Require(
-                                (quadDeclaredParameters[1].GenericParameterAttributes & varianceMask) ==
-                                    GenericParameterAttributes.Covariant,
-                                "quad output variance");
-                            Require(
-                                (quadDeclaredParameters[2].GenericParameterAttributes & varianceMask) ==
-                                    GenericParameterAttributes.None,
-                                "quad state variance");
-                            Require(
-                                (quadDeclaredParameters[3].GenericParameterAttributes & varianceMask) ==
-                                    GenericParameterAttributes.Covariant,
-                                "quad nullable variance");
-                            for (int index = 0; index < quadExactParameters.Length; index++)
-                            {
-                                Require(
-                                    (quadExactParameters[index].GenericParameterAttributes & varianceMask) ==
-                                        GenericParameterAttributes.None,
-                                    "quad exact parameter variance " + index);
-                            }
-                            bool hasQuadExact = false;
-                            foreach (Type implemented in quadImplementation.GetInterfaces())
-                            {
-                                if (implemented.IsGenericType && implemented.GetGenericTypeDefinition() == quadExact)
-                                    hasQuadExact = true;
-                            }
-                            Require(hasQuadExact, "quad implementation has no complete exact capability");
-                            bool hasNullablePrimitiveExact = false;
-                            foreach (Type implemented in quadImplementation.GetInterfaces())
-                            {
-                                if (!implemented.IsGenericType || implemented.GetGenericTypeDefinition() != quadExact)
-                                    continue;
-                                Type[] arguments = implemented.GetGenericArguments();
-                                if (arguments[3] == typeof(Nullable<int>)) hasNullablePrimitiveExact = true;
-                            }
-                            Require(hasNullablePrimitiveExact, "quad nullable primitive exact argument");
-
-                            MethodInfo create = RequireMethod(facade, "newWide");
-                            MethodInfo same = RequireMethod(facade, "sameAfterWiden");
-                            MethodInfo read = RequireMethod(facade, "readWide");
-                            MethodInfo accept = RequireMethod(facade, "acceptWide");
-                            object value = create.Invoke(null, null);
-                            Require(canonical.IsInstanceOfType(value), "canonical identity");
-                            Require((bool) same.Invoke(null, new object[] { value }), "widening identity");
-                            Require((string) read.Invoke(null, new object[] { value }) == "first:64", "fallback result");
-                            Require((bool) accept.Invoke(null, new object[] { value, 64 }), "fallback argument");
-                            try
-                            {
-                                accept.Invoke(null, new object[] { value, "wrong" });
-                                throw new Exception("wrong-shaped high-index argument was accepted");
-                            }
-                            catch (TargetInvocationException failure)
-                            {
-                                Require(failure.InnerException is InvalidCastException,
-                                    "wrong-shaped high-index argument failure");
-                            }
-
-                            MethodInfo createQuad = RequireMethod(facade, "newQuad");
-                            MethodInfo sameQuad = RequireMethod(facade, "sameQuad");
-                            MethodInfo passQuad = RequireMethod(facade, "passQuad");
-                            MethodInfo readQuad = RequireMethod(facade, "readQuad");
-                            MethodInfo acceptQuad = RequireMethod(facade, "acceptQuad");
-                            object quad = createQuad.Invoke(null, null);
-                            Require(quadCanonical.IsInstanceOfType(quad), "quad canonical identity");
-                            Require((bool) sameQuad.Invoke(null, new object[] { quad }), "quad widening identity");
-                            MethodInfo closedPassQuad = passQuad.MakeGenericMethod(
-                                typeof(object), typeof(int), typeof(string), typeof(Nullable<int>));
-                            Require(Object.ReferenceEquals(quad, closedPassQuad.Invoke(null, new object[] { quad })),
-                                "quad open pass-through identity");
-                            Require((string) readQuad.Invoke(null, new object[] { quad }) == "4:7",
-                                "quad mixed fallback result");
-                            Require((bool) acceptQuad.Invoke(null, new object[] { quad, 4 }),
-                                "quad exact fallback argument");
-                            try
-                            {
-                                acceptQuad.Invoke(null, new object[] { quad, "wrong" });
-                                throw new Exception("wrong-shaped quad argument was accepted");
-                            }
-                            catch (TargetInvocationException failure)
-                            {
-                                Require(failure.InnerException is InvalidCastException,
-                                    "wrong-shaped quad argument failure");
-                            }
-
-                            MethodInfo createIntersection = RequireMethod(facade, "newIntersection");
-                            MethodInfo sameIntersection = RequireMethod(facade, "sameIntersection");
-                            MethodInfo readIntersection = RequireMethod(facade, "readIntersection");
-                            object intersection = createIntersection.Invoke(null, null);
-                            Require(intersectionCanonical.IsInstanceOfType(intersection),
-                                "intersection canonical identity");
-                            Require((bool) sameIntersection.Invoke(null, new object[] { intersection }),
-                                "intersection parent identity");
-                            wide.IntersectionLeft<int> left = (wide.IntersectionLeft<int>) intersection;
-                            wide.IntersectionRight<int> right = (wide.IntersectionRight<int>) intersection;
-                            wide.Intersection<int> derived = (wide.Intersection<int>) intersection;
-                            wide.IntersectionMarkerImpl marker = new wide.IntersectionMarkerImpl();
-                            Require(Object.ReferenceEquals(left, right) && Object.ReferenceEquals(left, derived),
-                                "intersection C# identity");
-                            Require(left.label == 79 && right.label == 79 && derived.label == 79,
-                                "intersection property dispatch");
-                            Require(left.read() == 73 && right.read() == 73 && derived.read() == 73 &&
-                                left.readAt(1) == 74 && right.readAt(2) == 75 && derived.readAt(3) == 76,
-                                "intersection parent dispatch");
-                            Require(left.readGeneric(marker) == 73 && right.readGeneric(marker) == 73 &&
-                                derived.readGeneric(marker) == 73, "intersection generic dispatch");
-                            Require((int) readIntersection.Invoke(null, new object[] { intersection }) == 681,
-                                "intersection Kotlin dispatch");
-
-                            MethodInfo createOwnerBound = RequireMethod(facade, "newOwnerBound");
-                            MethodInfo exerciseOwnerBound = RequireMethod(facade, "exerciseOwnerBound");
-                            object ownerBoundObject = createOwnerBound.Invoke(null, null);
-                            wide.OwnerBoundLeft<wide.IntersectionMarker> ownerBoundLeft =
-                                (wide.OwnerBoundLeft<wide.IntersectionMarker>) ownerBoundObject;
-                            wide.OwnerBoundRight<wide.IntersectionMarker> ownerBoundRight =
-                                (wide.OwnerBoundRight<wide.IntersectionMarker>) ownerBoundObject;
-                            wide.OwnerBoundIntersection<wide.IntersectionMarker> ownerBoundDerived =
-                                (wide.OwnerBoundIntersection<wide.IntersectionMarker>) ownerBoundObject;
-                            Require(Object.ReferenceEquals(ownerBoundLeft.retain(marker), marker) &&
-                                Object.ReferenceEquals(ownerBoundRight.retain(marker), marker) &&
-                                Object.ReferenceEquals(ownerBoundDerived.retain(marker), marker),
-                                "owner-bound C# dispatch");
-                            Require((bool) exerciseOwnerBound.Invoke(
-                                null, new object[] { ownerBoundObject, marker }),
-                                "owner-bound Kotlin dispatch");
-                            MethodInfo ownerBoundMethod =
-                                typeof(wide.OwnerBoundIntersection<wide.IntersectionMarker>).GetMethod("retain");
-                            Require(ownerBoundMethod.GetGenericArguments()[0]
-                                .GetGenericParameterConstraints().Length == 0,
-                                "owner-bound physical constraint was not erased");
-                            try {
-                                ownerBoundDerived.retain<string>("wrong");
-                                throw new Exception("owner-bound erased slot accepted an invalid value");
-                            } catch (InvalidCastException) {
-                            }
-                            MarkerValue markerValue = new MarkerValue();
-                            Require(ownerBoundDerived.retain<MarkerValue>(markerValue)
-                                    .Equals(markerValue),
-                                "value owner-bound C# dispatch");
-
-                            MethodInfo createVariantOwnerBound =
-                                RequireMethod(facade, "newVariantOwnerBound");
-                            MethodInfo exerciseVariantOwnerBound =
-                                RequireMethod(facade, "exerciseVariantOwnerBound");
-                            object variantOwnerBoundObject = createVariantOwnerBound.Invoke(null, null);
-                            wide.VariantOwnerBoundLeft__KotlinExact<wide.IntersectionMarker>
-                                variantOwnerBoundLeft =
-                                    (wide.VariantOwnerBoundLeft__KotlinExact<wide.IntersectionMarker>)
-                                        variantOwnerBoundObject;
-                            wide.VariantOwnerBoundRight__KotlinExact<wide.IntersectionMarker>
-                                variantOwnerBoundRight =
-                                    (wide.VariantOwnerBoundRight__KotlinExact<wide.IntersectionMarker>)
-                                        variantOwnerBoundObject;
-                            wide.VariantOwnerBoundIntersection__KotlinExact<wide.IntersectionMarker>
-                                variantOwnerBoundDerived =
-                                    (wide.VariantOwnerBoundIntersection__KotlinExact<wide.IntersectionMarker>)
-                                        variantOwnerBoundObject;
-                            Require(Object.ReferenceEquals(
-                                    variantOwnerBoundLeft.retainVariant(marker), marker) &&
-                                Object.ReferenceEquals(
-                                    variantOwnerBoundRight.retainVariant(marker), marker) &&
-                                Object.ReferenceEquals(
-                                    variantOwnerBoundDerived.retainVariant(marker), marker),
-                                "variant owner-bound C# dispatch");
-                            Require((bool) exerciseVariantOwnerBound.Invoke(
-                                null, new object[] { variantOwnerBoundObject, marker }),
-                                "variant owner-bound Kotlin dispatch");
-                            MethodInfo variantOwnerBoundMethod = typeof(
-                                wide.VariantOwnerBoundIntersection__KotlinExact<wide.IntersectionMarker>)
-                                    .GetMethod("retainVariant");
-                            Require(variantOwnerBoundMethod.GetGenericArguments()[0]
-                                .GetGenericParameterConstraints().Length == 0,
-                                "variant owner-bound physical constraint was not erased");
-                            try {
-                                variantOwnerBoundDerived.retainVariant<string>("wrong");
-                                throw new Exception(
-                                    "variant owner-bound erased slot accepted an invalid value");
-                            } catch (InvalidCastException) {
-                            }
-
-                            MethodInfo createCovariant =
-                                RequireMethod(facade, "newCovariantIntersection");
-                            MethodInfo exerciseCovariant =
-                                RequireMethod(facade, "exerciseCovariantIntersection");
-                            object covariantObject =
-                                createCovariant.Invoke(null, new object[] { marker });
-                            wide.CovariantWide<wide.IntersectionMarker> covariantWide =
-                                (wide.CovariantWide<wide.IntersectionMarker>) covariantObject;
-                            wide.CovariantNarrow<wide.IntersectionMarker> covariantNarrow =
-                                (wide.CovariantNarrow<wide.IntersectionMarker>) covariantObject;
-                            wide.CovariantIntersection<wide.IntersectionMarker> covariantDerived =
-                                (wide.CovariantIntersection<wide.IntersectionMarker>) covariantObject;
-                            Require(Object.ReferenceEquals(covariantWide.covariantResult(), marker) &&
-                                Object.ReferenceEquals(covariantNarrow.covariantResult(), marker) &&
-                                Object.ReferenceEquals(covariantDerived.covariantResult(), marker),
-                                "covariant C# intersection dispatch");
-                            Require((bool) exerciseCovariant.Invoke(
-                                null, new object[] { covariantObject, marker }),
-                                "covariant Kotlin intersection dispatch");
-
-                            MethodInfo createMutable = RequireMethod(facade, "newMutableIntersection");
-                            MethodInfo exerciseMutable = RequireMethod(facade, "exerciseMutableIntersection");
-                            object mutable = createMutable.Invoke(null, null);
-                            wide.MutableIntersectionLeft<string> mutableLeft =
-                                (wide.MutableIntersectionLeft<string>) mutable;
-                            wide.MutableIntersectionRight<string> mutableRight =
-                                (wide.MutableIntersectionRight<string>) mutable;
-                            wide.MutableIntersection<string> mutableDerived =
-                                (wide.MutableIntersection<string>) mutable;
-                            mutableDerived.mutableLabel = "csharp";
-                            Require(mutableLeft.mutableLabel == "csharp" &&
-                                mutableRight.mutableLabel == "csharp", "mutable C# property dispatch");
-                            Require((bool) exerciseMutable.Invoke(null, new object[] { mutable }) &&
-                                mutableDerived.mutableLabel == "producer", "mutable Kotlin dispatch");
-
-                            MethodInfo createSplitMutable =
-                                RequireMethod(facade, "newSplitMutableIntersection");
-                            MethodInfo exerciseSplitMutable =
-                                RequireMethod(facade, "exerciseSplitMutableIntersection");
-                            object splitMutable = createSplitMutable.Invoke(null, null);
-                            wide.SplitMutableIntersection<string> splitMutableDeclared =
-                                (wide.SplitMutableIntersection<string>) splitMutable;
-                            wide.SplitMutableIntersection__KotlinExact<string> splitMutableExact =
-                                (wide.SplitMutableIntersection__KotlinExact<string>) splitMutable;
-                            PropertyInfo splitDeclaredProperty = typeof(
-                                wide.SplitMutableIntersection<string>).GetProperty("splitLabel");
-                            PropertyInfo splitExactProperty = typeof(
-                                wide.SplitMutableIntersection__KotlinExact<string>)
-                                    .GetProperty("splitLabel");
-                            Require(splitDeclaredProperty.CanRead && !splitDeclaredProperty.CanWrite,
-                                "split mutable declared property shape");
-                            Require(splitExactProperty.CanRead && splitExactProperty.CanWrite,
-                                "split mutable exact property shape");
-                            splitMutableExact.splitLabel = "split-csharp";
-                            Require(splitMutableDeclared.splitLabel == "split-csharp",
-                                "split mutable C# property dispatch");
-                            Require((bool) exerciseSplitMutable.Invoke(
-                                    null, new object[] { splitMutable }) &&
-                                splitMutableDeclared.splitLabel == "split-producer",
-                                "split mutable Kotlin property dispatch");
-
-                            MethodInfo createExact = RequireMethod(facade, "newExactIntersection");
-                            MethodInfo readExact = RequireMethod(facade, "readExactIntersection");
-                            object exactIntersectionObject = createExact.Invoke(null, null);
-                            wide.ExactIntersectionLeft__KotlinExact<int> exactLeft =
-                                (wide.ExactIntersectionLeft__KotlinExact<int>) exactIntersectionObject;
-                            wide.ExactIntersectionRight__KotlinExact<int> exactRight =
-                                (wide.ExactIntersectionRight__KotlinExact<int>) exactIntersectionObject;
-                            wide.ExactIntersection__KotlinExact<int> exactDerived =
-                                (wide.ExactIntersection__KotlinExact<int>) exactIntersectionObject;
-                            Require(exactLeft.acceptsExact(101) && exactRight.acceptsExact(101) &&
-                                exactDerived.acceptsExact(101), "exact C# dispatch");
-                            Require((bool) readExact.Invoke(null, new object[] { exactIntersectionObject }),
-                                "exact Kotlin dispatch");
-
-                            MethodInfo createPermuted = RequireMethod(facade, "newPermutedIntersection");
-                            MethodInfo readPermuted = RequireMethod(facade, "readPermutedIntersection");
-                            object permuted = createPermuted.Invoke(null, null);
-                            wide.PermutedIntersectionLeft<string, int> permutedLeft =
-                                (wide.PermutedIntersectionLeft<string, int>) permuted;
-                            wide.PermutedIntersectionRight<int, string> permutedRight =
-                                (wide.PermutedIntersectionRight<int, string>) permuted;
-                            wide.PermutedIntersection<string, int> permutedDerived =
-                                (wide.PermutedIntersection<string, int>) permuted;
-                            Require(permutedLeft.permute("abcd") == 83 &&
-                                permutedRight.permute("abcde") == 83 &&
-                                permutedDerived.permute("abcdef") == 83,
-                                "permuted C# dispatch");
-                            Require((int) readPermuted.Invoke(null, new object[] { permuted, "abcd" }) == 249,
-                                "permuted Kotlin dispatch");
-
-                            MethodInfo createIndirect = RequireMethod(facade, "newIndirectIntersection");
-                            MethodInfo readIndirect = RequireMethod(facade, "readIndirectIntersection");
-                            object indirect = createIndirect.Invoke(null, null);
-                            wide.IndirectIntersectionLeftBase<int> indirectLeft =
-                                (wide.IndirectIntersectionLeftBase<int>) indirect;
-                            wide.IndirectIntersectionRightBase<int> indirectRight =
-                                (wide.IndirectIntersectionRightBase<int>) indirect;
-                            wide.IndirectIntersection<int> indirectDerived =
-                                (wide.IndirectIntersection<int>) indirect;
-                            Require(indirectLeft.indirect() == 89 && indirectRight.indirect() == 89 &&
-                                indirectDerived.indirect() == 89, "indirect C# dispatch");
-                            Require((int) readIndirect.Invoke(null, new object[] { indirect }) == 267,
-                                "indirect Kotlin dispatch");
-                            MethodInfo createIndirectDescendant =
-                                RequireMethod(facade, "newIndirectIntersectionDescendant");
-                            wide.IndirectIntersectionDescendant<int> indirectDescendant =
-                                (wide.IndirectIntersectionDescendant<int>)
-                                    createIndirectDescendant.Invoke(null, null);
-                            Require(indirectDescendant.indirect() == 97,
-                                "inherited selected intersection slot");
-                            return 0;
-                        }
-                    }
-                    """.trimIndent()
-                )
-            }
-            val verifier = consumerDirectory.resolve("WideVerifier.exe")
-            val compileResult = runCSharpCompiler(
-                checkNotNull(csharpCompiler),
-                verifierSource,
-                verifier,
-                libraryAssembly,
-                checkNotNull(frameworkNetStandardFacade),
-                target = "exe",
-            )
-            assertEquals(0, compileResult.exitCode, compileResult.output)
-
-            val verifierProcess = if (target == "net10.0") {
-                consumerDirectory.resolve("WideConsumer.runtimeconfig.json")
-                    .copyTo(consumerDirectory.resolve("WideVerifier.runtimeconfig.json"), overwrite = true)
-                ProcessBuilder(dotnetHost.path, "exec", verifier.path)
-            } else {
-                ProcessBuilder(verifier.path)
-            }.directory(consumerDirectory).redirectErrorStream(true).start()
-            val verifierOutput = verifierProcess.inputStream.bufferedReader().use { it.readText() }
-            assertEquals(0, verifierProcess.waitFor(), "High-arity C# verifier failed for $target:\n$verifierOutput")
         }
     }
 
@@ -17249,8 +13912,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val declarations = DotNetLibraryAbiCodec.decode(producerMetadata.readKlibManifest()).values
         val unsafeClass = declarations.filterIsInstance<DotNetPhysicalDeclaration.Class>()
             .single { declaration -> declaration.ownerPath.last() == "barriers.UnsafeSink" }
-        assertEquals(listOf("barriers.UnsafeSink`1"), unsafeClass.declaredOwnerPath)
-        assertEquals(listOf("barriers.UnsafeSink__KotlinExact`1"), unsafeClass.exactOwnerPath)
+        assertEquals(listOf("barriers.UnsafeSink"), unsafeClass.ownerPath)
         val unsafeCanonicalSlot = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
             .single { declaration ->
                 declaration.ownerPath.last() == "barriers.UnsafeSink" &&
@@ -17258,8 +13920,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         val foreignShapeClass = declarations.filterIsInstance<DotNetPhysicalDeclaration.Class>()
             .single { declaration -> declaration.ownerPath.last() == "barriers.ForeignShape" }
-        assertEquals(listOf("barriers.ForeignShape`1"), foreignShapeClass.declaredOwnerPath)
-        assertEquals(listOf("barriers.ForeignShape__KotlinExact`1"), foreignShapeClass.exactOwnerPath)
+        assertEquals(listOf("barriers.ForeignShape"), foreignShapeClass.ownerPath)
         val foreignShapeFunctions = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
             .filter { declaration -> declaration.ownerPath.last() == "barriers.ForeignShape" }
         val foreignValueCanonicalSlot = foreignShapeFunctions.single { declaration ->
@@ -17401,13 +14062,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             checkNotNull(frameworkNetStandardFacade),
             target = "exe",
         )
-        assertEquals(0, frameworkCompile.exitCode, frameworkCompile.output)
-        producerAssembly.copyTo(frameworkDirectory.resolve(producerAssembly.name), overwrite = true)
-        runAssemblerPairing(
-            frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkApplication),
-            frameworkDirectory,
-            "Framework foreign generic-interface barriers",
-        )
+        assertTrue(frameworkCompile.exitCode != 0) {
+            "Framework C# must not see implicit typed exports for Kotlin generic interfaces"
+        }
+        assertTrue("CS0234" in frameworkCompile.output || "CS0426" in frameworkCompile.output) {
+            "Expected the removed typed interface owners to be absent:\n${frameworkCompile.output}"
+        }
 
         val modernDirectory = producerDirectory.resolve("modern").apply { mkdirs() }
         compileInProcess(
@@ -17430,27 +14090,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             modernRuntime,
             target = "exe",
         )
-        assertEquals(0, modernCompile.exitCode, modernCompile.output)
-        producerAssembly.copyTo(modernDirectory.resolve(producerAssembly.name), overwrite = true)
-        modernDirectory.resolve("ForeignBarriers.runtimeconfig.json").writeText(
-            """
-            {
-              "runtimeOptions": {
-                "tfm": "net10.0",
-                "framework": {
-                  "name": "Microsoft.NETCore.App",
-                  "version": "10.0.0"
-                },
-                "rollForward": "LatestMinor"
-              }
-            }
-            """.trimIndent()
-        )
-        runAssemblerPairing(
-            listOf(checkNotNull(modernCSharp).dotNetHost.path, "exec", modernApplication.path),
-            modernDirectory,
-            "CoreCLR foreign generic-interface barriers",
-        )
+        assertTrue(modernCompile.exitCode != 0) {
+            "Modern C# must not see implicit typed exports for Kotlin generic interfaces"
+        }
+        assertTrue("CS0234" in modernCompile.output || "CS0426" in modernCompile.output) {
+            "Expected the removed typed interface owners to be absent:\n${modernCompile.output}"
+        }
     }
 
     @Test
@@ -17495,8 +14140,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("abstract virtual instance object 'value__KotlinErased__" in portableIl) { portableIl }
         assertTrue("/'__KotlinDefaultImpls'::'value'" in portableIl) { portableIl }
         assertTrue("<GenericInterfaceCanonicalBridge-" in portableIl) { portableIl }
-        assertTrue("<GenericInterfaceDeclaredBridge-" in portableIl) { portableIl }
-        assertTrue("<GenericInterfaceExactBridge-" in portableIl) { portableIl }
+        assertFalse("<GenericInterfaceDeclaredBridge-" in portableIl) { portableIl }
+        assertFalse("<GenericInterfaceExactBridge-" in portableIl) { portableIl }
 
         val promotedDirectory = File(tmpdir, "promoted-generic-interface-default").apply { mkdirs() }
         val promotedSource = promotedDirectory.resolve("promoted.kt").apply {
@@ -17528,48 +14173,39 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val promotedDeclarations = DotNetLibraryAbiCodec.decode(promotedMetadata.readKlibManifest())
         val promotions = promotedDeclarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.InterfaceDefaultPromotion>()
-        assertEquals(34, promotions.size, promotions.joinToString("\n"))
+        assertEquals(17, promotions.size, promotions.joinToString("\n"))
         for (owner in listOf("PromotedLeft", "PromotedRight", "PromotedDiamond")) {
             val ownerPromotions = promotions.filter { declaration ->
                 declaration.ownerPath == listOf("genericdefaults.$owner")
             }
-            assertEquals(6, ownerPromotions.size, ownerPromotions.joinToString("\n"))
+            assertEquals(3, ownerPromotions.size, ownerPromotions.joinToString("\n"))
             assertEquals(
-                setOf(
-                    DotNetInterfaceDefaultPromotionView.CANONICAL,
-                    DotNetInterfaceDefaultPromotionView.DECLARED,
-                    DotNetInterfaceDefaultPromotionView.EXACT,
-                ),
+                setOf(DotNetInterfaceDefaultPromotionView.CANONICAL),
                 ownerPromotions.mapTo(hashSetOf()) { it.physicalView },
             )
         }
         val viewBridges = promotedDeclarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericInterfaceViewBridge>()
-        assertEquals(12, viewBridges.size, viewBridges.joinToString("\n"))
+        assertTrue(viewBridges.all { it.physicalView == DotNetInterfaceDefaultPromotionView.CANONICAL }) {
+            viewBridges.joinToString("\n")
+        }
         val overriddenValueBridges = viewBridges.filter { bridge ->
             bridge.ownerPath == listOf("genericdefaults.OverriddenInt") &&
                     "/PortableGeneric.value" in bridge.inheritedLogicalMemberKey
         }
-        assertEquals(2, overriddenValueBridges.size, overriddenValueBridges.joinToString("\n"))
+        assertEquals(1, overriddenValueBridges.size, overriddenValueBridges.joinToString("\n"))
         assertEquals(
-            setOf(
-                DotNetInterfaceDefaultPromotionView.CANONICAL,
-                DotNetInterfaceDefaultPromotionView.DECLARED,
-            ),
+            setOf(DotNetInterfaceDefaultPromotionView.CANONICAL),
             overriddenValueBridges.mapTo(hashSetOf()) { it.physicalView },
         )
         assertEquals(
-            setOf(
-                DotNetInterfaceDefaultPromotionView.CANONICAL,
-                DotNetInterfaceDefaultPromotionView.DECLARED,
-                DotNetInterfaceDefaultPromotionView.EXACT,
-            ),
+            setOf(DotNetInterfaceDefaultPromotionView.CANONICAL),
             promotions.mapTo(hashSetOf()) { it.physicalView },
         )
         val promotedIl = promotedDirectory.resolve("Promoted.GenericDefaults.il").readText()
         assertTrue("<GenericInterfaceDefaultPromotionCanonical-" in promotedIl) { promotedIl }
-        assertTrue("<GenericInterfaceDefaultPromotionDeclared-" in promotedIl) { promotedIl }
-        assertTrue("<GenericInterfaceDefaultPromotionExact-" in promotedIl) { promotedIl }
+        assertFalse("<GenericInterfaceDefaultPromotionDeclared-" in promotedIl) { promotedIl }
+        assertFalse("<GenericInterfaceDefaultPromotionExact-" in promotedIl) { promotedIl }
         assertTrue("[Portable.GenericDefaults]" in promotedIl) { promotedIl }
         assertTrue("/'__KotlinDefaultImpls'::'value'" in promotedIl) { promotedIl }
         assertTrue("<GenericInterfaceCanonicalBridge-genericdefaults.PortableGeneric-value-" in promotedIl) {
@@ -17761,39 +14397,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             runtimeAssembly,
             target = "exe",
         )
-        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
-        listOf(
-            portableDirectory.resolve("Portable.GenericDefaults.dll"),
-            promotedDirectory.resolve("Promoted.GenericDefaults.dll"),
-            closedImplementationDirectory.resolve("Closed.GenericDefaults.dll"),
-            runtimeAssembly,
-        ).forEach { dependency ->
-            dependency.copyTo(csharpDirectory.resolve(dependency.name), overwrite = true)
+        assertTrue(csharpCompile.exitCode != 0) {
+            "Generic Kotlin interfaces must not appear as implicit typed C# exports"
         }
-        csharpDirectory.resolve("GenericDefaultCSharpConsumer.runtimeconfig.json").writeText(
-            """
-            {
-              "runtimeOptions": {
-                "tfm": "net10.0",
-                "framework": {
-                  "name": "Microsoft.NETCore.App",
-                  "version": "10.0.0"
-                },
-                "rollForward": "LatestMinor"
-              }
-            }
-            """.trimIndent()
-        )
-        runDotNet(
-            checkNotNull(modernCSharp).dotNetHost,
-            csharpAssembly,
-            csharpDirectory,
-            "C# failed to consume the promoted generic-interface diamond",
-        )
+        assertTrue("CS0308" in csharpCompile.output || "CS0234" in csharpCompile.output) {
+            "Expected Roslyn to reject the absent typed export surface:\n${csharpCompile.output}"
+        }
     }
 
     @Test
-    fun testModernCSharpConsumesProfileAwareGenericInterfaceDefault() {
+    fun testGenericKotlinInterfaceDefaultIsNotAnImplicitCSharpExport() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
         requireOrAssumeToolchain(csharpToolchain != null, "Modern Roslyn and the net10 reference pack are not available")
@@ -17878,27 +14491,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             runtimeAssembly,
             target = "exe",
         )
-        assertEquals(0, modernCompile.exitCode, modernCompile.output)
-        modernDirectory.resolve("ModernCSharpConsumer.runtimeconfig.json").writeText(
-            """
-            {
-              "runtimeOptions": {
-                "tfm": "net10.0",
-                "framework": {
-                  "name": "Microsoft.NETCore.App",
-                  "version": "10.0.0"
-                },
-                "rollForward": "LatestMinor"
-              }
-            }
-            """.trimIndent()
-        )
-        runDotNet(
-            modernCSharp.dotNetHost,
-            modernConsumer,
-            modernDirectory,
-            "Modern C# failed to inherit the generic Kotlin DIM",
-        )
+        assertTrue(modernCompile.exitCode != 0) {
+            "A modern target must not turn an internal Kotlin generic interface into a typed C# export"
+        }
+        assertTrue("CS0308" in modernCompile.output || "CS0234" in modernCompile.output) {
+            "Expected Roslyn to reject the absent typed export surface:\n${modernCompile.output}"
+        }
 
         val portableConsumerSource = portableDirectory.resolve("consumer.cs").apply { writeText(consumerText) }
         val portableCompile = runModernCSharpCompiler(
@@ -17912,8 +14510,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(portableCompile.exitCode != 0) {
             "A portable abstract interface slot must require a C# implementation:\n${portableCompile.output}"
         }
-        assertTrue("CS0535" in portableCompile.output) {
-            "Expected Roslyn's missing-interface-member diagnostic for the portable profile:\n${portableCompile.output}"
+        assertTrue("CS0308" in portableCompile.output || "CS0234" in portableCompile.output) {
+            "Expected Roslyn to reject the absent portable typed export surface:\n${portableCompile.output}"
         }
 
         val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
@@ -17951,8 +14549,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(frameworkCompile.exitCode != 0) {
             "A net48 abstract interface slot must require a C# implementation:\n${frameworkCompile.output}"
         }
-        assertTrue("CS0535" in frameworkCompile.output) {
-            "Expected the Framework compiler's missing-interface-member diagnostic:\n${frameworkCompile.output}"
+        assertTrue("CS0308" in frameworkCompile.output || "CS0234" in frameworkCompile.output) {
+            "Expected the Framework compiler to reject the absent typed export surface:\n${frameworkCompile.output}"
         }
     }
 
@@ -19461,7 +16059,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 declaration.staticInitialization?.ownerPath?.last() == "<StaticInitialization>"
             }
         assertEquals("staticfailure.ProducerGenericChildFailure", genericChildDeclaration.ownerPath.last())
-        assertNull(genericChildDeclaration.declaredOwnerPath)
         assertEquals(
             "<StaticInitialization>",
             genericChildDeclaration.staticInitialization?.ownerPath?.last(),
@@ -25377,29 +21974,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val modernMethodImplIl = checkNotNull(modernMethodImplAssembly.parentFile)
             .resolve("Portable.MethodImpl.il")
             .readText()
-        assertTrue(
+        assertFalse(
             "<GenericInterfaceDefaultForwarderTarget-portablemethodimpl.ProfileDefault-" in modernMethodImplIl
         ) {
-            "An erased generic class needs a canonical forwarder because its owner-dependent " +
-                    "typed interface DIM is not in the physical class ancestry:\n$modernMethodImplIl"
+            "A net10 erased interface DIM must be inherited without a redundant class forwarder:\n" +
+                    modernMethodImplIl
         }
         assertTrue(
             "<GenericInterfaceDefaultForwarderTarget-portablemethodimpl.ClosedProfileDefault-" !in
                     modernMethodImplIl
         ) {
-            "A parameter-independent closed interface edge must retain its native typed DIM:\n" +
+            "A closed logical construction must inherit the same erased interface DIM:\n" +
                     modernMethodImplIl
         }
-        assertTrue("<GenericInterfaceDefaultErasedAdapter-" in modernMethodImplIl) {
+        assertFalse("<GenericInterfaceDefaultErasedAdapter-" in modernMethodImplIl) {
             modernMethodImplIl
         }
         assertTrue(
-            "specialname newslot virtual instance int32 'get_code'()" in modernMethodImplIl
+            Regex(
+                "specialname newslot virtual instance int32 " +
+                        "'get_code__KotlinErased__[0-9a-f]{32}'\\(\\)"
+            ).containsMatchIn(modernMethodImplIl)
         ) {
             modernMethodImplIl
         }
         assertTrue(
-            "specialname newslot virtual instance void 'set_code'(int32 'value')" in modernMethodImplIl
+            Regex(
+                "specialname newslot virtual instance void " +
+                        "'set_code__KotlinErased__[0-9a-f]{32}'\\(int32 'value'\\)"
+            ).containsMatchIn(modernMethodImplIl)
         ) {
             modernMethodImplIl
         }
@@ -25547,7 +22150,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
             assertTrue(
                 Regex(
-                    "OK [1-9][0-9]* SLOTS [1-9][0-9]* " +
+                    "OK [1-9][0-9]* SLOTS 0 " +
                             "INTERFACES [1-9][0-9]* FRIENDS [1-9][0-9]*"
                 )
                     .matches(methodImplOutput.trim())
@@ -25578,32 +22181,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "The raw resource audit accepted a missing portable logical declaration"
         }
         assertTrue("MISSING MANIFEST DECLARATION" in corruptedOutput) { corruptedOutput }
-
-        val corruptedMethodImpl = File(
-            tmpdir,
-            "portable-methodimpl-corrupted/Portable.MethodImpl.dll",
-        )
-        corruptCSharpManifestSlotMethodName(
-            methodImplLibraries.getValue("net10.0"),
-            corruptedMethodImpl,
-        )
-        val corruptedMethodImplComparison = ProcessBuilder(
-            checkNotNull(csharpToolchain).dotNetHost.path,
-            "exec",
-            surfaceVerifier.path,
-            runtimeAssemblies.getValue(DotNetTarget.NETSTANDARD_2_0).path,
-            runtimeAssemblies.getValue(DotNetTarget.NET10_0).path,
-            methodImplLibraries.getValue("netstandard2.0").path,
-            corruptedMethodImpl.path,
-        ).directory(surfaceVerifierDirectory).redirectErrorStream(true).start()
-        val corruptedMethodImplOutput =
-            corruptedMethodImplComparison.inputStream.bufferedReader().use { it.readText() }
-        assertTrue(corruptedMethodImplComparison.waitFor() != 0) {
-            "The MethodImpl audit accepted a name-only manifest slot match"
-        }
-        assertTrue("UNRESOLVED MANIFEST SLOT" in corruptedMethodImplOutput) {
-            corruptedMethodImplOutput
-        }
 
         val unresolvedPhysicalDirectory =
             File(tmpdir, "portable-methodimpl-unresolved-physical").apply { mkdirs() }
@@ -26439,7 +23016,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testLibraryPublicationFailsWhenADeclarationIsEvicted() {
+    fun testLibraryPublicationAdmitsOnlyRepresentableDeclarations() {
         val validOverrideSource = File(tmpdir, "valid-inherited-generic-interface-override.kt").apply {
             writeText(
                 """
@@ -26528,6 +23105,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             *expectedDiagnostics,
         )
 
+        var successfulPublicationCount = 0
+        fun assertPublicationSucceeds(
+            moduleName: String,
+            sourceText: String,
+        ) {
+            val fixtureIndex = successfulPublicationCount++
+            val source = File(tmpdir, "publication-ok-$fixtureIndex.kt").apply {
+                writeText(sourceText.trimIndent())
+            }
+            val outputDirectory = File(tmpdir, "publication-ok-$fixtureIndex")
+            compileInProcess(
+                K2DotNetCompiler(),
+                source.path,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
+                K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
+            )
+            assertFalse(outputDirectory.resolve("$moduleName.klib").exists())
+            assertTrue(outputDirectory.resolve("$moduleName.dll").isFile)
+        }
+
         assertPublicationFails(
             "Unsupported.Library",
             """
@@ -26578,7 +23176,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             listOf("net48", "netstandard2.0", "net10.0"),
             "both map to the same IL method 'copy${'$'}default(int32, int32)'",
         )
-        assertPublicationFails(
+        assertPublicationSucceeds(
             "Generic.Interface.Clashes",
             """
             package sample
@@ -26631,15 +23229,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
             public interface ReservedOwner__KotlinExact<T>
             """,
-            "clash on its declared CLR capability",
-            "clash on its exact CLR capability",
-            "and inherited member 'get_value'",
-            "inherited members '<get-item>' and 'get_item'",
-            "but are distinct Kotlin members",
-            "requires an owner-relative generic adapter beyond direct method-parameter uses",
-            "maps to a duplicate canonical, declared, or exact IL type",
         )
-        assertPublicationFails(
+        assertPublicationSucceeds(
             "Generic.Interface.ErasedCallableOverloads",
             """
             package sample
@@ -26649,9 +23240,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun apply(callback: (String) -> T): Int
             }
             """,
-            "members 'apply' and 'apply'",
-            "clash on its declared CLR capability",
-            "both map to 'apply(class [Kotlin.Runtime]'Kotlin.Function1')'",
         )
         assertPublicationFails(
             "Generic.Interface.DefaultHelperTypeClash",
@@ -26666,7 +23254,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             listOf("net48", "netstandard2.0", "net10.0"),
             "maps to a duplicate canonical, declared, or exact IL type",
         )
-        assertPublicationFails(
+        assertPublicationSucceeds(
             "Generic.Interface.ReturnOnlyPhysicalClash",
             """
             package sample
@@ -26676,11 +23264,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun choose(value: String?): Any?
             }
             """,
-            "members 'choose' and 'choose'",
-            "clash on its declared CLR capability",
-            "both map to 'choose(string)'",
         )
-        assertPublicationFails(
+        assertPublicationSucceeds(
             "Generic.Interface.InheritedCallableOverloads",
             """
             package sample
@@ -26696,9 +23281,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public interface InheritedCallableOverloads<T> :
                 CallableLeft<T>, CallableRight<T>
             """,
-            "inherited members 'apply' and 'apply'",
-            "clash on its declared CLR capability",
-            "no selected derived intersection slot covers both Kotlin members",
         )
         val inheritedProducerDirectory = File(tmpdir, "inherited-callable-overload-producer")
         val inheritedProducerSource = File(tmpdir, "inherited-callable-overload-producer.kt").apply {
@@ -26751,14 +23333,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 K2DotNetCompilerArguments::destination.cliArgument, inheritedConsumerDirectory.path,
             )
         )
-        assertEquals(ExitCode.COMPILATION_ERROR, inheritedExitCode, inheritedOutput)
-        assertTrue("inherited members 'apply' and 'apply'" in inheritedOutput) { inheritedOutput }
-        assertTrue("clash on its declared CLR capability" in inheritedOutput) { inheritedOutput }
-        assertTrue("no selected derived intersection slot covers both Kotlin members" in inheritedOutput) {
-            inheritedOutput
-        }
+        assertEquals(ExitCode.OK, inheritedExitCode, inheritedOutput)
         assertFalse(inheritedConsumerDirectory.resolve("Inherited.Callable.Consumer.klib").exists())
-        assertFalse(inheritedConsumerDirectory.resolve("Inherited.Callable.Consumer.dll").exists())
+        assertTrue(inheritedConsumerDirectory.resolve("Inherited.Callable.Consumer.dll").isFile)
     }
 
     @Test
@@ -28737,8 +25314,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val declarations = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest())
         val boxClass = declarations.values.filterIsInstance<DotNetPhysicalDeclaration.Class>()
             .single { declaration -> declaration.ownerPath.last() == "genericclassabi.Box" }
-        assertEquals(null, boxClass.declaredOwnerPath)
-        assertEquals(null, boxClass.exactOwnerPath)
         val boxFunctions = declarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.Function>()
             .filter { declaration -> declaration.ownerPath.last() == "genericclassabi.Box" }
@@ -29715,7 +26290,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("static string 'requireStringBoundNullable'<'T'>(object 'value')" in libraryIl) { libraryIl }
         assertTrue("unbox.any !!0" in libraryIl) { libraryIl }
         assertTrue("castclass string" in libraryIl) { libraryIl }
-        assertTrue(".class interface public abstract auto ansi 'nullableabi.NullableSource`1'" in libraryIl) { libraryIl }
+        assertTrue(".class interface public abstract auto ansi 'nullableabi.NullableSource'" in libraryIl) { libraryIl }
+        assertFalse("nullableabi.NullableSource`1" in libraryIl) { libraryIl }
         assertTrue("instance object 'nullableValue'()" in libraryIl) { libraryIl }
         val storedNullableSourceIl = libraryIl
             .substringAfter(".class public auto ansi sealed beforefieldinit 'nullableabi.StoredNullableSource'")
@@ -30610,11 +27186,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         val metadataLibrary = libraryDirectory.resolve("Exception.Overloads.dll")
         val libraryIl = libraryDirectory.resolve("Exception.Overloads.il").readText()
-        assertTrue(
+        assertEquals(
+            22,
             Regex("\\.method [^\\n]*'classify__KotlinException__[0-9a-f]{32}'")
                 .findAll(libraryIl)
-                .count() >= 24
-        ) { libraryIl }
+                .count(),
+            libraryIl,
+        )
+        assertEquals(
+            2,
+            Regex("\\.method [^\\n]*'classify__KotlinErased__[0-9a-f]{32}'")
+                .findAll(libraryIl)
+                .count(),
+            libraryIl,
+        )
         assertEquals(
             2,
             Regex("\\.method [^\\n]*'nested__KotlinException__[0-9a-f]{32}'").findAll(libraryIl).count(),
@@ -32242,18 +28827,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertFalse("KotlinCompilerAbiAttribute" in methodIl) { methodIl }
             assertFalse("EditorBrowsableAttribute" in methodIl) { methodIl }
         }
-        assertTrue(
-            "implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', " +
-                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object>" in il
-        )
+        assertTrue("implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'" in il)
+        assertFalse("Kotlin.Collections.Iterator`1" in il)
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-" in il)
-        assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-" in il)
-        assertTrue(
-            "implements [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
-                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable`1'<object>" in il
-        )
+        assertFalse("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-" in il)
+        assertTrue("implements [Kotlin.Runtime]'Kotlin.Collections.Iterable'" in il)
+        assertFalse("Kotlin.Collections.Iterable`1" in il)
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.Iterable-iterator-" in il)
-        assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterable-iterator-" in il)
+        assertFalse("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterable-iterator-" in il)
         val arrayAsListStart = il.indexOf(
             ".class private auto ansi sealed beforefieldinit " +
                     "'Kotlin.Collections.ArrayAsList'"
@@ -32644,24 +29225,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             ".class private auto ansi sealed 'Kotlin.Collections.EmptyIterator'\n" +
                     "       extends ${coreLibraryReference}System.Object\n" +
-                    "       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', " +
-                    "class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<class [Kotlin.Runtime]'Kotlin.Nothing'>" in il
+                    "       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator'" in il
         )
         assertTrue(
             ".class private auto ansi sealed 'Kotlin.Collections.EmptyList'\n" +
                     "       extends ${coreLibraryReference}System.Object\n" +
                     "       implements [Kotlin.Runtime]'Kotlin.Collections.List', 'Kotlin.Io.Serializable', " +
-                    "'Kotlin.Collections.RandomAccess', class [Kotlin.Runtime]" +
-                    "'Kotlin.Collections.List__KotlinExact`1'<class [Kotlin.Runtime]'Kotlin.Nothing'>" in il
+                    "'Kotlin.Collections.RandomAccess'" in il
         )
+        assertFalse("Kotlin.Collections.ListIterator`1" in il)
+        assertFalse("Kotlin.Collections.List__KotlinExact" in il)
         assertTrue(".class interface public abstract auto ansi 'Kotlin.Collections.RandomAccess'" in il)
         assertTrue(".class interface private abstract auto ansi 'Kotlin.Io.Serializable'" in il)
         assertTrue("class [Kotlin.Runtime]'Kotlin.Nothing'" in il)
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-next-" in il)
-        assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-next-" in il)
+        assertFalse("<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-next-" in il)
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.List-get-" in il)
-        assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.List-get-" in il)
-        assertTrue("<GenericInterfaceExactBridge-kotlin.collections.List-contains-" in il)
+        assertFalse("<GenericInterfaceDeclaredBridge-kotlin.collections.List-get-" in il)
+        assertFalse("<GenericInterfaceExactBridge-kotlin.collections.List-contains-" in il)
         assertTrue(
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
                     "'emptyList'<'T'>()" in il
@@ -38105,46 +34686,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val corruptedPayloadText = encodedPayload.replaceFirst(
             "I\t$encodedLogicalKey\t",
             "I\t$replacementField\t",
-        )
-        val corruptedPayload = corruptedPayloadText.toByteArray(Charsets.UTF_8)
-        assertEquals(payload.size, corruptedPayload.size)
-        corruptedPayload.copyInto(image, payloadOffset)
-        MessageDigest.getInstance("SHA-256")
-            .digest(corruptedPayload)
-            .copyInto(image, envelopeOffset + 16)
-        output.parentFile?.mkdirs()
-        output.writeBytes(image)
-    }
-
-    private fun corruptCSharpManifestSlotMethodName(
-        assembly: File,
-        output: File,
-    ) {
-        val image = assembly.readBytes()
-        val envelopeOffset = findCSharpImplementationManifestEnvelope(image)
-        val payloadSize = readLittleEndianInt(image, envelopeOffset + 12)
-        val payloadOffset = envelopeOffset + 48
-        require(payloadSize >= 0 && payloadOffset + payloadSize <= image.size)
-        val payload = image.copyOfRange(payloadOffset, payloadOffset + payloadSize)
-        val encodedPayload = payload.toString(Charsets.UTF_8)
-        val slotRecord = encodedPayload.lineSequence()
-            .first { record -> record.startsWith("S\t") }
-        val fields = slotRecord.split('\t').toMutableList()
-        assertEquals(9, fields.size)
-        val encodedMethodName = fields[4]
-        val methodName = Base64.getUrlDecoder()
-            .decode(encodedMethodName)
-            .toString(Charsets.UTF_8)
-        val replacementLastCharacter = if (methodName.last() == 'X') 'Y' else 'X'
-        val replacementMethodName = methodName.dropLast(1) + replacementLastCharacter
-        val replacementField = Base64.getUrlEncoder()
-            .withoutPadding()
-            .encodeToString(replacementMethodName.toByteArray(Charsets.UTF_8))
-        assertEquals(encodedMethodName.length, replacementField.length)
-        fields[4] = replacementField
-        val corruptedPayloadText = encodedPayload.replaceFirst(
-            slotRecord,
-            fields.joinToString("\t"),
         )
         val corruptedPayload = corruptedPayloadText.toByteArray(Charsets.UTF_8)
         assertEquals(payload.size, corruptedPayload.size)

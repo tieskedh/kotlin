@@ -1229,10 +1229,6 @@ IL_whenNext_1:
     }
   }
 }
-.class interface public abstract auto ansi 'GenericMetadataOwner`1'<'T'>
-       implements 'GenericMetadataOwner'
-{
-}
 .class public abstract sealed auto ansi 'nestedObjectDeclarationsKt'
        extends [mscorlib]System.Object
 {

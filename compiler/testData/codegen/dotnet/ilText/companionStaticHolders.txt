@@ -141,10 +141,6 @@
     }
   }
 }
-.class interface public abstract auto ansi 'GenericHolderInterface`1'<'T'>
-       implements 'GenericHolderInterface'
-{
-}
 .class public abstract sealed auto ansi beforefieldinit 'companionStaticHoldersKt'
        extends [mscorlib]System.Object
 {

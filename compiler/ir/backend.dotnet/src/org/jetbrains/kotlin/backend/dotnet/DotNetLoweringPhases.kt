@@ -171,15 +171,15 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInterfaceDefaultArgumentsLowering,
     // Apply the erased-identity/typed-member split uniformly to module, library, and runtime-owned
     // generic interfaces, including Iterator/Iterable. Every implementation receives its
-    // same-object canonical and typed bridges from this one lowering. Invariant declarations are
-    // included because Kotlin use-site projections and stars also change the logical view without
-    // changing object identity.
+    // erased MethodImpl bridge from this one lowering. An independently truthful mapped host
+    // capability, such as IComparable<T>, may receive an additional bridge without changing
+    // Kotlin object identity.
     // Imported CLR interfaces never enter this lowering and retain their native variance rules.
     ::DotNetGenericInterfaceBridgeLowering,
     // CLR method-slot identity includes the return type on every supported profile. Preserve
     // Kotlin covariant overrides with one exact virtual implementation plus private final
-    // MethodImpl adapters for each wider ordinary class/interface slot. Split generic-interface
-    // views remain owned by the preceding specialized lowering.
+    // MethodImpl adapters for each wider ordinary class/interface slot. Erased generic-interface
+    // slots and explicit mapped host capabilities remain owned by the preceding lowering.
     ::DotNetCovariantReturnBridgeLowering,
     // Follow the common/JVM inner-class pipeline before initializer merging: first make a generic
     // outer's implicit type arguments explicit on the independent CLR nested type, then add the

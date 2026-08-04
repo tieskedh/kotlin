@@ -182,10 +182,10 @@ role from an attribute name.
 
 ### 5. Close the remaining draft ABI decisions before wider breadth
 
-The following drafts must be accepted, revised, or explicitly excluded before third-party binary
-publication:
+The accepted runtime decisions must be frozen and the remaining drafts accepted, revised, or
+explicitly excluded before third-party binary publication:
 
-- [generic and variant interface ABI](../decisions/draft-adr-generic-interface-abi.md);
+- [erased generic-interface identity](../decisions/generic-interface-erased-identity.md);
 - [callable and callable-reference ABI](../decisions/draft-adr-callable-and-reference-abi.md);
 - [explicit C# export surface](../decisions/draft-adr-explicit-csharp-export-surface.md); and
 - [structured CLR importer boundary](../decisions/draft-adr-clr-importer-boundary.md).

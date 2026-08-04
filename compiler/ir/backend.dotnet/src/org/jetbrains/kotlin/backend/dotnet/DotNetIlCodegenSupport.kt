@@ -538,7 +538,7 @@ internal class DotNetIlTypeMapper private constructor(
             DotNetGenericInterfaceMemberView.EXACT -> exactGenericInterfaceSignatureView()
         }
 
-    fun isSplitGenericInterface(irClass: IrClass): Boolean =
+    fun isErasedGenericInterface(irClass: IrClass): Boolean =
         irClass.isInterface && (genericInterfaces.containsKey(irClass) ||
                 DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass) ||
                 externalDeclarations.hasGenericInterface(irClass))
@@ -614,36 +614,35 @@ internal class DotNetIlTypeMapper private constructor(
         return info
     }
 
-    fun isSplitGenericInterfaceType(type: IrType): Boolean {
+    fun isErasedGenericInterfaceType(type: IrType): Boolean {
         val simpleType = type as? IrSimpleType ?: return false
         val irClass = (simpleType.classifier as? IrClassSymbol)?.owner ?: return false
-        return isSplitGenericInterface(irClass)
+        return isErasedGenericInterface(irClass)
     }
 
     fun genericInterfaceMemberView(
         member: IrSimpleFunction,
         interfaceClass: IrClass,
     ): DotNetGenericInterfaceMemberView =
-        member.dotNetGenericInterfaceMemberView(interfaceClass, ::isSplitGenericInterface)
+        member.dotNetGenericInterfaceMemberView(interfaceClass, ::isErasedGenericInterface)
 
     fun genericInterfaceMemberViews(
         member: IrSimpleFunction,
         interfaceClass: IrClass,
     ): List<DotNetGenericInterfaceMemberView> =
-        member.dotNetGenericInterfaceMemberViews(interfaceClass, ::isSplitGenericInterface)
+        member.dotNetGenericInterfaceMemberViews(interfaceClass, ::isErasedGenericInterface)
 
     fun isClrLegalDeclaredGenericInterfaceSupertype(type: IrType, owner: IrClass): Boolean =
-        type.isDotNetClrLegalDeclaredSupertype(owner, ::isSplitGenericInterface)
+        type.isDotNetClrLegalDeclaredSupertype(owner, ::isErasedGenericInterface)
 
     fun genericInterfaceInfoOrNull(irClass: IrClass): DotNetGenericInterfaceInfo? =
         if (!irClass.isInterface) null else (genericInterfaces[irClass]
             ?: comparableInterfaceInfo.takeIf { irClass.isDotNetComparableClass() }
             ?: DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)
             ?: run {
-                val declared = externalDeclarations.declaredClassInfoOrNull(irClass) ?: return null
                 val canonical = externalDeclarations.classInfoOrNull(irClass, canonicalGenericInterfaceView())
                     ?: return null
-                DotNetGenericInterfaceInfo(canonical, declared, externalDeclarations.exactClassInfoOrNull(irClass))
+                DotNetGenericInterfaceInfo(canonical)
             }).also(::recordAssemblyReferences)
 
     fun externalObjectInstanceOwnerInfoOrNull(field: IrField): DotNetIlClassInfo? {
@@ -677,7 +676,8 @@ internal class DotNetIlTypeMapper private constructor(
         val simpleType = type as? IrSimpleType ?: return null
         val irClass = (simpleType.classifier as? IrClassSymbol)?.owner ?: return null
         val info = genericInterfaceInfoOrNull(irClass) ?: return null
-        if (simpleType.arguments.size != info.declaredClassInfo.typeParameterCount) return null
+        val declaredClassInfo = info.declaredClassInfo ?: return null
+        if (simpleType.arguments.size != declaredClassInfo.typeParameterCount) return null
         val classInfo = info.classInfo(view) ?: return null
         val carrierMapper = when (view) {
             DotNetGenericInterfaceView.DECLARED -> declaredGenericInterfaceSignatureView()
@@ -807,7 +807,7 @@ internal class DotNetIlTypeMapper private constructor(
                 directParameterOwner?.let(::isErasedGenericClass) == true
             val topClass = (simpleType?.classifier as? IrClassSymbol)?.owner
             if (!isDirectErasedClassParameter &&
-                (topClass == null || (!isSplitGenericInterface(topClass) && !isErasedGenericClass(topClass)))
+                (topClass == null || (!isErasedGenericInterface(topClass) && !isErasedGenericClass(topClass)))
             ) {
                 // A reified carrier such as Holder<T> or T? has no single closed CLR
                 // instantiation once T belongs to a canonical non-generic interface. Object is
@@ -941,7 +941,7 @@ internal class DotNetIlTypeMapper private constructor(
      * evicted class therefore fails the whole instantiation (the normal fixpoint-eviction rule).
      * Use-site variance projections (`Box<out T>`) and star projections remain unsupported for
      * those foreign reified shapes because ECMA-335 has no use-site variance. Kotlin-owned
-     * generic interfaces take the earlier split-interface arm instead: their canonical storage identity
+     * generic interfaces take the earlier erased-interface arm instead: their runtime storage identity
      * is non-generic, so projections and stars do not alter its CLR type and remain Kotlin
      * metadata rather than CLR generic conversions. Declaration-site variance is used only by
      * the optional declared interface capability.
@@ -952,7 +952,7 @@ internal class DotNetIlTypeMapper private constructor(
         val genericClassInfo = genericClassInfoOrNull(irClass)
         if (genericClassInfo != null) return DotNetIlValueType.UserClass(genericClassInfo.classInfo)
         if (
-            isSplitGenericInterface(irClass) &&
+            isErasedGenericInterface(irClass) &&
             (genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL ||
                     genericInterfaceMapping.canonicalizeNestedInterfaces)
         ) {
@@ -1014,7 +1014,7 @@ internal class DotNetIlTypeMapper private constructor(
             return DotNetIlValueType.Object
         }
         val parentGenericInterface = (typeParameter.parent as? IrClass)
-            ?.takeIf(::isSplitGenericInterface)
+            ?.takeIf(::isErasedGenericInterface)
         val parentGenericClass = (typeParameter.parent as? IrClass)
             ?.takeIf(::isErasedGenericClass)
         if (
@@ -1059,7 +1059,7 @@ internal class DotNetIlTypeMapper private constructor(
             if (isErasedGenericClass(parameterOwner)) return true
             if (
                 genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL &&
-                isSplitGenericInterface(parameterOwner)
+                isErasedGenericInterface(parameterOwner)
             ) {
                 return true
             }
@@ -1079,7 +1079,7 @@ internal class DotNetIlTypeMapper private constructor(
 
     private fun recordAssemblyReferences(info: DotNetGenericInterfaceInfo) {
         recordAssemblyReference(info.canonicalClassInfo)
-        recordAssemblyReference(info.declaredClassInfo)
+        info.declaredClassInfo?.let(::recordAssemblyReference)
         info.exactClassInfo?.let(::recordAssemblyReference)
     }
 
@@ -1189,7 +1189,7 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
                 forMetadata && boundParameter != null &&
                 (origin == DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER ||
                         (boundParameter.parent as? IrClass)?.let { owner ->
-                            typeMapper.isSplitGenericInterface(owner) || typeMapper.isErasedGenericClass(owner)
+                            typeMapper.isErasedGenericInterface(owner) || typeMapper.isErasedGenericClass(owner)
                         } == true)
             ) {
                 return@mapIndexedNotNull null
@@ -1212,7 +1212,7 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
                 }
                 is IrTypeParameterSymbol -> when (val mappedBound = typeMapper.toDotNetIlValueType(bound)) {
                     is DotNetIlValueType.TypeParameter -> Triple(2, index, mappedBound)
-                    // The erased canonical view of a split interface has no owner-generic slot
+                    // An erased Kotlin interface has no owner-generic CLR slot
                     // with which to express `R : T`. Its `T` maps to object, so this physical view
                     // widens the constraint. Metadata on the typed views and helper is handled by
                     // the owner-dependent rule above.
