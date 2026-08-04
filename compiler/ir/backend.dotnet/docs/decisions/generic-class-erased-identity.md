@@ -8,8 +8,9 @@
 
 ## Decision
 
-A Kotlin-owned ordinary generic class has one physical CLR class and one
-runtime/virtual ABI. The CLR class is non-generic:
+A Kotlin-owned ordinary generic class has one authoritative physical CLR type
+identity, object representation, storage model, and runtime/virtual ABI. The
+CLR class is non-generic:
 
 ```text
 Kotlin:  class Box<T>(var value: T)
@@ -26,6 +27,31 @@ native reified CLR types. A future typed C# surface is a separate explicit,
 fail-closed export product and must not redefine Kotlin runtime identity.
 Internal specialization is permitted only when it is invisible behind this
 one ABI.
+
+Erasure is therefore not merely the default public ABI. It is the single
+semantic runtime representation. No optimization, annotation, compiler
+switch, manifest, or export feature may add a second physical implementation
+whose CLR construction determines a Kotlin-owned object's classifier,
+authoritative generic-dependent state, or class-dependent virtual dispatch.
+In particular, the target must not restore `BoxImpl<T>`-style owners, typed
+authoritative storage for escaped objects, or a declaration whose runtime
+meaning alternates between erased and CLR-generic.
+
+CLR generics remain first-class capabilities where they do not redefine that
+identity. This includes imported CLR types, method-owned generic parameters,
+truthfully exact constructed interface capabilities governed by the separate
+interface ABI, explicit .NET export artifacts, and private implementation
+specialization. A class-owned parameter remains erased in storage and member
+positions even when a method on that class has its own reified CLR method
+parameters.
+
+An internal optimization qualifies as an optimization only when disabling it
+does not change public or protected ABI, supported Kotlin/.NET reflection,
+runtime casts, object identity, virtual dispatch, or cross-module observable
+semantics. Private IL, compiler-generated helpers, internal metadata, and
+physical layout may differ. If disabling the mechanism changes one of the
+supported observations, the mechanism is a new ABI and requires a separate
+architecture decision.
 
 This is the Kotlin/.NET target authors' pre-ABI decision. It follows the
 architecture of mature Kotlin targets, but it is not a Kotlin core-team
@@ -153,19 +179,46 @@ typed Kotlin export contract.
 
 Ordinary Kotlin compilation must not silently publish `Box<T>`. A future typed
 C# export must be opt-in and state, per declaration, whether it emits an
-adapter, facade, wrapper, or producer-owned derived class. It must diagnose
-unrepresentable construction, identity, mutation, inheritance, override,
-projection, collision, and nullability shapes rather than falling back to a
-misleading typed ABI.
+adapter, facade, wrapper, or another explicitly separate surface. It must not
+derive a typed implementation from the erased Kotlin class and thereby make
+only some instances physically typed. It must diagnose unrepresentable
+construction, identity, mutation, inheritance, override, projection,
+collision, and nullability shapes rather than falling back to a misleading
+typed ABI.
+
+The public C# rule is deliberately simpler than the compiler architecture:
+
+> Kotlin classes remain Kotlin classes. C# consumes only explicitly exported,
+> safe .NET APIs.
+
+Native CLR generics such as `List<int>` and `Task<T>` remain ordinary .NET
+types. A Kotlin implementation type such as `Box<T>` does not itself become a
+CLR `Box<T>`; an explicit export may instead publish a supported surface such
+as `IReadOnlyBox<T>` or `DotNetBox<T>`. C# documentation and IntelliSense must
+describe the exported .NET API rather than expose canonical-dispatch,
+classifier, or split-interface vocabulary. Unsupported declaration shapes
+fail closed instead of appearing as partially typed APIs.
+
+An export adapter may have its own CLR identity, but it is never an alternative
+physical implementation of the Kotlin declaration and never owns the
+authoritative Kotlin state. It does not affect Kotlin `is`, `as`, reflection,
+generic semantics, or dispatch. It must not imply same-object reference
+identity with the underlying Kotlin object unless that property has been
+explicitly proven and specified. The implementation TypeDef may remain
+technically visible to raw CLR tooling, but it is not a supported typed C#
+contract.
 
 The same rule applies when the class implements a Kotlin-owned generic
-interface. `class C<T> : I<T>` physically implements only the canonical erased
+interface. Under the currently implemented, separately governed interface
+candidate, `class C<T> : I<T>` physically implements only the canonical erased
 `I`, because the class has no CLR `T` with which to name a truthful `I<T>`.
 Mapping it to `I<object>` would add a different interface, not preserve the
-logical edge. A closed edge such as `C<T> : I<String>` may retain an already
-selected typed interface capability because it is independent of the erased
-class parameter. Method bounds such as `<R : T>` remain authoritative in KLIB
-and omit the unrepresentable CLR relational constraint on the erased owner.
+logical edge. A closed edge such as `C<T> : I<String>` may retain a truthful
+exact constructed interface capability because it is independent of the
+erased class parameter. This does not decide whether the split-interface
+candidate itself remains the final interface ABI. Method bounds such as
+`<R : T>` remain authoritative in KLIB and omit the unrepresentable CLR
+relational constraint on the erased owner.
 
 On a profile with default interface methods, a default body physically hosted
 by the typed `I<T>` sibling cannot satisfy canonical `I` for that erased
@@ -226,8 +279,8 @@ This decision does not authorize:
 - public reified-inline support.
 
 These may be considered after the semantic ABI and representative target
-programs provide measurements. An optimization may not change observable
-classifier identity or the delayed-use contract.
+programs provide measurements. An optimization may not change the supported
+public or cross-module observations listed in the decision above.
 
 ## Verification gate
 

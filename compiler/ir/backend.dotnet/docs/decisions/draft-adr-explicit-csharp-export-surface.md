@@ -23,6 +23,35 @@ chosen. Their text is not public Kotlin metadata or stable ABI.
 
 ## Decision
 
+### One C# authoring rule
+
+The supported user-facing contract is:
+
+> Kotlin classes remain Kotlin classes. C# consumes only explicitly exported,
+> safe .NET APIs.
+
+C# authors need distinguish only native CLR types, explicitly exported .NET
+APIs, and Kotlin implementation types. Native CLR generics retain their normal
+CLR behavior. An exported API behaves as ordinary typed .NET code within its
+declared supported contract, including IntelliSense, nullability, constraints,
+and compile-time diagnostics. A Kotlin-owned generic implementation type does
+not automatically become a CLR generic class and its low-level physical shape
+is not a supported typed C# API.
+
+Public C# documentation uses *Kotlin implementation type*, *exported .NET
+API*, *adapter* or *facade* where one exists, and *native CLR type*. Terms such
+as canonical ABI, erased classifier, and split-interface model belong to
+compiler documentation, not the authoring model. Unsupported shapes fail
+closed instead of appearing as partly typed exports, and one public type name
+must not sometimes denote an erased implementation and sometimes a CLR generic
+export.
+
+An adapter may have its own CLR identity but neither replaces the underlying
+Kotlin object nor owns its authoritative state. Reference identity between an
+adapter and its implementation object is not implied. An export must state any
+identity guarantee explicitly rather than appearing transparently identical
+to the implementation type.
+
 ### Export is explicit and additive
 
 One export request selects exactly one supported public declaration and an
