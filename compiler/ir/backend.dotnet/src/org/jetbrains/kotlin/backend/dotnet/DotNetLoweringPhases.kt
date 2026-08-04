@@ -22,6 +22,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCovariantReturnBridgeLowe
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultArgumentStubGenerator
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterCleaner
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterInjector
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetEnumClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
@@ -165,6 +166,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetDefaultArgumentStubGenerator,
     ::DotNetDefaultParameterInjector,
     ::DotNetDefaultParameterCleaner,
+    // JVM constructor/entry lowering with a CLR reference-class endpoint. KLIB retains enum
+    // identity; physical entry fields and ordinary synthetic bodies must exist before interface
+    // bridges and static-initializer ownership inspect the final class graph.
+    ::DotNetEnumClassLowering,
     // JVM DefaultImpls ownership without CLR DIM: keep interface slots abstract, move their
     // masked dispatchers into a compiler-reserved nested helper, and redirect calls to its static
     // methods with the interface receiver explicit. This preserves the Framework 4.8 floor.

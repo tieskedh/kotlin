@@ -47,6 +47,7 @@ import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
+import org.jetbrains.kotlin.name.FqName
 
 /**
  * Emits statement-bearing constructs in value position. Implemented by [DotNetIlMethodCodegen]:
@@ -156,6 +157,27 @@ internal class DotNetIlExpressionCodegen(
         if (valuePosition) {
             methodContext.notePhantomValueAfterThrow()
         }
+    }
+
+    /** Emits the Common synthetic `illegalArgumentException(message)` throw with exact Kotlin identity. */
+    fun emitIllegalArgumentExceptionThrow(message: IrExpression, valuePosition: Boolean) {
+        val entry = checkNotNull(
+            DotNetMappedExceptions.mappedEntry(FqName("kotlin.IllegalArgumentException"))
+        ) { "IllegalArgumentException has no .NET exception mapping" }
+        emitExpression(message, DotNetIlValueType.String)
+        methodContext.emit(
+            "newobj instance void ${entry.constructorTypeRef(coreLibraryReference)}::.ctor(string)",
+            pops = 1,
+            pushes = 1,
+        )
+        methodContext.emit("dup", pops = 1, pushes = 2)
+        methodContext.emit("ldc.i4 ${entry.classifierTypeId.abiValue}", pushes = 1)
+        methodContext.emit(
+            DotNetThrowableRuntime.setExactTypeIdCallInstruction(coreLibraryReference),
+            pops = 2,
+        )
+        methodContext.emitThrow()
+        if (valuePosition) methodContext.notePhantomValueAfterThrow()
     }
 
     /** Loads the canonical object used when Kotlin Unit occupies a real CLR value slot. */
@@ -2547,6 +2569,7 @@ internal class DotNetIlExpressionCodegen(
     }
 
     private fun emitWhenExpression(expression: IrWhen, expectedType: DotNetIlValueType) {
+        val entryStackDepth = methodContext.stackDepth
         val endLabel = methodContext.nextLabel("whenEnd")
         var hasElse = false
 
@@ -2570,7 +2593,15 @@ internal class DotNetIlExpressionCodegen(
             dotNetUnsupported("when expression without an else branch")
         }
 
-        methodContext.emitLabel(endLabel)
+        if (methodContext.isLabelReferenced(endLabel) || !methodContext.isTerminated) {
+            methodContext.emitLabel(endLabel)
+        } else {
+            // Every reachable arm transferred control (most commonly the sole else arm threw).
+            // An unreferenced dead join would incorrectly turn the method back into fall-through
+            // and make its consumer pop a return value from an empty stack. Preserve termination
+            // and only retain the phantom value needed by an enclosing dead consumer.
+            methodContext.notePhantomValueAtTerminatedExpression(entryStackDepth)
+        }
     }
 
     private fun emitNullStringAsStringLiteral() {

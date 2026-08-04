@@ -38,6 +38,8 @@ tasks.named<ProcessResources>("processResources") {
     }
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/internal/Annotations.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/internal/AnnotationsBuiltin.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/internal/serializationUtil.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt"),
     )) {
         into("kotlin-dotnet-stdlib/src/kotlin/internal")
@@ -56,6 +58,9 @@ tasks.named<ProcessResources>("processResources") {
         into("kotlin-dotnet-stdlib/src/kotlin/collections")
     }
     from(rootProject.file("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt")) {
+        into("kotlin-dotnet-stdlib/src/kotlin/annotations")
+    }
+    from(rootProject.file("libraries/stdlib/src/kotlin/annotations/WasExperimental.kt")) {
         into("kotlin-dotnet-stdlib/src/kotlin/annotations")
     }
     from(files(

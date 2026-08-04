@@ -568,6 +568,15 @@ public fun <T> List<T>.getOrNull(index: Int): T? {
 }
 
 /**
+ * Returns an element at the given [index] or `null` if the [index] is out of bounds of this array.
+ *
+ * @sample samples.collections.Collections.Elements.getOrNull
+ */
+public fun <T> Array<out T>.getOrNull(index: Int): T? {
+    return if (index in indices) get(index) else null
+}
+
+/**
  * Returns first index of [element], or -1 if the collection does not contain element.
  */
 public fun <@kotlin.internal.OnlyInputTypes T> Iterable<T>.indexOf(element: T): Int {
@@ -1271,3 +1280,13 @@ public inline fun <T> Iterable<T>.sumOf(selector: (T) -> Int): Int {
     }
     return sum
 }
+
+/**
+ * Private resolution marker for the exact Common `Array.getOrNull` body above.
+ *
+ * The shared range-contains lowering consumes every call before CIL generation. This is
+ * intentionally not a public `Array.indices` product: publishing that property requires
+ * the complete `IntRange` dependency closure, which is outside this bootstrap slice.
+ */
+private val <T> Array<out T>.indices: IntRange
+    get() = throw AssertionError("Array.indices bootstrap marker survived lowering")
