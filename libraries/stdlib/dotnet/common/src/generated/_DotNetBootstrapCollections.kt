@@ -22,6 +22,8 @@ public expect fun <T> Array<out T>.asList(): List<T>
 public val <T> List<T>.lastIndex: Int
     get() = this.size - 1
 
+public expect interface RandomAccess
+
 @PublishedApi
 @SinceKotlin("1.3")
 @IgnorableReturnValue
@@ -641,6 +643,47 @@ public inline fun <T> List<T>.indexOfLast(predicate: (T) -> Boolean): Int {
         }
     }
     return -1
+}
+
+/**
+ * Appends the string from all the elements separated using [separator] and using the given [prefix] and [postfix] if supplied.
+ *
+ * If the collection has no elements, the function appends only [prefix] followed by [postfix] to [buffer] (both are empty by default).
+ *
+ * If the collection is huge, you can specify a non-negative value of [limit], in which case only the first [limit]
+ * elements will be appended, followed by the [truncated] string (which defaults to "...").
+ *
+ * @return the [buffer] argument with appended elements.
+ *
+ * @sample samples.collections.Collections.Transformations.joinTo
+ */
+@IgnorableReturnValue
+public fun <T, A : Appendable> Iterable<T>.joinTo(buffer: A, separator: CharSequence = ", ", prefix: CharSequence = "", postfix: CharSequence = "", limit: Int = -1, truncated: CharSequence = "...", transform: ((T) -> CharSequence)? = null): A {
+    buffer.append(prefix)
+    var count = 0
+    for (element in this) {
+        if (++count > 1) buffer.append(separator)
+        if (limit < 0 || count <= limit) {
+            buffer.appendElement(element, transform)
+        } else break
+    }
+    if (limit >= 0 && count > limit) buffer.append(truncated)
+    buffer.append(postfix)
+    return buffer
+}
+
+/**
+ * Creates a string from all the elements separated using [separator] and using the given [prefix] and [postfix] if supplied.
+ *
+ * If the collection has no elements, the result consists of only [prefix] followed by [postfix] (both are empty by default).
+ *
+ * If the collection is huge, you can specify a non-negative value of [limit], in which case only the first [limit]
+ * elements will be appended, followed by the [truncated] string (which defaults to "...").
+ *
+ * @sample samples.collections.Collections.Transformations.joinToString
+ */
+public fun <T> Iterable<T>.joinToString(separator: CharSequence = ", ", prefix: CharSequence = "", postfix: CharSequence = "", limit: Int = -1, truncated: CharSequence = "...", transform: ((T) -> CharSequence)? = null): String {
+    return joinTo(StringBuilder(), separator, prefix, postfix, limit, truncated, transform).toString()
 }
 
 /**

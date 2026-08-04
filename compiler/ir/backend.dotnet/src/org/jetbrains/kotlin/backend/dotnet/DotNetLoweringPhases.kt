@@ -24,11 +24,11 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterCleaner
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterInjector
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
-import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericDataClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInterfaceDefaultArgumentsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassConstructorCallsLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassPhysicalizationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassTypeParametersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesMemberBodyLowering
@@ -49,11 +49,10 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLoweri
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetUpgradeCallableReferences
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetVarargLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
-import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericClassBridgeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetAllFunctionInlining
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetPrivateFunctionInlining
-import org.jetbrains.kotlin.config.phaseConfig
 import org.jetbrains.kotlin.config.LanguageFeature
+import org.jetbrains.kotlin.config.phaseConfig
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.phaser.NamedCompilerPhase
 import org.jetbrains.kotlin.config.phaser.PhaseConfig
@@ -182,10 +181,6 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // MethodImpl adapters for each wider ordinary class/interface slot. Split generic-interface
     // views remain owned by the preceding specialized lowering.
     ::DotNetCovariantReturnBridgeLowering,
-    // CLR generics reify C<T>, unlike the erased class identity used by generated data-class
-    // equality on the mature targets. Preserve reified storage/signatures, but give each generic
-    // data class a private non-generic equality view before later lowerings inspect its members.
-    ::DotNetGenericDataClassLowering,
     // Follow the common/JVM inner-class pipeline before initializer merging: first make a generic
     // outer's implicit type arguments explicit on the independent CLR nested type, then add the
     // outer field/constructor argument, rewrite outer-this reads into field chains, and move
@@ -195,11 +190,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInnerClassesLowering,
     ::DotNetInnerClassesMemberBodyLowering,
     ::DotNetInnerClassConstructorCallsLowering,
-    // Ordinary generic classes retain one typed CLR implementation while Kotlin calls and
-    // runtime identity use non-generic canonical slots on that same object. Run only after the
-    // common inner-class pipeline has copied outer parameters into physical inner declarations;
-    // those declarations have become generic classes too and require the same bridge set.
-    ::DotNetGenericClassBridgeLowering,
+    // The common passes no longer need lexical `inner` identity. Outer state and type parameters
+    // are now explicit CLR members/slots, so stop general IR substitution from counting both the
+    // physical copies and the original enclosing type-constructor parameters.
+    ::DotNetInnerClassPhysicalizationLowering,
     // Initializer merging first — a stated deviation from the JVM phase order for a CLR-neutral
     // reason: DotNetForLoopLowering is an IrBuildingTransformer whose builder only exists inside
     // functions (LowerUtils installs it in visitFunction), so a `for` loop inside an `init {}`
@@ -264,6 +258,11 @@ internal object DotNetLoweringPhases {
     fun lower(irModuleFragment: IrModuleFragment, context: DotNetBackendContext) {
         val phaseConfig = context.configuration.phaseConfig ?: PhaseConfig()
         val engine = PhaseEngine(phaseConfig, PhaserState(), context)
+        // Unlike the mature linking backends, a .NET library serializes and emits the same IR
+        // module in one pipeline. The first-stage KLIB prefix has therefore already transformed
+        // this module when the modern intra-module inliner is enabled; several of those phases
+        // deliberately reject a second visit. The pre-serialization resolver also links selected
+        // dependency bodies from the main graph, so no second prefix is required in that mode.
         if (!context.configuration.languageVersionSettings.supportsFeature(LanguageFeature.IrIntraModuleInlinerBeforeKlibSerialization)) {
             for (lowering in dotNetInlineLowerings) {
                 engine.runPhase(lowering, irModuleFragment)

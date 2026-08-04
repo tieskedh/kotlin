@@ -133,7 +133,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'ViewImpl'
        extends [mscorlib]System.Object
-       implements 'LeafView', class 'LeafView`1'<string>
+       implements 'LeafView', class 'LeafView`1'<string>, class 'RedeclaredView`1'<string>, class 'BaseView`1'<string>
 {
   .field private string 'item'
   .field private int32 'count'
@@ -437,7 +437,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'PairImpl'
        extends [mscorlib]System.Object
-       implements 'Swapped', class 'Swapped`2'<int32, string>
+       implements 'Swapped', class 'Swapped`2'<int32, string>, class 'PairView`2'<string, int32>
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {

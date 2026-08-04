@@ -1,19 +1,10 @@
-// Generics × inheritance, stage 1 (probe series genprobe_s5/_s7/_s8):
-// - a NON-generic class extending an INSTANTIATED generic base: `extends class 'Box`1'<int32>`,
-//   base-ctor chain `call instance void class 'Box`1'<int32>::.ctor(!0)`, inherited members and
-//   the super-call named through the instantiated DECLARING base, and the override spelled with
-//   the SUBSTITUTED type (`int32` where the base slot says `!0`) — the spelling that reuses the
-//   base virtual slot (genprobe_s5; the open `!0` spelling in a non-generic derived class is
-//   the probe-verified silent-mis-dispatch poison shape this backend never emits, and parameter
-//   substitution matches the slot too, genprobe_s8);
-// - a GENERIC class extending a plain non-generic base: plain `extends`, plain base-ctor chain,
-//   ordinary slot-reusing override (genprobe_s5);
-// - the instantiated-base flavor COMPOSES with the interface model: a non-generic class may
-//   extend an instantiated generic base AND implement interfaces — `extends class 'Box`1'<int32>`
-//   followed by the ordinary `implements` line, the interface implementation in the fresh-slot
-//   spelling (`newslot virtual` — Kotlin modality: an override not marked `final` stays open),
-//   interface-typed dispatch via `callvirt` on the interface token (`LabeledBox`; runtime-pinned
-//   by box/genericInheritance.kt).
+// Kotlin-owned generic inheritance uses one non-generic CLR owner per declaration. `IntBox`
+// physically extends `Box`; its constructor boxes Int for the erased base slot. A substituted
+// narrow override receives a JVM-direction bridge for the erased base signature, so base-typed
+// dispatch still reaches the most-derived body. Generic subclasses are erased in the same way.
+// This class hierarchy composes with the separately selected split-interface ABI: `LabeledBox`
+// extends erased `Box` and implements the ordinary `Labeled` interface without changing either
+// identity model.
 open class Box<T>(private var value: T) {
     fun get(): T = value
 

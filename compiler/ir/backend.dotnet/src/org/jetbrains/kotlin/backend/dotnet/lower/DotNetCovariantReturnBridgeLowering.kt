@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredCovariantReturnBridge
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
+import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetStringType
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -53,6 +54,7 @@ import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isSubclassOf
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
+import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
@@ -62,12 +64,15 @@ internal val DOTNET_COVARIANT_RETURN_BRIDGE: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_COVARIANT_RETURN_BRIDGE")
 
 /**
- * Materializes floor-compatible CLR MethodImpl adapters for Kotlin covariant returns.
+ * Materializes floor-compatible CLR MethodImpl adapters for Kotlin override signatures.
  *
  * The source declaration remains the one exact Kotlin implementation. Each generated method has
  * the substituted signature of one wider physical slot, calls the exact implementation
- * virtually, and contains no copied source body. Generic-interface canonical/typed views remain
- * the responsibility of [DotNetGenericInterfaceBridgeLowering].
+ * virtually, and contains no copied source body. Ordinary CLR inheritance usually needs this
+ * only for covariant returns. An erased Kotlin-owned generic base can additionally widen
+ * parameters in its declaration context (`Base<T>.write(T)` is physically `write(object)`), so
+ * the same JVM-style bridge rule covers the complete affected slot signature. Generic-interface
+ * canonical/typed views remain the responsibility of [DotNetGenericInterfaceBridgeLowering].
  */
 internal class DotNetCovariantReturnBridgeLowering(
     private val context: DotNetBackendContext,
@@ -129,9 +134,22 @@ internal class DotNetCovariantReturnBridgeLowering(
         for (target in declaredTargets) {
             val directClassSlots = target.overriddenSymbols.mapTo(linkedSetOf()) { symbol ->
                 val member = symbol.owner
-                if (member.isFakeOverride) member.resolveFakeOverride() ?: member else member
+                if (member.isFakeOverride) {
+                    // `resolveFakeOverride()` deliberately ignores abstract declarations.
+                    // An abstract member inherited through an erased intermediate class is
+                    // nevertheless the real CLR slot that a concrete covariant leaf must fill.
+                    member.resolveFakeOverride()
+                        ?: member.resolveFakeOverrideMaybeAbstract()
+                        ?: member
+                } else {
+                    member
+                }
             }
-            val slots = target.allOverridden()
+            // `allOverridden()` may retain only an intermediate fake override while the direct
+            // physical class slot is available through its resolved declaration. Include both
+            // sets before filtering; otherwise an erased abstract base's object-return slot can
+            // survive without an implementation on a concrete covariant leaf.
+            val slots = (target.allOverridden() + directClassSlots)
                 .filter { slot ->
                     isOrdinaryPhysicalSlot(slot) &&
                             ((slot.parent as? IrClass)?.isInterface == true || slot in directClassSlots)
@@ -176,9 +194,14 @@ internal class DotNetCovariantReturnBridgeLowering(
         target: IrSimpleFunction,
     ) {
         if (slot.typeParameters.size != target.typeParameters.size) return
+        val slotOwner = slot.parent as? IrClass ?: return
+        val requiresErasedClassOverrideBridge =
+            !slotOwner.isInterface &&
+                    (slotOwner.isDotNetGenericClassDeclaration || externalDeclarations.hasGenericClass(slotOwner)) &&
+                    slot.signatureReferencesTypeParameterOf(slotOwner)
         val slotReturnType = slot.returnTypeIn(owner, target.typeParameters)
         val targetReturnType = target.returnTypeIn(owner, target.typeParameters)
-        if (slotReturnType.hasSameClrCarrierAs(targetReturnType)) return
+        if (!requiresErasedClassOverrideBridge && slotReturnType.hasSameClrCarrierAs(targetReturnType)) return
         if (context.covariantReturnBridges.any { existing ->
                 existing.owner == owner && existing.inheritedMember == slot && existing.target == target
             }
@@ -220,7 +243,10 @@ internal class DotNetCovariantReturnBridgeLowering(
         target: IrSimpleFunction,
     ): IrSimpleFunction {
         val slotOwner = slot.parent as? IrClass
-            ?: error("Internal .NET backend error: covariant-return slot has no class owner")
+            ?: error("Internal .NET backend error: physical override slot has no class owner")
+        val keepsErasedClassOwnerParameters =
+            !slotOwner.isInterface &&
+                    (slotOwner.isDotNetGenericClassDeclaration || externalDeclarations.hasGenericClass(slotOwner))
         val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         val slotParameters = slot.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         if (targetParameters.size != slotParameters.size) {
@@ -250,7 +276,15 @@ internal class DotNetCovariantReturnBridgeLowering(
             }
             val slotMethodSubstitutor = IrTypeSubstitutor(slotMethodSubstitution, allowEmptySubstitution = true)
             fun bridgeType(type: IrType): IrType {
-                val ownerSubstituted = slotOwnerSubstitutor?.substitute(type) ?: type
+                // The physical slot of a Kotlin-owned generic base was emitted in the base's
+                // erased declaration context. Keep those owner parameters here so the shared
+                // type mapper reproduces the exact object/upper-bound/erased-array carrier;
+                // only method parameters are rebound to this synthetic method.
+                val ownerSubstituted = if (keepsErasedClassOwnerParameters) {
+                    type
+                } else {
+                    slotOwnerSubstitutor?.substitute(type) ?: type
+                }
                 return slotMethodSubstitutor.substitute(ownerSubstituted)
             }
 
@@ -343,6 +377,22 @@ internal class DotNetCovariantReturnBridgeLowering(
     private fun IrType.isOpenNullableTypeParameter(): Boolean {
         val simpleType = this as? IrSimpleType ?: return false
         return simpleType.isMarkedNullable() && simpleType.classifier is IrTypeParameterSymbol
+    }
+
+    /** Whether declaration-context erasure can change any physical carrier in this class slot. */
+    private fun IrSimpleFunction.signatureReferencesTypeParameterOf(owner: IrClass): Boolean =
+        returnType.referencesTypeParameterOf(owner) ||
+                parameters.asSequence()
+                    .filter { parameter -> parameter.kind != IrParameterKind.DispatchReceiver }
+                    .any { parameter -> parameter.type.referencesTypeParameterOf(owner) }
+
+    private fun IrType.referencesTypeParameterOf(owner: IrClass): Boolean {
+        val simpleType = this as? IrSimpleType ?: return false
+        val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
+        if (parameter?.parent == owner) return true
+        return simpleType.arguments.any { argument ->
+            (argument as? IrTypeProjection)?.type?.referencesTypeParameterOf(owner) == true
+        }
     }
 
     private fun IrClass.baseClassAlreadyImplements(interfaceClass: IrClass): Boolean {

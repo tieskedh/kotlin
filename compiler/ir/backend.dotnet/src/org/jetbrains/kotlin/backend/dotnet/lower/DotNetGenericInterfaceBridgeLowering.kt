@@ -24,8 +24,10 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnsupported
+import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
+import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
 import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.config.dotNetTarget
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -52,7 +54,6 @@ import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
-import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isNullableAny
@@ -88,15 +89,6 @@ internal val IrDeclarationOrigin.dotNetGenericInterfaceBridgeMemberViewOrNull: D
 internal val IrDeclarationOrigin.isDotNetGenericInterfaceBridge: Boolean
     get() = this == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE ||
             dotNetGenericInterfaceBridgeMemberViewOrNull != null
-
-private fun IrType.referencesTypeParameterOf(owner: IrClass): Boolean {
-    val simpleType = this as? IrSimpleType ?: return false
-    val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
-    if (parameter?.parent == owner) return true
-    return simpleType.arguments.any { argument ->
-        (argument as? IrTypeProjection)?.type?.referencesTypeParameterOf(owner) == true
-    }
-}
 
 /**
  * Adds the canonical erased slots of Kotlin-owned generic interfaces.
@@ -230,10 +222,21 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     ?: interfaceClass.name.asString(),
                 slotIdentity = slot.dotNetGenericInterfaceCanonicalSlotId(),
                 typedSubstitutor = typedSubstitutor,
-                typedViews = slot.dotNetGenericInterfaceMemberViews(
-                    interfaceClass,
-                    isMappedKotlinGenericInterface,
-                ),
+                typedViews = if (
+                    irClass.isDotNetGenericClassDeclaration &&
+                    typedSubstitutor.substitute(interfaceClass.symbol.defaultType)
+                        .referencesTypeParameterOf(irClass)
+                ) {
+                    // The erased class owner has no CLR `T` with which to spell `I<T>`. Its
+                    // canonical MethodImpl is the complete Kotlin dispatch path; emitting
+                    // `I<object>` plus typed bridges would create a false physical obligation.
+                    emptyList()
+                } else {
+                    slot.dotNetGenericInterfaceMemberViews(
+                        interfaceClass,
+                        isMappedKotlinGenericInterface,
+                    )
+                },
             )
             if (irClass.inheritsGenericInterfaceBridge(plan, externalDeclarations)) continue
             val canonicalBridge = createCanonicalBridge(plan, isMappedKotlinGenericInterface)
@@ -355,11 +358,17 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             val directParameter = simpleType.classifier as? IrTypeParameterSymbol
             if (directParameter?.owner?.parent == plan.interfaceClass) return context.irBuiltIns.anyNType
             val carrier = (simpleType.classifier as? IrClassSymbol)?.owner
-            return if (carrier?.let(isMappedKotlinGenericInterface) == true) {
+            return if (
+                carrier?.let(isMappedKotlinGenericInterface) == true ||
+                carrier?.isDotNetGenericClassDeclaration == true
+            ) {
+                // Both carriers have one erased physical identity. Substitute the interface
+                // parameter out of the synthetic bridge IR while preserving the nested carrier;
+                // the type mapper then selects the canonical interface or erased class owner.
                 canonicalSubstitutor.substitute(type)
             } else {
-                // A reified generic class/array depending on an erased interface parameter has
-                // no single closed CLR instantiation. Its canonical carrier is object.
+                // A genuinely reified CLR carrier or array depending on an erased interface
+                // parameter has no single closed instantiation. Its canonical carrier is object.
                 context.irBuiltIns.anyNType
             }
         }

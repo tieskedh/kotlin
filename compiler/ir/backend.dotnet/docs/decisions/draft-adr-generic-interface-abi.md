@@ -1,7 +1,7 @@
 # Draft ADR: Kotlin-owned generic interface ABI on CLR
 
-- Status: **Draft — implemented candidate under pre-ABI evaluation**
-- Date: 2026-07-17
+- Status: **Draft — implemented candidate, frozen pending reassessment**
+- Date: 2026-08-04
 - Scope: generic interfaces, declaration/use-site variance, erased identity,
   typed capabilities, inheritance, iteration/collections, and C# consumption
 
@@ -27,6 +27,61 @@ covariant, while `contains(@UnsafeVariance E)` cannot inhabit that same CLR
 variant surface. Making the whole interface invariant would discard useful C#
 variance; using only a generic identity would break Kotlin conversions through
 value types.
+
+## Reopened after generic-class erasure
+
+This candidate predates the decision to give every Kotlin-owned generic class
+one non-generic physical owner. That decision materially weakens the blanket
+case for typed interface siblings. A physical erased implementation of:
+
+```kotlin
+class Values<T> : Source<T>
+```
+
+cannot truthfully implement one closed CLR `Source<T>` per logical Kotlin
+construction. It can universally implement only the erased `Source` identity;
+`Source<object>` is not an equivalent substitute for `Source<Int>` or
+`Source<String>`.
+
+Typed interface views can still be useful for a non-generic implementation
+with a concrete logical argument, a deliberately selected BCL mapping, or an
+explicit C# export. Those are bounded capabilities, however, rather than proof
+that every Kotlin-owned generic interface needs two or three TypeDefs and a
+bridge family. Boxing is already the normal Kotlin ABI cost once the owning
+class and canonical interface are erased.
+
+The class-erasure migration now enforces that boundary. An erased generic
+class whose interface edge mentions one of its own logical parameters (for
+example `Values<T> : Source<T>`) implements only the canonical interface and
+receives only canonical `MethodImpl` bridges. It does not invent
+`Source<object>`. A closed edge independent of the erased owner parameter (for
+example `Values<T> : Source<String>`) may still publish the existing truthful
+typed capability. This is a class-ABI correctness rule, not a decision to keep
+or remove the split interface declaration candidate itself.
+
+The same boundary applies to DIM dispatch. A default physically hosted by
+typed `I<T>` is not in the ancestry of canonical-only `C<T>`, so the erased
+class needs the existing helper materialized as one canonical `MethodImpl`.
+This does not add `I<T>` to the class. A closed, truthfully implemented typed
+edge continues to inherit its native DIM directly.
+
+The reassessment therefore compares:
+
+1. one erased interface as the default Kotlin-owned ABI, with typed CLR views
+   admitted only by an explicit mapping/export contract; and
+2. the implemented canonical/declared/exact split below.
+
+It must measure actual typed consumers and unboxed execution against TypeDef,
+bridge, `MethodImpl`, default-body, metadata, C#-authoring, and maintenance
+cost. Imported CLR generic interfaces are outside this choice and retain their
+native identity. Special mappings such as Common `Comparable<T>` to the BCL
+must be evaluated as mappings, not used to infer a blanket source-declaration
+rule.
+
+No new feature may expand the implemented split candidate while this question
+is open. This reopening does not itself authorize deleting the existing views;
+that requires one producer/consumer migration and the full interface/default-
+method gate.
 
 ## Non-negotiable invariants
 

@@ -231,6 +231,8 @@ import org.jetbrains.kotlin.test.TestCaseWithTmpdir
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -10282,21 +10284,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
                         implementationMethodName = "<InterfaceDefaultForwarder-defaultWithDefaults>",
                     ),
-            "G:C:sample/Box:F:sample/Box.read" to
-                    DotNetPhysicalDeclaration.GenericClassMemberBridge(
-                        ownerPath = listOf("sample.Box`1"),
-                        ownerLogicalKey = "C:sample/Box",
-                        memberLogicalKey = "F:sample/Box.read",
-                        typedMethodName = "read",
-                        implementationMethodName = "<GenericClassCanonicalBridge-read>",
-                    ),
         )
         val properties = Properties().apply {
             setProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY, DotNetLibraryAbiCodec.ABI_VERSION)
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("17", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("18", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -16519,15 +16513,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::" +
                         "'readGeneric'<[1]>(!!0)" in consumerIl
             ) { consumerIl }
+            val localOwnerBoundIl = consumerIl
+                .substringAfter(".class public auto ansi sealed beforefieldinit 'wideconsumer.LocalOwnerBound'")
+                .substringBefore("\n.class ")
             assertTrue(
-                ".override method instance !!0 class [Wide.Generic]" +
-                        "'wide.OwnerBoundIntersection`1'<!0>::'retain'<[1]>(!!0)" in consumerIl
-            ) { consumerIl }
+                ".override method instance !!0 [Wide.Generic]'wide.OwnerBoundLeft'::" +
+                        "'retain__KotlinErased__" in localOwnerBoundIl
+            ) { localOwnerBoundIl }
+            assertFalse("'wide.OwnerBoundIntersection`1'" in localOwnerBoundIl) { localOwnerBoundIl }
+            val localVariantOwnerBoundIl = consumerIl
+                .substringAfter(".class public auto ansi sealed beforefieldinit 'wideconsumer.LocalVariantOwnerBound'")
+                .substringBefore("\n.class ")
             assertTrue(
-                ".override method instance !!0 class [Wide.Generic]" +
-                        "'wide.VariantOwnerBoundIntersection__KotlinExact`1'<!0>::" +
-                        "'retainVariant'<[1]>(!!0)" in consumerIl
-            ) { consumerIl }
+                ".override method instance !!0 [Wide.Generic]'wide.VariantOwnerBoundLeft'::" +
+                        "'retainVariant__KotlinErased__" in localVariantOwnerBoundIl
+            ) { localVariantOwnerBoundIl }
+            assertFalse("'wide.VariantOwnerBoundIntersection`1'" in localVariantOwnerBoundIl) {
+                localVariantOwnerBoundIl
+            }
             assertTrue(
                 ".override method instance !0 class [Wide.Generic]" +
                         "'wide.CovariantIntersection`1'<class [Wide.Generic]" +
@@ -19076,7 +19079,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
 
         val producerIl = producerDirectory.resolve("Companion.Holder.Library.il").readText()
-        assertTrue("'companionholder.GenericOwner`1'/'<CompanionStatics>'" in producerIl) { producerIl }
+        assertTrue("'companionholder.GenericOwner'/'<CompanionStatics>'" in producerIl) { producerIl }
         assertTrue("'companionholder.GenericInterface'/'<CompanionStatics>'" in producerIl) { producerIl }
         assertTrue("static !!0 'echo'<'R'>(!!0 'value')" in producerIl) { producerIl }
         assertTrue("'create\$default'" in producerIl) { producerIl }
@@ -19094,7 +19097,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
             )
             val profileIl = profileDirectory.resolve("Companion.Holder.Library.il").readText()
-            assertTrue("'companionholder.GenericOwner`1'/'<CompanionStatics>'" in profileIl) { profileIl }
+            assertTrue("'companionholder.GenericOwner'/'<CompanionStatics>'" in profileIl) { profileIl }
             assertTrue("'companionholder.GenericInterface'/'<CompanionStatics>'" in profileIl) { profileIl }
             assertTrue("static !!0 'echo'<'R'>(!!0 'value')" in profileIl) { profileIl }
         }
@@ -19142,7 +19145,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         val consumerIl = consumerDirectory.resolve("CompanionHolderConsumer.il").readText()
         val classHolder =
-            "[Companion.Holder.Library]'companionholder.GenericOwner`1'/'<CompanionStatics>'"
+            "[Companion.Holder.Library]'companionholder.GenericOwner'/'<CompanionStatics>'"
         val interfaceHolder =
             "[Companion.Holder.Library]'companionholder.GenericInterface'/'<CompanionStatics>'"
         assertTrue("$classHolder::'create\$default'(int32, int32)" in consumerIl) { consumerIl }
@@ -19350,7 +19353,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("ldsfld" in consumerIl && "'<CompanionStatics>'::'Companion'" in consumerIl) { consumerIl }
         assertTrue("'companioninit.ProducerSingleton'::'INSTANCE'" in consumerIl) { consumerIl }
         assertTrue(
-            "call void [Companion.Initialization.Library]'companioninit.GenericPrivateState`1'/" +
+            "call void [Companion.Initialization.Library]'companioninit.GenericPrivateState'/" +
                     "'<CompanionStatics>'::'<EnsureInitialized>'()" in consumerIl
         ) { consumerIl }
         runDotNet(
@@ -19458,10 +19461,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 declaration.staticInitialization?.ownerPath?.last() == "<StaticInitialization>"
             }
         assertEquals("staticfailure.ProducerGenericChildFailure", genericChildDeclaration.ownerPath.last())
-        assertEquals(
-            "staticfailure.ProducerGenericChildFailure`1",
-            genericChildDeclaration.declaredOwnerPath?.last(),
-        )
+        assertNull(genericChildDeclaration.declaredOwnerPath)
         assertEquals(
             "<StaticInitialization>",
             genericChildDeclaration.staticInitialization?.ownerPath?.last(),
@@ -25298,6 +25298,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public class ProfileDefaultImpl<T> : ProfileDefault<T>
 
+                public interface ClosedProfileDefault<T> {
+                    public fun transform(value: T): T = value
+                }
+
+                public class ClosedProfileDefaultImpl<T> : ClosedProfileDefault<String>
+
                 @PublishedApi
                 internal interface ProfileCompilerContract<T> {
                     public fun compilerTransform(value: T): T
@@ -25371,8 +25377,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val modernMethodImplIl = checkNotNull(modernMethodImplAssembly.parentFile)
             .resolve("Portable.MethodImpl.il")
             .readText()
-        assertTrue("<GenericInterfaceDefaultForwarderTarget-" !in modernMethodImplIl) {
-            modernMethodImplIl
+        assertTrue(
+            "<GenericInterfaceDefaultForwarderTarget-portablemethodimpl.ProfileDefault-" in modernMethodImplIl
+        ) {
+            "An erased generic class needs a canonical forwarder because its owner-dependent " +
+                    "typed interface DIM is not in the physical class ancestry:\n$modernMethodImplIl"
+        }
+        assertTrue(
+            "<GenericInterfaceDefaultForwarderTarget-portablemethodimpl.ClosedProfileDefault-" !in
+                    modernMethodImplIl
+        ) {
+            "A parameter-independent closed interface edge must retain its native typed DIM:\n" +
+                    modernMethodImplIl
         }
         assertTrue("<GenericInterfaceDefaultErasedAdapter-" in modernMethodImplIl) {
             modernMethodImplIl
@@ -28708,29 +28724,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(
             libraryIl,
             repeatedLibraryDirectory.resolve("GenericClass.Library.il").readText(),
-            "Generic-class canonical slots must be reproducible across independent IR symbols",
+            "The erased generic-class ABI must be reproducible across independent IR symbols",
         )
-        assertTrue(".class interface public abstract auto ansi 'genericclassabi.Box'" in libraryIl) { libraryIl }
-        assertTrue(".class public auto ansi beforefieldinit 'genericclassabi.Box`1'<'T'>" in libraryIl) { libraryIl }
-        assertTrue("implements 'genericclassabi.Box'" in libraryIl) { libraryIl }
-        assertTrue("<GenericClassCanonicalBridge-read>" in libraryIl) { libraryIl }
-        assertTrue("<GenericClassCanonicalBridge-write>" in libraryIl) { libraryIl }
+        assertTrue(".class public auto ansi beforefieldinit 'genericclassabi.Box'" in libraryIl) { libraryIl }
+        assertTrue(".field private object 'value'" in libraryIl) { libraryIl }
+        assertTrue("instance void .ctor(object 'value')" in libraryIl) { libraryIl }
+        assertTrue("instance object 'read'()" in libraryIl) { libraryIl }
+        assertTrue("instance void 'write'(object 'next')" in libraryIl) { libraryIl }
+        assertFalse("genericclassabi.Box`1" in libraryIl) { libraryIl }
+        assertFalse("GenericClassCanonicalBridge" in libraryIl) { libraryIl }
 
         val declarations = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest())
         val boxClass = declarations.values.filterIsInstance<DotNetPhysicalDeclaration.Class>()
             .single { declaration -> declaration.ownerPath.last() == "genericclassabi.Box" }
-        assertEquals("genericclassabi.Box`1", boxClass.declaredOwnerPath?.last())
+        assertEquals(null, boxClass.declaredOwnerPath)
         assertEquals(null, boxClass.exactOwnerPath)
-        val classBridges = declarations.values
-            .filterIsInstance<DotNetPhysicalDeclaration.GenericClassMemberBridge>()
-            .filter { bridge -> bridge.ownerPath.last() == "genericclassabi.Box`1" }
-        assertEquals(setOf("read", "write"), classBridges.map { it.typedMethodName }.toSet())
-        assertTrue(classBridges.all { bridge -> "<GenericClassCanonicalBridge-" in bridge.implementationMethodName })
-        val canonicalFunctions = declarations.values
+        val boxFunctions = declarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.Function>()
             .filter { declaration -> declaration.ownerPath.last() == "genericclassabi.Box" }
-        val canonicalRead = canonicalFunctions.single { function -> function.methodName.startsWith("read__KotlinErased__") }
-        val canonicalWrite = canonicalFunctions.single { function -> function.methodName.startsWith("write__KotlinErased__") }
+        assertEquals(setOf("read", "write"), boxFunctions.map { function -> function.methodName }.toSet())
         val facadeFunctions = declarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.Function>()
             .filter { declaration -> declaration.ownerPath.last() == "genericclassabi.genericClassLibraryKt" }
@@ -28756,29 +28768,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 """
                 using System;
 
-                public sealed class CSharpBox : genericclassabi.Box<string>
+                public sealed class CSharpBox : genericclassabi.Box
                 {
                     public CSharpBox(string value) : base(value) {}
 
-                    public override string read()
+                    public override object read()
                     {
-                        return base.read() + "!";
+                        return (string)base.read() + "!";
                     }
 
-                    public override void write(string value)
+                    public override void write(object value)
                     {
-                        base.write(value + "?");
+                        base.write((string)value + "?");
                     }
-                }
-
-                public sealed class FakeCanonicalBox : genericclassabi.Box
-                {
-                    public object ${canonicalRead.methodName}()
-                    {
-                        return "fake";
-                    }
-
-                    public void ${canonicalWrite.methodName}(object value) {}
                 }
 
                 public static class GenericClassConsumer
@@ -28792,20 +28794,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (genericclassabi.genericClassLibraryKt.${readStringFunction.methodName}(typed) != "changed?!") return 3;
                         if (!Object.ReferenceEquals(typed,
                             genericclassabi.genericClassLibraryKt.checkedBox(typed))) return 4;
-
-                        FakeCanonicalBox fake = new FakeCanonicalBox();
-                        if (genericclassabi.genericClassLibraryKt.isBox(fake)) return 5;
-                        if (genericclassabi.genericClassLibraryKt.safeBox(fake) != null) return 6;
-                        bool rejected = false;
-                        try
-                        {
-                            genericclassabi.genericClassLibraryKt.checkedBox(fake);
-                        }
-                        catch (InvalidCastException)
-                        {
-                            rejected = true;
-                        }
-                        return rejected ? 0 : 7;
+                        return 0;
                     }
                 }
                 """.trimIndent()
@@ -28821,6 +28810,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             target = "exe",
         )
         assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        val accidentalTypedSource = libraryDirectory.resolve("AccidentalTypedGenericConsumer.cs").apply {
+            writeText(
+                """
+                public sealed class AccidentalTypedGenericConsumer
+                {
+                    private genericclassabi.Box<string> value;
+                }
+                """.trimIndent()
+            )
+        }
+        val accidentalTypedCompile = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            accidentalTypedSource,
+            libraryDirectory.resolve("AccidentalTypedGenericConsumer.dll"),
+            metadataLibrary,
+            checkNotNull(frameworkNetStandardFacade),
+            target = "library",
+        )
+        assertNotEquals(0, accidentalTypedCompile.exitCode) {
+            "Kotlin-owned generic classes must not silently publish a CLR C<T> ABI"
+        }
 
         for (target in listOf("net48", "net10.0")) {
             val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
@@ -28859,11 +28869,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             throw Error("external generic base ancestry")
                         }
                         writeString(local, "changed")
-                        if (readString(local) != "changed?!") throw Error("external typed super dispatch")
+                        if (readString(local) != "changed?!") throw Error("external erased super dispatch")
                         val carrier = LocalCarrier("nested")
                         val nested = carrier.wrap()
                         if (carrier.read(nested) != "nested" || nested !is Box<*>) {
-                            throw Error("external generic class in canonical member signature")
+                            throw Error("external generic class in erased member signature")
                         }
                         if (choose(Box(35)) != "int:35" || choose(Box("thirty-six")) != "string:thirty-six") {
                             throw Error("external erased top-level overload")
@@ -28890,6 +28900,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             val value: Int = wrong.read()
                             value + 1
                             throw Error("logical type barrier")
+                        } catch (_: ClassCastException) {
+                        }
+                        wrong.write(40)
+                        try {
+                            readString(library)
+                            throw Error("unchecked mutation must fail only at the later incompatible use")
                         } catch (_: ClassCastException) {
                         }
                     }
@@ -29701,9 +29717,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("castclass string" in libraryIl) { libraryIl }
         assertTrue(".class interface public abstract auto ansi 'nullableabi.NullableSource`1'" in libraryIl) { libraryIl }
         assertTrue("instance object 'nullableValue'()" in libraryIl) { libraryIl }
+        val storedNullableSourceIl = libraryIl
+            .substringAfter(".class public auto ansi sealed beforefieldinit 'nullableabi.StoredNullableSource'")
+            .substringBefore("\n.class ")
         assertTrue(
-            ".override method instance object class 'nullableabi.NullableSource`1'<!0>::'nullableValue'()" in libraryIl
-        ) { libraryIl }
+            ".override method instance object 'nullableabi.NullableSource'::" +
+                    "'nullableValue__KotlinErased__" in storedNullableSourceIl
+        ) { storedNullableSourceIl }
+        assertFalse("'nullableabi.NullableSource`1'<object>" in storedNullableSourceIl) {
+            storedNullableSourceIl
+        }
 
         for (target in listOf("net48", "net10.0")) {
             val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
@@ -29783,18 +29806,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         {
                             public static int Main()
                             {
-                                var holder = new nullableabi.NullableHolder<int>(41);
+                                var holder = new nullableabi.NullableHolder(41);
                                 if ((int) holder.value != 41) return 1;
                                 holder.value = null;
                                 if (holder.value != null) return 2;
 
-                                nullableabi.NullableSource<int> source =
-                                    new nullableabi.StoredNullableSource<int>(42);
-                                if ((int) source.nullableValue() != 42) return 3;
+                                var stored = new nullableabi.StoredNullableSource(42);
+                                nullableabi.NullableSource source = stored;
+                                if ((int) stored.nullableValue() != 42) return 3;
                                 if ((int) nullableabi.openNullableLibraryKt.readNullable<int>(source) != 42) return 4;
 
-                                nullableabi.NullableSource<string> empty =
-                                    new nullableabi.StoredNullableSource<string>(null);
+                                var empty = new nullableabi.StoredNullableSource(null);
                                 if (empty.nullableValue() != null) return 5;
                                 if (nullableabi.openNullableLibraryKt.echoNullable<string>(null) != null) return 6;
                                 if (nullableabi.openNullableLibraryKt.requireNullable<int>(43) != 43) return 7;
@@ -31669,6 +31691,87 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         consumeSelfDescribingStdlib(firstDirectory, target)
         consumeInstalledStdlib(firstDirectory, target)
+        if (target == "net10.0") verifyNet10CSharpAppendable(firstDirectory)
+    }
+
+    private fun verifyNet10CSharpAppendable(stdlibDirectory: File) {
+        val toolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(toolchain != null, "Modern Roslyn and the net10 reference pack are not available")
+        val directory = File(tmpdir, "net10-csharp-appendable").apply { mkdirs() }
+        val source = directory.resolve("AppendableProbe.cs").apply {
+            writeText(
+                """
+                using System;
+
+                public sealed class ForeignAppendable : Kotlin.Text.Appendable
+                {
+                    private readonly System.Text.StringBuilder storage = new System.Text.StringBuilder();
+
+                    public Kotlin.Text.Appendable append(char value)
+                    {
+                        storage.Append(value);
+                        return this;
+                    }
+
+                    public Kotlin.Text.Appendable append(object value)
+                    {
+                        storage.Append(value == null ? "null" : value.ToString());
+                        return this;
+                    }
+
+                    public Kotlin.Text.Appendable append(object value, int startIndex, int endIndex)
+                    {
+                        string text = value == null ? "null" : value.ToString();
+                        storage.Append(text, startIndex, endIndex - startIndex);
+                        return this;
+                    }
+
+                    public override string ToString() => storage.ToString();
+                }
+
+                public static class AppendableProbe
+                {
+                    private static T AppendOne<T>(T destination) where T : Kotlin.Text.Appendable
+                    {
+                        destination.append('x');
+                        return destination;
+                    }
+
+                    public static int Main()
+                    {
+                        var foreign = new ForeignAppendable();
+                        if (!Object.ReferenceEquals(foreign, AppendOne(foreign)) || foreign.ToString() != "x")
+                            return 1;
+
+                        var builder = new Kotlin.Text.StringBuilder();
+                        builder.appendAny(42).append('!');
+                        return builder.ToString() == "42!" ? 0 : 2;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val output = directory.resolve("AppendableProbe.dll")
+        val compileResult = runModernCSharpCompiler(
+            checkNotNull(toolchain),
+            source,
+            output,
+            stdlibDirectory.resolve("Kotlin.Stdlib.dll"),
+            stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME),
+            target = "exe",
+        )
+        assertEquals(0, compileResult.exitCode, compileResult.output)
+        directory.resolve("AppendableProbe.runtimeconfig.json").writeText(net10RuntimeConfig())
+        stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+            .copyTo(directory.resolve("Kotlin.Stdlib.dll"), overwrite = true)
+        stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+            .copyTo(directory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME), overwrite = true)
+        val process = ProcessBuilder(checkNotNull(toolchain).dotNetHost.path, "exec", output.path)
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val processOutput = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, process.waitFor(), "C# Appendable/StringBuilder probe failed:\n$processOutput")
     }
 
     private fun produceSelfDescribingStdlib(
@@ -32005,11 +32108,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         })
         assertTrue(physicalDeclarations.values.none { declaration ->
             declaration.ownerPath.any { owner ->
-                owner == "Kotlin.Collections.ArrayAsList`1" ||
-                        owner == "Kotlin.Collections.ArrayAsListIterator`1"
+                owner == "Kotlin.Collections.ArrayAsList"
             }
         }) {
             "Private array-list implementation identities must not enter the physical ABI index"
+        }
+        val privateAbstractCollectionHelpers = setOf(
+            "SubList",
+            "IteratorImpl",
+            "ListIteratorImpl",
+            "kotlin.collections.AbstractCollection\$toString\$1",
+        )
+        assertTrue(physicalDeclarations.values.none { declaration ->
+            declaration.ownerPath.any { owner -> owner.substringBefore('`') in privateAbstractCollectionHelpers }
+        }) {
+            "Private Common abstract-collection helpers must not enter the physical ABI index"
         }
         val eofExceptionBindings = physicalDeclarations.values.filter { declaration ->
             declaration.ownerPath == listOf("Kotlin.Io.ReadAfterEOFException")
@@ -32031,6 +32144,57 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(".assembly extern $coreLibraryAssembly" in il)
         assertTrue("System.Runtime.Versioning.TargetFrameworkAttribute" in il)
         if (target == "netstandard2.0") assertTrue("[mscorlib]" !in il)
+        assertTrue(".class interface public abstract auto ansi 'Kotlin.Text.Appendable'" in il)
+        assertTrue(".class public auto ansi sealed beforefieldinit 'Kotlin.Text.StringBuilder'" in il)
+        assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Text.StringsKt'" in il)
+        assertTrue(".class public auto ansi sealed beforefieldinit 'Kotlin.NotImplementedError'" in il)
+        assertTrue("'joinTo'<" in il)
+        assertTrue("'joinToString'<" in il)
+        assertTrue("'appendAny'(object 'value')" in il)
+        assertTrue("'insertAny'(int32 'index', object 'value')" in il)
+        assertTrue("'appendLineAny'(class 'Kotlin.Text.StringBuilder' '<this>', object 'value')" in il)
+        assertFalse("dotNetStringBuilder" in il) {
+            "Declaration-suppressing builder storage operations leaked into Kotlin.Stdlib IL"
+        }
+        assertTrue("${coreLibraryReference}System.Text.StringBuilder" in il) {
+            "The Kotlin-owned builder implementation must use the selected BCL storage type"
+        }
+        val publicOrProtectedMetadataHeaders = il.lineSequence()
+            .filter { line ->
+                (".method public " in line || ".method family " in line ||
+                        ".field public " in line || ".field family " in line ||
+                        ".property " in line) &&
+                        "System.Text.StringBuilder" in line
+            }
+            .toList()
+        assertTrue(publicOrProtectedMetadataHeaders.isEmpty()) {
+            "The private BCL builder carrier leaked into Kotlin public/protected metadata:\n" +
+                    publicOrProtectedMetadataHeaders.joinToString("\n")
+        }
+        assertTrue(".method public hidebysig specialname rtspecialname instance void .ctor()" in il)
+        assertTrue(
+            ".method private hidebysig specialname rtspecialname instance void .ctor(" +
+                    "object 'storage', int32 'marker')" in il
+        )
+        assertTrue(
+            ".class public abstract auto ansi beforefieldinit " +
+                    "'Kotlin.Collections.AbstractCollection'" in il
+        )
+        assertTrue(
+            ".class public abstract auto ansi beforefieldinit " +
+                    "'Kotlin.Collections.AbstractList'" in il
+        )
+        assertFalse("Kotlin.Collections.AbstractCollection`" in il)
+        assertFalse("Kotlin.Collections.AbstractList`" in il)
+        assertTrue("'IteratorImpl'" in il)
+        assertTrue("'ListIteratorImpl'" in il)
+        assertTrue("'SubList'" in il)
+        assertFalse("IteratorImpl`" in il)
+        assertFalse("ListIteratorImpl`" in il)
+        assertFalse("SubList`" in il)
+        assertTrue(
+            ".field private class 'Kotlin.Collections.AbstractList' 'this\$0'" in il
+        )
         val inlineOnlyMethodHeaders = listOf(
             ".method assembly hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterable' " +
                     "'asIterable'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
@@ -32079,42 +32243,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertFalse("EditorBrowsableAttribute" in methodIl) { methodIl }
         }
         assertTrue(
-            "implements 'Kotlin.Collections.ArrayIterator', " +
-                    "[Kotlin.Runtime]'Kotlin.Collections.Iterator', " +
-                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>" in il
+            "implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', " +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<object>" in il
         )
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-" in il)
         assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-" in il)
         assertTrue(
-            "implements 'Kotlin.Collections.ArrayIterable', " +
-                    "[Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
-                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable`1'<!0>" in il
+            "implements [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable`1'<object>" in il
         )
         assertTrue("<GenericInterfaceCanonicalBridge-kotlin.collections.Iterable-iterator-" in il)
         assertTrue("<GenericInterfaceDeclaredBridge-kotlin.collections.Iterable-iterator-" in il)
         val arrayAsListStart = il.indexOf(
             ".class private auto ansi sealed beforefieldinit " +
-                    "'Kotlin.Collections.ArrayAsList`1'<'T'>"
+                    "'Kotlin.Collections.ArrayAsList'"
         )
         assertTrue(arrayAsListStart >= 0)
         val arrayAsListEnd = il.indexOf("\n.class ", arrayAsListStart + 1)
             .takeIf { index -> index >= 0 } ?: il.length
         val arrayAsListIl = il.substring(arrayAsListStart, arrayAsListEnd)
         assertTrue(
-            "implements 'Kotlin.Collections.ArrayAsList', " +
-                    "[Kotlin.Runtime]'Kotlin.Collections.List', " +
-                    "'Kotlin.Collections.RandomAccess', class [Kotlin.Runtime]" +
-                    "'Kotlin.Collections.List__KotlinExact`1'<!0>" in arrayAsListIl
+            "extends 'Kotlin.Collections.AbstractList'" in arrayAsListIl &&
+                    "implements 'Kotlin.Collections.RandomAccess'" in arrayAsListIl
         )
         assertTrue("System.Collections" !in arrayAsListIl) {
             "The Kotlin array view must not acquire a BCL collection identity:\n$arrayAsListIl"
         }
-        assertTrue(
-            ".class private auto ansi sealed beforefieldinit " +
-                    "'Kotlin.Collections.ArrayAsListIterator`1'<'T'>" in il
-        )
-        assertTrue(".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterator`1'" in il)
-        assertTrue(".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterable`1'" in il)
+        assertFalse("Kotlin.Collections.ArrayAsListIterator" in il)
+        assertTrue(".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterator'" in il)
+        assertTrue(".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterable'" in il)
         assertTrue(
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' " +
                     "'dotNetArrayIterator'<'T'>(!!0[] 'array')" in il
@@ -32541,6 +32698,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/internal/Annotations.kt").absoluteFile
         sourceFiles +=
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractList.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ExceptionsH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ioH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt").absoluteFile
@@ -32901,6 +33060,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun intArrayView(values: Array<Int>): List<Int> = values.asList()
 
+                private class ConsumerList<T>(private val values: Array<T>) : AbstractList<T>() {
+                    override val size: Int get() = values.size
+                    override fun get(index: Int): T = values[index]
+                }
+
+                public fun <T> inheritedList(values: Array<T>): List<T> = ConsumerList(values)
+
+                public fun buildAndJoin(values: Iterable<Any?>): String {
+                    val builder = StringBuilder("prefix:")
+                    builder.append(7)
+                    builder.append(values.joinToString(separator = "|", prefix = "[", postfix = "]"))
+                    return builder.toString()
+                }
+
+                @Suppress("DEPRECATION_ERROR")
+                public fun deprecatedAppendFails(): String {
+                    return try {
+                        StringBuilder("safe").append(charArrayOf('x'), 0, 1)
+                        "fail"
+                    } catch (_: NotImplementedError) {
+                        "OK"
+                    }
+                }
+
                 public fun emptyInts(): List<Int> = emptyList()
 
                 public fun emptyStrings(): List<String> = emptyList()
@@ -33178,10 +33361,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<string>" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<!!0>(!!0[])" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(!!0[])" in il)
-        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayIterator`1'" !in il)
-        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayIterable`1'" !in il)
-        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayAsList`1'" !in il)
-        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayAsListIterator`1'" !in il)
+        assertTrue("newobj instance void [Kotlin.Stdlib]'Kotlin.Text.StringBuilder'::.ctor(string)" in il)
+        assertTrue(
+            "call instance class [Kotlin.Stdlib]'Kotlin.Text.StringBuilder' " +
+                    "[Kotlin.Stdlib]'Kotlin.Text.StringBuilder'::'append'(int32)" in il
+        )
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'joinToString\$default'<object>" in il)
+        assertFalse(
+            "[Kotlin.Stdlib]'Kotlin.Text.StringsKt'::'append'(" +
+                    "class [Kotlin.Stdlib]'Kotlin.Text.StringBuilder', " +
+                    "class [Kotlin.Runtime]'Kotlin.CharArray', int32, int32)" in il
+        ) {
+            "The real separate consumer must inline the Common deprecated append body:\n$il"
+        }
+        assertTrue("extends [Kotlin.Stdlib]'Kotlin.Collections.AbstractList'" in il)
+        assertFalse("System.Text.StringBuilder" in il) {
+            "A Kotlin consumer must reference only the Kotlin-owned builder identity:\n$il"
+        }
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayIterator'" !in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayIterable'" !in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.ArrayAsList'" !in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<string>" in il)
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
@@ -34133,6 +34332,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         throw IllegalStateException("unexpected subList")
                 }
 
+                class ExternalCommonList<T>(private val values: Array<T>) : AbstractList<T>() {
+                    override val size: Int get() = values.size
+
+                    override fun get(index: Int): T = values[index]
+                }
+
                 fun nonLocalMatch(values: Iterable<Int>): Int {
                     values.any { value ->
                         if (value == 2) return value
@@ -34264,6 +34469,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             view.singleOrNull() == null &&
                             singleton.single() == 4 &&
                             singleton.singleOrNull() == 4
+                    val externalList = ExternalCommonList(arrayOf("left", "right"))
+                    val externalBuilder = StringBuilder("items:")
+                    val externalAppendable: Appendable = externalBuilder
+                    val externalBuilderIdentity = externalAppendable.append(
+                        externalList.joinToString(separator = "|", prefix = "[", postfix = "]")
+                    )
+                    val externalBuilderChars: CharSequence = externalBuilder
+                    val commonBaseAndBuilderOk =
+                        externalList.iterator().next() == "left" &&
+                            externalList.subList(1, 2).toString() == "[right]" &&
+                            externalBuilderIdentity === externalBuilder &&
+                            externalBuilderChars.toString() == "items:[left|right]"
                     val indexedOptionalOk =
                         view.getOrNull(-1) == null &&
                             view.getOrNull(0) == 1 &&
@@ -34855,7 +35072,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             provenFrontierOk + "|" + foldOk + "|" + reduceOk + "|" + forEachOk + "|" +
                             firstPredicateOk + "|" + lastPredicateOk + "|" +
                             singlePredicateOk + "|" + inlinePredicatesOk + "|" + inlineOnlyOk + "|" +
-                            sumOfSelectorOk
+                            sumOfSelectorOk + "|" + commonBaseAndBuilderOk
                     )
                 }
                 """.trimIndent()
@@ -34889,7 +35106,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }

@@ -47,13 +47,12 @@ internal val DOTNET_STATIC_INITIALIZATION_ENTRY: IrDeclarationOrigin =
  * own initializers in their existing source order. This follows the common static-initialization
  * graph; an abstract-only implemented interface is deliberately not initialized as a side effect.
  *
- * Existing companion state keeps using its non-generic companion-static holder. A generic
- * classifier or interface which only needs an initialization event instead receives a dedicated
- * non-generic static-initialization holder; it does not acquire a misleading companion ABI.
- * Active uses of a generic class call the holder entry so different closed CLR instantiations
- * cannot create distinct Kotlin initialization state. External edges are represented by synthetic
- * IR calls whose physical owner and method come exclusively from the producer's KLIB physical
- * index.
+ * Existing companion state keeps using its selected non-generic companion-static holder. A
+ * logically generic classifier or interface which only needs an initialization event likewise
+ * receives a dedicated non-generic static-initialization holder; this preserves the established
+ * static-placement ABI while Kotlin-owned class TypeDefs themselves are now erased. External
+ * edges are represented by synthetic IR calls whose physical owner and method come exclusively
+ * from the producer's KLIB physical index.
  */
 internal class DotNetStaticInitializationGraphLowering(
     private val context: DotNetBackendContext,

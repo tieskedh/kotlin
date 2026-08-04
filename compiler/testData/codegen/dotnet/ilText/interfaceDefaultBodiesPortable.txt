@@ -235,7 +235,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'GenericBodyImpl'
        extends [mscorlib]System.Object
-       implements 'GenericBody', class 'GenericBody__KotlinExact`1'<int32>
+       implements 'GenericBody', class 'GenericBody__KotlinExact`1'<int32>, class 'GenericBody`1'<int32>
 {
   .field private int32 'current'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'current') cil managed

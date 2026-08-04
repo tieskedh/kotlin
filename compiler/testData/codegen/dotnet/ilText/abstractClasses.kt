@@ -93,6 +93,28 @@ class ConcreteConstrained<T : Marked>(stored: T) : Constrained<T>(stored) {
     override fun current(): T = stored
 }
 
+// An erased abstract generic class does not physically inherit a later closed typed
+// interface construction. A concrete leaf which first supplies the bodies must therefore
+// publish a complete interface view, including members whose signatures do not mention T.
+abstract class DeferredIterator<T> : Iterator<T>
+
+class DeferredStringIterator(private val value: String) : DeferredIterator<String>() {
+    private var available = true
+
+    override fun hasNext(): Boolean = available
+
+    override fun next(): String {
+        available = false
+        return value
+    }
+}
+
+abstract class DeferredIterable<T> : Iterable<T>
+
+class DeferredStringIterable(private val value: String) : DeferredIterable<String>() {
+    override fun iterator(): Iterator<String> = DeferredStringIterator(value)
+}
+
 abstract class FactoryBase {
     abstract fun product(): String
 
@@ -131,5 +153,6 @@ fun main() {
     val constrained = ConcreteConstrained(Token("marked"))
     println(constrained.current().mark())
     println(constrained.marker())
+    println(DeferredStringIterable("deferred").iterator().next())
     println(FactoryBase.create("factory").product())
 }

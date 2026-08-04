@@ -51,83 +51,38 @@
     .get instance string 'MarkedValue'::'get_text'()
   }
 }
-.class interface public abstract auto ansi 'MemberHost'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_captured__KotlinErased__b94074f3789c7f79c3addcefe9a27128'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance !!0 'choose__KotlinErased__146a9e1d1c4f658aef788611af52230a'<'M'>(object 'context', !!0 'value') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance object 'capturedFrom__KotlinErased__ba80b7a9fde359e790daa4bd96fa27df'<'M'>(!!0 'ignored') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance !!0 'relay__KotlinErased__da732c7795ab004696b1540d8fb53919'<'M'>(!!0 'value') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance class 'MemberHost' 'wrap__KotlinErased__569f11134fd3f601f136f4cb7579621c'<'M'>(!!0 'value') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance !!0 'read__KotlinErased__3693b76ba16321e7fabe8473b6927586'<'M'>(class 'MemberHost' 'other') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance string 'labelOf__KotlinErased__cbbaef25a1ae36b9cddb94bdec8a25b1'<(class 'Marked') 'M'>(!!0 'value') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'captured__KotlinErased__b94074f3789c7f79c3addcefe9a27128'()
-  {
-    .get instance object 'MemberHost'::'get_captured__KotlinErased__b94074f3789c7f79c3addcefe9a27128'()
-  }
-}
-.class public auto ansi sealed beforefieldinit 'MemberHost`1'<'C'>
+.class public auto ansi sealed beforefieldinit 'MemberHost'
        extends [mscorlib]System.Object
-       implements 'MemberHost'
 {
-  .field private !0 'captured'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'captured') cil managed
+  .field private object 'captured'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'captured') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'MemberHost`1'<!0>::'captured'
+    stfld object 'MemberHost'::'captured'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_captured'() cil managed
+  .method public hidebysig specialname instance object 'get_captured'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'MemberHost`1'<!0>::'captured'
+    ldfld object 'MemberHost'::'captured'
     ret
   }
-  .method public hidebysig instance !!0 'choose'<'M'>(!0 'context', !!0 'value') cil managed
+  .method public hidebysig instance !!0 'choose'<'M'>(object 'context', !!0 'value') cil managed
   {
     .maxstack 1
     ldarg.2
     ret
   }
-  .method public hidebysig instance !0 'capturedFrom'<'M'>(!!0 'ignored') cil managed
+  .method public hidebysig instance object 'capturedFrom'<'M'>(!!0 'ignored') cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance !0 class 'MemberHost`1'<!0>::'get_captured'()
+    call instance object 'MemberHost'::'get_captured'()
     ret
   }
   .method public hidebysig instance !!0 'relay'<'M'>(!!0 'value') cil managed
@@ -135,23 +90,25 @@
     .maxstack 3
     ldarg.0
     ldarg.0
-    call instance !0 class 'MemberHost`1'<!0>::'get_captured'()
+    call instance object 'MemberHost'::'get_captured'()
     ldarg.1
-    call instance !!0 class 'MemberHost`1'<!0>::'choose'<!!0>(!0, !!0)
+    call instance !!0 'MemberHost'::'choose'<!!0>(object, !!0)
     ret
   }
-  .method public hidebysig instance class 'MemberHost`1'<!!0> 'wrap'<'M'>(!!0 'value') cil managed
+  .method public hidebysig instance class 'MemberHost' 'wrap'<'M'>(!!0 'value') cil managed
   {
     .maxstack 1
     ldarg.1
-    newobj instance void class 'MemberHost`1'<!!0>::.ctor(!0)
+    box !!0
+    newobj instance void 'MemberHost'::.ctor(object)
     ret
   }
-  .method public hidebysig instance !!0 'read__KotlinErased__fc983a1f7919aa0cdafcc1f792f33ff3'<'M'>(class 'MemberHost`1'<!!0> 'other') cil managed
+  .method public hidebysig instance !!0 'read__KotlinErased__fc983a1f7919aa0cdafcc1f792f33ff3'<'M'>(class 'MemberHost' 'other') cil managed
   {
     .maxstack 1
     ldarg.1
-    call instance !0 class 'MemberHost`1'<!!0>::'get_captured'()
+    call instance object 'MemberHost'::'get_captured'()
+    unbox.any !!0
     ret
   }
   .method public hidebysig instance string 'labelOf'<(class 'Marked') 'M'>(!!0 'value') cil managed
@@ -167,98 +124,13 @@
     callvirt instance string 'Marked'::'label'()
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-captured>>'() cil managed
+  .property instance object 'captured'()
   {
-    .override method instance object 'MemberHost'::'get_captured__KotlinErased__b94074f3789c7f79c3addcefe9a27128'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'MemberHost`1'<!0>
-    call instance !0 class 'MemberHost`1'<!0>::'get_captured'()
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !!0 '<GenericClassCanonicalBridge-choose>'<'M'>(object 'context', !!0 'value') cil managed
-  {
-    .override method instance !!0 'MemberHost'::'choose__KotlinErased__146a9e1d1c4f658aef788611af52230a'<[1]>(object, !!0)
-    .maxstack 3
-    ldarg.0
-    castclass class 'MemberHost`1'<!0>
-    ldarg.1
-    unbox.any !0
-    ldarg.2
-    call instance !!0 class 'MemberHost`1'<!0>::'choose'<!!0>(!0, !!0)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-capturedFrom>'<'M'>(!!0 'ignored') cil managed
-  {
-    .override method instance object 'MemberHost'::'capturedFrom__KotlinErased__ba80b7a9fde359e790daa4bd96fa27df'<[1]>(!!0)
-    .maxstack 2
-    ldarg.0
-    castclass class 'MemberHost`1'<!0>
-    ldarg.1
-    call instance !0 class 'MemberHost`1'<!0>::'capturedFrom'<!!0>(!!0)
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !!0 '<GenericClassCanonicalBridge-relay>'<'M'>(!!0 'value') cil managed
-  {
-    .override method instance !!0 'MemberHost'::'relay__KotlinErased__da732c7795ab004696b1540d8fb53919'<[1]>(!!0)
-    .maxstack 2
-    ldarg.0
-    castclass class 'MemberHost`1'<!0>
-    ldarg.1
-    call instance !!0 class 'MemberHost`1'<!0>::'relay'<!!0>(!!0)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance class 'MemberHost' '<GenericClassCanonicalBridge-wrap>'<'M'>(!!0 'value') cil managed
-  {
-    .override method instance class 'MemberHost' 'MemberHost'::'wrap__KotlinErased__569f11134fd3f601f136f4cb7579621c'<[1]>(!!0)
-    .maxstack 2
-    ldarg.0
-    castclass class 'MemberHost`1'<!0>
-    ldarg.1
-    call instance class 'MemberHost`1'<!!0> class 'MemberHost`1'<!0>::'wrap'<!!0>(!!0)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !!0 '<GenericClassCanonicalBridge-read>'<'M'>(class 'MemberHost' 'other') cil managed
-  {
-    .override method instance !!0 'MemberHost'::'read__KotlinErased__3693b76ba16321e7fabe8473b6927586'<[1]>(class 'MemberHost')
-    .maxstack 2
-    ldarg.0
-    castclass class 'MemberHost`1'<!0>
-    ldarg.1
-    castclass class 'MemberHost`1'<!!0>
-    call instance !!0 class 'MemberHost`1'<!0>::'read__KotlinErased__fc983a1f7919aa0cdafcc1f792f33ff3'<!!0>(class 'MemberHost`1'<!!0>)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance string '<GenericClassCanonicalBridge-labelOf>'<(class 'Marked') 'M'>(!!0 'value') cil managed
-  {
-    .override method instance string 'MemberHost'::'labelOf__KotlinErased__cbbaef25a1ae36b9cddb94bdec8a25b1'<[1]>(!!0)
-    .maxstack 2
-    ldarg.0
-    castclass class 'MemberHost`1'<!0>
-    ldarg.1
-    call instance string class 'MemberHost`1'<!0>::'labelOf'<!!0>(!!0)
-    ret
-  }
-  .property instance !0 'captured'()
-  {
-    .get instance !0 'MemberHost`1'::'get_captured'()
+    .get instance object 'MemberHost'::'get_captured'()
   }
 }
-.class interface public abstract auto ansi 'TypeParameterBoundMember'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance !!0 'use__KotlinErased__128e75b66fe1b06a7150d1760ef71b1b'<'T'>(!!0 'value') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-}
-.class public auto ansi sealed beforefieldinit 'TypeParameterBoundMember`1'<'C'>
+.class public auto ansi sealed beforefieldinit 'TypeParameterBoundMember'
        extends [mscorlib]System.Object
-       implements 'TypeParameterBoundMember'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
@@ -267,24 +139,10 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig instance !!0 'use'<(!0) 'T'>(!!0 'value') cil managed
+  .method public hidebysig instance !!0 'use'<'T'>(!!0 'value') cil managed
   {
     .maxstack 1
     ldarg.1
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !!0 '<GenericClassCanonicalBridge-use>'<'T'>(!!0 'value') cil managed
-  {
-    .override method instance !!0 'TypeParameterBoundMember'::'use__KotlinErased__128e75b66fe1b06a7150d1760ef71b1b'<[1]>(!!0)
-    .maxstack 2
-    ldarg.0
-    castclass class 'TypeParameterBoundMember`1'<!0>
-    ldarg.1
-    box !!0
-    unbox.any !0
-    call instance !!0 class 'TypeParameterBoundMember`1'<!0>::'use'<!0>(!!0)
-    box !0
-    unbox.any !!0
     ret
   }
 }
@@ -309,20 +167,9 @@
        implements 'ChildPicker', class 'GenericPicker`1'<!0>
 {
 }
-.class interface public abstract auto ansi 'Picker'
-       implements 'ChildPicker'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance !!0 'pick__KotlinErased__4b635bd068de54dd53bc6ab284a17b90'<'M'>(object 'context', !!0 'value') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-}
-.class public auto ansi sealed beforefieldinit 'Picker`1'<'C'>
+.class public auto ansi sealed beforefieldinit 'Picker'
        extends [mscorlib]System.Object
-       implements 'Picker', 'ChildPicker', class 'ChildPicker`1'<!0>
+       implements 'ChildPicker'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
@@ -331,7 +178,7 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual instance !!0 'pick'<'M'>(!0 'context', !!0 'value') cil managed
+  .method public hidebysig newslot virtual instance !!0 'pick'<'M'>(object 'context', !!0 'value') cil managed
   {
     .maxstack 1
     ldarg.2
@@ -343,31 +190,8 @@
     .maxstack 3
     ldarg.0
     ldarg.1
-    unbox.any !0
     ldarg.2
-    callvirt instance !!0 class 'Picker`1'<!0>::'pick'<!!0>(!0, !!0)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDeclaredBridge-GenericPicker-pick-41dbc5f7a47e7672cf15c571ddc59992>'<'M'>(!0 'context', !!0 'value') cil managed
-  {
-    .override method instance !!0 class 'GenericPicker`1'<!0>::'pick'<[1]>(!0, !!0)
-    .maxstack 3
-    ldarg.0
-    ldarg.1
-    ldarg.2
-    callvirt instance !!0 class 'Picker`1'<!0>::'pick'<!!0>(!0, !!0)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !!0 '<GenericClassCanonicalBridge-pick>'<'M'>(object 'context', !!0 'value') cil managed
-  {
-    .override method instance !!0 'Picker'::'pick__KotlinErased__4b635bd068de54dd53bc6ab284a17b90'<[1]>(object, !!0)
-    .maxstack 3
-    ldarg.0
-    castclass class 'Picker`1'<!0>
-    ldarg.1
-    unbox.any !0
-    ldarg.2
-    callvirt instance !!0 class 'Picker`1'<!0>::'pick'<!!0>(!0, !!0)
+    callvirt instance !!0 'Picker'::'pick'<!!0>(object, !!0)
     ret
   }
 }
@@ -437,19 +261,8 @@
     ret
   }
 }
-.class interface public abstract auto ansi 'GenericBase'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance !!0 'select__KotlinErased__a7bc541bf417ec11d75f0e1c8840e70d'<'M'>(object 'context', !!0 'value') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-}
-.class public auto ansi beforefieldinit 'GenericBase`1'<'C'>
+.class public auto ansi beforefieldinit 'GenericBase'
        extends [mscorlib]System.Object
-       implements 'GenericBase'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
@@ -458,42 +271,41 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual instance !!0 'select'<'M'>(!0 'context', !!0 'value') cil managed
+  .method public hidebysig newslot virtual instance !!0 'select'<'M'>(object 'context', !!0 'value') cil managed
   {
     .maxstack 1
     ldarg.2
     ret
   }
-  .method private hidebysig newslot virtual final instance !!0 '<GenericClassCanonicalBridge-select>'<'M'>(object 'context', !!0 'value') cil managed
-  {
-    .override method instance !!0 'GenericBase'::'select__KotlinErased__a7bc541bf417ec11d75f0e1c8840e70d'<[1]>(object, !!0)
-    .maxstack 3
-    ldarg.0
-    castclass class 'GenericBase`1'<!0>
-    ldarg.1
-    unbox.any !0
-    ldarg.2
-    callvirt instance !!0 class 'GenericBase`1'<!0>::'select'<!!0>(!0, !!0)
-    ret
-  }
 }
 .class public auto ansi sealed beforefieldinit 'StringDerived'
-       extends class 'GenericBase`1'<string>
+       extends 'GenericBase'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance void class 'GenericBase`1'<string>::.ctor()
+    call instance void 'GenericBase'::.ctor()
     ret
   }
-  .method public hidebysig virtual instance !!0 'select'<'M'>(string 'context', !!0 'value') cil managed
+  .method public hidebysig newslot virtual instance !!0 'select'<'M'>(string 'context', !!0 'value') cil managed
   {
     .maxstack 3
     ldarg.0
     ldarg.1
     ldarg.2
-    call instance !!0 class 'GenericBase`1'<string>::'select'<!!0>(!0, !!0)
+    call instance !!0 'GenericBase'::'select'<!!0>(object, !!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<CovariantReturnBridge-GenericBase-select-74bae6aa538ad5e34fcd643ab917edd0>'<'M'>(object 'context', !!0 'value') cil managed
+  {
+    .override method instance !!0 'GenericBase'::'select'<[1]>(object, !!0)
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    castclass string
+    ldarg.2
+    callvirt instance !!0 'StringDerived'::'select'<!!0>(string, !!0)
     ret
   }
 }
@@ -702,32 +514,10 @@ IL_whenNext_1:
   .method public hidebysig static int32 'basePick__KotlinErased__2f4ea34656dcad286e5775f19847dd60'(class 'GenericBase' 'value') cil managed
   {
     .maxstack 3
-    .locals init (
-      [0] class 'GenericBase' '<genericClassReceiver>',
-      [1] class 'GenericBase`1'<string> '<genericClassCapability>',
-      [2] int32 '<genericClassResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class 'GenericBase`1'<string>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericClassCanonicalFallback_0
-    ldloc.1
     ldstr "base"
     ldc.i4 41
-    callvirt instance !!0 class 'GenericBase`1'<string>::'select'<int32>(!0, !!0)
-    stloc.2
-    br IL_genericClassJoin_1
-IL_genericClassCanonicalFallback_0:
-    ldloc.0
-    ldstr "base"
-    ldc.i4 41
-    callvirt instance !!0 'GenericBase'::'select__KotlinErased__a7bc541bf417ec11d75f0e1c8840e70d'<int32>(object, !!0)
-    stloc.2
-IL_genericClassJoin_1:
-    ldloc.2
+    callvirt instance !!0 'GenericBase'::'select'<int32>(object, !!0)
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -736,90 +526,67 @@ IL_genericClassJoin_1:
     .maxstack 3
     .locals init (
       [0] class 'MemberHost' 'host',
-      [1] class 'MemberHost' '<genericClassReceiver>',
-      [2] class 'MemberHost`1'<int32> '<genericClassCapability>',
-      [3] int32 '<genericClassResult>',
-      [4] class 'ChildPicker' 'intPicker',
-      [5] class 'GenericIdentity' 'inherited',
-      [6] class 'ArityOverloads' 'overloads'
+      [1] class 'ChildPicker' 'intPicker',
+      [2] class 'GenericIdentity' 'inherited',
+      [3] class 'ArityOverloads' 'overloads'
     )
     ldstr "captured"
-    newobj instance void class 'MemberHost`1'<string>::.ctor(!0)
+    newobj instance void 'MemberHost'::.ctor(object)
     stloc.0
     ldloc.0
-    castclass class 'MemberHost`1'<string>
     ldstr "context"
     ldc.i4 7
-    call instance !!0 class 'MemberHost`1'<string>::'choose'<int32>(!0, !!0)
+    call instance !!0 'MemberHost'::'choose'<int32>(object, !!0)
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    castclass class 'MemberHost`1'<string>
     ldc.i4.1
-    call instance !0 class 'MemberHost`1'<string>::'capturedFrom'<bool>(!!0)
+    call instance object 'MemberHost'::'capturedFrom'<bool>(!!0)
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    castclass class 'MemberHost`1'<string>
     ldstr "relayed"
-    call instance !!0 class 'MemberHost`1'<string>::'relay'<string>(!!0)
+    call instance !!0 'MemberHost'::'relay'<string>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    castclass class 'MemberHost`1'<string>
     ldc.i4 11
-    call instance class 'MemberHost`1'<!!0> class 'MemberHost`1'<string>::'wrap'<int32>(!!0)
-    stloc.1
-    ldloc.1
-    isinst class 'MemberHost`1'<int32>
-    stloc.2
-    ldloc.2
-    brfalse IL_genericClassCanonicalFallback_0
-    ldloc.2
-    call instance !0 class 'MemberHost`1'<int32>::'get_captured'()
-    stloc.3
-    br IL_genericClassJoin_1
-IL_genericClassCanonicalFallback_0:
-    ldloc.1
-    callvirt instance object 'MemberHost'::'get_captured__KotlinErased__b94074f3789c7f79c3addcefe9a27128'()
+    call instance class 'MemberHost' 'MemberHost'::'wrap'<int32>(!!0)
+    call instance object 'MemberHost'::'get_captured'()
     unbox.any [mscorlib]System.Int32
-    stloc.3
-IL_genericClassJoin_1:
-    ldloc.3
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    castclass class 'MemberHost`1'<string>
     ldstr "read"
-    newobj instance void class 'MemberHost`1'<string>::.ctor(!0)
-    call instance !!0 class 'MemberHost`1'<string>::'read__KotlinErased__fc983a1f7919aa0cdafcc1f792f33ff3'<string>(class 'MemberHost`1'<!!0>)
+    newobj instance void 'MemberHost'::.ctor(object)
+    call instance !!0 'MemberHost'::'read__KotlinErased__fc983a1f7919aa0cdafcc1f792f33ff3'<string>(class 'MemberHost')
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    castclass class 'MemberHost`1'<string>
     ldstr "marked"
     newobj instance void 'MarkedValue'::.ctor(string)
-    call instance string class 'MemberHost`1'<string>::'labelOf'<class 'MarkedValue'>(!!0)
+    call instance string 'MemberHost'::'labelOf'<class 'MarkedValue'>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
-    newobj instance void class 'TypeParameterBoundMember`1'<class 'Marked'>::.ctor()
+    newobj instance void 'TypeParameterBoundMember'::.ctor()
     ldstr "owner-bound"
     newobj instance void 'MarkedValue'::.ctor(string)
-    call instance !!0 class 'TypeParameterBoundMember`1'<class 'Marked'>::'use'<class 'MarkedValue'>(!!0)
+    call instance !!0 'TypeParameterBoundMember'::'use'<class 'MarkedValue'>(!!0)
     callvirt instance string 'MarkedValue'::'label'()
     call void [mscorlib]System.Console::WriteLine(string)
-    newobj instance void class 'Picker`1'<string>::.ctor()
+    newobj instance void 'Picker'::.ctor()
     call int32 'genericMembersKt'::'childPick'(class 'ChildPicker')
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    newobj instance void class 'Picker`1'<int32>::.ctor()
-    stloc 4
-    ldloc 4
+    newobj instance void 'Picker'::.ctor()
+    stloc.1
+    ldloc.1
     ldc.i4 1
     box [mscorlib]System.Int32
     ldstr "value-owner"
@@ -831,8 +598,8 @@ IL_genericClassJoin_1:
     callvirt instance string 'BoundMemberImpl'::'labelOf'<class 'MarkedValue'>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'InheritedIdentity'::.ctor()
-    stloc 5
-    ldloc 5
+    stloc.2
+    ldloc.2
     ldstr "inherited-interface"
     callvirt instance !!0 'GenericIdentity'::'identity'<string>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
@@ -849,8 +616,8 @@ IL_genericClassJoin_1:
     callvirt instance !!0 'StringDerived'::'select'<string>(string, !!0)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'ArityOverloads'::.ctor()
-    stloc 6
-    ldloc 6
+    stloc.3
+    ldloc.3
     ldc.i4 12
     call instance int32 'ArityOverloads'::'same'(int32)
     box [mscorlib]System.Int32
@@ -858,7 +625,7 @@ IL_genericClassJoin_1:
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 6
+    ldloc.3
     ldc.i4 13
     call instance int32 'ArityOverloads'::'same'<string>(int32)
     box [mscorlib]System.Int32

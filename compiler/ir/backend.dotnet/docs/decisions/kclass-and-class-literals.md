@@ -18,8 +18,8 @@ CLR carrier is not the logical Kotlin classifier:
   Kotlin-owned implementation capability;
 - broad Kotlin exception relations share the `System.Exception` carrier;
 - `Array<*>` is the classified SZ-array view of `System.Array`;
-- a Kotlin-owned generic class has one declaration-erased canonical identity
-  and one typed CLR `C<T>` implementation capability; and
+- a Kotlin-owned generic class has one declaration-erased non-generic physical
+  class identity; and
 - split generic interfaces have canonical and typed capability views.
 
 Consequently, replacing `KClass` with `System.Type`, or defining equality and
@@ -96,13 +96,14 @@ identity. It cannot by itself express:
 - the distinction between logical `Throwable` and `Exception` when both use
   `System.Exception` as their physical carrier;
 - Kotlin's SZ-array-only `Array<*>` relation;
-- declaration-erased identity of a closed CLR generic class; or
+- declaration-erased Kotlin identity when the available CLR carrier is a
+  closed foreign generic construction; or
 - Kotlin source names for local and anonymous classes after CLR metadata names
   have been invented.
 
-An open generic `System.Type` also cannot use `IsInstanceOfType` directly to
-classify a closed constructed value. Its class/base/interface ancestry must be
-compared by generic type definition.
+An open foreign generic `System.Type` also cannot use `IsInstanceOfType`
+directly to classify a closed constructed value. Kotlin-owned generic classes
+do not need that workaround because their physical TypeDef is non-generic.
 
 ## Decision
 
@@ -122,10 +123,10 @@ existing callable-reflection floor.
 - an optional versioned logical classifier id.
 
 The stored `System.Type` is an additive CLR bridge. Exact CLR-backed
-classifiers expose an exact type; an ordinary generic class exposes its
-producer-recorded open typed TypeDef; classified relations may expose only
-their physical carrier or no single type. Consumers must not reconstruct
-Kotlin identity from this field alone.
+classifiers expose an exact type; an ordinary Kotlin-owned generic class
+exposes its producer-recorded non-generic TypeDef; classified relations may
+expose only their physical carrier or no single type. Consumers must not
+reconstruct Kotlin identity from this field alone.
 
 ### Static class literals
 
@@ -135,7 +136,7 @@ the authoritative IR declaration and one of these classifier shapes:
 | Kotlin classifier | Runtime evidence |
 | --- | --- |
 | ordinary class/interface, scalar, `String`, `Any`, `Unit`, primitive-array wrapper | exact `System.Type` |
-| Kotlin-owned generic class | producer-recorded open typed `C<>` TypeDef plus declaration-erased classifier kind |
+| Kotlin-owned generic class | exact producer-recorded non-generic physical TypeDef |
 | generic/split Kotlin interface | its canonical interface where available; otherwise an open generic interface definition |
 | `Array` | classified SZ-array kind, not a bare acceptance of every `System.Array` |
 | `CharSequence` | classified relation shared with ordinary type tests |
@@ -155,7 +156,8 @@ The runtime:
 1. returns Kotlin scalar, `String`, `Any`, `Unit`, primitive-array, and mapped
    exception identities for their exact physical types;
 2. normalizes every admitted CLR SZ vector to Kotlin `Array` identity;
-3. normalizes a closed ordinary generic class to its open definition;
+3. normalizes a closed foreign generic carrier to its open definition where
+   its Kotlin classifier view is declaration-erased;
 4. reads compiler-authored local/anonymous naming evidence where CLR naming
    cannot reconstruct the Common names; and
 5. otherwise retains the exact runtime CLR class, including a foreign class.
@@ -188,16 +190,16 @@ CLR type.
 `is`/`as` operations:
 
 - exact `Type.IsInstanceOfType` for exact classifiers;
-- an open-definition ancestry walk for ordinary generic classes/interfaces;
+- an open-definition ancestry walk for foreign generic classes/interfaces;
 - the existing `CharSequence`, SZ-array, and exception classifiers;
 - the signed Common numeric-box set for `Number`; and
 - constant false for `Nothing`.
 
 Equality and hashing use classifier kind plus logical id or normalized
 `System.Type`, never names. Two wrappers for the same classifier are equal
-without requiring reference interning. Closed `Box<int>` and `Box<string>`
-therefore produce equal dynamic `KClass` values for declaration `Box`, while
-the physical objects and typed capabilities remain unchanged.
+without requiring reference interning. Every logical `Box<T>` construction
+therefore produces the same dynamic `KClass` value for the one physical
+declaration `Box`.
 
 ## Design attack
 
@@ -210,8 +212,8 @@ tests.
 ### Use closed `C<T>` as a faster `KClass` identity
 
 Rejected. It makes Kotlin type arguments observable through class equality
-and dynamic class literals. The typed CLR class remains a capability of the
-same object, not Kotlin runtime identity.
+and dynamic class literals. Ordinary Kotlin compilation emits no such closed
+typed class; imported CLR generics remain a separate foreign-type fact.
 
 ### Derive every name from the invented CLR metadata name
 

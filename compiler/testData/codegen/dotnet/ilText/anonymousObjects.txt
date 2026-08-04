@@ -1,9 +1,4 @@
 .assembly extern mscorlib {}
-.assembly extern System
-{
-  .ver 4:0:0:0
-  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
-}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -83,104 +78,57 @@
     .get instance int32 'AnonymousBase'::'get_right'()
   }
 }
-.class interface public abstract auto ansi 'GenericAnonymousBase'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_base__KotlinErased__53cee5ed546bc1637a3b6d977e4e5f41'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'base__KotlinErased__53cee5ed546bc1637a3b6d977e4e5f41'()
-  {
-    .get instance object 'GenericAnonymousBase'::'get_base__KotlinErased__53cee5ed546bc1637a3b6d977e4e5f41'()
-  }
-}
-.class public auto ansi beforefieldinit 'GenericAnonymousBase`1'<'T'>
+.class public auto ansi beforefieldinit 'GenericAnonymousBase'
        extends [mscorlib]System.Object
-       implements 'GenericAnonymousBase'
 {
-  .field private !0 'base'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'base') cil managed
+  .field private object 'base'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'base') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'GenericAnonymousBase`1'<!0>::'base'
+    stfld object 'GenericAnonymousBase'::'base'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_base'() cil managed
+  .method public hidebysig specialname instance object 'get_base'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'GenericAnonymousBase`1'<!0>::'base'
+    ldfld object 'GenericAnonymousBase'::'base'
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-base>>'() cil managed
+  .property instance object 'base'()
   {
-    .override method instance object 'GenericAnonymousBase'::'get_base__KotlinErased__53cee5ed546bc1637a3b6d977e4e5f41'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericAnonymousBase`1'<!0>
-    call instance !0 class 'GenericAnonymousBase`1'<!0>::'get_base'()
-    box !0
-    ret
-  }
-  .property instance !0 'base'()
-  {
-    .get instance !0 'GenericAnonymousBase`1'::'get_base'()
+    .get instance object 'GenericAnonymousBase'::'get_base'()
   }
 }
-.class interface public abstract auto ansi 'AnonymousOwner'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance class 'AnonymousValue' 'source__KotlinErased__9d72aa5a9a8f82f0e7ebcffdabc70d80'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-}
-.class public auto ansi sealed beforefieldinit 'AnonymousOwner`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'AnonymousOwner'
        extends [mscorlib]System.Object
-       implements 'AnonymousOwner'
 {
-  .class nested private interface abstract auto ansi 'AnonymousOwner$source$1'
+  .class nested private auto ansi sealed beforefieldinit 'AnonymousOwner$source$1'
+         extends [mscorlib]System.Object
          implements 'AnonymousValue'
   {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__de2b26d79ce7cd4211e01930cffbca95'() cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    }
-  }
-  .class nested private auto ansi sealed beforefieldinit 'AnonymousOwner$source$1`1'<'T'>
-         extends [mscorlib]System.Object
-         implements 'AnonymousOwner`1'/'AnonymousOwner$source$1', 'AnonymousValue', class 'AnonymousValue`1'<!0>
-  {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
-    .field private class 'AnonymousOwner`1'<!0> 'this$0'
-    .method public hidebysig specialname rtspecialname instance void .ctor(class 'AnonymousOwner`1'<!0> 'this$0') cil managed
+    .field private class 'AnonymousOwner' 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'AnonymousOwner' 'this$0') cil managed
     {
       .maxstack 2
       ldarg.0
       ldarg.1
-      stfld class 'AnonymousOwner`1'<!0> class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::'this$0'
+      stfld class 'AnonymousOwner' 'AnonymousOwner'/'AnonymousOwner$source$1'::'this$0'
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
     }
-    .method public hidebysig newslot virtual instance !0 'value'() cil managed
+    .method public hidebysig newslot virtual instance object 'value'() cil managed
     {
       .maxstack 1
       ldarg.0
-      ldfld class 'AnonymousOwner`1'<!0> class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::'this$0'
-      call instance !0 class 'AnonymousOwner`1'<!0>::'get_seed'()
+      ldfld class 'AnonymousOwner' 'AnonymousOwner'/'AnonymousOwner$source$1'::'this$0'
+      call instance object 'AnonymousOwner'::'get_seed'()
       ret
     }
     .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-AnonymousValue-value-5a8ae3f11b4e947866756e11da5ad753>'() cil managed
@@ -188,66 +136,38 @@
       .override method instance object 'AnonymousValue'::'value__KotlinErased__5a8ae3f11b4e947866756e11da5ad753'()
       .maxstack 1
       ldarg.0
-      callvirt instance !0 class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::'value'()
-      box !0
-      ret
-    }
-    .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-AnonymousValue-value-5a8ae3f11b4e947866756e11da5ad753>'() cil managed
-    {
-      .override method instance !0 class 'AnonymousValue`1'<!0>::'value'()
-      .maxstack 1
-      ldarg.0
-      callvirt instance !0 class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::'value'()
-      ret
-    }
-    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-value>'() cil managed
-    {
-      .override method instance object 'AnonymousOwner`1'/'AnonymousOwner$source$1'::'value__KotlinErased__de2b26d79ce7cd4211e01930cffbca95'()
-      .maxstack 1
-      ldarg.0
-      castclass class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>
-      callvirt instance !0 class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::'value'()
-      box !0
+      callvirt instance object 'AnonymousOwner'/'AnonymousOwner$source$1'::'value'()
       ret
     }
   }
-  .field private !0 'seed'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'seed') cil managed
+  .field private object 'seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'seed') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'AnonymousOwner`1'<!0>::'seed'
+    stfld object 'AnonymousOwner'::'seed'
     ret
   }
-  .method private hidebysig specialname instance !0 'get_seed'() cil managed
+  .method private hidebysig specialname instance object 'get_seed'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'AnonymousOwner`1'<!0>::'seed'
+    ldfld object 'AnonymousOwner'::'seed'
     ret
   }
   .method public hidebysig instance class 'AnonymousValue' 'source'() cil managed
   {
     .maxstack 1
     ldarg.0
-    newobj instance void class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::.ctor(class 'AnonymousOwner`1'<!0>)
+    newobj instance void 'AnonymousOwner'/'AnonymousOwner$source$1'::.ctor(class 'AnonymousOwner')
     ret
   }
-  .method private hidebysig newslot virtual final instance class 'AnonymousValue' '<GenericClassCanonicalBridge-source>'() cil managed
+  .property instance object 'seed'()
   {
-    .override method instance class 'AnonymousValue' 'AnonymousOwner'::'source__KotlinErased__9d72aa5a9a8f82f0e7ebcffdabc70d80'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'AnonymousOwner`1'<!0>
-    call instance class 'AnonymousValue' class 'AnonymousOwner`1'<!0>::'source'()
-    ret
-  }
-  .property instance !0 'seed'()
-  {
-    .get instance !0 'AnonymousOwner`1'::'get_seed'()
+    .get instance object 'AnonymousOwner'::'get_seed'()
   }
 }
 .class public auto ansi sealed beforefieldinit 'AnonymousInInitializer'
@@ -490,58 +410,40 @@
     .get instance int32 'anonymousObjectsKt$superArguments$value$1'::'get_own'()
   }
 }
-.class interface private abstract auto ansi 'anonymousObjectsKt$genericSuperArgument$source$1'
-       implements 'GenericAnonymousBase'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-}
-.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$genericSuperArgument$source$1`1'<'T'>
-       extends class 'GenericAnonymousBase`1'<!0>
-       implements 'anonymousObjectsKt$genericSuperArgument$source$1'
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$genericSuperArgument$source$1'
+       extends 'GenericAnonymousBase'
 {
   .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 '$super_call_param$1') cil managed
+  .method public hidebysig specialname rtspecialname instance void .ctor(object '$super_call_param$1') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    call instance void class 'GenericAnonymousBase`1'<!0>::.ctor(!0)
+    call instance void 'GenericAnonymousBase'::.ctor(object)
     ret
   }
 }
-.class interface private abstract auto ansi 'anonymousObjectsKt$genericAnonymous$source$1'
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$genericAnonymous$source$1'
+       extends [mscorlib]System.Object
        implements 'AnonymousValue'
 {
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__246ee768abe791e0e466c4d45733f167'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-}
-.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$genericAnonymous$source$1`1'<'T'>
-       extends [mscorlib]System.Object
-       implements 'anonymousObjectsKt$genericAnonymous$source$1', 'AnonymousValue', class 'AnonymousValue`1'<!0>
-{
   .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
-  .field private !0 '$value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 '$value') cil managed
+  .field private object '$value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object '$value') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    stfld !0 class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>::'$value'
+    stfld object 'anonymousObjectsKt$genericAnonymous$source$1'::'$value'
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual instance !0 'value'() cil managed
+  .method public hidebysig newslot virtual instance object 'value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>::'$value'
+    ldfld object 'anonymousObjectsKt$genericAnonymous$source$1'::'$value'
     ret
   }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-AnonymousValue-value-5a8ae3f11b4e947866756e11da5ad753>'() cil managed
@@ -549,26 +451,7 @@
     .override method instance object 'AnonymousValue'::'value__KotlinErased__5a8ae3f11b4e947866756e11da5ad753'()
     .maxstack 1
     ldarg.0
-    callvirt instance !0 class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>::'value'()
-    box !0
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-AnonymousValue-value-5a8ae3f11b4e947866756e11da5ad753>'() cil managed
-  {
-    .override method instance !0 class 'AnonymousValue`1'<!0>::'value'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance !0 class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>::'value'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-value>'() cil managed
-  {
-    .override method instance object 'anonymousObjectsKt$genericAnonymous$source$1'::'value__KotlinErased__246ee768abe791e0e466c4d45733f167'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>
-    callvirt instance !0 class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>::'value'()
-    box !0
+    callvirt instance object 'anonymousObjectsKt$genericAnonymous$source$1'::'value'()
     ret
   }
 }
@@ -870,10 +753,11 @@ IL_whenNext_1:
     call !!0 'anonymousObjectsKt'::'passAnonymous'<!!0>(!!0)
     stloc.1
     ldloc.1
-    newobj instance void class 'anonymousObjectsKt$genericSuperArgument$source$1`1'<!!0>::.ctor(!0)
+    box !!0
+    newobj instance void 'anonymousObjectsKt$genericSuperArgument$source$1'::.ctor(object)
     stloc.0
     ldloc.0
-    callvirt instance object 'GenericAnonymousBase'::'get_base__KotlinErased__53cee5ed546bc1637a3b6d977e4e5f41'()
+    call instance object 'GenericAnonymousBase'::'get_base'()
     unbox.any !!0
     ret
   }
@@ -888,7 +772,8 @@ IL_whenNext_1:
     )
     call void 'anonymousObjectsKt'::'<EnsureInitialized>'()
     ldarg.0
-    newobj instance void class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!!0>::.ctor(!0)
+    box !!0
+    newobj instance void 'anonymousObjectsKt$genericAnonymous$source$1'::.ctor(object)
     stloc.0
     ldloc.0
     stloc.1
@@ -1002,8 +887,8 @@ IL_genericInterfaceJoin_1:
     call !!0 'anonymousObjectsKt'::'genericAnonymous'<string>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "owner"
-    newobj instance void class 'AnonymousOwner`1'<string>::.ctor(!0)
-    call instance class 'AnonymousValue' class 'AnonymousOwner`1'<string>::'source'()
+    newobj instance void 'AnonymousOwner'::.ctor(object)
+    call instance class 'AnonymousValue' 'AnonymousOwner'::'source'()
     stloc.0
     ldloc.0
     isinst class 'AnonymousValue`1'<string>

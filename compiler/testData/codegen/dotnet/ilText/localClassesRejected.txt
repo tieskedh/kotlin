@@ -27,13 +27,13 @@
        extends [mscorlib]System.Object
 {
   .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 05 4c 6f 63 61 6c 00 00)
-  .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value') cil managed
+  .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' '$value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' '$value') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    stfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'localClassesRejectedKt$mutableCaptureSupported$Local'::'$value'
+    stfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' 'localClassesRejectedKt$mutableCaptureSupported$Local'::'$value'
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -42,8 +42,9 @@
   {
     .maxstack 1
     ldarg.0
-    ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'localClassesRejectedKt$mutableCaptureSupported$Local'::'$value'
-    ldfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::'element'
+    ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' 'localClassesRejectedKt$mutableCaptureSupported$Local'::'$value'
+    ldfld object [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::'element'
+    unbox.any [mscorlib]System.Int32
     ret
   }
 }
@@ -54,18 +55,20 @@
   {
     .maxstack 2
     .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'value'
+      [0] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' 'value'
     )
-    newobj instance void class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::.ctor()
     stloc.0
     ldloc.0
     ldc.i4 1
-    stfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::'element'
+    box [mscorlib]System.Int32
+    stfld object [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::'element'
     ldloc.0
     ldc.i4 2
-    stfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::'element'
+    box [mscorlib]System.Int32
+    stfld object [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::'element'
     ldloc.0
-    newobj instance void 'localClassesRejectedKt$mutableCaptureSupported$Local'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>)
+    newobj instance void 'localClassesRejectedKt$mutableCaptureSupported$Local'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef')
     call instance int32 'localClassesRejectedKt$mutableCaptureSupported$Local'::'value'()
     ret
   }

@@ -1,9 +1,4 @@
 .assembly extern mscorlib {}
-.assembly extern System
-{
-  .ver 4:0:0:0
-  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
-}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -11,66 +6,42 @@
 .assembly 'genericEvicted' {}
 .module 'main-genericEvicted.il'
 
-.class interface public abstract auto ansi 'GB'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_v__KotlinErased__f199a32ccaf9810855b9007833fc966a'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'v__KotlinErased__f199a32ccaf9810855b9007833fc966a'()
-  {
-    .get instance object 'GB'::'get_v__KotlinErased__f199a32ccaf9810855b9007833fc966a'()
-  }
-}
-.class public auto ansi beforefieldinit 'GB`1'<'T'>
+.class public auto ansi beforefieldinit 'GB'
        extends [mscorlib]System.Object
-       implements 'GB'
 {
-  .field private !0 'v'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'v') cil managed
+  .field private object 'v'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'v') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'GB`1'<!0>::'v'
+    stfld object 'GB'::'v'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_v'() cil managed
+  .method public hidebysig specialname instance object 'get_v'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'GB`1'<!0>::'v'
+    ldfld object 'GB'::'v'
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-v>>'() cil managed
+  .property instance object 'v'()
   {
-    .override method instance object 'GB'::'get_v__KotlinErased__f199a32ccaf9810855b9007833fc966a'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GB`1'<!0>
-    call instance !0 class 'GB`1'<!0>::'get_v'()
-    box !0
-    ret
-  }
-  .property instance !0 'v'()
-  {
-    .get instance !0 'GB`1'::'get_v'()
+    .get instance object 'GB'::'get_v'()
   }
 }
 .class public auto ansi sealed beforefieldinit 'DInt'
-       extends class 'GB`1'<int32>
+       extends 'GB'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'x') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    call instance void class 'GB`1'<int32>::.ctor(!0)
+    box [mscorlib]System.Int32
+    call instance void 'GB'::.ctor(object)
     ret
   }
 }
@@ -89,7 +60,7 @@
     .maxstack 3
     ldc.i4 7
     newobj instance void 'DInt'::.ctor(int32)
-    callvirt instance object 'GB'::'get_v__KotlinErased__f199a32ccaf9810855b9007833fc966a'()
+    call instance object 'GB'::'get_v'()
     unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull

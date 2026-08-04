@@ -89,6 +89,26 @@ The Kotlin actual owns every semantic policy above those mechanics:
 The storage choice is therefore a CLR implementation detail, not a transfer
 of semantic authority to the BCL.
 
+### Physical overload names and non-observable capacity policy
+
+The classified CLR `object` carrier makes three Common overload pairs collide
+after erasure. Their bounded physical naming table is:
+
+- `StringBuilder.append(Any?)` becomes `appendAny`;
+- `StringBuilder.insert(Int, Any?)` becomes `insertAny`; and
+- top-level `StringBuilder.appendLine(Any?)` becomes `appendLineAny`.
+
+KLIB retains the authoritative Kotlin names. The `CharSequence` overloads and
+`Appendable` interface slots keep their ordinary physical names. This table is
+not a general declaration-order or collision-suffix scheme; it gives only
+these fixed Common overloads stable, C#-addressable CLR identities.
+
+Common specifies no observable effect for `trimToSize`, so the .NET actual may
+truthfully implement it as a no-op. Capacity remains an implementation hint.
+Range validation, self-append/self-insert snapshots, `CharArray` copying,
+search, surrogate-preserving reversal, and rendering remain Kotlin policy and
+cannot be delegated wholesale to BCL overload behavior.
+
 ### Exact Common source closure
 
 The first product phase compiles authoritative Common `Appendable.kt` and an
@@ -202,7 +222,8 @@ for the irreducible mechanics and avoid a new versioned runtime service.
   phase adds the two exact Common `buildString` declarations without changing
   that class ABI.
 - C# sees a truthful Kotlin `Appendable` interface and wrapper class rather
-  than a false claim about the sealed BCL builder.
+  than a false claim about the sealed BCL builder. Its public constructors are
+  CLR-public; the constructor accepting private storage remains CLR-private.
 - The wrapper adds one allocation beside its private BCL storage. This is the
   cost of preserving Kotlin identity on a host without the JVM relationship.
 - Storage can change before or after ABI freeze without changing public

@@ -1,9 +1,4 @@
 .assembly extern mscorlib {}
-.assembly extern System
-{
-  .ver 4:0:0:0
-  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
-}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -216,53 +211,37 @@
     .set instance void 'IntValueIterator'::'set_available'(bool)
   }
 }
-.class interface public abstract auto ansi 'GenericValueIterator'
+.class public auto ansi sealed beforefieldinit 'GenericValueIterator'
+       extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
 {
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance bool 'hasNext__KotlinErased__edff050d2156e31aeee53837076531e6'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance object 'next__KotlinErased__654713c1f81363ce0db238c1614213a6'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-}
-.class public auto ansi sealed beforefieldinit 'GenericValueIterator`1'<'T'>
-       extends [mscorlib]System.Object
-       implements 'GenericValueIterator', [Kotlin.Runtime]'Kotlin.Collections.Iterator', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
-{
-  .field private !0 'value'
+  .field private object 'value'
   .field private bool 'available'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'value') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'GenericValueIterator`1'<!0>::'value'
+    stfld object 'GenericValueIterator'::'value'
     ldarg.0
     ldc.i4.1
-    stfld bool class 'GenericValueIterator`1'<!0>::'available'
+    stfld bool 'GenericValueIterator'::'available'
     ret
   }
-  .method private hidebysig specialname instance !0 'get_value'() cil managed
+  .method private hidebysig specialname instance object 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'GenericValueIterator`1'<!0>::'value'
+    ldfld object 'GenericValueIterator'::'value'
     ret
   }
   .method private hidebysig specialname instance bool 'get_available'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld bool class 'GenericValueIterator`1'<!0>::'available'
+    ldfld bool 'GenericValueIterator'::'available'
     ret
   }
   .method private hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
@@ -270,24 +249,24 @@
     .maxstack 2
     ldarg.0
     ldarg.1
-    stfld bool class 'GenericValueIterator`1'<!0>::'available'
+    stfld bool 'GenericValueIterator'::'available'
     ret
   }
   .method public hidebysig newslot virtual instance bool 'hasNext'() cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance bool class 'GenericValueIterator`1'<!0>::'get_available'()
+    call instance bool 'GenericValueIterator'::'get_available'()
     ret
   }
-  .method public hidebysig newslot virtual instance !0 'next'() cil managed
+  .method public hidebysig newslot virtual instance object 'next'() cil managed
   {
     .maxstack 2
     ldarg.0
     ldc.i4.0
-    call instance void class 'GenericValueIterator`1'<!0>::'set_available'(bool)
+    call instance void 'GenericValueIterator'::'set_available'(bool)
     ldarg.0
-    call instance !0 class 'GenericValueIterator`1'<!0>::'get_value'()
+    call instance object 'GenericValueIterator'::'get_value'()
     ret
   }
   .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
@@ -295,15 +274,7 @@
     .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
     .maxstack 1
     ldarg.0
-    callvirt instance bool class 'GenericValueIterator`1'<!0>::'hasNext'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
-  {
-    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>::'HasNext'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance bool class 'GenericValueIterator`1'<!0>::'hasNext'()
+    callvirt instance bool 'GenericValueIterator'::'hasNext'()
     ret
   }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
@@ -311,56 +282,22 @@
     .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     .maxstack 1
     ldarg.0
-    callvirt instance !0 class 'GenericValueIterator`1'<!0>::'next'()
-    box !0
+    callvirt instance object 'GenericValueIterator'::'next'()
     ret
   }
-  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
+  .property instance object 'value'()
   {
-    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>::'Next'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance !0 class 'GenericValueIterator`1'<!0>::'next'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance bool '<GenericClassCanonicalBridge-hasNext>'() cil managed
-  {
-    .override method instance bool 'GenericValueIterator'::'hasNext__KotlinErased__edff050d2156e31aeee53837076531e6'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericValueIterator`1'<!0>
-    callvirt instance bool class 'GenericValueIterator`1'<!0>::'hasNext'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-next>'() cil managed
-  {
-    .override method instance object 'GenericValueIterator'::'next__KotlinErased__654713c1f81363ce0db238c1614213a6'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericValueIterator`1'<!0>
-    callvirt instance !0 class 'GenericValueIterator`1'<!0>::'next'()
-    box !0
-    ret
-  }
-  .property instance !0 'value'()
-  {
-    .get instance !0 'GenericValueIterator`1'::'get_value'()
+    .get instance object 'GenericValueIterator'::'get_value'()
   }
   .property instance bool 'available'()
   {
-    .get instance bool 'GenericValueIterator`1'::'get_available'()
-    .set instance void 'GenericValueIterator`1'::'set_available'(bool)
+    .get instance bool 'GenericValueIterator'::'get_available'()
+    .set instance void 'GenericValueIterator'::'set_available'(bool)
   }
 }
-.class interface public abstract auto ansi 'DeferredValueIterator'
-       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-}
-.class public abstract auto ansi beforefieldinit 'DeferredValueIterator`1'<'T'>
+.class public abstract auto ansi beforefieldinit 'DeferredValueIterator'
        extends [mscorlib]System.Object
-       implements 'DeferredValueIterator', [Kotlin.Runtime]'Kotlin.Collections.Iterator', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
@@ -371,14 +308,15 @@
   }
 }
 .class public auto ansi sealed beforefieldinit 'DeferredStringValueIterator'
-       extends class 'DeferredValueIterator`1'<string>
+       extends 'DeferredValueIterator'
+       implements class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>
 {
   .field private string 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
   {
     .maxstack 2
     ldarg.0
-    call instance void class 'DeferredValueIterator`1'<string>::.ctor()
+    call instance void 'DeferredValueIterator'::.ctor()
     ldarg.0
     ldarg.1
     stfld string 'DeferredStringValueIterator'::'value'
@@ -457,7 +395,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'ViewedStringIterator'
        extends [mscorlib]System.Object
-       implements 'IteratorView', class 'IteratorView`1'<string>
+       implements 'IteratorView', class 'IteratorView`1'<string>, class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>
 {
   .field private string 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
@@ -893,7 +831,7 @@ IL_genericInterfaceJoin_1:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "generic"
-    newobj instance void class 'GenericValueIterator`1'<string>::.ctor(!0)
+    newobj instance void 'GenericValueIterator'::.ctor(object)
     call !!0 'arrayIteratorsKt'::'erasedGenericNext'<string>(class [Kotlin.Runtime]'Kotlin.Collections.Iterator')
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "deferred"

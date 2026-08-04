@@ -61,7 +61,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Reified array operations reuse ordinary substituted carriers](decisions/reified-array-operations.md)
 - [Nominal `KClass` and class literals over classified CLR evidence](decisions/kclass-and-class-literals.md)
 - [Parameterless Kotlin marker annotation classes](decisions/marker-annotation-classes.md)
-- [Erased identity and typed capability for generic classes](decisions/generic-class-erased-identity.md)
+- [Erased runtime and virtual ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
 - [Generic and variant interface ABI](decisions/draft-adr-generic-interface-abi.md)

@@ -1,9 +1,4 @@
 .assembly extern mscorlib {}
-.assembly extern System
-{
-  .ver 4:0:0:0
-  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
-}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -22,59 +17,60 @@
     ret
   }
 }
-.class interface public abstract auto ansi 'test.constraints.rejected.GenericBase'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__f0ada401b14821b51c4aaa9a38ec86f7'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'value__KotlinErased__f0ada401b14821b51c4aaa9a38ec86f7'()
-  {
-    .get instance object 'test.constraints.rejected.GenericBase'::'get_value__KotlinErased__f0ada401b14821b51c4aaa9a38ec86f7'()
-  }
-}
-.class public auto ansi beforefieldinit 'test.constraints.rejected.GenericBase`1'<'T'>
+.class public auto ansi beforefieldinit 'test.constraints.rejected.GenericBase'
        extends [mscorlib]System.Object
-       implements 'test.constraints.rejected.GenericBase'
 {
-  .field private !0 'value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  .field private object 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'value') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'test.constraints.rejected.GenericBase`1'<!0>::'value'
+    stfld object 'test.constraints.rejected.GenericBase'::'value'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  .method public hidebysig specialname instance object 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'test.constraints.rejected.GenericBase`1'<!0>::'value'
+    ldfld object 'test.constraints.rejected.GenericBase'::'value'
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  .property instance object 'value'()
   {
-    .override method instance object 'test.constraints.rejected.GenericBase'::'get_value__KotlinErased__f0ada401b14821b51c4aaa9a38ec86f7'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'test.constraints.rejected.GenericBase`1'<!0>
-    call instance !0 class 'test.constraints.rejected.GenericBase`1'<!0>::'get_value'()
-    box !0
-    ret
-  }
-  .property instance !0 'value'()
-  {
-    .get instance !0 'test.constraints.rejected.GenericBase`1'::'get_value'()
+    .get instance object 'test.constraints.rejected.GenericBase'::'get_value'()
   }
 }
 .class interface public abstract auto ansi 'test.constraints.rejected.LocalMark'
 {
+}
+.class public auto ansi sealed beforefieldinit 'test.constraints.rejected.EvictedClassBound'
+       extends [mscorlib]System.Object
+{
+  .field private object 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld object 'test.constraints.rejected.EvictedClassBound'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance object 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld object 'test.constraints.rejected.EvictedClassBound'::'value'
+    ret
+  }
+  .property instance object 'value'()
+  {
+    .get instance object 'test.constraints.rejected.EvictedClassBound'::'get_value'()
+  }
 }
 .class public abstract sealed auto ansi beforefieldinit 'test.constraints.rejected.genericConstraintsRejectedKt'
        extends [mscorlib]System.Object

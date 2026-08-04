@@ -53,23 +53,6 @@ internal data class DotNetGenericInterfaceInfo(
     }
 }
 
-/**
- * The two physical CLR identities of one Kotlin-owned ordinary generic class.
- *
- * [canonicalClassInfo] is a non-generic interface used by Kotlin storage, dispatch, projections,
- * and erased runtime operations. [typedClassInfo] is the invariant CLR generic class which owns
- * constructors, state, source-named members, and the natural C# capability. Both views are
- * implemented by the same object; the canonical identity is never a wrapper.
- */
-internal data class DotNetGenericClassInfo(
-    val canonicalClassInfo: DotNetIlClassInfo,
-    val typedClassInfo: DotNetIlClassInfo,
-)
-
-/** Ordinary classes whose declaration parameters require erased Kotlin runtime identity. */
-internal val IrClass.isDotNetGenericClassDeclaration: Boolean
-    get() = !isInterface && typeParameters.isNotEmpty()
-
 internal enum class DotNetGenericInterfaceView {
     CANONICAL,
     DECLARED,

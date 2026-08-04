@@ -109,34 +109,35 @@ the physical reified throwing-stub contract remain separate boundaries.
 
 ### 2. Expand Common collections by exact dependency closure
 
-Use [`common-collections.md`](common-collections.md). The next slice may now include its selected
-ordinary non-reified Common/generated inline families, but only after each complete source,
-expect/actual, backend, and runtime dependency closure is known. Do not fork Common algorithms to
-make a slice look smaller.
+Use [`common-collections.md`](common-collections.md). Its builder and Common abstract-base
+foundation now composes with the selected erased generic-class ABI without a target-authored
+algorithm or collection-specific bridge.
 
 The collection work provides ordinary user value and foundations for enums, while exercising
 generic interfaces, arrays, separate products, and profile-compatible stdlib publication.
 
-Generic-class member dispatch may now exploit an exact typed CLR capability through the bounded
-policy in [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md):
-fresh constructions and immutable aliases may call it directly, other exactly representable
-invariant receivers may probe once per call and fall back to canonical dispatch. Global provenance,
-explicit loop guard hoisting, visibility-based full erasure, and AOT-specific specialization remain on hold
-until measurements after this bounded path show a material residual cost. A failed capability
-probe is maintained for Kotlin correctness and is not a performance target.
+The erased physical generic-class route is selected in
+[`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md).
+The disproven primary-typed/exceptional-canonical model has been replaced by one non-generic
+Kotlin runtime owner and one erased virtual hierarchy. Explicit typed C# export remains a later
+fail-closed product. Hybrid class capabilities, wrappers as identity, receiver-only provenance,
+guard hoisting, visibility-dependent ABI, and AOT-specific specialization remain excluded.
 
-The source-level bootstrap cycle has a truthful three-phase cut. Common `Appendable`, the complete
-`StringBuilder` expect class and its non-contract extensions do not depend on contracts; only the
-two top-level `buildString` declarations do. The existing exact fail-closed Common projection may
-therefore publish the builder class, generated `joinTo`/`joinToString`, and Common abstract
-collection bases first while omitting precisely those two declarations. This is a complete class
-surface and an exact declaration subset, not a target stub or rewritten algorithm.
+The first part of the source-level bootstrap cycle is complete. Common
+`Appendable`, the complete `StringBuilder` expect class and its non-contract extensions do not
+depend on contracts; only the two top-level `buildString` declarations do. The exact fail-closed
+Common projection therefore produces the builder class, generated `joinTo`/`joinToString`, and
+Common abstract collection bases while omitting precisely those two declarations. Its source
+closure is complete over the erased generic-class representation; it is not a target stub or
+rewritten algorithm.
 
-Modern enums plus the non-reified `EnumEntries` core then form one coherent language/product
-phase. They use Kotlin-owned reference classes, the general Comparable mapping, producer-recorded
-entry-field binding, and the existing static-initialization machinery; they are not CLR value-type
-enums. Once `InvocationKind` exists, the exact contracts/`Standard.kt`/`buildString` closure can
-land and the temporary projection can give way to the full ordinary Common file. General reified
+Modern enums plus the non-reified `EnumEntries` core now form the next coherent language/product
+phase. They use
+Kotlin-owned reference classes, the general Comparable mapping, producer-recorded entry-field
+binding, and the existing static-initialization machinery; they are not CLR value-type enums. Once
+`InvocationKind` exists, the exact
+contracts/`Standard.kt`/`buildString` closure can land and the temporary projection can give way to
+the full ordinary Common file. General reified
 enum functions remain behind the reified gate throughout.
 
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
@@ -153,7 +154,7 @@ implementation follows the shared annotation member generator and covers separat
 valued constructors and Kotlin reflection discovery remain separate. See
 [`../decisions/marker-annotation-classes.md`](../decisions/marker-annotation-classes.md).
 
-After the builder/abstract-base and enum phases, publish the complete contracts product rather
+After the generic-class, collection, and enum phases, publish the complete contracts product rather
 than a compiler-private cycle breaker. Existing nullability and CodeAnalysis plumbing already
 distinguishes authoritative Kotlin facts from exact CLR projections. Compiler-consumed effects
 belong to KLIB/Common semantics; Roslyn attributes may additionally expose only their exact subset
@@ -226,8 +227,8 @@ The current verified count and command belong only in [`../../STATUS.md`](../../
 
 Parking means “fail clearly and do not constrain a future ABI,” not “approximate now.”
 
-- enums, pending the selected builder/abstract-base foundation and coherent non-reified
-  `EnumEntries` product;
+- enums and the coherent non-reified `EnumEntries` product, selected as the next bounded phase over
+  the erased generic-class and Common abstract-list foundations;
 - valued annotation constructors and arguments, wider use-site targets, and runtime annotation
   reflection; parameterless markers, retention, and their exact CLR-parent projection are selected;
 - `KType`, `typeOf`, and member/annotation reflection; the nominal `KClass`/class-literal floor is
@@ -237,7 +238,7 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - suspend inline functions until coroutine state machines are supported;
 - coroutine state machines and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;
-- `Appendable`, `StringBuilder`, and `lateinit` (`CharSequence` itself is complete);
+- `lateinit`, plus the two `buildString` declarations pending the contracts closure;
 - collection/stdlib families outside admitted Common dependency closures; and
 - broad Gradle/KMP distribution integration beyond the current target model.
 

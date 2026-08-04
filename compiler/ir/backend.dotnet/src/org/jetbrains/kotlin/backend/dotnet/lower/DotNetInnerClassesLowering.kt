@@ -38,6 +38,8 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classOrNull
+import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
+import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.util.IrTypeParameterRemapper
 import org.jetbrains.kotlin.ir.util.copyAnnotationsFrom
 import org.jetbrains.kotlin.ir.util.copyTo
@@ -135,11 +137,12 @@ internal class DotNetInnerClassesSupport(private val irFactory: IrFactory) : Inn
 /**
  * Makes Kotlin's implicit generic-outer arguments explicit on CLR inner metadata.
  *
- * FIR types already spell an inner instantiation as `Inner<own, outer...>` even though the IR
- * declaration initially owns only `own`. Appending copies of the immediate outer's full parameter
- * list therefore makes declaration and use-site arities agree without rewriting call sites. The
- * pass runs outer-first: at the next nesting level the immediate outer already owns its inherited
- * copies, so `Second<V>` below `Outer<T>.First<U>` becomes `Second<V, U, T>`.
+ * FIR types already spell an inner instantiation as `Inner<own, outer...>` even though source IR
+ * declarations initially own only `own`. KLIB deserialization may already have materialized the
+ * captured outer parameters on the declaration. The lowering therefore reuses a complete trailing
+ * captured set and copies only the source-IR form; both inputs normalize to the same CLR shape.
+ * The pass runs outer-first: at the next nesting level the immediate outer already owns its
+ * inherited copies, so `Second<V>` below `Outer<T>.First<U>` becomes `Second<V, U, T>`.
  *
  * All types inside the inner subtree are remapped from the outer parameters to the new independent
  * slots before the common inner-class passes create `this$0`. The positional model, generic base
@@ -159,10 +162,62 @@ internal class DotNetInnerClassTypeParametersLowering(
         if (irClass.isInner) {
             val outerClass = irClass.parentAsClass
             if (outerClass.typeParameters.isNotEmpty()) {
-                val copiedOuterTypeParameters = irClass.copyTypeParameters(outerClass.typeParameters)
-                val outerToInner = outerClass.typeParameters.zip(copiedOuterTypeParameters).toMap()
+                val receiverType = irClass.thisReceiver?.type as? IrSimpleType
+                    ?: error("Internal .NET backend error: inner class '${irClass.name}' has no simple receiver type")
+                val receiverArguments = receiverType.arguments.map { argument ->
+                    (argument as? IrTypeProjection)?.type as? IrSimpleType
+                        ?: error(
+                            "Internal .NET backend error: inner class '${irClass.name}' has a " +
+                                    "non-concrete receiver type argument"
+                        )
+                }
+                val ownParameterCount = receiverArguments.size - outerClass.typeParameters.size
+                check(ownParameterCount >= 0) {
+                    "Internal .NET backend error: inner class '${irClass.name}' has fewer receiver " +
+                            "arguments than its outer class"
+                }
+                val declarationParameters = irClass.typeParameters
+                val capturedOuterTypeParameters = when (declarationParameters.size) {
+                    ownParameterCount -> {
+                        check(receiverArguments.take(ownParameterCount).zip(declarationParameters).all { pair ->
+                            pair.first.classifier == pair.second.symbol
+                        }) {
+                            "Internal .NET backend error: inner class '${irClass.name}' has a malformed " +
+                                    "declaration-owned receiver prefix"
+                        }
+                        check(receiverArguments.drop(ownParameterCount).zip(outerClass.typeParameters).all { pair ->
+                            pair.first.classifier == pair.second.symbol
+                        }) {
+                            "Internal .NET backend error: inner class '${irClass.name}' has a malformed " +
+                                    "outer-owned receiver suffix"
+                        }
+                        irClass.copyTypeParameters(outerClass.typeParameters)
+                    }
+
+                    receiverArguments.size -> {
+                        check(receiverArguments.zip(declarationParameters).all { pair ->
+                            pair.first.classifier == pair.second.symbol
+                        }) {
+                            "Internal .NET backend error: actualized or deserialized inner class " +
+                                    "'${irClass.name}' has a non-positional captured-parameter shape"
+                        }
+                        declarationParameters.takeLast(outerClass.typeParameters.size)
+                    }
+
+                    else -> error(
+                        "Internal .NET backend error: inner class '${irClass.name}' partially owns " +
+                                "its captured outer type parameters"
+                    )
+                }
+                val outerToInner = outerClass.typeParameters.zip(capturedOuterTypeParameters).toMap()
                 irClass.dotNetOuterTypeParameterCopies = outerToInner
                 irClass.remapTypes(IrTypeParameterRemapper(outerToInner))
+                // `IrClass.defaultType` is its dispatch-receiver type. Some deserialized KLIB
+                // receivers retain their pre-normalization argument list even after declaration
+                // parameters are materialized, so rebuild that authoritative self type explicitly.
+                irClass.thisReceiver!!.type = irClass.symbol.typeWith(
+                    irClass.typeParameters.map { it.typeParameterDefaultType }
+                )
             }
         }
         irClass.declarations.filterIsInstance<IrClass>().forEach(::lowerClassTree)
@@ -266,5 +321,38 @@ internal class DotNetInnerClassConstructorCallsLowering(context: DotNetBackendCo
             return null
         }
         return simpleType.arguments.map { (it as? IrTypeProjection)?.type ?: return null }
+    }
+}
+
+/**
+ * Completes the target IR transition from a logical Kotlin inner class to a CLR nested class.
+ *
+ * The common inner-class passes have already replaced lexical outer access with an explicit field
+ * and constructor parameter. [DotNetInnerClassTypeParametersLowering] likewise made every outer
+ * generic slot physically owned by the nested TypeDef. Keeping [IrClass.isInner] after that point
+ * would make general IR type substitution count both the explicit copies and the lexical outer
+ * parameters. Clear it only after all common inner-class consumers have run; nesting itself stays
+ * represented by the declaration parent and Kotlin's original meaning remains in serialized KLIB.
+ */
+internal class DotNetInnerClassPhysicalizationLowering(
+    @Suppress("UNUSED_PARAMETER") context: DotNetBackendContext,
+) : ModuleLoweringPass {
+    override fun lower(irModule: IrModuleFragment) {
+        for (irFile in irModule.files) {
+            irFile.declarations.filterIsInstance<IrClass>().forEach(::lowerClassTree)
+        }
+    }
+
+    private fun lowerClassTree(irClass: IrClass) {
+        irClass.declarations.filterIsInstance<IrClass>().forEach(::lowerClassTree)
+        if (!irClass.isInner) return
+
+        val receiverType = irClass.thisReceiver?.type as? IrSimpleType
+            ?: error("Internal .NET backend error: inner class '${irClass.name}' has no simple receiver type")
+        check(receiverType.arguments.size == irClass.typeParameters.size) {
+            "Internal .NET backend error: inner class '${irClass.name}' was not normalized to " +
+                    "its complete CLR generic parameter list"
+        }
+        irClass.isInner = false
     }
 }

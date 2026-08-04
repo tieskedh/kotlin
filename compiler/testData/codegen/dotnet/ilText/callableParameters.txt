@@ -1,9 +1,4 @@
 .assembly extern mscorlib {}
-.assembly extern System
-{
-  .ver 4:0:0:0
-  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
-}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -46,55 +41,30 @@
     }
   }
 }
-.class interface public abstract auto ansi 'demo.TextBox'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__223337c041794aeece8462cb23fbf2bf'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'value__KotlinErased__223337c041794aeece8462cb23fbf2bf'()
-  {
-    .get instance object 'demo.TextBox'::'get_value__KotlinErased__223337c041794aeece8462cb23fbf2bf'()
-  }
-}
-.class public auto ansi sealed beforefieldinit 'demo.TextBox`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'demo.TextBox'
        extends [mscorlib]System.Object
-       implements 'demo.TextBox'
 {
-  .field private !0 'value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  .field private object 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'value') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'demo.TextBox`1'<!0>::'value'
+    stfld object 'demo.TextBox'::'value'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  .method public hidebysig specialname instance object 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'demo.TextBox`1'<!0>::'value'
+    ldfld object 'demo.TextBox'::'value'
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  .property instance object 'value'()
   {
-    .override method instance object 'demo.TextBox'::'get_value__KotlinErased__223337c041794aeece8462cb23fbf2bf'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'demo.TextBox`1'<!0>
-    call instance !0 class 'demo.TextBox`1'<!0>::'get_value'()
-    box !0
-    ret
-  }
-  .property instance !0 'value'()
-  {
-    .get instance !0 'demo.TextBox`1'::'get_value'()
+    .get instance object 'demo.TextBox'::'get_value'()
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'demo.callableParametersKt'

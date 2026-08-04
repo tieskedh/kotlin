@@ -1,9 +1,4 @@
 .assembly extern mscorlib {}
-.assembly extern System
-{
-  .ver 4:0:0:0
-  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
-}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -17,104 +12,62 @@
   {
   }
 }
-.class interface public abstract auto ansi 'GenericLocalOwner'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__3890fc68ee5e9adbb6849bad741bd287'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-}
-.class public auto ansi sealed beforefieldinit 'GenericLocalOwner`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'GenericLocalOwner'
        extends [mscorlib]System.Object
-       implements 'GenericLocalOwner'
 {
-  .class nested private interface abstract auto ansi 'GenericLocalOwner$value$Local'
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__ab9033053949afd166f3dc2f04c5eb53'() cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    }
-  }
-  .class nested private auto ansi sealed beforefieldinit 'GenericLocalOwner$value$Local`1'<'T'>
+  .class nested private auto ansi sealed beforefieldinit 'GenericLocalOwner$value$Local'
          extends [mscorlib]System.Object
-         implements 'GenericLocalOwner`1'/'GenericLocalOwner$value$Local'
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 05 4c 6f 63 61 6c 00 00)
-    .field private class 'GenericLocalOwner`1'<!0> 'this$0'
-    .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericLocalOwner`1'<!0> 'this$0') cil managed
+    .field private class 'GenericLocalOwner' 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericLocalOwner' 'this$0') cil managed
     {
       .maxstack 2
       ldarg.0
       ldarg.1
-      stfld class 'GenericLocalOwner`1'<!0> class 'GenericLocalOwner`1'/'GenericLocalOwner$value$Local`1'<!0>::'this$0'
+      stfld class 'GenericLocalOwner' 'GenericLocalOwner'/'GenericLocalOwner$value$Local'::'this$0'
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
     }
-    .method public hidebysig instance !0 'value'() cil managed
+    .method public hidebysig instance object 'value'() cil managed
     {
       .maxstack 1
       ldarg.0
-      ldfld class 'GenericLocalOwner`1'<!0> class 'GenericLocalOwner`1'/'GenericLocalOwner$value$Local`1'<!0>::'this$0'
-      call instance !0 class 'GenericLocalOwner`1'<!0>::'get_seed'()
-      ret
-    }
-    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-value>'() cil managed
-    {
-      .override method instance object 'GenericLocalOwner`1'/'GenericLocalOwner$value$Local'::'value__KotlinErased__ab9033053949afd166f3dc2f04c5eb53'()
-      .maxstack 1
-      ldarg.0
-      castclass class 'GenericLocalOwner`1'/'GenericLocalOwner$value$Local`1'<!0>
-      call instance !0 class 'GenericLocalOwner`1'/'GenericLocalOwner$value$Local`1'<!0>::'value'()
-      box !0
+      ldfld class 'GenericLocalOwner' 'GenericLocalOwner'/'GenericLocalOwner$value$Local'::'this$0'
+      call instance object 'GenericLocalOwner'::'get_seed'()
       ret
     }
   }
-  .field private !0 'seed'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'seed') cil managed
+  .field private object 'seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'seed') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'GenericLocalOwner`1'<!0>::'seed'
+    stfld object 'GenericLocalOwner'::'seed'
     ret
   }
-  .method private hidebysig specialname instance !0 'get_seed'() cil managed
+  .method private hidebysig specialname instance object 'get_seed'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'GenericLocalOwner`1'<!0>::'seed'
+    ldfld object 'GenericLocalOwner'::'seed'
     ret
   }
-  .method public hidebysig instance !0 'value'() cil managed
+  .method public hidebysig instance object 'value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    newobj instance void class 'GenericLocalOwner`1'/'GenericLocalOwner$value$Local`1'<!0>::.ctor(class 'GenericLocalOwner`1'<!0>)
-    call instance !0 class 'GenericLocalOwner`1'/'GenericLocalOwner$value$Local`1'<!0>::'value'()
+    newobj instance void 'GenericLocalOwner'/'GenericLocalOwner$value$Local'::.ctor(class 'GenericLocalOwner')
+    call instance object 'GenericLocalOwner'/'GenericLocalOwner$value$Local'::'value'()
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-value>'() cil managed
+  .property instance object 'seed'()
   {
-    .override method instance object 'GenericLocalOwner'::'value__KotlinErased__3890fc68ee5e9adbb6849bad741bd287'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericLocalOwner`1'<!0>
-    call instance !0 class 'GenericLocalOwner`1'<!0>::'value'()
-    box !0
-    ret
-  }
-  .property instance !0 'seed'()
-  {
-    .get instance !0 'GenericLocalOwner`1'::'get_seed'()
+    .get instance object 'GenericLocalOwner'::'get_seed'()
   }
 }
 .class public auto ansi sealed beforefieldinit 'LocalInInitializer'
@@ -348,96 +301,60 @@
     ret
   }
 }
-.class interface private abstract auto ansi 'localClassesKt$genericFunctionLocal$Local'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance object 'captured__KotlinErased__ab91418732df9c12e8a91b87bb1f7fc1'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance object 'own__KotlinErased__c8baba0f5d8bad5155fc4650950ea4ef'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-}
-.class private auto ansi sealed beforefieldinit 'localClassesKt$genericFunctionLocal$Local`2'<'U', 'T'>
+.class private auto ansi sealed beforefieldinit 'localClassesKt$genericFunctionLocal$Local'
        extends [mscorlib]System.Object
-       implements 'localClassesKt$genericFunctionLocal$Local'
 {
   .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 05 4c 6f 63 61 6c 00 00)
-  .field private !1 'captured'
-  .field private !0 'own'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!1 'captured', !0 'own') cil managed
+  .field private object 'captured'
+  .field private object 'own'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'captured', object 'own') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !1 class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>::'captured'
+    stfld object 'localClassesKt$genericFunctionLocal$Local'::'captured'
     ldarg.0
     ldarg.2
-    stfld !0 class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>::'own'
+    stfld object 'localClassesKt$genericFunctionLocal$Local'::'own'
     ret
   }
-  .method private hidebysig specialname instance !1 'get_captured'() cil managed
+  .method private hidebysig specialname instance object 'get_captured'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !1 class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>::'captured'
+    ldfld object 'localClassesKt$genericFunctionLocal$Local'::'captured'
     ret
   }
-  .method private hidebysig specialname instance !0 'get_own'() cil managed
+  .method private hidebysig specialname instance object 'get_own'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>::'own'
+    ldfld object 'localClassesKt$genericFunctionLocal$Local'::'own'
     ret
   }
-  .method public hidebysig instance !1 'captured'() cil managed
+  .method public hidebysig instance object 'captured'() cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance !1 class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>::'get_captured'()
+    call instance object 'localClassesKt$genericFunctionLocal$Local'::'get_captured'()
     ret
   }
-  .method public hidebysig instance !0 'own'() cil managed
+  .method public hidebysig instance object 'own'() cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance !0 class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>::'get_own'()
+    call instance object 'localClassesKt$genericFunctionLocal$Local'::'get_own'()
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-captured>'() cil managed
+  .property instance object 'captured'()
   {
-    .override method instance object 'localClassesKt$genericFunctionLocal$Local'::'captured__KotlinErased__ab91418732df9c12e8a91b87bb1f7fc1'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>
-    call instance !1 class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>::'captured'()
-    box !1
-    ret
+    .get instance object 'localClassesKt$genericFunctionLocal$Local'::'get_captured'()
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-own>'() cil managed
+  .property instance object 'own'()
   {
-    .override method instance object 'localClassesKt$genericFunctionLocal$Local'::'own__KotlinErased__c8baba0f5d8bad5155fc4650950ea4ef'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>
-    call instance !0 class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>::'own'()
-    box !0
-    ret
-  }
-  .property instance !1 'captured'()
-  {
-    .get instance !1 'localClassesKt$genericFunctionLocal$Local`2'::'get_captured'()
-  }
-  .property instance !0 'own'()
-  {
-    .get instance !0 'localClassesKt$genericFunctionLocal$Local`2'::'get_own'()
+    .get instance object 'localClassesKt$genericFunctionLocal$Local'::'get_own'()
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'localClassesKt'
@@ -495,12 +412,14 @@
       [0] class 'localClassesKt$genericFunctionLocal$Local' 'local'
     )
     ldarg.0
+    box !!0
     ldc.i4 5
-    newobj instance void class 'localClassesKt$genericFunctionLocal$Local`2'<int32, !!0>::.ctor(!1, !0)
+    box [mscorlib]System.Int32
+    newobj instance void 'localClassesKt$genericFunctionLocal$Local'::.ctor(object, object)
     stloc.0
     ldloc.0
-    castclass class 'localClassesKt$genericFunctionLocal$Local`2'<int32, !!0>
-    call instance !0 class 'localClassesKt$genericFunctionLocal$Local`2'<int32, !!0>::'own'()
+    call instance object 'localClassesKt$genericFunctionLocal$Local'::'own'()
+    unbox.any [mscorlib]System.Int32
     ldc.i4 5
     ceq
     ldc.i4.0
@@ -510,8 +429,8 @@
     ret
 IL_whenNext_1:
     ldloc.0
-    castclass class 'localClassesKt$genericFunctionLocal$Local`2'<int32, !!0>
-    call instance !1 class 'localClassesKt$genericFunctionLocal$Local`2'<int32, !!0>::'captured'()
+    call instance object 'localClassesKt$genericFunctionLocal$Local'::'captured'()
+    unbox.any !!0
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -552,8 +471,9 @@ IL_whenNext_1:
     call !!0 'localClassesKt'::'genericFunctionLocal'<string>(!!0, !!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "owner"
-    newobj instance void class 'GenericLocalOwner`1'<string>::.ctor(!0)
-    call instance !0 class 'GenericLocalOwner`1'<string>::'value'()
+    newobj instance void 'GenericLocalOwner'::.ctor(object)
+    call instance object 'GenericLocalOwner'::'value'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 8
     newobj instance void 'LocalInInitializer'::.ctor(int32)

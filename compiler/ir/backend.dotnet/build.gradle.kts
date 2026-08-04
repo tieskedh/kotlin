@@ -49,6 +49,12 @@ tasks.named<ProcessResources>("processResources") {
     )) {
         into("kotlin-dotnet-stdlib/src/kotlin/reflect")
     }
+    from(files(
+        rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractList.kt"),
+    )) {
+        into("kotlin-dotnet-stdlib/src/kotlin/collections")
+    }
     from(rootProject.file("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt")) {
         into("kotlin-dotnet-stdlib/src/kotlin/annotations")
     }

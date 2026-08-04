@@ -137,14 +137,8 @@ IL_whenNext_1:
     ret
   }
 }
-.class interface public abstract auto ansi 'GenericState'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-}
-.class public auto ansi sealed beforefieldinit 'GenericState`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'GenericState'
        extends [mscorlib]System.Object
-       implements 'GenericState'
 {
   .class nested public abstract sealed auto ansi '<CompanionStatics>'
          extends [mscorlib]System.Object
@@ -161,14 +155,14 @@ IL_whenNext_1:
       )
       .try {
         ldc.i4 3
-        stsfld int32 'GenericState`1'/'<CompanionStatics>'::'genericState'
+        stsfld int32 'GenericState'/'<CompanionStatics>'::'genericState'
         leave IL_tryEnd_0
       }
       catch [mscorlib]System.Exception {
         stloc.0
         ldloc.0
         call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
-        stsfld object 'GenericState`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+        stsfld object 'GenericState'/'<CompanionStatics>'::'<static-initialization-failure>'
         leave IL_tryEnd_0
       }
   IL_tryEnd_0:
@@ -179,13 +173,13 @@ IL_whenNext_1:
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .maxstack 2
-      ldsfld object 'GenericState`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+      ldsfld object 'GenericState'/'<CompanionStatics>'::'<static-initialization-failure>'
       ldnull
       ceq
       ldc.i4.0
       ceq
       brfalse IL_whenNext_1
-      ldsfld object 'GenericState`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+      ldsfld object 'GenericState'/'<CompanionStatics>'::'<static-initialization-failure>'
       call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
       ldstr "GenericState"
       call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
@@ -197,19 +191,19 @@ IL_whenNext_1:
     .method public hidebysig specialname static int32 'get_genericState'() cil managed
     {
       .maxstack 1
-      call void 'GenericState`1'/'<CompanionStatics>'::'<EnsureInitialized>'()
-      ldsfld int32 'GenericState`1'/'<CompanionStatics>'::'genericState'
+      call void 'GenericState'/'<CompanionStatics>'::'<EnsureInitialized>'()
+      ldsfld int32 'GenericState'/'<CompanionStatics>'::'genericState'
       ret
     }
     .property int32 'genericState'()
     {
-      .get int32 'GenericState`1'/'<CompanionStatics>'::'get_genericState'()
+      .get int32 'GenericState'/'<CompanionStatics>'::'get_genericState'()
     }
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
-    call void 'GenericState`1'/'<CompanionStatics>'::'<EnsureInitialized>'()
+    call void 'GenericState'/'<CompanionStatics>'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret

@@ -1,11 +1,7 @@
-// Generic top-level functions on the real CoreCLR (stage-1 generics, probe series genprobe):
-// identity/pair-style plumbing through every mapped type-arg kind — string, int32, int64,
-// float64, bool, char, Int? (the Nullable hybrid: both the wrapped and the empty flavor
-// round-trip through !!0), a user class, a nested generic-class instantiation
-// (`id<Box<String>>`) — plus multiple type parameters, a generic function calling another
-// generic function passing T through (`<!!0>` at the inner call site), and a generic class
-// instantiated with the METHOD type parameter (`wrap` returning `class 'Box`1'<!!0>`,
-// genprobe_s9).
+// Generic top-level functions remain real CLR generic methods and round-trip every admitted
+// method-type argument. Kotlin-owned `Box<T>` is different: it has one erased physical owner,
+// while KLIB retains the logical nested and method-parameter constructions exercised by `id`
+// and `wrap`.
 
 class Marker(val tag: Int)
 

@@ -1716,11 +1716,11 @@ $kClassSupportTypesIl
             |    }
             |  }
             |
-            |  .class public auto ansi sealed beforefieldinit 'MutableRef`1'<'T'>
+            |  .class public auto ansi sealed beforefieldinit 'MutableRef'
             |         extends ${coreLibraryReference}System.Object
             |  {
             |    $compilerAbiTypeAttributesIl
-            |    .field public !0 'element'
+            |    .field public object 'element'
             |
             |    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
             |    {
@@ -2166,77 +2166,6 @@ $kClassSupportTypesIl
             |      castclass ${coreLibraryReference}System.Array
             |      ret
             |IL_genericArraySafeCastNull:
-            |      ldnull
-            |      ret
-            |    }
-            |
-            |    .method public hidebysig static bool 'IsGenericClass'(
-            |        object 'value', class ${coreLibraryReference}System.Type 'openDefinition') cil managed
-            |    {
-            |      .maxstack 2
-            |      .locals init (
-            |        [0] class ${coreLibraryReference}System.Type 'currentType'
-            |      )
-            |      ldarg.0
-            |      brfalse.s IL_genericClassFalse
-            |      ldarg.0
-            |      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Object::GetType()
-            |      stloc.0
-            |IL_genericClassNext:
-            |      ldloc.0
-            |      brfalse.s IL_genericClassFalse
-            |      ldloc.0
-            |      callvirt instance bool ${coreLibraryReference}System.Type::get_IsGenericType()
-            |      brfalse.s IL_genericClassBase
-            |      ldloc.0
-            |      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetGenericTypeDefinition()
-            |      ldarg.1
-            |      call bool ${coreLibraryReference}System.Type::op_Equality(
-            |          class ${coreLibraryReference}System.Type, class ${coreLibraryReference}System.Type)
-            |      brtrue.s IL_genericClassTrue
-            |IL_genericClassBase:
-            |      ldloc.0
-            |      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::get_BaseType()
-            |      stloc.0
-            |      br.s IL_genericClassNext
-            |IL_genericClassTrue:
-            |      ldc.i4.1
-            |      ret
-            |IL_genericClassFalse:
-            |      ldc.i4.0
-            |      ret
-            |    }
-            |
-            |    .method public hidebysig static object 'CheckGenericClassCast'(
-            |        object 'value', class ${coreLibraryReference}System.Type 'openDefinition') cil managed
-            |    {
-            |      .maxstack 2
-            |      ldarg.0
-            |      brfalse.s IL_genericClassCastValid
-            |      ldarg.0
-            |      ldarg.1
-            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'IsGenericClass'(
-            |          object, class ${coreLibraryReference}System.Type)
-            |      brtrue.s IL_genericClassCastValid
-            |      newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor()
-            |      throw
-            |IL_genericClassCastValid:
-            |      ldarg.0
-            |      ret
-            |    }
-            |
-            |    .method public hidebysig static object 'SafeGenericClassCast'(
-            |        object 'value', class ${coreLibraryReference}System.Type 'openDefinition') cil managed
-            |    {
-            |      .maxstack 2
-            |      ldarg.0
-            |      ldarg.1
-            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'IsGenericClass'(
-            |          object, class ${coreLibraryReference}System.Type)
-            |      brfalse.s IL_genericClassSafeCastNull
-            |      ldarg.0
-            |      ret
-            |IL_genericClassSafeCastNull:
             |      ldnull
             |      ret
             |    }
@@ -3737,21 +3666,6 @@ $kClassSupportTypesIl
         "call class ${coreLibraryReference}System.Array [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"SafeGenericArrayCast".toIlIdentifier()}(object)"
-
-    fun isGenericClassCallInstruction(coreLibraryReference: String): String =
-        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
-                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
-                "${"IsGenericClass".toIlIdentifier()}(object, class ${coreLibraryReference}System.Type)"
-
-    fun checkGenericClassCastCallInstruction(coreLibraryReference: String): String =
-        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
-                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
-                "${"CheckGenericClassCast".toIlIdentifier()}(object, class ${coreLibraryReference}System.Type)"
-
-    fun safeGenericClassCastCallInstruction(coreLibraryReference: String): String =
-        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
-                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
-                "${"SafeGenericClassCast".toIlIdentifier()}(object, class ${coreLibraryReference}System.Type)"
 
     val checkCharSequenceCastCallInstruction: String =
         "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
