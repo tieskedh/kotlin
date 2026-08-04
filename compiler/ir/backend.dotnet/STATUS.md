@@ -12,7 +12,8 @@ verification, and work state.
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
 - Last completed feature: one erased physical ABI for Kotlin-owned generic
-  classes plus the Common builder and abstract-collection foundation
+  classes and interfaces, plus the Common builder and abstract-collection
+  foundation
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -40,12 +41,12 @@ The JUnit audit covered 20 fresh XML files and 1044 tests:
 - 85 library-integration tests
 - zero failures, errors, or skips
 
-The final gate additionally covers the profile-sensitive consequence of class
-erasure. An owner-dependent `C<T> : I<T>` implements canonical `I` only and,
-on a DIM profile, receives a helper-backed canonical `MethodImpl` because the
-typed `I<T>` default is not in its physical ancestry. The adversarial closed
-case `C<T> : I<String>` retains its truthful typed edge and native DIM without
-that class forwarder. PSI and LightTree agree on every updated physical shape.
+The final gate additionally covers generic-interface erasure on both runtime
+profiles. Both owner-dependent `C<T> : I<T>` and closed `C<T> : I<String>`
+implement the one erased Kotlin-owned `I`. A modern default lives on that
+erased DIM; portable profiles use its recorded helper/forwarder path. Neither
+case publishes an implicit CLR `I<T>` sibling. PSI and LightTree agree on
+every updated physical shape.
 
 The formerly red generic-class probes are now positive regressions. Widened
 Common `containsAll` compares a wrong-shaped element and returns `false`
@@ -127,17 +128,18 @@ storage and members use an accepted erased carrier, an erased upper bound, or
 `castclass`/`isinst` over the one owner supplies Kotlin's declaration-erased
 identity, including inherited and separate-library cases.
 
-Physical ABI 18 records only that owner and removes class capability paths,
+Physical ABI 19 records only that owner and removes class capability paths,
 class-member bridge records, canonical class interfaces, ancestry classifiers,
 and typed-dispatch probes. Imported CLR generics remain reified. Typed C#
 generic-class export is a separate fail-closed product rather than an implicit
 second implementation ABI.
 
 An erased generic class also no longer fabricates a typed generic-interface
-edge from its absent owner parameter: `C<T> : I<T>` implements canonical `I`
-only, while a parameter-independent closed edge such as `C<T> : I<String>` may
-retain the existing typed capability. KLIB preserves `I<T>` and method bounds
-such as `<R : T>`; the latter omit an impossible CLR owner-relative constraint.
+edge: both `C<T> : I<T>` and `C<T> : I<String>` implement the one erased `I`
+when `I` is Kotlin-owned. Only an explicitly mapped host capability or imported
+CLR interface may retain a separate typed edge. KLIB preserves `I<T>` and
+method bounds such as `<R : T>`; the latter omit an impossible CLR
+owner-relative constraint.
 
 The complete collection-facing accumulator-fold family now uses the generated
 Common bodies for `Iterable.fold`/`foldIndexed` and
@@ -291,7 +293,7 @@ code generation, and public reified declarations remain separate programmes.
 Common `Comparable<in T>` now retains its full logical identity and recursive
 bounds in KLIB while one object exposes the profile-selected canonical
 `System.IComparable` and truthful typed `System.IComparable<T>` views. Kotlin
-implementations fill both slots through the existing split-interface bridge
+implementations fill both slots through the explicit Comparable mapping bridge
 lowering; ordinary C# consumes either interface without an adapter. Logical
 interface and type-parameter calls use one versioned semantic helper so String
 comparison remains ordinal and Float/Double retain Kotlin NaN and signed-zero
@@ -365,9 +367,9 @@ receiver-seeded reduction family remains published with all eight fallbacks;
 an inlined empty nullable branch uses the existing nullable-bottom carrier
 path. The accumulator-fold family likewise remains published, and a discarded
 substituted generic fold result performs its existing checked recovery before
-being discarded. Kotlin-owned generic classes use physical ABI 18's one erased
-owner; the superseded bounded typed-dispatch experiment remains only as Git
-history and design evidence. Ordinary
+being discarded. Kotlin-owned generic classes and interfaces use physical ABI
+19's one erased owner; the superseded bounded typed-dispatch experiment
+remains only as Git history and design evidence. Ordinary
 non-reified inline bodies now
 bind exact signatures throughout the complete frontend-selected dependency
 graph. Resolution remains non-linking, and an incomplete graph fails at the
@@ -381,7 +383,8 @@ explicit erased-object cast to an open type parameter uses `unbox.any`; safe
 generic casts remain unsupported. The Kotlin-owned builder, exact generated
 joins, Common abstract bases, and migrated array-backed list are published.
 Only the two top-level `buildString` declarations remain parked behind the
-contracts DSL. Runtime surface level 13 owns the erased compiler mutable cell.
+contracts DSL. Runtime surface level 14 owns the erased compiler mutable cell
+and the erased Kotlin collection-interface surface.
 Parameterless annotation classes are admitted generally;
 `InvocationKind`, the enum product, and the complete contract-effect closure
 remain unresolved. The
@@ -428,7 +431,7 @@ exact-carrier admission boundary and an adversarial matrix across both FIR
 frontends and runtime profiles. Exact scalars, classes/interfaces, strings,
 supported primitive-array wrappers, imported CLR interfaces, nullable forms,
 smart-cast use, and single evaluation are covered; classified exceptions,
-`CharSequence`, and split generic interfaces retain their dedicated paths.
+`CharSequence`, and erased generic interfaces retain their dedicated paths.
 Closed `GenericInstance` checks remain forbidden as Kotlin identity; ordinary
 Kotlin-owned generic-class tests instead use the one producer-recorded erased
 TypeDef and return the same object.
@@ -460,13 +463,11 @@ an implicit CLR `C<T>` surface.
 
 ## Open architectural blockers
 
-- The implemented split generic-interface candidate is frozen for a bounded
-  reassessment after class erasure. A generic erased class cannot provide one
-  truthful closed interface capability per logical construction, so typed
-  siblings must justify themselves as explicit BCL/C# capabilities rather
-  than as a blanket Kotlin-owned declaration rule. Do not expand or remove the
-  candidate piecemeal before its producer/consumer and default-method matrix is
-  compared with one erased-interface default.
+- Typed .NET export for Kotlin-owned generics remains a separate product
+  programme. It may publish a facade, adapter, or independently truthful host
+  capability, but it must not reintroduce a second Kotlin runtime identity,
+  storage model, or virtual ABI. The concrete export surface and identity
+  policy remain open; the erased Kotlin runtime ABI does not.
 - Contracts, full `Standard.kt`, and the two omitted `buildString`
   declarations follow after an ordinary `InvocationKind` exists.
 - KLIB-in-DLL and physical ABI codecs still need neutral serialization owners
@@ -481,21 +482,15 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Reassess the frozen generic-interface candidate against the now-erased
-   class ABI. Compare one erased default plus explicit mapped/exported typed
-   capabilities with the existing canonical/declared/exact split, including
-   Kotlin identity, variance, boxing, C# implementation, interface defaults,
-   `MethodImpl` rows, separate compilation, metadata size, and representative
-   generated stdlib implementors. Imported CLR interfaces remain reified.
-2. Implement ordinary Kotlin enums and the non-reified `EnumEntries` core as
+1. Implement ordinary Kotlin enums and the non-reified `EnumEntries` core as
    one reference-class feature, including producer-recorded enum-entry field
    binding, entry annotations, static initialization, separate compilation,
    and Kotlin/C# consumption. Do not map Kotlin enums to CLR value-type enums
    or open the general reified gate.
-3. Once `InvocationKind` exists, publish the exact contracts/`Standard.kt`/
+2. Once `InvocationKind` exists, publish the exact contracts/`Standard.kt`/
    `buildString` closure and replace the temporary StringBuilder projection
    with the complete ordinary Common file.
-4. Continue the Common collection programme by exact dependency closure,
+3. Continue the Common collection programme by exact dependency closure,
    preferring families that exercise enum/contracts foundations or unlock
    ordinary application code without introducing target-owned algorithms.
 

@@ -35,14 +35,11 @@ import org.jetbrains.kotlin.types.Variance
  * KProperty0/1/2 and their mutable variants use the same erased-identity rule and inherit the
  * matching FunctionN execution view; their Get/Set slots are Kotlin-owned runtime contracts.
  *
- * Kotlin Iterable, Iterator, and Collection use the same split representation as user generic
- * interfaces: a non-generic Kotlin identity plus CLR-generic execution/interop capabilities on
- * the same object. Iterator's canonical object-shaped Next slot preserves reference identity
- * across Kotlin's covariant views, including value-element instantiations that CLR generic
- * variance cannot convert. Collection additionally needs an invariant exact capability for its
- * logically covariant `contains(@UnsafeVariance E)` input. The five currently supported primitive
- * Iterator subclasses still alias the canonical Iterator identity until their ordinary stdlib
- * classes are produced. CLR collection interfaces remain explicit interop concerns.
+ * Kotlin Iterable, Iterator, Collection, and List use one declaration-erased interface each.
+ * Their object-shaped slots preserve identity across Kotlin projections and value/reference
+ * constructions without a second CLR-generic capability ABI. The five currently supported
+ * primitive Iterator subclasses still alias the erased Iterator identity until their ordinary
+ * stdlib classes are produced. CLR collection interfaces remain explicit interop concerns.
  */
 internal object DotNetRuntimeTypes {
     val DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME = FqName("kotlin.runtime.internal.DefaultConstructorMarker")
@@ -71,69 +68,41 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
-    private fun singleParameterRuntimeInterface(
-        canonicalName: String,
-        needsExactView: Boolean = false,
-    ): DotNetGenericInterfaceInfo = DotNetGenericInterfaceInfo(
+    private fun singleParameterRuntimeInterface(canonicalName: String): DotNetGenericInterfaceInfo =
+        DotNetGenericInterfaceInfo(
         canonicalClassInfo = DotNetIlClassInfo(
             ilClassName = canonicalName,
             assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
         ),
-        declaredClassInfo = DotNetIlClassInfo(
-            ilClassName = "$canonicalName`1",
-            typeParameterVariances = listOf(Variance.OUT_VARIANCE),
-            assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
-        ),
-        exactClassInfo = if (needsExactView) {
-            DotNetIlClassInfo(
-                ilClassName = dotNetExactGenericInterfaceName(canonicalName, parameterCount = 1),
-                typeParameterVariances = listOf(Variance.INVARIANT),
-                assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
-            )
-        } else {
-            null
-        },
     )
 
     private val iteratorGenericInterfaceInfo =
         singleParameterRuntimeInterface("Kotlin.Collections.Iterator")
     private val iteratorBase = iteratorGenericInterfaceInfo.canonicalClassInfo
-    private val declaredIteratorBase = iteratorGenericInterfaceInfo.declaredClassInfo
     val iteratorType = DotNetIlValueType.UserClass(iteratorBase)
 
     private val listIteratorGenericInterfaceInfo =
         singleParameterRuntimeInterface("Kotlin.Collections.ListIterator")
     private val listIteratorBase = listIteratorGenericInterfaceInfo.canonicalClassInfo
-    private val declaredListIteratorBase = listIteratorGenericInterfaceInfo.declaredClassInfo
     private val listIteratorType = DotNetIlValueType.UserClass(listIteratorBase)
 
     private val iterableGenericInterfaceInfo =
         singleParameterRuntimeInterface("Kotlin.Collections.Iterable")
     private val iterableBase = iterableGenericInterfaceInfo.canonicalClassInfo
-    private val declaredIterableBase = iterableGenericInterfaceInfo.declaredClassInfo
     val iterableType = DotNetIlValueType.UserClass(iterableBase)
 
-    private val collectionGenericInterfaceInfo = singleParameterRuntimeInterface(
-        canonicalName = "Kotlin.Collections.Collection",
-        needsExactView = true,
-    )
+    private val collectionGenericInterfaceInfo =
+        singleParameterRuntimeInterface("Kotlin.Collections.Collection")
     private val collectionBase = collectionGenericInterfaceInfo.canonicalClassInfo
-    private val declaredCollectionBase = collectionGenericInterfaceInfo.declaredClassInfo
-    private val exactCollectionBase = collectionGenericInterfaceInfo.exactClassInfo!!
     private val collectionType = DotNetIlValueType.UserClass(collectionBase)
 
-    private val listGenericInterfaceInfo = singleParameterRuntimeInterface(
-        canonicalName = "Kotlin.Collections.List",
-        needsExactView = true,
-    )
+    private val listGenericInterfaceInfo =
+        singleParameterRuntimeInterface("Kotlin.Collections.List")
     private val listBase = listGenericInterfaceInfo.canonicalClassInfo
-    private val declaredListBase = listGenericInterfaceInfo.declaredClassInfo
-    private val exactListBase = listGenericInterfaceInfo.exactClassInfo!!
     val listType = DotNetIlValueType.UserClass(listBase)
 
     private data class RuntimeGenericInterfaceMethodNames(
         val canonical: String,
-        val typed: String = canonical,
         val property: String? = null,
     )
 
@@ -163,7 +132,6 @@ internal object DotNetRuntimeTypes {
         "isEmpty" to RuntimeGenericInterfaceMethodNames("IsEmpty"),
         "contains" to RuntimeGenericInterfaceMethodNames(
             canonical = "ContainsErased",
-            typed = "Contains",
         ),
         "containsAll" to RuntimeGenericInterfaceMethodNames("ContainsAll"),
     )
@@ -171,11 +139,9 @@ internal object DotNetRuntimeTypes {
         "get" to RuntimeGenericInterfaceMethodNames("Get"),
         "indexOf" to RuntimeGenericInterfaceMethodNames(
             canonical = "IndexOfErased",
-            typed = "IndexOf",
         ),
         "lastIndexOf" to RuntimeGenericInterfaceMethodNames(
             canonical = "LastIndexOfErased",
-            typed = "LastIndexOf",
         ),
         "listIterator" to RuntimeGenericInterfaceMethodNames("GetListIterator"),
         "subList" to RuntimeGenericInterfaceMethodNames("SubList"),
@@ -289,37 +255,10 @@ internal object DotNetRuntimeTypes {
         )
     }
 
-    private val runtimeInterfaceElementType =
-        DotNetIlValueType.TypeParameter(index = 0, isMethodParameter = false)
-
-    private fun DotNetIlClassInfo.withRuntimeElementType(): DotNetIlValueType.GenericInstance =
-        DotNetIlValueType.GenericInstance(this, listOf(runtimeInterfaceElementType))
-
     init {
-        declaredIteratorBase.interfaces = listOf(iteratorType)
         listIteratorBase.interfaces = listOf(iteratorType)
-        declaredListIteratorBase.interfaces = listOf(
-            listIteratorType,
-            declaredIteratorBase.withRuntimeElementType(),
-        )
-        declaredIterableBase.interfaces = listOf(iterableType)
         collectionBase.interfaces = listOf(iterableType)
-        declaredCollectionBase.interfaces = listOf(
-            collectionType,
-            declaredIterableBase.withRuntimeElementType(),
-        )
-        exactCollectionBase.interfaces = listOf(
-            declaredCollectionBase.withRuntimeElementType(),
-        )
         listBase.interfaces = listOf(collectionType)
-        declaredListBase.interfaces = listOf(
-            listType,
-            declaredCollectionBase.withRuntimeElementType(),
-        )
-        exactListBase.interfaces = listOf(
-            declaredListBase.withRuntimeElementType(),
-            exactCollectionBase.withRuntimeElementType(),
-        )
         kClassBase.interfaces = listOf(DotNetIlValueType.UserClass(kClassifierBase))
         kFunctionBase.interfaces = listOf(
             DotNetIlValueType.UserClass(kCallableBase),
@@ -377,7 +316,7 @@ internal object DotNetRuntimeTypes {
     fun genericInterfaceInfoFor(irClass: IrClass): DotNetGenericInterfaceInfo? =
         genericInterfaceDescriptorFor(irClass)?.info
 
-    /** Runtime-owned split interfaces plus profile-mapped Common interfaces handled by codegen. */
+    /** Runtime-owned erased interfaces plus profile-mapped Common interfaces handled by codegen. */
     fun hasBuiltInGenericInterfaceMapping(irClass: IrClass): Boolean =
         genericInterfaceDescriptorFor(irClass) != null || irClass.isDotNetComparableClass()
 
@@ -386,7 +325,7 @@ internal object DotNetRuntimeTypes {
      * in Kotlin.Runtime's C# authoring manifest.
      */
     fun supportsCSharpSourceAuthoring(irClass: IrClass): Boolean =
-        irClass.isDotNetCharSequenceClass() || genericInterfaceDescriptorFor(irClass) != null
+        irClass.isDotNetCharSequenceClass()
 
     /** The non-generic implementation capability for the classified CharSequence carrier. */
     fun charSequenceImplementationClassInfo(irClass: IrClass): DotNetIlClassInfo? =
@@ -405,7 +344,7 @@ internal object DotNetRuntimeTypes {
         genericInterfaceMethodNamesOrNull(function)?.canonical
 
     fun genericInterfaceTypedMethodNameOrNull(function: IrSimpleFunction): String? =
-        genericInterfaceMethodNamesOrNull(function)?.typed
+        null
 
     fun genericInterfacePropertyNameOrNull(function: IrSimpleFunction): String? =
         genericInterfaceMethodNamesOrNull(function)?.property
@@ -428,9 +367,8 @@ internal object DotNetRuntimeTypes {
         val descriptor = irClass.fqNameWhenAvailable?.asString()
             ?.let(genericInterfaceDescriptorsByFqName::get)
             ?: return null
-        val expectedArity = descriptor.info.declaredClassInfo.typeParameterCount
         return descriptor.takeIf {
-            irClass.typeParameters.size == expectedArity ||
+            irClass.typeParameters.size == 1 ||
                     irClass.origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB
         }
     }

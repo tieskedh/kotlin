@@ -51,7 +51,7 @@ bridges to the source implementation:
 - `CompareTo(T)` implements the contravariant typed slot for natural C# use.
 
 Neither bridge wraps, clones, or translates the receiver. Unlike
-Kotlin-owned split interfaces, the typed BCL interface is not claimed to
+ordinary erased Kotlin-owned interfaces, the typed BCL interface is not claimed to
 inherit the canonical BCL interface; the implementing class explicitly names
 both truthful capabilities.
 
@@ -99,8 +99,8 @@ or grant it another Kotlin declaration identity.
 
 Parameterized casts remain erased. A cast such as `String as Comparable<Int>`
 may succeed; the incompatible argument fails only when `compareTo` performs
-the later checked typed use. This is the same Kotlin erasure rule used by the
-other split generic interfaces.
+the later checked typed use. This is the same Kotlin erasure rule used by
+ordinary Kotlin-owned generic interfaces.
 
 A foreign value implementing only `System.IComparable<T>` does not satisfy
 this logical identity: that typed CLR interface has no universal erased

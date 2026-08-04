@@ -1,7 +1,7 @@
 # Common collections programme
 
 - Status: **Active — builder/Common abstract-base foundation complete; enums selected next**
-- ABI foundation: [`../decisions/draft-adr-generic-interface-abi.md`](../decisions/draft-adr-generic-interface-abi.md)
+- ABI foundation: [`../decisions/generic-interface-erased-identity.md`](../decisions/generic-interface-erased-identity.md)
 
 ## Purpose
 
@@ -19,8 +19,9 @@ only narrow actuals and physical representation work required by the CLR.
   where their host requires one.
 - No mature target reconstructs Kotlin collection semantics from a host collection interface.
 
-The .NET canonical, declared, and exact CLR interfaces are physical capabilities of one Kotlin
-object. They are not separate Kotlin collections.
+Kotlin-owned generic collection interfaces have one erased CLR owner and one erased virtual slot
+family. Independently truthful mapped BCL capabilities, such as `IComparable<T>` for Common
+`Comparable<T>`, are explicit exceptions rather than implicit siblings of every Kotlin interface.
 
 ## CLR interoperability boundary
 
@@ -109,7 +110,7 @@ sublist, equality, hash, and rendering algorithms have been removed. It owns onl
 array, size, and checked indexed access required by that representation.
 
 The view implements no BCL collection interface. Reusing a BCL wrapper would still not implement
-the Kotlin canonical/declared/exact interfaces and would add another identity layer.
+the Kotlin-owned erased interfaces and would add another identity layer.
 
 ### Output-projected generic arrays
 

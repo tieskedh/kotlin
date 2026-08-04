@@ -47,13 +47,6 @@
   {
   }
 }
-.class interface public abstract auto ansi 'NullableSlot`1'<'T'>
-       implements 'NullableSlot'
-{
-  .method public hidebysig newslot abstract virtual instance object 'nullable'() cil managed
-  {
-  }
-}
 .class public auto ansi sealed beforefieldinit 'GenericNullableSlot'
        extends [mscorlib]System.Object
        implements 'NullableSlot'
@@ -157,28 +150,8 @@ IL_notNull_0:
   .method public hidebysig static object 'readNullable'<'T'>(class 'NullableSlot' 'value') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class 'NullableSlot' '<genericInterfaceReceiver>',
-      [1] class 'NullableSlot`1'<!!0> '<genericInterfaceCapability>',
-      [2] object '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class 'NullableSlot`1'<!!0>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance object class 'NullableSlot`1'<!!0>::'nullable'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object 'NullableSlot'::'nullable__KotlinErased__020ae010049477bc392d0718bd17be15'()
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static valuetype [mscorlib]System.Nullable`1<int32> 'readNullableInt'(class 'NullableSlot' 'value') cil managed

@@ -10,7 +10,6 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceBridgeMemberViewOrNull
-import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceBridge
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
@@ -93,7 +92,6 @@ internal class DotNetIlMethodCodegen(
     private val typeMapper: DotNetIlTypeMapper,
     facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo> = emptyMap(),
     private val covariantReturnImplementations: Set<IrSimpleFunction> = emptySet(),
-    private val genericInterfaceIntersectionSlots: List<DotNetGenericInterfaceIntersectionSlot> = emptyList(),
 ) {
     private val signature = functionInfo.signature
     private val methodContext = DotNetIlMethodContext(
@@ -241,10 +239,7 @@ internal class DotNetIlMethodCodegen(
                 function.origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
             ) {
                 appendGenericInterfaceCanonicalBridgeOverride()
-            } else if (
-                function.origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null ||
-                function.origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull != null
-            ) {
+            } else if (function.origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null) {
                 appendGenericInterfaceTypedBridgeOverride()
             } else if (function.origin == DOTNET_COVARIANT_RETURN_BRIDGE) {
                 appendCovariantReturnBridgeOverride()
@@ -294,7 +289,6 @@ internal class DotNetIlMethodCodegen(
         if (origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) return "private"
         if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET) return "private"
         if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER) return "private"
-        if (origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull != null) return "private"
         if (origin.isDotNetGenericInterfaceBridge) return "private"
         if (origin == DOTNET_COVARIANT_RETURN_BRIDGE) return "private"
         if (isDotNetInlineOnly()) return "assembly"
@@ -383,14 +377,15 @@ internal class DotNetIlMethodCodegen(
      * Maps an ordinary class method to a non-generic interface slot when stable erased-carrier
      * naming makes their CLR names differ. This occurs when one Kotlin override simultaneously
      * reuses an unmangled generic-base slot (`Base<T>.f(T)`) and implements an interface slot whose
-     * parameter is directly classified (an exception or split generic interface). The class vtable
+     * parameter is directly classified (an exception or erased Kotlin generic interface). The class vtable
      * name remains authoritative; an explicit MethodImpl row preserves the additional interface
      * decision without copying the body.
      *
-     * Split generic interfaces own their several physical views in
-     * [appendGenericInterfaceTypedBridgeOverride] and are deliberately excluded here. A signature
-     * difference also remains bridge territory; attaching an incompatible body through MethodImpl
-     * would merely defer the error to type loading.
+     * Erased Kotlin generic-interface slots are owned by their canonical bridge and are
+     * deliberately excluded here. An independently mapped host capability, such as
+     * `IComparable<T>`, is handled by [appendGenericInterfaceTypedBridgeOverride]. A signature
+     * difference also remains bridge territory; attaching an incompatible body through
+     * MethodImpl would merely defer the error to type loading.
      */
     private fun StringBuilder.appendRenamedErasedInterfaceSlotOverrides() {
         val implementation = function as? IrSimpleFunction ?: return
@@ -476,7 +471,6 @@ internal class DotNetIlMethodCodegen(
         val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
             ?: dotNetUnsupported("generic interface typed capability is unavailable")
         val memberView = bridge.origin.dotNetGenericInterfaceBridgeMemberViewOrNull
-            ?: bridge.origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull
             ?: error("Internal .NET backend error: typed generic interface bridge has no physical view")
         val capabilityInfo = interfaceInfo.classInfo(memberView.physicalView)
             ?: dotNetUnsupported("generic interface ${memberView.name.lowercase()} capability is unavailable")
@@ -510,51 +504,6 @@ internal class DotNetIlMethodCodegen(
                         bridge.typeParameters.size,
                     )
         )
-        // One deterministic contributing bridge also implements the producer-recorded derived
-        // intersection slot. Reusing this forwarding method preserves the single Kotlin body and
-        // handles covariant return adaptation that CLR implicit interface matching cannot.
-        for (slot in genericInterfaceIntersectionSlots) {
-            if (slot.memberView != memberView ||
-                slot.implementationMember != overridden ||
-                !bridgeClass.isSubclassOf(slot.owner)
-            ) {
-                continue
-            }
-            val intersectionInfo = typeMapper.genericInterfaceInfoOrNull(slot.owner)
-                ?: dotNetUnsupported("generic interface intersection owner is unavailable")
-            val intersectionCapability = intersectionInfo.classInfo(memberView.physicalView)
-                ?: dotNetUnsupported("generic interface intersection capability is unavailable")
-            val intersectionSubstitutor = AbstractIrTypeSubstitutor.forSuperClass(
-                slot.owner.symbol,
-                bridgeClass.defaultType,
-            ) ?: error(
-                "Internal .NET backend error: '${bridgeClass.name}' is not a subtype of " +
-                        "intersection owner '${slot.owner.name}'"
-            )
-            val intersectionArguments = slot.owner.typeParameters.map { parameter ->
-                val argumentType = intersectionSubstitutor.substitute(parameter.typeParameterDefaultType)
-                signatureMapper.toDotNetIlValueType(argumentType)
-                    ?: dotNetUnsupported(
-                        "generic interface intersection argument '${argumentType.render()}' is unavailable"
-                    )
-            }
-            val intersectionOwnerToken = DotNetIlValueType.GenericInstance(
-                intersectionCapability,
-                intersectionArguments,
-            ).nameInSignature
-            val intersectionOverrideInfo = DotNetIlFunctionInfo(
-                intersectionCapability,
-                slot.signatureSource.dotNetSignature(signatureMapper),
-            )
-            appendLine(
-                "    .override method " +
-                        intersectionOverrideInfo.renderOverrideMethodReference(
-                            slot.physicalMethodName,
-                            intersectionOwnerToken,
-                            bridge.typeParameters.size,
-                        )
-            )
-        }
     }
 
     /** Binds one exact-return forwarding method to its wider ordinary class or interface slot. */
@@ -631,7 +580,6 @@ internal class DotNetIlMethodCodegen(
         if (origin == DOTNET_INTERFACE_DEFAULT_FORWARDER) return "newslot virtual final "
         if (origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) return "newslot virtual final "
         if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER) return "newslot virtual final "
-        if (origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull != null) return "newslot virtual final "
         if (origin.isDotNetGenericInterfaceBridge) return "newslot virtual final "
         if (origin == DOTNET_COVARIANT_RETURN_BRIDGE) return "newslot virtual final "
         if (this !is IrSimpleFunction || !signature.hasThis) return ""

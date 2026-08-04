@@ -64,7 +64,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Erased runtime and virtual ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
-- [Generic and variant interface ABI](decisions/draft-adr-generic-interface-abi.md)
+- [Erased ABI for Kotlin-owned generic interfaces](decisions/generic-interface-erased-identity.md)
 - [Callable and callable-reference ABI](decisions/draft-adr-callable-and-reference-abi.md)
 - [Runtime and stdlib product ownership](decisions/runtime-and-stdlib-ownership.md)
 - [CIL and PE production direction](decisions/cil-and-pe-production.md)

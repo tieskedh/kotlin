@@ -12,7 +12,7 @@
 
 .class public auto ansi sealed beforefieldinit 'StringValueIterator'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
 {
   .field private string 'value'
   .field private bool 'available'
@@ -76,25 +76,9 @@
     callvirt instance bool 'StringValueIterator'::'hasNext'()
     ret
   }
-  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
-  {
-    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>::'HasNext'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance bool 'StringValueIterator'::'hasNext'()
-    ret
-  }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
   {
     .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance string 'StringValueIterator'::'next'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
-  {
-    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>::'Next'()
     .maxstack 1
     ldarg.0
     callvirt instance string 'StringValueIterator'::'next'()
@@ -112,7 +96,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'IntValueIterator'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
 {
   .field private int32 'value'
   .field private bool 'available'
@@ -176,14 +160,6 @@
     callvirt instance bool 'IntValueIterator'::'hasNext'()
     ret
   }
-  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
-  {
-    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>::'HasNext'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance bool 'IntValueIterator'::'hasNext'()
-    ret
-  }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
   {
     .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
@@ -191,14 +167,6 @@
     ldarg.0
     callvirt instance int32 'IntValueIterator'::'next'()
     box [mscorlib]System.Int32
-    ret
-  }
-  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
-  {
-    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>::'Next'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance int32 'IntValueIterator'::'next'()
     ret
   }
   .property instance int32 'value'()
@@ -309,7 +277,6 @@
 }
 .class public auto ansi sealed beforefieldinit 'DeferredStringValueIterator'
        extends 'DeferredValueIterator'
-       implements class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>
 {
   .field private string 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
@@ -350,25 +317,9 @@
     callvirt instance bool 'DeferredStringValueIterator'::'hasNext'()
     ret
   }
-  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
-  {
-    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>::'HasNext'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance bool 'DeferredStringValueIterator'::'hasNext'()
-    ret
-  }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
   {
     .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance string 'DeferredStringValueIterator'::'next'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
-  {
-    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>::'Next'()
     .maxstack 1
     ldarg.0
     callvirt instance string 'DeferredStringValueIterator'::'next'()
@@ -386,16 +337,9 @@
   {
   }
 }
-.class interface public abstract auto ansi 'IteratorView`1'<+ 'T'>
-       implements 'IteratorView', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
-{
-  .method public hidebysig newslot abstract virtual instance string 'label'() cil managed
-  {
-  }
-}
 .class public auto ansi sealed beforefieldinit 'ViewedStringIterator'
        extends [mscorlib]System.Object
-       implements 'IteratorView', class 'IteratorView`1'<string>, class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>
+       implements 'IteratorView'
 {
   .field private string 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
@@ -442,14 +386,6 @@
     callvirt instance bool 'ViewedStringIterator'::'hasNext'()
     ret
   }
-  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
-  {
-    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>::'HasNext'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance bool 'ViewedStringIterator'::'hasNext'()
-    ret
-  }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
   {
     .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
@@ -458,25 +394,9 @@
     callvirt instance string 'ViewedStringIterator'::'next'()
     ret
   }
-  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
-  {
-    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>::'Next'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance string 'ViewedStringIterator'::'next'()
-    ret
-  }
   .method private hidebysig newslot virtual final instance string '<GenericInterfaceCanonicalBridge-IteratorView-label-b5a1c52f084c2f4770398a4e5aa391fe>'() cil managed
   {
     .override method instance string 'IteratorView'::'label__KotlinErased__b5a1c52f084c2f4770398a4e5aa391fe'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance string 'ViewedStringIterator'::'label'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-IteratorView-label-b5a1c52f084c2f4770398a4e5aa391fe>'() cil managed
-  {
-    .override method instance string class 'IteratorView`1'<string>::'label'()
     .maxstack 1
     ldarg.0
     callvirt instance string 'ViewedStringIterator'::'label'()
@@ -509,57 +429,17 @@
   .method public hidebysig static int32 'nextBoxed'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32> '<genericInterfaceCapability>',
-      [2] int32 '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>::'Next'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     unbox.any [mscorlib]System.Int32
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static !!0 'nextGeneric'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0> '<genericInterfaceCapability>',
-      [2] !!0 '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0>::'Next'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     unbox.any !!0
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'openIterator'<'T'>(!!0[] 'values') cil managed
@@ -572,30 +452,10 @@ IL_genericInterfaceJoin_1:
   .method public hidebysig static !!0 'firstFromOpenArray'<'T'>(!!0[] 'values') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0> '<genericInterfaceCapability>',
-      [2] !!0 '<genericInterfaceResult>'
-    )
     ldarg.0
     call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'arrayIteratorsKt'::'openIterator'<!!0>(!!0[])
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0>::'Next'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     unbox.any !!0
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'stringIterator'(string[] 'values') cil managed
@@ -608,28 +468,8 @@ IL_genericInterfaceJoin_1:
   .method public hidebysig static bool 'hasNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string> '<genericInterfaceCapability>',
-      [2] bool '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>::'HasNext'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static object 'iteratorAsAny'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
@@ -645,35 +485,17 @@ IL_genericInterfaceJoin_1:
     .maxstack 1
     .locals init (
       [0] int32 '<try>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>',
-      [2] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32> '<genericInterfaceCapability>',
-      [3] int32 '<genericInterfaceResult>',
-      [4] class [Kotlin.Runtime]'Kotlin.NoSuchElementException' '<unused var>'
+      [1] class [Kotlin.Runtime]'Kotlin.NoSuchElementException' '<unused var>'
     )
     .try {
       ldarg.0
-      stloc.1
-      ldloc.1
-      isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>
-      stloc.2
-      ldloc.2
-      brfalse IL_genericInterfaceErasedFallback_1
-      ldloc.2
-      callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>::'Next'()
-      stloc.3
-      br IL_genericInterfaceJoin_2
-IL_genericInterfaceErasedFallback_1:
-      ldloc.1
       callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
       unbox.any [mscorlib]System.Int32
-      stloc.3
-IL_genericInterfaceJoin_2:
-      ldloc.3
       stloc.0
       leave IL_tryEnd_0
     }
     catch [Kotlin.Runtime]'Kotlin.NoSuchElementException' {
-      stloc 4
+      stloc.1
       ldc.i4 -1
       stloc.0
       leave IL_tryEnd_0
@@ -692,85 +514,25 @@ IL_tryEnd_0:
   .method public hidebysig static string 'erasedStringNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string> '<genericInterfaceCapability>',
-      [2] string '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string>::'Next'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     castclass [mscorlib]System.String
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static int32 'erasedIntNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32> '<genericInterfaceCapability>',
-      [2] int32 '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<int32>::'Next'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     unbox.any [mscorlib]System.Int32
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static !!0 'erasedGenericNext'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0> '<genericInterfaceCapability>',
-      [2] !!0 '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!!0>::'Next'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     unbox.any !!0
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static bool 'hasNextThroughView'(class 'IteratorView' 'values') cil managed

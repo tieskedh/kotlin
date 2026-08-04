@@ -282,13 +282,6 @@ IL_whenNext_1:
     {
     }
   }
-  .class nested public interface abstract auto ansi 'Producer`1'<+ 'T'>
-         implements 'InterfaceDeclarationHost'/'Producer'
-  {
-    .method public hidebysig newslot abstract virtual instance !0 'produce'() cil managed
-    {
-    }
-  }
   .class nested public auto ansi sealed beforefieldinit 'ProducerImplementation'
          extends [mscorlib]System.Object
          implements 'InterfaceDeclarationHost'/'Producer'
@@ -505,13 +498,6 @@ IL_whenNext_1:
     {
     }
   }
-  .class nested public interface abstract auto ansi 'Independent`1'<+ 'U'>
-         implements 'GenericInterfaceDeclarationHost'/'Independent'
-  {
-    .method public hidebysig newslot abstract virtual instance !0 'item'() cil managed
-    {
-    }
-  }
   .class nested public auto ansi sealed beforefieldinit 'IndependentImplementation'
          extends [mscorlib]System.Object
          implements 'GenericInterfaceDeclarationHost'/'Independent'
@@ -625,10 +611,6 @@ IL_whenNext_1:
     }
   }
 }
-.class interface public abstract auto ansi 'GenericInterfaceDeclarationHost`1'<'T'>
-       implements 'GenericInterfaceDeclarationHost'
-{
-}
 .class interface public abstract auto ansi 'DeepInterfaceHost'
 {
   .class nested public interface abstract auto ansi 'Middle'
@@ -718,15 +700,9 @@ IL_tryEnd_0:
     .locals init (
       [0] class 'RootNestedContract' 'rootContract',
       [1] class 'InterfaceDeclarationHost'/'Producer' 'producer',
-      [2] class 'InterfaceDeclarationHost'/'Producer' '<genericInterfaceReceiver>',
-      [3] class 'InterfaceDeclarationHost'/'Producer`1'<string> '<genericInterfaceCapability>',
-      [4] string '<genericInterfaceResult>',
-      [5] class 'GenericInterfaceDeclarationHost'/'Independent' 'independent',
-      [6] class 'GenericInterfaceDeclarationHost'/'Independent' '<genericInterfaceReceiver>@6',
-      [7] class 'GenericInterfaceDeclarationHost'/'Independent`1'<int32> '<genericInterfaceCapability>@7',
-      [8] int32 '<genericInterfaceResult>@8',
-      [9] class 'DeepInterfaceHost'/'Middle'/'Leaf' 'leaf',
-      [10] class 'ObjectInterfaceHost'/'NestedContract' 'objectContract'
+      [2] class 'GenericInterfaceDeclarationHost'/'Independent' 'independent',
+      [3] class 'DeepInterfaceHost'/'Middle'/'Leaf' 'leaf',
+      [4] class 'ObjectInterfaceHost'/'NestedContract' 'objectContract'
     )
     call void 'nestedInterfacesKt'::'<EnsureInitialized>'()
     call int32 'nestedInterfacesKt'::'get_nestedInterfaceInitializationCount'()
@@ -767,23 +743,8 @@ IL_tryEnd_0:
     newobj instance void 'InterfaceDeclarationHost'/'ProducerImplementation'::.ctor(object)
     stloc.1
     ldloc.1
-    stloc.2
-    ldloc.2
-    isinst class 'InterfaceDeclarationHost'/'Producer`1'<string>
-    stloc.3
-    ldloc.3
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.3
-    callvirt instance !0 class 'InterfaceDeclarationHost'/'Producer`1'<string>::'produce'()
-    stloc 4
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.2
     callvirt instance object 'InterfaceDeclarationHost'/'Producer'::'produce__KotlinErased__dab285453cb8c1fa7cc9990c9327860a'()
     castclass [mscorlib]System.String
-    stloc 4
-IL_genericInterfaceJoin_1:
-    ldloc 4
     call void [mscorlib]System.Console::WriteLine(string)
     call void 'InterfaceDeclarationHost'/'Singleton'::'<EnsureInitialized>'()
     ldsfld class 'InterfaceDeclarationHost'/'Singleton' 'InterfaceDeclarationHost'/'Singleton'::'INSTANCE'
@@ -796,25 +757,10 @@ IL_genericInterfaceJoin_1:
     ldc.i4 4
     box [mscorlib]System.Int32
     newobj instance void 'GenericInterfaceDeclarationHost'/'IndependentImplementation'::.ctor(object)
-    stloc 5
-    ldloc 5
-    stloc 6
-    ldloc 6
-    isinst class 'GenericInterfaceDeclarationHost'/'Independent`1'<int32>
-    stloc 7
-    ldloc 7
-    brfalse IL_genericInterfaceErasedFallback_2
-    ldloc 7
-    callvirt instance !0 class 'GenericInterfaceDeclarationHost'/'Independent`1'<int32>::'item'()
-    stloc 8
-    br IL_genericInterfaceJoin_3
-IL_genericInterfaceErasedFallback_2:
-    ldloc 6
+    stloc.2
+    ldloc.2
     callvirt instance object 'GenericInterfaceDeclarationHost'/'Independent'::'item__KotlinErased__6b920256c659c76c6bdbdfb965beed60'()
     unbox.any [mscorlib]System.Int32
-    stloc 8
-IL_genericInterfaceJoin_3:
-    ldloc 8
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -829,8 +775,8 @@ IL_genericInterfaceJoin_3:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'DeepInterfaceImplementation'::.ctor()
-    stloc 9
-    ldloc 9
+    stloc.3
+    ldloc.3
     callvirt instance int32 'DeepInterfaceHost'/'Middle'/'Leaf'::'leaf'()
     box [mscorlib]System.Int32
     ldnull
@@ -838,8 +784,8 @@ IL_genericInterfaceJoin_3:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'ObjectInterfaceImplementation'::.ctor()
-    stloc 10
-    ldloc 10
+    stloc 4
+    ldloc 4
     callvirt instance string 'ObjectInterfaceHost'/'NestedContract'::'text'()
     call void [mscorlib]System.Console::WriteLine(string)
     call int32 'nestedInterfacesKt'::'get_nestedInterfaceInitializationCount'()

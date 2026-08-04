@@ -153,10 +153,6 @@
     }
   }
 }
-.class interface public abstract auto ansi 'GenericCompanionInterface`1'<'T'>
-       implements 'GenericCompanionInterface'
-{
-}
 .class interface public abstract auto ansi 'MarkedCompanionInterface'
 {
   .class nested public auto ansi sealed beforefieldinit 'Companion'
