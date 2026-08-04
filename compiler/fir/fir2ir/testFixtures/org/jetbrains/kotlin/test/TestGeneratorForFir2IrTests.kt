@@ -52,28 +52,31 @@ fun main(args: Array<String>) {
             }
 
             testClass<AbstractFirLightTreeDotNetBoxTest> {
-                model("box/annotations", pattern = "^(intrinsicConstEvaluationInSources|nestedAnnotation)\\.kt$")
+                // The fallback .NET stdlib is compiled from source in the same product. Do not
+                // select intrinsicConstEvaluationInSources: that test intentionally redeclares
+                // the stdlib builtin and is ignored by the other non-JVM backends as well.
+                model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
             }
 
             testClass<AbstractFirPsiDotNetBoxTest> {
-                model("box/annotations", pattern = "^(intrinsicConstEvaluationInSources|nestedAnnotation)\\.kt$")
+                model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
             }
 
             testClass<AbstractFirLightTreeDotNetFrameworkBoxTest> {
-                model("box/annotations", pattern = "^(intrinsicConstEvaluationInSources|nestedAnnotation)\\.kt$")
+                model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
             }
 
             testClass<AbstractFirPsiDotNetFrameworkBoxTest> {
-                model("box/annotations", pattern = "^(intrinsicConstEvaluationInSources|nestedAnnotation)\\.kt$")
+                model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")

@@ -365,8 +365,8 @@ See the
   selected after shared IR substitution. Do not add a reified-only array
   token/wrapper, fall back to `object[]` for an unsupported element, or use a
   closed typed CLR generic class as Kotlin element identity. Array-allocation
-  readiness does not enable either public reified gate: `KType`,
-  enums, valued annotations and annotation reflection, remaining classifier
+  readiness does not enable either public reified gate: `KType`, reified enum
+  helpers, valued annotations and annotation reflection, remaining classifier
   families, the final substituted type-operator matrix, and the physical
   throwing-stub contract stay one complete feature boundary. See
   [the reified-array decision](docs/decisions/reified-array-operations.md).
@@ -573,7 +573,7 @@ identity, and the private data-class equality view is not a general carrier.
 Physically exact non-generic casts and scalar/array prerequisites may land
 independently, but must reject rather than generalize to `GenericInstance`.
 Reified Common stdlib declarations remain outside the product meanwhile.
-Suspend inline functions, enums, valued annotation classes, value classes,
+Suspend inline functions, valued annotation classes, value classes,
 `KType`, member/annotation reflection, coroutines, concurrency primitives, and
 broad KMP/Gradle product integration remain separate programmes until
 `STATUS.md` or the way forward selects one. Parameterless marker annotation
