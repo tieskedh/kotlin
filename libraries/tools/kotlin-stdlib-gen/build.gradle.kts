@@ -46,6 +46,8 @@ tasks {
                 "_DotNetBootstrapAppendable.kt",
                 "_DotNetBootstrapStringBuilder.kt",
                 "_DotNetBootstrapKotlin.kt",
+                "_DotNetBootstrapEnum.kt",
+                "_DotNetBootstrapEnumEntries.kt",
                 "_DotNetBootstrapJsName.kt",
             ).map { fileName ->
                 rootProject.file("libraries/stdlib/dotnet/common/src/generated/$fileName")
@@ -64,6 +66,8 @@ tasks {
             rootProject.file("libraries/stdlib/src/kotlin/text/Appendable.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/text/StringBuilder.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/util/Standard.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/Enum.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/enums/EnumEntries.kt"),
             rootProject.file("libraries/stdlib/common/src/kotlin/JsAnnotationsH.kt"),
         )
     }

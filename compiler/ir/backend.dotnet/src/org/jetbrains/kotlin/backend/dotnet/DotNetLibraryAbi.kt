@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithVisibility
+import org.jetbrains.kotlin.ir.declarations.IrEnumEntry
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
@@ -134,6 +135,17 @@ sealed interface DotNetPhysicalDeclaration {
                     "a default-argument dispatcher requires a CLR method name"
                 }
             }
+        }
+    }
+
+    /** The public static singleton field carrying one logical Kotlin enum entry. */
+    data class EnumEntry(
+        override val ownerPath: List<String>,
+        val fieldName: String,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty()) { "an enum-entry field requires a CLR owner" }
+            require(fieldName.isNotEmpty()) { "an enum-entry field requires a CLR field name" }
         }
     }
 
@@ -339,7 +351,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "19"
+    const val ABI_VERSION = "20"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -386,6 +398,7 @@ object DotNetLibraryAbiCodec {
             val fields = when (declaration) {
                 is DotNetPhysicalDeclaration.Class -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.Function -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.EnumEntry -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.InterfaceDefaultPromotion -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericInterfaceViewBridge -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot ->
@@ -404,6 +417,7 @@ object DotNetLibraryAbiCodec {
             val declaration = when (fields.firstOrNull()) {
                 "C" -> decodeClass(fields, logicalKey)
                 "F" -> decodeFunction(fields, logicalKey)
+                "E" -> decodeEnumEntry(fields, logicalKey)
                 "FD" -> decodeInterfaceDefaultFunction(fields, logicalKey)
                 "P" -> decodeInterfaceDefaultPromotion(fields, logicalKey)
                 "B" -> decodeGenericInterfaceViewBridge(fields, logicalKey)
@@ -898,6 +912,26 @@ object DotNetLibraryAbiCodec {
         ) + ownerPath + initializationPath + objectInstancePath
     }
 
+    private fun DotNetPhysicalDeclaration.EnumEntry.encodeFields(): List<String> =
+        listOf("E", ownerPath.size.toString(), fieldName) + ownerPath
+
+    private fun decodeEnumEntry(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.EnumEntry {
+        require(fields.size >= 4) {
+            "enum-entry declaration '$logicalKey' has an incomplete CLR identity"
+        }
+        val ownerSize = fields[1].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && fields.size == 3 + ownerSize) {
+            "enum-entry declaration '$logicalKey' has an invalid CLR owner-path payload"
+        }
+        return DotNetPhysicalDeclaration.EnumEntry(
+            ownerPath = fields.drop(3).requireOwnerPath(logicalKey, "enum-entry"),
+            fieldName = fields[2].requireFieldName(logicalKey, "enum-entry"),
+        )
+    }
+
     private fun decodeClass(
         fields: List<String>,
         logicalKey: String,
@@ -1028,6 +1062,13 @@ internal fun collectDotNetMetadataLinkageKeys(
         accessors.forEach(::addFunction)
     }
 
+    fun addEnumEntry(entry: IrEnumEntry) {
+        val owner = entry.parent as? IrClass ?: return
+        if (!owner.isDotNetCrossModuleDeclaration) return
+        if (!with(DotNetIrMangler) { entry.isExported(compatibleMode = false) }) return
+        entry.computeDotNetLibraryAbiKeyOrNull("E", signatureComputer)?.let { key -> put(entry, key) }
+    }
+
     fun addClass(irClass: IrClass) {
         if (irClass.isDotNetResolutionOnlyStdlibDeclaration) return
         if (irClass.isDotNetCrossModuleDeclaration &&
@@ -1038,6 +1079,7 @@ internal fun collectDotNetMetadataLinkageKeys(
         for (declaration in irClass.declarations) {
             when (declaration) {
                 is IrClass -> addClass(declaration)
+                is IrEnumEntry -> addEnumEntry(declaration)
                 is IrSimpleFunction -> addFunction(declaration)
                 is IrProperty -> addProperty(declaration)
                 else -> {}
@@ -1168,6 +1210,11 @@ internal data class DotNetBoundObjectInstance(
     val library: DotNetExternalLibrary,
     val declaration: DotNetPhysicalDeclaration.Class,
     val objectInstance: DotNetObjectInstance,
+)
+
+internal data class DotNetBoundEnumEntry(
+    val library: DotNetExternalLibrary,
+    val enumEntry: DotNetPhysicalDeclaration.EnumEntry,
 )
 
 internal data class DotNetBoundInterfaceDefaultPromotion(
@@ -1310,6 +1357,13 @@ internal class DotNetExternalDeclarations(
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
         val objectInstance = declaration.objectInstance ?: return null
         return DotNetBoundObjectInstance(bound.library, declaration, objectInstance)
+    }
+
+    fun enumEntryOrNull(entry: IrEnumEntry): DotNetBoundEnumEntry? {
+        val logicalKey = entry.computeDotNetLibraryAbiKeyOrNull("E", signatureComputer) ?: return null
+        val bound = declarations[logicalKey] ?: return null
+        val enumEntry = bound.declaration as? DotNetPhysicalDeclaration.EnumEntry ?: return null
+        return DotNetBoundEnumEntry(bound.library, enumEntry)
     }
 
     fun objectInstanceOwnerInfo(binding: DotNetBoundObjectInstance): DotNetIlClassInfo {
@@ -1543,6 +1597,7 @@ internal fun collectDotNetLibraryDeclarations(
     interfaceDefaultClassForwarders: List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
     staticInitializations: Map<IrClass, DotNetLoweredStaticInitialization> = emptyMap(),
     objectInstanceFields: Map<IrClass, IrField> = emptyMap(),
+    enumEntryFields: Map<IrEnumEntry, IrField> = emptyMap(),
     typeMapper: DotNetIlTypeMapper? = null,
 ): Map<String, DotNetPhysicalDeclaration> = buildMap {
     val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
@@ -1622,6 +1677,24 @@ internal fun collectDotNetLibraryDeclarations(
                 )
             )
         }
+    }
+    for ([enumEntry, field] in enumEntryFields) {
+        if (enumEntry.fileOrNull !in files) continue
+        val logicalKey = preLoweringDeclarationKeys[enumEntry] ?: continue
+        val physicalOwner = field.parent as? IrClass
+            ?: error("Internal .NET backend error: enum-entry field has no CLR class owner")
+        val ownerInfo = availableClasses[physicalOwner]
+            ?: error(
+                "Internal .NET backend error: enum-entry owner for " +
+                        "'${enumEntry.render()}' did not survive physical emission"
+            )
+        put(
+            logicalKey,
+            DotNetPhysicalDeclaration.EnumEntry(
+                ownerPath = ownerInfo.physicalPathComponents(),
+                fieldName = field.name.asString(),
+            )
+        )
     }
     for (entry in availableFunctions) {
         val function = entry.key

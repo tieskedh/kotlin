@@ -260,8 +260,17 @@ internal class DotNetStaticInitializationFailureLowering(
             override fun visitGetField(expression: IrGetField): IrExpression {
                 expression.transformChildrenVoid(this)
                 val field = expression.symbol.owner
-                if (field.origin != IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE) return expression
-                val logicalOwner = singletonLogicalOwner(field, localFields) ?: return expression
+                if (
+                    field.origin != IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE &&
+                    field.origin != IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRY
+                ) {
+                    return expression
+                }
+                val logicalOwner = if (field.origin == IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRY) {
+                    field.parent as? IrClass
+                } else {
+                    singletonLogicalOwner(field, localFields)
+                } ?: return expression
                 val entry = localStaticInitializationEntry(logicalOwner)
                     ?: externalStaticInitializationEntry(logicalOwner)
                     ?: return expression

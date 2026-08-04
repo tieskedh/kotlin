@@ -11,35 +11,44 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: one erased physical ABI for Kotlin-owned generic
-  classes and interfaces, plus the Common builder and abstract-collection
-  foundation
+- Last completed feature: ordinary Kotlin reference-class enums and the
+  non-reified Common `EnumEntries` core
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
-stdlib. The target is not close to 98% feature-complete: enums, valued
-annotations and annotation reflection, `KType`/member reflection, reified
-public APIs, value classes, coroutines, the contracts/`buildString` closure,
-broad Set/Map production, and Gradle/KMP product integration remain
-substantial open programmes.
+stdlib. The target is not close to 98% feature-complete: valued annotations
+and annotation reflection, `KType`/member reflection, reified public APIs and
+enum helpers, value classes, coroutines, the contracts/`buildString` closure,
+broad Set/Map production, and Gradle/KMP product integration remain substantial
+open programmes.
 
 ## Current green gate
 
-The current erased-generic-class and Common builder/abstract-base production
-head passed:
+The current ordinary-enum and non-reified `EnumEntries` production head
+passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The JUnit audit covered 20 fresh XML files and 1044 tests:
+The JUnit audit covered 20 fresh XML files and 1049 tests:
 
-- 938 FIR, IL-text, and box tests
+- 942 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 85 library-integration tests
+- 86 library-integration tests
 - zero failures, errors, or skips
+
+Ordinary Kotlin enums are one reference-class hierarchy, never CLR
+`System.Enum` value types. Entry fields retain singleton identity and source
+order; private entry subclasses implement bodies and abstract members;
+`values()` is fresh, `entries` is stable, and `valueOf` uses exact Kotlin names
+and failure semantics. Both frontend paths execute the complete adversarial
+corpus on Framework CLR and CoreCLR. A portable library is separately consumed
+by Kotlin and C# on both runtimes, including entry-field metadata, marker
+attributes, virtual dispatch, static initialization, arrays, and widened
+`Enum<*>`/`EnumEntries<*>` views. Reified enum helpers remain fail-closed.
 
 The final gate additionally covers generic-interface erasure on both runtime
 profiles. Both owner-dependent `C<T> : I<T>` and closed `C<T> : I<String>`
@@ -128,11 +137,12 @@ storage and members use an accepted erased carrier, an erased upper bound, or
 `castclass`/`isinst` over the one owner supplies Kotlin's declaration-erased
 identity, including inherited and separate-library cases.
 
-Physical ABI 19 records only that owner and removes class capability paths,
-class-member bridge records, canonical class interfaces, ancestry classifiers,
-and typed-dispatch probes. Imported CLR generics remain reified. Typed C#
-generic-class export is a separate fail-closed product rather than an implicit
-second implementation ABI.
+Physical ABI 20 records that one erased generic owner plus producer-owned enum
+entry fields. It retains the removal of class capability paths, class-member
+bridge records, canonical class interfaces, ancestry classifiers, and typed-
+dispatch probes. Imported CLR generics remain reified. Typed C# generic-class
+export is a separate fail-closed product rather than an implicit second
+implementation ABI.
 
 An erased generic class also no longer fabricates a typed generic-interface
 edge: both `C<T> : I<T>` and `C<T> : I<String>` implement the one erased `I`
@@ -368,7 +378,7 @@ an inlined empty nullable branch uses the existing nullable-bottom carrier
 path. The accumulator-fold family likewise remains published, and a discarded
 substituted generic fold result performs its existing checked recovery before
 being discarded. Kotlin-owned generic classes and interfaces use physical ABI
-19's one erased owner; the superseded bounded typed-dispatch experiment
+20's one erased owner; the superseded bounded typed-dispatch experiment
 remains only as Git history and design evidence. Ordinary
 non-reified inline bodies now
 bind exact signatures throughout the complete frontend-selected dependency
@@ -385,9 +395,9 @@ joins, Common abstract bases, and migrated array-backed list are published.
 Only the two top-level `buildString` declarations remain parked behind the
 contracts DSL. Runtime surface level 14 owns the erased compiler mutable cell
 and the erased Kotlin collection-interface surface.
-Parameterless annotation classes are admitted generally;
-`InvocationKind`, the enum product, and the complete contract-effect closure
-remain unresolved. The
+Parameterless annotation classes are admitted generally; ordinary enums and
+the non-reified `EnumEntries` core are now published. `InvocationKind` and the
+complete contract-effect closure remain unresolved. The
 classified `CharSequence` carrier, Common collection predicates, and ordinary
 inline-function boundary remain intact; reified and suspend inline are still
 explicit errors. The nominal `KClass` floor is selected and published; it does
@@ -407,10 +417,9 @@ runners, plus target-owned CIL, C# reflection/application, and portable Kotlin
 producer/consumer evidence. Valued annotations and annotation discovery remain
 outside this foundation.
 
-The general Common Comparable mapping is now independently published. It is
-not an enum-private facility: the later `Enum<E>` product must consume the same
-KLIB identity, canonical classifier, typed C# view, and semantic operation
-boundary.
+The general Common Comparable mapping is independently published and the enum
+product consumes the same KLIB identity, canonical classifier, typed C# view,
+and semantic operation boundary rather than an enum-private substitute.
 
 The reified audit established that shared IR substitution is ready. Its
 ordinary runtime prerequisites now include declaration-erased Kotlin generic
@@ -482,15 +491,13 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Implement ordinary Kotlin enums and the non-reified `EnumEntries` core as
-   one reference-class feature, including producer-recorded enum-entry field
-   binding, entry annotations, static initialization, separate compilation,
-   and Kotlin/C# consumption. Do not map Kotlin enums to CLR value-type enums
-   or open the general reified gate.
-2. Once `InvocationKind` exists, publish the exact contracts/`Standard.kt`/
-   `buildString` closure and replace the temporary StringBuilder projection
-   with the complete ordinary Common file.
-3. Continue the Common collection programme by exact dependency closure,
+1. Publish the exact contracts product, starting with ordinary
+   `InvocationKind`, then the Common contracts DSL/effect metadata,
+   `Standard.kt`, and both `buildString` declarations. Replace the temporary
+   StringBuilder projection with the complete ordinary Common file; project
+   only the exact Roslyn-contract subset in addition to authoritative KLIB
+   effects.
+2. Continue the Common collection programme by exact dependency closure,
    preferring families that exercise enum/contracts foundations or unlock
    ordinary application code without introducing target-owned algorithms.
 

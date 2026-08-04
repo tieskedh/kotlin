@@ -48,6 +48,12 @@ fun main(args: Array<String>) {
     val kotlinOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapKotlin.kt"
     )
+    val enumEntriesOutputFile = baseDir.resolve(
+        "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapEnumEntries.kt"
+    )
+    val enumOutputFile = baseDir.resolve(
+        "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapEnum.kt"
+    )
     val jsNameOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapJsName.kt"
     )
@@ -63,6 +69,9 @@ fun main(args: Array<String>) {
         baseDir.resolve("libraries/stdlib/src/kotlin/text/StringBuilder.kt")
     val commonStandardFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/util/Standard.kt")
+    val commonEnumEntriesFile =
+        baseDir.resolve("libraries/stdlib/src/kotlin/enums/EnumEntries.kt")
+    val commonEnumFile = baseDir.resolve("libraries/stdlib/src/kotlin/Enum.kt")
     val commonJsAnnotationsFile =
         baseDir.resolve("libraries/stdlib/common/src/kotlin/JsAnnotationsH.kt")
     val arrayAsListDeclaration = extractCommonDeclaration(
@@ -157,7 +166,7 @@ fun main(args: Array<String>) {
         Elements.f_first_predicate selectedFor setOf(Family.Iterables),
         Elements.f_firstOrNull selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_firstOrNull_predicate selectedFor setOf(Family.Iterables),
-        Elements.f_getOrNull selectedFor setOf(Family.Lists),
+        Elements.f_getOrNull selectedFor setOf(Family.Lists, Family.ArraysOfObjects),
         Elements.f_indexOf selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_indexOfFirst selectedFor setOf(Family.Iterables, Family.Lists),
         Elements.f_indexOfLast selectedFor setOf(Family.Iterables, Family.Lists),
@@ -225,6 +234,19 @@ fun main(args: Array<String>) {
     for (member in members) {
         member.build(generatedSource)
     }
+    generatedSource.appendLine(
+        """
+        /**
+         * Private resolution marker for the exact Common `Array.getOrNull` body above.
+         *
+         * The shared range-contains lowering consumes every call before CIL generation. This is
+         * intentionally not a public `Array.indices` product: publishing that property requires
+         * the complete `IntRange` dependency closure, which is outside this bootstrap slice.
+         */
+        private val <T> Array<out T>.indices: IntRange
+            get() = throw AssertionError("Array.indices bootstrap marker survived lowering")
+        """.trimIndent()
+    )
     val normalizedSource = generatedSource.toString()
         .replace("\r\n", "\n")
         .lineSequence()
@@ -253,6 +275,14 @@ fun main(args: Array<String>) {
         ),
         Charsets.UTF_8,
     )
+    enumEntriesOutputFile.writeText(
+        projectEnumEntriesFile(commonEnumEntriesFile),
+        Charsets.UTF_8,
+    )
+    enumOutputFile.writeText(
+        projectEnumFile(commonEnumFile),
+        Charsets.UTF_8,
+    )
     jsNameOutputFile.writeText(
         buildProjectedSource(
             packageName = "kotlin.js",
@@ -266,6 +296,79 @@ fun main(args: Array<String>) {
         ),
         Charsets.UTF_8,
     )
+}
+
+private fun projectEnumFile(sourceFile: File): String {
+    var projectedSource = sourceFile.readText().replace("\r\n", "\n")
+    val commonConstructor =
+        "public expect abstract class Enum<E : Enum<E>>(name: String, ordinal: Int): Comparable<E> {"
+    val bootstrapConstructor =
+        "public expect abstract class Enum<E : Enum<E>>(name: String = \"\", ordinal: Int = -1): Comparable<E> {"
+    check(projectedSource.countOccurrences(commonConstructor) == 1) {
+        "Expected exactly one Common Enum constructor in ${sourceFile.path}"
+    }
+    // A serialized Enum constructor is deserialized by FIR with synthetic defaults regardless
+    // of its proto flags. The temporary same-compilation source product has no deserialization
+    // boundary, so express those two frontend-only placeholders in source. The enum lowering
+    // always replaces them with the exact entry name and ordinal; no physical default stub may
+    // survive. Remove this projection when the stdlib is always consumed as an installed KLIB.
+    projectedSource = projectedSource.replace(commonConstructor, bootstrapConstructor)
+    return injectGeneratedWarning(projectedSource)
+}
+
+private fun projectEnumEntriesFile(sourceFile: File): String {
+    var projectedSource = sourceFile.readText().replace("\r\n", "\n")
+    val commonFileSuppression =
+        "@file:Suppress(\"EXPECT_AND_ACTUAL_IN_THE_SAME_MODULE\") // for building kotlin-stdlib-jvm-minimal-for-test"
+    check(projectedSource.countOccurrences(commonFileSuppression) == 1) {
+        "Expected exactly one Common EnumEntries file suppression in ${sourceFile.path}"
+    }
+    // This suppression belongs to the JVM minimal-test source layout. The .NET common/platform
+    // split has no same-module expect/actual declaration and its test harness correctly rejects
+    // suppressing an error diagnostic in injected bootstrap source.
+    projectedSource = projectedSource.replace(commonFileSuppression, "")
+    val reifiedSurface = extractCommonDeclarationPrefix(
+        sourceFile,
+        "public inline fun <reified T : Enum<T>> enumEntries(): EnumEntries<T>",
+        "@PublishedApi\n@SinceKotlin(\"1.8\") // Used by pre-1.9.0 JVM compiler for the feature in preview mode.",
+    )
+    check(projectedSource.countOccurrences(reifiedSurface) == 1) {
+        "Expected exactly one reified enum-entries surface in ${sourceFile.path}"
+    }
+    projectedSource = projectedSource.replace(reifiedSurface, "")
+    return injectGeneratedWarning(projectedSource)
+}
+
+/**
+ * Copies a documented declaration plus its immediately following declarations up to one exact
+ * retained declaration prefix. This is used for Common source tails where the ordinary next-KDoc
+ * boundary does not exist; both markers stay fail-closed under upstream regrouping.
+ */
+private fun extractCommonDeclarationPrefix(
+    sourceFile: File,
+    declarationHeader: String,
+    retainedDeclarationPrefix: String,
+): String {
+    val source = sourceFile.readText().replace("\r\n", "\n")
+    val declarationIndex = source.indexOf(declarationHeader)
+    check(declarationIndex >= 0) {
+        "Cannot find Common declaration '$declarationHeader' in ${sourceFile.path}"
+    }
+    check(source.indexOf(declarationHeader, declarationIndex + declarationHeader.length) < 0) {
+        "Common declaration header '$declarationHeader' is not unique in ${sourceFile.path}"
+    }
+    val documentationIndex = source.lastIndexOf("/**", declarationIndex)
+    check(documentationIndex >= 0) {
+        "Cannot find KDoc for Common declaration '$declarationHeader' in ${sourceFile.path}"
+    }
+    val retainedDeclarationIndex = source.indexOf(retainedDeclarationPrefix, declarationIndex)
+    check(retainedDeclarationIndex >= 0) {
+        "Cannot find retained Common declaration prefix '$retainedDeclarationPrefix' in ${sourceFile.path}"
+    }
+    check(source.indexOf(retainedDeclarationPrefix, retainedDeclarationIndex + retainedDeclarationPrefix.length) < 0) {
+        "Retained Common declaration prefix '$retainedDeclarationPrefix' is not unique in ${sourceFile.path}"
+    }
+    return source.substring(documentationIndex, retainedDeclarationIndex).trimEnd()
 }
 
 private fun projectWholeCommonFile(sourceFile: File): String {

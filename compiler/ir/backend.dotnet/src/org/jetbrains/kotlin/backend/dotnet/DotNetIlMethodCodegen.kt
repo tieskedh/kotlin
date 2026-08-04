@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_B
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_ENUM_ENTRY_CONSTRUCTOR
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceBridgeMemberViewOrNull
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceBridge
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -155,7 +156,14 @@ internal class DotNetIlMethodCodegen(
         // `ifaceprobe_s1`/`_s2` and `abstractprobe_s1`).
         val isAbstractMember = function is IrSimpleFunction && function.modality == Modality.ABSTRACT
         if (!isAbstractMember) {
-            emitBody()
+            try {
+                emitBody()
+            } catch (failure: IllegalStateException) {
+                throw IllegalStateException(
+                    "${failure.message} while rendering ${function.render()}",
+                    failure,
+                )
+            }
         }
         val ilText = buildString {
             // The printed parameter list never contains the implicit `this` of an instance
@@ -285,6 +293,10 @@ internal class DotNetIlMethodCodegen(
      *   directly (objprobe_s7a, nestedprobe_s2).
      */
     private fun IrFunction.dotNetMemberVisibility(): String {
+        // CLR enclosing types cannot call private members of their nested types. The enum entry
+        // implementation class itself remains nested-private; only its compiler-generated
+        // constructor is assembly-visible so the enclosing enum's `.cctor` can instantiate it.
+        if (origin == DOTNET_ENUM_ENTRY_CONSTRUCTOR) return "assembly"
         if (origin == DOTNET_INTERFACE_DEFAULT_FORWARDER) return "private"
         if (origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) return "private"
         if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET) return "private"
