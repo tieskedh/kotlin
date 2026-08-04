@@ -46,55 +46,30 @@
     }
   }
 }
-.class interface public abstract auto ansi 'demo.Box'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__de5e2a288393b34091c22a9c96542098'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'value__KotlinErased__de5e2a288393b34091c22a9c96542098'()
-  {
-    .get instance object 'demo.Box'::'get_value__KotlinErased__de5e2a288393b34091c22a9c96542098'()
-  }
-}
-.class public auto ansi sealed beforefieldinit 'demo.Box`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'demo.Box'
        extends [mscorlib]System.Object
-       implements 'demo.Box'
 {
-  .field private !0 'value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  .field private object 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'value') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'demo.Box`1'<!0>::'value'
+    stfld object 'demo.Box'::'value'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  .method public hidebysig specialname instance object 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'demo.Box`1'<!0>::'value'
+    ldfld object 'demo.Box'::'value'
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
+  .property instance object 'value'()
   {
-    .override method instance object 'demo.Box'::'get_value__KotlinErased__de5e2a288393b34091c22a9c96542098'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'demo.Box`1'<!0>
-    call instance !0 class 'demo.Box`1'<!0>::'get_value'()
-    box !0
-    ret
-  }
-  .property instance !0 'value'()
-  {
-    .get instance !0 'demo.Box`1'::'get_value'()
+    .get instance object 'demo.Box'::'get_value'()
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'demo.overloadedFunctionExportsKt'

@@ -85,55 +85,30 @@
       ret
     }
   }
-  .class nested public interface abstract auto ansi 'Independent'
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .method public hidebysig specialname newslot abstract virtual instance object 'get_item__KotlinErased__cfb2b18064afd0e95c187f1432bedbf8'() cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    }
-    .property instance object 'item__KotlinErased__cfb2b18064afd0e95c187f1432bedbf8'()
-    {
-      .get instance object 'ObjectDeclarationHost'/'Independent'::'get_item__KotlinErased__cfb2b18064afd0e95c187f1432bedbf8'()
-    }
-  }
-  .class nested public auto ansi sealed beforefieldinit 'Independent`1'<'T'>
+  .class nested public auto ansi sealed beforefieldinit 'Independent'
          extends [mscorlib]System.Object
-         implements 'ObjectDeclarationHost'/'Independent'
   {
-    .field private !0 'item'
-    .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
+    .field private object 'item'
+    .method public hidebysig specialname rtspecialname instance void .ctor(object 'item') cil managed
     {
       .maxstack 2
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ldarg.0
       ldarg.1
-      stfld !0 class 'ObjectDeclarationHost'/'Independent`1'<!0>::'item'
+      stfld object 'ObjectDeclarationHost'/'Independent'::'item'
       ret
     }
-    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    .method public hidebysig specialname instance object 'get_item'() cil managed
     {
       .maxstack 1
       ldarg.0
-      ldfld !0 class 'ObjectDeclarationHost'/'Independent`1'<!0>::'item'
+      ldfld object 'ObjectDeclarationHost'/'Independent'::'item'
       ret
     }
-    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-item>>'() cil managed
+    .property instance object 'item'()
     {
-      .override method instance object 'ObjectDeclarationHost'/'Independent'::'get_item__KotlinErased__cfb2b18064afd0e95c187f1432bedbf8'()
-      .maxstack 1
-      ldarg.0
-      castclass class 'ObjectDeclarationHost'/'Independent`1'<!0>
-      call instance !0 class 'ObjectDeclarationHost'/'Independent`1'<!0>::'get_item'()
-      box !0
-      ret
-    }
-    .property instance !0 'item'()
-    {
-      .get instance !0 'ObjectDeclarationHost'/'Independent`1'::'get_item'()
+      .get instance object 'ObjectDeclarationHost'/'Independent'::'get_item'()
     }
   }
   .class nested private auto ansi sealed beforefieldinit 'Hidden'
@@ -575,55 +550,30 @@ IL_whenNext_1:
         ret
       }
     }
-    .class nested public interface abstract auto ansi 'Independent'
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .method public hidebysig specialname newslot abstract virtual instance object 'get_item__KotlinErased__bdb0e4b004056110b53f6a4c2315fb85'() cil managed
-      {
-        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      }
-      .property instance object 'item__KotlinErased__bdb0e4b004056110b53f6a4c2315fb85'()
-      {
-        .get instance object 'CompanionDeclarationHost'/'Companion'/'Independent'::'get_item__KotlinErased__bdb0e4b004056110b53f6a4c2315fb85'()
-      }
-    }
-    .class nested public auto ansi sealed beforefieldinit 'Independent`1'<'T'>
+    .class nested public auto ansi sealed beforefieldinit 'Independent'
            extends [mscorlib]System.Object
-           implements 'CompanionDeclarationHost'/'Companion'/'Independent'
     {
-      .field private !0 'item'
-      .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
+      .field private object 'item'
+      .method public hidebysig specialname rtspecialname instance void .ctor(object 'item') cil managed
       {
         .maxstack 2
         ldarg.0
         call instance void [mscorlib]System.Object::.ctor()
         ldarg.0
         ldarg.1
-        stfld !0 class 'CompanionDeclarationHost'/'Companion'/'Independent`1'<!0>::'item'
+        stfld object 'CompanionDeclarationHost'/'Companion'/'Independent'::'item'
         ret
       }
-      .method public hidebysig specialname instance !0 'get_item'() cil managed
+      .method public hidebysig specialname instance object 'get_item'() cil managed
       {
         .maxstack 1
         ldarg.0
-        ldfld !0 class 'CompanionDeclarationHost'/'Companion'/'Independent`1'<!0>::'item'
+        ldfld object 'CompanionDeclarationHost'/'Companion'/'Independent'::'item'
         ret
       }
-      .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-item>>'() cil managed
+      .property instance object 'item'()
       {
-        .override method instance object 'CompanionDeclarationHost'/'Companion'/'Independent'::'get_item__KotlinErased__bdb0e4b004056110b53f6a4c2315fb85'()
-        .maxstack 1
-        ldarg.0
-        castclass class 'CompanionDeclarationHost'/'Companion'/'Independent`1'<!0>
-        call instance !0 class 'CompanionDeclarationHost'/'Companion'/'Independent`1'<!0>::'get_item'()
-        box !0
-        ret
-      }
-      .property instance !0 'item'()
-      {
-        .get instance !0 'CompanionDeclarationHost'/'Companion'/'Independent`1'::'get_item'()
+        .get instance object 'CompanionDeclarationHost'/'Companion'/'Independent'::'get_item'()
       }
     }
     .class nested private auto ansi sealed beforefieldinit 'Hidden'
@@ -1015,55 +965,30 @@ IL_whenNext_1:
   .class nested public auto ansi sealed 'Singleton'
          extends [mscorlib]System.Object
   {
-    .class nested public interface abstract auto ansi 'Independent'
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .method public hidebysig specialname newslot abstract virtual instance object 'get_item__KotlinErased__7dfb283ea4d25dbe104eb1f1a3e5d22a'() cil managed
-      {
-        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      }
-      .property instance object 'item__KotlinErased__7dfb283ea4d25dbe104eb1f1a3e5d22a'()
-      {
-        .get instance object 'GenericMetadataOwner'/'Singleton'/'Independent'::'get_item__KotlinErased__7dfb283ea4d25dbe104eb1f1a3e5d22a'()
-      }
-    }
-    .class nested public auto ansi sealed beforefieldinit 'Independent`1'<'U'>
+    .class nested public auto ansi sealed beforefieldinit 'Independent'
            extends [mscorlib]System.Object
-           implements 'GenericMetadataOwner'/'Singleton'/'Independent'
     {
-      .field private !0 'item'
-      .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
+      .field private object 'item'
+      .method public hidebysig specialname rtspecialname instance void .ctor(object 'item') cil managed
       {
         .maxstack 2
         ldarg.0
         call instance void [mscorlib]System.Object::.ctor()
         ldarg.0
         ldarg.1
-        stfld !0 class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<!0>::'item'
+        stfld object 'GenericMetadataOwner'/'Singleton'/'Independent'::'item'
         ret
       }
-      .method public hidebysig specialname instance !0 'get_item'() cil managed
+      .method public hidebysig specialname instance object 'get_item'() cil managed
       {
         .maxstack 1
         ldarg.0
-        ldfld !0 class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<!0>::'item'
+        ldfld object 'GenericMetadataOwner'/'Singleton'/'Independent'::'item'
         ret
       }
-      .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-item>>'() cil managed
+      .property instance object 'item'()
       {
-        .override method instance object 'GenericMetadataOwner'/'Singleton'/'Independent'::'get_item__KotlinErased__7dfb283ea4d25dbe104eb1f1a3e5d22a'()
-        .maxstack 1
-        ldarg.0
-        castclass class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<!0>
-        call instance !0 class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<!0>::'get_item'()
-        box !0
-        ret
-      }
-      .property instance !0 'item'()
-      {
-        .get instance !0 'GenericMetadataOwner'/'Singleton'/'Independent`1'::'get_item'()
+        .get instance object 'GenericMetadataOwner'/'Singleton'/'Independent'::'get_item'()
       }
     }
     .class nested public auto ansi sealed 'NestedObject'
@@ -1409,8 +1334,9 @@ IL_tryEnd_0:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "ten"
-    newobj instance void class 'ObjectDeclarationHost'/'Independent`1'<string>::.ctor(!0)
-    call instance !0 class 'ObjectDeclarationHost'/'Independent`1'<string>::'get_item'()
+    newobj instance void 'ObjectDeclarationHost'/'Independent'::.ctor(object)
+    call instance object 'ObjectDeclarationHost'/'Independent'::'get_item'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 18
     newobj instance void 'ObjectDeclarationHost'/'Internal'::.ctor(int32)
@@ -1487,8 +1413,9 @@ IL_tryEnd_0:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "fifteen"
-    newobj instance void class 'CompanionDeclarationHost'/'Companion'/'Independent`1'<string>::.ctor(!0)
-    call instance !0 class 'CompanionDeclarationHost'/'Companion'/'Independent`1'<string>::'get_item'()
+    newobj instance void 'CompanionDeclarationHost'/'Companion'/'Independent'::.ctor(object)
+    call instance object 'CompanionDeclarationHost'/'Companion'/'Independent'::'get_item'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 19
     newobj instance void 'CompanionDeclarationHost'/'Companion'/'Internal'::.ctor(int32)
@@ -1532,8 +1459,9 @@ IL_tryEnd_0:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "generic"
-    newobj instance void class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<string>::.ctor(!0)
-    call instance !0 class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<string>::'get_item'()
+    newobj instance void 'GenericMetadataOwner'/'Singleton'/'Independent'::.ctor(object)
+    call instance object 'GenericMetadataOwner'/'Singleton'/'Independent'::'get_item'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     call void 'GenericMetadataOwner'/'Singleton'/'NestedObject'::'<EnsureInitialized>'()
     ldsfld class 'GenericMetadataOwner'/'Singleton'/'NestedObject' 'GenericMetadataOwner'/'Singleton'/'NestedObject'::'INSTANCE'

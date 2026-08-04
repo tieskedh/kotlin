@@ -113,6 +113,16 @@ interface ResultSource<out T> {
     fun result(): T
 }
 
+class Payload<T>(val value: T)
+
+interface PayloadFactory<T> {
+    fun makePayload(): Payload<T>
+}
+
+class IntPayloadFactory : PayloadFactory<Int> {
+    override fun makePayload(): Payload<Int> = Payload(19)
+}
+
 open class InheritedSource {
     open fun result(): Special = Special("inherited")
 }
@@ -344,6 +354,10 @@ fun box(): String {
     castEvaluationCount = 0
     if (safeStarProducer(countedCastOperand(castOperand)) !== intIdentity || castEvaluationCount != 1) {
         return "fail 47: safe cast evaluated operand more than once"
+    }
+    val payloadFactory: PayloadFactory<Int> = IntPayloadFactory()
+    if (payloadFactory.makePayload().value != 19) {
+        return "fail 48: erased generic-class carrier nested in generic-interface result"
     }
     return "OK"
 }

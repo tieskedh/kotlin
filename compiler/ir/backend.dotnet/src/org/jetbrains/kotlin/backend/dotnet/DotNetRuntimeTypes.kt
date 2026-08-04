@@ -252,8 +252,7 @@ internal object DotNetRuntimeTypes {
     )
 
     private val mutableRefClass = DotNetIlClassInfo(
-        ilClassName = "Kotlin.Runtime.Internal.MutableRef`1",
-        typeParameterVariances = listOf(Variance.INVARIANT),
+        ilClassName = "Kotlin.Runtime.Internal.MutableRef",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
@@ -371,6 +370,10 @@ internal object DotNetRuntimeTypes {
         }
     }
 
+    /** The compiler-owned mutable cell follows the same one-owner erasure rule as captures. */
+    fun erasedGenericClassInfoFor(irClass: IrClass): DotNetGenericClassInfo? =
+        mutableRefClass.takeIf { irClass.isDotNetMutableRefStub == true }?.let(::DotNetGenericClassInfo)
+
     fun genericInterfaceInfoFor(irClass: IrClass): DotNetGenericInterfaceInfo? =
         genericInterfaceDescriptorFor(irClass)?.info
 
@@ -435,6 +438,9 @@ internal object DotNetRuntimeTypes {
     fun mapCallableType(type: IrType): DotNetIlValueType.UserClass? {
         val simpleType = type as? IrSimpleType ?: return null
         val irClass = simpleType.classifier.owner as? IrClass ?: return null
+        if (irClass.isDotNetMutableRefStub == true && simpleType.arguments.size == 1) {
+            return DotNetIlValueType.UserClass(mutableRefClass)
+        }
         val classInfo = when {
             irClass.isDotNetFunctionBase -> {
                 if (simpleType.arguments.size != 1) return null

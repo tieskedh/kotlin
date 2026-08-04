@@ -1,9 +1,4 @@
 .assembly extern mscorlib {}
-.assembly extern System
-{
-  .ver 4:0:0:0
-  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
-}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -11,207 +6,106 @@
 .assembly 'genericClasses' {}
 .module 'main-genericClasses.il'
 
-.class interface public abstract auto ansi 'Box'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance object 'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig newslot abstract virtual instance void 'put__KotlinErased__bbc5fb7c0b34d2201abd5a7109ee29fe'(object 'v') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_item__KotlinErased__11135d00fc7c578746a3402b7976979d'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'item__KotlinErased__11135d00fc7c578746a3402b7976979d'()
-  {
-    .get instance object 'Box'::'get_item__KotlinErased__11135d00fc7c578746a3402b7976979d'()
-  }
-}
-.class public auto ansi sealed beforefieldinit 'Box`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'Box'
        extends [mscorlib]System.Object
-       implements 'Box'
 {
-  .field private !0 'value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  .field private object 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'value') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'Box`1'<!0>::'value'
+    stfld object 'Box'::'value'
     ret
   }
-  .method private hidebysig specialname instance !0 'get_value'() cil managed
+  .method private hidebysig specialname instance object 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'Box`1'<!0>::'value'
+    ldfld object 'Box'::'value'
     ret
   }
-  .method private hidebysig specialname instance void 'set_value'(!0 '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_value'(object '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    stfld !0 class 'Box`1'<!0>::'value'
+    stfld object 'Box'::'value'
     ret
   }
-  .method public hidebysig instance !0 'get'() cil managed
+  .method public hidebysig instance object 'get'() cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance !0 class 'Box`1'<!0>::'get_value'()
+    call instance object 'Box'::'get_value'()
     ret
   }
-  .method public hidebysig instance void 'put'(!0 'v') cil managed
+  .method public hidebysig instance void 'put'(object 'v') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    call instance void class 'Box`1'<!0>::'set_value'(!0)
+    call instance void 'Box'::'set_value'(object)
     ret
   }
-  .method public hidebysig specialname instance !0 'get_item'() cil managed
+  .method public hidebysig specialname instance object 'get_item'() cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance !0 class 'Box`1'<!0>::'get_value'()
+    call instance object 'Box'::'get_value'()
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-get>'() cil managed
+  .property instance object 'value'()
   {
-    .override method instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'Box`1'<!0>
-    call instance !0 class 'Box`1'<!0>::'get'()
-    box !0
-    ret
+    .get instance object 'Box'::'get_value'()
+    .set instance void 'Box'::'set_value'(object)
   }
-  .method private hidebysig newslot virtual final instance void '<GenericClassCanonicalBridge-put>'(object 'v') cil managed
+  .property instance object 'item'()
   {
-    .override method instance void 'Box'::'put__KotlinErased__bbc5fb7c0b34d2201abd5a7109ee29fe'(object)
-    .maxstack 2
-    ldarg.0
-    castclass class 'Box`1'<!0>
-    ldarg.1
-    unbox.any !0
-    call instance void class 'Box`1'<!0>::'put'(!0)
-    ret
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-item>>'() cil managed
-  {
-    .override method instance object 'Box'::'get_item__KotlinErased__11135d00fc7c578746a3402b7976979d'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'Box`1'<!0>
-    call instance !0 class 'Box`1'<!0>::'get_item'()
-    box !0
-    ret
-  }
-  .property instance !0 'value'()
-  {
-    .get instance !0 'Box`1'::'get_value'()
-    .set instance void 'Box`1'::'set_value'(!0)
-  }
-  .property instance !0 'item'()
-  {
-    .get instance !0 'Box`1'::'get_item'()
+    .get instance object 'Box'::'get_item'()
   }
 }
-.class interface public abstract auto ansi 'Pair2'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_first__KotlinErased__02a330782265286a0451a125eaba8bd1'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_second__KotlinErased__e317903a6367ed0a67a84bfcbd0109c7'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'first__KotlinErased__02a330782265286a0451a125eaba8bd1'()
-  {
-    .get instance object 'Pair2'::'get_first__KotlinErased__02a330782265286a0451a125eaba8bd1'()
-  }
-  .property instance object 'second__KotlinErased__e317903a6367ed0a67a84bfcbd0109c7'()
-  {
-    .get instance object 'Pair2'::'get_second__KotlinErased__e317903a6367ed0a67a84bfcbd0109c7'()
-  }
-}
-.class public auto ansi sealed beforefieldinit 'Pair2`2'<'A', 'B'>
+.class public auto ansi sealed beforefieldinit 'Pair2'
        extends [mscorlib]System.Object
-       implements 'Pair2'
 {
-  .field private !0 'first'
-  .field private !1 'second'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'first', !1 'second') cil managed
+  .field private object 'first'
+  .field private object 'second'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'first', object 'second') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld !0 class 'Pair2`2'<!0, !1>::'first'
+    stfld object 'Pair2'::'first'
     ldarg.0
     ldarg.2
-    stfld !1 class 'Pair2`2'<!0, !1>::'second'
+    stfld object 'Pair2'::'second'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_first'() cil managed
+  .method public hidebysig specialname instance object 'get_first'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !0 class 'Pair2`2'<!0, !1>::'first'
+    ldfld object 'Pair2'::'first'
     ret
   }
-  .method public hidebysig specialname instance !1 'get_second'() cil managed
+  .method public hidebysig specialname instance object 'get_second'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld !1 class 'Pair2`2'<!0, !1>::'second'
+    ldfld object 'Pair2'::'second'
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-first>>'() cil managed
+  .property instance object 'first'()
   {
-    .override method instance object 'Pair2'::'get_first__KotlinErased__02a330782265286a0451a125eaba8bd1'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'Pair2`2'<!0, !1>
-    call instance !0 class 'Pair2`2'<!0, !1>::'get_first'()
-    box !0
-    ret
+    .get instance object 'Pair2'::'get_first'()
   }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-second>>'() cil managed
+  .property instance object 'second'()
   {
-    .override method instance object 'Pair2'::'get_second__KotlinErased__e317903a6367ed0a67a84bfcbd0109c7'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'Pair2`2'<!0, !1>
-    call instance !1 class 'Pair2`2'<!0, !1>::'get_second'()
-    box !1
-    ret
-  }
-  .property instance !0 'first'()
-  {
-    .get instance !0 'Pair2`2'::'get_first'()
-  }
-  .property instance !1 'second'()
-  {
-    .get instance !1 'Pair2`2'::'get_second'()
+    .get instance object 'Pair2'::'get_second'()
   }
 }
 .class public auto ansi sealed beforefieldinit 'ErasedMemberOverloads'
@@ -256,9 +150,6 @@
   {
     .maxstack 2
     ldarg.0
-    ldtoken 'Box`1'
-    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
-    call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CheckGenericClassCast'(object, class [mscorlib]System.Type)
     castclass class 'Box'
     dup
     brtrue IL_notNull_0
@@ -272,19 +163,16 @@ IL_notNull_0:
   {
     .maxstack 2
     ldarg.0
-    ldtoken 'Box`1'
-    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
-    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'IsGenericClass'(object, class [mscorlib]System.Type)
+    isinst class 'Box'
+    ldnull
+    cgt.un
     ret
   }
   .method public hidebysig static class 'Box' 'erasedGenericSafeCast'(object 'value') cil managed
   {
-    .maxstack 2
+    .maxstack 1
     ldarg.0
-    ldtoken 'Box`1'
-    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
-    call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'SafeGenericClassCast'(object, class [mscorlib]System.Type)
-    castclass class 'Box'
+    isinst class 'Box'
     ret
   }
   .method public hidebysig static int32 'guaranteedAliasRead'() cil managed
@@ -295,77 +183,36 @@ IL_notNull_0:
       [1] class 'Box' 'alias'
     )
     ldc.i4 40
-    newobj instance void class 'Box`1'<int32>::.ctor(!0)
+    box [mscorlib]System.Int32
+    newobj instance void 'Box'::.ctor(object)
     stloc.0
     ldloc.0
     stloc.1
     ldloc.1
-    castclass class 'Box`1'<int32>
-    call instance !0 class 'Box`1'<int32>::'get'()
+    call instance object 'Box'::'get'()
+    unbox.any [mscorlib]System.Int32
     ret
   }
   .method public hidebysig static int32 'guardedIntRead__KotlinErased__df325ff2ae4d1c4875ee06199a02b55a'(class 'Box' 'value') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class 'Box' '<genericClassReceiver>',
-      [1] class 'Box`1'<int32> '<genericClassCapability>',
-      [2] int32 '<genericClassResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class 'Box`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericClassCanonicalFallback_0
-    ldloc.1
-    call instance !0 class 'Box`1'<int32>::'get'()
-    stloc.2
-    br IL_genericClassJoin_1
-IL_genericClassCanonicalFallback_0:
-    ldloc.0
-    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
+    call instance object 'Box'::'get'()
     unbox.any [mscorlib]System.Int32
-    stloc.2
-IL_genericClassJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static void 'guardedIntWrite__KotlinErased__e9e2ed9320f72dc53408a7134da22299'(class 'Box' 'value', int32 'replacement') cil managed
   {
     .maxstack 2
-    .locals init (
-      [0] class 'Box' '<genericClassReceiver>',
-      [1] class 'Box`1'<int32> '<genericClassCapability>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class 'Box`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericClassCanonicalFallback_0
-    ldloc.1
-    ldarg.1
-    call instance void class 'Box`1'<int32>::'put'(!0)
-    br IL_genericClassJoin_1
-IL_genericClassCanonicalFallback_0:
-    ldloc.0
     ldarg.1
     box [mscorlib]System.Int32
-    callvirt instance void 'Box'::'put__KotlinErased__bbc5fb7c0b34d2201abd5a7109ee29fe'(object)
-IL_genericClassJoin_1:
+    call instance void 'Box'::'put'(object)
     ret
   }
   .method public hidebysig static int32 'guardedMismatchedRead__KotlinErased__ec8d3c6f036dff89729188581b49c7f0'(class 'Box' 'value') cil managed
   {
     .maxstack 2
-    .locals init (
-      [0] class 'Box' '<genericClassReceiver>',
-      [1] class 'Box`1'<int32> '<genericClassCapability>',
-      [2] int32 '<genericClassResult>'
-    )
     ldarg.0
     castclass object
     dup
@@ -374,9 +221,6 @@ IL_genericClassJoin_1:
     newobj instance void [mscorlib]System.NullReferenceException::.ctor()
     throw
 IL_notNull_0:
-    ldtoken 'Box`1'
-    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
-    call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'CheckGenericClassCast'(object, class [mscorlib]System.Type)
     castclass class 'Box'
     dup
     brtrue IL_notNull_1
@@ -384,23 +228,8 @@ IL_notNull_0:
     newobj instance void [mscorlib]System.NullReferenceException::.ctor()
     throw
 IL_notNull_1:
-    stloc.0
-    ldloc.0
-    isinst class 'Box`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericClassCanonicalFallback_2
-    ldloc.1
-    call instance !0 class 'Box`1'<int32>::'get'()
-    stloc.2
-    br IL_genericClassJoin_3
-IL_genericClassCanonicalFallback_2:
-    ldloc.0
-    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
+    call instance object 'Box'::'get'()
     unbox.any [mscorlib]System.Int32
-    stloc.2
-IL_genericClassJoin_3:
-    ldloc.2
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -415,52 +244,49 @@ IL_genericClassJoin_3:
       [4] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
       [5] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>',
       [6] class 'Box' 'nested',
-      [7] class 'Box' '<genericClassReceiver>',
-      [8] class 'Box`1'<string> '<genericClassCapability>',
-      [9] string '<genericClassResult>',
-      [10] class 'Pair2' 'p'
+      [7] class 'Pair2' 'p'
     )
     ldstr "first"
-    newobj instance void class 'Box`1'<string>::.ctor(!0)
+    newobj instance void 'Box'::.ctor(object)
     stloc.0
     ldloc.0
-    castclass class 'Box`1'<string>
-    call instance !0 class 'Box`1'<string>::'get'()
+    call instance object 'Box'::'get'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    castclass class 'Box`1'<string>
     ldstr "second"
-    call instance void class 'Box`1'<string>::'put'(!0)
+    call instance void 'Box'::'put'(object)
     ldloc.0
-    castclass class 'Box`1'<string>
-    call instance !0 class 'Box`1'<string>::'get_item'()
+    call instance object 'Box'::'get_item'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 41
-    newobj instance void class 'Box`1'<int32>::.ctor(!0)
+    box [mscorlib]System.Int32
+    newobj instance void 'Box'::.ctor(object)
     stloc.1
     ldloc.1
-    castclass class 'Box`1'<int32>
     ldloc.1
-    castclass class 'Box`1'<int32>
-    call instance !0 class 'Box`1'<int32>::'get'()
+    call instance object 'Box'::'get'()
+    unbox.any [mscorlib]System.Int32
     ldc.i4 1
     add
-    call instance void class 'Box`1'<int32>::'put'(!0)
+    box [mscorlib]System.Int32
+    call instance void 'Box'::'put'(object)
     ldloc.1
-    castclass class 'Box`1'<int32>
-    call instance !0 class 'Box`1'<int32>::'get'()
+    call instance object 'Box'::'get'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 7
-    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
-    newobj instance void class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>::.ctor(!0)
+    box [mscorlib]System.Int32
+    newobj instance void 'Box'::.ctor(object)
     stloc.2
     ldloc.2
-    castclass class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>
-    call instance !0 class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>::'get'()
+    call instance object 'Box'::'get'()
+    unbox.any valuetype [mscorlib]System.Nullable`1<int32>
     stloc.3
     ldloc.3
     stloc 4
@@ -489,48 +315,45 @@ IL_whenEnd_0:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "inner"
-    newobj instance void class 'Box`1'<string>::.ctor(!0)
-    newobj instance void class 'Box`1'<class 'Box`1'<string>>::.ctor(!0)
+    newobj instance void 'Box'::.ctor(object)
+    newobj instance void 'Box'::.ctor(object)
     stloc 6
     ldloc 6
-    castclass class 'Box`1'<class 'Box`1'<string>>
-    call instance !0 class 'Box`1'<class 'Box`1'<string>>::'get'()
-    stloc 7
-    ldloc 7
-    isinst class 'Box`1'<string>
-    stloc 8
-    ldloc 8
-    brfalse IL_genericClassCanonicalFallback_3
-    ldloc 8
-    call instance !0 class 'Box`1'<string>::'get'()
-    stloc 9
-    br IL_genericClassJoin_4
-IL_genericClassCanonicalFallback_3:
-    ldloc 7
-    callvirt instance object 'Box'::'get__KotlinErased__0530c4cc1af6a1197b3910c745411916'()
+    call instance object 'Box'::'get'()
+    castclass 'Box'
+    call instance object 'Box'::'get'()
     castclass [mscorlib]System.String
-    stloc 9
-IL_genericClassJoin_4:
-    ldloc 9
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 1
+    box [mscorlib]System.Int32
     ldstr "one"
-    newobj instance void class 'Pair2`2'<int32, string>::.ctor(!0, !1)
-    stloc 10
-    ldloc 10
-    castclass class 'Pair2`2'<int32, string>
-    call instance !0 class 'Pair2`2'<int32, string>::'get_first'()
+    newobj instance void 'Pair2'::.ctor(object, object)
+    stloc 7
+    ldloc 7
+    call instance object 'Pair2'::'get_first'()
+    unbox.any [mscorlib]System.Int32
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 10
-    castclass class 'Pair2`2'<int32, string>
-    call instance !1 class 'Pair2`2'<int32, string>::'get_second'()
+    ldloc 7
+    call instance object 'Pair2'::'get_second'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
     call bool 'genericClassesKt'::'erasedGenericTest'(object)
+    brtrue IL_boolStrTrue_3
+    ldstr "false"
+    br IL_boolStrEnd_4
+IL_boolStrTrue_3:
+    ldstr "true"
+IL_boolStrEnd_4:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class 'Box' 'genericClassesKt'::'erasedGenericSafeCast'(object)
+    ldloc.0
+    ceq
     brtrue IL_boolStrTrue_5
     ldstr "false"
     br IL_boolStrEnd_6
@@ -539,8 +362,7 @@ IL_boolStrTrue_5:
 IL_boolStrEnd_6:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    call class 'Box' 'genericClassesKt'::'erasedGenericSafeCast'(object)
-    castclass class 'Box'
+    call class 'Box' 'genericClassesKt'::'erasedGenericCast'(object)
     ldloc.0
     ceq
     brtrue IL_boolStrTrue_7
@@ -549,18 +371,6 @@ IL_boolStrEnd_6:
 IL_boolStrTrue_7:
     ldstr "true"
 IL_boolStrEnd_8:
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc.0
-    call class 'Box' 'genericClassesKt'::'erasedGenericCast'(object)
-    castclass class 'Box'
-    ldloc.0
-    ceq
-    brtrue IL_boolStrTrue_9
-    ldstr "false"
-    br IL_boolStrEnd_10
-IL_boolStrTrue_9:
-    ldstr "true"
-IL_boolStrEnd_10:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
     call string 'genericClassesKt'::'erasedOverload__KotlinErased__1f4a754b0e33e25b1978454a64842ecd'(class 'Box')

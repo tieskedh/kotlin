@@ -308,28 +308,24 @@ See the
   signature, or generalize this rule to input/out projections, open
   `Array<T?>`, or other Kotlin generic classes. See
   [the star-projected-array ADR](docs/decisions/star-projected-arrays.md).
-- Every Kotlin-owned ordinary generic class uses a non-generic canonical CLR
-  interface for Kotlin storage, dispatch, projections, and erased casts while
-  retaining its invariant arity-suffixed CLR class as the typed implementation
-  and C# capability on the same object. Canonical bridges own erased member
-  barriers; runtime tests/casts must also verify ancestry from the exact
-  producer-recorded open generic class definition, never the interface alone.
-  Do not use a closed `C<T>` as Kotlin identity, wrap or reinterpret a cast,
-  erase away the typed CLR class, or choose carriers from local provenance.
-  Any ordinary callable parameter containing this erased view receives a
-  stable whole-Kotlin-signature physical name before an overload collision
-  exists; never derive ABI naming from the current overload set. A canonical
-  slot of a cross-module declaration uses its public KLIB identity; a slot
-  below a private/local owner uses only the explicit stable structural codec.
-  Never hash file-local IR signatures, rendered types, object identity,
-  declaration order, or source offsets into a physical name. A canonical
-  value upcast to a non-generic CLR base uses only a proven same-object checked
-  cast from its typed ancestry; the canonical interface cannot inherit a CLR
-  class. Keep owner-relative exact interface capabilities on typed `C<T>`;
-  never fabricate an `I<object>` canonical edge. Compiler-generated default-
-  argument dispatchers are implementation helpers, not canonical source-member
-  slots, and recover any exact typed owner only from authoritative IR.
-  See [the generic-class ADR](docs/decisions/generic-class-erased-identity.md).
+- Every Kotlin-owned ordinary generic class has one non-generic physical CLR
+  owner and one erased runtime/virtual ABI. KLIB remains authoritative for its
+  logical parameters, arguments, variance, projections, nullability, and
+  bounds. Owner-type storage and member positions use `object`, an erased upper
+  bound, or an already accepted erased Kotlin carrier; generic results narrow
+  only at their logical use site. A closed CLR `C<T>` is neither Kotlin runtime
+  identity nor an implementation capability. Imported CLR generic classes
+  remain reified and explicit typed C# export is a separate fail-closed product.
+  Do not emit the prototype's canonical interface, typed class, capability
+  probes, ancestry classifier, class bridge records, wrappers, copies, or
+  duplicate storage. Never narrow a nested carrier such as
+  `Collection<object>` to `Collection<int>` or special-case one Common method.
+  Kotlin/.NET deliberately selects classifier-only unchecked casts and delayed
+  typed failure for Kotlin-owned classes as a cross-target compatibility
+  contract, although the language specification would permit earlier platform
+  failure. Preserve same-object identity, mutation, virtual dispatch, and
+  separate compilation. See
+  [the generic-class ADR](docs/decisions/generic-class-erased-identity.md).
 - `KClass` is a nominal Kotlin runtime value over exact or classified CLR type
   evidence. KLIB owns logical `KClass<T>` and declaration identity;
   `System.Type` is a retained physical bridge and never becomes `KClass` or
@@ -366,14 +362,27 @@ See the
   scalars, `Any`, `String`, non-generic classes/interfaces, supported
   primitive-array wrappers, and fully known CLR vectors. Never admit a
   `GenericInstance` as Kotlin runtime identity: Kotlin-owned generic classes
-  are declaration-erased on mature targets even though their current CLR
-  storage is closed. `Array<*>` is the one selected structural erased-array
-  case above; its classified `System.Array` path must not leak into ordinary
-  generic-class RTTI.
-- Variant/generic interfaces use the versioned split-interface/bridge model
-  where one CLR interface cannot truthfully carry all Kotlin views. MethodImpl
-  and effective interface maps are semantic ABI, not IL spelling trivia. See
+  are declaration-erased on this target as well. `Array<*>` is the one
+  selected structural erased-array case above; its classified `System.Array`
+  path must not leak into ordinary generic-class RTTI.
+- The implemented variant/generic-interface candidate currently uses the
+  versioned split-interface/bridge model. Class erasure materially weakens the
+  case for emitting typed siblings for every Kotlin-owned generic interface:
+  an erased generic implementation can promise only its canonical interface,
+  not one truthful closed capability per logical construction. Freeze this
+  candidate while its ADR is reassessed. Do not extend or remove split views
+  piecemeal; any replacement must preserve erased Kotlin identity, foreign CLR
+  interface identity, default dispatch, `MethodImpl` maps, separate
+  compilation, and explicitly selected BCL/C# capabilities through one full
+  producer/consumer gate. See
   [the generic-interface draft](docs/decisions/draft-adr-generic-interface-abi.md).
+  At the already-decided class-erasure boundary, `C<T> : I<T>` publishes only
+  canonical `I`; never substitute the absent class parameter with a fabricated
+  `I<object>` capability. A closed `C<T> : I<String>` edge is distinct and may
+  retain a truthful selected typed capability. On DIM profiles, a default body
+  hosted by typed `I<T>` cannot satisfy that canonical-only class; emit the
+  existing helper-backed canonical class `MethodImpl` without adding a typed
+  interface edge. A closed edge may inherit its native DIM normally.
 - Interface default bodies are profile-aware. Do not simulate modern DIM into
   the Framework ABI or reject a Kotlin body without applying the accepted
   fallback policy. See

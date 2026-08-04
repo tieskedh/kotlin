@@ -39,14 +39,13 @@ import org.jetbrains.kotlin.name.Name
 internal var IrClass.isDotNetMutableRefStub: Boolean? by irAttribute(copyByDefault = false)
 
 /**
- * Rewrites a captured mutable local to one shared `MutableRef<T>` object, following the JVM
- * `SharedVariablesLowering` model. The CLR-specific difference is a single reified generic cell:
- * its `element: !0` field preserves primitive, nullable, reference, and open type-parameter
- * storage without boxing or a family of primitive-specialized runtime classes.
+ * Rewrites a captured mutable local to one logical `MutableRef<T>` object, following the JVM
+ * `SharedVariablesLowering` model. The physical compiler-owned cell is non-generic and stores
+ * `element: object`; IR retains `T`, so reads narrow/unbox only at their logical use site.
  *
  * The synthetic class below is an IR symbol table stub only. It is never emitted into the user
  * assembly; [DotNetRuntimeTypes] maps it to
- * `[Kotlin.Runtime]Kotlin.Runtime.Internal.MutableRef\`1`. A cell may become a private field of a
+ * `[Kotlin.Runtime]Kotlin.Runtime.Internal.MutableRef`. A cell may become a private field of a
  * generated callable class, but it is not a callable representation and does not change that
  * object's erased `Kotlin.FunctionN` identity.
  */

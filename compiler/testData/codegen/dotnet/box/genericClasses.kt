@@ -1,7 +1,5 @@
-// Kotlin generic-class identity is the non-generic canonical CLR interface; the invariant
-// `Box`1<T>` class is the same object's typed implementation capability. These checks keep the
-// reified storage advantage while attacking erased Kotlin casts, ancestry, evaluation count,
-// state identity, and parameter-overload collisions.
+// Kotlin-owned generic classes use one erased CLR owner. These checks pin the corresponding
+// classifier-only casts, same-object mutation, member narrowing, and virtual dispatch.
 
 class Box<T>(private var value: T) {
     fun get(): T = value
@@ -16,6 +14,33 @@ class Box<T>(private var value: T) {
 
 class Pair2<A, B>(val first: A, val second: B) {
     fun swap(): Pair2<B, A> = Pair2<B, A>(second, first)
+}
+
+private class ProbePacket<out T>(val value: T)
+
+private class WidenedProbe<out T>(private val expected: T) {
+    private var lastPacket: Any? = null
+
+    fun accepts(value: @UnsafeVariance T): Boolean = expected == value
+
+    fun inspects(packet: ProbePacket<@UnsafeVariance T>): Boolean {
+        lastPacket = packet
+        return expected == packet.value
+    }
+
+    fun sawSamePacket(packet: Any?): Boolean = lastPacket === packet
+}
+
+private open class RouteBase<out T>(private val value: T) {
+    open fun label(): String = "Base>$value"
+}
+
+private open class RouteMid<T>(value: T) : RouteBase<T>(value) {
+    override fun label(): String = "Mid>" + super.label()
+}
+
+private class RouteLeaf<T>(value: T) : RouteMid<T>(value) {
+    override fun label(): String = "Leaf>" + super.label()
 }
 
 open class ErasedBase<T>(private var stored: T) {
@@ -51,16 +76,18 @@ private fun countedErased(value: Any?): Any? {
     return value
 }
 
-private var capabilityReceiverCount = 0
-private var capabilityArgumentCount = 0
+private var erasedReceiverCount = 0
+private var erasedArgumentCount = 0
+private var widenedReceiverCount = 0
+private var widenedPacketCount = 0
 
-private fun countedCapabilityReceiver(value: Box<Int>): Box<Int> {
-    capabilityReceiverCount++
+private fun countedErasedReceiver(value: Box<Int>): Box<Int> {
+    erasedReceiverCount++
     return value
 }
 
-private fun countedCapabilityArgument(value: Int): Int {
-    capabilityArgumentCount++
+private fun countedErasedArgument(value: Int): Int {
+    erasedArgumentCount++
     return value
 }
 
@@ -71,6 +98,16 @@ private fun guardedWrite(value: Box<Int>, replacement: Int) {
 }
 
 private fun guardedVirtualRead(value: ErasedBase<Int>): Int = value.read()
+
+private fun countedWidenedReceiver(value: WidenedProbe<Any?>): WidenedProbe<Any?> {
+    widenedReceiverCount++
+    return value
+}
+
+private fun countedWidenedPacket(value: ProbePacket<Any?>): ProbePacket<Any?> {
+    widenedPacketCount++
+    return value
+}
 
 fun box(): String {
     val bs = Box("hello")
@@ -167,10 +204,10 @@ fun box(): String {
     if (guardedRead(guarded) != 35) return "fail 35: guarded typed result"
     guardedWrite(guarded, 36)
     if (guardedRead(guarded) != 36) return "fail 36: guarded typed argument"
-    capabilityReceiverCount = 0
-    capabilityArgumentCount = 0
-    countedCapabilityReceiver(guarded).put(countedCapabilityArgument(37))
-    if (capabilityReceiverCount != 1 || capabilityArgumentCount != 1 || guardedRead(guarded) != 37) {
+    erasedReceiverCount = 0
+    erasedArgumentCount = 0
+    countedErasedReceiver(guarded).put(countedErasedArgument(37))
+    if (erasedReceiverCount != 1 || erasedArgumentCount != 1 || guardedRead(guarded) != 37) {
         return "fail 37: guarded receiver/argument evaluation"
     }
     if (guardedVirtualRead(OverridingIntBase(38)) != 39) return "fail 38: guarded virtual override"
@@ -179,8 +216,67 @@ fun box(): String {
     val mismatchedBox = Box("mismatch") as Any as Box<Int>
     try {
         guardedRead(mismatchedBox)
-        return "fail 39: mismatched capability did not fail at result use"
+        return "fail 39: mismatched erased view did not fail at result use"
     } catch (_: ClassCastException) {
+    }
+
+    val mutableString = Box("before")
+    @Suppress("UNCHECKED_CAST")
+    val mutableAsInt = mutableString as Any as Box<Int>
+    try {
+        mutableAsInt.put(40)
+    } catch (_: ClassCastException) {
+        return "fail 40: erased mutation failed before later String use"
+    }
+    val mutableStar: Box<*> = mutableString
+    if (mutableStar.get() != 40) return "fail 41: erased mutation did not update shared storage"
+    try {
+        val impossible: String = mutableString.get()
+        impossible.length
+        return "fail 42: erased mutation did not fail at later String use"
+    } catch (_: ClassCastException) {
+    }
+
+    val mutableInt = Box(43)
+    @Suppress("UNCHECKED_CAST")
+    val mutableAsString = mutableInt as Any as Box<String>
+    try {
+        mutableAsString.put("after")
+    } catch (_: ClassCastException) {
+        return "fail 43: inverse erased mutation failed before later Int use"
+    }
+    val inverseStar: Box<*> = mutableInt
+    if (inverseStar.get() != "after") return "fail 44: inverse mutation did not update shared storage"
+    try {
+        val impossible: Int = mutableInt.get()
+        impossible + 1
+        return "fail 45: inverse mutation did not fail at later Int use"
+    } catch (_: ClassCastException) {
+    }
+
+    val widenedProbe: WidenedProbe<Any?> = WidenedProbe(46)
+    if (!widenedProbe.accepts(46)) return "fail 46: widened direct input true"
+    if (widenedProbe.accepts("wrong")) return "fail 47: widened direct input false"
+    val matchingPacket = ProbePacket<Any?>(46)
+    if (!widenedProbe.inspects(matchingPacket)) return "fail 48: widened nested input true"
+    if (!widenedProbe.sawSamePacket(matchingPacket)) return "fail 49: nested argument identity"
+    val wrongPacket = ProbePacket<Any?>("wrong")
+    if (widenedProbe.inspects(wrongPacket)) return "fail 50: widened nested input false"
+    if (!widenedProbe.sawSamePacket(wrongPacket)) return "fail 51: wrong nested argument identity"
+    widenedReceiverCount = 0
+    widenedPacketCount = 0
+    if (countedWidenedReceiver(widenedProbe).inspects(countedWidenedPacket(wrongPacket))) {
+        return "fail 52: counted widened nested input false"
+    }
+    if (widenedReceiverCount != 1 || widenedPacketCount != 1) {
+        return "fail 53: widened receiver/argument evaluation"
+    }
+
+    val intRoute: RouteBase<Any?> = RouteLeaf(54)
+    if (intRoute.label() != "Leaf>Mid>Base>54") return "fail 54: widened Int override chain"
+    val stringRoute: RouteBase<Any?> = RouteLeaf("fifty-five")
+    if (stringRoute.label() != "Leaf>Mid>Base>fifty-five") {
+        return "fail 55: widened String override chain"
     }
     return "OK"
 }

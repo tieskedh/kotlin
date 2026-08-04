@@ -11,8 +11,8 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: general Common `Comparable<T>` with canonical and
-  typed CLR interface views plus Kotlin-correct built-in ordering
+- Last completed feature: one erased physical ABI for Kotlin-owned generic
+  classes plus the Common builder and abstract-collection foundation
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -20,32 +20,40 @@ This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
 stdlib. The target is not close to 98% feature-complete: enums, valued
 annotations and annotation reflection, `KType`/member reflection, reified
-public APIs, value classes, coroutines, the contracts/builder/abstract-
-collections cluster, broad Set/Map production, and Gradle/KMP product
-integration remain substantial open programmes.
+public APIs, value classes, coroutines, the contracts/`buildString` closure,
+broad Set/Map production, and Gradle/KMP product integration remain
+substantial open programmes.
 
 ## Current green gate
 
-The current Common `Comparable` production head passed:
+The current erased-generic-class and Common builder/abstract-base production
+head passed:
 
 ```text
-.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon
+.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The JUnit audit covered 20 fresh XML files and 1036 tests:
+The JUnit audit covered 20 fresh XML files and 1044 tests:
 
-- 930 FIR, IL-text, and box tests
+- 938 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 85 library-integration tests
 - zero failures, errors, or skips
 
-An independent adversarial review then strengthened existing Comparable test
-methods without changing production sources. All four affected PSI/LightTree
-and Framework/CoreCLR box lanes plus the portable-library integration test
-passed again on the final test source. They additionally execute inherited
-interface dispatch, safe casts, a canonical-only C# `IComparable` through the
-emitted recursive generic constraint, and exclusion of a typed-only
-`IComparable<T>` from Kotlin's erased Comparable identity.
+The final gate additionally covers the profile-sensitive consequence of class
+erasure. An owner-dependent `C<T> : I<T>` implements canonical `I` only and,
+on a DIM profile, receives a helper-backed canonical `MethodImpl` because the
+typed `I<T>` default is not in its physical ancestry. The adversarial closed
+case `C<T> : I<String>` retains its truthful typed edge and native DIM without
+that class forwarder. PSI and LightTree agree on every updated physical shape.
+
+The formerly red generic-class probes are now positive regressions. Widened
+Common `containsAll` compares a wrong-shaped element and returns `false`
+without premature narrowing, while mutation through an unchecked
+`Box<String> as Box<Int>` changes the same object and fails only when the
+result is later consumed as `String`. The same corpus covers direct and nested
+owner-type inputs, argument identity/evaluation, and a three-level widened
+override chain on both frontends and runtime profiles.
 
 All compiler-argument, API, configuration-key, Gradle-option, and test-runner
 generators owned by the affected upstream range were rerun through their
@@ -111,30 +119,25 @@ consumed separately by Kotlin and Roslyn on Framework CLR and CoreCLR, while
 input projections, open nullable elements, and value-vector covariance remain
 negative.
 
-Ordinary Kotlin-owned generic classes now have one declaration-erased Kotlin
-identity without discarding truthful CLR generic capability. Every logical
-`C<T>` uses a non-generic canonical interface for Kotlin storage, projected
-fallback dispatch, and casts, while the same object remains the invariant CLR
-`C<T>` implementation for state, inheritance, constructors, and C# use.
-Fresh constructions and immutable local aliases now call that typed capability
-directly; other fully representable invariant receivers probe it once per call
-and fall back to the canonical slot on a miss. Value-type fast branches contain
-no bridge boxing, arguments and receivers retain Kotlin evaluation order, and
-typed virtual calls retain CLR override dispatch. Unchecked mismatches are not
-optimized: they miss the probe and keep the required delayed failure at the
-canonical argument/result barrier. Global provenance, compiler-managed guard
-hoisting/loop versioning, visibility-based full erasure, and AOT-specific
-specialization remain explicitly on hold.
-Runtime tests and casts additionally verify the producer-recorded open typed
-TypeDef through the actual base chain, rejecting hostile canonical-interface
-implementors without wrapping or changing identity. ABI 17 records both owner
-paths and typed/canonical member bridges; erased callable names are derived
-from complete logical identities. Public slots use public KLIB identity and
-private/local slots use a bounded structural codec, with an executable
-double-producer CIL reproducibility check. Kotlin and Roslyn consumers execute
-the portable producer on Framework CLR and CoreCLR, including nested types,
-default dispatch, inheritance, overloads, virtual C# subclass dispatch, and
-wrong-argument failure at the later logical member barrier.
+Every Kotlin-owned ordinary generic class now has one non-generic physical
+owner and one erased runtime/virtual ABI. KLIB remains authoritative for type
+parameters, bounds, variance, arguments, projections, and nullability. Owner
+storage and members use an accepted erased carrier, an erased upper bound, or
+`object`; reads narrow only at their logical use site. Ordinary CLR
+`castclass`/`isinst` over the one owner supplies Kotlin's declaration-erased
+identity, including inherited and separate-library cases.
+
+Physical ABI 18 records only that owner and removes class capability paths,
+class-member bridge records, canonical class interfaces, ancestry classifiers,
+and typed-dispatch probes. Imported CLR generics remain reified. Typed C#
+generic-class export is a separate fail-closed product rather than an implicit
+second implementation ABI.
+
+An erased generic class also no longer fabricates a typed generic-interface
+edge from its absent owner parameter: `C<T> : I<T>` implements canonical `I`
+only, while a parameter-independent closed edge such as `C<T> : I<String>` may
+retain the existing typed capability. KLIB preserves `I<T>` and method bounds
+such as `<R : T>`; the latter omit an impossible CLR owner-relative constraint.
 
 The complete collection-facing accumulator-fold family now uses the generated
 Common bodies for `Iterable.fold`/`foldIndexed` and
@@ -300,6 +303,25 @@ types, physical MethodImpl rows, portable Kotlin consumers, and both canonical-
 only and typed CLR foreign boundaries on Framework CLR and CoreCLR. Runtime
 surface level 12 owns the helper; typed polymorphic fast paths remain unselected.
 
+The builder and Common abstract-collection tranche publishes the authoritative
+Common `Appendable`, the complete non-contract `StringBuilder` surface,
+generated `Iterable.joinTo`/`joinToString`, and Common
+`AbstractCollection`/`AbstractList`. Only the two contract-bearing
+`buildString` declarations remain outside the fail-closed Common projection.
+The Kotlin-owned builder wraps private profile-selected BCL storage without
+exposing `System.Text.StringBuilder` in public or protected metadata; its
+colliding `Any?` overloads have the stable physical names `appendAny`,
+`insertAny`, and `appendLineAny`, while KLIB retains the Kotlin names.
+`ArrayAsList` inherits the Common base and owns only its retained array, size,
+and indexed access. Logical class covariance remains in KLIB while each
+Kotlin-owned generic class has its single erased CLR owner.
+Source and actualized/deserialized inner generic declarations normalize to the
+same outer-first TypeDef arity, closing the separate-library path exercised by
+the Common iterator and sublist implementations. The exact Common bodies also
+closed general backend gaps for `Int`/`Long` bitwise shifts, Unit-valued effects
+in value positions, smartcasts from open type parameters, and projected generic
+array reads and writes; none is encoded as a builder-specific rewrite.
+
 ## Current architecture
 
 - `:core:language.targets.dotnet` owns the logical .NET platform and the
@@ -343,9 +365,9 @@ receiver-seeded reduction family remains published with all eight fallbacks;
 an inlined empty nullable branch uses the existing nullable-bottom carrier
 path. The accumulator-fold family likewise remains published, and a discarded
 substituted generic fold result performs its existing checked recovery before
-being discarded. Bounded generic-class dispatch now
-uses truthful typed CLR capability where available without changing canonical
-identity, physical ABI 17, library metadata, or failure semantics. Ordinary
+being discarded. Kotlin-owned generic classes use physical ABI 18's one erased
+owner; the superseded bounded typed-dispatch experiment remains only as Git
+history and design evidence. Ordinary
 non-reified inline bodies now
 bind exact signatures throughout the complete frontend-selected dependency
 graph. Resolution remains non-linking, and an incomplete graph fails at the
@@ -356,11 +378,13 @@ element type, retains sufficiently large destination identity without JVM's
 Java-specific tail terminator, and keeps public reified `toTypedArray` outside
 the admitted surface. The backend's
 explicit erased-object cast to an open type parameter uses `unbox.any`; safe
-generic casts remain unsupported. Builder storage is selected as a Kotlin-owned
-wrapper over private BCL storage, but implementation is parked: the exact Common
-source closure reaches the public contract DSL. Its parameterless annotation
-classes are now admitted generally; `InvocationKind`, the enum product, and
-the complete contract-effect closure remain unresolved. The
+generic casts remain unsupported. The Kotlin-owned builder, exact generated
+joins, Common abstract bases, and migrated array-backed list are published.
+Only the two top-level `buildString` declarations remain parked behind the
+contracts DSL. Runtime surface level 13 owns the erased compiler mutable cell.
+Parameterless annotation classes are admitted generally;
+`InvocationKind`, the enum product, and the complete contract-effect closure
+remain unresolved. The
 classified `CharSequence` carrier, Common collection predicates, and ordinary
 inline-function boundary remain intact; reified and suspend inline are still
 explicit errors. The nominal `KClass` floor is selected and published; it does
@@ -406,8 +430,8 @@ supported primitive-array wrappers, imported CLR interfaces, nullable forms,
 smart-cast use, and single evaluation are covered; classified exceptions,
 `CharSequence`, and split generic interfaces retain their dedicated paths.
 Closed `GenericInstance` checks remain forbidden as Kotlin identity; ordinary
-generic-class tests instead use the producer-recorded open TypeDef and return
-the same canonical object view.
+Kotlin-owned generic-class tests instead use the one producer-recorded erased
+TypeDef and return the same object.
 
 All eight signed Common primitive-array wrappers are now complete through one
 runtime registry and the symmetric .NET stdlib declaration surface. The new
@@ -426,23 +450,25 @@ elements, input projections, or value-vector covariance. Those parked shapes
 still require successful typed-use carriers rather than inference from the
 star read-only view.
 
-The generic-class closure now covers final/open/abstract/sealed, nested/inner,
-data, inherited, nullable/scalar, generic-member, default-argument, projected,
-and erased-overload shapes. Canonical interfaces never fabricate
-owner-relative `I<object>` capabilities; exact typed capabilities remain on
-`C<T>`. Identical private/local canonical slots are stable across compiler
-processes and frontend order.
+The erased generic-class closure covers final/open/abstract/sealed,
+nested/inner, data, inherited, nullable/scalar, bounded/multiple owner
+parameters, generic members, default arguments, projected and erased-overload
+shapes. It additionally covers widened direct and nested generic-bearing
+inputs, multi-level portable overrides, same-object mutation after an
+unchecked cast, delayed incompatible reads, one physical owner, and absence of
+an implicit CLR `C<T>` surface.
 
 ## Open architectural blockers
 
-- Exact Common `AbstractCollection`/`AbstractList` production still needs the
-  remaining `Appendable`/`StringBuilder` and `joinTo` closure; do not fork its
-  algorithms into .NET. The source audit established that only top-level
-  `buildString` reaches the public contracts DSL, so the builder class and
-  abstract collection bases can land first through the existing exact,
-  fail-closed Common projection mechanism. Modern enums plus the non-reified
-  `EnumEntries` core form the next coherent language/product phase; contracts,
-  full `Standard.kt`, and `buildString` follow after `InvocationKind` exists.
+- The implemented split generic-interface candidate is frozen for a bounded
+  reassessment after class erasure. A generic erased class cannot provide one
+  truthful closed interface capability per logical construction, so typed
+  siblings must justify themselves as explicit BCL/C# capabilities rather
+  than as a blanket Kotlin-owned declaration rule. Do not expand or remove the
+  candidate piecemeal before its producer/consumer and default-method matrix is
+  compared with one erased-interface default.
+- Contracts, full `Standard.kt`, and the two omitted `buildString`
+  declarations follow after an ordinary `InvocationKind` exists.
 - KLIB-in-DLL and physical ABI codecs still need neutral serialization owners
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
@@ -455,12 +481,12 @@ processes and frontend order.
 
 ## Next bounded work
 
-1. Implement the complete Kotlin-owned Common `Appendable`/`StringBuilder`
-   class layer and non-contract extensions, exact generated
-   `joinTo`/`joinToString`, and Common `AbstractCollection`/`AbstractList`;
-   migrate the private direct `ArrayAsList` to the Common base. Leave only the
-   two contract-bearing `buildString` declarations outside this exact
-   fail-closed source projection.
+1. Reassess the frozen generic-interface candidate against the now-erased
+   class ABI. Compare one erased default plus explicit mapped/exported typed
+   capabilities with the existing canonical/declared/exact split, including
+   Kotlin identity, variance, boxing, C# implementation, interface defaults,
+   `MethodImpl` rows, separate compilation, metadata size, and representative
+   generated stdlib implementors. Imported CLR interfaces remain reified.
 2. Implement ordinary Kotlin enums and the non-reified `EnumEntries` core as
    one reference-class feature, including producer-recorded enum-entry field
    binding, entry annotations, static initialization, separate compilation,
@@ -469,6 +495,9 @@ processes and frontend order.
 3. Once `InvocationKind` exists, publish the exact contracts/`Standard.kt`/
    `buildString` closure and replace the temporary StringBuilder projection
    with the complete ordinary Common file.
+4. Continue the Common collection programme by exact dependency closure,
+   preferring families that exercise enum/contracts foundations or unlock
+   ordinary application code without introducing target-owned algorithms.
 
 The post-rebase callable-reference probe found that common IR's new
 `addBoundValueAtOverride` helper cannot directly replace the .NET lowering:

@@ -1,9 +1,4 @@
 .assembly extern mscorlib {}
-.assembly extern System
-{
-  .ver 4:0:0:0
-  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
-}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -11,29 +6,8 @@
 .assembly 'openNullableTypeParameters' {}
 .module 'main-openNullableTypeParameters.il'
 
-.class interface public abstract auto ansi 'NullableHolder'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__b9a2b2f133afe945726ea58217a3d392'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .method public hidebysig specialname newslot abstract virtual instance void 'set_value__KotlinErased__01c06abce1578a07aa3f6f7e597a1aa7'(object '<set-?>') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-  .property instance object 'value__KotlinErased__b9a2b2f133afe945726ea58217a3d392'()
-  {
-    .get instance object 'NullableHolder'::'get_value__KotlinErased__b9a2b2f133afe945726ea58217a3d392'()
-    .set instance void 'NullableHolder'::'set_value__KotlinErased__01c06abce1578a07aa3f6f7e597a1aa7'(object)
-  }
-}
-.class public auto ansi sealed beforefieldinit 'NullableHolder`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'NullableHolder'
        extends [mscorlib]System.Object
-       implements 'NullableHolder'
 {
   .field private object 'value'
   .method public hidebysig specialname rtspecialname instance void .ctor(object 'value') cil managed
@@ -43,14 +17,14 @@
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld object class 'NullableHolder`1'<!0>::'value'
+    stfld object 'NullableHolder'::'value'
     ret
   }
   .method public hidebysig specialname instance object 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld object class 'NullableHolder`1'<!0>::'value'
+    ldfld object 'NullableHolder'::'value'
     ret
   }
   .method public hidebysig specialname instance void 'set_value'(object '<set-?>') cil managed
@@ -58,33 +32,13 @@
     .maxstack 2
     ldarg.0
     ldarg.1
-    stfld object class 'NullableHolder`1'<!0>::'value'
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-<get-value>>'() cil managed
-  {
-    .override method instance object 'NullableHolder'::'get_value__KotlinErased__b9a2b2f133afe945726ea58217a3d392'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'NullableHolder`1'<!0>
-    call instance object class 'NullableHolder`1'<!0>::'get_value'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance void '<GenericClassCanonicalBridge-<set-value>>'(object '<set-?>') cil managed
-  {
-    .override method instance void 'NullableHolder'::'set_value__KotlinErased__01c06abce1578a07aa3f6f7e597a1aa7'(object)
-    .maxstack 2
-    ldarg.0
-    castclass class 'NullableHolder`1'<!0>
-    ldarg.1
-    call instance void class 'NullableHolder`1'<!0>::'set_value'(object)
-    ret
+    stfld object 'NullableHolder'::'value'
     ret
   }
   .property instance object 'value'()
   {
-    .get instance object 'NullableHolder`1'::'get_value'()
-    .set instance void 'NullableHolder`1'::'set_value'(object)
+    .get instance object 'NullableHolder'::'get_value'()
+    .set instance void 'NullableHolder'::'set_value'(object)
   }
 }
 .class interface public abstract auto ansi 'NullableSlot'
@@ -100,20 +54,9 @@
   {
   }
 }
-.class interface public abstract auto ansi 'GenericNullableSlot'
-       implements 'NullableSlot'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  .method public hidebysig newslot abstract virtual instance object 'nullable__KotlinErased__3f5a5675e3bba909423ce1c36d4feff4'() cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-  }
-}
-.class public auto ansi sealed beforefieldinit 'GenericNullableSlot`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'GenericNullableSlot'
        extends [mscorlib]System.Object
-       implements 'GenericNullableSlot', 'NullableSlot', class 'NullableSlot`1'<!0>
+       implements 'NullableSlot'
 {
   .field private object 'stored'
   .method public hidebysig specialname rtspecialname instance void .ctor(object 'stored') cil managed
@@ -123,21 +66,21 @@
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld object class 'GenericNullableSlot`1'<!0>::'stored'
+    stfld object 'GenericNullableSlot'::'stored'
     ret
   }
   .method private hidebysig specialname instance object 'get_stored'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld object class 'GenericNullableSlot`1'<!0>::'stored'
+    ldfld object 'GenericNullableSlot'::'stored'
     ret
   }
   .method public hidebysig newslot virtual instance object 'nullable'() cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance object class 'GenericNullableSlot`1'<!0>::'get_stored'()
+    call instance object 'GenericNullableSlot'::'get_stored'()
     ret
   }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-NullableSlot-nullable-020ae010049477bc392d0718bd17be15>'() cil managed
@@ -145,29 +88,12 @@
     .override method instance object 'NullableSlot'::'nullable__KotlinErased__020ae010049477bc392d0718bd17be15'()
     .maxstack 1
     ldarg.0
-    callvirt instance object class 'GenericNullableSlot`1'<!0>::'nullable'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericInterfaceDeclaredBridge-NullableSlot-nullable-020ae010049477bc392d0718bd17be15>'() cil managed
-  {
-    .override method instance object class 'NullableSlot`1'<!0>::'nullable'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance object class 'GenericNullableSlot`1'<!0>::'nullable'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-nullable>'() cil managed
-  {
-    .override method instance object 'GenericNullableSlot'::'nullable__KotlinErased__3f5a5675e3bba909423ce1c36d4feff4'()
-    .maxstack 1
-    ldarg.0
-    castclass class 'GenericNullableSlot`1'<!0>
-    callvirt instance object class 'GenericNullableSlot`1'<!0>::'nullable'()
+    callvirt instance object 'GenericNullableSlot'::'nullable'()
     ret
   }
   .property instance object 'stored'()
   {
-    .get instance object 'GenericNullableSlot`1'::'get_stored'()
+    .get instance object 'GenericNullableSlot'::'get_stored'()
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'openNullableTypeParametersKt'

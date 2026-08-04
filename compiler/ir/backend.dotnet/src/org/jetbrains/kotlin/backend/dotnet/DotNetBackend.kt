@@ -38,16 +38,28 @@ object DotNetBackend {
         val producedLibraryArtifact = configuration.dotNetProducedLibraryArtifact
         val externalLibraries = configuration.dotNetExternalLibraries
         val publishedEmissionScope = if (producesStdlib) DotNetIlEmissionScope.STDLIB else DotNetIlEmissionScope.USER
-        val preLoweringDeclarationKeys = if (producesStdlib || producesLibrary) {
-            val preLoweringIntrinsics = DotNetIlIntrinsicMethods(irBuiltIns, publishedEmissionScope)
-            collectDotNetMetadataLinkageKeys(
+        val hasBootstrapStdlib = DotNetStdlibLibrary.hasImplementation(irModuleFragment)
+        fun collectPreLoweringDeclarationKeys(scope: DotNetIlEmissionScope): Map<org.jetbrains.kotlin.ir.declarations.IrDeclaration, String> {
+            val preLoweringIntrinsics = DotNetIlIntrinsicMethods(irBuiltIns, scope)
+            return collectDotNetMetadataLinkageKeys(
                 irModuleFragment,
-                publishedEmissionScope,
+                scope,
             ) { function ->
                 preLoweringIntrinsics.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true
             }
+        }
+        val preLoweringDeclarationKeys = if (producesStdlib || producesLibrary) {
+            collectPreLoweringDeclarationKeys(publishedEmissionScope)
         } else {
             emptyMap()
+        }
+        // A bootstrap stdlib and the following user assembly form two physical producers even
+        // during one compiler invocation. Capture the stdlib's logical keys before lowering so
+        // its completed physical index can bind the user emission exactly like an installed DLL.
+        val preLoweringStdlibDeclarationKeys = when {
+            !hasBootstrapStdlib -> emptyMap()
+            producesStdlib -> preLoweringDeclarationKeys
+            else -> collectPreLoweringDeclarationKeys(DotNetIlEmissionScope.STDLIB)
         }
         val expectedMetadataLinkageKeys = preLoweringDeclarationKeys.values.toSet()
         fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
@@ -157,7 +169,7 @@ object DotNetBackend {
             return result(ilTarget)
         }
 
-        val stdlibEmission = if (DotNetStdlibLibrary.hasImplementation(irModuleFragment)) {
+        val stdlibEmission = if (hasBootstrapStdlib) {
             DotNetIlEmitter(
                 messageCollector = messageCollector,
                 assemblyName = DotNetStdlibLibrary.ASSEMBLY_NAME,
@@ -168,11 +180,10 @@ object DotNetBackend {
                 emissionScope = DotNetIlEmissionScope.STDLIB,
                 coreLibrary = target.coreLibrary,
                 failOnDeclarationEviction = true,
-                preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+                preLoweringDeclarationKeys = preLoweringStdlibDeclarationKeys,
                 interfaceDefaultImplementations = context.interfaceDefaultImplementations,
                 defaultArgumentDispatchers = context.defaultArgumentDispatchers,
                 genericInterfaceDefaults = context.genericInterfaceDefaults,
-                genericClassBridges = context.genericClassBridges,
                 covariantReturnBridges = context.covariantReturnBridges,
                 staticInitializations = context.staticInitializations,
                 staticInitializationFailures = context.staticInitializationFailures,
@@ -225,6 +236,27 @@ object DotNetBackend {
             return result(assembledStdlib, stdlibEmission.declarations)
         }
 
+        // Treat a stdlib emitted from injected bootstrap sources exactly like a separately
+        // loaded producer for the following user-assembly emission. Its completed declaration
+        // index is authoritative for erased member names, owner paths, and initialization ABI;
+        // recomputing those facts from the already-lowered IR can diverge from the physical DLL.
+        val userExternalLibraries = if (stdlibEmission != null) {
+            externalLibraries.filterNot { library ->
+                DotNetPlatformAssemblyIdentity.isStdlib(library.artifact.assemblyName)
+            } + DotNetExternalLibrary(
+                artifact = DotNetLibraryArtifact(
+                    DotNetStdlibLibrary.ASSEMBLY_NAME,
+                    target.description,
+                    DotNetStdlibLibrary.ASSEMBLY_VERSION,
+                ),
+                assemblyFile = output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME),
+                declarations = stdlibEmission.declarations,
+                friendAssemblies = emptySet(),
+            )
+        } else {
+            externalLibraries
+        }
+
         val emitter = DotNetIlEmitter(
             messageCollector = messageCollector,
             assemblyName = assemblyName,
@@ -240,7 +272,7 @@ object DotNetBackend {
             propertyExports = configuration.dotNetPropertyExports,
             coreLibrary = target.coreLibrary,
             assemblyVersionIl = if (producesLibrary) checkNotNull(producedLibraryArtifact).assemblyVersionIl else null,
-            externalLibraries = externalLibraries,
+            externalLibraries = userExternalLibraries,
             failOnDeclarationEviction = producesLibrary,
             compilesAgainstStdlib = (producesLibrary || emitsExecutable) &&
                     (stdlibEmission != null || configuration.dotNetExternalStdlib != null),
@@ -257,7 +289,6 @@ object DotNetBackend {
             externalStaticInitializations = context.externalStaticInitializations,
             interfaceDefaultPromotions = context.interfaceDefaultPromotions,
             genericInterfaceViewBridges = context.genericInterfaceViewBridges,
-            genericClassBridges = context.genericClassBridges,
             covariantReturnBridges = context.covariantReturnBridges,
             interfaceDefaultClassForwarders = context.interfaceDefaultClassForwarders,
             cSharpWrongShapePolicies = cSharpWrongShapePolicies,
@@ -307,7 +338,7 @@ object DotNetBackend {
                 }
             }
         }
-        for (library in externalLibraries) {
+        for (library in userExternalLibraries) {
             // Kotlin.Stdlib has a dedicated installation/packaging path above. It still belongs
             // to externalLibraries for ordinary declaration binding, but must not be copied or
             // validated a second time as an arbitrary user library here.

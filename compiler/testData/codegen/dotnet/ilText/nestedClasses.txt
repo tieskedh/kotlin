@@ -50,14 +50,8 @@
     .get instance int32 'NestedBase'::'get_seed'()
   }
 }
-.class interface public abstract auto ansi 'GenericOuter'
-{
-  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-}
-.class public auto ansi sealed beforefieldinit 'GenericOuter`1'<'T'>
+.class public auto ansi sealed beforefieldinit 'GenericOuter'
        extends [mscorlib]System.Object
-       implements 'GenericOuter'
 {
   .class nested public auto ansi sealed beforefieldinit 'Plain'
          extends [mscorlib]System.Object
@@ -70,80 +64,59 @@
       call instance void [mscorlib]System.Object::.ctor()
       ldarg.0
       ldarg.1
-      stfld int32 'GenericOuter`1'/'Plain'::'number'
+      stfld int32 'GenericOuter'/'Plain'::'number'
       ret
     }
     .method private hidebysig specialname instance int32 'get_number'() cil managed
     {
       .maxstack 1
       ldarg.0
-      ldfld int32 'GenericOuter`1'/'Plain'::'number'
+      ldfld int32 'GenericOuter'/'Plain'::'number'
       ret
     }
     .method public hidebysig instance int32 'value'() cil managed
     {
       .maxstack 1
       ldarg.0
-      call instance int32 'GenericOuter`1'/'Plain'::'get_number'()
+      call instance int32 'GenericOuter'/'Plain'::'get_number'()
       ret
     }
     .property instance int32 'number'()
     {
-      .get instance int32 'GenericOuter`1'/'Plain'::'get_number'()
+      .get instance int32 'GenericOuter'/'Plain'::'get_number'()
     }
   }
-  .class nested public interface abstract auto ansi 'Generic'
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .method public hidebysig newslot abstract virtual instance object 'item__KotlinErased__dbb8a2527f3f4ac2eae856ec44d31ace'() cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    }
-  }
-  .class nested public auto ansi sealed beforefieldinit 'Generic`1'<'U'>
+  .class nested public auto ansi sealed beforefieldinit 'Generic'
          extends [mscorlib]System.Object
-         implements 'GenericOuter`1'/'Generic'
   {
-    .field private !0 'item'
-    .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
+    .field private object 'item'
+    .method public hidebysig specialname rtspecialname instance void .ctor(object 'item') cil managed
     {
       .maxstack 2
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ldarg.0
       ldarg.1
-      stfld !0 class 'GenericOuter`1'/'Generic`1'<!0>::'item'
+      stfld object 'GenericOuter'/'Generic'::'item'
       ret
     }
-    .method private hidebysig specialname instance !0 'get_item'() cil managed
+    .method private hidebysig specialname instance object 'get_item'() cil managed
     {
       .maxstack 1
       ldarg.0
-      ldfld !0 class 'GenericOuter`1'/'Generic`1'<!0>::'item'
+      ldfld object 'GenericOuter'/'Generic'::'item'
       ret
     }
-    .method public hidebysig instance !0 'item'() cil managed
+    .method public hidebysig instance object 'item'() cil managed
     {
       .maxstack 1
       ldarg.0
-      call instance !0 class 'GenericOuter`1'/'Generic`1'<!0>::'get_item'()
+      call instance object 'GenericOuter'/'Generic'::'get_item'()
       ret
     }
-    .method private hidebysig newslot virtual final instance object '<GenericClassCanonicalBridge-item>'() cil managed
+    .property instance object 'item'()
     {
-      .override method instance object 'GenericOuter`1'/'Generic'::'item__KotlinErased__dbb8a2527f3f4ac2eae856ec44d31ace'()
-      .maxstack 1
-      ldarg.0
-      castclass class 'GenericOuter`1'/'Generic`1'<!0>
-      call instance !0 class 'GenericOuter`1'/'Generic`1'<!0>::'item'()
-      box !0
-      ret
-    }
-    .property instance !0 'item'()
-    {
-      .get instance !0 'GenericOuter`1'/'Generic`1'::'get_item'()
+      .get instance object 'GenericOuter'/'Generic'::'get_item'()
     }
   }
   .class nested public auto ansi sealed beforefieldinit 'Middle'
@@ -160,26 +133,26 @@
         call instance void [mscorlib]System.Object::.ctor()
         ldarg.0
         ldarg.1
-        stfld string 'GenericOuter`1'/'Middle'/'Deep'::'text'
+        stfld string 'GenericOuter'/'Middle'/'Deep'::'text'
         ret
       }
       .method private hidebysig specialname instance string 'get_text'() cil managed
       {
         .maxstack 1
         ldarg.0
-        ldfld string 'GenericOuter`1'/'Middle'/'Deep'::'text'
+        ldfld string 'GenericOuter'/'Middle'/'Deep'::'text'
         ret
       }
       .method public hidebysig instance string 'text'() cil managed
       {
         .maxstack 1
         ldarg.0
-        call instance string 'GenericOuter`1'/'Middle'/'Deep'::'get_text'()
+        call instance string 'GenericOuter'/'Middle'/'Deep'::'get_text'()
         ret
       }
       .property instance string 'text'()
       {
-        .get instance string 'GenericOuter`1'/'Middle'/'Deep'::'get_text'()
+        .get instance string 'GenericOuter'/'Middle'/'Deep'::'get_text'()
       }
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -604,18 +577,18 @@ IL_whenNext_1:
 .class public abstract sealed auto ansi beforefieldinit 'nestedClassesKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static class 'GenericOuter`1'/'Plain' 'makePlain'(int32 'value') cil managed
+  .method public hidebysig static class 'GenericOuter'/'Plain' 'makePlain'(int32 'value') cil managed
   {
     .maxstack 1
     ldarg.0
-    newobj instance void 'GenericOuter`1'/'Plain'::.ctor(int32)
+    newobj instance void 'GenericOuter'/'Plain'::.ctor(int32)
     ret
   }
-  .method public hidebysig static int32 'readPlain'(class 'GenericOuter`1'/'Plain' 'value') cil managed
+  .method public hidebysig static int32 'readPlain'(class 'GenericOuter'/'Plain' 'value') cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance int32 'GenericOuter`1'/'Plain'::'value'()
+    call instance int32 'GenericOuter'/'Plain'::'value'()
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -629,20 +602,21 @@ IL_whenNext_1:
       [3] class 'NestedLabel' 'label'
     )
     ldc.i4 3
-    call class 'GenericOuter`1'/'Plain' 'nestedClassesKt'::'makePlain'(int32)
-    call int32 'nestedClassesKt'::'readPlain'(class 'GenericOuter`1'/'Plain')
+    call class 'GenericOuter'/'Plain' 'nestedClassesKt'::'makePlain'(int32)
+    call int32 'nestedClassesKt'::'readPlain'(class 'GenericOuter'/'Plain')
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "generic"
-    newobj instance void class 'GenericOuter`1'/'Generic`1'<string>::.ctor(!0)
-    call instance !0 class 'GenericOuter`1'/'Generic`1'<string>::'item'()
+    newobj instance void 'GenericOuter'/'Generic'::.ctor(object)
+    call instance object 'GenericOuter'/'Generic'::'item'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "deep"
-    newobj instance void 'GenericOuter`1'/'Middle'/'Deep'::.ctor(string)
-    call instance string 'GenericOuter`1'/'Middle'/'Deep'::'text'()
+    newobj instance void 'GenericOuter'/'Middle'/'Deep'::.ctor(string)
+    call instance string 'GenericOuter'/'Middle'/'Deep'::'text'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 9
     newobj instance void 'VisibilityOuter'::.ctor(int32)
