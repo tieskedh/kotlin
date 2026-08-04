@@ -148,10 +148,6 @@ object DotNetBackend {
         val context = DotNetBackendContext(irBuiltIns, configuration, symbolTable, irModuleFragment)
         val runtimeCSharpImplementationManifest =
             collectDotNetRuntimeCSharpImplementationManifest(context, target)
-        val cSharpWrongShapePolicies = collectDotNetCSharpWrongShapePolicies(
-            context,
-            preLoweringDeclarationKeys.keys,
-        )
         try {
             configuration.perfManager.tryMeasurePhaseTime(PhaseType.IrLowering) {
                 DotNetLoweringPhases.lower(irModuleFragment, context)
@@ -183,12 +179,10 @@ object DotNetBackend {
                 preLoweringDeclarationKeys = preLoweringStdlibDeclarationKeys,
                 interfaceDefaultImplementations = context.interfaceDefaultImplementations,
                 defaultArgumentDispatchers = context.defaultArgumentDispatchers,
-                genericInterfaceDefaults = context.genericInterfaceDefaults,
                 covariantReturnBridges = context.covariantReturnBridges,
                 staticInitializations = context.staticInitializations,
                 staticInitializationFailures = context.staticInitializationFailures,
                 objectInstanceFields = context.objectInstanceFields,
-                cSharpWrongShapePolicies = cSharpWrongShapePolicies,
                 cSharpImplementationManifestTarget = target,
                 hasKotlinMetadataResource = producesStdlib && kotlinMetadataResourceFactory != null,
             ).emit(irModuleFragment) ?: return result(ilTarget)
@@ -280,7 +274,6 @@ object DotNetBackend {
             friendAssemblies = configuration.dotNetFriendAssemblies,
             interfaceDefaultImplementations = context.interfaceDefaultImplementations,
             defaultArgumentDispatchers = context.defaultArgumentDispatchers,
-            genericInterfaceDefaults = context.genericInterfaceDefaults,
             externalInterfaceDefaultHelpers = context.externalInterfaceDefaultHelpers,
             externalDefaultArgumentDispatchers = context.externalDefaultArgumentDispatchers,
             staticInitializations = context.staticInitializations,
@@ -291,7 +284,6 @@ object DotNetBackend {
             genericInterfaceViewBridges = context.genericInterfaceViewBridges,
             covariantReturnBridges = context.covariantReturnBridges,
             interfaceDefaultClassForwarders = context.interfaceDefaultClassForwarders,
-            cSharpWrongShapePolicies = cSharpWrongShapePolicies,
             cSharpImplementationManifestTarget = target.takeIf { producesLibrary },
             hasKotlinMetadataResource = producesLibrary && kotlinMetadataResourceFactory != null,
         )

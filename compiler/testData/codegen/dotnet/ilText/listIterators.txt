@@ -518,139 +518,39 @@ IL_whenEnd_2:
   .method public hidebysig static int32 'exactNext'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32> '<genericInterfaceCapability>',
-      [2] int32 '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>::'Next'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
     unbox.any [mscorlib]System.Int32
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static object 'wideNext'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object> '<genericInterfaceCapability>',
-      [2] object '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object>::'Next'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static int32 'exactPrevious'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32> '<genericInterfaceCapability>',
-      [2] int32 '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>::'Previous'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Previous'()
     unbox.any [mscorlib]System.Int32
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static object 'widePrevious'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object> '<genericInterfaceCapability>',
-      [2] object '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object>::'Previous'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Previous'()
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static !!0 'openNext'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
   {
     .maxstack 1
-    .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
-      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!!0> '<genericInterfaceCapability>',
-      [2] !!0 '<genericInterfaceResult>'
-    )
     ldarg.0
-    stloc.0
-    ldloc.0
-    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!!0>
-    stloc.1
-    ldloc.1
-    brfalse IL_genericInterfaceErasedFallback_0
-    ldloc.1
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!!0>::'Next'()
-    stloc.2
-    br IL_genericInterfaceJoin_1
-IL_genericInterfaceErasedFallback_0:
-    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
     unbox.any !!0
-    stloc.2
-IL_genericInterfaceJoin_1:
-    ldloc.2
     ret
   }
   .method public hidebysig static int32 'inheritedNext__KotlinErased__07ec84e7118d8b61e1adaab3fdd3de4d'(class 'InheritedPairCursor' 'iterator') cil managed

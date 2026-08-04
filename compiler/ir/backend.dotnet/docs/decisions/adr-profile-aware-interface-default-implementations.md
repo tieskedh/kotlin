@@ -104,55 +104,46 @@ ordinary virtual dispatch. The portable helper owns a copy of that exact Kotlin 
 interface body exists on those profiles.
 
 This is `enable`-derived rather than a literal copy of the JVM representation: the CLR helper and
-DIM spellings, interface slot mapping, and split generic-interface capabilities are .NET-owned.
+DIM spellings and interface slot mapping are .NET-owned.
 
 ### 4. Generic defaults have one body and one helper identity
 
-Every generic Kotlin interface-default declaration has one logical member, one canonical semantic
-body, and one stable helper ABI identity. The split erased, declared-variance, and exact CLR views
-are physical projections of that member; they are not independent implementations.
+Every generic Kotlin interface-default declaration has one logical member, one erased physical
+slot, and one stable helper ABI identity. KLIB retains the owner parameters and substitutions;
+the CLR interface does not acquire declared-variance or invariant-exact sibling owners.
 
-On the portable profiles, the helper owns the moved body. Interface views remain abstract, and
-implementing classes or derived views contain only forwarding or representation adapters. On
-`net10.0`, one strongly typed DIM owns the body. The exact invariant view is the normal strongly
-typed C# surface and reaches that canonical DIM without an erased-result cast. A declared-variance
-or erased view which cannot expose the same physical signature adapts by virtually dispatching to
-the canonical typed slot, boxing, casting, or widening only when that view's own ABI requires it.
-Explicit `MethodImpl` rows bind every physical view to the one logical override group.
-When that body or adapter is a property accessor, every view which owns the corresponding CLR
-Property row retains `specialname`; moving the body into a DIM must not degrade the property into
-an ordinary method for reflection or C#.
+On portable profiles, the helper owns the moved body. The erased interface slot remains abstract,
+and implementing classes contain only the required forwarding bridge. On `net10.0`, the erased
+DIM owns the Kotlin body directly. A property accessor retains `specialname` and its CLR Property
+row; moving the body between helper and DIM must not degrade it into an ordinary method.
 
-When a concrete non-generic `net10.0` interface overrides a member inherited from a split generic
-interface, that interface owns one complete canonical/declared/exact adapter bundle. Each final
-adapter maps its inherited physical slot and dispatches virtually to the overriding DIM; none owns
-a body copy. Implementing classes inherit the bundle and do not duplicate it. Because generated
-adapter declarations are not logical KLIB members, a library records every adapter as structured
-physical ABI keyed by the owning logical interface, inherited logical member, and physical view.
-A separately compiled consumer uses only that record, never a generated name or rendered IL.
+When a concrete non-generic `net10.0` interface overrides a member inherited from an erased
+generic Kotlin interface, it maps that one inherited slot and dispatches virtually to the
+overriding DIM. Because generated mapping declarations are not logical KLIB members, a library
+records the mapping as structured physical ABI keyed by the owning logical interface and
+inherited logical member. A separately compiled consumer uses that record, never a generated name
+or rendered IL.
 
-The helper preserves the declaration and method generic-parameter order, substitution, and stable
-method identity across profiles. On `net10.0` it selects the canonical DIM nonvirtually. It is used
+The helper preserves declaration and method generic-parameter order, substitution, and stable
+method identity across profiles. On `net10.0` it selects the erased DIM nonvirtually. It is used
 only for qualified-super selection, compatibility, and promotion of a selected portable
-helper-owned default. No helper, promotion DIM, interface-view adapter, class bridge, or class
-forwarder contains an independently lowered copy of the Kotlin body.
+helper-owned default. No helper, promotion DIM, class bridge, or class forwarder contains an
+independently lowered copy of the Kotlin body.
 
 Kotlin bounds remain part of the KLIB signature and frontend type system. CLR metadata normally
 carries the corresponding constraints, except for a method constraint which depends on a type
-parameter of a split Kotlin generic interface. That relationship is deliberately omitted from all
-executable CLR views of the member:
+parameter of an erased Kotlin generic interface. That relationship is deliberately omitted from
+the executable CLR member:
 
-- ECMA-335 forbids using a variant interface type parameter in such a constraint, causing the
-  declared-variance interface to fail type loading;
-- retaining the constraint only on the invariant exact DIM rejects a valid Kotlin call made
-  through a widened declaration-site-variance view; and
+- the physical interface has no owner type parameter which could carry the relationship;
+- retaining a fabricated closed constraint would reject valid Kotlin calls made through widened
+  declaration-site variance; and
 - a portable closed value-type bridge cannot express the substituted relationship as a CLR
   generic-parameter constraint.
 
-The exact view still has strongly typed arguments and results; only the incompatible physical
-constraint is weakened. Kotlin callers remain checked against the logical bound. An optional C#
-export facade may later restate a convenience constraint, but it must forward to the Kotlin slot
-and must not redefine Kotlin virtual dispatch or helper identity.
+Kotlin callers remain checked against the logical bound. An optional C# export facade may later
+restate a convenience constraint, but it must forward to the Kotlin slot and must not redefine
+Kotlin virtual dispatch or helper identity.
 ### 5. Ordinary calls always use virtual dispatch
 
 An ordinary Kotlin call such as `value.f()` uses normal CLR class or interface dispatch. It is
@@ -308,13 +299,14 @@ A more-derived provider shadows an ancestor provider for this calculation. Two p
 implement the same logical Kotlin declaration are not assumed to be harmless: unless one is more
 specific, the backend must materialize Kotlin's already-resolved choice before CLR execution.
 
-This provider rule also applies independently to every canonical, declared, and exact view of a
-generic Kotlin interface. If two `net10.0` interfaces promote the same portable generic default,
-a derived diamond emits one new resolver bundle whose adapters all call the original declaring
-interface's helper identity. It does not inherit CLR ambiguity, choose one branch arbitrarily, or
-lower another copy of the body. Kotlin source cannot implicitly combine an unrelated concrete
-default with a separate abstract or concrete declaration: common override resolution requires an
-explicit derived override, which then follows the ordinary declared-body path above.
+This provider rule applies once to the erased owner of a Kotlin-owned generic interface. If two
+`net10.0` interfaces promote the same portable generic default, a derived diamond emits one
+resolving DIM whose body calls the original declaring interface's helper identity. It does not
+inherit CLR ambiguity, choose one branch arbitrarily, or lower another copy of the body. An
+independently mapped host capability may need its own bridge, but cannot become a second Kotlin
+default-body owner. Kotlin source cannot implicitly combine an unrelated concrete default with a
+separate abstract or concrete declaration: common override resolution requires an explicit
+derived override, which then follows the ordinary declared-body path above.
 
 ### 10. Pure no-compatibility mode is deferred
 
@@ -333,9 +325,9 @@ record must additionally describe:
 - the exact owner and method identity of the ordinary masked default-argument dispatcher,
   independently of whether the interface member has a body;
 - the helper's receiver and generic-parameter mapping;
-- every canonical/declared/exact interface slot supplied by the logical member;
-- every final interface view adapter inherited by downstream implementors, keyed by its owning
-  logical interface, inherited logical member, and physical view; and
+- the one erased interface slot supplied by the logical member;
+- every final erased interface adapter inherited by downstream implementors, keyed by its owning
+  logical interface and inherited logical member; and
 - every covariant-return `MethodImpl`, keyed by its logical owner and inherited logical member, so
   downstream classes can recognize an interface-owned mapping without inspecting generated IL; and
 - every generated class `MethodImpl` mapping needed to preserve Kotlin resolution, keyed by its

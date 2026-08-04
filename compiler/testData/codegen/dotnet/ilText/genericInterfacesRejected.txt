@@ -12,10 +12,7 @@
   {
   }
 }
-.class interface public abstract auto ansi 'RejectProducer`1'<+ 'T'>
+.class interface public abstract auto ansi 'EvictedArgumentView'
        implements 'RejectProducer'
 {
-  .method public hidebysig newslot abstract virtual instance !0 'produce'() cil managed
-  {
-  }
 }

@@ -46,7 +46,7 @@ metadata is authoritative for the physical CLR declaration. For a
 Kotlin-produced DLL, retain the complete KLIB contract and derive a truthful
 CLR/Roslyn view in addition to it. For a foreign DLL, exact CLR metadata and
 standard attributes are evidence from which FIR may derive a Kotlin view.
-Never infer authoritative KLIB identity or Kotlin-only split-interface/C#
+Never infer authoritative KLIB identity or Kotlin-only physical-ABI/C#
 implementation-manifest contracts from CLR annotations.
 
 This document records the target authors' working position. Do not describe a
@@ -380,24 +380,17 @@ See the
   are declaration-erased on this target as well. `Array<*>` is the one
   selected structural erased-array case above; its classified `System.Array`
   path must not leak into ordinary generic-class RTTI.
-- The implemented variant/generic-interface candidate currently uses the
-  versioned split-interface/bridge model. Class erasure materially weakens the
-  case for emitting typed siblings for every Kotlin-owned generic interface:
-  an erased generic implementation can promise only its canonical interface,
-  not one truthful closed capability per logical construction. Freeze this
-  candidate while its ADR is reassessed. Do not extend or remove split views
-  piecemeal; any replacement must preserve erased Kotlin identity, foreign CLR
-  interface identity, default dispatch, `MethodImpl` maps, separate
-  compilation, and explicitly selected BCL/C# capabilities through one full
-  producer/consumer gate. See
-  [the generic-interface draft](docs/decisions/draft-adr-generic-interface-abi.md).
-  At the already-decided class-erasure boundary, `C<T> : I<T>` publishes only
-  canonical `I`; never substitute the absent class parameter with a fabricated
-  `I<object>` capability. A closed `C<T> : I<String>` edge is distinct and may
-  retain a truthful selected typed capability. On DIM profiles, a default body
-  hosted by typed `I<T>` cannot satisfy that canonical-only class; emit the
-  existing helper-backed canonical class `MethodImpl` without adding a typed
-  interface edge. A closed edge may inherit its native DIM normally.
+- Kotlin-owned ordinary generic interfaces have one authoritative non-generic
+  CLR TypeDef and one erased virtual slot family. Do not reintroduce
+  declaration-variant or invariant-exact sibling TypeDefs, typed-view guards,
+  or an implementation-set-dependent typed ABI. Kotlin constructions,
+  projections, casts, defaults, and separate consumers all use that one
+  physical identity; KLIB retains the logical parameters and override graph.
+  Imported CLR generic interfaces remain native. A separately accepted BCL
+  mapping such as `Comparable<T>` may expose an additional exact host
+  capability only where independently truthful, and future typed C# surfaces
+  belong to explicit export. See
+  [the erased generic-interface decision](docs/decisions/generic-interface-erased-identity.md).
 - Interface default bodies are profile-aware. Do not simulate modern DIM into
   the Framework ABI or reject a Kotlin body without applying the accepted
   fallback policy. See

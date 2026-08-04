@@ -84,7 +84,7 @@ internal class DotNetIlClassCodegen(
             isAbstract -> "$visibility abstract auto ansi$beforeFieldInit"
             else -> "$visibility auto ansi$sealed$beforeFieldInit"
         }
-        // A reified CLR TypeDef (for example a split-interface capability) appends its formal
+        // A reified CLR TypeDef (for example an explicitly mapped host capability) appends its formal
         // type-parameter list right after the arity-suffixed name. Kotlin-owned ordinary generic
         // classes pass no list here: their one physical owner is declaration-erased. A genuinely
         // generic CLR base reference still carries its complete instantiation token.

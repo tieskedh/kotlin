@@ -20,7 +20,8 @@ CLR carrier is not the logical Kotlin classifier:
 - `Array<*>` is the classified SZ-array view of `System.Array`;
 - a Kotlin-owned generic class has one declaration-erased non-generic physical
   class identity; and
-- split generic interfaces have canonical and typed capability views.
+- Kotlin-owned generic interfaces have one declaration-erased physical
+  identity; independently mapped host capabilities do not replace it.
 
 Consequently, replacing `KClass` with `System.Type`, or defining equality and
 `isInstance` only through `System.Type`, would contradict runtime type tests
