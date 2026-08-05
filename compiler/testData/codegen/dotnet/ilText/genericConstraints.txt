@@ -495,6 +495,72 @@ IL_tryEnd_0:
     ldarg.0
     ret
   }
+  .method public hidebysig static !!1 'keepGenericInterfaceBound'<'T', (class 'test.constraints.NonNullValue') 'C'>(!!1 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static !!1 'keepExternalGenericInterfaceBound'<'T', (class [Kotlin.Runtime]'Kotlin.Collections.Iterable') 'C'>(!!1 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static !!1 'observeExternalGenericInterfaceBound'<'T', (class [Kotlin.Runtime]'Kotlin.Collections.Iterable') 'C'>(!!1 'value', class [Kotlin.Runtime]'Kotlin.Function1' 'action') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'tmp0',
+      [1] class [Kotlin.Runtime]'Kotlin.Function1' 'tmp2',
+      [2] class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'this',
+      [3] class [Kotlin.Runtime]'Kotlin.Function1' 'action',
+      [4] object 'tmp0@4',
+      [5] object 'this@5',
+      [6] class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'tmp0@6',
+      [7] class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '$this$apply',
+      [8] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<iterator>',
+      [9] object 'element'
+    )
+    ldarg.0
+    box !!1
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloc.0
+    stloc.2
+    ldloc.1
+    stloc.3
+    ldloc.2
+    stloc 4
+    ldloc 4
+    stloc 5
+    ldloc 5
+    castclass class [Kotlin.Runtime]'Kotlin.Collections.Iterable'
+    stloc 6
+    ldloc 6
+    stloc 7
+    ldloc 7
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+    stloc 8
+IL_whileCond_0:
+    ldloc 8
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    brfalse IL_whileEnd_1
+    ldloc 8
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    stloc 9
+    ldloc.3
+    ldloc 9
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    pop
+    br IL_whileCond_0
+IL_whileEnd_1:
+    ldloc 5
+    castclass class [Kotlin.Runtime]'Kotlin.Collections.Iterable'
+    unbox.any !!1
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
@@ -561,6 +627,11 @@ IL_tryEnd_0:
     pop
     ldloc.0
     call !!0 'test.constraints.genericConstraintsKt'::'typeParameterBound'<class 'test.constraints.Impl', class 'test.constraints.Left'>(!!0)
+    pop
+    ldstr "generic"
+    newobj instance void 'test.constraints.NonNullValueBox'::.ctor(object)
+    call !!1 'test.constraints.genericConstraintsKt'::'keepGenericInterfaceBound'<string, class 'test.constraints.NonNullValueBox'>(!!1)
+    callvirt instance object 'test.constraints.NonNullValueBox'::'read'()
     pop
     ldloc.0
     newobj instance void 'test.constraints.BoundBox'::.ctor(class 'test.constraints.Left')

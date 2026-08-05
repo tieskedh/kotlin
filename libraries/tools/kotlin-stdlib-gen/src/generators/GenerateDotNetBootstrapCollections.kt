@@ -144,6 +144,8 @@ fun main(args: Array<String>) {
         Aggregates.f_forEachIndexed selectedFor setOf(Family.Iterables),
         Aggregates.f_none selectedFor setOf(Family.Iterables),
         Aggregates.f_none_predicate selectedFor setOf(Family.Iterables),
+        Aggregates.f_onEach selectedFor setOf(Family.Iterables),
+        Aggregates.f_onEachIndexed selectedFor setOf(Family.Iterables),
         Aggregates.f_reduceSuper selectedFor setOf(Family.Iterables),
         Aggregates.f_reduceIndexedSuper selectedFor setOf(Family.Iterables),
         Aggregates.f_reduceIndexedOrNullSuper selectedFor setOf(Family.Iterables),

@@ -128,6 +128,28 @@ depends on an erased interface parameter remains authoritative in KLIB and
 omits the unrepresentable owner-relative CLR constraint. This is the same
 class-versus-method ownership distinction used by erased generic classes.
 
+A method-owned parameter whose bound is a constructed Kotlin-owned interface
+retains the one erased interface owner as a necessarily true CLR constraint:
+
+```text
+Kotlin:  fun <T, C : Source<T>> observe(value: C): C
+CLR:     C observe<T, (Source) C>(C value)
+```
+
+KLIB keeps `Source<T>` and Kotlin continues to check the complete relation;
+CLR metadata keeps the useful fact that `C` implements `Source` without
+inventing `Source<T>` or dropping the method-owned `C`. This is a truthful
+weakening, symmetric with an erased Kotlin-owned generic-class bound. An
+imported CLR generic-interface bound remains reified and must be represented
+exactly or rejected.
+
+An inlined Common body may temporarily expose a value of method parameter `C`
+through that erased bound and then return it as `C`. The CLR recovery is
+`unbox.any C`: for a reference instantiation it is a checked same-object view;
+for a possible value-type implementation it recovers the boxed value. This is
+an adaptation between one method parameter and its proven bound, not a second
+interface classifier or a closed CLR generic identity.
+
 Logical overloads which collide after erasure receive deterministic physical
 names derived from the complete Kotlin signature. Existing authoritative
 Common generator spellings may be projected by a bounded stdlib-owned table.
@@ -262,7 +284,9 @@ The migrated ABI must cover:
 - producer/consumer calls, same-object conversions, casts, and delayed
   incompatible argument/result failure;
 - properties, method-generic members, owner-relative bounds, nested carriers,
-  unsafe variance, and deterministic erased overload names;
+  method parameters bounded by constructed erased interfaces, bound-view
+  recovery after Common inlining, unsafe variance, and deterministic erased
+  overload names;
 - direct, repeated, diamond, intersection, refined-return, and cross-library
   inheritance;
 - abstract and default members on every supported profile;

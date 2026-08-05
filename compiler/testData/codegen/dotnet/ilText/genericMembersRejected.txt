@@ -23,6 +23,29 @@
     ret
   }
 }
+.class public auto ansi sealed beforefieldinit 'GenericBoundMember'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance !!0 'use'<(class [Kotlin.Runtime]'Kotlin.Collections.List') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+}
+.class interface public abstract auto ansi 'GenericBoundMemberSlot'
+{
+  .method public hidebysig newslot abstract virtual instance !!0 'use'<(class [Kotlin.Runtime]'Kotlin.Collections.List') 'T'>(!!0 'value') cil managed
+  {
+  }
+}
 .class public auto ansi sealed beforefieldinit 'Survivor'
        extends [mscorlib]System.Object
 {

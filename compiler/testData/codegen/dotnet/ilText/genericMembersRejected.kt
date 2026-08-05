@@ -1,6 +1,5 @@
-// Ordinary non-reified inline methods are the supported control. The remaining unsupported
-// method-generic shapes reject their whole owning class or interface; they are never erased or
-// emitted with weakened constraints.
+// Ordinary non-reified inline methods and method parameters bounded by Kotlin-owned erased
+// interfaces are the supported controls. Reified members remain unsupported and are omitted.
 
 class InlineMember {
     inline fun <T> id(value: T): T = value

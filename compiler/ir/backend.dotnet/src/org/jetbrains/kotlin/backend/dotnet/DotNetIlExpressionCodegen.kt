@@ -909,6 +909,25 @@ internal class DotNetIlExpressionCodegen(
                             if (methodContext.isTerminated) return
                             methodContext.emit(narrowing, pops = 1, pushes = 1)
                         }
+                        castType is DotNetIlValueType.TypeParameter &&
+                                castType.isConstrainedTo(operandType) -> {
+                            // Shared inline bodies such as `C.onEach { ... }: C`, where
+                            // `C : Iterable<T>`, can expose the same receiver through its erased
+                            // upper-bound view before returning it as `C`. JVM needs no operation
+                            // because both views have one erased token. CLR must recover the open
+                            // method parameter: `unbox.any !!n` checks a reference instantiation
+                            // and also recovers a boxed value-type implementation. The frontend's
+                            // IMPLICIT_CAST proves the value is the original `C`; the physical
+                            // constraint proves only that the intervening bound view is truthful.
+                            val narrowing = castType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
+                                ?: dotNetUnsupported(
+                                    "implicit cast from bound ${operandType.nameInSignature} to " +
+                                            "${castType.nameInSignature} is not supported"
+                                )
+                            emitExpression(expression.argument, operandType)
+                            if (methodContext.isTerminated) return
+                            methodContext.emit(narrowing, pops = 1, pushes = 1)
+                        }
                         operandType is DotNetIlValueType.TypeParameter -> {
                             val narrowing = castType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
                                 ?: dotNetUnsupported(

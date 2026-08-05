@@ -642,6 +642,52 @@ assembly visibility under `sumOfInt`, logical KLIB identity under `sumOf`, no ex
 separate and installed Kotlin consumers, C# inaccessibility, and execution through the portable
 stdlib on Framework CLR and CoreCLR.
 
+### Completed same-receiver observation
+
+The closed Common frontier is exactly `Iterable.onEach` and `Iterable.onEachIndexed`. The
+authoritative `Aggregates` templates return `C` from a receiver `C : Iterable<T>`: `onEach` uses
+`apply` around the encounter-order loop, while `onEachIndexed` uses `apply` around the already
+selected Common `forEachIndexed` operation. The contracts and scope-function product now supplies
+the exact `apply` declaration and calls-in-place effect that previously kept this pair outside the
+bootstrap product.
+
+JVM, JS, Wasm, and Native compile these same Common declarations. The CLR creates no reason to
+replace `apply`, duplicate either loop, map the call to a BCL enumeration helper, or weaken the
+return to `Iterable<T>`. The method-owned `C` remains a truthful CLR generic method parameter;
+the Kotlin-owned `Iterable<T>` upper bound uses its accepted erased interface carrier while KLIB
+retains the complete logical relationship. This is method-generic capability above the canonical
+Kotlin object model, not a reintroduction of a CLR-generic Kotlin-owned class or interface.
+
+The critical semantic requirement is same-receiver preservation. A custom subtype returned from
+either operation must retain its logical type and the identical runtime object, with all mutations
+performed by the callback visible through that object. Both functions traverse once in encounter
+order. The indexed form starts at zero and inherits `forEachIndexed`'s exact
+`checkIndexOverflow(index++)` behavior. Iterator or callback failures propagate unchanged at the
+point Common evaluates them; a non-local return from the inline callback exits the caller and does
+not manufacture a returned receiver.
+
+The public physical fallbacks remain ordinary inline MethodDefs rather than `@InlineOnly`
+compiler ABI. Separate and installed Kotlin consumers must nevertheless inline the authoritative
+KLIB body when possible, while direct CLR fallback calls must preserve the same generic return and
+runtime behavior. Returning only the erased Iterable carrier, wrapping or copying a receiver,
+calling `forEach` instead of the indexed Common dependency, or adding a target-specific fast path
+is rejected: each either loses `C`, changes traversal/failure behavior, or forks Common without a
+CLR constraint.
+
+Completion must prove empty, singleton, nullable and widened elements; exact callback/index order;
+custom-subtype static return and same-object identity; mutation visibility; iterator and callback
+failure identity, timing and stopping; non-local return; one public physical fallback for each
+logical declaration; complete KLIB bodies and no external call from separate and installed Kotlin
+consumers; direct fallback execution; and Framework CLR/CoreCLR coverage through the portable
+stdlib products.
+
+The completed implementation passes that matrix. It also closes the general compiler boundary
+that the Common `apply` body exposed: a method parameter `C : Iterable<T>` may be viewed as the one
+erased `Iterable` carrier while executing the body, then recovered as the same open `C` with CLR
+`unbox.any C`. The recovery is proven by the method's physical erased-interface constraint and the
+frontend `IMPLICIT_CAST`; it neither weakens the logical return to `Iterable` nor introduces a
+closed CLR generic interface.
+
 ## Next selection rule
 
 Reuse an upstream compiler box test directly whenever its complete dependency closure is already

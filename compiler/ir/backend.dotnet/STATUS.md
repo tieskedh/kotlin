@@ -11,8 +11,8 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: exact Common-contract projection onto standard
-  CodeAnalysis metadata for explicit `net10.0` exports
+- Last completed feature: exact Common `Iterable.onEach`/`onEachIndexed` with
+  same-receiver method-generic return and erased-interface constraints
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -26,7 +26,7 @@ open programmes.
 
 ## Current green gate
 
-The current exact-contract export production head passed:
+The current same-receiver collection production head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
@@ -38,6 +38,19 @@ The JUnit audit covered 24 fresh XML files and 1066 tests:
 - 21 generated CLI tests
 - 87 library-integration tests
 - zero failures, errors, or skips
+
+Common `Iterable.onEach` and `onEachIndexed` now use their exact generated
+`apply`-based bodies and preserve the static `C : Iterable<T>` result plus the
+identical receiver object. The CLR method keeps `C` as an open generic method
+parameter and records the one erased Kotlin `Iterable` owner as its truthful
+physical constraint; KLIB retains the complete `Iterable<T>` relationship.
+Shared inlining may expose that receiver through the erased bound before the
+return, so CIL recovers the proven original `C` with `unbox.any C` rather than
+weakening the result, wrapping the object, or introducing a closed generic
+interface. The gate covers custom subtypes, identity, empty/nullable/widened
+values, mutation, callback and iterator failures, non-local returns, both
+frontends and runtimes, separate and installed consumers, physical fallbacks,
+and handwritten CIL.
 
 All four PSI/LightTree and Framework/CoreCLR runners execute the target-owned
 contracts/scope corpus plus three selected upstream contract tests. The test
@@ -193,17 +206,16 @@ Framework CLR and CoreCLR. Binary inlining's explicit `Nothing?` nullable branch
 reuses the existing bottom/null-carrier emission rather than introducing a cast
 or classifier.
 
-Common `Iterable.forEach` and `forEachIndexed` now use their exact generated
-inline loops. The embedded KLIB retains `forEach`'s binary `HidesMembers`
-directive: a separate hostile consumer with a same-signature member still
-resolves and inlines the Common extension, without requiring a CLR runtime
-attribute. Adversarial execution pins empty, singleton, nullable/value,
-mutation, order/index, exception identity, stopping point, and non-local-return
-behavior. The indexed body retains the Common overflow helper, while
-handwritten CIL executes both physical void fallbacks and checks full callback
-traces on Framework CLR and CoreCLR. The completed `apply`/contracts product
-now unblocks exact Common `onEach` and `onEachIndexed`; they are not yet an
-admitted generated batch.
+Common `Iterable.forEach` and `forEachIndexed` use their exact generated inline
+loops, and the completed `apply`/contracts product now composes them into the
+exact generated `onEach`/`onEachIndexed` same-receiver pair. The embedded KLIB
+retains `forEach`'s binary `HidesMembers` directive: a separate hostile consumer
+with a same-signature member still resolves and inlines the Common extension,
+without requiring a CLR runtime attribute. Adversarial execution pins empty,
+singleton, nullable/value, mutation, identity, order/index, exception identity,
+stopping point, and non-local-return behavior. Both indexed bodies retain the
+Common overflow helper, while handwritten CIL executes all four physical
+fallbacks and checks full callback traces on Framework CLR and CoreCLR.
 
 Common `Iterable.first(predicate)` and `firstOrNull(predicate)` now use their
 exact generated first-match loops. Adversarial execution pins empty and
@@ -414,8 +426,10 @@ generated Common signed numeric averages remain published with
 all six bounded physical names and exact KLIB bodies. The generated Common
 first-match predicate pair remains published with
 both physical fallbacks and inlinable KLIB bodies. The preceding iteration-
-action pair remains published with both void
-fallbacks and the authoritative `HidesMembers` compiler directive. The
+action family now includes generated `forEach`/`forEachIndexed` and
+`onEach`/`onEachIndexed`; the latter pair preserves its open method-owned `C`
+through one erased `Iterable` constraint and same-object result. The void pair
+retains the authoritative `HidesMembers` compiler directive. The
 receiver-seeded reduction family remains published with all eight fallbacks;
 an inlined empty nullable branch uses the existing nullable-bottom carrier
 path. The accumulator-fold family likewise remains published, and a discarded
@@ -547,10 +561,13 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Continue the Common collection programme by exact dependency closure,
+1. Audit and, if the already-admitted marker/overload-name closure remains
+   exact, add the Common Long- and Double-selector `sumOf` pair under the
+   generator-owned `sumOfLong`/`sumOfDouble` physical spellings.
+2. Continue the Common collection programme by exact dependency closure,
    preferring families that exercise enum/contracts foundations or unlock
    ordinary application code without introducing target-owned algorithms.
-2. Extend CLR contract projection only when a new standard attribute has an
+3. Extend CLR contract projection only when a new standard attribute has an
    exact Common effect, stable target rule, verified profile identity, and the
    same strip-without-Kotlin-semantic-change evidence as the closed first set.
 
