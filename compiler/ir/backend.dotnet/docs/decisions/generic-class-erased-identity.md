@@ -1,16 +1,18 @@
-# ADR: erased ABI for Kotlin-owned generic classes
+# ADR: semantic erasure for Kotlin-owned generic classes
 
 - Status: **Accepted — pre-ABI**
 - Date: 2026-08-04
+- Amended: 2026-08-05 to distinguish canonical erasure from private
+  implementation reification
 - Scope: Kotlin-owned ordinary generic classes, including their storage,
   member ABI, inheritance, casts, runtime identity, separate compilation, and
   default CLR surface
 
 ## Decision
 
-A Kotlin-owned ordinary generic class has one authoritative physical CLR type
-identity, object representation, storage model, and runtime/virtual ABI. The
-CLR class is non-generic:
+A Kotlin-owned ordinary generic class has one authoritative semantic runtime
+classifier, one canonical erased Kotlin runtime/virtual ABI, and one
+authoritative mutable state. Its canonical CLR owner is non-generic:
 
 ```text
 Kotlin:  class Box<T>(var value: T)
@@ -19,31 +21,55 @@ CLR:     class Box { object value; object get_value(); void set_value(object); }
 
 KLIB remains authoritative for `T`, its bounds and variance, every use-site
 argument or projection, and nullability. The versioned physical binding stores
-the one non-generic CLR owner; it does not store a typed sibling, canonical
-interface, class-member bridge family, or open-generic classifier token.
+the one non-generic canonical owner; it does not store a typed sibling,
+canonical interface, class-member bridge family, or open-generic classifier
+token as an alternative Kotlin identity.
 
 This rule applies only to Kotlin-owned classes. Imported CLR generics remain
 native reified CLR types. A future typed C# surface is a separate explicit,
 fail-closed export product and must not redefine Kotlin runtime identity.
-Internal specialization is permitted only when it is invisible behind this
-one ABI.
+Internal specialization is permitted only when it is removable and invisible
+behind this complete erased ABI.
 
-Erasure is therefore not merely the default public ABI. It is the single
-semantic runtime representation. No optimization, annotation, compiler
-switch, manifest, or export feature may add a second physical implementation
-whose CLR construction determines a Kotlin-owned object's classifier,
-authoritative generic-dependent state, or class-dependent virtual dispatch.
-In particular, the target must not restore `BoxImpl<T>`-style owners, typed
-authoritative storage for escaped objects, or a declaration whose runtime
-meaning alternates between erased and CLR-generic.
+Erasure is therefore not merely the default public ABI. It is the
+authoritative semantic model: generic arguments never become Kotlin runtime
+identity, casts remain declaration-erased, and every cross-module Kotlin path
+has a complete erased route. It is not a permanent prohibition on physically
+reified private implementation. No optimization, annotation, compiler switch,
+manifest, or export may add a second observable Kotlin implementation whose
+CLR construction determines the classifier, class-dependent dispatch, or a
+competing authoritative state.
 
 CLR generics remain first-class capabilities where they do not redefine that
 identity. This includes imported CLR types, method-owned generic parameters,
 truthfully exact constructed interface capabilities governed by the separate
 interface ABI, explicit .NET export artifacts, and private implementation
-specialization. A class-owned parameter remains erased in storage and member
-positions even when a method on that class has its own reified CLR method
-parameters.
+specialization. Class-owned parameters remain erased in public, protected, and
+canonical cross-module member positions. The current baseline also stores
+their authoritative values through `object`, an erased upper bound, or an
+accepted erased Kotlin carrier.
+
+That baseline private layout is not frozen. A later optimization may use
+generic methods, private `TypedStorage<T>` cells, scalar replacement, exact
+constructors, or another CLR-generic helper when a separate ADR proves all of
+the following:
+
+- the complete erased execution route remains available;
+- the object retains one identity and one authoritative state;
+- unchecked views retain delayed-use behavior, including incompatible erased
+  writes where Kotlin permits them;
+- virtual dispatch, reflection, and separate compilation remain unchanged;
+- disabling the optimization changes no supported DLL signature or observable
+  Kotlin behavior; and
+- measurements justify the additional compiler, metadata, JIT/AOT, and
+  maintenance cost.
+
+For a mutable escaped object, a fixed typed field alone cannot satisfy those
+rules. A future typed normal state would need a correct transition to erased
+storage, or an equivalent one-state strategy, when an incompatible erased
+write occurs. Identity, visibility between threads, atomicity, and transition
+ordering belong to that future decision. Two concurrently authoritative
+stores remain forbidden.
 
 An internal optimization qualifies as an optimization only when disabling it
 does not change public or protected ABI, supported Kotlin/.NET reflection,
@@ -52,6 +78,12 @@ semantics. Private IL, compiler-generated helpers, internal metadata, and
 physical layout may differ. If disabling the mechanism changes one of the
 supported observations, the mechanism is a new ABI and requires a separate
 architecture decision.
+
+The long-term implementation objective is to maximize truthful and measured
+CLR reification, especially where it removes value-type boxing, while keeping
+semantic erasure authoritative. “Maximize” does not make specialization an end
+in itself: an unmeasured mechanism whose complexity exceeds its benefit should
+not land.
 
 This is the Kotlin/.NET target authors' pre-ABI decision. It follows the
 architecture of mature Kotlin targets, but it is not a Kotlin core-team
@@ -83,6 +115,13 @@ rejecting the write early or duplicating storage.
 The target has no hard requirement that every arbitrary Kotlin-created object
 also expose natural same-object CLR `C<T>` identity. Without that requirement,
 the permanent dual ABI and storage analysis are not justified.
+
+This rejects a second public class ABI, not private optimization. A
+non-escaping allocation may eventually disappear through scalar replacement;
+an immutable producer may admit typed private storage; and a mutable object
+may conceptually begin in typed storage and transition to erased storage on an
+incompatible erased write. Each is compatible with the decision only when it
+preserves the semantic contract below and earns its complexity with evidence.
 
 ## Semantic contract
 
@@ -123,8 +162,8 @@ element-wise algorithm without narrowing a complete nested carrier such as
 
 ## Physical mapping
 
-An owner type parameter in class storage, a constructor, or an instance member
-maps to:
+An owner type parameter in the canonical constructor or instance-member ABI,
+and in the current baseline class storage, maps to:
 
 1. its already accepted erased Kotlin carrier, when one exists;
 2. an exactly representable erased upper bound; or
@@ -133,6 +172,12 @@ maps to:
 An array whose element is an erased owner parameter uses the accepted erased
 `System.Array` carrier. This does not change the separately accepted exact
 array rules for concrete element types.
+
+Private storage fields and compiler-generated helpers are not semantic ABI.
+They may later use more exact CLR shapes under the optimization proof in the
+decision above. Public/protected signatures, runtime tests, cross-module calls,
+and the canonical erased fallback remain stable while those private details
+change.
 
 Methods may retain their own CLR method type parameters. Only type parameters
 owned by the erased class lose physical CLR generic slots. Imported CLR types
@@ -188,12 +233,21 @@ typed Kotlin export contract.
 
 Ordinary Kotlin compilation must not silently publish `Box<T>`. A future typed
 C# export must be opt-in and state, per declaration, whether it emits an
-adapter, facade, wrapper, or another explicitly separate surface. It must not
-derive a typed implementation from the erased Kotlin class and thereby make
-only some instances physically typed. It must diagnose unrepresentable
-construction, identity, mutation, inheritance, override, projection,
-collision, and nullability shapes rather than falling back to a misleading
-typed ABI.
+adapter, facade, read-only interface, export-created same-object subtype, or
+another explicitly separate surface. A same-object export is a new export ABI,
+not a different representation of the Kotlin declaration: only objects
+constructed through that export may possess its CLR generic identity, while
+every Kotlin operation continues through the canonical erased contracts. An
+arbitrary existing `Box` cannot be retroactively converted into
+`DotNetBox<T>` without an adapter. Every export form must diagnose
+unrepresentable construction, identity, mutation, inheritance, override,
+projection, collision, and nullability shapes rather than falling back to a
+misleading typed ABI.
+
+For Kotlin type tests and supported reflection, an export-created subtype must
+normalize to the original Kotlin declaration rather than manufacture a second
+Kotlin classifier from its CLR export TypeDef. If that normalization is not
+truthful for a proposed shape, same-object export is unsupported for it.
 
 The public C# rule is deliberately simpler than the compiler architecture:
 
@@ -216,6 +270,13 @@ identity with the underlying Kotlin object unless that property has been
 explicitly proven and specified. The implementation TypeDef may remain
 technically visible to raw CLR tooling, but it is not a supported typed C#
 contract.
+
+The export programme may therefore distinguish four honest categories:
+
+- same-object export for instances created through that export contract;
+- adapter export for arbitrary existing Kotlin instances;
+- read-only facade where mutation or identity is not promised; and
+- unsupported when no exact host contract exists.
 
 The same rule applies when the class implements a Kotlin-owned generic
 interface. `class C<T> : I<T>` physically implements the one erased `I`,
@@ -262,11 +323,14 @@ has shipped, so every producer and consumer moves together.
   requirement.
 - **Wrap, copy, or proxy on casts.** Breaks identity, mutation, dispatch, and
   synchronization.
-- **Maintain typed and erased storage.** Creates an incoherent aliasing and
-  synchronization model.
-- **Choose physical representation from local provenance or visibility.** A
-  single logical ABI cannot vary across fields, joins, casts, libraries, and
-  foreign calls.
+- **Maintain two concurrently authoritative typed and erased stores.** Creates
+  an incoherent aliasing, visibility, and synchronization model. A one-state
+  transition from typed to erased storage is not rejected here; it requires a
+  separate proof.
+- **Choose canonical ABI representation from local provenance or visibility.**
+  A single logical ABI cannot vary across fields, joins, casts, libraries, and
+  foreign calls. Removable scalar replacement and private helpers do not
+  change that ABI and remain possible.
 - **Special-case `containsAll`.** Other nested carriers, overrides, and
   separate compilation require the general erased rule.
 
@@ -275,16 +339,20 @@ has shipped, so every producer and consumer moves together.
 This decision does not authorize:
 
 - typed C# generic-class export;
-- SSA/CFG provenance analysis, capability guards, or loop versioning;
-- profile-specific ReadyToRun or NativeAOT specialization;
+- typed private storage with deoptimization for escaped mutable objects;
+- SSA/CFG escape/provenance analysis, capability guards, or loop versioning;
+- profile-specific ReadyToRun or NativeAOT specialization policy;
 - a visibility-dependent mix of erased and reified Kotlin-owned class ABIs;
 - value/inline classes, enum classes, valued annotations, or reflection;
 - changes to the separately selected generic-interface or array ABIs; or
 - public reified-inline support.
 
-These may be considered after the semantic ABI and representative target
-programs provide measurements. An optimization may not change the supported
-public or cross-module observations listed in the decision above.
+These may be considered after the semantic ABI, core language/stdlib features,
+the concurrency and memory model, and representative target programs provide
+measurements. Prefer scalar replacement and immutable/private shapes before a
+mutable escaped-object deoptimization system. An optimization may not change
+the supported public or cross-module observations listed in the decision
+above.
 
 ## Verification gate
 
@@ -305,6 +373,12 @@ The accepted ABI must cover:
   imported CLR generics; and
 - unchanged generic-interface, array, nullability, friend/compiler-ABI, and
   stdlib behavior.
+
+The semantic assertions above are permanent. Tests that require one canonical
+public/protected erased signature are ABI tests. Tests that literally require
+one private `.field object` or forbid every private generic helper describe the
+current baseline layout and must be labelled as such; they may change after a
+specialization ADR without weakening any semantic assertion.
 
 The implementation is complete only when the old class-only runtime helpers,
 bridges, metadata records, TypeDefs, and tests no longer survive as active
