@@ -14,6 +14,7 @@ package kotlin.text
 // See: https://github.com/JetBrains/kotlin/tree/master/libraries/stdlib
 //
 
+import kotlin.contracts.*
 
 /**
  * A mutable sequence of characters.
@@ -498,9 +499,26 @@ public expect fun StringBuilder.toCharArray(destination: CharArray, destinationO
 @IgnorableReturnValue
 public inline fun StringBuilder.append(obj: Any?): StringBuilder = this.append(obj)
 
+/**
+ * Builds new string by populating newly created [StringBuilder] using provided [builderAction]
+ * and then converting it to [String].
+ */
+@kotlin.internal.InlineOnly
+public inline fun buildString(builderAction: StringBuilder.() -> Unit): String {
+    contract { callsInPlace(builderAction, InvocationKind.EXACTLY_ONCE) }
+    return StringBuilder().apply(builderAction).toString()
+}
 
-
-
+/**
+ * Builds new string by populating newly created [StringBuilder] initialized with the given [capacity]
+ * using provided [builderAction] and then converting it to [String].
+ */
+@SinceKotlin("1.1")
+@kotlin.internal.InlineOnly
+public inline fun buildString(capacity: Int, builderAction: StringBuilder.() -> Unit): String {
+    contract { callsInPlace(builderAction, InvocationKind.EXACTLY_ONCE) }
+    return StringBuilder(capacity).apply(builderAction).toString()
+}
 
 /**
  * Appends all arguments to the given StringBuilder.

@@ -57,6 +57,12 @@ tasks.named<ProcessResources>("processResources") {
     )) {
         into("kotlin-dotnet-stdlib/src/kotlin/collections")
     }
+    from(files(
+        rootProject.file("libraries/stdlib/src/kotlin/contracts/ContractBuilder.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/contracts/Effect.kt"),
+    )) {
+        into("kotlin-dotnet-stdlib/src/kotlin/contracts")
+    }
     from(rootProject.file("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt")) {
         into("kotlin-dotnet-stdlib/src/kotlin/annotations")
     }
@@ -78,6 +84,7 @@ tasks.named<ProcessResources>("processResources") {
     from(files(
         rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/internal/SharedVariableBox.kt"),
         rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/internal/SyntheticConstructorMarker.kt"),
+        rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/internal/ThrowHelpers.kt"),
     )) {
         into("kotlin-dotnet-stdlib/common-non-jvm/src/kotlin/internal")
     }

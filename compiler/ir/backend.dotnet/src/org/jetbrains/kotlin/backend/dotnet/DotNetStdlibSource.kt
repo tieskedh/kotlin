@@ -105,6 +105,10 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "common-non-jvm/src/kotlin/internal/SyntheticConstructorMarker.kt",
     ),
     DotNetStdlibSourceResource(
+        "ThrowHelpers.kt",
+        "common-non-jvm/src/kotlin/internal/ThrowHelpers.kt",
+    ),
+    DotNetStdlibSourceResource(
         "ExceptionsH.kt",
         "common/src/kotlin/ExceptionsH.kt",
         isCommon = true,
@@ -172,6 +176,16 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "AbstractList.kt",
         "src/kotlin/collections/AbstractList.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "ContractBuilder.kt",
+        "src/kotlin/contracts/ContractBuilder.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Effect.kt",
+        "src/kotlin/contracts/Effect.kt",
         isCommon = true,
     ),
 ).sortedBy(DotNetStdlibSourceResource::path)

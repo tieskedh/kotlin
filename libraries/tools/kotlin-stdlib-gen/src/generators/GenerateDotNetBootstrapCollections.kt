@@ -260,19 +260,11 @@ fun main(args: Array<String>) {
         Charsets.UTF_8,
     )
     stringBuilderOutputFile.writeText(
-        projectStringBuilderFile(commonStringBuilderFile),
+        projectWholeCommonFile(commonStringBuilderFile),
         Charsets.UTF_8,
     )
     kotlinOutputFile.writeText(
-        buildProjectedSource(
-            packageName = "kotlin",
-            declarations = listOf(
-                extractCommonDeclaration(
-                    commonStandardFile,
-                    "public class NotImplementedError(message: String = \"An operation is not implemented.\") : Error(message)",
-                ),
-            ),
-        ),
+        projectStandardFile(commonStandardFile),
         Charsets.UTF_8,
     )
     enumEntriesOutputFile.writeText(
@@ -376,23 +368,32 @@ private fun projectWholeCommonFile(sourceFile: File): String {
     return injectGeneratedWarning(normalizedSource)
 }
 
-private fun projectStringBuilderFile(sourceFile: File): String {
+/**
+ * Retains the complete contract-bearing scope-function closure while `repeat` remains behind the
+ * ordinary range/progression product. The declaration is the exact final Common source tail, so
+ * upstream movement or added declarations after it fail generation instead of silently widening
+ * this temporary projection.
+ */
+private fun projectStandardFile(sourceFile: File): String {
     var projectedSource = sourceFile.readText().replace("\r\n", "\n")
-    val contractsImport = "import kotlin.contracts.*\n"
-    check(projectedSource.countOccurrences(contractsImport) == 1) {
-        "Expected exactly one contracts import in ${sourceFile.path}"
+    val declarationHeader = "public inline fun repeat(times: Int, action: (Int) -> Unit)"
+    val declarationIndex = projectedSource.indexOf(declarationHeader)
+    check(declarationIndex >= 0) {
+        "Cannot find Common declaration '$declarationHeader' in ${sourceFile.path}"
     }
-    projectedSource = projectedSource.replace(contractsImport, "")
-    for (declarationHeader in listOf(
-        "public inline fun buildString(builderAction: StringBuilder.() -> Unit): String",
-        "public inline fun buildString(capacity: Int, builderAction: StringBuilder.() -> Unit): String",
-    )) {
-        val declaration = extractCommonDeclaration(sourceFile, declarationHeader)
-        check(projectedSource.countOccurrences(declaration) == 1) {
-            "Expected exactly one projected Common declaration '$declarationHeader' in ${sourceFile.path}"
-        }
-        projectedSource = projectedSource.replace(declaration, "")
+    check(projectedSource.indexOf(declarationHeader, declarationIndex + declarationHeader.length) < 0) {
+        "Common declaration header '$declarationHeader' is not unique in ${sourceFile.path}"
     }
+    val documentationIndex = projectedSource.lastIndexOf("/**", declarationIndex)
+    check(documentationIndex >= 0) {
+        "Cannot find KDoc for Common declaration '$declarationHeader' in ${sourceFile.path}"
+    }
+    val declaration = extractCommonFunction(sourceFile, declarationHeader)
+    val declarationEnd = declarationIndex + declaration.length
+    check(projectedSource.substring(declarationEnd).isBlank()) {
+        "Common repeat is no longer the final declaration in ${sourceFile.path}"
+    }
+    projectedSource = projectedSource.substring(0, documentationIndex)
     return injectGeneratedWarning(projectedSource)
 }
 

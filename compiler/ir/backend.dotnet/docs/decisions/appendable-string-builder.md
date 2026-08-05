@@ -139,6 +139,11 @@ contract copies, target-local shims, rewritten `buildString`, or a one-enum
 exception remain forbidden. Once the dependency exists, the temporary
 projection is replaced by the complete ordinary Common file.
 
+That later phase is now complete under the
+[Common-contracts ADR](common-contracts-product.md): the generator projects the
+whole Common `StringBuilder.kt`, including both `buildString` declarations,
+beside the authoritative contracts and `Standard.kt` source product.
+
 ### `CharSequence` interaction
 
 The Kotlin wrapper implements the existing runtime `Kotlin.CharSequence`
@@ -259,6 +264,6 @@ BCL collection adapters, or define general reflection over private CLR
 implementation fields. Common abstract collection bases consume this surface
 under the collections programme. The typed collection-to-array representation
 is selected independently by [its own ADR](collection-to-array.md). This ADR
-also does not select the general enum or contract representations required by
-the later `buildString` phase; those language products remain separate
-features.
+also does not own the general enum or contract representations used by the
+later `buildString` phase. Those remain separate language products and are now
+completed under the ordinary-enum and Common-contracts ADRs.

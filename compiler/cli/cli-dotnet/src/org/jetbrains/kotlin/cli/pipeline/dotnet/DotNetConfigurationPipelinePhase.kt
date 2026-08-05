@@ -286,6 +286,8 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
                     arguments.dotNetProduceStdlib || usesBootstrapStdlibSources,
                 optInExperimentalMultiplatform =
                     arguments.dotNetProduceStdlib || usesBootstrapStdlibSources,
+                optInExperimentalContracts =
+                    arguments.dotNetProduceStdlib || usesBootstrapStdlibSources,
             )
 
         val classpathFiles = linkedSetOf<File>()
@@ -312,6 +314,7 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(
     enableMultiplatform: Boolean,
     muteExpectActualClassesWarning: Boolean,
     optInExperimentalMultiplatform: Boolean,
+    optInExperimentalContracts: Boolean,
 ): LanguageVersionSettings {
     val delegate = this
     return object : LanguageVersionSettings by delegate {
@@ -342,9 +345,15 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(
                         delegate.getFlag(AnalysisFlags.muteExpectActualClassesWarning)) as T
             }
             @Suppress("UNCHECKED_CAST")
-            if (flag == AnalysisFlags.optIn && optInExperimentalMultiplatform) {
-                return (delegate.getFlag(AnalysisFlags.optIn) + "kotlin.ExperimentalMultiplatform")
-                    .distinct() as T
+            if (
+                flag == AnalysisFlags.optIn &&
+                (optInExperimentalMultiplatform || optInExperimentalContracts)
+            ) {
+                val productOptIns = buildList {
+                    if (optInExperimentalMultiplatform) add("kotlin.ExperimentalMultiplatform")
+                    if (optInExperimentalContracts) add("kotlin.contracts.ExperimentalContracts")
+                }
+                return (delegate.getFlag(AnalysisFlags.optIn) + productOptIns).distinct() as T
             }
             return delegate.getFlag(flag)
         }

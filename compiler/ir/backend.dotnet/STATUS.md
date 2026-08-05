@@ -11,8 +11,8 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: ordinary Kotlin reference-class enums and the
-  non-reified Common `EnumEntries` core
+- Last completed feature: Common contracts, scope functions, and the complete
+  ordinary `StringBuilder`/`buildString` product
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -20,25 +20,41 @@ This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
 stdlib. The target is not close to 98% feature-complete: valued annotations
 and annotation reflection, `KType`/member reflection, reified public APIs and
-enum helpers, value classes, coroutines, the contracts/`buildString` closure,
+enum helpers, value classes, coroutines, ordinary mutable collections plus
 broad Set/Map production, and Gradle/KMP product integration remain substantial
 open programmes.
 
 ## Current green gate
 
-The current ordinary-enum and non-reified `EnumEntries` production head
-passed:
+The current Common-contracts, scope-function, and complete ordinary
+`StringBuilder` production head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The JUnit audit covered 20 fresh XML files and 1049 tests:
+The JUnit audit covered 24 fresh XML files and 1065 tests:
 
-- 942 FIR, IL-text, and box tests
+- 958 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 86 library-integration tests
 - zero failures, errors, or skips
+
+All four PSI/LightTree and Framework/CoreCLR runners execute the target-owned
+contracts/scope corpus plus three selected upstream contract tests. The test
+pipeline now runs the same shared pre-serialization KLIB lowerings as the CLI;
+Common `SharedVariableBox` therefore replaces the obsolete test-only mutable
+capture cell, and Common non-JVM `ThrowHelpers.kt` is a real stdlib compiler-ABI
+dependency. Direct and installed stdlib products, including a separate local-
+delegate consumer, prove that source closure without enabling the separately
+parked `lateinit` lowering.
+
+Source-defined exception subclasses now inherit standard `Throwable.message`
+and `cause` through the universal `System.Exception` virtual slots. The
+structural fallback accepts only fake overrides whose real chain remains in
+the mapped standard exception hierarchy; a derived user-defined `message`
+override remains ordinary Kotlin virtual dispatch. PSI, LightTree, Framework
+CLR, CoreCLR, and an installed cross-assembly consumer cover both sides.
 
 Ordinary Kotlin enums are one reference-class hierarchy, never CLR
 `System.Enum` value types. Entry fields retain singleton identity and source
@@ -183,8 +199,9 @@ attribute. Adversarial execution pins empty, singleton, nullable/value,
 mutation, order/index, exception identity, stopping point, and non-local-return
 behavior. The indexed body retains the Common overflow helper, while
 handwritten CIL executes both physical void fallbacks and checks full callback
-traces on Framework CLR and CoreCLR. `onEach` remains parked because its exact
-Common body reaches `apply` and the public contracts DSL through `Standard.kt`.
+traces on Framework CLR and CoreCLR. The completed `apply`/contracts product
+now unblocks exact Common `onEach` and `onEachIndexed`; they are not yet an
+admitted generated batch.
 
 Common `Iterable.first(predicate)` and `firstOrNull(predicate)` now use their
 exact generated first-match loops. Adversarial execution pins empty and
@@ -315,11 +332,12 @@ types, physical MethodImpl rows, portable Kotlin consumers, and both canonical-
 only and typed CLR foreign boundaries on Framework CLR and CoreCLR. Runtime
 surface level 12 owns the helper; typed polymorphic fast paths remain unselected.
 
-The builder and Common abstract-collection tranche publishes the authoritative
-Common `Appendable`, the complete non-contract `StringBuilder` surface,
-generated `Iterable.joinTo`/`joinToString`, and Common
-`AbstractCollection`/`AbstractList`. Only the two contract-bearing
-`buildString` declarations remain outside the fail-closed Common projection.
+The builder, contracts, and Common abstract-collection tranches publish the
+authoritative Common `Appendable`, complete `StringBuilder` including both
+`buildString` declarations, generated `Iterable.joinTo`/`joinToString`, Common
+`AbstractCollection`/`AbstractList`, the public contracts DSL/effect model, and
+`Standard.kt` through `takeUnless`. Only Common's final `repeat` declaration is
+projected out until its real `Int.until`/range/progression closure exists.
 The Kotlin-owned builder wraps private profile-selected BCL storage without
 exposing `System.Text.StringBuilder` in public or protected metadata; its
 colliding `Any?` overloads have the stable physical names `appendAny`,
@@ -333,6 +351,16 @@ the Common iterator and sublist implementations. The exact Common bodies also
 closed general backend gaps for `Int`/`Long` bitwise shifts, Unit-valued effects
 in value positions, smartcasts from open type parameters, and projected generic
 array reads and writes; none is encoded as a builder-specific rewrite.
+
+FIR consumes Common contracts for data flow, and embedded KLIB retains their
+effects across library boundaries. The backend executes neither the DSL nor a
+target-authored approximation: `contract` has an assembly-visible fail-safe
+physical body under the existing inline-only ABI, while executable consumers
+contain no DSL call. The complete Common `run`, `with`, `apply`, `also`, `let`,
+`takeIf`, and `takeUnless` bodies preserve calls-in-place analysis, receiver
+identity, exceptions, and non-local returns. `InvocationKind` uses the ordinary
+Kotlin enum representation. Exact Roslyn CodeAnalysis attributes remain a
+separately gated derived export view, never a replacement contract store.
 
 ## Current architecture
 
@@ -392,12 +420,13 @@ the admitted surface. The backend's
 explicit erased-object cast to an open type parameter uses `unbox.any`; safe
 generic casts remain unsupported. The Kotlin-owned builder, exact generated
 joins, Common abstract bases, and migrated array-backed list are published.
-Only the two top-level `buildString` declarations remain parked behind the
-contracts DSL. Runtime surface level 14 owns the erased compiler mutable cell
-and the erased Kotlin collection-interface surface.
+The public Common contracts DSL/effects, ordinary `InvocationKind`, scope
+functions through `takeUnless`, and both `buildString` declarations are now in
+the same self-describing stdlib product. Runtime surface level 14 owns the
+erased compiler mutable cell and the erased Kotlin collection-interface
+surface.
 Parameterless annotation classes are admitted generally; ordinary enums and
-the non-reified `EnumEntries` core are now published. `InvocationKind` and the
-complete contract-effect closure remain unresolved. The
+the non-reified `EnumEntries` core are now published. The
 classified `CharSequence` carrier, Common collection predicates, and ordinary
 inline-function boundary remain intact; reified and suspend inline are still
 explicit errors. The nominal `KClass` floor is selected and published; it does
@@ -477,8 +506,12 @@ an implicit CLR `C<T>` surface.
   capability, but it must not reintroduce a second Kotlin runtime identity,
   storage model, or virtual ABI. The concrete export surface and identity
   policy remain open; the erased Kotlin runtime ABI does not.
-- Contracts, full `Standard.kt`, and the two omitted `buildString`
-  declarations follow after an ordinary `InvocationKind` exists.
+- Common `repeat` remains outside the exact `Standard.kt` projection until the
+  ordinary `Int.until`/range/progression closure lands; no target loop stands
+  in for that dependency.
+- Exact CLR CodeAnalysis contract projection needs a neutral validated
+  FIR/KLIB-to-export carrier. The backend must not rediscover effects from
+  lowered bodies or make standard attributes authoritative for Kotlin.
 - KLIB-in-DLL and physical ABI codecs still need neutral serialization owners
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
@@ -491,12 +524,9 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Publish the exact contracts product, starting with ordinary
-   `InvocationKind`, then the Common contracts DSL/effect metadata,
-   `Standard.kt`, and both `buildString` declarations. Replace the temporary
-   StringBuilder projection with the complete ordinary Common file; project
-   only the exact Roslyn-contract subset in addition to authoritative KLIB
-   effects.
+1. Design and prove the neutral exact-contract export carrier, then project
+   only the CodeAnalysis subset whose implication direction, target, stability,
+   and selected framework attribute identity are exactly representable.
 2. Continue the Common collection programme by exact dependency closure,
    preferring families that exercise enum/contracts foundations or unlock
    ordinary application code without introducing target-owned algorithms.

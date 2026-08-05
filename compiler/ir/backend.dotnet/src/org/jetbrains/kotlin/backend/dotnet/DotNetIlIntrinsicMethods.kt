@@ -513,13 +513,11 @@ internal class DotNetIlIntrinsicMethods(
     /**
      * `Throwable.message`/`Throwable.cause` on every [mapped exception type][DotNetMappedExceptions],
      * compiled to `System.Exception::get_Message()`/`get_InnerException()` (both callvirt
-     * signatures ilasm-probe-verified). A key is registered per mapped FqName because the
-     * accessor call site's owner is the static receiver class: on a subtype receiver
-     * (`e: IllegalStateException`) the getter arrives as a fake override owned by the subclass,
-     * not by `kotlin.Throwable` (the registration-per-FqName option of the JVM's
-     * resolve-fake-overrides-then-look-up precedent, chosen to leave [getIntrinsic] dispatch
-     * untouched). Rejected exception types need no keys: any receiver of such a type already
-     * fails signature mapping with the registry's per-type reason.
+     * signatures ilasm-probe-verified). A key is registered per mapped FqName for direct and
+     * stdlib-owned call-site owners. Source-defined subclasses need the structural fake-override
+     * fallback in [getIntrinsic]: their inherited accessor is owned by the source class, whose
+     * FqName cannot be registered in advance. Rejected exception types need no keys: any receiver
+     * of such a type already fails signature mapping with the registry's per-type reason.
      */
     private fun exceptionMemberIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         for ([fqName, entry] in DotNetMappedExceptions.entries) {
@@ -800,6 +798,14 @@ internal class DotNetIlIntrinsicMethods(
         // boundary. User implementations keep ordinary direct calls on their concrete type.
         (function as? IrSimpleFunction)?.dotNetCharSequenceIntrinsicOrNull()?.let { return it }
 
+        // A source-defined exception subclass owns fake overrides of Throwable.message/cause,
+        // so its FqName cannot appear in the static registry. Resolve only inherited standard
+        // exception slots to System.Exception. A real user override in the chain deliberately
+        // rejects this fallback and retains ordinary Kotlin virtual dispatch.
+        (function as? IrSimpleFunction)
+            ?.dotNetInheritedExceptionMemberIntrinsicOrNull()
+            ?.let { return it }
+
         // Calls through fake overrides and user overrides are owned by that class rather than by
         // kotlin.Any, so an exact registry key cannot name them. The JVM resolves those calls to
         // java.lang.Object slots; select the CLR counterpart from the transitive override chain.
@@ -819,6 +825,31 @@ internal class DotNetIlIntrinsicMethods(
         val name: String,
         val valueParameterTypeNames: List<FqName?>,
     )
+}
+
+private fun IrSimpleFunction.dotNetInheritedExceptionMemberIntrinsicOrNull(): DotNetIlIntrinsicMethod? {
+    if (
+        !isFakeOverride ||
+        parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver ||
+        parameters.size != 1
+    ) {
+        return null
+    }
+    val intrinsic = when (name.asString()) {
+        "<get-message>" -> DotNetIlExceptionMessageIntrinsic
+        "<get-cause>" -> DotNetIlExceptionCauseIntrinsic
+        else -> return null
+    }
+    val terminalOverrides = allOverridden().filterNot { overridden -> overridden.isFakeOverride }.toList()
+    val inheritsThrowableSlot = terminalOverrides.any { overridden ->
+        (overridden.parent as? IrClass)?.fqNameWhenAvailable == StandardNames.FqNames.throwable
+    }
+    val hasOnlyStandardExceptionSlots = terminalOverrides.all { overridden ->
+        val ownerFqName = (overridden.parent as? IrClass)?.fqNameWhenAvailable
+        ownerFqName != null &&
+                DotNetMappedExceptions.entries[ownerFqName] is DotNetMappedExceptions.Entry.Mapped
+    }
+    return intrinsic.takeIf { inheritsThrowableSlot && hasOnlyStandardExceptionSlots }
 }
 
 private fun IrSimpleFunction.dotNetComparableIntrinsicOrNull(): DotNetIlIntrinsicMethod? {
@@ -3779,16 +3810,21 @@ private object DotNetIlThrowableSuppressedExceptionsIntrinsic : DotNetIlIntrinsi
     }
 }
 
-/** The dispatch receiver of an exception member access, together with its mapped IL type. */
+/** The dispatch receiver of an exception member access, widened to the universal CLR carrier. */
 private fun IrCall.dotNetMappedExceptionReceiver(
     codegen: DotNetIlExpressionCodegen,
     memberName: String,
 ): Pair<IrExpression, DotNetIlValueType.MappedClass> {
     val receiver = arguments.single()
         ?: dotNetUnsupported("missing receiver of 'Throwable.$memberName'")
-    val receiverType = codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.MappedClass
-        ?: dotNetUnsupported("reading '$memberName' of a non-exception-mapped receiver is not supported")
-    return receiver to receiverType
+    val receiverType = codegen.toDotNetIlValueType(receiver.type)
+    val exceptionCarrier = DotNetIlValueType.MappedClass(
+        DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)
+    )
+    if (receiverType?.isDotNetAssignableTo(exceptionCarrier) != true) {
+        dotNetUnsupported("reading '$memberName' of a receiver not assignable to System.Exception is not supported")
+    }
+    return receiver to exceptionCarrier
 }
 
 private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen): DotNetIlValueType? {

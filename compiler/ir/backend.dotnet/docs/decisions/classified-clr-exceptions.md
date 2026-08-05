@@ -134,6 +134,14 @@ equivalent.
 Kotlin-owned constructors map `cause` to `InnerException`. Foreign objects
 retain their own `InnerException`, `Data`, message, stack, and exact type.
 
+The standard `Throwable.message` and `Throwable.cause` properties use the
+virtual `System.Exception.Message` and `InnerException` slots for mapped
+declarations and source-defined subclasses. A source subclass owns IR fake
+overrides whose FqName cannot be registered in advance, so codegen follows the
+transitive override chain only when every real declaration remains in the
+mapped standard exception hierarchy. A real Kotlin user override is ordinary
+virtual Kotlin dispatch and must not be redirected to the CLR base slot.
+
 ### Kotlin-only state is identity-associated
 
 Common `Throwable` state absent from `System.Exception` is stored by a
@@ -203,7 +211,8 @@ Before ABI freeze, validation must cover:
   profiles through a portable library;
 - identity, exact CLR type, `InnerException`, `Data`, message, stack trace, and
   suppressed state across catch and rethrow;
-- Kotlin subclasses across separately compiled modules;
+- inherited `message`/`cause` and user-overridden properties on Kotlin
+  subclasses across separately compiled modules;
 - returns, properties, generic positions, and narrow foreign boundaries; and
 - C# provider/consumer behavior for broad, narrow, nullable, and exact
   exception surfaces.

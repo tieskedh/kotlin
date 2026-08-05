@@ -56,6 +56,7 @@ fun main(args: Array<String>) {
                 // select intrinsicConstEvaluationInSources: that test intentionally redeclares
                 // the stdlib builtin and is ignored by the other non-JVM backends as well.
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
+                model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
@@ -63,6 +64,7 @@ fun main(args: Array<String>) {
 
             testClass<AbstractFirPsiDotNetBoxTest> {
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
+                model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
@@ -70,6 +72,7 @@ fun main(args: Array<String>) {
 
             testClass<AbstractFirLightTreeDotNetFrameworkBoxTest> {
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
+                model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
@@ -77,6 +80,7 @@ fun main(args: Array<String>) {
 
             testClass<AbstractFirPsiDotNetFrameworkBoxTest> {
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
+                model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")

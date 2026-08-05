@@ -179,6 +179,8 @@ contract store. Import an attribute effect only where its target and effect
 algebra match Kotlin and still apply Kotlin stability rules; retain effects
 that CLR cannot express in KLIB alone. Do not infer Kotlin contracts merely
 because a C# analysis attribute is suggestive.
+See the
+[Common-contracts ADR](docs/decisions/common-contracts-product.md).
 
 C# authoring and export surfaces are explicit opt-in interop products.
 Properties, defaults, callable adapters, collisions, nullability, and
