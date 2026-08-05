@@ -11,8 +11,8 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: Common contracts, scope functions, and the complete
-  ordinary `StringBuilder`/`buildString` product
+- Last completed feature: exact Common-contract projection onto standard
+  CodeAnalysis metadata for explicit `net10.0` exports
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -26,18 +26,17 @@ open programmes.
 
 ## Current green gate
 
-The current Common-contracts, scope-function, and complete ordinary
-`StringBuilder` production head passed:
+The current exact-contract export production head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The JUnit audit covered 24 fresh XML files and 1065 tests:
+The JUnit audit covered 24 fresh XML files and 1066 tests:
 
 - 958 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 86 library-integration tests
+- 87 library-integration tests
 - zero failures, errors, or skips
 
 All four PSI/LightTree and Framework/CoreCLR runners execute the target-owned
@@ -362,8 +361,19 @@ physical body under the existing inline-only ABI, while executable consumers
 contain no DSL call. The complete Common `run`, `with`, `apply`, `also`, `let`,
 `takeIf`, and `takeUnless` bodies preserve calls-in-place analysis, receiver
 identity, exceptions, and non-local returns. `InvocationKind` uses the ordinary
-Kotlin enum representation. Exact Roslyn CodeAnalysis attributes remain a
-separately gated derived export view, never a replacement contract store.
+Kotlin enum representation.
+
+The exact first CLR contract projection is now complete as an additive export
+view. FIR2IR derives a versioned neutral five-effect carrier from resolved
+Common contracts; only an explicitly selected export consumes it. `net10.0`
+emits the exact `System.Diagnostics.CodeAnalysis` TypeDefs supplied by
+`System.Runtime`, while `net48` and `netstandard2.0` omit them because their
+selected contracts do not contain those identities. The gate proves both FIR
+parsers, every admitted attribute target and constructor payload, Roslyn
+nullable flow with warnings as errors, overlap normalization, default-overload
+parameter omission, absence on ordinary Kotlin MethodDefs and compound
+effects, and a Kotlin consumer of a reassembled DLL after every derived
+CodeAnalysis row was stripped. KLIB remains the independent authority.
 
 ## Current architecture
 
@@ -373,12 +383,14 @@ separately gated derived export view, never a replacement contract store.
   validation without depending on FIR, IR, backend, or CLI code.
 - `:compiler:frontend.common.dotnet` owns objective PE/ECMA-335 facts and
   physical CLR validation; FIR owns Kotlin interpretation.
-- `:compiler:dotnet.imports` owns the versioned, self-validating in-process
-  carrier for one already-selected foreign CLR declaration.
+- `:compiler:dotnet.imports` owns versioned, self-validating neutral carriers
+  for selected foreign CLR linkage and the already-derived exact contract
+  export subset.
 - `:compiler:fir:fir-dotnet` owns foreign Kotlin projection and lazy FIR symbol
   construction without depending on backend or CLI implementation packages.
 - `:compiler:fir:fir2ir:dotnet-backend` owns the narrow target-specific IR
-  overridability rule for retained flexible CLR array declarations.
+  overridability rule for retained flexible CLR array declarations and derives
+  the neutral exact-contract projection while resolved FIR and IR coexist.
 - `:compiler:ir:backend.dotnet` owns IR lowering, CIL mapping/emission, and
   backend product construction.
 - `:compiler:ir:serialization.dotnet` owns .NET KLIB IR serialization and the
@@ -428,6 +440,11 @@ functions through `takeUnless`, and both `buildString` declarations are now in
 the same self-describing stdlib product. Runtime surface level 14 owns the
 erased compiler mutable cell and the erased Kotlin collection-interface
 surface.
+The exact Common-contract export subset is additive and complete for
+`NotNull`, `NotNullWhen`, `NotNullIfNotNull`, `DoesNotReturnIf`, and
+`DoesNotReturn`. Its neutral carrier contains neither FIR/IR nodes nor the
+authoritative contract graph; ordinary Kotlin declarations and profiles
+without the exact standard TypeDefs remain physically unchanged.
 Parameterless annotation classes are admitted generally; ordinary enums and
 the non-reified `EnumEntries` core are now published. The
 classified `CharSequence` carrier, Common collection predicates, and ordinary
@@ -518,9 +535,6 @@ an implicit CLR `C<T>` surface.
 - Common `repeat` remains outside the exact `Standard.kt` projection until the
   ordinary `Int.until`/range/progression closure lands; no target loop stands
   in for that dependency.
-- Exact CLR CodeAnalysis contract projection needs a neutral validated
-  FIR/KLIB-to-export carrier. The backend must not rediscover effects from
-  lowered bodies or make standard attributes authoritative for Kotlin.
 - KLIB-in-DLL and physical ABI codecs still need neutral serialization owners
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
@@ -533,12 +547,12 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Design and prove the neutral exact-contract export carrier, then project
-   only the CodeAnalysis subset whose implication direction, target, stability,
-   and selected framework attribute identity are exactly representable.
-2. Continue the Common collection programme by exact dependency closure,
+1. Continue the Common collection programme by exact dependency closure,
    preferring families that exercise enum/contracts foundations or unlock
    ordinary application code without introducing target-owned algorithms.
+2. Extend CLR contract projection only when a new standard attribute has an
+   exact Common effect, stable target rule, verified profile identity, and the
+   same strip-without-Kotlin-semantic-change evidence as the closed first set.
 
 The post-rebase callable-reference probe found that common IR's new
 `addBoundValueAtOverride` helper cannot directly replace the .NET lowering:

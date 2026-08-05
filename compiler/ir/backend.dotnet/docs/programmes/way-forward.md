@@ -156,9 +156,10 @@ valued constructors and Kotlin reflection discovery remain separate. See
 [`../decisions/marker-annotation-classes.md`](../decisions/marker-annotation-classes.md).
 
 The contracts product is now public Common API rather than a compiler-private cycle breaker.
-Compiler-consumed effects belong to KLIB/Common semantics. The next annotation/export slice may
-project only the exact CodeAnalysis subset through a neutral FIR-to-export carrier; it must not
-rediscover contracts from lowered IR or make CLR attributes authoritative. The importer may
+Compiler-consumed effects belong to KLIB/Common semantics. The first exact CodeAnalysis export
+slice is complete through a versioned neutral FIR-to-export carrier and remains limited to
+explicit exports on profiles that physically supply the standard attributes. It neither
+rediscovers contracts from lowered IR nor makes CLR attributes authoritative. The importer may
 continue accepting those standard attributes as foreign evidence under Kotlin stability rules.
 
 ### 3. Retain and enforce the completed declaration architecture seam
