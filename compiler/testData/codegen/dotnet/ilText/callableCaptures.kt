@@ -1,6 +1,6 @@
 // Captured values and bound receivers are private generated-class layout, not callable ABI
 // alternatives. Every class below still implements only the arity-erased Kotlin.FunctionN
-// identity; mutable locals share one runtime-internal generic cell.
+// identity; mutable locals share Common's one compiler-ABI generic cell.
 
 private class Offset(private val delta: Int) {
     fun apply(value: Int): Int = value + delta
