@@ -48,8 +48,11 @@ internal object DotNetStdlibLibrary {
     const val READ_AFTER_EOF_EXCEPTION_IL_NAME = "Kotlin.Io.ReadAfterEOFException"
     const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
     const val TEXT_FACADE_IL_NAME = "Kotlin.Text.StringsKt"
+    const val STANDARD_FACADE_IL_NAME = "Kotlin.StandardKt"
+    const val CONTRACTS_FACADE_IL_NAME = "Kotlin.Contracts.ContractBuilderKt"
     const val IO_FACADE_IL_NAME = "Kotlin.Io.ConsoleKt"
     const val ENUM_ENTRIES_FACADE_IL_NAME = "Kotlin.Enums.EnumEntriesKt"
+    const val THROW_HELPERS_FACADE_IL_NAME = "Kotlin.Internal.ThrowHelpersKt"
     const val THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME =
         "kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt"
     const val SERIALIZATION_UTIL_FACADE_IL_NAME = "Kotlin.Internal.SerializationUtilKt"
@@ -79,6 +82,17 @@ internal object DotNetStdlibLibrary {
         "kotlin.io.ReadAfterEOFException" to READ_AFTER_EOF_EXCEPTION_IL_NAME,
         "kotlin.text.Appendable" to "Kotlin.Text.Appendable",
         "kotlin.text.StringBuilder" to "Kotlin.Text.StringBuilder",
+        "kotlin.contracts.ExperimentalContracts" to "Kotlin.Contracts.ExperimentalContracts",
+        "kotlin.contracts.ExperimentalExtendedContracts" to "Kotlin.Contracts.ExperimentalExtendedContracts",
+        "kotlin.contracts.ContractBuilder" to "Kotlin.Contracts.ContractBuilder",
+        "kotlin.contracts.InvocationKind" to "Kotlin.Contracts.InvocationKind",
+        "kotlin.contracts.Effect" to "Kotlin.Contracts.Effect",
+        "kotlin.contracts.ConditionalEffect" to "Kotlin.Contracts.ConditionalEffect",
+        "kotlin.contracts.SimpleEffect" to "Kotlin.Contracts.SimpleEffect",
+        "kotlin.contracts.Returns" to "Kotlin.Contracts.Returns",
+        "kotlin.contracts.ReturnsNotNull" to "Kotlin.Contracts.ReturnsNotNull",
+        "kotlin.contracts.CallsInPlace" to "Kotlin.Contracts.CallsInPlace",
+        "kotlin.contracts.HoldsIn" to "Kotlin.Contracts.HoldsIn",
         "kotlin.NotImplementedError" to "Kotlin.NotImplementedError",
         "kotlin.SuppressedExceptionList" to "Kotlin.SuppressedExceptionList",
         "kotlin.SuppressedExceptionIterator" to "Kotlin.SuppressedExceptionIterator",
@@ -171,6 +185,19 @@ internal object DotNetStdlibLibrary {
         "kotlin.text.set" to TEXT_FACADE_IL_NAME,
         "kotlin.text.setRange" to TEXT_FACADE_IL_NAME,
         "kotlin.text.toCharArray" to TEXT_FACADE_IL_NAME,
+        "kotlin.text.buildString" to TEXT_FACADE_IL_NAME,
+        "kotlin.TODO" to STANDARD_FACADE_IL_NAME,
+        "kotlin.run" to STANDARD_FACADE_IL_NAME,
+        "kotlin.with" to STANDARD_FACADE_IL_NAME,
+        "kotlin.apply" to STANDARD_FACADE_IL_NAME,
+        "kotlin.also" to STANDARD_FACADE_IL_NAME,
+        "kotlin.let" to STANDARD_FACADE_IL_NAME,
+        "kotlin.takeIf" to STANDARD_FACADE_IL_NAME,
+        "kotlin.takeUnless" to STANDARD_FACADE_IL_NAME,
+        "kotlin.contracts.contract" to CONTRACTS_FACADE_IL_NAME,
+        "kotlin.internal.throwUninitializedPropertyAccessException" to THROW_HELPERS_FACADE_IL_NAME,
+        "kotlin.internal.throwUnsupportedOperationException" to THROW_HELPERS_FACADE_IL_NAME,
+        "kotlin.internal.staticInitializationFailure" to THROW_HELPERS_FACADE_IL_NAME,
         "kotlin.io.readln" to IO_FACADE_IL_NAME,
         "kotlin.io.readlnOrNull" to IO_FACADE_IL_NAME,
         "kotlin.internal.throwNoWhenBranchMatchedException" to THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME,
@@ -561,7 +588,15 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.text",
             facadeIlName = TEXT_FACADE_IL_NAME,
         ),
-        "_DotNetBootstrapKotlin.kt" to ImplementationSource(packageFqName = "kotlin"),
+        "_DotNetBootstrapKotlin.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = STANDARD_FACADE_IL_NAME,
+        ),
+        "ContractBuilder.kt" to ImplementationSource(
+            packageFqName = "kotlin.contracts",
+            facadeIlName = CONTRACTS_FACADE_IL_NAME,
+        ),
+        "Effect.kt" to ImplementationSource(packageFqName = "kotlin.contracts"),
         "DotNetStdlibIo.kt" to ImplementationSource(
             packageFqName = "kotlin.io",
             facadeIlName = IO_FACADE_IL_NAME,
@@ -593,6 +628,10 @@ internal object DotNetStdlibLibrary {
         ),
         "SharedVariableBox.kt" to ImplementationSource(packageFqName = "kotlin.internal"),
         "SyntheticConstructorMarker.kt" to ImplementationSource(packageFqName = "kotlin.internal"),
+        "ThrowHelpers.kt" to ImplementationSource(
+            packageFqName = "kotlin.internal",
+            facadeIlName = THROW_HELPERS_FACADE_IL_NAME,
+        ),
         "KClasses.kt" to ImplementationSource(
             packageFqName = "kotlin.reflect",
             facadeIlName = KCLASSES_FACADE_IL_NAME,
