@@ -46,6 +46,12 @@
 .class public abstract sealed auto ansi beforefieldinit 'test.genericarrays.rejected.genericArraysRejectedKt'
        extends [mscorlib]System.Object
 {
+  .method public hidebysig static class [mscorlib]System.Array 'valueProjection'(int32[] 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint

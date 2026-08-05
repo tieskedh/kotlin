@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — signed selector sums complete; mutable collection/list foundation selected next**
+- Status: **Active — mutable collection/list foundation and first bulk Common family complete; Set/Map substrate next**
 - ABI foundation: [`../decisions/generic-interface-erased-identity.md`](../decisions/generic-interface-erased-identity.md)
 
 ## Purpose
@@ -54,8 +54,186 @@ Generated and target-private collection shards explicitly share
 `Kotlin.Collections.CollectionsKt`. Callable/accessor-only shards may aggregate into that one
 physical facade. At most one shard may own top-level physical state and its initializer; multiple
 state owners require a separately designed initialization order and are rejected meanwhile.
+Once a generated shard is admitted and assigned to that facade, the complete function closure in
+the shard is physically owned there; there is no second hand-maintained function allowlist which
+can omit private Common helpers. Exact resolution markers remain declaration-suppressed after
+their consuming lowerings.
 
 ## Current admitted product
+
+### Completed mutable collection/list foundation
+
+The completed tranche is a representation and product foundation rather than one more
+leaf-function slice. It landed as one coherent boundary comprising:
+
+- the authoritative `MutableIterator`, `MutableListIterator`, `MutableIterable`,
+  `MutableCollection`, and `MutableList` logical contracts, backed by one non-generic erased CLR
+  TypeDef and slot family per Kotlin-owned interface;
+- the Common `AbstractMutableCollection` and `AbstractMutableList` expect contracts with an
+  actual implementation derived from the shared JS/Native/Wasm algorithm lineage, including
+  mutable iterators, fail-fast `modCount`, range removal, and live mutable sublists;
+- the Common `ArrayList` expect contract and an ordinary Kotlin-owned erased .NET actual with one
+  object-vector state, capacity management, fail-fast iterators and sublists, and read-only builder
+  sealing;
+- the exact Common list factories, size constructors, and `buildList` surface whose complete
+  dependencies become available;
+- separate-DLL physical ABI, stale-runtime rejection, Framework/CoreCLR execution, and a CLR
+  metadata/C# boundary which proves that no BCL generic collection identity is implied; and
+- execution of every dependency-closed upstream stdlib collection test through a real .NET test
+  product, retaining target-owned tests only for physical CLR and product boundaries.
+
+This tranche deliberately tests the accepted generic-class and generic-interface erasure decisions
+at their hardest ordinary stdlib boundary. Mutable return refinements such as
+`MutableIterable.iterator(): MutableIterator` and `MutableList.subList(): MutableList` must be
+satisfied through the general erased-interface and covariant-return bridge machinery; a
+collection-specific dispatch path is forbidden. `MutableCollection.remove` uses the repository's
+shared special-bridge semantics and returns `false` for an incompatible widened argument instead
+of narrowing it before the Kotlin body.
+
+JVM uses host collection implementations but preserves the Common API; JS, Native, and Wasm share
+the Kotlin mutable abstract-base and array-list algorithm lineage. The .NET actual follows that
+lineage. The one necessary CLR adaptation is private storage: an erased Kotlin-owned
+`ArrayList<E>` has no reified CLR `E` token with which to allocate `E[]`, so it stores elements in
+an `object[]`, boxing CLR value elements. KLIB retains `E`, and reads narrow or unbox only at their
+logical use sites. A private `List<object>`, a public `ArrayList<E>` CLR TypeDef, or a second typed
+state would add host identity or recreate the rejected hybrid generic-class model.
+
+JVM's host mapping remains the required counterexample rather than evidence that every target must
+own its collection class. `java.util.List` has erased runtime identity and a protocol close enough
+to Kotlin's `MutableList` for the JVM backend's established name, bridge, and mutability-marker
+mapping; `java.util.Iterator` already separates `hasNext()` from `next()`. Neither CLR candidate
+has that complete match. `System.Collections.Generic.List<T>` makes its constructed generic
+identity observable, while legacy non-generic `System.Collections.ArrayList` implements
+`IEnumerator.MoveNext()`/`Current`, returns an index from `Add(object)`, and returns `void` from
+`Remove(object)`. It therefore cannot fill the Kotlin erased virtual slots without pervasive
+compiler call rewriting and iterator adapters, and it supplies no modern typed C# surface in
+return. Using either BCL class as private storage would still require the Kotlin owner and is a
+removable implementation choice, not a reason to change its runtime identity. This is why the
+.NET actual follows the JS/Native/Wasm owned-class precedent after explicitly testing and rejecting
+the JVM-style host mapping.
+
+Capacity overflow follows the Native/Wasm algorithm and throws Common `OutOfMemoryError` before
+reading the supplied collection. The exact CLR carrier is `System.OutOfMemoryException`, as owned
+by the classified-exception ADR. Substituting an available argument exception would make the
+target implementation, rather than Common, authoritative.
+
+The same foundation includes general open generic-vararg materialization because the authoritative
+Common factories use `vararg T`. Like JVM, Native, Wasm, and JS, .NET must support omitted,
+literal, spread, and forwarded generic varargs rather than hand-writing factory bodies. The CLR can
+represent a method-owned `vararg T` exactly as `T[]`: `newarr !!T`, `ldelem !!T`, and `stelem !!T`
+work for both reference- and value-type substitutions. This is a truthful CLR capability owned by
+the method and does not reintroduce CLR-generic identity for Kotlin-owned classes. The physical
+signature authority reads the vararg marker itself: pre-lowering KLIB still spells the parameter
+as source-level `Array<out T>`, whereas both producer CIL and separate consumer calls must use the
+normalized invariant `T[]`. Treating that declaration as an ordinary bounded output projection
+would compile same-module calls but fail separate execution with a missing method.
+
+Common `listOfNotNull` also requires the general nullable method-parameter smartcast. For
+`<T : Any>(value: T?)`, the logical null check narrows the read to `T`, while the open nullable
+parameter uses the accepted boxed-or-null `object` slot. The CLR recovery is `unbox.any !!T`, the
+single operation that checks a reference substitution and unboxes a value substitution. This is a
+frontend-proven generic null-narrowing rule, not a collection helper or an unchecked object cast.
+
+Common `ifEmpty` exercises a second general method-generic boundary: `C : R`. ECMA-335 can retain
+that relative method constraint directly. The codegen model must keep the positional relationship
+and widen the same `C` value to `R` only when that constraint proves it. The physical conversion is
+`box C; unbox.any R`, not merely `box C`: `R` can also be a value-type substitution, so its local
+or return slot must receive an actual `R` value. Unrelated open parameters remain rejected. This
+preserves receiver identity and avoids a Common-specific cast or wrapper.
+
+The foundation does not add `IEnumerable<T>`, `IList<T>`, or another BCL capability. Interop
+evidence must instead show both truthful sides: imported CLR generic collections keep their native
+constructed identity, while Kotlin-owned mutable collections expose only their erased low-level
+CLR contract until a separate explicit adapter/export feature is selected. This keeps later
+adapter work removable and prevents it from determining Kotlin runtime identity.
+
+The bootstrap generator now admits every Common collection-template
+variant whose dependency closure consists only of the already published read-only foundation,
+this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
+The exact inventory is generator-owned and fail-closed. Set/Map, ranges as public values,
+sequences, random/sorting, reified operations, reflection, and unsigned families remain excluded
+when they introduce an independent dependency rather than being approximated or copied.
+
+The first bulk admission is intentionally collection-facing and homogeneous. It includes the
+complete dependency-closed Iterable/List variants of:
+
+- indexed iteration plus the authoritative `IndexedValue`, `Iterators.kt`, and `Iterables.kt`
+  source closure;
+- `elementAtOrElse`/`getOrElse`, drop/take and predicate filtering, including generic mutable
+  destinations and nullable filtering;
+- collection snapshots, mutable snapshots, and primitive-array snapshots;
+- map/flatMap and indexed/not-null/destination variants whose transform returns `Iterable` rather
+  than `Sequence`;
+- running fold/reduce and their indexed aliases;
+- in-place mutable-list reverse and Iterable reversed snapshots;
+- partition, plus/minus for single, Iterable, or Array operands, and zip/zipWithNext for Iterable
+  or Array operands; and
+- every non-Sequence mutable-collection helper needed by those bodies, including array/Iterable
+  bulk mutation and first/last removal.
+
+The authoritative `Pair` and `Triple` source used by partitioning and zipping carries Common's
+internal `JsImplicitExport(Boolean)` directive. The bootstrap source product retains that exact
+declaration and both applications in KLIB. Like the existing optional `JsName` expectation, its
+declaration lives in the resolution-only `kotlin.js` shard and receives no .NET TypeDef or CLR
+custom-attribute row: the payload controls JS declaration-file export and has no truthful .NET
+meaning. This does not admit valued annotation classes generally; user/runtime construction,
+Common value semantics, CLR value encoding, foreign import, and annotation reflection remain one
+separate feature boundary. Dropping the applications from `Tuples.kt`, inventing a parameterless
+stub, or treating this JS compiler directive as a CLR attribute would make target source rather
+than Common authoritative.
+
+`Pair`, `Triple`, `IndexedValue`, `IndexingIterable`, and `IndexingIterator` are ordinary
+Kotlin-owned classes in the stdlib assembly. Generic members and classes use the already accepted
+erased Kotlin runtime ABI; `Tuples.kt` follows JVM's file-facade ownership as `Kotlin.TuplesKt`,
+without implying a CLR-generic `Pair<A, B>` surface. Anonymous and local callable classes created
+inside an admitted stdlib shard remain owned by that same shard after closure conversion, rather
+than leaking into the user assembly. This is source-product partitioning, not a collection- or
+lambda-specific constructor path.
+
+The array-valued InlineOnly mutable operators expose a CLR-only inliner boundary rather than a
+collection exception. Type inference through `MutableCollection<in T>` can widen the inliner's
+logical parameter temporary while the supplied Kotlin array remains an exact value vector. The
+backend therefore preserves exact array storage provenance through immutable compiler-generated
+inline temporaries and widens only at the already selected projected `System.Array` consumer.
+User locals, invariant ABI and writable destinations receive no such widening.
+
+This batch is one compiler-foundation test: it combines erased class and interface dispatch,
+method-owned CLR generics, relative constraints, projected arrays, nullable type-parameter
+recovery, inline non-local control flow, data classes, anonymous generic classes, and
+cross-library inlining. Array-receiver overloads are not silently bundled into this
+collection-facing batch; they remain owned by the array product and may be admitted as a separate
+homogeneous source family. Sequence, Set/Map, sorting/random, range-signature, reified, reflection,
+and unsigned variants fail closed outside the batch.
+
+The first shared semantic-test product is deliberately built from repository-owned sources rather
+than a .NET transcription. Its generator projects the exact Common `Test` expectation,
+`assertEquals`, `Asserter`, `messagePrefix`, `AssertionErrorWithCause`, and `DefaultAsserter`
+closure into a staged `Kotlin.Test.dll`; the .NET source supplies only the parameterless CLR marker,
+default-asserter selection, and exception-construction actual. The existing
+`libraries/stdlib/test/collections/IteratorsTest.kt` is then compiled unchanged against a portable
+stdlib and that test product and executed on Framework CLR and CoreCLR. The test also forces the
+exact Common assertion failure message and verifies that `@Test` becomes a real CLR custom
+attribute. This proves the upstream-test path and the portable producer/consumer ABI; it does not
+claim the complete kotlin.test API or an external test-framework adapter yet.
+
+Several bodies use scalar dependencies that are smaller than the independently parked range
+product. Exact Common `require`, `Int.coerceAtLeast`, and two-argument `Int.minOf` are admitted;
+the last keeps its generated Common expect plus the same narrow actual comparison used by the
+mature non-JVM targets. `optimizeReadOnlyList` is extracted from its authoritative Common owner.
+
+`drop` and `takeLast` spell counted implementation loops with `Int.until`, the exact
+random-access mutable-list filter compacts its tail with `Int.downTo`, and selected generic-array
+search spells `for (index in indices)`. Publishing those calls
+would publish `IntRange`/`IntProgression`, which are outside this batch. The bootstrap sources
+therefore own private `kotlin.collections.until` and `downTo` resolution markers plus the existing
+private generic `Array.indices` marker. The general .NET for-loop lowering consumes those exact
+markers as zero-based array-size, end-exclusive ascending, and inclusive descending counted loops
+before code generation. Receivers and bounds are evaluated once; `index < size`,
+`first < endExclusive`, and `last <= first` are the respective continuation/emptiness tests; and
+no range/progression object or callable survives. A public helper, arbitrary user-defined
+lookalike, `step`, Long progression, or range value remains rejected. These are temporary
+source-product resolution markers, not target-authored replacement bodies for Common collection
+functions.
 
 ### Builder and Common abstract-base foundation
 
@@ -114,13 +292,13 @@ the Kotlin-owned erased interfaces and would add another identity layer.
 
 ### Output-projected generic arrays
 
-`Array<out E>` retains the physical `E[]` vector and KLIB projection metadata. CLR reference-vector
-covariance can represent `Array<Derived> -> Array<out Base>` without copying. CLR value vectors are
-invariant, so `Array<Int> -> Array<out Any>` is rejected rather than boxed, copied, or emitted as
-invalid IL. `Array<Int>.asList()` remains supported at exact element type and retains its `int32[]`.
+`Array<out E>` retains the original exact vector object through a physical `System.Array` view and
+KLIB projection metadata. Reads recover the KLIB-declared `E`; writes remain projected out. This
+represents `Array<Int> -> Array<out Any?>` without boxing, copying, or invalid `int32[] -> object[]`
+IL, while an invariant `Array<Int>` remains the exact `int32[]` carrier.
 
-Input and star projections need their own truthful carrier rules and remain outside this product
-boundary.
+Star projection uses the separately selected erased `Any?` read contract over the same physical
+base. Input projections still need a truthful write carrier and remain outside this boundary.
 
 ### Indexed optional access
 
@@ -319,6 +497,12 @@ fixed Function2/Function3 invocation, `checkIndexOverflow`, the classified physi
 `UnsupportedOperationException`, and ordinary cross-library inlining are already published. No
 builder, annotation-class representation, enum, reflection token, reified operation, or new
 carrier is selected here.
+
+The direct erased Function2/Function3 fallback is part of that evidence, not merely the optional
+exact callable capability. A foreign or older implementation returns `object`; after that checked
+recovery, every initialization or assignment from `T` to the relatively constrained `S` must use
+the same verifier-safe `box T; unbox.any S` sequence. Testing only compiler-generated exact
+lambdas would hide an invalid object-in-`S` slot for value substitutions.
 
 The production inliner exposes an empty nullable branch as `Nothing?` followed by an
 `IMPLICIT_CAST` to the substituted result. JVM and Native retain nullable-bottom subtyping through

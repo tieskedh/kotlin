@@ -1920,6 +1920,9 @@ $kClassSupportTypesIl
             |      ldarg.1
             |      ldc.i4.s 21
             |      beq EC_KotlinNothingValue
+            |      ldarg.1
+            |      ldc.i4.s 22
+            |      beq EC_OutOfMemory
             |      br EC_False
             |
             |    EC_Exception:
@@ -1981,6 +1984,10 @@ $kClassSupportTypesIl
             |    EC_KotlinNothingValue:
             |      ldarg.0
             |      isinst Kotlin.KotlinNothingValueException
+            |      br EC_MatchedObject
+            |    EC_OutOfMemory:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.OutOfMemoryException
             |      br EC_MatchedObject
             |
             |    EC_Error:

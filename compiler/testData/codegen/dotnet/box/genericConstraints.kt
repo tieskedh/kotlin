@@ -86,6 +86,10 @@ private fun <T : Left> widenAny(value: T): Any = value
 
 private fun <T, U> typeParameterBound(value: T): T where T : U = value
 
+private fun <T, U> widenToTypeParameterBound(value: T): U where T : U = value
+
+private fun <T, U, V> widenToTransitiveBound(value: T): V where T : U, U : V = value
+
 private class BoundBox<T>(val value: T) where T : Left, T : Right {
     fun total(): Int = value.left(value.right)
 }
@@ -110,6 +114,10 @@ fun box(): String {
     if (typeParameterBound<Impl, Left>(value) !== value) {
         return "fail: type-parameter bound"
     }
+    val relative: Left = widenToTypeParameterBound<Impl, Left>(value)
+    if (relative !== value) return "fail: relative type-parameter widening"
+    val transitive: Any = widenToTransitiveBound<Impl, Left, Any>(value)
+    if (transitive !== value) return "fail: transitive type-parameter widening"
 
     if (BoundBox(value).total() != 10) return "fail: class constraint"
     if (BoundBox(Other()).total() != 12) return "fail: second instantiation"

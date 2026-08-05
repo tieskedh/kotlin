@@ -11,8 +11,9 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: exact Common `Iterable.onEach`/`onEachIndexed` with
-  same-receiver method-generic return and erased-interface constraints
+- Last completed feature: one erased mutable collection/list/`ArrayList`
+  runtime foundation, the dependency-closed Common collection family it
+  unlocks, and the first unchanged upstream stdlib test product
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -20,37 +21,54 @@ This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
 stdlib. The target is not close to 98% feature-complete: valued annotations
 and annotation reflection, `KType`/member reflection, reified public APIs and
-enum helpers, value classes, coroutines, ordinary mutable collections plus
-broad Set/Map production, and Gradle/KMP product integration remain substantial
-open programmes.
+enum helpers, value classes, coroutines, broad Set/Map production, and
+Gradle/KMP product integration remain substantial open programmes.
 
 ## Current green gate
 
-The current same-receiver collection production head passed:
+The current mutable-collection/list production head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The JUnit audit covered 24 fresh XML files and 1066 tests:
+The JUnit audit covered 24 fresh XML files and 1071 tests, written between
+2026-08-05 21:04 and 21:29 local time:
 
-- 958 FIR, IL-text, and box tests
+- 962 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 87 library-integration tests
+- 88 library-integration tests
 - zero failures, errors, or skips
 
-Common `Iterable.onEach` and `onEachIndexed` now use their exact generated
-`apply`-based bodies and preserve the static `C : Iterable<T>` result plus the
-identical receiver object. The CLR method keeps `C` as an open generic method
-parameter and records the one erased Kotlin `Iterable` owner as its truthful
-physical constraint; KLIB retains the complete `Iterable<T>` relationship.
-Shared inlining may expose that receiver through the erased bound before the
-return, so CIL recovers the proven original `C` with `unbox.any C` rather than
-weakening the result, wrapping the object, or introducing a closed generic
-interface. The gate covers custom subtypes, identity, empty/nullable/widened
-values, mutation, callback and iterator failures, non-local returns, both
-frontends and runtimes, separate and installed consumers, physical fallbacks,
-and handwritten CIL.
+`MutableIterator`, `MutableCollection`, `MutableList`, Common abstract mutable
+bases, and Kotlin `ArrayList<E>` now use one declaration-erased CLR owner and
+virtual ABI per Kotlin declaration. `ArrayList` follows the JS/Native/Wasm
+owned-class lineage with one object-vector state, fail-fast iterators, live
+sublists, capacity management, and builder sealing. The JVM host-mapping
+counterexample was evaluated explicitly: CLR `List<T>` has constructed runtime
+identity, while legacy `System.Collections.ArrayList` has incompatible
+enumeration and mutation slots and supplies no typed C# surface.
+
+The bootstrap generator admits the complete dependency-closed Common
+Iterable/List transformation family unlocked by that substrate rather than
+target-authored algorithms. It covers filtering, mapping, flat mapping,
+snapshots, drop/take, running fold/reduce, reverse, partition, plus/minus,
+zip, mutable destinations, and their indexed/not-null variants. A staged
+Common `Kotlin.Test.dll` compiles the repository's existing `IteratorsTest.kt`
+unchanged and executes it against one portable stdlib on Framework CLR and
+CoreCLR.
+
+The tranche also closes the general compiler boundaries exposed by those
+sources: exact method-generic `vararg T` ABI across DLLs, identity-preserving
+`Array<out E>` through `System.Array`, nullable open-parameter recovery,
+relative method constraints `T : S`, erased-owner covariant bridges, inline
+array provenance, counted range-marker loops, and stdlib source-product
+ownership. Retained foreign MethodDefs remain physical authority when their
+flexible Kotlin array view differs: an exact Kotlin SZARRAY override fills the
+foreign slot directly and never receives an invalid `System.Array`
+MethodImpl. The gate covers both frontends, both runtime profiles, exact IL,
+portable/separate/installed products, C# metadata, stale schema/runtime
+rejection, and hostile callback/iterator/control-flow cases.
 
 All four PSI/LightTree and Framework/CoreCLR runners execute the target-owned
 contracts/scope corpus plus three selected upstream contract tests. The test
@@ -567,14 +585,14 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Perform the deep mutable-collection/list foundation audit as one explicit
-   unlock tranche: mutable iterator and collection contracts, Common abstract
-   mutable bases, an ordinary Kotlin `ArrayList`, factories/builders,
-   separate-DLL ABI, C# boundary behavior, and the applicable upstream stdlib
-   test product. Record every Common generator family whose only blocker this
-   foundation removes before implementation.
-2. Implement that foundation and admit the complete dependency-homogeneous
-   Common family set it unlocks; do not resume one-function allowlist growth.
+1. Audit the Set/Map/hash-storage substrate as one explicit unlock tranche:
+   Common interfaces and abstract bases, the shared JS/Native/Wasm
+   `HashMap`/`HashSet` lineage, the JVM host-mapping counterexample, BCL
+   equality/enumeration differences, erased Kotlin ABI, and the complete
+   generator/test family it would release.
+2. Implement that substrate and admit its dependency-homogeneous Common
+   family plus unchanged upstream tests; do not resume one-function allowlist
+   growth or expose implicit BCL `Dictionary<K,V>`/`HashSet<T>` identity.
 3. Extend CLR contract projection only when a new standard attribute has an
    exact Common effect, stable target rule, verified profile identity, and the
    same strip-without-Kotlin-semantic-change evidence as the closed first set.

@@ -89,6 +89,10 @@ fun <T : Any> nonNullBound(value: T): T = value
 
 fun <T, U> typeParameterBound(value: T): T where T : U = value
 
+fun <T, U> widenToTypeParameterBound(value: T): U where T : U = value
+
+fun <T, U, V> widenToTransitiveTypeParameterBound(value: T): V where T : U, U : V = value
+
 fun <T : Any, C : NonNullValue<T>> keepGenericInterfaceBound(value: C): C = value
 
 fun <T, C : Iterable<T>> keepExternalGenericInterfaceBound(value: C): C = value
@@ -121,6 +125,10 @@ fun main() {
     NonNullValueBox("reference").read()
     NonNullValueBox(42).read()
     typeParameterBound<Impl, Left>(value)
+    widenToTypeParameterBound<Impl, Left>(value)
+    widenToTypeParameterBound<Int, Int>(42)
+    widenToTransitiveTypeParameterBound<Impl, Left, Any>(value)
+    widenToTransitiveTypeParameterBound<Int, Int, Int>(42)
     keepGenericInterfaceBound<String, NonNullValueBox<String>>(NonNullValueBox("generic")).read()
     BoundBox(value).total()
 }

@@ -35,7 +35,8 @@ import org.jetbrains.kotlin.types.Variance
  * KProperty0/1/2 and their mutable variants use the same erased-identity rule and inherit the
  * matching FunctionN execution view; their Get/Set slots are Kotlin-owned runtime contracts.
  *
- * Kotlin Iterable, Iterator, Collection, and List use one declaration-erased interface each.
+ * Kotlin read-only and mutable Iterable, Iterator, Collection, and List families use one
+ * declaration-erased interface each.
  * Their object-shaped slots preserve identity across Kotlin projections and value/reference
  * constructions without a second CLR-generic capability ABI. The five currently supported
  * primitive Iterator subclasses still alias the erased Iterator identity until their ordinary
@@ -86,20 +87,56 @@ internal object DotNetRuntimeTypes {
     private val listIteratorBase = listIteratorGenericInterfaceInfo.canonicalClassInfo
     private val listIteratorType = DotNetIlValueType.UserClass(listIteratorBase)
 
+    private val mutableIteratorGenericInterfaceInfo =
+        singleParameterRuntimeInterface("Kotlin.Collections.MutableIterator")
+    private val mutableIteratorBase = mutableIteratorGenericInterfaceInfo.canonicalClassInfo
+    val mutableIteratorType = DotNetIlValueType.UserClass(mutableIteratorBase)
+
+    private val mutableListIteratorGenericInterfaceInfo =
+        singleParameterRuntimeInterface("Kotlin.Collections.MutableListIterator")
+    private val mutableListIteratorBase = mutableListIteratorGenericInterfaceInfo.canonicalClassInfo
+    val mutableListIteratorType = DotNetIlValueType.UserClass(mutableListIteratorBase)
+
     private val iterableGenericInterfaceInfo =
         singleParameterRuntimeInterface("Kotlin.Collections.Iterable")
     private val iterableBase = iterableGenericInterfaceInfo.canonicalClassInfo
     val iterableType = DotNetIlValueType.UserClass(iterableBase)
+
+    private val mutableIterableGenericInterfaceInfo =
+        singleParameterRuntimeInterface("Kotlin.Collections.MutableIterable")
+    private val mutableIterableBase = mutableIterableGenericInterfaceInfo.canonicalClassInfo
+    val mutableIterableType = DotNetIlValueType.UserClass(mutableIterableBase)
 
     private val collectionGenericInterfaceInfo =
         singleParameterRuntimeInterface("Kotlin.Collections.Collection")
     private val collectionBase = collectionGenericInterfaceInfo.canonicalClassInfo
     private val collectionType = DotNetIlValueType.UserClass(collectionBase)
 
+    private val mutableCollectionGenericInterfaceInfo =
+        singleParameterRuntimeInterface("Kotlin.Collections.MutableCollection")
+    private val mutableCollectionBase = mutableCollectionGenericInterfaceInfo.canonicalClassInfo
+    val mutableCollectionType = DotNetIlValueType.UserClass(mutableCollectionBase)
+
     private val listGenericInterfaceInfo =
         singleParameterRuntimeInterface("Kotlin.Collections.List")
     private val listBase = listGenericInterfaceInfo.canonicalClassInfo
     val listType = DotNetIlValueType.UserClass(listBase)
+
+    private val mutableListGenericInterfaceInfo =
+        singleParameterRuntimeInterface("Kotlin.Collections.MutableList")
+    private val mutableListBase = mutableListGenericInterfaceInfo.canonicalClassInfo
+    val mutableListType = DotNetIlValueType.UserClass(mutableListBase)
+
+    init {
+        listIteratorBase.interfaces = listOf(iteratorType)
+        mutableIteratorBase.interfaces = listOf(iteratorType)
+        mutableListIteratorBase.interfaces = listOf(listIteratorType, mutableIteratorType)
+        mutableIterableBase.interfaces = listOf(iterableType)
+        collectionBase.interfaces = listOf(iterableType)
+        mutableCollectionBase.interfaces = listOf(collectionType, mutableIterableType)
+        listBase.interfaces = listOf(collectionType)
+        mutableListBase.interfaces = listOf(listType, mutableCollectionType)
+    }
 
     private data class RuntimeGenericInterfaceMethodNames(
         val canonical: String,
@@ -121,9 +158,20 @@ internal object DotNetRuntimeTypes {
         "nextIndex" to RuntimeGenericInterfaceMethodNames("NextIndex"),
         "previousIndex" to RuntimeGenericInterfaceMethodNames("PreviousIndex"),
     )
+    private val mutableIteratorMethods = mapOf(
+        "remove" to RuntimeGenericInterfaceMethodNames("Remove"),
+    )
+    private val mutableListIteratorMethods = mapOf(
+        "hasNext" to RuntimeGenericInterfaceMethodNames("HasNext"),
+        "next" to RuntimeGenericInterfaceMethodNames("Next"),
+        "remove" to RuntimeGenericInterfaceMethodNames("Remove"),
+        "set" to RuntimeGenericInterfaceMethodNames("Set"),
+        "add" to RuntimeGenericInterfaceMethodNames("Add"),
+    )
     private val iterableMethods = mapOf(
         "iterator" to RuntimeGenericInterfaceMethodNames("GetIterator"),
     )
+    private val mutableIterableMethods = iterableMethods
     private val collectionMethods = iterableMethods + mapOf(
         "get_size" to RuntimeGenericInterfaceMethodNames(
             canonical = "get_Size",
@@ -135,6 +183,14 @@ internal object DotNetRuntimeTypes {
         ),
         "containsAll" to RuntimeGenericInterfaceMethodNames("ContainsAll"),
     )
+    private val mutableCollectionMethods = mutableIterableMethods + mapOf(
+        "add" to RuntimeGenericInterfaceMethodNames("Add"),
+        "remove" to RuntimeGenericInterfaceMethodNames("RemoveErased"),
+        "addAll" to RuntimeGenericInterfaceMethodNames("AddAll"),
+        "removeAll" to RuntimeGenericInterfaceMethodNames("RemoveAll"),
+        "retainAll" to RuntimeGenericInterfaceMethodNames("RetainAll"),
+        "clear" to RuntimeGenericInterfaceMethodNames("Clear"),
+    )
     private val listMethods = collectionMethods + mapOf(
         "get" to RuntimeGenericInterfaceMethodNames("Get"),
         "indexOf" to RuntimeGenericInterfaceMethodNames(
@@ -143,6 +199,18 @@ internal object DotNetRuntimeTypes {
         "lastIndexOf" to RuntimeGenericInterfaceMethodNames(
             canonical = "LastIndexOfErased",
         ),
+        "listIterator" to RuntimeGenericInterfaceMethodNames("GetListIterator"),
+        "subList" to RuntimeGenericInterfaceMethodNames("SubList"),
+    )
+    private val mutableListMethods = mapOf(
+        "add" to RuntimeGenericInterfaceMethodNames("Add"),
+        "remove" to RuntimeGenericInterfaceMethodNames("RemoveErased"),
+        "addAll" to RuntimeGenericInterfaceMethodNames("AddAll"),
+        "removeAll" to RuntimeGenericInterfaceMethodNames("RemoveAll"),
+        "retainAll" to RuntimeGenericInterfaceMethodNames("RetainAll"),
+        "clear" to RuntimeGenericInterfaceMethodNames("Clear"),
+        "set" to RuntimeGenericInterfaceMethodNames("Set"),
+        "removeAt" to RuntimeGenericInterfaceMethodNames("RemoveAt"),
         "listIterator" to RuntimeGenericInterfaceMethodNames("GetListIterator"),
         "subList" to RuntimeGenericInterfaceMethodNames("SubList"),
     )
@@ -156,17 +224,37 @@ internal object DotNetRuntimeTypes {
             info = listIteratorGenericInterfaceInfo,
             methods = listIteratorMethods,
         ),
+        "kotlin.collections.MutableIterator" to RuntimeGenericInterfaceDescriptor(
+            info = mutableIteratorGenericInterfaceInfo,
+            methods = mutableIteratorMethods,
+        ),
+        "kotlin.collections.MutableListIterator" to RuntimeGenericInterfaceDescriptor(
+            info = mutableListIteratorGenericInterfaceInfo,
+            methods = mutableListIteratorMethods,
+        ),
         "kotlin.collections.Iterable" to RuntimeGenericInterfaceDescriptor(
             info = iterableGenericInterfaceInfo,
             methods = iterableMethods,
+        ),
+        "kotlin.collections.MutableIterable" to RuntimeGenericInterfaceDescriptor(
+            info = mutableIterableGenericInterfaceInfo,
+            methods = mutableIterableMethods,
         ),
         "kotlin.collections.Collection" to RuntimeGenericInterfaceDescriptor(
             info = collectionGenericInterfaceInfo,
             methods = collectionMethods,
         ),
+        "kotlin.collections.MutableCollection" to RuntimeGenericInterfaceDescriptor(
+            info = mutableCollectionGenericInterfaceInfo,
+            methods = mutableCollectionMethods,
+        ),
         "kotlin.collections.List" to RuntimeGenericInterfaceDescriptor(
             info = listGenericInterfaceInfo,
             methods = listMethods,
+        ),
+        "kotlin.collections.MutableList" to RuntimeGenericInterfaceDescriptor(
+            info = mutableListGenericInterfaceInfo,
+            methods = mutableListMethods,
         ),
     )
 

@@ -207,20 +207,28 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
      * decorative metadata, `!n`/`!!n` indices are authoritative (probe-verified, `genprobe_s1`:
      * the callsite signature keeps the `!!n` slots verbatim while only the `<...>` list is
      * substituted), which is why equality here is by index and kind alone. [upperBounds] carries
-     * the stage-2 module-local class/interface constraints without changing token identity. An
-     * unconstrained value supports exactly store/load/pass. A constrained one can additionally
-     * dispatch through a bound with `constrained.` or box to a bound/`object`; it still is not
-     * intrinsically reference-shaped because a CLR caller may instantiate an interface-bound
-     * parameter with a value type.
+     * the stage-2 module-local class/interface constraints without changing token identity, while
+     * [relativeUpperBounds] retains positional `T : U` relationships. An unconstrained value
+     * supports exactly store/load/pass. A constrained one can additionally dispatch through a
+     * bound with `constrained.` or box to a bound/`object`; it still is not intrinsically
+     * reference-shaped because a CLR caller may instantiate an interface-bound parameter with a
+     * value type.
      */
     class TypeParameter(
         val index: Int,
         val isMethodParameter: kotlin.Boolean,
         val upperBounds: List<UserClass> = emptyList(),
+        val relativeUpperBounds: Set<Identity> = emptySet(),
     ) : DotNetIlValueType(if (isMethodParameter) "!!$index" else "!$index") {
+        data class Identity(val index: Int, val isMethodParameter: kotlin.Boolean)
+
+        val identity: Identity
+            get() = Identity(index, isMethodParameter)
+
         /** Whether metadata guarantees this parameter is assignable (when boxed) to [expected]. */
         fun isConstrainedTo(expected: DotNetIlValueType): kotlin.Boolean =
-            upperBounds.any { it.isDotNetAssignableTo(expected) }
+            upperBounds.any { it.isDotNetAssignableTo(expected) } ||
+                    (expected is TypeParameter && expected.identity in relativeUpperBounds)
 
         override fun equals(other: Any?): kotlin.Boolean =
             other is TypeParameter && other.index == index && other.isMethodParameter == isMethodParameter

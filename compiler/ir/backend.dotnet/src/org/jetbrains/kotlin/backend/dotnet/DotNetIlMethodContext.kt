@@ -354,13 +354,16 @@ internal class DotNetIlMethodContext(
         return slot
     }
 
-    fun declareLocal(variable: IrVariable): DotNetIlSlot.Local {
+    fun declareLocal(
+        variable: IrVariable,
+        physicalTypeOverride: DotNetIlValueType? = null,
+    ): DotNetIlSlot.Local {
         slots[variable.symbol]?.let { existingSlot ->
             return existingSlot as? DotNetIlSlot.Local
                 ?: dotNetUnsupported("local '${variable.name.asString()}' shadows a parameter")
         }
 
-        val type = typeMapper.toDotNetIlValueType(variable.type)
+        val type = physicalTypeOverride ?: typeMapper.toDotNetIlValueType(variable.type)
             ?: dotNetUnsupported("local '${variable.name.asString()}' has unsupported type ${variable.type.render()}")
         val slot = DotNetIlSlot.Local(
             index = localSlots.size,

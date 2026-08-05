@@ -495,6 +495,22 @@ IL_tryEnd_0:
     ldarg.0
     ret
   }
+  .method public hidebysig static !!1 'widenToTypeParameterBound'<(!!1) 'T', 'U'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    box !!0
+    unbox.any !!1
+    ret
+  }
+  .method public hidebysig static !!2 'widenToTransitiveTypeParameterBound'<(!!1) 'T', (!!2) 'U', 'V'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    box !!0
+    unbox.any !!2
+    ret
+  }
   .method public hidebysig static !!1 'keepGenericInterfaceBound'<'T', (class 'test.constraints.NonNullValue') 'C'>(!!1 'value') cil managed
   {
     .maxstack 1
@@ -627,6 +643,18 @@ IL_whileEnd_1:
     pop
     ldloc.0
     call !!0 'test.constraints.genericConstraintsKt'::'typeParameterBound'<class 'test.constraints.Impl', class 'test.constraints.Left'>(!!0)
+    pop
+    ldloc.0
+    call !!1 'test.constraints.genericConstraintsKt'::'widenToTypeParameterBound'<class 'test.constraints.Impl', class 'test.constraints.Left'>(!!0)
+    pop
+    ldc.i4 42
+    call !!1 'test.constraints.genericConstraintsKt'::'widenToTypeParameterBound'<int32, int32>(!!0)
+    pop
+    ldloc.0
+    call !!2 'test.constraints.genericConstraintsKt'::'widenToTransitiveTypeParameterBound'<class 'test.constraints.Impl', class 'test.constraints.Left', object>(!!0)
+    pop
+    ldc.i4 42
+    call !!2 'test.constraints.genericConstraintsKt'::'widenToTransitiveTypeParameterBound'<int32, int32, int32>(!!0)
     pop
     ldstr "generic"
     newobj instance void 'test.constraints.NonNullValueBox'::.ctor(object)

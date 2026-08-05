@@ -37,6 +37,12 @@ private fun strings(vararg values: String?): String =
 private fun objects(vararg values: Any?): String =
     values[0].toString() + ":" + values[1].toString() + ":" + values[2].toString()
 
+private fun <T> genericCount(vararg values: T): Int = values.size
+
+private fun <T> genericFirst(vararg values: T): T = values[0]
+
+private fun <T> genericForward(vararg values: T): T = genericFirst(*values)
+
 private class Item(val value: Int)
 
 private fun items(vararg values: Item?): Int =
@@ -142,5 +148,9 @@ fun box(): String {
 
     fun local(vararg values: Int): Int = sum(*values)
     if (local(8, *intArrayOf(9)) != 17) return "fail 26: local"
+    if (genericCount<Int>() != 0) return "fail 27: empty generic vararg"
+    if (genericFirst(40, 41) != 40) return "fail 28: value generic vararg"
+    if (genericForward("left", *arrayOf("right")) != "left") return "fail 29: reference generic spread"
+    if (genericForward<String?>(null, "value") != null) return "fail 30: nullable generic vararg"
     return "OK"
 }

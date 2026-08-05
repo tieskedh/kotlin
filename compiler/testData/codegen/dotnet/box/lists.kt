@@ -116,6 +116,18 @@ private fun sideEffectingNullableBottom(): Nothing? {
     return null
 }
 
+private class OverflowSizedCollection : AbstractCollection<Int>() {
+    var iteratorCalls: Int = 0
+
+    override val size: Int
+        get() = Int.MAX_VALUE
+
+    override fun iterator(): Iterator<Int> {
+        iteratorCalls++
+        throw Error("capacity overflow must fail before iteration")
+    }
+}
+
 fun box(): String {
     val ints: List<Int> = PairList(7, 9)
     val intsWide: List<Any?> = ints
@@ -260,6 +272,100 @@ fun box(): String {
     if (sideEffectingString != null || sideEffectingInt != null || nullableBottomCalls != 2) {
         return "fail 48: side-effecting nullable bottom widening"
     }
+
+    val mutable = mutableListOf(1, 2, 3)
+    if (mutable.size != 3 || mutable.toString() != "[1, 2, 3]") return "fail 49: mutable factory"
+    mutable.add(1, 7)
+    if (mutable.toString() != "[1, 7, 2, 3]") return "fail 50: indexed add"
+    if (mutable.set(2, 8) != 2 || mutable.removeAt(0) != 1) return "fail 51: set/removeAt"
+    if (mutable.toString() != "[7, 8, 3]") return "fail 52: mutation result"
+    if (!mutable.addAll(listOf(9, 10)) || !mutable.addAll(1, listOf(4, 5))) {
+        return "fail 53: addAll"
+    }
+    if (mutable.toString() != "[7, 4, 5, 8, 3, 9, 10]") return "fail 54: addAll order"
+    if (!mutable.removeAll { it % 2 == 0 } || mutable.toString() != "[7, 5, 3, 9]") {
+        return "fail 55: predicate removeAll"
+    }
+    if (!mutable.retainAll { it >= 5 } || mutable.toString() != "[7, 5, 9]") {
+        return "fail 56: predicate retainAll"
+    }
+
+    val cursor = mutable.listIterator(1)
+    if (cursor.next() != 5) return "fail 57: mutable iterator next"
+    cursor.set(6)
+    cursor.add(8)
+    if (cursor.previous() != 8) return "fail 58: mutable iterator add/previous"
+    cursor.remove()
+    if (mutable.toString() != "[7, 6, 9]") return "fail 59: mutable iterator mutations"
+
+    val stale = mutable.iterator()
+    mutable.add(11)
+    try {
+        stale.next()
+        return "fail 60: fail-fast iterator"
+    } catch (_: ConcurrentModificationException) {
+    }
+
+    val root = arrayListOf(0, 1, 2, 3)
+    val middle = root.subList(1, 3)
+    middle[0] = 10
+    middle.add(20)
+    if (root.toString() != "[0, 10, 2, 20, 3]") return "fail 61: live sublist"
+    val nested = middle.subList(1, 3)
+    if (nested.removeAt(0) != 2 || root.toString() != "[0, 10, 20, 3]") {
+        return "fail 62: nested sublist propagation"
+    }
+
+    val copied = ArrayList(root)
+    copied.ensureCapacity(32)
+    copied.trimToSize()
+    if (copied != root || copied === root) return "fail 63: collection constructor/capacity"
+
+    val overflowSource = OverflowSizedCollection()
+    try {
+        copied.addAll(overflowSource)
+        return "fail 63b: capacity overflow did not throw"
+    } catch (failure: OutOfMemoryError) {
+        if (failure !is Error || overflowSource.iteratorCalls != 0) {
+            return "fail 63c: capacity overflow classification/order"
+        }
+    }
+
+    var escapedBuilder: MutableList<Int>? = null
+    val built = buildList {
+        escapedBuilder = this
+        add(1)
+        add(2)
+    }
+    if (built.toString() != "[1, 2]") return "fail 64: buildList"
+    try {
+        escapedBuilder!!.add(3)
+        return "fail 65: escaped builder remained mutable"
+    } catch (_: UnsupportedOperationException) {
+    }
+
+    if (listOf(4, 5).toString() != "[4, 5]") return "fail 66: listOf vararg"
+    if (listOfNotNull<Int>(null).isNotEmpty() || listOfNotNull(6).toString() != "[6]") {
+        return "fail 67: listOfNotNull"
+    }
+    var defaultCalls = 0
+    val sameNonEmpty: List<Int> = root.ifEmpty {
+        defaultCalls++
+        listOf(99)
+    }
+    if (sameNonEmpty !== root || defaultCalls != 0) return "fail 68: ifEmpty identity"
+    val defaulted: List<Int> = emptyList<Int>().ifEmpty {
+        defaultCalls++
+        listOf(99)
+    }
+    if (defaulted.toString() != "[99]" || defaultCalls != 1) return "fail 69: ifEmpty default"
+
+    val nullableMutable = arrayListOf<Int?>(null, 1)
+    if (!nullableMutable.remove(null) || nullableMutable.toString() != "[1]") {
+        return "fail 70: nullable mutable elements"
+    }
+    mutable.clear()
+    if (mutable.isNotEmpty()) return "fail 71: clear"
 
     return "OK"
 }

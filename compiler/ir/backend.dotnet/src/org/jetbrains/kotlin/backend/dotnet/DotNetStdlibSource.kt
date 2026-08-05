@@ -18,6 +18,18 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/collections/DotNetStdlibCollections.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetAbstractMutableCollection.kt",
+        "dotnet/src/kotlin/collections/DotNetAbstractMutableCollection.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetAbstractMutableList.kt",
+        "dotnet/src/kotlin/collections/DotNetAbstractMutableList.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetArrayList.kt",
+        "dotnet/src/kotlin/collections/DotNetArrayList.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetStringBuilder.kt",
         "dotnet/src/kotlin/text/DotNetStringBuilder.kt",
     ),
@@ -63,6 +75,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "_DotNetBootstrapCollectionFactories.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapCollectionFactories.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "_DotNetBootstrapAppendable.kt",
         "dotnet/common/src/generated/_DotNetBootstrapAppendable.kt",
         isCommon = true,
@@ -103,8 +120,28 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "_DotNetBootstrapMutableCollections.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapMutableCollections.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapPreconditions.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapPreconditions.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "Exceptions.kt",
         "common-non-jvm/src/kotlin/Exceptions.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapOutOfMemoryError.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapOutOfMemoryError.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapScalarBounds.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapScalarBounds.kt",
+        isCommon = true,
     ),
     DotNetStdlibSourceResource(
         "SharedVariableBox.kt",
@@ -179,6 +216,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "Tuples.kt",
+        "src/kotlin/util/Tuples.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "AbstractCollection.kt",
         "src/kotlin/collections/AbstractCollection.kt",
         isCommon = true,
@@ -186,6 +228,36 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "AbstractList.kt",
         "src/kotlin/collections/AbstractList.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "IndexedValue.kt",
+        "src/kotlin/collections/IndexedValue.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Iterables.kt",
+        "src/kotlin/collections/Iterables.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Iterators.kt",
+        "src/kotlin/collections/Iterators.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "AbstractMutableCollection.kt",
+        "common/src/kotlin/collections/AbstractMutableCollection.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "AbstractMutableList.kt",
+        "common/src/kotlin/collections/AbstractMutableList.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "ArrayList.kt",
+        "common/src/kotlin/collections/ArrayList.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

@@ -41,6 +41,7 @@ import org.jetbrains.kotlin.ir.types.IrStarProjection
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
+import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
@@ -49,6 +50,8 @@ import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
+import org.jetbrains.kotlin.ir.util.defaultType as classDefaultType
+import org.jetbrains.kotlin.ir.util.erasedUpperBound
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
@@ -59,6 +62,11 @@ import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
+import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
+import org.jetbrains.kotlin.types.Variance
 
 internal val DOTNET_COVARIANT_RETURN_BRIDGE: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_COVARIANT_RETURN_BRIDGE")
@@ -110,7 +118,12 @@ internal class DotNetCovariantReturnBridgeLowering(
                 adapter.overriddenSymbols = adapter.overriddenSymbols.filter { overridden ->
                     val slot = overridden.owner
                     adapter.returnType.hasSameClrCarrierAs(
-                        slot.returnTypeIn(owner, adapter.typeParameters),
+                        slot.typeIn(
+                            slot.returnType,
+                            owner,
+                            adapter.typeParameters,
+                            keepOwnerTypeParameters = false,
+                        ),
                     )
                 }
                 if (adapter.overriddenSymbols.isEmpty()) {
@@ -149,12 +162,28 @@ internal class DotNetCovariantReturnBridgeLowering(
             // physical class slot is available through its resolved declaration. Include both
             // sets before filtering; otherwise an erased abstract base's object-return slot can
             // survive without an implementation on a concrete covariant leaf.
-            val slots = (target.allOverridden() + directClassSlots)
+            val allPhysicalSlots = (target.allOverridden() + directClassSlots)
                 .filter { slot ->
-                    isOrdinaryPhysicalSlot(slot) &&
-                            ((slot.parent as? IrClass)?.isInterface == true || slot in directClassSlots)
+                    isOrdinaryPhysicalSlot(slot)
                 }
                 .distinctBy { it.symbol }
+            val nearestClassSlots = allPhysicalSlots
+                .filter { slot -> (slot.parent as? IrClass)?.isInterface != true }
+                .filter { slot ->
+                    val slotOwner = slot.parent as IrClass
+                    allPhysicalSlots.none { candidate ->
+                        if (candidate == slot) return@none false
+                        val candidateOwner = candidate.parent as? IrClass ?: return@none false
+                        !candidateOwner.isInterface && candidateOwner.isSubclassOf(slotOwner)
+                    }
+                }
+            // A covariant declaration must fill the nearest physical class slot even when FIR
+            // records that slot only transitively through an inherited fake override. More
+            // distant class slots are already reached through the nearest slot's own MethodImpl
+            // bridge, while every interface slot remains independently owned by its TypeDef.
+            val slots = (allPhysicalSlots.filter { slot ->
+                (slot.parent as? IrClass)?.isInterface == true
+            } + nearestClassSlots).distinctBy { it.symbol }
             for (slot in slots) {
                 if (owner.inheritsInterfaceCovariantBridgeFor(slot)) continue
                 addBridgeIfRequired(owner, slot, target)
@@ -194,14 +223,50 @@ internal class DotNetCovariantReturnBridgeLowering(
         target: IrSimpleFunction,
     ) {
         if (slot.typeParameters.size != target.typeParameters.size) return
+        // A foreign slot's retained CLR MethodDef is the physical authority. Its Kotlin view can
+        // be flexible (`Array<out E>?`) even when the exact slot and the rigid Kotlin override
+        // are both the same SZARRAY. Reinterpreting that logical projection through the ordinary
+        // Kotlin type mapper would manufacture a System.Array MethodImpl whose body signature no
+        // longer matches the foreign declaration. FIR2IR has already accepted this exact override
+        // shape; suppress a bridge only after rechecking the complete retained physical signature.
+        if (slot.hasSameImportedClrSignatureAs(target, owner)) return
         val slotOwner = slot.parent as? IrClass ?: return
-        val requiresErasedClassOverrideBridge =
+        val keepsErasedSlotOwnerParameters =
             !slotOwner.isInterface &&
-                    (slotOwner.isDotNetGenericClassDeclaration || externalDeclarations.hasGenericClass(slotOwner)) &&
-                    slot.signatureReferencesTypeParameterOf(slotOwner)
-        val slotReturnType = slot.returnTypeIn(owner, target.typeParameters)
-        val targetReturnType = target.returnTypeIn(owner, target.typeParameters)
-        if (!requiresErasedClassOverrideBridge && slotReturnType.hasSameClrCarrierAs(targetReturnType)) return
+                    (slotOwner.isDotNetGenericClassDeclaration || externalDeclarations.hasGenericClass(slotOwner))
+        val slotReturnType = slot.typeIn(
+            slot.returnType,
+            owner,
+            target.typeParameters,
+            keepOwnerTypeParameters = keepsErasedSlotOwnerParameters,
+        )
+        val targetReturnType = target.typeIn(
+            target.returnType,
+            owner,
+            target.typeParameters,
+            keepOwnerTypeParameters = false,
+        )
+        val slotParameters = slot.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
+        val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
+        val hasDifferentParameterCarrier = slotParameters.size != targetParameters.size ||
+                slotParameters.zip(targetParameters).any { pair ->
+                    val slotParameter = pair.first
+                    val targetParameter = pair.second
+                    val slotType = slot.typeIn(
+                        slotParameter.type,
+                        owner,
+                        target.typeParameters,
+                        keepOwnerTypeParameters = keepsErasedSlotOwnerParameters,
+                    )
+                    val targetType = target.typeIn(
+                        targetParameter.type,
+                        owner,
+                        target.typeParameters,
+                        keepOwnerTypeParameters = false,
+                    )
+                    !slotType.hasSameClrCarrierAs(targetType)
+                }
+        if (!hasDifferentParameterCarrier && slotReturnType.hasSameClrCarrierAs(targetReturnType)) return
         if (context.covariantReturnBridges.any { existing ->
                 existing.owner == owner && existing.inheritedMember == slot && existing.target == target
             }
@@ -220,21 +285,116 @@ internal class DotNetCovariantReturnBridgeLowering(
         )
     }
 
-    private fun IrSimpleFunction.returnTypeIn(
+    private fun IrSimpleFunction.typeIn(
+        type: IrType,
         owner: IrClass,
         methodParameters: List<org.jetbrains.kotlin.ir.declarations.IrTypeParameter>,
+        keepOwnerTypeParameters: Boolean,
     ): IrType {
-        val declarationOwner = parent as? IrClass ?: return returnType
-        val ownerSubstitutor = declarationOwner.takeIf { it != owner }?.let { declaringClass ->
+        val declarationOwner = parent as? IrClass ?: return type
+        val ownerSubstitutor = declarationOwner.takeIf { it != owner && !keepOwnerTypeParameters }?.let { declaringClass ->
             AbstractIrTypeSubstitutor.forSuperClass(declaringClass.symbol, owner.symbol.defaultType)
         }
-        val ownerSubstituted = ownerSubstitutor?.substitute(returnType) ?: returnType
+        val ownerSubstituted = ownerSubstitutor?.substitute(type) ?: type
         if (typeParameters.isEmpty()) return ownerSubstituted
         val methodSubstitution = typeParameters.zip(methodParameters).associate { pair ->
             pair.first.symbol to pair.second.symbol.defaultType
         }
         return IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
             .substitute(ownerSubstituted)
+    }
+
+    private fun IrSimpleFunction.hasSameImportedClrSignatureAs(
+        target: IrSimpleFunction,
+        owner: IrClass,
+    ): Boolean {
+        val physicalMethod = when (val source = containerSource) {
+            is DotNetClrImportedMethodSource -> source.method
+            is DotNetClrImportedPropertySource -> {
+                val property = correspondingPropertySymbol?.owner ?: return false
+                when (this) {
+                    property.getter -> source.getter
+                    property.setter -> source.setter ?: return false
+                    else -> return false
+                }
+            }
+            else -> return false
+        }
+        val physicalSignature = physicalMethod.signature
+        val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
+        if (physicalSignature.parameterTypes.size != targetParameters.size) return false
+        val targetParameterTypes = targetParameters.map { parameter ->
+            target.typeIn(
+                parameter.type,
+                owner,
+                target.typeParameters,
+                keepOwnerTypeParameters = false,
+            )
+        }
+        if (!targetParameterTypes.zip(physicalSignature.parameterTypes).all { pair ->
+                pair.first.hasImportedClrCarrier(pair.second)
+            }
+        ) {
+            return false
+        }
+        val targetReturnType = target.typeIn(
+            target.returnType,
+            owner,
+            target.typeParameters,
+            keepOwnerTypeParameters = false,
+        )
+        return when (val physicalReturnType = physicalSignature.returnType) {
+            DotNetClrTypeSignature.Void -> targetReturnType.isUnit()
+            else -> targetReturnType.hasImportedClrCarrier(physicalReturnType)
+        }
+    }
+
+    private fun IrType.hasImportedClrCarrier(physicalType: DotNetClrTypeSignature): Boolean =
+        when (physicalType) {
+            is DotNetClrTypeSignature.Primitive ->
+                classOrNull?.owner?.fqNameWhenAvailable?.asString() ==
+                        physicalType.type.kotlinClassifierNameOrNull()
+            is DotNetClrTypeSignature.SzArray -> {
+                val simpleType = this as? IrSimpleType ?: return false
+                if (simpleType.classOrNull?.owner?.fqNameWhenAvailable?.asString() != "kotlin.Array") {
+                    return false
+                }
+                val elementProjection = simpleType.arguments.singleOrNull() as? IrTypeProjection
+                    ?: return false
+                elementProjection.variance == Variance.INVARIANT &&
+                        elementProjection.type.hasImportedClrCarrier(physicalType.elementType)
+            }
+            DotNetClrTypeSignature.Void,
+            DotNetClrTypeSignature.TypedReference,
+            is DotNetClrTypeSignature.Array,
+            is DotNetClrTypeSignature.ByReference,
+            is DotNetClrTypeSignature.FunctionPointer,
+            is DotNetClrTypeSignature.GenericParameter,
+            is DotNetClrTypeSignature.GenericInstance,
+            is DotNetClrTypeSignature.Modified,
+            is DotNetClrTypeSignature.Named,
+            is DotNetClrTypeSignature.Pointer,
+                -> false
+        }
+
+    private fun DotNetClrPrimitiveType.kotlinClassifierNameOrNull(): String? = when (this) {
+        DotNetClrPrimitiveType.BOOLEAN -> "kotlin.Boolean"
+        DotNetClrPrimitiveType.CHAR -> "kotlin.Char"
+        DotNetClrPrimitiveType.INT8 -> "kotlin.Byte"
+        DotNetClrPrimitiveType.INT16 -> "kotlin.Short"
+        DotNetClrPrimitiveType.INT32 -> "kotlin.Int"
+        DotNetClrPrimitiveType.INT64 -> "kotlin.Long"
+        DotNetClrPrimitiveType.FLOAT32 -> "kotlin.Float"
+        DotNetClrPrimitiveType.FLOAT64 -> "kotlin.Double"
+        DotNetClrPrimitiveType.STRING -> "kotlin.String"
+        DotNetClrPrimitiveType.OBJECT -> "kotlin.Any"
+        DotNetClrPrimitiveType.UINT8,
+        DotNetClrPrimitiveType.UINT16,
+        DotNetClrPrimitiveType.UINT32,
+        DotNetClrPrimitiveType.UINT64,
+        DotNetClrPrimitiveType.NATIVE_INT,
+        DotNetClrPrimitiveType.NATIVE_UINT,
+            -> null
     }
 
     private fun createBridge(
@@ -338,6 +498,13 @@ internal class DotNetCovariantReturnBridgeLowering(
     /** Reference nullability erases in CLR metadata; value/nullability and reified arguments do not. */
     private fun IrType.hasSameClrCarrierAs(other: IrType): Boolean {
         if (this == other) return true
+        val erasedClassParameterCarrier = erasedClassParameterCarrierOrNull()
+        val otherErasedClassParameterCarrier = other.erasedClassParameterCarrierOrNull()
+        if (erasedClassParameterCarrier != null || otherErasedClassParameterCarrier != null) {
+            return (erasedClassParameterCarrier ?: this).hasSameClrCarrierAs(
+                otherErasedClassParameterCarrier ?: other,
+            )
+        }
         if (!isOpenNullableTypeParameter() && !other.isOpenNullableTypeParameter() &&
             isDotNetStringType() && other.isDotNetStringType()
         ) {
@@ -374,25 +541,28 @@ internal class DotNetCovariantReturnBridgeLowering(
         }
     }
 
+    /** The declaration-context carrier used by an owner-erased generic class parameter. */
+    private fun IrType.erasedClassParameterCarrierOrNull(): IrType? {
+        val simpleType = this as? IrSimpleType ?: return null
+        val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner ?: return null
+        val parameterOwner = parameter.parent as? IrClass ?: return null
+        if (parameterOwner.isInterface ||
+            (!parameterOwner.isDotNetGenericClassDeclaration && !externalDeclarations.hasGenericClass(parameterOwner))
+        ) {
+            return null
+        }
+        if (simpleType.isMarkedNullable()) return context.irBuiltIns.anyNType
+        val upperBound = simpleType.erasedUpperBound
+        return if (upperBound == parameterOwner || upperBound.classDefaultType == simpleType) {
+            context.irBuiltIns.anyNType
+        } else {
+            upperBound.classDefaultType
+        }
+    }
+
     private fun IrType.isOpenNullableTypeParameter(): Boolean {
         val simpleType = this as? IrSimpleType ?: return false
         return simpleType.isMarkedNullable() && simpleType.classifier is IrTypeParameterSymbol
-    }
-
-    /** Whether declaration-context erasure can change any physical carrier in this class slot. */
-    private fun IrSimpleFunction.signatureReferencesTypeParameterOf(owner: IrClass): Boolean =
-        returnType.referencesTypeParameterOf(owner) ||
-                parameters.asSequence()
-                    .filter { parameter -> parameter.kind != IrParameterKind.DispatchReceiver }
-                    .any { parameter -> parameter.type.referencesTypeParameterOf(owner) }
-
-    private fun IrType.referencesTypeParameterOf(owner: IrClass): Boolean {
-        val simpleType = this as? IrSimpleType ?: return false
-        val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
-        if (parameter?.parent == owner) return true
-        return simpleType.arguments.any { argument ->
-            (argument as? IrTypeProjection)?.type?.referencesTypeParameterOf(owner) == true
-        }
     }
 
     private fun IrClass.baseClassAlreadyImplements(interfaceClass: IrClass): Boolean {
