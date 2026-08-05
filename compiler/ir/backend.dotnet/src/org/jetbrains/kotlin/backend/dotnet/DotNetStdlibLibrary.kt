@@ -93,6 +93,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.contracts.ReturnsNotNull" to "Kotlin.Contracts.ReturnsNotNull",
         "kotlin.contracts.CallsInPlace" to "Kotlin.Contracts.CallsInPlace",
         "kotlin.contracts.HoldsIn" to "Kotlin.Contracts.HoldsIn",
+        "kotlin.experimental.ExperimentalTypeInference" to "Kotlin.Experimental.ExperimentalTypeInference",
+        "kotlin.OverloadResolutionByLambdaReturnType" to "Kotlin.OverloadResolutionByLambdaReturnType",
         "kotlin.NotImplementedError" to "Kotlin.NotImplementedError",
         "kotlin.SuppressedExceptionList" to "Kotlin.SuppressedExceptionList",
         "kotlin.SuppressedExceptionIterator" to "Kotlin.SuppressedExceptionIterator",
@@ -529,7 +531,9 @@ internal object DotNetStdlibLibrary {
     )
     private val signedIterableSelectorSumPlatformNames = mapOf(
         "kotlin.collections.sumOf" to mapOf(
+            "kotlin.Double" to "sumOfDouble",
             "kotlin.Int" to "sumOfInt",
+            "kotlin.Long" to "sumOfLong",
         ),
     )
 
@@ -593,6 +597,12 @@ internal object DotNetStdlibLibrary {
         "_DotNetBootstrapKotlin.kt" to ImplementationSource(
             packageFqName = "kotlin",
             facadeIlName = STANDARD_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapExperimentalTypeInference.kt" to ImplementationSource(
+            packageFqName = "kotlin.experimental",
+        ),
+        "_DotNetBootstrapOverloadResolutionByLambdaReturnType.kt" to ImplementationSource(
+            packageFqName = "kotlin",
         ),
         "ContractBuilder.kt" to ImplementationSource(
             packageFqName = "kotlin.contracts",

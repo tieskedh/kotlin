@@ -23699,6 +23699,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         return Kotlin.Collections.CollectionsKt.sumOfInt<int>(values, selector);
                     }
+
+                    public static long SumOfLong(
+                        Kotlin.Collections.Iterable values,
+                        Kotlin.Function1 selector)
+                    {
+                        return Kotlin.Collections.CollectionsKt.sumOfLong<int>(values, selector);
+                    }
+
+                    public static double SumOfDouble(
+                        Kotlin.Collections.Iterable values,
+                        Kotlin.Function1 selector)
+                    {
+                        return Kotlin.Collections.CollectionsKt.sumOfDouble<int>(values, selector);
+                    }
                 }
                 """.trimIndent()
             )
@@ -23716,6 +23730,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue("sumOfInt" in forbiddenInlineOnlyResult.output) {
             "Expected C# accessibility diagnostic for @InlineOnly sumOfInt:\n" +
+                    forbiddenInlineOnlyResult.output
+        }
+        assertTrue("sumOfLong" in forbiddenInlineOnlyResult.output) {
+            "Expected C# accessibility diagnostic for @InlineOnly sumOfLong:\n" +
+                    forbiddenInlineOnlyResult.output
+        }
+        assertTrue("sumOfDouble" in forbiddenInlineOnlyResult.output) {
+            "Expected C# accessibility diagnostic for @InlineOnly sumOfDouble:\n" +
                     forbiddenInlineOnlyResult.output
         }
     }
@@ -29148,11 +29170,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }) {
             "Logical sum overloads must bind to six distinct static Common platform names"
         }
-        assertEquals(
-            2,
-            collectionFunctions.count { declaration -> declaration.methodName == "sumOfInt" },
-            "sumOfInt must bind both the Int receiver sum and the Int selector sum",
-        )
+        for (methodName in setOf("sumOfInt", "sumOfLong", "sumOfDouble")) {
+            assertEquals(
+                2,
+                collectionFunctions.count { declaration -> declaration.methodName == methodName },
+                "$methodName must bind both the numeric receiver sum and its selector sum",
+            )
+        }
         assertEquals(
             averagePhysicalMethodNames,
             collectionFunctions
@@ -29412,6 +29436,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Text.StringsKt'" in il)
         assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.StandardKt'" in il)
         assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Contracts.ContractBuilderKt'" in il)
+        assertTrue(
+            ".class public auto ansi sealed beforefieldinit " +
+                    "'Kotlin.Experimental.ExperimentalTypeInference'" in il
+        ) { "Missing Common ExperimentalTypeInference marker declaration:\n$il" }
+        assertTrue(
+            ".class public auto ansi sealed beforefieldinit " +
+                    "'Kotlin.OverloadResolutionByLambdaReturnType'" in il
+        ) { "Missing Common OverloadResolutionByLambdaReturnType marker declaration:\n$il" }
+        assertFalse(".custom instance void 'Kotlin.Experimental.ExperimentalTypeInference'::.ctor()" in il) {
+            "BINARY ExperimentalTypeInference applications must remain KLIB-only:\n$il"
+        }
+        assertFalse(".custom instance void 'Kotlin.OverloadResolutionByLambdaReturnType'::.ctor()" in il) {
+            "BINARY OverloadResolutionByLambdaReturnType applications must remain KLIB-only:\n$il"
+        }
         assertTrue("'Kotlin.Contracts.ContractBuilder'" in il)
         assertTrue("'Kotlin.Contracts.InvocationKind'" in il)
         for (entryName in listOf("AT_MOST_ONCE", "AT_LEAST_ONCE", "EXACTLY_ONCE", "UNKNOWN")) {
@@ -29522,7 +29560,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".method assembly hidebysig static object 'firstNotNullOfOrNull'<'T', 'R'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
                     "class [Kotlin.Runtime]'Kotlin.Function1' 'transform')",
+            ".method assembly hidebysig static float64 'sumOfDouble'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'selector')",
             ".method assembly hidebysig static int32 'sumOfInt'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
+                    "class [Kotlin.Runtime]'Kotlin.Function1' 'selector')",
+            ".method assembly hidebysig static int64 'sumOfLong'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
                     "class [Kotlin.Runtime]'Kotlin.Function1' 'selector')",
         )
@@ -30290,6 +30334,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun <T> sumOfSelectedInts(values: Iterable<T>, selector: (T) -> Int): Int =
                     values.sumOf(selector)
 
+                public fun <T> sumOfSelectedLongs(values: Iterable<T>, selector: (T) -> Long): Long =
+                    values.sumOf(selector)
+
+                public fun <T> sumOfSelectedDoubles(values: Iterable<T>, selector: (T) -> Double): Double =
+                    values.sumOf(selector)
+
                 @Suppress("DEPRECATION")
                 public fun sumSelectedNonLocal(values: Iterable<Int>): Int {
                     values.sumBy { value ->
@@ -30637,11 +30687,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'sumByDouble'<" !in il) {
             "The separate consumer must inline the Common sumByDouble body:\n$il"
         }
-        assertTrue(
-            "::'sumOfInt'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
-                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
-        ) {
-            "The separate consumer must inline the Common sumOf(Int selector) body:\n$il"
+        for (methodName in setOf("sumOfInt", "sumOfLong", "sumOfDouble")) {
+            assertTrue(
+                "::'$methodName'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                        "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+            ) {
+                "The separate consumer must inline the Common $methodName selector body:\n$il"
+            }
         }
         assertTrue(
             "::'requireNoNulls'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il
@@ -31043,6 +31095,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun <T> installedSumOfSelectedInts(values: Iterable<T>, selector: (T) -> Int): Int =
                     values.sumOf(selector)
 
+                public fun <T> installedSumOfSelectedLongs(values: Iterable<T>, selector: (T) -> Long): Long =
+                    values.sumOf(selector)
+
+                public fun <T> installedSumOfSelectedDoubles(
+                    values: Iterable<T>,
+                    selector: (T) -> Double,
+                ): Double = values.sumOf(selector)
+
                 @Suppress("DEPRECATION")
                 public fun installedSumSelectedNonLocal(values: Iterable<Int>): Int {
                     values.sumBy { value ->
@@ -31314,6 +31374,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             installedSumOfSelectedInts(
                                 arrayOf(Int.MAX_VALUE, 1).asIterable()
                             ) { it } == Int.MIN_VALUE &&
+                            installedSumOfSelectedLongs(
+                                arrayOf(Long.MAX_VALUE, 1L).asIterable()
+                            ) { it } == Long.MIN_VALUE &&
+                            installedSumOfSelectedDoubles(
+                                arrayOf(1.0e16, 1.0, -1.0e16).asIterable()
+                            ) { it } == 0.0 &&
                             (guardedIterableResult as Any) === (guardedIterable as Any) &&
                             (guardedListResult as Any) === (guardedList as Any) &&
                             (observedOnEachResult as Any) === (observedOnEach as Any) &&
@@ -31559,11 +31625,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'sumByDouble'<" !in il) {
             "The installed consumer must inline the Common sumByDouble body:\n$il"
         }
-        assertTrue(
-            "::'sumOfInt'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
-                    "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
-        ) {
-            "The installed consumer must inline the Common sumOf(Int selector) body:\n$il"
+        for (methodName in setOf("sumOfInt", "sumOfLong", "sumOfDouble")) {
+            assertTrue(
+                "::'$methodName'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable', " +
+                        "class [Kotlin.Runtime]'Kotlin.Function1')" !in il
+            ) {
+                "The installed consumer must inline the Common $methodName selector body:\n$il"
+            }
         }
         assertTrue("::'requireNoNulls'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')" in il)
         assertTrue("::'requireNoNulls'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
@@ -31942,6 +32010,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                 }
 
+                fun nonLocalLongSumOfSelected(values: Iterable<Int>): Long {
+                    return 9L + values.sumOf { value ->
+                        if (value == 2) return 32L
+                        value.toLong()
+                    }
+                }
+
                 fun main() {
                     print(false)
                     print("|")
@@ -32094,14 +32169,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                     val widenedSumValues: Iterable<CharSequence?> =
                         arrayOf<CharSequence?>("a", null, "bbb").asIterable()
+                    val sumOfDoubleNaN =
+                        arrayOf(1.0, Double.NaN).asIterable().sumOf { value -> value }
                     val sumOfSelectorOk =
                         emptyArray<Int>().asIterable().sumOf { it } == 0 &&
+                            emptyArray<Int>().asIterable().sumOf { it.toLong() } == 0L &&
+                            emptyArray<Int>().asIterable().sumOf { it.toDouble() } == 0.0 &&
                             arrayOf(Int.MAX_VALUE, 1).asIterable().sumOf { it } == Int.MIN_VALUE &&
+                            arrayOf(Long.MAX_VALUE, 1L).asIterable().sumOf { it } == Long.MIN_VALUE &&
+                            arrayOf(1.0e16, 1.0, -1.0e16).asIterable().sumOf { it } == 0.0 &&
+                            sumOfDoubleNaN != sumOfDoubleNaN &&
                             sumOfResult == 12 && sumOfTrace == 123 &&
                             sumOfCounting.iteratorCalls == 1 && sumOfCounting.nextCalls == 3 &&
                             widenedSumValues.sumOf { value -> value?.length ?: 5 } == 9 &&
+                            widenedSumValues.sumOf { value -> (value?.length ?: 5).toLong() } == 9L &&
                             sumOfFailureIdentity && sumOfFailureCalls == 2 &&
-                            nonLocalSumOfSelected(arrayOf(1, 2, 3).asIterable()) == 26
+                            nonLocalSumOfSelected(arrayOf(1, 2, 3).asIterable()) == 26 &&
+                            nonLocalLongSumOfSelected(arrayOf(1, 2, 3).asIterable()) == 32L
                     val counting = CountingInts(arrayOf(1, 2, 3))
                     val countedSum = counting.sum()
                     val floatNaN = arrayOf(Float.NaN).asIterable().sum()
