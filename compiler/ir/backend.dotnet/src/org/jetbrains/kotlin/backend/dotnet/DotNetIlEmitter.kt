@@ -1139,6 +1139,7 @@ internal class DotNetIlEmitter(
         val exportedIlIdentities = hashSetOf<String>()
         val exportedPropertyIdentities = hashSetOf<String>()
         var exportsUseNullableMetadata = false
+        var exportsUseCodeAnalysisMetadata = false
         var exportFailed = false
 
         fun reserveExportedMethod(
@@ -1208,6 +1209,8 @@ internal class DotNetIlEmitter(
                 }
                 renderedExports[target] = renderedExport
                 exportsUseNullableMetadata = exportsUseNullableMetadata || renderedExport.usesNullableMetadata
+                exportsUseCodeAnalysisMetadata =
+                    exportsUseCodeAnalysisMetadata || renderedExport.usesCodeAnalysisMetadata
             } catch (e: DotNetIlUnsupportedException) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
@@ -1282,6 +1285,8 @@ internal class DotNetIlEmitter(
                 renderedPropertyExports[target] = renderedExport
                 exportsUseNullableMetadata =
                     exportsUseNullableMetadata || renderedExport.usesNullableMetadata
+                exportsUseCodeAnalysisMetadata =
+                    exportsUseCodeAnalysisMetadata || renderedExport.usesCodeAnalysisMetadata
             } catch (e: DotNetIlUnsupportedException) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
@@ -1515,6 +1520,7 @@ internal class DotNetIlEmitter(
                 referencesStdlibAssembly = DotNetStdlibLibrary.ASSEMBLY_NAME in referencedAssemblies,
                 referencesEditorBrowsableAssembly =
                     "System.ComponentModel.EditorBrowsableAttribute" in moduleBody,
+                referencesCodeAnalysisAssembly = exportsUseCodeAnalysisMetadata,
                 referencedExternalLibraries = externalLibraries.filter { library ->
                     !DotNetPlatformAssemblyIdentity.isStdlib(library.artifact.assemblyName) &&
                             referencedAssemblies.any { referenced ->
@@ -3270,6 +3276,8 @@ internal class DotNetIlEmitter(
             propertyBlock = propertyBlock,
             usesNullableMetadata = renderedGetter.usesNullableMetadata ||
                     renderedSetter?.usesNullableMetadata == true,
+            usesCodeAnalysisMetadata = renderedGetter.usesCodeAnalysisMetadata ||
+                    renderedSetter?.usesCodeAnalysisMetadata == true,
         )
     }
 
@@ -3321,6 +3329,8 @@ internal class DotNetIlEmitter(
             }
         val usesNullableMetadata = returnNullabilityFlags.isNotEmpty() ||
                 parameterNullabilityFlags.any { it.isNotEmpty() }
+        val fullContractMetadata = target.renderDotNetCodeAnalysisMetadata(coreLibrary)
+        var usesCodeAnalysisMetadata = fullContractMetadata.isNotEmpty
         val renderedMethods = mutableListOf<DotNetRenderedExportMethod>()
         renderedMethods += DotNetRenderedExportMethod(
             method = DotNetIlRenderedMethod(buildString {
@@ -3330,9 +3340,21 @@ internal class DotNetIlEmitter(
                             "${clrMethodName.toIlIdentifier()}($parameters) cil managed"
                 )
                 appendLine("  {")
-                appendNullableAttribute(parameterIndex = 0, flags = returnNullabilityFlags)
+                for (attribute in fullContractMetadata.methodAttributes) {
+                    appendLine("    $attribute")
+                }
+                appendExportParameterAttributes(
+                    parameterIndex = 0,
+                    nullableFlags = returnNullabilityFlags,
+                    codeAnalysisAttributes = fullContractMetadata.parameterAttributes[0].orEmpty(),
+                )
                 parameterNullabilityFlags.forEachIndexed { index, flags ->
-                    appendNullableAttribute(parameterIndex = index + 1, flags = flags)
+                    appendExportParameterAttributes(
+                        parameterIndex = index + 1,
+                        nullableFlags = flags,
+                        codeAnalysisAttributes =
+                            fullContractMetadata.parameterAttributes[index + 1].orEmpty(),
+                    )
                 }
                 appendLine("    .maxstack ${maxOf(1, target.parameters.size)}")
                 target.parameters.indices.forEach { index ->
@@ -3354,7 +3376,12 @@ internal class DotNetIlEmitter(
         )
 
         if (!includeDefaultOverloads) {
-            return DotNetRenderedExport(renderedMethods, usesNullableMetadata, returnNullabilityFlags)
+            return DotNetRenderedExport(
+                renderedMethods,
+                usesNullableMetadata,
+                usesCodeAnalysisMetadata,
+                returnNullabilityFlags,
+            )
         }
         val defaultParameterIndices = target.dotNetDefaultParameterIndices.orEmpty().toSet()
         val trailingOverloadStarts = buildList {
@@ -3365,7 +3392,12 @@ internal class DotNetIlEmitter(
             }
         }
         if (trailingOverloadStarts.isEmpty()) {
-            return DotNetRenderedExport(renderedMethods, usesNullableMetadata, returnNullabilityFlags)
+            return DotNetRenderedExport(
+                renderedMethods,
+                usesNullableMetadata,
+                usesCodeAnalysisMetadata,
+                returnNullabilityFlags,
+            )
         }
 
         val defaultStub = target.defaultArgumentsDispatchFunction as? IrSimpleFunction
@@ -3385,6 +3417,11 @@ internal class DotNetIlEmitter(
             .associate { indexedParameter -> indexedParameter.value to indexedParameter.index }
 
         for (firstOmitted in trailingOverloadStarts) {
+            val contractMetadata = target.renderDotNetCodeAnalysisMetadata(
+                coreLibrary,
+                retainedParameterCount = firstOmitted,
+            )
+            usesCodeAnalysisMetadata = usesCodeAnalysisMetadata || contractMetadata.isNotEmpty
             val retainedParameterTypes = exportedParameterTypes.take(firstOmitted)
             val retainedParameters = target.parameters.indices.take(firstOmitted).joinToString(", ") { index ->
                 "${retainedParameterTypes[index]} ${target.parameters[index].name.asString().toIlIdentifier()}"
@@ -3407,9 +3444,21 @@ internal class DotNetIlEmitter(
                                 "${clrMethodName.toIlIdentifier()}($retainedParameters) cil managed"
                     )
                     appendLine("  {")
-                    appendNullableAttribute(parameterIndex = 0, flags = returnNullabilityFlags)
+                    for (attribute in contractMetadata.methodAttributes) {
+                        appendLine("    $attribute")
+                    }
+                    appendExportParameterAttributes(
+                        parameterIndex = 0,
+                        nullableFlags = returnNullabilityFlags,
+                        codeAnalysisAttributes = contractMetadata.parameterAttributes[0].orEmpty(),
+                    )
                     parameterNullabilityFlags.take(firstOmitted).forEachIndexed { index, flags ->
-                        appendNullableAttribute(parameterIndex = index + 1, flags = flags)
+                        appendExportParameterAttributes(
+                            parameterIndex = index + 1,
+                            nullableFlags = flags,
+                            codeAnalysisAttributes =
+                                contractMetadata.parameterAttributes[index + 1].orEmpty(),
+                        )
                     }
                     if (defaultValueLocals.isNotEmpty()) {
                         appendLine("    .locals init (")
@@ -3448,7 +3497,12 @@ internal class DotNetIlEmitter(
                 parameterTypes = retainedParameterTypes,
             )
         }
-        return DotNetRenderedExport(renderedMethods, usesNullableMetadata, returnNullabilityFlags)
+        return DotNetRenderedExport(
+            renderedMethods,
+            usesNullableMetadata,
+            usesCodeAnalysisMetadata,
+            returnNullabilityFlags,
+        )
     }
 
     /**
@@ -3536,10 +3590,17 @@ internal class DotNetIlEmitter(
         )
     }
 
-    private fun StringBuilder.appendNullableAttribute(parameterIndex: Int, flags: List<Int>) {
-        if (flags.isEmpty()) return
+    private fun StringBuilder.appendExportParameterAttributes(
+        parameterIndex: Int,
+        nullableFlags: List<Int>,
+        codeAnalysisAttributes: List<String>,
+    ) {
+        if (nullableFlags.isEmpty() && codeAnalysisAttributes.isEmpty()) return
         appendLine("    .param [$parameterIndex]")
-        appendLine("    ${DotNetNullableMetadata.renderAttribute(flags)}")
+        if (nullableFlags.isNotEmpty()) {
+            appendLine("    ${DotNetNullableMetadata.renderAttribute(nullableFlags)}")
+        }
+        for (attribute in codeAnalysisAttributes) appendLine("    $attribute")
     }
 
     private fun StringBuilder.appendDefaultArgumentPlaceholder(
@@ -3587,6 +3648,7 @@ internal class DotNetIlEmitter(
     private data class DotNetRenderedExport(
         val methods: List<DotNetRenderedExportMethod>,
         val usesNullableMetadata: Boolean,
+        val usesCodeAnalysisMetadata: Boolean,
         val returnNullabilityFlags: List<Int>,
     )
 
@@ -3605,6 +3667,7 @@ internal class DotNetIlEmitter(
         val methods: List<DotNetRenderedExportMethod>,
         val propertyBlock: String,
         val usesNullableMetadata: Boolean,
+        val usesCodeAnalysisMetadata: Boolean,
     )
 
     private data class DotNetExportedCallableBoundary(
@@ -3623,6 +3686,7 @@ internal class DotNetIlEmitter(
         referencesRuntimeAssembly: Boolean,
         referencesStdlibAssembly: Boolean,
         referencesEditorBrowsableAssembly: Boolean,
+        referencesCodeAnalysisAssembly: Boolean,
         referencedExternalLibraries: List<DotNetExternalLibrary>,
         referencedForeignAssemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>,
         friendAssemblies: List<DotNetFriendAssemblyIdentity>,
@@ -3632,6 +3696,9 @@ internal class DotNetIlEmitter(
         coreLibrary.appendAssemblyReferenceTo(this)
         if (referencesEditorBrowsableAssembly) {
             coreLibrary.appendEditorBrowsableAssemblyReferenceTo(this)
+        }
+        if (referencesCodeAnalysisAssembly && !referencesEditorBrowsableAssembly) {
+            coreLibrary.appendCodeAnalysisAssemblyReferenceTo(this)
         }
         if (referencesRuntimeAssembly) {
             appendLine(".assembly extern ${DotNetRuntimeLibrary.ASSEMBLY_NAME}")

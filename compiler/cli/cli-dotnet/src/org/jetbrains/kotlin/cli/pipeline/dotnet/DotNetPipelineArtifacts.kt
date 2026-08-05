@@ -8,8 +8,10 @@ import org.jetbrains.kotlin.cli.pipeline.PipelineArtifact
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.fir.pipeline.AllModulesFrontendOutput
 import org.jetbrains.kotlin.fir.pipeline.Fir2IrActualizedResult
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.library.SerializedMetadata
 import org.jetbrains.kotlin.library.SerializedIrModule
+import org.jetbrains.kotlin.load.dotnet.DotNetExactContractProjection
 import java.io.File
 
 data class DotNetFrontendPipelineArtifact(
@@ -33,6 +35,7 @@ data class DotNetFir2IrPipelineArtifact(
     override val configuration: CompilerConfiguration,
     val libraryMetadata: SerializedMetadata?,
     val libraryIr: SerializedIrModule?,
+    val exactContractProjections: Map<IrSimpleFunction, DotNetExactContractProjection>,
 ) : Fir2IrPipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)
     override fun withCompilerConfiguration(newConfiguration: CompilerConfiguration): DotNetFir2IrPipelineArtifact =
