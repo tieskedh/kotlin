@@ -2,6 +2,8 @@
 
 - Status: **Accepted**
 - Date: 2026-07-21
+- Amended: 2026-08-05 for relative method-type-parameter recovery, inherited class-slot closure,
+  and declaration-erased carrier comparison
 - Scope: Kotlin-owned declarations on `net48`, `netstandard2.0`, and `net10.0`
 
 This is a pre-ABI decision for the experimental Kotlin/.NET backend. No Kotlin/.NET binary has
@@ -54,6 +56,15 @@ This is deliberate local erasure, not blanket generic erasure. Non-null `T` rema
 generic parameter, and a declaration written with a concrete `Int?` remains
 `System.Nullable<Int32>`. Kotlin metadata retains the logical `T?` type and all constraints.
 
+A type parameter owned by a declaration-erased Kotlin class follows that class decision instead:
+its stable carrier is `object` or its erased upper bound. Kotlin nullability is then determined by
+the complete upper-bound type, not only by the occurrence's explicit nullable marker. In
+particular, unconstrained `class Box<E>` permits a nullable substitution even though an occurrence
+is written `E`, so an unchecked read from its erased storage must preserve `null`. Conversely
+`E : Any` remains non-null and keeps the corresponding runtime null check. This is the CLR form of
+the same erased cast distinction made by JVM bytecode; it does not infer nullability from the
+stored object.
+
 ### 2. Physical clashes are diagnosed after carrier mapping
 
 Because `T?` and `Any?` both use `object`, overloads that differ only by those logical types are a
@@ -84,6 +95,24 @@ satisfying a newly introduced interface slot receive an explicit adapter because
 interface owns no inherited forwarding body and CLR name-and-signature inference includes the
 return type.
 
+The immediate physical class slot is computed from the complete Kotlin override graph, not only
+from FIR's direct `overriddenSymbols`. FIR may retain an inherited abstract class member only as a
+transitive fake override when an intervening Kotlin interface refines its return. The first class
+that declares the precise member must still own the `MethodImpl` bridge to the nearest real class
+slot. More distant class slots are excluded because that nearest bridge already dispatches to
+them; interface slots remain independent and are all considered separately. Otherwise a concrete
+leaf can contain the precise method and still fail CLR type loading because an older abstract
+return-shaped slot remained unimplemented.
+
+Bridge necessity is decided from the complete physical signature after declaration-context
+erasure, not merely from the presence of an owner type parameter. For example,
+`Base<T>.write(T)` and `Derived : Base<String>` need an `object`-to-`string` adapter, while
+`Base<T>.addAll(Collection<T>)` and the derived declaration both use the same erased
+`Kotlin.Collections.Collection` parameter and need no adapter. Emitting a bridge for the latter
+would give the CLR two textually different Kotlin declarations with one physical signature; a
+virtual call from that bridge could resolve back to the bridge itself. Return and every value
+parameter carrier are therefore compared before a MethodImpl is created.
+
 An abstract class refinement may own a concrete bridge which dispatches to its precise abstract
 slot. A concrete subclass then implements that precise slot normally. An abstract interface
 refinement instead remains a separate abstract CLR slot: portable interfaces cannot contain the
@@ -91,7 +120,27 @@ adapter body, so each body-owning class receives the adapters for all abstract s
 This distinction changes bridge placement only; it does not change Kotlin override selection or
 copy a semantic body.
 
-### 4. The bridge model is uniform across profiles
+### 4. Relative method constraints remain physical codegen facts
+
+A method-owned relationship such as `<C, R> where C : R` is represented by the CLR's positional
+generic-parameter constraint as well as by authoritative KLIB. The backend's structural type model
+must retain that relative bound, including its transitive relative bounds, rather than flattening
+only concrete class/interface constraints.
+
+When Common returns a `C` value as `R`, as in `C.ifEmpty`, the typed IR and `C : R` constraint prove
+the widening. CLR codegen emits `box C; unbox.any R`. The intermediate object boundary is required
+because both parameters are open: `R` may itself be instantiated with a value type, so `box C`
+alone would leave an object reference in an `R`-typed local or return slot. `unbox.any R` is a
+checked reference cast for reference substitutions and exact unboxing for value substitutions.
+Reference identity is preserved and a value spends no time in an invalid typed slot. No wrapper,
+collection special case, or erased Kotlin-class identity is introduced.
+
+This rule applies only when the source type parameter's retained physical constraint graph reaches
+the expected parameter. Unrelated open parameters remain non-convertible. Owner-relative bounds
+which cannot be encoded after the accepted Kotlin-owned class/interface erasure continue to follow
+their separate weakening rules; this method-owned case does not restore an erased owner token.
+
+### 5. The bridge model is uniform across profiles
 
 All three profiles use the floor-compatible explicit bridge representation. `net10.0` does not
 switch ordinary Kotlin ABI to CLR covariant-return metadata. A future export-only C# facade may use
@@ -126,4 +175,7 @@ Before this ABI is frozen, tests must cover:
 5. class, property, interface, inherited-interface, and multi-level covariant returns;
 6. dispatch through every base/interface view and direct precise calls;
 7. direct IL assertions for `MethodImpl`, exact-return slots, and absence of copied bodies; and
-8. C# compilation/reflection showing the intended public surface and hidden bridges.
+8. C# compilation/reflection showing the intended public surface and hidden bridges; and
+9. direct and transitive method-type-parameter bounds, exact `box C; unbox.any R` IL, same-object
+   reference widening, legal value substitution, separate compilation, erased foreign-callback
+   fallback, and rejection of unrelated parameter conversions.

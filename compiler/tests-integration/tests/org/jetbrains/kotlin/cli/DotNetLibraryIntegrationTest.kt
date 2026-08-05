@@ -10278,7 +10278,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("20", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals(
+            DotNetLibraryAbiCodec.ABI_VERSION,
+            properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY),
+        )
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -21063,6 +21066,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val il = applicationDirectory.resolve("ForeignCallConsumer.il").readText()
             assertTrue(".assembly extern 'Foreign.CallContracts'" in il) { il }
             assertTrue(".ver 3:4:5:6" in il) { il }
+            assertFalse("<CovariantReturnBridge-ForeignCallContracts.OrdinaryArrayApi" in il) {
+                "Exact foreign SZARRAY overrides must fill their retained CLR slots directly:\n$il"
+            }
             assertTrue(
                 "callvirt instance int32 [Foreign.CallContracts]'ForeignCallContracts.Api'::'Compute'(int32)" in il
             ) { il }
@@ -22621,6 +22627,156 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertCollectionToArrayImplementationIl(stdlibDirectory)
         executeCollectionToArrayImplementation(stdlibDirectory, "net48", dotnetHost = null)
         executeCollectionToArrayImplementation(stdlibDirectory, "net10.0", dotnetHost)
+    }
+
+    @Test
+    fun testRunsDependencyClosedUpstreamStdlibCollectionTest() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ilasm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ilasm is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(
+            frameworkHost != null,
+            "Windows PowerShell CLR 4 host is not available",
+        )
+
+        val stdlibDirectory = produceSelfDescribingStdlib("netstandard2.0", "upstream-stdlib-test")
+        val stdlib = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+        val kotlinTestDirectory = File(tmpdir, "upstream-stdlib-test/kotlin-test").apply { mkdirs() }
+        val kotlinTestCommonSources = listOf(
+            File(
+                "libraries/kotlin.test/dotnet/common/src/main/kotlin/kotlin/test/" +
+                        "_DotNetBootstrapTestAnnotation.kt"
+            ).absoluteFile,
+            File(
+                "libraries/kotlin.test/dotnet/common/src/main/kotlin/kotlin/test/" +
+                        "_DotNetBootstrapAssertionExpect.kt"
+            ).absoluteFile,
+        )
+        val kotlinTestPlatformSources = listOf(
+            File(
+                "libraries/kotlin.test/dotnet/common/src/main/kotlin/kotlin/test/" +
+                        "_DotNetBootstrapAssertions.kt"
+            ).absoluteFile,
+            File(
+                "libraries/kotlin.test/dotnet/common/src/main/kotlin/kotlin/test/" +
+                        "_DotNetBootstrapDefaultAsserter.kt"
+            ).absoluteFile,
+            File(
+                "libraries/kotlin.test/dotnet/src/main/kotlin/kotlin/test/DotNetTestSupport.kt"
+            ).absoluteFile,
+        )
+        assertTrue(
+            kotlinTestCommonSources.all(File::isFile) && kotlinTestPlatformSources.all(File::isFile)
+        ) {
+            "The staged Kotlin/.NET kotlin.test source product is incomplete"
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            "-Xallow-kotlin-package",
+            K2DotNetCompilerArguments::noStdlib.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, stdlib.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Kotlin.Test",
+            K2DotNetCompilerArguments::destination.cliArgument, kotlinTestDirectory.path,
+            "-Xcommon-sources=${kotlinTestCommonSources.joinToString(",", transform = File::getPath)}",
+            *kotlinTestCommonSources.map(File::getPath).toTypedArray(),
+            *kotlinTestPlatformSources.map(File::getPath).toTypedArray(),
+        )
+        val kotlinTest = kotlinTestDirectory.resolve("Kotlin.Test.dll")
+        assertTrue(kotlinTest.isFile) { "The staged Kotlin/.NET kotlin.test product was not emitted" }
+        assertTrue(
+            ".class public auto ansi sealed beforefieldinit 'kotlin.test.Test'" in
+                    kotlinTestDirectory.resolve("Kotlin.Test.il").readText()
+        ) {
+            "kotlin.test.Test must be one concrete CLR marker attribute"
+        }
+
+        val upstreamTest = File("libraries/stdlib/test/collections/IteratorsTest.kt").absoluteFile
+        assertTrue(upstreamTest.isFile) { "Missing authoritative upstream test $upstreamTest" }
+        for (target in listOf("net48", "net10.0")) {
+            val executionDirectory = File(tmpdir, "upstream-stdlib-test/$target").apply { mkdirs() }
+            val runner = executionDirectory.resolve("runner.kt").apply {
+                writeText(
+                    """
+                    import kotlin.test.assertEquals
+                    import test.collections.IteratorsTest
+
+                    fun main() {
+                        IteratorsTest().iterationOverIterator()
+                        try {
+                            assertEquals("expected", "actual")
+                            throw AssertionError("A failing Common assertion returned normally")
+                        } catch (failure: AssertionError) {
+                            if (failure.message != "Expected <expected>, actual <actual>.") throw failure
+                        }
+                        println("OK")
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = executionDirectory.resolve(
+                if (target == "net48") "UpstreamStdlibTest.exe" else "UpstreamStdlibTest.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                upstreamTest.path,
+                runner.path,
+                K2DotNetCompilerArguments::noStdlib.cliArgument,
+                K2DotNetCompilerArguments::classpath.cliArgument,
+                listOf(stdlib, kotlinTest).joinToString(File.pathSeparator, transform = File::getPath),
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "UpstreamStdlibTest",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            val applicationIl = executionDirectory.resolve("UpstreamStdlibTest.il").readText()
+            assertTrue(
+                ".custom instance void [Kotlin.Test]'kotlin.test.Test'::.ctor()" in applicationIl
+            ) {
+                "The untouched upstream @Test application was not projected into CLR metadata for $target"
+            }
+            assertTrue(
+                "[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'listOf'<int32>(!!0[])" in
+                        applicationIl
+            ) {
+                "The separate upstream consumer did not bind Common vararg T to the producer's exact T[] ABI " +
+                        "for $target:\n$applicationIl"
+            }
+            assertFalse(
+                "[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'listOf'<int32>(class " in
+                        applicationIl
+            ) {
+                "A Kotlin vararg parameter must not be reconstructed as an ordinary projected System.Array " +
+                        "parameter for $target:\n$applicationIl"
+            }
+            stdlib.copyTo(executionDirectory.resolve(stdlib.name), overwrite = true)
+            kotlinTest.copyTo(executionDirectory.resolve(kotlinTest.name), overwrite = true)
+            stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME).copyTo(
+                executionDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME),
+                overwrite = true,
+            )
+            if (target == "net48") {
+                runAssemblerPairing(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), application),
+                    executionDirectory,
+                    "Framework upstream stdlib test product",
+                )
+            } else {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    executionDirectory,
+                    "CoreCLR upstream stdlib test product failed",
+                )
+            }
+        }
     }
 
     @Test
@@ -28970,10 +29126,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         consumeSelfDescribingStdlib(firstDirectory, target)
         consumeInstalledStdlib(firstDirectory, target)
-        if (target == "net10.0") verifyNet10CSharpAppendable(firstDirectory)
+        if (target == "net10.0") verifyNet10CSharpStdlibBoundary(firstDirectory)
     }
 
-    private fun verifyNet10CSharpAppendable(stdlibDirectory: File) {
+    private fun verifyNet10CSharpStdlibBoundary(stdlibDirectory: File) {
         val toolchain = DotNetIlAssembler.findModernCSharpCompiler()
         requireOrAssumeToolchain(toolchain != null, "Modern Roslyn and the net10 reference pack are not available")
         val directory = File(tmpdir, "net10-csharp-appendable").apply { mkdirs() }
@@ -29016,6 +29172,39 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         return destination;
                     }
 
+                    private static int VerifyErasedKotlinCollections()
+                    {
+                        Type[] kotlinTypes = {
+                            typeof(Kotlin.Collections.MutableIterator),
+                            typeof(Kotlin.Collections.MutableListIterator),
+                            typeof(Kotlin.Collections.MutableIterable),
+                            typeof(Kotlin.Collections.MutableCollection),
+                            typeof(Kotlin.Collections.MutableList),
+                            typeof(Kotlin.Collections.AbstractMutableCollection),
+                            typeof(Kotlin.Collections.AbstractMutableList),
+                            typeof(Kotlin.Collections.ArrayList),
+                        };
+                        foreach (Type type in kotlinTypes)
+                        {
+                            if (type.IsGenericType || type.GetGenericArguments().Length != 0)
+                                return 10;
+                        }
+                        foreach (Type contract in typeof(Kotlin.Collections.ArrayList).GetInterfaces())
+                        {
+                            if (contract.Namespace == "System.Collections.Generic")
+                                return 11;
+                        }
+
+                        object list = Activator.CreateInstance(typeof(Kotlin.Collections.ArrayList));
+                        var add = list.GetType().GetMethod("add", new Type[] { typeof(object) });
+                        var get = list.GetType().GetMethod("get", new Type[] { typeof(int) });
+                        if (add == null || get == null || !(bool)add.Invoke(list, new object[] { 41 }))
+                            return 12;
+                        if ((int)get.Invoke(list, new object[] { 0 }) != 41)
+                            return 13;
+                        return 0;
+                    }
+
                     public static int Main()
                     {
                         var foreign = new ForeignAppendable();
@@ -29024,7 +29213,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                         var builder = new Kotlin.Text.StringBuilder();
                         builder.appendAny(42).append('!');
-                        return builder.ToString() == "42!" ? 0 : 2;
+                        if (builder.ToString() != "42!")
+                            return 2;
+                        return VerifyErasedKotlinCollections();
                     }
                 }
                 """.trimIndent()
@@ -29050,7 +29241,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .redirectErrorStream(true)
             .start()
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
-        assertEquals(0, process.waitFor(), "C# Appendable/StringBuilder probe failed:\n$processOutput")
+        assertEquals(0, process.waitFor(), "C# stdlib boundary probe failed:\n$processOutput")
     }
 
     private fun produceSelfDescribingStdlib(
@@ -29095,6 +29286,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val kClassType = runtimeType("Kotlin", "KClass")
         val kClassImplType = runtimeType("Kotlin", "KClassImpl")
         val kClassFactoryType = runtimeType("Kotlin.Runtime.Internal", "KClassFactory")
+        val erasedMutableCollectionTypes = listOf(
+            "MutableIterator",
+            "MutableListIterator",
+            "MutableIterable",
+            "MutableCollection",
+            "MutableList",
+        ).map { metadataName -> runtimeType("Kotlin.Collections", metadataName) }
         assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassifierType.visibility)
         assertTrue(kClassifierType.isInterface)
         assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassType.visibility)
@@ -29117,6 +29315,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
             }
         )
+        assertTrue(erasedMutableCollectionTypes.all { type ->
+            type.visibility == DotNetClrTypeVisibility.PUBLIC &&
+                    type.isInterface &&
+                    '`' !in type.metadataName
+        })
+        assertTrue(runtimeMetadata.genericParameterDefinitions.none { parameter ->
+            erasedMutableCollectionTypes.any { type -> type.handle == parameter.owner }
+        }) {
+            "Kotlin-owned mutable collection interfaces must have one non-generic runtime identity"
+        }
         assertFalse(stdlibDirectory.resolve("Kotlin.Stdlib.klib").exists()) {
             "The stdlib producer must not write a sibling KLIB"
         }
@@ -29223,9 +29431,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "component3" to 1,
                 "component4" to 1,
                 "component5" to 1,
-                "contains" to 1,
+                "contains" to 2,
                 "count" to 3,
-                "elementAt" to 1,
+                "elementAt" to 2,
                 "elementAtOrNull" to 2,
                 "find" to 1,
                 "findLast" to 2,
@@ -29237,10 +29445,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "foldIndexed" to 1,
                 "foldRight" to 1,
                 "foldRightIndexed" to 1,
-                "forEach" to 1,
+                "forEach" to 2,
                 "forEachIndexed" to 1,
                 "getOrNull" to 2,
-                "indexOf" to 2,
+                "indexOf" to 3,
                 "indexOfFirst" to 2,
                 "indexOfLast" to 2,
                 "last" to 4,
@@ -29370,6 +29578,93 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ) &&
                     declaration.isInstance
         })
+        val bulkCollectionFunctionCounts = mapOf(
+            "addAll" to 2,
+            "convertToListIfNotCollection" to 1,
+            "drop" to 1,
+            "dropLast" to 1,
+            "dropLastWhile" to 1,
+            "dropWhile" to 1,
+            "elementAtOrElse" to 2,
+            "filter" to 1,
+            "filterIndexed" to 1,
+            "filterIndexedTo" to 1,
+            "filterNot" to 1,
+            "filterNotNull" to 1,
+            "filterNotNullTo" to 1,
+            "filterNotTo" to 1,
+            "filterTo" to 1,
+            "flatMap" to 1,
+            "flatMapIndexed" to 1,
+            "flatMapIndexedTo" to 1,
+            "flatMapTo" to 1,
+            "flatten" to 1,
+            "getOrElse" to 1,
+            "map" to 1,
+            "mapIndexed" to 1,
+            "mapIndexedNotNull" to 1,
+            "mapIndexedNotNullTo" to 1,
+            "mapIndexedTo" to 1,
+            "mapNotNull" to 1,
+            "mapNotNullTo" to 1,
+            "mapTo" to 1,
+            "minus" to 3,
+            "minusAssign" to 3,
+            "minusElement" to 1,
+            "partition" to 1,
+            "plus" to 6,
+            "plusAssign" to 3,
+            "plusElement" to 2,
+            "removeAll" to 5,
+            "removeFirst" to 1,
+            "removeFirstOrNull" to 1,
+            "removeLast" to 1,
+            "removeLastOrNull" to 1,
+            "retainAll" to 5,
+            "reverse" to 1,
+            "reversed" to 1,
+            "runningFold" to 1,
+            "runningFoldIndexed" to 1,
+            "runningReduce" to 1,
+            "runningReduceIndexed" to 1,
+            "scan" to 1,
+            "scanIndexed" to 1,
+            "take" to 1,
+            "takeLast" to 1,
+            "takeLastWhile" to 1,
+            "takeWhile" to 1,
+            "toBooleanArray" to 1,
+            "toByteArray" to 1,
+            "toCharArray" to 1,
+            "toCollection" to 1,
+            "toDoubleArray" to 1,
+            "toFloatArray" to 1,
+            "toIntArray" to 1,
+            "toList" to 1,
+            "toLongArray" to 1,
+            "toMutableList" to 2,
+            "toShortArray" to 1,
+            "withIndex" to 2,
+            "zip" to 4,
+            "zipWithNext" to 2,
+        )
+        assertEquals(
+            bulkCollectionFunctionCounts,
+            collectionFunctions
+                .filter { declaration -> declaration.methodName in bulkCollectionFunctionCounts }
+                .groupingBy(DotNetPhysicalDeclaration.Function::methodName)
+                .eachCount(),
+        )
+        assertTrue(collectionFunctions.none { declaration ->
+            declaration.methodName in bulkCollectionFunctionCounts && declaration.isInstance
+        })
+        assertEquals(
+            1,
+            collectionFunctions.count { declaration ->
+                declaration.methodName.startsWith("unzip__KotlinErased__")
+            },
+            "The erased Pair return must receive one deterministic physical unzip name",
+        )
         assertEquals(
             setOf(
                 "checkCountOverflow",
@@ -29515,8 +29810,40 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".class public abstract auto ansi beforefieldinit " +
                     "'Kotlin.Collections.AbstractList'" in il
         )
+        assertTrue(
+            ".class public abstract auto ansi beforefieldinit " +
+                    "'Kotlin.Collections.AbstractMutableCollection'" in il
+        )
+        assertTrue(
+            ".class public abstract auto ansi beforefieldinit " +
+                    "'Kotlin.Collections.AbstractMutableList'" in il
+        )
+        assertTrue(
+            ".class public auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayList'" in il
+        )
         assertFalse("Kotlin.Collections.AbstractCollection`" in il)
         assertFalse("Kotlin.Collections.AbstractList`" in il)
+        assertFalse("Kotlin.Collections.AbstractMutableCollection`" in il)
+        assertFalse("Kotlin.Collections.AbstractMutableList`" in il)
+        assertFalse("Kotlin.Collections.ArrayList`" in il)
+        val arrayListStart = il.indexOf(
+            ".class public auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayList'"
+        )
+        val arrayListEnd = il.indexOf("\n.class ", arrayListStart + 1)
+            .takeIf { index -> index >= 0 } ?: il.length
+        val arrayListIl = il.substring(arrayListStart, arrayListEnd)
+        assertTrue("extends 'Kotlin.Collections.AbstractMutableList'" in arrayListIl)
+        assertTrue("implements 'Kotlin.Collections.RandomAccess'" in arrayListIl)
+        assertFalse("System.Collections.Generic" in arrayListIl) {
+            "The erased Kotlin ArrayList must not acquire a BCL generic collection identity:\n$arrayListIl"
+        }
+        assertTrue(
+            "<CovariantReturnBridge-kotlin.collections.AbstractCollection-iterator-" in il &&
+                    ".override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' " +
+                    "'Kotlin.Collections.AbstractCollection'::'iterator'()" in il
+        ) {
+            "The mutable return refinement must close the inherited abstract class slot:\n$il"
+        }
         assertTrue("'IteratorImpl'" in il)
         assertTrue("'ListIteratorImpl'" in il)
         assertTrue("'SubList'" in il)
@@ -29622,7 +29949,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
-                    "'asList'<'T'>(!!0[] '<this>')" in il
+                    "'asList'<'T'>(class ${coreLibraryReference}System.Array '<this>')" in il
         )
         assertTrue("dotNetArrayOfNulls" !in il) {
             "The declaration-suppressing host operation leaked into Kotlin.Stdlib IL"
@@ -30050,8 +30377,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/internal/serializationUtil.kt").absoluteFile
         sourceFiles +=
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/util/Tuples.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractList.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/collections/IndexedValue.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/collections/Iterables.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/collections/Iterators.kt").absoluteFile
+        sourceFiles +=
+            File("libraries/stdlib/common/src/kotlin/collections/AbstractMutableCollection.kt").absoluteFile
+        sourceFiles +=
+            File("libraries/stdlib/common/src/kotlin/collections/AbstractMutableList.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/ArrayList.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/contracts/ContractBuilder.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/contracts/Effect.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ExceptionsH.kt").absoluteFile
@@ -30099,6 +30435,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
     private fun consumeSelfDescribingStdlib(stdlibDirectory: File, target: String) {
         val metadataLibrary = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+        val coreLibraryReference = if (target == "netstandard2.0") "[netstandard]" else "[mscorlib]"
         val consumerSource = stdlibDirectory.resolve("consumer.kt").apply {
             writeText(
                 """
@@ -30424,6 +30761,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun <T> lastPosition(values: List<T>): Int = values.lastIndex
 
+                public fun <T> mutateRoundTrip(values: MutableList<T>, value: T): T {
+                    values.add(value)
+                    return values.removeAt(values.size - 1)
+                }
+
+                public fun <T> mutableSingleton(value: T): MutableList<T> = mutableListOf(value)
+
                 public fun firstArray(values: Array<String>): String = values.iterator().next()
 
                 public fun firstArrayIterable(values: Array<String>): String = values.asIterable().first()
@@ -30737,10 +31081,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             "::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il
         )
+        assertTrue("class [Kotlin.Runtime]'Kotlin.Collections.MutableList' 'values'" in il)
+        assertTrue("[Kotlin.Runtime]'Kotlin.Collections.MutableList'::'Add'(object)" in il)
+        assertTrue("[Kotlin.Runtime]'Kotlin.Collections.MutableList'::'RemoveAt'(int32)" in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'mutableListOf'<!!0>(!!0[])" in il)
+        assertFalse("Kotlin.Collections.MutableList`" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterator'<string>" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<string>" in il)
-        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<!!0>(!!0[])" in il)
-        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(!!0[])" in il)
+        assertTrue(
+            "[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<!!0>(class " +
+                    "${coreLibraryReference}System.Array)" in il
+        )
+        assertTrue(
+            "[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(class " +
+                    "${coreLibraryReference}System.Array)" in il
+        )
         assertTrue("newobj instance void [Kotlin.Stdlib]'Kotlin.Text.StringBuilder'::.ctor(string)" in il)
         assertTrue(
             "call instance class [Kotlin.Stdlib]'Kotlin.Text.StringBuilder' " +
@@ -30817,6 +31172,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         installedProfile: String = target,
     ) {
         val kotlinHome = File(tmpdir, "kotlin-home-$target-$installedProfile")
+        val coreLibraryReference = if (target == "netstandard2.0") "[netstandard]" else "[mscorlib]"
         val installedDirectory = kotlinHome.resolve("lib/dotnet/$installedProfile").apply { mkdirs() }
         stdlibDirectory.resolve("Kotlin.Stdlib.dll").copyTo(installedDirectory.resolve("Kotlin.Stdlib.dll"))
         stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
@@ -31195,6 +31551,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun <T> installedLastPosition(values: List<T>): Int = values.lastIndex
 
+                public fun <T> installedMutableRoundTrip(values: MutableList<T>, value: T): T {
+                    values.add(value)
+                    return values.removeAt(values.size - 1)
+                }
+
                 public fun <T> installedArrayView(values: Array<out T>): List<T> = values.asList()
 
                 public fun installedEmptyInts(): List<Int> = emptyList()
@@ -31299,6 +31660,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val snapshot = owner.suppressedExceptions
                     val view = values.asList()
                     values[0] = "changed"
+                    val mutable = mutableListOf<Int?>(1, null, 3)
+                    val mutableRoundTrip = installedMutableRoundTrip(mutable, 4)
+                    val mutableView = mutable.subList(0, 2)
+                    mutableView[0] = 2
+                    val staleMutableIterator = mutable.iterator()
+                    mutable.add(5)
+                    var mutableFailFast = false
+                    try {
+                        staleMutableIterator.next()
+                    } catch (_: ConcurrentModificationException) {
+                        mutableFailFast = true
+                    }
+                    var escapedBuilder: MutableList<Int>? = null
+                    val builtList = buildList {
+                        escapedBuilder = this
+                        add(6)
+                        add(7)
+                    }
+                    var builderSealed = false
+                    try {
+                        escapedBuilder!!.add(8)
+                    } catch (_: UnsupportedOperationException) {
+                        builderSealed = true
+                    }
+                    val mutableOk =
+                        mutableRoundTrip == 4 &&
+                            mutable.toString() == "[2, null, 3, 5]" &&
+                            mutableView.toString() == "[2, null]" &&
+                            mutableFailFast &&
+                            builtList.toString() == "[6, 7]" &&
+                            builderSealed
                     val collectionsOk =
                         view[0] == "changed" &&
                             view[1] == "K" &&
@@ -31419,7 +31811,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             InvocationKind.entries[2] === InvocationKind.EXACTLY_ONCE &&
                             InvocationKind.entries[3] === InvocationKind.UNKNOWN
                     println(
-                        if (kClassOk && collectionsOk && sumsOk && averagesOk && frontierOk &&
+                        if (kClassOk && collectionsOk && mutableOk && sumsOk && averagesOk && frontierOk &&
                             inlineOnlyOk && throwableOk && contractsOk
                         ) {
                             "OK"
@@ -31661,7 +32053,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue("::'singleOrNull'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
         assertTrue("::'get_lastIndex'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)
-        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<!!0>(!!0[])" in il)
+        assertTrue("class [Kotlin.Runtime]'Kotlin.Collections.MutableList' 'values'" in il)
+        assertTrue("[Kotlin.Runtime]'Kotlin.Collections.MutableList'::'Add'(object)" in il)
+        assertTrue("[Kotlin.Runtime]'Kotlin.Collections.MutableList'::'RemoveAt'(int32)" in il)
+        assertFalse("Kotlin.Collections.MutableList`" in il)
+        assertTrue(
+            "[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<!!0>(class " +
+                    "${coreLibraryReference}System.Array)" in il
+        )
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>" in il)
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Io.ConsoleKt'::'readlnOrNull'()" in il)
@@ -33094,7 +33493,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<int32>(!!0[])
                     stloc.2
                     ldloc.1
-                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(!!0[])
+                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(class [mscorlib]System.Array)
                     stloc.3
 
                     ldc.i4.0
@@ -33522,7 +33921,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 EMPTY_REDUCE_RIGHT_OR_NULL:
                     ldc.i4.0
                     newarr [mscorlib]System.Int32
-                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(!!0[])
+                    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<int32>(class [mscorlib]System.Array)
                     newobj instance void SumOperation::.ctor()
                     call object [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'reduceRightOrNull'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Function2')
                     brfalse.s EMPTY_REDUCE_THROW
@@ -33844,7 +34243,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ldstr "C"
                     stelem.ref
                     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]
-                        'Kotlin.Collections.CollectionsKt'::'asList'<string>(!!0[])
+                        'Kotlin.Collections.CollectionsKt'::'asList'<string>(class [mscorlib]System.Array)
                     stloc.0
 
                     ldloc.0
@@ -33980,7 +34379,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ldstr "Y"
                     stelem.ref
                     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]
-                        'Kotlin.Collections.CollectionsKt'::'asList'<string>(!!0[])
+                        'Kotlin.Collections.CollectionsKt'::'asList'<string>(class [mscorlib]System.Array)
                     stloc.0
                     ldloc.0
                     ldc.i4.0
@@ -34007,7 +34406,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ldc.i4.8
                     stelem.i4
                     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]
-                        'Kotlin.Collections.CollectionsKt'::'asList'<int32>(!!0[])
+                        'Kotlin.Collections.CollectionsKt'::'asList'<int32>(class [mscorlib]System.Array)
                     stloc.s 4
                     ldloc.s 4
                     ldc.i4.0
@@ -34176,10 +34575,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val library = produceLibraryWithRewrittenMetadata(
             assemblyName = "Stale.Embedded.Schema",
-            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "99"),
+            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "20"),
         )
         val diagnostics = compileAgainstRejectedDll(library)
-        assertTrue("uses unsupported CLR ABI index version '99'" in diagnostics) { diagnostics }
+        assertTrue("uses unsupported CLR ABI index version '20'" in diagnostics) { diagnostics }
     }
 
     @Test

@@ -162,12 +162,14 @@ fun box(): String {
         RuntimeException(),
         IllegalStateException(),
         ClassCastException(),
+        OutOfMemoryError(),
     )
     val mappedExceptionClasses = arrayOf(
         Error::class,
         RuntimeException::class,
         IllegalStateException::class,
         ClassCastException::class,
+        OutOfMemoryError::class,
     )
     var exceptionIndex = 0
     while (exceptionIndex < mappedExceptions.size) {
@@ -179,6 +181,7 @@ fun box(): String {
     val custom = CustomException("custom")
     if (custom::class != CustomException::class) return fail("custom exception identity")
     if (!IllegalArgumentException::class.isInstance(custom)) return fail("mapped exception ancestry")
+    if (!Error::class.isInstance(OutOfMemoryError())) return fail("out-of-memory Error ancestry")
 
     class `Dollar$Name`
     val localClass = `Dollar$Name`::class

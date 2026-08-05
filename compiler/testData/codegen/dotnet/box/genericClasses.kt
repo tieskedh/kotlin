@@ -31,6 +31,16 @@ private class WidenedProbe<out T>(private val expected: T) {
     fun sawSamePacket(packet: Any?): Boolean = lastPacket === packet
 }
 
+private class ErasedUncheckedRead<T>(private val stored: Any?) {
+    @Suppress("UNCHECKED_CAST")
+    fun read(): T = stored as T
+}
+
+private class NonNullErasedUncheckedRead<T : Any>(private val stored: Any?) {
+    @Suppress("UNCHECKED_CAST")
+    fun read(): T = stored as T
+}
+
 private open class RouteBase<out T>(private val value: T) {
     open fun label(): String = "Base>$value"
 }
@@ -277,6 +287,13 @@ fun box(): String {
     val stringRoute: RouteBase<Any?> = RouteLeaf("fifty-five")
     if (stringRoute.label() != "Leaf>Mid>Base>fifty-five") {
         return "fail 55: widened String override chain"
+    }
+    val nullableUnchecked: Int? = ErasedUncheckedRead<Int?>(null).read()
+    if (nullableUnchecked != null) return "fail 56: erased unchecked nullable read"
+    try {
+        NonNullErasedUncheckedRead<Any>(null).read()
+        return "fail 57: erased unchecked non-null read accepted null"
+    } catch (_: NullPointerException) {
     }
     return "OK"
 }

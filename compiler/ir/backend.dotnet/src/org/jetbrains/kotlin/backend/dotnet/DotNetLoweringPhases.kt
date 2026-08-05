@@ -143,7 +143,8 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetAnnotationImplementationLowering,
     // Match the mature backends before closure conversion and default stubs: normalize concrete
     // vararg parameters to their vector ABI, materialize omitted arguments, and lower spread
-    // copies to ordinary array operations. Open `vararg T` keeps its unsupported projection.
+    // copies to ordinary array operations. Open `vararg T` becomes the CLR's truthful method-
+    // generic `T[]` vector without changing Kotlin-owned class identity.
     ::DotNetVarargLowering,
     // Reuse the common JVM/JS/Wasm/Native fill-loop shape while rich direct lambdas and callable
     // references can still be inlined. Non-direct initializers retain the erased Function1 ABI.

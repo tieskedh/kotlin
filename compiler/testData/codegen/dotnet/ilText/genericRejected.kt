@@ -8,7 +8,8 @@
 //   reference identity, and boxing would manufacture two unrelated references;
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
 // - reified inline functions: ordinary inlining is supported, but reified operations are not;
-// - varargs of `T`: the parameter type is the unsupported projected `Array<out T>` ABI;
+// Method-owned varargs of `T` are now supported as exact CLR `T[]` parameters. They remain in this
+// mixed rejection fixture to pin that admitted boundary beside the still rejected shapes above.
 // Widening an unconstrained `T` to `Any?`, structural `==`/`== null`, templates, and `toString`
 // are supported through CLR `box !!n` plus the System.Object Any foundation. Other unconstrained
 // member calls still need a declared bound. The erased callable bridge needs the same general

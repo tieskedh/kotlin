@@ -32,6 +32,11 @@ public actual class UninitializedPropertyAccessException : RuntimeException {
     public actual constructor(cause: Throwable?) : super(cause)
 }
 
+public actual open class OutOfMemoryError : Error {
+    public actual constructor() : super()
+    public actual constructor(message: String?) : super(message)
+}
+
 @SinceKotlin("1.4")
 public actual fun Throwable.stackTraceToString(): String = dotNetStackTraceToString(this)
 
