@@ -711,11 +711,14 @@ classifier. The CLR instead reifies invariant `C<T>` constructions. A closed CLR
 strict, while a reflection predicate alone cannot support member use after Kotlin accepts an
 unchecked cast between different logical arguments.
 
-The selected model gives each Kotlin generic class one non-generic physical class. Its storage,
-constructors, base edge, and virtual slots use erased carriers; ordinary JVM-direction bridges
-cover substituted narrow overrides. Runtime tests and casts use that class or its ordinary erased
-base ancestry directly. There is no canonical class interface, closed `C<T>` capability, ancestry
-helper, wrapper, or duplicate storage.
+The selected model gives each Kotlin generic class one canonical non-generic physical class. Its
+public/protected constructors, base edge, and virtual slots use erased carriers; the current
+baseline storage does as well. Ordinary JVM-direction bridges cover substituted narrow overrides.
+Runtime tests and casts use that class or its ordinary erased base ancestry directly. There is no
+canonical class interface, closed `C<T>` Kotlin identity, ancestry helper, wrapper, or duplicate
+authoritative state. Private specialization may later replace baseline storage only under the
+semantic and measurement conditions in the owning ADR; it cannot change this prerequisite's
+erased execution route.
 
 KLIB keeps arguments, variance, projections, bounds, and member types authoritative. Imported CLR
 generics remain reified, while typed C# export is a separate fail-closed product. The complete

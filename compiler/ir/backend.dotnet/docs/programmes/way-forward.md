@@ -116,12 +116,16 @@ algorithm or collection-specific bridge.
 The collection work provides ordinary user value and the foundation now consumed by enums, while exercising
 generic interfaces, arrays, separate products, and profile-compatible stdlib publication.
 
-The erased physical generic-class route is selected in
+The semantically erased generic-class route is selected in
 [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md).
-The disproven primary-typed/exceptional-canonical model has been replaced by one non-generic
-Kotlin runtime owner and one erased virtual hierarchy. Explicit typed C# export remains a later
-fail-closed product. Hybrid class capabilities, wrappers as identity, receiver-only provenance,
-guard hoisting, visibility-dependent ABI, and AOT-specific specialization remain excluded.
+The disproven primary-typed/exceptional-canonical model has been replaced by one canonical
+non-generic Kotlin owner, one erased virtual hierarchy, and one authoritative state. Explicit typed
+C# export remains a later fail-closed product. A second observable class ABI, wrappers as Kotlin
+identity, and visibility-dependent ABI remain excluded. Removable scalar replacement, private
+CLR-generic helpers, typed storage with correct deoptimization, and AOT-specific specialization are
+future optimization work rather than forbidden representations. Defer them until core
+language/stdlib coverage, the concurrency/memory model, and representative benchmarks can justify
+their permanent complexity.
 
 The source-level builder/contracts bootstrap cycle is complete. Common `Appendable`, the complete
 `StringBuilder` file including both `buildString` declarations, generated
