@@ -162,7 +162,17 @@ internal class DotNetIlIntrinsicMethods(
         // no physical declaration, and any surviving call proves the shared lowering missed it.
         Key(kotlinCollectionsFqn, arrayFqn, "<get-indices>", emptyList())
                 to DotNetIlUnsupportedIntrinsic(
-            reason = "private Array.indices bootstrap marker survived RangeContainsLowering",
+            reason = "private Array.indices bootstrap marker survived range/for-loop lowering",
+            excludesDeclarationFromCodegen = true,
+        ),
+        Key(kotlinCollectionsFqn, intFqn, "until", listOf(intFqn))
+                to DotNetIlUnsupportedIntrinsic(
+            reason = "private Int.until bootstrap marker survived for-loop lowering",
+            excludesDeclarationFromCodegen = true,
+        ),
+        Key(kotlinCollectionsFqn, intFqn, "downTo", listOf(intFqn))
+                to DotNetIlUnsupportedIntrinsic(
+            reason = "private Int.downTo bootstrap marker survived for-loop lowering",
             excludesDeclarationFromCodegen = true,
         ),
         Key(kotlinInternalFqn, null, "throwKotlinNothingValueException", emptyList())
@@ -1390,7 +1400,9 @@ private object DotNetIlGenericArrayGetIntrinsic : DotNetIlIntrinsicMethod() {
                     codegen.coreLibraryReference,
                 )
                 if (widening != null) {
-                    codegen.emit(widening, pops = 1, pushes = 1)
+                    widening.instructions.forEach { instruction ->
+                        codegen.emit(instruction, pops = 1, pushes = 1)
+                    }
                 } else {
                     // Projected and captured Array.get calls can expose two logically equivalent
                     // open type parameters that occupy different physical CLR slots. Kotlin's
@@ -1407,7 +1419,9 @@ private object DotNetIlGenericArrayGetIntrinsic : DotNetIlIntrinsicMethod() {
                             "generic-array element ${elementType.nameInSignature} cannot be viewed as " +
                                     expectedType.nameInSignature
                         )
-                        codegen.emit(toObject, pops = 1, pushes = 1)
+                        toObject.instructions.forEach { instruction ->
+                            codegen.emit(instruction, pops = 1, pushes = 1)
+                        }
                     }
                     val narrowing = expectedType.dotNetObjectNarrowingInstructionOrNull(codegen.coreLibraryReference)
                         ?: dotNetUnsupported(

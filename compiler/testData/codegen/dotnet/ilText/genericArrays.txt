@@ -229,11 +229,11 @@
     callvirt instance int32 'test.genericarrays.Base'::'value'()
     ret
   }
-  .method public hidebysig static class 'test.genericarrays.Base' 'projected'(class 'test.genericarrays.Base'[] 'values') cil managed
+  .method public hidebysig static class 'test.genericarrays.Base' 'projected'(class [mscorlib]System.Array 'values') cil managed
   {
     .maxstack 2
     .locals init (
-      [0] class 'test.genericarrays.Base'[] '<arrayGet>',
+      [0] class [mscorlib]System.Array '<arrayGet>',
       [1] int32 '<arrayIndex>'
     )
     ldarg.0
@@ -242,14 +242,15 @@
     stloc.1
     ldloc.0
     ldloc.1
-    ldelem class 'test.genericarrays.Base'
+    callvirt instance object [mscorlib]System.Array::GetValue(int32)
+    castclass 'test.genericarrays.Base'
     ret
   }
   .method public hidebysig static class 'test.genericarrays.Base' 'projectedCall'(class 'test.genericarrays.Derived'[] 'values') cil managed
   {
     .maxstack 1
     ldarg.0
-    call class 'test.genericarrays.Base' 'test.genericarrays.genericArraysKt'::'projected'(class 'test.genericarrays.Base'[])
+    call class 'test.genericarrays.Base' 'test.genericarrays.genericArraysKt'::'projected'(class [mscorlib]System.Array)
     ret
   }
   .method public hidebysig static string[] 'stringLiteral'() cil managed

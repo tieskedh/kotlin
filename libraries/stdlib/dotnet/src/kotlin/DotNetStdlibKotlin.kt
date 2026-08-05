@@ -13,3 +13,9 @@ package kotlin
 public val Char.code: Int
     @Suppress("DEPRECATION")
     get() = this.toInt()
+
+// Common owns the expect declaration. This is the same overflow-free Int comparison used by the
+// generated JVM, JS, Wasm, and Native actuals; no CLR-specific ordering rule is substituted.
+@SinceKotlin("1.1")
+@kotlin.internal.InlineOnly
+public actual inline fun minOf(a: Int, b: Int): Int = if (a <= b) a else b

@@ -80,6 +80,19 @@ therefore classifies as `CancellationException`, `IllegalStateException`,
 
 This logical relation is uniform across all supported profiles.
 
+### Out-of-memory failure uses the exact CLR identity
+
+Common `OutOfMemoryError` is physically `System.OutOfMemoryException`. The CLR type has the exact
+parameterless and nullable-message constructor surface required by Common, and the classifier
+already places managed CLR out-of-memory failures in Kotlin `Error`. A Kotlin construction,
+including collection-capacity overflow, therefore retains the original CLR object and is caught as
+both `OutOfMemoryError` and `Error` without a Kotlin wrapper.
+
+JVM uses `java.lang.OutOfMemoryError`; JS, Wasm, and Native expose a target-owned physical error.
+The CLR's existing exact type is the only platform delta. Mapping overflow to
+`IllegalArgumentException`, inventing a Kotlin-owned sibling, or classifying every `Error` as
+out-of-memory would change Common semantics or foreign identity and is rejected.
+
 ### Catch lowering preserves CLR search semantics
 
 A Kotlin catch not exactly expressible as one CLR type becomes a filter over

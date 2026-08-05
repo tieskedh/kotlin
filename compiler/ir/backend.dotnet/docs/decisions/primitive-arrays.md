@@ -35,19 +35,13 @@ vectors are covariant. The importer does not infer Kotlin covariance from the
 carrier. Foreign stores may therefore throw CLR `ArrayTypeMismatchException`;
 that is an interop hazard rather than a reason to weaken Kotlin variance.
 
-`Array<out T>` keeps the same vector carrier and records its projection in
-KLIB. Closed reference widening may use truthful CLR covariance. A value
-vector cannot widen to `object[]`; until an identity-preserving carrier exists,
-that boundary is rejected rather than copied or silently changed. `in`
-projections remain unsupported where no single truthful element token exists;
-stars follow their separate classified `System.Array` decision.
-
-An inferred bounded output projection need not become a physical boundary when
-its only consumer already requests the separately selected `Array<*>` view. In
-that case codegen emits each child at the final `System.Array` boundary, so an
-`int32[]` and a `string[]` retain their exact carriers and identities. This
-expected-type elision does not admit the bounded projection in a signature,
-field, local, return, cast, or operation, and does not manufacture covariance.
+`Array<out T>` records its projection and bounded read result in KLIB while its
+physical view is `System.Array`, as selected by the later bounded-output
+projection decision. The original exact vector remains unchanged: an
+`int32[]` and a `string[]` widen to that common base without copying, and reads
+recover the declared bound at use. `in` projections remain unsupported where
+no single truthful write token exists; stars follow their separate classified
+`System.Array` decision with the fixed erased `Any?` read result.
 
 ### Specialized arrays are Kotlin-owned wrappers
 
@@ -134,10 +128,10 @@ This is a concrete closed-carrier rule. It does not map nested open `Array<T?>`
 to `object[]`: the accepted hybrid-nullability ADR keeps that shape rejected
 because one invariant vector signature cannot become `Nullable<V>[]` for a
 value substitution and a reference vector for a reference substitution.
-Likewise, a projection from a value-element vector to `Array<out Any?>` remains
-outside the admitted physical ABI; CLR vector covariance applies only to
-reference elements. Exact invariant use, nested arrays, generic substitution,
-and concrete same-element projections do not require either widening.
+Likewise, a projection from a value-element vector to `Array<out Any?>` does
+not become `object[]`; it retains the exact vector through the bounded-output
+`System.Array` view. Exact invariant use, nesting, and generic substitution
+continue to use their ordinary precise vector carriers.
 
 #### Design attack
 

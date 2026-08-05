@@ -58,6 +58,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Primitive scalar carriers](decisions/primitive-scalars.md)
 - [Kotlin-owned primitive-array wrappers](decisions/primitive-arrays.md)
 - [Classified `Array<*>` erased view](decisions/star-projected-arrays.md)
+- [Bounded `Array<out E>` read-only CLR view](decisions/bounded-output-projected-arrays.md)
 - [Reified array operations reuse ordinary substituted carriers](decisions/reified-array-operations.md)
 - [Nominal `KClass` and class literals over classified CLR evidence](decisions/kclass-and-class-literals.md)
 - [Parameterless Kotlin marker annotation classes](decisions/marker-annotation-classes.md)

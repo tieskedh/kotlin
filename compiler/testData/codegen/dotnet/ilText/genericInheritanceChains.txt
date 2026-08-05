@@ -126,14 +126,14 @@
     call instance void 'Base'::.ctor(object, object)
     ret
   }
-  .method public hidebysig newslot virtual instance object 'second'() cil managed
+  .method public hidebysig virtual instance object 'second'() cil managed
   {
     .maxstack 1
     ldarg.0
     call instance object 'Base'::'second'()
     ret
   }
-  .method public hidebysig newslot virtual instance !!0 'choose'<'M'>(object 'context', !!0 'value') cil managed
+  .method public hidebysig virtual instance !!0 'choose'<'M'>(object 'context', !!0 'value') cil managed
   {
     .maxstack 3
     ldarg.0
@@ -160,24 +160,6 @@
     callvirt instance object 'Base'::'first'()
     ret
   }
-  .method private hidebysig newslot virtual final instance object '<CovariantReturnBridge-Base-second-5b0509bcc56dd8e9911319afbdc084bf>'() cil managed
-  {
-    .override method instance object 'Base'::'second'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance object 'Mid'::'second'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance !!0 '<CovariantReturnBridge-Base-choose-46561e8d96d0cd13eba506c34ad6b642>'<'M'>(object 'context', !!0 'value') cil managed
-  {
-    .override method instance !!0 'Base'::'choose'<[1]>(object, !!0)
-    .maxstack 3
-    ldarg.0
-    ldarg.1
-    ldarg.2
-    callvirt instance !!0 'Mid'::'choose'<!!0>(object, !!0)
-    ret
-  }
 }
 .class public auto ansi sealed beforefieldinit 'Leaf'
        extends 'Mid'
@@ -191,7 +173,7 @@
     call instance void 'Mid'::.ctor(object, object)
     ret
   }
-  .method public hidebysig newslot virtual instance object 'second'() cil managed
+  .method public hidebysig virtual instance object 'second'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -206,14 +188,6 @@
     ldarg.1
     call instance string 'Mid'::'source'<!!0>(!!0)
     call string [mscorlib]System.String::Concat(string, string)
-    ret
-  }
-  .method private hidebysig newslot virtual final instance object '<CovariantReturnBridge-Mid-second-8c44137e4844541684a9db99fd2d4374>'() cil managed
-  {
-    .override method instance object 'Mid'::'second'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance object 'Leaf'::'second'()
     ret
   }
 }

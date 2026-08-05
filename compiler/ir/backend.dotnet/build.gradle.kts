@@ -44,6 +44,9 @@ tasks.named<ProcessResources>("processResources") {
     )) {
         into("kotlin-dotnet-stdlib/src/kotlin/internal")
     }
+    from(rootProject.file("libraries/stdlib/src/kotlin/util/Tuples.kt")) {
+        into("kotlin-dotnet-stdlib/src/kotlin/util")
+    }
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KClass.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KClasses.kt"),
@@ -54,8 +57,18 @@ tasks.named<ProcessResources>("processResources") {
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractList.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/collections/IndexedValue.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/collections/Iterables.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/collections/Iterators.kt"),
     )) {
         into("kotlin-dotnet-stdlib/src/kotlin/collections")
+    }
+    from(files(
+        rootProject.file("libraries/stdlib/common/src/kotlin/collections/AbstractMutableCollection.kt"),
+        rootProject.file("libraries/stdlib/common/src/kotlin/collections/AbstractMutableList.kt"),
+        rootProject.file("libraries/stdlib/common/src/kotlin/collections/ArrayList.kt"),
+    )) {
+        into("kotlin-dotnet-stdlib/common/src/kotlin/collections")
     }
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/contracts/ContractBuilder.kt"),

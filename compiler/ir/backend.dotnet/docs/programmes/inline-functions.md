@@ -664,7 +664,8 @@ The bounded slice must cover all eight families across `arrayOf`, `arrayOfNulls`
 initializer constructors, concrete nullable varargs/spreads, get/set/size, direct and escaping
 iteration, copy/content operations, exact casts, nesting, generic functions/classes, portable KLIB
 consumption, and C# signatures/aliasing on both profiles. It must preserve the existing rejection of
-nested open `Array<T?>`, input projections, and value-vector widening to `Array<out Any?>`.
+nested open `Array<T?>` and input projections. Bounded output projections now follow their
+separate identity-preserving `System.Array` decision.
 Star projection remains a separate erased-view prerequisite; closed `Nullable<V>[]` does not
 answer any of those shapes and must not be used as a pretext to weaken their gates.
 
@@ -690,9 +691,10 @@ primitive-array wrappers remain outside the classifier. No path copies, wraps, t
 exact vector; KLIB keeps the star projection authoritative. The full decision and adversarial gate
 are in the [star-projected-array ADR](../decisions/star-projected-arrays.md).
 
-This prerequisite remains bounded to `Array<*>`. It does not infer support for input projections,
-open `Array<T?>`, value-vector covariance to `Array<out Any?>`, or declaration-erased identity for
-ordinary Kotlin generic classes.
+This prerequisite remains bounded to `Array<*>`. It does not by itself infer support for input
+projections, open `Array<T?>`, bounded output projections, or declaration-erased identity for
+ordinary Kotlin generic classes; bounded output projections were selected later under their own
+typed-read decision.
 
 This prerequisite is implemented. `starProjectedArrays.kt` executes reference, value,
 nullable-value, nested, and empty vectors across both FIR frontends and runtime profiles, including
@@ -700,8 +702,8 @@ identity, mutation aliasing, erased reads/iteration, exact follow-up casts, null
 single evaluation. The portable-library test additionally proves `System.Array` signatures and
 copy-free Kotlin/Roslyn consumption on Framework CLR and CoreCLR, accepts foreign SZ vectors, and
 rejects rectangular and non-zero-based CLR arrays through the shared classifier. The existing
-backend-reachable sentinels keep input projections, open nullable elements, and value-vector
-covariance outside the feature. The next reversible prerequisite is declaration-erased runtime
+backend-reachable sentinels keep input projections and open nullable elements outside the feature.
+The next reversible prerequisite is declaration-erased runtime
 identity for ordinary Kotlin generic classes, not either reified support gate.
 
 ### Selected seventh prerequisite: erased generic-class identity

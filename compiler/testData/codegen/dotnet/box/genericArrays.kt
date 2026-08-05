@@ -24,6 +24,10 @@ private fun <T> replace(values: Array<T>, value: T) {
     values[0] = value
 }
 
+private fun <T> projectedFirst(values: Array<out T>): T = values[0]
+
+private fun projectedAny(values: Array<out Any?>): Any? = values[0]
+
 private fun <T : Base> bounded(values: Array<T>): Int = values[0].value()
 
 private fun protectedGet(values: Array<String>): String = values[
@@ -67,6 +71,7 @@ fun box(): String {
     )
     if (strings.size != 2 || strings[0] != "a" || strings[1] != "b") return "fail: literal"
     if (first(strings) != "a") return "fail: generic get"
+    if (projectedFirst(strings) != "a") return "fail: projected reference get"
     replace(strings, "c")
     if (strings[0] != "c") return "fail: generic set"
     if (protectedGet(strings) != "c") return "fail: protected get"
@@ -102,6 +107,18 @@ fun box(): String {
     if (strings !== strings || strings === arrayOf("holder", "b")) return "fail: reference identity"
     val absent: Array<String>? = null
     if (absent != null) return "fail: nullable outer"
+
+    val projectedInts = arrayOf(11, 12)
+    val projectedIntsView: Array<out Any?> = projectedInts
+    if (projectedAny(projectedIntsView) != 11) return "fail: projected value get"
+    projectedInts[0] = 13
+    if (projectedAny(projectedIntsView) != 13) return "fail: projected value alias"
+    val projectedNullable = arrayOf<Int?>(null, 14)
+    if (projectedAny(projectedNullable) != null || projectedFirst(projectedNullable) != null) {
+        return "fail: projected nullable value"
+    }
+    val projectedDerived: Array<out Base> = derived
+    if (projectedFirst(projectedDerived).value() != 30) return "fail: projected bounded reference"
 
     var negativeCaught = false
     try {

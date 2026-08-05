@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.render
@@ -37,6 +38,9 @@ internal object DotNetStdlibLibrary {
     const val ARRAY_AS_LIST_IL_NAME = "Kotlin.Collections.ArrayAsList"
     const val ABSTRACT_COLLECTION_IL_NAME = "Kotlin.Collections.AbstractCollection"
     const val ABSTRACT_LIST_IL_NAME = "Kotlin.Collections.AbstractList"
+    const val ABSTRACT_MUTABLE_COLLECTION_IL_NAME = "Kotlin.Collections.AbstractMutableCollection"
+    const val ABSTRACT_MUTABLE_LIST_IL_NAME = "Kotlin.Collections.AbstractMutableList"
+    const val ARRAY_LIST_IL_NAME = "Kotlin.Collections.ArrayList"
     const val ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayIterator"
     const val ARRAY_ITERABLE_IL_NAME = "Kotlin.Collections.ArrayIterable"
     const val ERASED_ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ErasedArrayIterator"
@@ -47,6 +51,7 @@ internal object DotNetStdlibLibrary {
     const val SERIALIZABLE_IL_NAME = "Kotlin.Io.Serializable"
     const val READ_AFTER_EOF_EXCEPTION_IL_NAME = "Kotlin.Io.ReadAfterEOFException"
     const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
+    const val TUPLES_FACADE_IL_NAME = "Kotlin.TuplesKt"
     const val TEXT_FACADE_IL_NAME = "Kotlin.Text.StringsKt"
     const val STANDARD_FACADE_IL_NAME = "Kotlin.StandardKt"
     const val CONTRACTS_FACADE_IL_NAME = "Kotlin.Contracts.ContractBuilderKt"
@@ -65,18 +70,26 @@ internal object DotNetStdlibLibrary {
 
     private val implementationClassIlNames = mapOf(
         "kotlin.Enum" to "Kotlin.Enum",
+        "kotlin.Pair" to "Kotlin.Pair",
+        "kotlin.Triple" to "Kotlin.Triple",
         "kotlin.enums.EnumEntries" to "Kotlin.Enums.EnumEntries",
         "kotlin.enums.EnumEntriesList" to "Kotlin.Enums.EnumEntriesList",
         "kotlin.enums.EnumEntriesSerializationProxy" to "Kotlin.Enums.EnumEntriesSerializationProxy",
         "kotlin.collections.ArrayAsList" to ARRAY_AS_LIST_IL_NAME,
         "kotlin.collections.AbstractCollection" to ABSTRACT_COLLECTION_IL_NAME,
         "kotlin.collections.AbstractList" to ABSTRACT_LIST_IL_NAME,
+        "kotlin.collections.AbstractMutableCollection" to ABSTRACT_MUTABLE_COLLECTION_IL_NAME,
+        "kotlin.collections.AbstractMutableList" to ABSTRACT_MUTABLE_LIST_IL_NAME,
+        "kotlin.collections.ArrayList" to ARRAY_LIST_IL_NAME,
         "kotlin.collections.ArrayIterator" to ARRAY_ITERATOR_IL_NAME,
         "kotlin.collections.ArrayIterable" to ARRAY_ITERABLE_IL_NAME,
         "kotlin.collections.ErasedArrayIterator" to ERASED_ARRAY_ITERATOR_IL_NAME,
         "kotlin.collections.ErasedArrayIterable" to ERASED_ARRAY_ITERABLE_IL_NAME,
         "kotlin.collections.EmptyIterator" to EMPTY_ITERATOR_IL_NAME,
         "kotlin.collections.EmptyList" to EMPTY_LIST_IL_NAME,
+        "kotlin.collections.IndexedValue" to "Kotlin.Collections.IndexedValue",
+        "kotlin.collections.IndexingIterable" to "Kotlin.Collections.IndexingIterable",
+        "kotlin.collections.IndexingIterator" to "Kotlin.Collections.IndexingIterator",
         "kotlin.collections.RandomAccess" to RANDOM_ACCESS_IL_NAME,
         "kotlin.io.Serializable" to SERIALIZABLE_IL_NAME,
         "kotlin.io.ReadAfterEOFException" to READ_AFTER_EOF_EXCEPTION_IL_NAME,
@@ -116,6 +129,17 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.asIterable" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.average" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.asList" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.asArrayList" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.listOf" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.mutableListOf" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.arrayListOf" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.listOfNotNull" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.buildList" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.buildListInternal" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.isNotEmpty" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.isNullOrEmpty" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.orEmpty" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.ifEmpty" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.arrayOfNulls" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.checkCountOverflow" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.checkIndexOverflow" to COLLECTIONS_FACADE_IL_NAME,
@@ -127,6 +151,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.component4" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.component5" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.contains" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.containsAll" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.count" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.elementAt" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.elementAtOrNull" to COLLECTIONS_FACADE_IL_NAME,
@@ -155,6 +180,15 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.none" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.onEach" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.onEachIndexed" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.removeAll" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.retainAll" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.filterInPlace" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.objectArray" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.clearObjectRange" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.copyObjectRange" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.objectRangeHashCode" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.objectRangeEquals" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.objectRangeToString" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.reduce" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.reduceIndexed" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.reduceIndexedOrNull" to COLLECTIONS_FACADE_IL_NAME,
@@ -198,6 +232,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.let" to STANDARD_FACADE_IL_NAME,
         "kotlin.takeIf" to STANDARD_FACADE_IL_NAME,
         "kotlin.takeUnless" to STANDARD_FACADE_IL_NAME,
+        "kotlin.check" to STANDARD_FACADE_IL_NAME,
         "kotlin.contracts.contract" to CONTRACTS_FACADE_IL_NAME,
         "kotlin.internal.throwUninitializedPropertyAccessException" to THROW_HELPERS_FACADE_IL_NAME,
         "kotlin.internal.throwUnsupportedOperationException" to THROW_HELPERS_FACADE_IL_NAME,
@@ -329,7 +364,13 @@ internal object DotNetStdlibLibrary {
     }
 
     fun implementationFunctionFacadeIlName(function: IrSimpleFunction): String? {
-        if ((function.parent as? IrFile)?.isDotNetStdlibImplementationSource != true) return null
+        val file = function.parent as? IrFile ?: return null
+        if (!file.isDotNetStdlibImplementationSource) return null
+        // The admitted source shard, not a second per-function list, owns its complete physical
+        // implementation closure. This is essential for exact Common projections: private and
+        // internal helpers must be emitted beside the public functions which call them. Shards
+        // without one facade retain the narrow legacy map below for independently owned members.
+        implementationFileFacadeIlName(file)?.let { return it }
         val functionFqName = function.fqNameWhenAvailable?.asString()
         return functionFqName?.let(implementationFunctionFacadeIlNames::get)
             ?: functionFqName
@@ -580,8 +621,31 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
+        "_DotNetBootstrapCollectionFactories.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = COLLECTIONS_FACADE_IL_NAME,
+        ),
+        "IndexedValue.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "Iterables.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = COLLECTIONS_FACADE_IL_NAME,
+        ),
+        "Iterators.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = COLLECTIONS_FACADE_IL_NAME,
+        ),
         "AbstractCollection.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "AbstractList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "AbstractMutableCollection.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "AbstractMutableList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "ArrayList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "DotNetAbstractMutableCollection.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "DotNetAbstractMutableList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "DotNetArrayList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "_DotNetBootstrapMutableCollections.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = COLLECTIONS_FACADE_IL_NAME,
+        ),
         "_DotNetBootstrapAppendable.kt" to ImplementationSource(
             packageFqName = "kotlin.text",
             facadeIlName = TEXT_FACADE_IL_NAME,
@@ -598,6 +662,23 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin",
             facadeIlName = STANDARD_FACADE_IL_NAME,
         ),
+        // Char.code is intrinsic and previously left this actual-only file with no physical
+        // declaration. The scalar-bounds tranche adds the executable minOf actual here. FIR
+        // actualization may retain either the Common expect or this .NET actual as owner, so both
+        // source names must designate the same Kotlin.Stdlib facade and neither may leak into the
+        // following user assembly.
+        "DotNetStdlibKotlin.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = STANDARD_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapScalarBounds.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = STANDARD_FACADE_IL_NAME,
+        ),
+        "Tuples.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = TUPLES_FACADE_IL_NAME,
+        ),
         "_DotNetBootstrapExperimentalTypeInference.kt" to ImplementationSource(
             packageFqName = "kotlin.experimental",
         ),
@@ -609,6 +690,10 @@ internal object DotNetStdlibLibrary {
             facadeIlName = CONTRACTS_FACADE_IL_NAME,
         ),
         "Effect.kt" to ImplementationSource(packageFqName = "kotlin.contracts"),
+        "_DotNetBootstrapPreconditions.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = STANDARD_FACADE_IL_NAME,
+        ),
         "DotNetStdlibIo.kt" to ImplementationSource(
             packageFqName = "kotlin.io",
             facadeIlName = IO_FACADE_IL_NAME,
@@ -687,7 +772,9 @@ internal val IrClass.isDotNetResolutionOnlyStdlibDeclaration: Boolean
 
 /** Marker for a product or fallback stdlib implementation declaration, never a user class. */
 internal val IrClass.isDotNetStdlibImplementation: Boolean
-    get() = DotNetStdlibLibrary.implementationClassIlName(this) != null
+    get() = DotNetStdlibLibrary.implementationClassIlName(this) != null ||
+            isOriginallyLocalDeclaration &&
+            (parent as? IrFile)?.isDotNetStdlibImplementationSource == true
 
 /** Marker for executable top-level stdlib source, distinct from resolution-only external stubs. */
 internal val IrSimpleFunction.isDotNetStdlibImplementation: Boolean

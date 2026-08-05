@@ -1,7 +1,8 @@
 package test.genericarrays.rejected
 
-// Every declaration below remains outside the supported invariant concrete-array model. No
-// fallback array-construction IL may be emitted.
+// Every declaration below except valueProjection remains outside the supported array model. A
+// covariant view of an already allocated exact vector is now represented by System.Array; it does
+// not allocate a fallback array or weaken the invariant carrier used by the original value.
 
 open class Base
 

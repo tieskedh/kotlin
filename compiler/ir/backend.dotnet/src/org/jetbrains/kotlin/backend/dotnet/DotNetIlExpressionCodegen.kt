@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrClassReference
@@ -30,6 +31,7 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
+import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isNullableNothing
@@ -94,6 +96,12 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emit(instruction, pops, pushes)
     }
 
+    private fun emitWideningCoercion(coercion: DotNetIlWideningCoercion) {
+        coercion.instructions.forEach { instruction ->
+            methodContext.emit(instruction, pops = 1, pushes = 1)
+        }
+    }
+
     fun recordAssemblyReference(assemblyName: String) {
         typeMapper.recordAssemblyReference(assemblyName)
     }
@@ -118,6 +126,10 @@ internal class DotNetIlExpressionCodegen(
      * performed by codegen.
      */
     private fun mappedNaturalType(expression: IrExpression): DotNetIlValueType? {
+        if (expression is IrGetValue && expression.type.isDotNetGenericArray()) {
+            val slotType = methodContext.reference(expression.symbol).type
+            if (slotType is DotNetIlValueType.GenericArray) return slotType
+        }
         if (
             expression is IrCall &&
             intrinsicMethods.getIntrinsic(expression.symbol) == null &&
@@ -277,7 +289,7 @@ internal class DotNetIlExpressionCodegen(
                 if (coercion != null) {
                     emitExpression(expression, naturalType)
                     if (methodContext.isTerminated) return
-                    methodContext.emit(coercion, pops = 1, pushes = 1)
+                    emitWideningCoercion(coercion)
                     return
                 }
             }
@@ -696,6 +708,26 @@ internal class DotNetIlExpressionCodegen(
             ?: dotNetUnsupported("implicit cast of a value of unsupported type ${expression.argument.type.render()}")
         val castType = typeMapper.toDotNetIlValueType(expression.typeOperand)
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
+        if (expression.operator == IrTypeOperator.IMPLICIT_CAST &&
+            expression.argument.type.isDotNetGenericArray() &&
+            expression.typeOperand.isDotNetGenericArray() &&
+            (expectedType is DotNetIlValueType.ErasedGenericArray || expectedType == operandType)
+        ) {
+            // FIR can materialize an invariant-looking IMPLICIT_CAST after type substitution,
+            // even though the consuming declaration is the authoritative read-only
+            // `Array<out T>` boundary. One important shape is an inlined
+            // `MutableCollection<in T>.plusAssign(Array<T>)`: erasing the collection owner can
+            // make the transient cast read `Array<Int> -> Array<Any?>`. CLR cannot widen
+            // `int32[]` to `object[]`, but every exact SZ vector already is the selected
+            // identity-preserving System.Array carrier. Emit the original vector directly at
+            // that outer carrier. An exact expected type can additionally come from the
+            // provenance-preserving compiler temporary selected by DotNetIlMethodCodegen; in
+            // that case the original vector is already precisely the local's physical type.
+            // Every other invariant destination takes the normal path below and therefore
+            // cannot acquire this widening.
+            emitExpression(expression.argument, operandType)
+            return
+        }
         if (expression.operator == IrTypeOperator.IMPLICIT_CAST && expression.argument.type.isNullableNothing()) {
             // Binary inlining can make an inline function's `return null` branch explicit as
             // Nothing? followed by an IMPLICIT_CAST to its substituted nullable result. Reuse the
@@ -771,7 +803,7 @@ internal class DotNetIlExpressionCodegen(
                     pops = 1,
                     pushes = 1,
                 )
-                if (expression.operator == IrTypeOperator.CAST && !expression.typeOperand.isMarkedNullable()) {
+                if (expression.operator == IrTypeOperator.CAST && !expression.typeOperand.isNullable()) {
                     emitReferenceNotNullOrThrowNpe()
                 }
                 return
@@ -794,7 +826,7 @@ internal class DotNetIlExpressionCodegen(
                     pops = 1,
                     pushes = 1,
                 )
-                if (expression.operator == IrTypeOperator.CAST && !expression.typeOperand.isMarkedNullable()) {
+                if (expression.operator == IrTypeOperator.CAST && !expression.typeOperand.isNullable()) {
                     emitReferenceNotNullOrThrowNpe()
                 }
                 return
@@ -826,7 +858,7 @@ internal class DotNetIlExpressionCodegen(
                 methodContext.emit("isinst ${castType.nameInSignature}", pops = 1, pushes = 1)
             } else {
                 methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
-                if (!expression.typeOperand.isMarkedNullable()) {
+                if (!expression.typeOperand.isNullable()) {
                     emitReferenceNotNullOrThrowNpe()
                 }
             }
@@ -888,7 +920,7 @@ internal class DotNetIlExpressionCodegen(
                         coercion != null -> {
                             emitExpression(expression.argument, operandType)
                             if (methodContext.isTerminated) return
-                            methodContext.emit(coercion, pops = 1, pushes = 1)
+                            emitWideningCoercion(coercion)
                         }
                         operandType is DotNetIlValueType.NullableValue && castType == operandType.elementType -> {
                             emitExpression(expression.argument, operandType)
@@ -944,7 +976,8 @@ internal class DotNetIlExpressionCodegen(
                         }
                         else -> dotNetUnsupported(
                             "implicit cast from ${operandType.nameInSignature} to ${castType.nameInSignature} " +
-                                    "is not a reference upcast and is not supported"
+                                    "is not a reference upcast and is not supported " +
+                                    "(${expression.argument.type.render()} -> ${expression.typeOperand.render()})"
                         )
                     }
                 }
@@ -957,7 +990,7 @@ internal class DotNetIlExpressionCodegen(
                     "implicit cast produces ${castType.nameInSignature} " +
                             "where ${expectedType.nameInSignature} is expected"
                 )
-            methodContext.emit(outerCoercion, pops = 1, pushes = 1)
+            emitWideningCoercion(outerCoercion)
         }
     }
 
@@ -975,7 +1008,7 @@ internal class DotNetIlExpressionCodegen(
             "$operationDescription produces ${castType.nameInSignature} " +
                     "where ${expectedType.nameInSignature} is expected"
         )
-        methodContext.emit(outerCoercion, pops = 1, pushes = 1)
+        emitWideningCoercion(outerCoercion)
     }
 
     private fun emitRuntimeTypeTest(
@@ -1935,7 +1968,7 @@ internal class DotNetIlExpressionCodegen(
                     "call to '${call.symbol.owner.name.asString()}' produces ${returnType.nameInSignature} " +
                             "where ${expectedType.nameInSignature} is expected"
                 )
-            methodContext.emit(coercion, pops = 1, pushes = 1)
+            emitWideningCoercion(coercion)
         } else if (producedType == null) {
             dotNetUnsupported(
                 "call to '${call.symbol.owner.name.asString()}' produces ${returnType.nameInSignature} " +
@@ -2050,23 +2083,24 @@ internal class DotNetIlExpressionCodegen(
             capabilityReceiverType.arguments,
             capabilityMethodInstantiation,
         )
-        val capabilityResultCoercion: DotNetOptionalInstruction?
-        val canonicalResultInstruction: String?
+        val capabilityResultCoercion: DotNetOptionalCoercion?
+        val canonicalResultCoercion: DotNetIlWideningCoercion?
         if (expectedType == null) {
             if (capabilityReturnType != DotNetIlReturnType.Void || canonical.returnType != DotNetIlReturnType.Void) {
                 return false
             }
             capabilityResultCoercion = null
-            canonicalResultInstruction = null
+            canonicalResultCoercion = null
         } else {
             val capabilityResultType = (capabilityReturnType as? DotNetIlReturnType.Value)?.type ?: return false
             val canonicalResultType = (canonical.returnType as? DotNetIlReturnType.Value)?.type ?: return false
             capabilityResultCoercion = wideningCoercionOrNull(capabilityResultType, expectedType) ?: return false
-            canonicalResultInstruction = when {
+            canonicalResultCoercion = when {
                 canonicalResultType.isDotNetAssignableTo(expectedType) -> null
                 canonicalResultType == DotNetIlValueType.Object ->
-                    expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference) ?: return false
-                else -> wideningCoercionOrNull(canonicalResultType, expectedType)?.instruction ?: return false
+                    expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
+                        ?.let(::DotNetIlWideningCoercion) ?: return false
+                else -> wideningCoercionOrNull(canonicalResultType, expectedType)?.coercion ?: return false
             }
         }
 
@@ -2105,9 +2139,7 @@ internal class DotNetIlExpressionCodegen(
             pops = capabilitySignature.parameterTypes.size,
             pushes = if (capabilityReturnType is DotNetIlReturnType.Value) 1 else 0,
         )
-        capabilityResultCoercion?.instruction?.let { instruction ->
-            methodContext.emit(instruction, pops = 1, pushes = 1)
-        }
+        capabilityResultCoercion?.coercion?.let(::emitWideningCoercion)
         resultSlot?.let { slot -> methodContext.emit(storeLocalInstruction(slot.index), pops = 1) }
         methodContext.emitGoto(joinLabel)
 
@@ -2128,9 +2160,7 @@ internal class DotNetIlExpressionCodegen(
             pops = canonical.info.signature.parameterTypes.size,
             pushes = if (canonical.returnType is DotNetIlReturnType.Value) 1 else 0,
         )
-        canonicalResultInstruction?.let { instruction ->
-            methodContext.emit(instruction, pops = 1, pushes = 1)
-        }
+        canonicalResultCoercion?.let(::emitWideningCoercion)
         resultSlot?.let { slot -> methodContext.emit(storeLocalInstruction(slot.index), pops = 1) }
 
         methodContext.emitLabel(joinLabel)
@@ -2246,18 +2276,14 @@ internal class DotNetIlExpressionCodegen(
             methodContext.emit(loadLocalInstruction(exactReceiverSlot.index), pushes = 1)
             argumentSlots.forEachIndexed { index, slot ->
                 methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
-                shape.argumentCoercions[index]?.let { instruction ->
-                    methodContext.emit(instruction, pops = 1, pushes = 1)
-                }
+                shape.argumentCoercions[index]?.let(::emitWideningCoercion)
             }
             methodContext.emit(
                 DotNetRuntimeTypes.exactInvokeCallInstruction(shape.exactType),
                 pops = arity + 1,
                 pushes = 1,
             )
-            shape.resultCoercion?.let { instruction ->
-                methodContext.emit(instruction, pops = 1, pushes = 1)
-            }
+            shape.resultCoercion?.let(::emitWideningCoercion)
             methodContext.emit(storeLocalInstruction(exactResultSlot.index), pops = 1)
             methodContext.emitGoto(joinLabel)
             if (nextShapeLabel != fallbackLabel) {
@@ -2282,7 +2308,7 @@ internal class DotNetIlExpressionCodegen(
                     ?: dotNetUnsupported(
                         "callable argument cannot be converted from ${parameterType.nameInSignature} to object"
                     )
-                methodContext.emit(coercion, pops = 1, pushes = 1)
+                emitWideningCoercion(coercion)
             }
         }
         methodContext.emit(
@@ -2325,10 +2351,10 @@ internal class DotNetIlExpressionCodegen(
         val arity = capabilityTypes.size - 1
         val argumentCoercions = (0 until arity).map { index ->
             val coercion = wideningCoercionOrNull(callSiteTypes[index], capabilityTypes[index]) ?: return null
-            coercion.instruction
+            coercion.coercion
         }
         val resultCoercion = wideningCoercionOrNull(capabilityTypes.last(), callSiteTypes.last()) ?: return null
-        return DotNetExactCallableInvocationShape(exactType, argumentCoercions, resultCoercion.instruction)
+        return DotNetExactCallableInvocationShape(exactType, argumentCoercions, resultCoercion.coercion)
     }
 
     private fun List<IrType>.toDotNetIlValueTypesOrNull(): List<DotNetIlValueType>? = map { type ->
@@ -2343,9 +2369,10 @@ internal class DotNetIlExpressionCodegen(
     private fun wideningCoercionOrNull(
         from: DotNetIlValueType,
         to: DotNetIlValueType,
-    ): DotNetOptionalInstruction? = when {
-        from.isDotNetAssignableTo(to) -> DotNetOptionalInstruction(null)
-        else -> dotNetWideningCoercionOrNull(from, to, coreLibraryReference)?.let(::DotNetOptionalInstruction)
+    ): DotNetOptionalCoercion? = when {
+        from.isDotNetAssignableTo(to) -> DotNetOptionalCoercion(null)
+        else -> dotNetWideningCoercionOrNull(from, to, coreLibraryReference)
+            ?.let { coercion -> DotNetOptionalCoercion(coercion) }
     }
 
     /** The deepest fixed FunctionN/KFunctionN type retained by an immutable initializer chain. */
@@ -2391,12 +2418,12 @@ internal class DotNetIlExpressionCodegen(
 
     private data class DotNetExactCallableInvocationShape(
         val exactType: DotNetIlValueType.GenericInstance,
-        val argumentCoercions: List<String?>,
-        val resultCoercion: String?,
+        val argumentCoercions: List<DotNetIlWideningCoercion?>,
+        val resultCoercion: DotNetIlWideningCoercion?,
     )
 
-    private data class DotNetOptionalInstruction(
-        val instruction: String?,
+    private data class DotNetOptionalCoercion(
+        val coercion: DotNetIlWideningCoercion?,
     )
 
     /** Narrows an erased runtime slot result from its stable carrier to the logical Kotlin type. */
@@ -2529,20 +2556,46 @@ internal class DotNetIlExpressionCodegen(
                 return
             }
             // A canonical generic-interface result can be stored in an object local while a
-            // concrete consumer later requires the enclosing function's open T. Materialize
-            // precisely that erased local-read boundary with `unbox.any !n/!!n`: ECMA-335 defines
-            // it for both reference and value substitutions. Restricting the rule to local slots
-            // and open type-parameter consumers prevents an object-to-arbitrary-type escape hatch.
-            // A corrupt value therefore still fails at first use.
+            // concrete consumer later requires the enclosing function's open T. A null-tested
+            // `T?` parameter has the same physical object slot; FIR may retain `T?` on the bare
+            // read while the typed consumer records the frontend-proven non-null `T` expectation.
+            // Materialize precisely those proven erased reads with
+            // `unbox.any !n/!!n`: ECMA-335 defines it for reference and value substitutions.
+            // Restricting the rule to locals or the exact nullable-parameter smartcast shape
+            // prevents an object-to-arbitrary-type escape hatch. A corrupt value still fails at
+            // first logical use.
             if (slotType == DotNetIlValueType.Object &&
                 expectedType is DotNetIlValueType.TypeParameter &&
-                expression.symbol.owner is IrVariable
+                (expression.symbol.owner is IrVariable || expression.isNullableTypeParameterRecovery(expectedType))
             ) {
                 emitLoadSlot(slot)
                 methodContext.emit(
                     "unbox.any ${expectedType.nameInSignature}",
                     pops = 1,
                     pushes = 1,
+                )
+                return
+            }
+            // A method relationship such as `C : R` is a real CLR GenericParamConstraint. FIR's
+            // typed consumer can therefore request R from a bare C slot without an explicit IR
+            // cast. The verifier-compatible widening is `box C; unbox.any R`: reference
+            // substitutions retain identity, while a value substitution is recovered as an
+            // actual R value rather than leaving an object reference in an R-typed slot.
+            if (slotType is DotNetIlValueType.TypeParameter &&
+                expectedType is DotNetIlValueType.TypeParameter &&
+                slotType.isConstrainedTo(expectedType)
+            ) {
+                emitLoadSlot(slot)
+                emitWideningCoercion(
+                    checkNotNull(
+                        dotNetWideningCoercionOrNull(
+                            slotType,
+                            expectedType,
+                            coreLibraryReference,
+                        )
+                    ) {
+                        "A relative generic constraint has no CLR widening coercion"
+                    }
                 )
                 return
             }
@@ -2574,10 +2627,21 @@ internal class DotNetIlExpressionCodegen(
             }
             dotNetUnsupported(
                 "value '${expression.symbol.owner.name.asString()}' has type ${slotType.nameInSignature} " +
-                        "where ${expectedType.nameInSignature} is expected"
+                        "where ${expectedType.nameInSignature} is expected " +
+                        "(declared ${expression.symbol.owner.type.render()}, read ${expression.type.render()})"
             )
         }
         emitLoadSlot(slot)
+    }
+
+    private fun IrGetValue.isNullableTypeParameterRecovery(expectedType: DotNetIlValueType.TypeParameter): Boolean {
+        if (symbol.owner !is IrValueParameter) return false
+        val declaredType = symbol.owner.type as? IrSimpleType ?: return false
+        val declaredParameter = declaredType.classifier as? IrTypeParameterSymbol ?: return false
+        val readParameter = (type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol ?: return false
+        return declaredParameter == readParameter &&
+                declaredType.isMarkedNullable() &&
+                typeMapper.toDotNetIlValueType(declaredParameter.owner.defaultType) == expectedType
     }
 
     private fun emitLoadSlot(slot: DotNetIlSlot) {
@@ -2653,18 +2717,22 @@ internal fun storeLocalInstruction(index: Int): String =
     if (index in 0..3) "stloc.$index" else "stloc $index"
 
 /**
- * The single IL instruction of a WIDENING conversion of the hybrid nullability model, or null
+ * The IL instruction sequence of a WIDENING conversion of the hybrid nullability model, or null
  * when no such conversion exists (instruction-free widenings live in [isDotNetAssignableTo];
- * narrowings only exist as explicit cast/`!!` shapes). Each pops 1, pushes 1:
+ * narrowings only exist as explicit cast/`!!` shapes). Every instruction pops 1 and pushes 1:
  * - `T -> T?`: `newobj Nullable<T>::.ctor(!0)` (boxprobe_s1);
  * - `T? -> Any?`: `box Nullable<T>` — the CLR collapses the result to boxed-`T`-or-null
  *   (boxprobe_s3, all five instantiations incl. the empty->null case nullprobe_s8);
  * - `T -> Any?` for plain primitives: `box <boxed T>` (nullprobe_s8).
  * - a built-in scalar/String carrier to Common Comparable's canonical `System.IComparable`
  *   view: exact primitive boxing or a checked same-object String interface view;
- * - constrained `!n`/`!!n -> bound/object`: `box !n`/`!!n`; this is a no-allocation identity
- *   conversion for reference instantiations and remains correct for an external value-type
- *   implementation of an interface bound (genconstraintprobe_s2).
+ * - constrained `!n`/`!!n -> reference bound/object`: `box !n`/`!!n`; this is a no-allocation
+ *   identity conversion for reference instantiations and remains correct for an external
+ *   value-type implementation of an interface bound (genconstraintprobe_s2);
+ * - relative method constraint `C : R`: `box C; unbox.any R`. `R` may itself be instantiated
+ *   with a value type, so leaving only the boxed object on an `R` slot is invalid CIL. Roslyn uses
+ *   this verifier-safe pair; reference substitutions preserve identity and value substitutions
+ *   are recovered exactly.
  * Roslyn precedent: C# performs exactly these conversions implicitly at typed/object boundaries;
  * JVM precedent: the JVM backend's StackValue boxing coercions.
  * A `Kotlin.Nothing -> R` reference cast is the physical realization of Kotlin bottom-type
@@ -2674,19 +2742,43 @@ internal fun dotNetWideningCoercionOrNull(
     from: DotNetIlValueType,
     to: DotNetIlValueType,
     coreLibraryReference: String,
-): String? = when {
-    to is DotNetIlValueType.NullableValue && from == to.elementType -> to.ctorInstruction
+): DotNetIlWideningCoercion? = when {
+    to is DotNetIlValueType.NullableValue && from == to.elementType ->
+        DotNetIlWideningCoercion(to.ctorInstruction)
     from == DotNetRuntimeTypes.nothingType && to.isDotNetReferenceShaped() ->
-        "castclass ${to.nameInSignature}"
-    to == DotNetIlValueType.Object && from is DotNetIlValueType.NullableValue -> from.boxInstruction
-    from is DotNetIlValueType.TypeParameter && (to == DotNetIlValueType.Object || from.isConstrainedTo(to)) ->
-        "box ${from.nameInSignature}"
+        DotNetIlWideningCoercion("castclass ${to.nameInSignature}")
+    to == DotNetIlValueType.Object && from is DotNetIlValueType.NullableValue ->
+        DotNetIlWideningCoercion(from.boxInstruction)
+    from is DotNetIlValueType.TypeParameter &&
+            to is DotNetIlValueType.TypeParameter &&
+            from.isConstrainedTo(to) -> DotNetIlWideningCoercion(
+        "box ${from.nameInSignature}",
+        "unbox.any ${to.nameInSignature}",
+    )
+    from is DotNetIlValueType.TypeParameter &&
+            (to == DotNetIlValueType.Object || from.isConstrainedTo(to)) ->
+        DotNetIlWideningCoercion("box ${from.nameInSignature}")
     to.isDotNetCanonicalComparable(coreLibraryReference) && from == DotNetIlValueType.String ->
-        "castclass ${to.nameInSignature}"
+        DotNetIlWideningCoercion("castclass ${to.nameInSignature}")
     to.isDotNetCanonicalComparable(coreLibraryReference) ->
-        from.dotNetBoxedCorelibRefOrNull(coreLibraryReference)?.let { "box $it" }
-    to == DotNetIlValueType.Object -> from.dotNetBoxedCorelibRefOrNull(coreLibraryReference)?.let { "box $it" }
+        from.dotNetBoxedCorelibRefOrNull(coreLibraryReference)?.let { boxed ->
+            DotNetIlWideningCoercion("box $boxed")
+        }
+    to == DotNetIlValueType.Object ->
+        from.dotNetBoxedCorelibRefOrNull(coreLibraryReference)?.let { boxed ->
+            DotNetIlWideningCoercion("box $boxed")
+        }
     else -> null
+}
+
+internal data class DotNetIlWideningCoercion(
+    val instructions: List<String>,
+) {
+    constructor(vararg instructions: String) : this(instructions.toList())
+
+    init {
+        require(instructions.isNotEmpty()) { "A widening coercion must contain at least one IL instruction" }
+    }
 }
 
 private fun DotNetIlValueType.isDotNetCanonicalComparable(coreLibraryReference: String): Boolean =

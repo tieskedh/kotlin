@@ -5,8 +5,6 @@
 
 package kotlin.collections
 
-import kotlin.io.Serializable
-
 // The ordinary target actual of the common marker. It intentionally has no relationship to a
 // CLR collection interface; algorithms use it only as a Kotlin-owned capability marker.
 public actual interface RandomAccess
@@ -48,50 +46,6 @@ internal actual fun <T> terminateCollectionToArray(
 // BCL operation directly and does not publish this declaration.
 private external fun <T> dotNetArrayOfNulls(reference: Array<T>, size: Int): Array<T>
 
-internal object EmptyIterator : ListIterator<Nothing> {
-    override fun hasNext(): Boolean = false
-    override fun hasPrevious(): Boolean = false
-    override fun nextIndex(): Int = 0
-    override fun previousIndex(): Int = -1
-    override fun next(): Nothing = throw NoSuchElementException()
-    override fun previous(): Nothing = throw NoSuchElementException()
-}
-
-// Kept as the same non-generic singleton as the common stdlib. Logical List<T> views therefore
-// preserve ===; the ordinary split-interface bridge lowering supplies canonical erased slots and
-// the List<Nothing> typed capabilities on this one object.
-internal object EmptyList : List<Nothing>, Serializable, RandomAccess {
-    override fun equals(other: Any?): Boolean = other is List<*> && other.isEmpty()
-    override fun hashCode(): Int = 1
-    override fun toString(): String = "[]"
-
-    override val size: Int get() = 0
-    override fun isEmpty(): Boolean = true
-    override fun contains(element: Nothing): Boolean = false
-    override fun containsAll(elements: Collection<Nothing>): Boolean = elements.isEmpty()
-
-    override fun get(index: Int): Nothing =
-        throw IndexOutOfBoundsException("Empty list doesn't contain element at index $index.")
-
-    override fun indexOf(element: Nothing): Int = -1
-    override fun lastIndexOf(element: Nothing): Int = -1
-
-    override fun iterator(): Iterator<Nothing> = EmptyIterator
-    override fun listIterator(): ListIterator<Nothing> = EmptyIterator
-
-    override fun listIterator(index: Int): ListIterator<Nothing> {
-        if (index != 0) throw IndexOutOfBoundsException("Index: $index")
-        return EmptyIterator
-    }
-
-    override fun subList(fromIndex: Int, toIndex: Int): List<Nothing> {
-        if (fromIndex == 0 && toIndex == 0) return this
-        throw IndexOutOfBoundsException("fromIndex: $fromIndex, toIndex: $toIndex")
-    }
-}
-
-public fun <T> emptyList(): List<T> = EmptyList
-
 /**
  * Returns a [List] that wraps the original array.
  *
@@ -100,6 +54,47 @@ public fun <T> emptyList(): List<T> = EmptyList
  * original array, matching the other mature targets' aliasing behavior.
  */
 public actual fun <T> Array<out T>.asList(): List<T> = ArrayAsList(this)
+
+@kotlin.internal.InlineOnly
+internal actual inline fun <T> Array<out T>.asArrayList(): ArrayList<T> {
+    val result = ArrayList<T>(size)
+    var index = 0
+    while (index < size) {
+        result.add(this[index])
+        index++
+    }
+    return result
+}
+
+public actual fun <T> listOf(element: T): List<T> = arrayListOf(element)
+
+// Common owns the expect. JS, Wasm, and Native generate this same list-level algorithm; unlike
+// JVM, .NET has no truthful host collection identity on which to delegate it.
+public actual fun <T> MutableList<T>.reverse(): Unit {
+    val midPoint = (size / 2) - 1
+    if (midPoint < 0) return
+    var reverseIndex = lastIndex
+    for (index in 0..midPoint) {
+        val tmp = this[index]
+        this[index] = this[reverseIndex]
+        this[reverseIndex] = tmp
+        reverseIndex--
+    }
+}
+
+@PublishedApi
+@SinceKotlin("1.3")
+@kotlin.internal.InlineOnly
+internal actual inline fun <E> buildListInternal(builderAction: MutableList<E>.() -> Unit): List<E> =
+    ArrayList<E>().apply(builderAction).build()
+
+@PublishedApi
+@SinceKotlin("1.3")
+@kotlin.internal.InlineOnly
+internal actual inline fun <E> buildListInternal(
+    capacity: Int,
+    builderAction: MutableList<E>.() -> Unit,
+): List<E> = ArrayList<E>(capacity).apply(builderAction).build()
 
 private class ArrayAsList<T>(private val array: Array<out T>) : AbstractList<T>(), RandomAccess {
     override val size: Int

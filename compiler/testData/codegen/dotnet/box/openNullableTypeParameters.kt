@@ -21,6 +21,9 @@ private fun <T> sameNullable(first: T?, second: T?): Boolean = first == second
 
 private fun <T> requireValue(value: T?): T = value!!
 
+private fun <T : Any> nullGuarded(value: T?): T =
+    if (value != null) value else throw IllegalArgumentException("missing")
+
 private fun <T : String> echoStringBound(value: T?): T? = value
 
 private fun <T : String> requireStringBound(value: T?): T = value!!
@@ -30,6 +33,7 @@ fun box(): String {
     if (echo(41) != 41) return "fail 2: primitive value"
     if (forward<Int>(42) != 42) return "fail 3: primitive forwarding"
     if (requireValue<Int>(43) != 43) return "fail 4: primitive recovery"
+    if (nullGuarded<Int>(48) != 48) return "fail 4c: primitive null-guard recovery"
     if (throughLocal(46) != 46) return "fail 4a: primitive local"
     if (!sameNullable<Int>(47, 47) || sameNullable<Int>(47, null)) {
         return "fail 4b: primitive equality"
@@ -38,6 +42,7 @@ fun box(): String {
     if (echo<String>(null) != null) return "fail 5: reference null"
     if (echo("reference") != "reference") return "fail 6: reference value"
     if (requireValue("required") != "required") return "fail 7: reference recovery"
+    if (nullGuarded("guarded") != "guarded") return "fail 7f: reference null-guard recovery"
     if (throughLocal("local") != "local") return "fail 7a: reference local"
     if (!sameNullable<String>(null, null) || sameNullable("left", "right")) {
         return "fail 7b: reference equality"
@@ -77,6 +82,13 @@ fun box(): String {
         threw = true
     }
     if (!threw) return "fail 14: string-bound null check"
+
+    try {
+        nullGuarded<String>(null)
+        return "fail 15: null guard did not throw"
+    } catch (failure: IllegalArgumentException) {
+        if (failure.message != "missing") return "fail 16: null guard failure identity"
+    }
 
     return "OK"
 }

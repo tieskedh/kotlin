@@ -590,7 +590,7 @@ private abstract class AbstractDotNetBoxRunner(
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
                     "'emptyList'<'T'>()",
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
-                    "'asList'<'T'>(!!0[] '<this>')",
+                    "'asList'<'T'>(class [mscorlib]System.Array '<this>')",
             ".method public hidebysig static bool 'any'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
             ".method public hidebysig specialname static int32 'get_lastIndex'<'T'>(" +

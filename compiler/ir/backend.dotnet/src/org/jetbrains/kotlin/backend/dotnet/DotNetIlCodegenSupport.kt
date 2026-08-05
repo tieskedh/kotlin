@@ -399,23 +399,9 @@ internal fun IrConstructor.dotNetSignature(typeMapper: DotNetIlTypeMapper): DotN
 
 private fun List<IrValueParameter>.dotNetParameterTypes(typeMapper: DotNetIlTypeMapper): List<DotNetIlValueType> =
     map { parameter ->
-        if (parameter.varargElementType?.containsDotNetTypeParameter() == true) {
-            dotNetUnsupported(
-                "vararg parameter '${parameter.name.asString()}' has an open element type; " +
-                        "generic vararg argument construction is not supported"
-            )
-        }
-        typeMapper.toDotNetIlValueType(parameter.type)
+        typeMapper.toDotNetIlParameterType(parameter)
             ?: dotNetUnsupported("parameter '${parameter.name.asString()}' has unsupported type ${parameter.type.render()}")
     }
-
-private fun IrType.containsDotNetTypeParameter(): Boolean {
-    val simpleType = this as? IrSimpleType ?: return true
-    if (simpleType.classifier is IrTypeParameterSymbol) return true
-    return simpleType.arguments.any { argument ->
-        (argument as? IrTypeProjection)?.type?.containsDotNetTypeParameter() != false
-    }
-}
 
 /**
  * Emission-scoped IR-to-IL type mapping. One instance is created per [DotNetIlEmitter.emit] call
@@ -755,6 +741,34 @@ internal class DotNetIlTypeMapper private constructor(
     }
 
     /**
+     * Maps one logical Kotlin parameter to its authoritative physical CLR parameter type.
+     *
+     * A reference `vararg E` is written in Kotlin IR as the source-level output projection
+     * `Array<out E>`, but [org.jetbrains.kotlin.backend.dotnet.lower.DotNetVarargLowering] gives
+     * the declaration and every call an invariant exact vector before CIL emission. Physical
+     * library metadata is also collected from pre-lowering declarations, so signature mapping
+     * must recognize the vararg marker itself instead of depending on that mutation having
+     * happened already. This keeps a separately compiled call to `vararg T` on the same `T[]`
+     * signature the producer emits, while an ordinary `Array<out T>` parameter continues to use
+     * its read-only `System.Array` view.
+     */
+    fun toDotNetIlParameterType(parameter: IrValueParameter): DotNetIlValueType? {
+        val varargElementType = parameter.varargElementType
+        if (varargElementType == null || !parameter.type.isDotNetGenericArray()) {
+            return toDotNetIlValueType(parameter.type)
+        }
+        if (varargElementType.isOpenNullableTypeParameter()) {
+            dotNetUnsupported(
+                "vararg parameter '${parameter.name.asString()}' contains open nullable type parameter " +
+                        "'${varargElementType.render()}'; the boxed-or-null carrier is supported only " +
+                        "as a direct value slot until nested invariant-carrier adapters are defined"
+            )
+        }
+        val elementType = toDotNetIlValueType(varargElementType) ?: return null
+        return DotNetIlValueType.GenericArray(elementType)
+    }
+
+    /**
      * Maps [type] in value position (parameter, local, field, evaluation stack), or null when
      * the type has no IL mapping, so that callers report their own located diagnostic.
      *
@@ -866,11 +880,12 @@ internal class DotNetIlTypeMapper private constructor(
      * [DotNetIlValueType.GenericArray] structural kind. Concrete primitive elements are legal and
      * retain the natural CLR vector (`Array<Int>` -> `int32[]`) because specialized primitive
      * arrays now have distinct Kotlin.Runtime wrapper types. An OPEN type parameter remains valid
-     * (`!n[]`/`!!n[]`) and substitutes reified CLR element types. A Kotlin `out` projection keeps
-     * the same element token: the projection remains authoritative KLIB metadata, while CLR
-     * reference-array covariance is admitted only by the physical assignability check. A star
-     * projection uses the classified [DotNetIlValueType.ErasedGenericArray] `System.Array` view;
-     * `in` retains a typed write contract and remains rejected.
+     * (`!n[]`/`!!n[]`) and substitutes reified CLR element types. A Kotlin `out` projection uses
+     * the classified [DotNetIlValueType.ErasedGenericArray] `System.Array` view because CLR
+     * vector covariance cannot represent value-element or arbitrary method-generic widenings;
+     * KLIB retains its stronger bounded read type. A star projection uses the same physical view
+     * with the fixed logical `Any?` read result. `in` retains a typed write contract and remains
+     * rejected.
      */
     private fun toGenericArrayTypeOrNull(type: IrType): DotNetIlValueType? {
         val simpleType = type as? IrSimpleType
@@ -892,6 +907,9 @@ internal class DotNetIlTypeMapper private constructor(
                         "'${elementIrType.render()}'; the boxed-or-null carrier is supported only " +
                         "as a direct value slot until nested invariant-carrier adapters are defined"
             )
+        }
+        if (projection.variance == Variance.OUT_VARIANCE) {
+            return DotNetIlValueType.ErasedGenericArray(coreLibrary.reference)
         }
         val elementType = toDotNetIlValueType(elementIrType) ?: return null
         return DotNetIlValueType.GenericArray(elementType)
@@ -1035,10 +1053,11 @@ internal class DotNetIlTypeMapper private constructor(
                 toDotNetIlValueType(erasedUpperBound.defaultType) ?: DotNetIlValueType.Object
             }
         }
+        val constraintTypes = typeParameter.dotNetConstraintTypes(this, forMetadata = false)
         return DotNetIlValueType.TypeParameter(
             typeParameter.index,
             isMethodParameter = typeParameter.parent is IrFunction,
-            upperBounds = typeParameter.dotNetConstraintTypes(this, forMetadata = false).flatMap { constraint ->
+            upperBounds = constraintTypes.flatMap { constraint ->
                 when (constraint) {
                     is DotNetIlValueType.UserClass -> listOf(constraint)
                     // A CLR `R : T` constraint is represented directly in metadata. For the
@@ -1048,6 +1067,10 @@ internal class DotNetIlTypeMapper private constructor(
                     else -> emptyList()
                 }
             },
+            relativeUpperBounds = constraintTypes
+                .filterIsInstance<DotNetIlValueType.TypeParameter>()
+                .flatMap { constraint -> listOf(constraint.identity) + constraint.relativeUpperBounds }
+                .toSet(),
         )
     }
 

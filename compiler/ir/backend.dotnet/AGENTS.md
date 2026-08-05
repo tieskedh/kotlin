@@ -305,6 +305,10 @@ See the
 - A non-reified explicit cast from an erased object to an open type parameter
   uses CLR `unbox.any !n`/`!!n`, which handles value and reference
   instantiations. Do not use that throwing operation to implement `as? T`.
+- A retained method constraint `C : R` widens with `box C; unbox.any R`,
+  including transitive relative bounds. `box C` alone is not an `R` value when
+  `R` has a value-type substitution. Preserve this rule through direct,
+  separate-library, and erased foreign-callable fallback paths.
 - Explicit casts to the eight selected Common primitive scalars preserve exact
   boxed identity and never perform numeric conversion. Checked non-null casts
   unbox the exact `System.<T>` box; checked nullable casts unbox as
@@ -317,9 +321,17 @@ See the
   Runtime tests/casts must use the one runtime SZ-array classifier so
   rectangular and non-zero-based arrays are not silently admitted. Do not use
   `object[]`, wrap or copy value vectors, infer star identity from a bare CLR
-  signature, or generalize this rule to input/out projections, open
-  `Array<T?>`, or other Kotlin generic classes. See
-  [the star-projected-array ADR](docs/decisions/star-projected-arrays.md).
+  signature, or generalize this rule to input projections, open `Array<T?>`,
+  or other Kotlin generic classes. A bounded `Array<out E>` separately uses
+  the same `System.Array` carrier but recovers its stronger KLIB-declared read
+  type at each use; it never permits writes. See
+  [the star-projected-array ADR](docs/decisions/star-projected-arrays.md) and
+  [the bounded-output projection ADR](docs/decisions/bounded-output-projected-arrays.md).
+- A Kotlin reference `vararg E` has source type `Array<out E>` but physical
+  declaration type `E[]`. Map that exact vector from the vararg marker in both
+  pre- and post-lowering signatures, so producer CIL, embedded physical binding,
+  and separate consumer calls agree. Do not generalize this exception to an
+  ordinary bounded-output array parameter; that remains `System.Array`.
 - Every Kotlin-owned ordinary generic class has one canonical non-generic CLR
   owner, one authoritative declaration-erased runtime classifier/virtual ABI,
   and one authoritative mutable state. Erasure is authoritative semantics and

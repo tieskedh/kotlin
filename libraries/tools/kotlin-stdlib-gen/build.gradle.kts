@@ -51,6 +51,11 @@ tasks {
                 "_DotNetBootstrapJsName.kt",
                 "_DotNetBootstrapExperimentalTypeInference.kt",
                 "_DotNetBootstrapOverloadResolutionByLambdaReturnType.kt",
+                "_DotNetBootstrapMutableCollections.kt",
+                "_DotNetBootstrapPreconditions.kt",
+                "_DotNetBootstrapCollectionFactories.kt",
+                "_DotNetBootstrapOutOfMemoryError.kt",
+                "_DotNetBootstrapScalarBounds.kt",
             ).map { fileName ->
                 rootProject.file("libraries/stdlib/dotnet/common/src/generated/$fileName")
             }
@@ -65,6 +70,10 @@ tasks {
             rootProject.file("libraries/stdlib/common/src/generated/_Arrays.kt")
         )
         inputs.files(
+            rootProject.file("libraries/stdlib/common/src/generated/_Comparisons.kt"),
+            rootProject.file("libraries/stdlib/common/src/generated/_Ranges.kt"),
+        )
+        inputs.files(
             rootProject.file("libraries/stdlib/src/kotlin/text/Appendable.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/text/StringBuilder.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/util/Standard.kt"),
@@ -73,6 +82,50 @@ tasks {
             rootProject.file("libraries/stdlib/common/src/kotlin/JsAnnotationsH.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/experimental/inferenceMarker.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/annotations/Inference.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/collections/MutableCollections.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/util/Preconditions.kt"),
+            rootProject.file("libraries/stdlib/native-wasm/src/kotlin/Exceptions.kt"),
+        )
+    }
+
+    register<JavaExec>("generateDotNetBootstrapKotlinTest") {
+        group = "application"
+        description = "Generates the dependency-closed Common kotlin.test slice for Kotlin/.NET."
+        mainClass = "generators.GenerateDotNetBootstrapKotlinTestKt"
+        classpath = sourceSets.main.get().runtimeClasspath
+        args = listOf("$rootDir")
+        systemProperty("line.separator", "\n")
+        outputs.files(
+            rootProject.file(
+                "libraries/kotlin.test/dotnet/common/src/main/kotlin/kotlin/test/" +
+                        "_DotNetBootstrapTestAnnotation.kt"
+            ),
+            rootProject.file(
+                "libraries/kotlin.test/dotnet/common/src/main/kotlin/kotlin/test/" +
+                        "_DotNetBootstrapAssertions.kt"
+            ),
+            rootProject.file(
+                "libraries/kotlin.test/dotnet/common/src/main/kotlin/kotlin/test/" +
+                        "_DotNetBootstrapAssertionExpect.kt"
+            ),
+            rootProject.file(
+                "libraries/kotlin.test/dotnet/common/src/main/kotlin/kotlin/test/" +
+                        "_DotNetBootstrapDefaultAsserter.kt"
+            ),
+        )
+        inputs.files(
+            rootProject.file(
+                "libraries/kotlin.test/annotations-common/src/main/kotlin/kotlin.test/Annotations.kt"
+            ),
+            rootProject.file(
+                "libraries/kotlin.test/common/src/main/kotlin/kotlin/test/Assertions.kt"
+            ),
+            rootProject.file(
+                "libraries/kotlin.test/common/src/main/kotlin/kotlin/test/Utils.kt"
+            ),
+            rootProject.file(
+                "libraries/kotlin.test/common/src/main/kotlin/kotlin/test/DefaultAsserter.kt"
+            ),
         )
     }
 

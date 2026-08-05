@@ -82,6 +82,13 @@ Each layer owns one kind of truth:
 6. FIR2IR retains the selected assembly, owner, member, and signature; the backend never
    rediscovers a member from a display name.
 
+Logical enhancement does not replace that retained signature during override lowering. In
+particular, an imported CLR vector can have a flexible projected Kotlin view while its MethodDef
+still owns an exact SZARRAY slot. Bridge selection and the emitter's final slot check consume the
+same retained physical record; neither remaps the enhanced Kotlin view and treats that remapping as
+foreign ABI. A Kotlin implementation fills the slot directly only after its complete rigid
+parameter and return carriers are proved equal to the retained MethodDef.
+
 No layer may compensate for missing evidence by probing directories, calling host `Type.GetType`,
 choosing an assembly by simple name, or parsing textual IL.
 

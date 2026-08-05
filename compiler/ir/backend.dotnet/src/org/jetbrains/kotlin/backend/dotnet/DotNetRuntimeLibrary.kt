@@ -833,9 +833,50 @@ $throwableExceptionTypesIl
             }
           }
 
+          .class interface public abstract auto ansi MutableIterator
+                 implements Kotlin.Collections.Iterator
+          {
+            .method public hidebysig newslot abstract virtual instance void Remove() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi MutableListIterator
+                 implements Kotlin.Collections.ListIterator,
+                            Kotlin.Collections.MutableIterator
+          {
+            .method public hidebysig newslot abstract virtual instance bool HasNext() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object Next() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Remove() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Set(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Add(object element) cil managed
+            {
+            }
+          }
+
           .class interface public abstract auto ansi Iterable
           {
             .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi MutableIterable
+                 implements Kotlin.Collections.Iterable
+          {
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.MutableIterator GetIterator() cil managed
             {
             }
           }
@@ -866,6 +907,39 @@ $throwableExceptionTypesIl
             .property instance int32 Size()
             {
               .get instance int32 Kotlin.Collections.Collection::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi MutableCollection
+                 implements Kotlin.Collections.Collection,
+                            Kotlin.Collections.MutableIterable
+          {
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.MutableIterator GetIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool Add(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RemoveErased(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool AddAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RemoveAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RetainAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Clear() cil managed
+            {
             }
           }
 
@@ -919,6 +993,63 @@ $throwableExceptionTypesIl
             .property instance int32 Size()
             {
               .get instance int32 Kotlin.Collections.List::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi MutableList
+                 implements Kotlin.Collections.List,
+                            Kotlin.Collections.MutableCollection
+          {
+            .method public hidebysig newslot abstract virtual instance bool Add(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RemoveErased(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool AddAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool AddAll(int32 index, class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RemoveAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RetainAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Clear() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object Set(int32 index, object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Add(int32 index, object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object RemoveAt(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.MutableListIterator GetListIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.MutableListIterator GetListIterator(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.MutableList SubList(int32 fromIndex, int32 toIndex) cil managed
+            {
             }
           }
 
