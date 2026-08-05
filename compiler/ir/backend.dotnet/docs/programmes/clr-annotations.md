@@ -1,6 +1,7 @@
 # CLR annotation interoperability programme
 
-- Status: **Active — foreign import expansion; parameterless Kotlin marker foundation implemented**
+- Status: **Active — exact Common-contract export and foreign flow-contract
+  import implemented; wider annotation grammar remains open**
 - Owner: .NET importer and foreign FIR integration
 - Governing decision:
   [`../decisions/draft-adr-clr-importer-boundary.md`](../decisions/draft-adr-clr-importer-boundary.md)
@@ -63,6 +64,7 @@ it does not declare the complete foreign importer finished.
 | ordinary `SZARRAY` over admitted signed primitives, `string`, or `object` | JVM-shaped flexible `Array<E>` foreign view with exact CLR-vector binding |
 | exact final `ParamArrayAttribute` on `string[]`/`object[]` | Common `vararg` call view with raw vector binding |
 | Kotlin implementation of an admitted CLR interface | direct implementation of the retained foreign TypeDef/MethodDef slots |
+| exact Kotlin Common contract export on `net10.0` | additive standard CodeAnalysis attribute on the explicit CLR export |
 
 Closed interface properties are formed only from coherent Property and MethodSemantics metadata.
 Split read/write null-state evidence is deliberately not flattened into the property's one Common
@@ -73,7 +75,7 @@ type.
 | Area | State | Next requirement |
 | --- | --- | --- |
 | Declaration nullability | Closed in the admitted grammar | Broaden with each new physical type grammar |
-| Positive parameter/result contracts | Exact subset closed | Extend only where Common contract algebra is exact |
+| Positive parameter/result contracts | Exact import/export subset closed | Extend only where Common contract algebra is exact |
 | Conditional weakening | Deferred | Model caller-state invalidation for `MaybeNullWhen` and `ref`/`out` |
 | Member null-state | Retained only | Preserve Kotlin smart-cast stability; no importer-only exception |
 | Properties/indexers | Non-indexed interface properties admitted | Define read/write views and indexer collisions |
@@ -168,16 +170,22 @@ In particular:
 ### 5. Add truthful Kotlin-to-.NET projections
 
 When a Kotlin fact has an exact standard representation, emit that representation from the
-authoritative Kotlin declaration and validate it independently. Initial candidates include
-nullable metadata, the exact CodeAnalysis contract subset, deprecation, target-framework facts,
-and friend access.
+authoritative Kotlin declaration and validate it independently. Nullable metadata, the exact
+first CodeAnalysis contract subset, target-framework facts, and friend access now do this;
+deprecation export and broader declaration families remain candidates.
 
-The next Common-contract bootstrap audit must keep two paths explicit. Compiler-consumed Kotlin
+The Common-contract export keeps two paths explicit. Compiler-consumed Kotlin
 effects and calls-in-place information remain in KLIB even when no CLR carrier exists. An exact
 Roslyn attribute may additionally project the subset it can express, and the importer may decode
 that same standard attribute as foreign evidence under Common stability rules. Sharing the
 attribute codec does not make it the Kotlin contract authority and does not justify serializing the
 same representable effect twice inside Kotlin-owned metadata.
+
+The versioned neutral carrier stores only the five admitted effect kinds and ordinary Kotlin value-
+parameter indices. FIR2IR produces it from resolved contracts; only the explicit .NET export
+consumer renders it. `net10.0` uses the verified `System.Runtime` TypeDefs. `net48` and
+`netstandard2.0` omit the projection because their selected reference contracts do not contain
+those standard types; the compiler never synthesizes look-alikes.
 
 Do not omit the same fact from KLIB. A Kotlin-produced DLL remains self-describing if attributes
 are stripped by external tooling, and KLIB-only consumers must not need the PE attribute graph to

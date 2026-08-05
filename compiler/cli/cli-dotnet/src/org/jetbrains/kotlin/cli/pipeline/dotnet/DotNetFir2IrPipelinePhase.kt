@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.compiler.plugin.getCompilerExtensions
 import org.jetbrains.kotlin.fir.backend.Fir2IrConfiguration
 import org.jetbrains.kotlin.fir.backend.Fir2IrVisibilityConverter
 import org.jetbrains.kotlin.fir.backend.dotnet.DotNetFir2IrExtensions
+import org.jetbrains.kotlin.fir.backend.dotnet.collectDotNetExactContractProjections
 import org.jetbrains.kotlin.fir.pipeline.convertToIrAndActualize
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
 
@@ -33,6 +34,20 @@ object DotNetFir2IrPipelinePhase : PipelinePhase<DotNetFrontendPipelineArtifact,
             createSpecialAnnotationsProvider = null,
             extraActualDeclarationExtractorsInitializer = { emptyList() },
         )
+        val exactContractProjections = buildMap {
+            for (frontendOutput in input.frontendOutput.outputs) {
+                val selected = collectDotNetExactContractProjections(
+                    frontendOutput.fir,
+                    fir2IrResult.components,
+                )
+                for (entry in selected.entries) {
+                    val previous = put(entry.key, entry.value)
+                    check(previous == null || previous == entry.value) {
+                        "Conflicting exact CLR contract projections after FIR actualization"
+                    }
+                }
+            }
+        }
 
         return DotNetFir2IrPipelineArtifact(
             fir2IrResult,
@@ -40,6 +55,7 @@ object DotNetFir2IrPipelinePhase : PipelinePhase<DotNetFrontendPipelineArtifact,
             configuration,
             input.libraryMetadata,
             input.libraryIr,
+            exactContractProjections,
         )
     }
 }

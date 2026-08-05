@@ -34,6 +34,7 @@ object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, 
             input.result.symbolTable,
             input.configuration,
             kotlinMetadataResourceFactory,
+            input.exactContractProjections,
         )
         return DotNetBackendPipelineArtifact(
             output.file,

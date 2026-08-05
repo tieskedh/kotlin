@@ -1,7 +1,7 @@
 # ADR: Common contracts as the Kotlin authority with additive CLR projections
 
-- Status: **Accepted for the ordinary non-reified contracts product; CLR
-  projection is a separately gated follow-up**
+- Status: **Accepted for the ordinary non-reified contracts product and the
+  exact first CLR-export projection**
 - Scope: the Common contracts DSL and effect interfaces, `InvocationKind`, the
   contract-bearing Common scope functions, and both Common `buildString`
   declarations
@@ -23,7 +23,7 @@ visible fallbacks for `@InlineOnly` functions under the existing inline-only
 ABI rule. Contract descriptions remain attached to logical Kotlin declarations
 in KLIB even when no CLR metadata can express them.
 
-For a Kotlin-produced DLL, a later export phase may additionally emit a standard
+For a Kotlin-produced DLL, the explicit export phase may additionally emit a standard
 `System.Diagnostics.CodeAnalysis` attribute only when one resolved Common
 effect has the same target and complete meaning. The attribute is a derived
 C#/CLR view. Removing it must not change Kotlin compilation, and removing the
@@ -36,14 +36,14 @@ The first admissible projection design is restricted to these exact shapes:
 | --- | --- |
 | normal return implies a reference parameter is non-null | parameter `NotNull` |
 | Boolean result `b` implies a reference parameter is non-null | parameter `NotNullWhen(b)` |
-| null result implies a named reference parameter is null | return `NotNullIfNotNull(name)` |
+| a named reference parameter is non-null implies a non-null result | return `NotNullIfNotNull(name)` |
 | normal return implies Boolean parameter `b` is the opposite of `v` | parameter `DoesNotReturnIf(v)` |
 
-The `NotNullIfNotNull` row is the exact contrapositive of the CLR attribute's
-parameter-non-null-implies-result-non-null meaning; reversing only one side of
-that implication would be unsound.
+The `NotNullIfNotNull` row is the same parameter-non-null-implies-result-
+non-null implication in both effect models. Reversing that implication would
+be unsound.
 
-An unconditional non-returning Kotlin declaration may use method
+An unconditional non-returning Kotlin declaration uses method
 `DoesNotReturn` only when its logical return is `Nothing` and its physical
 signature remains independently correct. This is a type/signature projection,
 not a substitute for a Common effect.
@@ -115,20 +115,52 @@ order, receiver identity, invocation count, exceptions, non-local returns, and
 result values. BCL helpers cannot replace them merely because a similarly
 named C# API exists.
 
-## Follow-up: attribute authority and profile behavior
+## Exact projection carrier and profile behavior
 
-Attribute projection is deliberately not required to publish the Common
-contracts product. FIR contract descriptions are not backend IR facts, and the
-backend must not rediscover them from lowered bodies or DSL calls. The export
-follow-up first needs a neutral, validated projection carrier with a FIR/KLIB
-producer and a backend/export consumer; that carrier may contain only the exact
-derived CLR view, never the authoritative Kotlin contract graph.
+Attribute projection is not required to publish the Common contracts product.
+FIR contract descriptions are not backend IR facts, and the backend does not
+rediscover them from lowered bodies or DSL calls. FIR2IR selects a versioned,
+neutral carrier while the resolved FIR effect and corresponding IR declaration
+are both available. The carrier contains only the exact derived CLR view, never
+the authoritative Kotlin contract graph. It has no dependency on FIR, IR, CIL,
+or Roslyn models.
+
+Carrier version 1 contains exactly `ParameterNotNull`,
+`ParameterNotNullWhen`, `ReturnNotNullIfParameterNotNull`,
+`DoesNotReturnIf`, and `DoesNotReturn`. Parameter indices address ordinary
+Kotlin value parameters; receiver, context-parameter, member-state, compound,
+type-predicate, and calls-in-place facts are structurally unrepresentable.
+Before transport, equivalent or overlapping conditional facts are normalized
+to the standard attributes' multiplicity rules. Unconditional `NotNull`
+subsumes `NotNullWhen`; both Boolean return values become one `NotNull` fact.
+Conflicting `DoesNotReturnIf` values for one parameter are omitted rather than
+emitted twice, while an independently established `DoesNotReturn` subsumes
+every conditional non-return fact.
+
+Only an explicitly selected .NET export consumes this carrier. The ordinary
+Kotlin MethodDef remains unchanged. A generated default-argument overload
+retains an attribute only when every parameter named or attributed by that
+fact remains in the overload. In particular, a `NotNullIfNotNull` projection
+never names a parameter omitted by the default wrapper.
 
 The backend resolves every CodeAnalysis attribute against the selected target
 framework profile and emits its exact constructor signature and parent row. If
 an exact standard TypeDef is unavailable, the projection is omitted or the
 selected product fails closed according to the profile contract; the backend
 must not synthesize a look-alike public attribute type.
+
+The first profile matrix is deliberately closed:
+
+| Profile | Exact CodeAnalysis owner | Projection |
+| --- | --- | --- |
+| `net48` | none in the selected framework contract | omitted |
+| `netstandard2.0` | none in the 2.0 reference contract | omitted |
+| `net10.0` | `[System.Runtime]System.Diagnostics.CodeAnalysis` | emitted |
+
+The pinned .NET 10 reference pack is metadata-verified for all five TypeDefs
+and exact constructors. A later profile may be added only with the same
+objective evidence; documentation that lists a type for some other framework
+version is not sufficient.
 
 The foreign importer may decode the same standard attributes as evidence under
 the importer ADR. That symmetry does not create a round-trip authority loop:
@@ -181,7 +213,7 @@ property cannot become smart-castable merely because C# accepts a
 Rejected. The CLR supplies no constraint that changes their algorithms. A
 target copy would drift from Common contracts and inline bodies.
 
-## Common-product completion evidence
+## Completion evidence
 
 The feature gate must prove both FIR frontends, both target profiles, direct
 and installed stdlib products, and separate producer/consumer libraries:
@@ -198,12 +230,14 @@ and installed stdlib products, and separate producer/consumer libraries:
 - continued fail-closed behavior for reified, suspend-inline, valued-
   annotation, and member-state features outside this phase.
 
-The subsequent CLR-export projection gate must separately prove:
+The CLR-export projection gate must separately prove:
 
 - exact CLR attribute identity, constructor payload, and parameter/return
   placement for every admitted projection;
 - absence of attributes for inexpressible, unstable, malformed, or
   profile-unavailable effects;
+- normalization of overlapping effects without duplicate non-repeatable
+  attributes;
 - identical Kotlin behavior with projection disabled; and
 - continued KLIB contract behavior after an external tool strips every derived
   CodeAnalysis attribute.

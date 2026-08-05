@@ -13,7 +13,9 @@ import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.util.SymbolTable
+import org.jetbrains.kotlin.load.dotnet.DotNetExactContractProjection
 import org.jetbrains.kotlin.util.PhaseType
 import org.jetbrains.kotlin.util.tryMeasurePhaseTime
 import java.io.File
@@ -25,6 +27,7 @@ object DotNetBackend {
         symbolTable: SymbolTable,
         configuration: CompilerConfiguration,
         kotlinMetadataResourceFactory: ((Map<String, DotNetPhysicalDeclaration>) -> ByteArray)? = null,
+        exactContractProjections: Map<IrSimpleFunction, DotNetExactContractProjection> = emptyMap(),
     ): DotNetBackendOutput {
         // The .NET backend has no IrDiagnosticReporter-based reporting yet; it deliberately talks
         // to the message collector directly, like DotNetIlEmitter and DotNetIlAssembler.
@@ -38,6 +41,9 @@ object DotNetBackend {
         val producedLibraryArtifact = configuration.dotNetProducedLibraryArtifact
         val externalLibraries = configuration.dotNetExternalLibraries
         val publishedEmissionScope = if (producesStdlib) DotNetIlEmissionScope.STDLIB else DotNetIlEmissionScope.USER
+        for (entry in exactContractProjections.entries) {
+            entry.key.installDotNetExactContractProjection(entry.value)
+        }
         val hasBootstrapStdlib = DotNetStdlibLibrary.hasImplementation(irModuleFragment)
         fun collectPreLoweringDeclarationKeys(scope: DotNetIlEmissionScope): Map<org.jetbrains.kotlin.ir.declarations.IrDeclaration, String> {
             val preLoweringIntrinsics = DotNetIlIntrinsicMethods(irBuiltIns, scope)

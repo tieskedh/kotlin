@@ -83,6 +83,14 @@ internal enum class DotNetCoreLibraryProfile(
         }
     }
 
+    /** Adds the assembly that owns the admitted CodeAnalysis contract attributes. */
+    fun appendCodeAnalysisAssemblyReferenceTo(builder: StringBuilder) {
+        check(this == NET10_0) {
+            "CodeAnalysis contract attributes are unavailable in the selected $name reference contract"
+        }
+        appendEditorBrowsableAssemblyReferenceTo(builder)
+    }
+
     /**
      * Emits the standard TargetFrameworkAttribute custom-attribute blob inside an `.assembly`.
      * The blob is the ECMA-335 serialization of the single constructor string followed by zero

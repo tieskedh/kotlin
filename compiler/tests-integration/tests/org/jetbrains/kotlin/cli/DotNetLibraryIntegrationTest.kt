@@ -25029,6 +25029,425 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testExactCommonContractsProjectOnlyToSupportedExplicitExports() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val modernCSharp = checkNotNull(csharpToolchain)
+        val sourceText = """
+            package contractexports
+
+            import kotlin.contracts.ExperimentalContracts
+            import kotlin.contracts.ExperimentalExtendedContracts
+            import kotlin.contracts.contract
+
+            public typealias TextAlias = String?
+            public typealias NullableIntAlias = Int?
+
+            @OptIn(ExperimentalContracts::class)
+            public fun requireText(value: String?) {
+                contract { returns() implies (value != null) }
+                if (value == null) throw IllegalArgumentException("value")
+            }
+
+            @OptIn(ExperimentalContracts::class)
+            public fun isText(value: String?): Boolean {
+                contract { returns(true) implies (value != null) }
+                return value != null
+            }
+
+            @OptIn(ExperimentalContracts::class)
+            public fun isNull(value: String?): Boolean {
+                contract { returns(false) implies (value != null) }
+                return value == null
+            }
+
+            @OptIn(ExperimentalContracts::class, ExperimentalExtendedContracts::class)
+            public fun copyText(value: String?): String? {
+                contract { (value != null) implies returnsNotNull() }
+                return value
+            }
+
+            @OptIn(ExperimentalContracts::class, ExperimentalExtendedContracts::class)
+            public fun copyDefaulted(value: String? = "fallback"): String? {
+                contract { (value != null) implies returnsNotNull() }
+                return value
+            }
+
+            @OptIn(ExperimentalContracts::class)
+            public fun isKnown(value: String?): Boolean {
+                contract {
+                    returns(true) implies (value != null)
+                    returns(false) implies (value != null)
+                }
+                if (value == null) throw IllegalArgumentException("value")
+                return true
+            }
+
+            @OptIn(ExperimentalContracts::class)
+            public fun requireTrue(value: Boolean) {
+                contract { returns() implies value }
+                if (!value) throw IllegalArgumentException("value")
+            }
+
+            public fun fail(): Nothing = throw IllegalStateException("fail")
+
+            @OptIn(ExperimentalContracts::class)
+            public fun defaulted(value: String? = "fallback"): String {
+                contract { returns() implies (value != null) }
+                return value ?: throw IllegalArgumentException("value")
+            }
+
+            @OptIn(ExperimentalContracts::class)
+            public fun requireBoth(first: String?, second: String?) {
+                contract { returns() implies (first != null && second != null) }
+                if (first == null || second == null) throw IllegalArgumentException("values")
+            }
+
+            @OptIn(ExperimentalContracts::class)
+            public fun requireAlias(value: TextAlias) {
+                contract { returns() implies (value != null) }
+                if (value == null) throw IllegalArgumentException("value")
+            }
+
+            @OptIn(ExperimentalContracts::class)
+            public fun requireNullableIntAlias(value: NullableIntAlias) {
+                contract { returns() implies (value != null) }
+                if (value == null) throw IllegalArgumentException("value")
+            }
+        """.trimIndent()
+        val exportArguments = arrayOf(
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.requireText=RequireText",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.isText=IsText",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.isNull=IsNull",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.copyText=CopyText",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.copyDefaulted=CopyDefaulted",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.isKnown=IsKnown",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.requireTrue=RequireTrue",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.fail=Fail",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.defaulted=Defaulted",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.requireBoth=RequireBoth",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "contractexports.requireAlias=RequireAlias",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument,
+            "contractexports.requireNullableIntAlias=RequireNullableIntAlias",
+        )
+
+        fun compileProducer(target: String, useLightTree: Boolean = true): File {
+            val parserName = if (useLightTree) "lt" else "psi"
+            val directory = File(
+                tmpdir,
+                "contract-export-${target.replace('.', '-')}-$parserName",
+            ).apply { mkdirs() }
+            val source = directory.resolve("contracts.kt").apply { writeText(sourceText) }
+            val moduleName = "Contract.Exports.${target.replace('.', '_')}.$parserName"
+            compileInProcess(
+                K2DotNetCompiler(),
+                source.path,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
+                "-Xuse-fir-lt=$useLightTree",
+                "-XXLanguage:+ConditionImpliesReturnsContracts",
+                *exportArguments,
+                K2DotNetCompilerArguments::destination.cliArgument, directory.path,
+            )
+            return directory.resolve("$moduleName.dll")
+                .also { library -> assertTrue(library.isFile) }
+        }
+
+        val frameworkLibrary = compileProducer("net48")
+        val portableLibrary = compileProducer("netstandard2.0")
+        val modernLibrary = compileProducer("net10.0")
+        val psiModernLibrary = compileProducer("net10.0", useLightTree = false)
+        for (library in listOf(frameworkLibrary, portableLibrary)) {
+            val il = library.resolveSibling("${library.nameWithoutExtension}.il").readText()
+            assertFalse("System.Diagnostics.CodeAnalysis" in il) { il }
+        }
+
+        val modernDirectory = checkNotNull(modernLibrary.parentFile)
+        val modernIl = modernLibrary.resolveSibling("${modernLibrary.nameWithoutExtension}.il").readText()
+        for (attributeName in listOf(
+            "NotNullAttribute",
+            "NotNullWhenAttribute",
+            "NotNullIfNotNullAttribute",
+            "DoesNotReturnIfAttribute",
+            "DoesNotReturnAttribute",
+        )) {
+            assertTrue("System.Diagnostics.CodeAnalysis.$attributeName" in modernIl) {
+                "Missing $attributeName from explicit net10 export:\n$modernIl"
+            }
+        }
+        val psiModernIl = psiModernLibrary.resolveSibling("${psiModernLibrary.nameWithoutExtension}.il").readText()
+        for (attributeName in listOf(
+            "NotNullAttribute",
+            "NotNullWhenAttribute",
+            "NotNullIfNotNullAttribute",
+            "DoesNotReturnIfAttribute",
+            "DoesNotReturnAttribute",
+        )) {
+            assertTrue("System.Diagnostics.CodeAnalysis.$attributeName" in psiModernIl) {
+                "PSI and LightTree contract projection differ for $attributeName:\n$psiModernIl"
+            }
+        }
+        assertTrue(".assembly extern System.Runtime" in modernIl) { modernIl }
+
+        val strippedDirectory = modernDirectory.resolve("stripped").apply { mkdirs() }
+        val strippedIl = strippedDirectory.resolve("${modernLibrary.nameWithoutExtension}.il").apply {
+            writeText(
+                modernIl.lineSequence()
+                    .filterNot { line -> "System.Diagnostics.CodeAnalysis" in line }
+                    .joinToString("\n")
+            )
+        }
+        val strippedLibrary = strippedDirectory.resolve(modernLibrary.name)
+        val strippedResources = buildMap {
+            put(DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME, modernLibrary.readKlibCarrier())
+            DotNetManagedResourceReader.read(
+                modernLibrary,
+                DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME,
+            )?.let { resource ->
+                put(DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME, resource.content)
+            }
+        }
+        assertTrue(
+            DotNetIlAssembler.assembleLibrary(
+                strippedIl,
+                strippedLibrary,
+                DotNetTarget.NET10_0,
+                MessageCollector.NONE,
+                strippedResources,
+            )
+        ) { "Could not reassemble the library after stripping derived CodeAnalysis attributes" }
+
+        val kotlinConsumerDirectory = modernDirectory.resolve("kotlin-consumer").apply { mkdirs() }
+        val kotlinConsumerSource = kotlinConsumerDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package contractconsumer
+
+                import contractexports.requireText
+
+                fun main() {
+                    val value: String? = "OK"
+                    requireText(value)
+                    if (value.length != 2) throw Error("KLIB contract was not retained")
+                }
+                """.trimIndent()
+            )
+        }
+        val kotlinConsumer = kotlinConsumerDirectory.resolve("ContractKotlinConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            kotlinConsumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, strippedLibrary.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "ContractKotlinConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, kotlinConsumer.path,
+        )
+        runDotNet(
+            modernCSharp.dotNetHost,
+            kotlinConsumer,
+            kotlinConsumerDirectory,
+            "KLIB contract consumer failed",
+        )
+
+        val runtimeBootstrap = modernDirectory.resolve("runtime-bootstrap.kt").apply {
+            writeText("fun main() {}")
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            runtimeBootstrap.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "ContractRuntimeBootstrap",
+            K2DotNetCompilerArguments::destination.cliArgument,
+            modernDirectory.resolve("ContractRuntimeBootstrap.dll").path,
+        )
+        val runtimeAssembly = modernDirectory.resolve("Kotlin.Runtime.dll")
+        val stdlibAssembly = modernDirectory.resolve("Kotlin.Stdlib.dll")
+        assertTrue(runtimeAssembly.isFile)
+        assertTrue(stdlibAssembly.isFile)
+
+        val csharpSource = modernDirectory.resolve("consumer.cs").apply {
+            writeText(
+                """
+                #nullable enable
+
+                using System;
+                using System.Collections.Generic;
+                using System.Linq;
+                using System.Reflection;
+                using Facade = contractexports.contractsKt;
+
+                public static class Program
+                {
+                    private const string CodeAnalysisNamespace = "System.Diagnostics.CodeAnalysis";
+
+                    private static CustomAttributeData Attribute(
+                        IEnumerable<CustomAttributeData> attributes,
+                        string name)
+                    {
+                        return attributes.Single(attribute =>
+                            attribute.AttributeType.FullName == CodeAnalysisNamespace + "." + name);
+                    }
+
+                    private static bool HasCodeAnalysisAttribute(IEnumerable<CustomAttributeData> attributes)
+                    {
+                        return attributes.Any(attribute =>
+                            attribute.AttributeType.Namespace == CodeAnalysisNamespace);
+                    }
+
+                    private static MethodInfo Method(string name, int parameterCount)
+                    {
+                        return typeof(Facade).GetMethods(BindingFlags.Public | BindingFlags.Static)
+                            .Single(method => method.Name == name &&
+                                method.GetParameters().Length == parameterCount);
+                    }
+
+                    private static int AfterRequire(string? value)
+                    {
+                        Facade.RequireText(value);
+                        return value.Length;
+                    }
+
+                    private static int AfterTrue(string? value)
+                    {
+                        return Facade.IsText(value) ? value.Length : 0;
+                    }
+
+                    private static int AfterFalse(string? value)
+                    {
+                        return !Facade.IsNull(value) ? value.Length : 0;
+                    }
+
+                    private static int AfterCopy(string? value)
+                    {
+                        if (value == null) return 0;
+                        string? result = Facade.CopyText(value);
+                        return result.Length;
+                    }
+
+                    private static int AfterGuard(string? value)
+                    {
+                        Facade.RequireTrue(value != null);
+                        return value.Length;
+                    }
+
+                    private static int AfterKnown(string? value)
+                    {
+                        Facade.IsKnown(value);
+                        return value.Length;
+                    }
+
+                    private static int AfterFail(string? value)
+                    {
+                        if (value == null) Facade.Fail();
+                        return value.Length;
+                    }
+
+                    public static int Main()
+                    {
+                        MethodInfo requireText = Method("RequireText", 1);
+                        Attribute(requireText.GetParameters()[0].GetCustomAttributesData(), "NotNullAttribute");
+
+                        CustomAttributeData whenTrue = Attribute(
+                            Method("IsText", 1).GetParameters()[0].GetCustomAttributesData(),
+                            "NotNullWhenAttribute");
+                        if (!(bool)whenTrue.ConstructorArguments.Single().Value!) return 1;
+
+                        CustomAttributeData whenFalse = Attribute(
+                            Method("IsNull", 1).GetParameters()[0].GetCustomAttributesData(),
+                            "NotNullWhenAttribute");
+                        if ((bool)whenFalse.ConstructorArguments.Single().Value!) return 2;
+
+                        CustomAttributeData ifNotNull = Attribute(
+                            Method("CopyText", 1).ReturnParameter.GetCustomAttributesData(),
+                            "NotNullIfNotNullAttribute");
+                        if ((string)ifNotNull.ConstructorArguments.Single().Value! != "value") return 3;
+                        Attribute(
+                            Method("CopyDefaulted", 1).ReturnParameter.GetCustomAttributesData(),
+                            "NotNullIfNotNullAttribute");
+                        if (HasCodeAnalysisAttribute(Method("CopyDefaulted", 0).GetCustomAttributesData()) ||
+                            HasCodeAnalysisAttribute(
+                                Method("CopyDefaulted", 0).ReturnParameter.GetCustomAttributesData()))
+                            return 4;
+                        MethodInfo isKnown = Method("IsKnown", 1);
+                        Attribute(isKnown.GetParameters()[0].GetCustomAttributesData(), "NotNullAttribute");
+                        if (isKnown.GetParameters()[0].GetCustomAttributesData().Any(attribute =>
+                                attribute.AttributeType.FullName ==
+                                    CodeAnalysisNamespace + ".NotNullWhenAttribute"))
+                            return 5;
+
+                        CustomAttributeData doesNotReturnIf = Attribute(
+                            Method("RequireTrue", 1).GetParameters()[0].GetCustomAttributesData(),
+                            "DoesNotReturnIfAttribute");
+                        if ((bool)doesNotReturnIf.ConstructorArguments.Single().Value!) return 6;
+
+                        Attribute(Method("Fail", 0).GetCustomAttributesData(), "DoesNotReturnAttribute");
+                        Attribute(
+                            Method("Defaulted", 1).GetParameters()[0].GetCustomAttributesData(),
+                            "NotNullAttribute");
+                        if (HasCodeAnalysisAttribute(Method("Defaulted", 0).GetCustomAttributesData()) ||
+                            HasCodeAnalysisAttribute(Method("Defaulted", 0).ReturnParameter.GetCustomAttributesData()))
+                            return 7;
+                        if (HasCodeAnalysisAttribute(Method("RequireBoth", 2).GetCustomAttributesData()) ||
+                            Method("RequireBoth", 2).GetParameters().Any(parameter =>
+                                HasCodeAnalysisAttribute(parameter.GetCustomAttributesData())))
+                            return 8;
+                        Attribute(
+                            Method("RequireAlias", 1).GetParameters()[0].GetCustomAttributesData(),
+                            "NotNullAttribute");
+                        if (HasCodeAnalysisAttribute(
+                                Method("RequireNullableIntAlias", 1).GetParameters()[0].GetCustomAttributesData()))
+                            return 9;
+
+                        MethodInfo implementation = Method("requireText", 1);
+                        if (HasCodeAnalysisAttribute(implementation.GetCustomAttributesData()) ||
+                            HasCodeAnalysisAttribute(implementation.GetParameters()[0].GetCustomAttributesData()))
+                            return 10;
+
+                        if (AfterRequire("one") != 3 || AfterTrue("two") != 3 ||
+                            AfterFalse("three") != 5 || AfterCopy("four") != 4 ||
+                            AfterGuard("five") != 4 || AfterKnown("known") != 5 ||
+                            AfterFail("six") != 3)
+                            return 11;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpConsumer = modernDirectory.resolve("ContractCSharpConsumer.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            modernCSharp,
+            csharpSource,
+            csharpConsumer,
+            modernLibrary,
+            runtimeAssembly,
+            stdlibAssembly,
+            target = "exe",
+            additionalArguments = listOf("/nullable:enable", "/warnaserror+"),
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        modernDirectory.resolve("ContractCSharpConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            modernCSharp.dotNetHost,
+            csharpConsumer,
+            modernDirectory,
+            "Roslyn exact-contract export consumer failed",
+        )
+    }
+
+    @Test
     fun testMarkerAnnotationsAcrossPortableLibraryAndCSharpBoundaries() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,
