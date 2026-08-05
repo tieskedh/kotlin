@@ -453,6 +453,7 @@ internal class DotNetIlTypeMapper private constructor(
     private val stdlibClasses: MutableMap<IrClass, DotNetIlClassInfo>,
     private val stdlibGenericClasses: MutableMap<IrClass, DotNetGenericClassInfo>,
     private val stdlibClassLinksInProgress: MutableSet<IrClass>,
+    val stdlibAssemblyName: String?,
     private val assemblyReferenceSink: (String) -> Unit,
 ) {
     constructor(
@@ -461,6 +462,7 @@ internal class DotNetIlTypeMapper private constructor(
         externalDeclarations: DotNetExternalDeclarations = DotNetExternalDeclarations(emptyList()),
         genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
         genericClasses: Map<IrClass, DotNetGenericClassInfo> = emptyMap(),
+        stdlibAssemblyName: String? = DotNetStdlibLibrary.ASSEMBLY_NAME,
         assemblyReferenceSink: (String) -> Unit = {},
         foreignAssemblyReferenceSink: (DotNetClrClasspathAssembly.WithoutCarrier) -> Unit = {},
     ) : this(
@@ -475,6 +477,7 @@ internal class DotNetIlTypeMapper private constructor(
         mutableMapOf(),
         mutableMapOf(),
         mutableSetOf(),
+        stdlibAssemblyName,
         assemblyReferenceSink,
     )
 
@@ -491,6 +494,7 @@ internal class DotNetIlTypeMapper private constructor(
             stdlibClasses,
             stdlibGenericClasses,
             stdlibClassLinksInProgress,
+            stdlibAssemblyName,
             assemblyReferenceSink,
         )
 
@@ -566,7 +570,7 @@ internal class DotNetIlTypeMapper private constructor(
     /** Same-module bootstrap lookup for one erased stdlib generic-class owner. */
     private fun stdlibGenericClassInfoOrNull(irClass: IrClass): DotNetGenericClassInfo? {
         stdlibGenericClasses[irClass]?.let { return it }
-        val info = DotNetStdlibLibrary.publicGenericImplementationClassInfoOrNull(irClass) ?: return null
+        val info = DotNetStdlibLibrary.publicGenericImplementationClassInfoOrNull(irClass, stdlibAssemblyName) ?: return null
         stdlibGenericClasses[irClass] = info
         if (stdlibClassLinksInProgress.add(irClass)) {
             try {
@@ -585,7 +589,7 @@ internal class DotNetIlTypeMapper private constructor(
     /** Same-module or fallback class graph for a public non-generic stdlib implementation. */
     private fun stdlibClassInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
         stdlibClasses[irClass]?.let { return it }
-        val info = DotNetStdlibLibrary.publicImplementationClassInfoOrNull(irClass) ?: return null
+        val info = DotNetStdlibLibrary.publicImplementationClassInfoOrNull(irClass, stdlibAssemblyName) ?: return null
         stdlibClasses[irClass] = info
         if (stdlibClassLinksInProgress.add(irClass)) {
             try {
@@ -715,14 +719,22 @@ internal class DotNetIlTypeMapper private constructor(
         }
     }
 
-    fun referencedFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? =
-        (comparableFunctionInfoOrNull(function)
+    fun referencedFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
+        val localStdlibFunction = {
+            DotNetStdlibLibrary.implementationFunctionInfoOrNull(function, this, stdlibAssemblyName)
+        }
+        val libraryFunction = if (stdlibAssemblyName == null) {
+            localStdlibFunction() ?: externalDeclarations.functionInfoOrNull(function, this)
+        } else {
+            externalDeclarations.functionInfoOrNull(function, this) ?: localStdlibFunction()
+        }
+        return (comparableFunctionInfoOrNull(function)
             ?: DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
-            ?: externalDeclarations.functionInfoOrNull(function, this)
-            ?: DotNetStdlibLibrary.implementationFunctionInfoOrNull(function, this)
+            ?: libraryFunction
             ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->
             functionInfo?.owner?.let(::recordAssemblyReference)
         }
+    }
 
     private fun comparableFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
         val owner = function.parent as? IrClass ?: return null
@@ -1097,10 +1109,17 @@ internal class DotNetIlTypeMapper private constructor(
     }
 
     private fun recordAssemblyReference(classInfo: DotNetIlClassInfo) {
+        check(stdlibAssemblyName != null || classInfo.assemblyName != DotNetStdlibLibrary.ASSEMBLY_NAME) {
+            "Internal .NET backend error: local Kotlin.Stdlib emission resolved " +
+                    "'${classInfo.ilClassName}' through an external Kotlin.Stdlib assembly scope"
+        }
         classInfo.assemblyName?.let(assemblyReferenceSink)
     }
 
     fun recordAssemblyReference(assemblyName: String) {
+        check(stdlibAssemblyName != null || assemblyName != DotNetStdlibLibrary.ASSEMBLY_NAME) {
+            "Internal .NET backend error: local Kotlin.Stdlib emission requested an external Kotlin.Stdlib scope"
+        }
         assemblyReferenceSink(assemblyName)
     }
 

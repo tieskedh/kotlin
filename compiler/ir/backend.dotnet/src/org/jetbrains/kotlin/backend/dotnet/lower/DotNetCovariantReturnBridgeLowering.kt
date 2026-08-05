@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetStringType
+import org.jetbrains.kotlin.backend.dotnet.isDotNetVirtual
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrElement
@@ -79,7 +80,10 @@ internal val DOTNET_COVARIANT_RETURN_BRIDGE: IrDeclarationOrigin =
  * virtually, and contains no copied source body. Ordinary CLR inheritance usually needs this
  * only for covariant returns. An erased Kotlin-owned generic base can additionally widen
  * parameters in its declaration context (`Base<T>.write(T)` is physically `write(object)`), so
- * the same JVM-style bridge rule covers the complete affected slot signature. Generic-interface
+ * the same JVM-style bridge rule covers the complete affected slot signature. A final inherited
+ * class method also needs an adapter when it satisfies an interface first declared by a derived
+ * class: the CLR cannot bind that slot to a non-virtual inherited MethodDef, while Kotlin/JVM
+ * semantics require the shape to work. Generic-interface
  * canonical/typed views remain the responsibility of [DotNetGenericInterfaceBridgeLowering].
  */
 internal class DotNetCovariantReturnBridgeLowering(
@@ -248,6 +252,8 @@ internal class DotNetCovariantReturnBridgeLowering(
         )
         val slotParameters = slot.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
+        val needsInheritedFinalInterfaceForwarder =
+            slotOwner.isInterface && target.parent != owner && !target.isDotNetVirtual()
         val hasDifferentParameterCarrier = slotParameters.size != targetParameters.size ||
                 slotParameters.zip(targetParameters).any { pair ->
                     val slotParameter = pair.first
@@ -266,7 +272,10 @@ internal class DotNetCovariantReturnBridgeLowering(
                     )
                     !slotType.hasSameClrCarrierAs(targetType)
                 }
-        if (!hasDifferentParameterCarrier && slotReturnType.hasSameClrCarrierAs(targetReturnType)) return
+        if (!needsInheritedFinalInterfaceForwarder &&
+            !hasDifferentParameterCarrier &&
+            slotReturnType.hasSameClrCarrierAs(targetReturnType)
+        ) return
         if (context.covariantReturnBridges.any { existing ->
                 existing.owner == owner && existing.inheritedMember == slot && existing.target == target
             }

@@ -1053,6 +1053,199 @@ $throwableExceptionTypesIl
             }
           }
 
+          .class interface public abstract auto ansi Set
+                 implements Kotlin.Collections.Collection
+          {
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool IsEmpty() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsErased(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .property instance int32 Size()
+            {
+              .get instance int32 Kotlin.Collections.Set::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi MutableSet
+                 implements Kotlin.Collections.Set,
+                            Kotlin.Collections.MutableCollection
+          {
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.MutableIterator GetIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool Add(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RemoveErased(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool AddAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RemoveAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool RetainAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Clear() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi Map
+          {
+            .class nested public interface abstract auto ansi Entry
+            {
+              .method public hidebysig specialname newslot abstract virtual instance object get_Key() cil managed
+              {
+              }
+
+              .method public hidebysig specialname newslot abstract virtual instance object get_Value() cil managed
+              {
+              }
+
+              .property instance object Key()
+              {
+                .get instance object Kotlin.Collections.Map/'Entry'::get_Key()
+              }
+
+              .property instance object Value()
+              {
+                .get instance object Kotlin.Collections.Map/'Entry'::get_Value()
+              }
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool IsEmpty() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsKeyErased(object key) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsValueErased(object 'value') cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object GetErased(object key) cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.Set get_Keys() cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.Collection get_Values() cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.Set get_Entries() cil managed
+            {
+            }
+
+            .property instance int32 Size()
+            {
+              .get instance int32 Kotlin.Collections.Map::get_Size()
+            }
+
+            .property instance class Kotlin.Collections.Set Keys()
+            {
+              .get instance class Kotlin.Collections.Set Kotlin.Collections.Map::get_Keys()
+            }
+
+            .property instance class Kotlin.Collections.Collection Values()
+            {
+              .get instance class Kotlin.Collections.Collection Kotlin.Collections.Map::get_Values()
+            }
+
+            .property instance class Kotlin.Collections.Set Entries()
+            {
+              .get instance class Kotlin.Collections.Set Kotlin.Collections.Map::get_Entries()
+            }
+          }
+
+          .class interface public abstract auto ansi MutableMap
+                 implements Kotlin.Collections.Map
+          {
+            .class nested public interface abstract auto ansi MutableEntry
+                   implements Kotlin.Collections.Map/'Entry'
+            {
+              .method public hidebysig newslot abstract virtual instance object SetValue(object newValue) cil managed
+              {
+              }
+            }
+
+            .method public hidebysig newslot abstract virtual instance object PutErased(object key, object 'value') cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object RemoveKeyErased(object key) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void PutAll(class Kotlin.Collections.Map from) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance void Clear() cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.MutableSet get_Keys() cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.MutableCollection get_Values() cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.MutableSet get_Entries() cil managed
+            {
+            }
+
+            .property instance class Kotlin.Collections.MutableSet Keys()
+            {
+              .get instance class Kotlin.Collections.MutableSet Kotlin.Collections.MutableMap::get_Keys()
+            }
+
+            .property instance class Kotlin.Collections.MutableCollection Values()
+            {
+              .get instance class Kotlin.Collections.MutableCollection Kotlin.Collections.MutableMap::get_Values()
+            }
+
+            .property instance class Kotlin.Collections.MutableSet Entries()
+            {
+              .get instance class Kotlin.Collections.MutableSet Kotlin.Collections.MutableMap::get_Entries()
+            }
+          }
+
         }
     """.trimIndent() + "\n" + DotNetRuntimeLibraryHelpers.ilText(
         coreLibraryReference,

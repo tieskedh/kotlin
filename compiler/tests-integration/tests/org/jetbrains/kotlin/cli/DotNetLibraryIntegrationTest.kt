@@ -22699,18 +22699,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "kotlin.test.Test must be one concrete CLR marker attribute"
         }
 
-        val upstreamTest = File("libraries/stdlib/test/collections/IteratorsTest.kt").absoluteFile
-        assertTrue(upstreamTest.isFile) { "Missing authoritative upstream test $upstreamTest" }
+        val upstreamTests = listOf(
+            File("libraries/stdlib/test/collections/IteratorsTest.kt").absoluteFile,
+            File("libraries/stdlib/test/collections/HashMapCompactTest.kt").absoluteFile,
+        )
+        assertTrue(upstreamTests.all(File::isFile)) {
+            "Missing authoritative upstream test from $upstreamTests"
+        }
         for (target in listOf("net48", "net10.0")) {
             val executionDirectory = File(tmpdir, "upstream-stdlib-test/$target").apply { mkdirs() }
             val runner = executionDirectory.resolve("runner.kt").apply {
                 writeText(
                     """
                     import kotlin.test.assertEquals
+                    import test.collections.HashMapCompactTest
                     import test.collections.IteratorsTest
 
                     fun main() {
                         IteratorsTest().iterationOverIterator()
+                        HashMapCompactTest().kt68298()
                         try {
                             assertEquals("expected", "actual")
                             throw AssertionError("A failing Common assertion returned normally")
@@ -22727,7 +22734,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
             compileInProcess(
                 K2DotNetCompiler(),
-                upstreamTest.path,
+                *upstreamTests.map(File::getPath).toTypedArray(),
                 runner.path,
                 K2DotNetCompilerArguments::noStdlib.cliArgument,
                 K2DotNetCompilerArguments::classpath.cliArgument,
@@ -29180,9 +29187,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             typeof(Kotlin.Collections.MutableIterable),
                             typeof(Kotlin.Collections.MutableCollection),
                             typeof(Kotlin.Collections.MutableList),
+                            typeof(Kotlin.Collections.Set),
+                            typeof(Kotlin.Collections.MutableSet),
+                            typeof(Kotlin.Collections.Map),
+                            typeof(Kotlin.Collections.MutableMap),
                             typeof(Kotlin.Collections.AbstractMutableCollection),
                             typeof(Kotlin.Collections.AbstractMutableList),
+                            typeof(Kotlin.Collections.AbstractSet),
+                            typeof(Kotlin.Collections.AbstractMutableSet),
+                            typeof(Kotlin.Collections.AbstractMap),
+                            typeof(Kotlin.Collections.AbstractMutableMap),
                             typeof(Kotlin.Collections.ArrayList),
+                            typeof(Kotlin.Collections.HashSet),
+                            typeof(Kotlin.Collections.HashMap),
                         };
                         foreach (Type type in kotlinTypes)
                         {
@@ -29202,6 +29219,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             return 12;
                         if ((int)get.Invoke(list, new object[] { 0 }) != 41)
                             return 13;
+
+                        object map = Activator.CreateInstance(typeof(Kotlin.Collections.HashMap));
+                        var put = map.GetType().GetMethod("put", new Type[] { typeof(object), typeof(object) });
+                        var mapGet = map.GetType().GetMethod("get", new Type[] { typeof(object) });
+                        if (put == null || mapGet == null || put.Invoke(map, new object[] { "answer", 42 }) != null)
+                            return 14;
+                        if ((int)mapGet.Invoke(map, new object[] { "answer" }) != 42)
+                            return 15;
+
+                        object set = Activator.CreateInstance(typeof(Kotlin.Collections.HashSet));
+                        var setAdd = set.GetType().GetMethod("add", new Type[] { typeof(object) });
+                        var setContains = set.GetType().GetMethod("contains", new Type[] { typeof(object) });
+                        if (setAdd == null || setContains == null || !(bool)setAdd.Invoke(set, new object[] { 42 }))
+                            return 16;
+                        if (!(bool)setContains.Invoke(set, new object[] { 42 }))
+                            return 17;
                         return 0;
                     }
 
@@ -29286,13 +29319,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val kClassType = runtimeType("Kotlin", "KClass")
         val kClassImplType = runtimeType("Kotlin", "KClassImpl")
         val kClassFactoryType = runtimeType("Kotlin.Runtime.Internal", "KClassFactory")
-        val erasedMutableCollectionTypes = listOf(
+        val erasedCollectionTypes = listOf(
+            "Iterator",
             "MutableIterator",
+            "Iterable",
+            "ListIterator",
             "MutableListIterator",
             "MutableIterable",
+            "Collection",
             "MutableCollection",
+            "List",
             "MutableList",
+            "Set",
+            "MutableSet",
+            "Map",
+            "MutableMap",
         ).map { metadataName -> runtimeType("Kotlin.Collections", metadataName) }
+        val mapType = erasedCollectionTypes.single { type -> type.metadataName == "Map" }
+        val mutableMapType = erasedCollectionTypes.single { type -> type.metadataName == "MutableMap" }
+        val mapEntryType = runtimeMetadata.typeDefinitions.single { type ->
+            type.declaringType == mapType.handle && type.metadataName == "Entry"
+        }
+        val mutableMapEntryType = runtimeMetadata.typeDefinitions.single { type ->
+            type.declaringType == mutableMapType.handle && type.metadataName == "MutableEntry"
+        }
         assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassifierType.visibility)
         assertTrue(kClassifierType.isInterface)
         assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassType.visibility)
@@ -29315,19 +29365,42 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
             }
         )
-        assertTrue(erasedMutableCollectionTypes.all { type ->
+        assertTrue(erasedCollectionTypes.all { type ->
             type.visibility == DotNetClrTypeVisibility.PUBLIC &&
                     type.isInterface &&
                     '`' !in type.metadataName
         })
+        assertTrue(
+            listOf(mapEntryType, mutableMapEntryType).all { type ->
+                type.visibility == DotNetClrTypeVisibility.NESTED_PUBLIC &&
+                        type.isInterface &&
+                        '`' !in type.metadataName
+            }
+        )
         assertTrue(runtimeMetadata.genericParameterDefinitions.none { parameter ->
-            erasedMutableCollectionTypes.any { type -> type.handle == parameter.owner }
+            erasedCollectionTypes.any { type -> type.handle == parameter.owner } ||
+                    parameter.owner == mapEntryType.handle ||
+                    parameter.owner == mutableMapEntryType.handle
         }) {
-            "Kotlin-owned mutable collection interfaces must have one non-generic runtime identity"
+            "Kotlin-owned collection interfaces must have one non-generic runtime identity"
         }
         assertFalse(stdlibDirectory.resolve("Kotlin.Stdlib.klib").exists()) {
             "The stdlib producer must not write a sibling KLIB"
         }
+        val implementationIl = stdlibDirectory.resolve("Kotlin.Stdlib.il").readText()
+        assertFalse(".assembly extern Kotlin.Stdlib" in implementationIl) {
+            "Kotlin.Stdlib emission must bind admitted helper calls to the current assembly, not to itself externally"
+        }
+        val implementationIlLines = implementationIl.lineSequence().toList()
+        fun volatileAbstractMapAccessCount(fieldName: String): Int =
+            implementationIlLines.indices.count { index ->
+                implementationIlLines[index].trim() == "volatile." &&
+                        index + 1 < implementationIlLines.size &&
+                        Regex("\\b(?:ld|st)fld\\b").containsMatchIn(implementationIlLines[index + 1]) &&
+                        "'Kotlin.Collections.AbstractMap'::'$fieldName'" in implementationIlLines[index + 1]
+            }
+        assertEquals(3, volatileAbstractMapAccessCount("_keys"))
+        assertEquals(3, volatileAbstractMapAccessCount("_values"))
         val manifest = implementationLibrary.readKlibManifest()
         assertTrue(manifest.getProperty("unique_name") == "Kotlin.Stdlib")
         assertTrue(manifest.getProperty("dotnet_assembly_file") == "Kotlin.Stdlib.dll")
@@ -29636,7 +29709,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "toBooleanArray" to 1,
             "toByteArray" to 1,
             "toCharArray" to 1,
-            "toCollection" to 1,
+            "toCollection" to 2,
             "toDoubleArray" to 1,
             "toFloatArray" to 1,
             "toIntArray" to 1,
@@ -30380,6 +30453,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/util/Tuples.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractList.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractMap.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractSet.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/IndexedValue.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/Iterables.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/Iterators.kt").absoluteFile
@@ -30387,7 +30462,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             File("libraries/stdlib/common/src/kotlin/collections/AbstractMutableCollection.kt").absoluteFile
         sourceFiles +=
             File("libraries/stdlib/common/src/kotlin/collections/AbstractMutableList.kt").absoluteFile
+        sourceFiles +=
+            File("libraries/stdlib/common/src/kotlin/collections/AbstractMutableMap.kt").absoluteFile
+        sourceFiles +=
+            File("libraries/stdlib/common/src/kotlin/collections/AbstractMutableSet.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/ArrayList.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/HashMap.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/HashSet.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/LinkedHashMap.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/LinkedHashSet.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/contracts/ContractBuilder.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/contracts/Effect.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ExceptionsH.kt").absoluteFile
