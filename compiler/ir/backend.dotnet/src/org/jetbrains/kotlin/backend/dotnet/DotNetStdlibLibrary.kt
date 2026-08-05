@@ -151,6 +151,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.joinTo" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.joinToString" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.none" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.onEach" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.onEachIndexed" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.reduce" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.reduceIndexed" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.reduceIndexedOrNull" to COLLECTIONS_FACADE_IL_NAME,
