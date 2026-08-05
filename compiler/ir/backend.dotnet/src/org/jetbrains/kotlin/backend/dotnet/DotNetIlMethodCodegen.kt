@@ -1040,19 +1040,27 @@ internal class DotNetIlMethodCodegen(
     private fun emitWhileLoop(loop: IrWhileLoop) {
         val conditionLabel = methodContext.nextLabel("whileCond")
         val endLabel = methodContext.nextLabel("whileEnd")
+        val conditionIsAlwaysTrue = loop.condition.isTrueConst()
         methodContext.registerLoop(
             loop,
             DotNetIlLoopLabels(breakLabel = endLabel, continueLabel = conditionLabel, ehDepth = methodContext.ehDepth),
         )
 
         methodContext.emitLabel(conditionLabel)
-        expressionCodegen.emitBranchIfFalse(loop.condition, endLabel)
+        // Omitting the impossible false edge is required for verifiable CIL when an infinite
+        // loop is the final statement of a non-Unit method. A literal `true; brfalse end` still
+        // gives the CLR verifier a syntactic path which falls off the method without `ret`.
+        if (!conditionIsAlwaysTrue) {
+            expressionCodegen.emitBranchIfFalse(loop.condition, endLabel)
+        }
         loop.body?.let { emitVoidExpression(it) }
         // The back edge is dead when the body ends with return/break/continue.
         if (!methodContext.isTerminated) {
             methodContext.emitGoto(conditionLabel)
         }
-        methodContext.emitLabel(endLabel)
+        if (!conditionIsAlwaysTrue || methodContext.isLabelReferenced(endLabel)) {
+            methodContext.emitLabel(endLabel)
+        }
 
         methodContext.unregisterLoop(loop)
     }

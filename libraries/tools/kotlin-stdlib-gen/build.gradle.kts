@@ -55,9 +55,14 @@ tasks {
                 "_DotNetBootstrapCollectionFactories.kt",
                 "_DotNetBootstrapOutOfMemoryError.kt",
                 "_DotNetBootstrapScalarBounds.kt",
+                "_DotNetBootstrapMaps.kt",
+                "_DotNetBootstrapSets.kt",
             ).map { fileName ->
                 rootProject.file("libraries/stdlib/dotnet/common/src/generated/$fileName")
-            }
+            } + listOf(
+                rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapMapsActuals.kt"),
+                rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapSetsActuals.kt"),
+            )
         )
         inputs.file(
             rootProject.file("libraries/stdlib/src/kotlin/collections/Collections.kt")
@@ -82,6 +87,10 @@ tasks {
             rootProject.file("libraries/stdlib/src/kotlin/experimental/inferenceMarker.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/annotations/Inference.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/collections/MutableCollections.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/collections/Maps.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/collections/Sets.kt"),
+            rootProject.file("libraries/stdlib/native-wasm/src/kotlin/collections/Maps.kt"),
+            rootProject.file("libraries/stdlib/native-wasm/src/kotlin/collections/Sets.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/util/Preconditions.kt"),
             rootProject.file("libraries/stdlib/native-wasm/src/kotlin/Exceptions.kt"),
         )

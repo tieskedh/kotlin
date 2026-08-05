@@ -1511,9 +1511,12 @@ private class DotNetIlArrayIteratorIntrinsic(
             ?: dotNetUnsupported("'iterator' has unsupported array receiver ${receiver.type.render()}")
         if (arrayType is DotNetIlValueType.ErasedGenericArray) {
             codegen.emitExpression(receiver, arrayType)
-            codegen.recordAssemblyReference(DotNetStdlibLibrary.ASSEMBLY_NAME)
+            codegen.stdlibAssemblyName?.let(codegen::recordAssemblyReference)
             codegen.emit(
-                DotNetStdlibLibrary.erasedArrayIteratorFactoryCallInstruction(codegen.coreLibraryReference),
+                DotNetStdlibLibrary.erasedArrayIteratorFactoryCallInstruction(
+                    codegen.coreLibraryReference,
+                    codegen.stdlibAssemblyName,
+                ),
                 pops = 1,
                 pushes = 1,
             )
@@ -1524,9 +1527,9 @@ private class DotNetIlArrayIteratorIntrinsic(
         if (arrayType is DotNetIlValueType.PrimitiveArray) {
             codegen.emit(arrayType.getStorageCallInstruction, pops = 1, pushes = 1)
         }
-        codegen.recordAssemblyReference(DotNetStdlibLibrary.ASSEMBLY_NAME)
+        codegen.stdlibAssemblyName?.let(codegen::recordAssemblyReference)
         codegen.emit(
-            DotNetStdlibLibrary.arrayIteratorFactoryCallInstruction(elementType),
+            DotNetStdlibLibrary.arrayIteratorFactoryCallInstruction(elementType, codegen.stdlibAssemblyName),
             pops = 1,
             pushes = 1,
         )
@@ -1555,9 +1558,12 @@ private class DotNetIlArrayAsIterableIntrinsic(
             ?: dotNetUnsupported("'asIterable' has unsupported array receiver ${receiver.type.render()}")
         if (arrayType is DotNetIlValueType.ErasedGenericArray) {
             codegen.emitExpression(receiver, arrayType)
-            codegen.recordAssemblyReference(DotNetStdlibLibrary.ASSEMBLY_NAME)
+            codegen.stdlibAssemblyName?.let(codegen::recordAssemblyReference)
             codegen.emit(
-                DotNetStdlibLibrary.erasedArrayIterableFactoryCallInstruction(codegen.coreLibraryReference),
+                DotNetStdlibLibrary.erasedArrayIterableFactoryCallInstruction(
+                    codegen.coreLibraryReference,
+                    codegen.stdlibAssemblyName,
+                ),
                 pops = 1,
                 pushes = 1,
             )
@@ -1568,9 +1574,9 @@ private class DotNetIlArrayAsIterableIntrinsic(
         if (arrayType is DotNetIlValueType.PrimitiveArray) {
             codegen.emit(arrayType.getStorageCallInstruction, pops = 1, pushes = 1)
         }
-        codegen.recordAssemblyReference(DotNetStdlibLibrary.ASSEMBLY_NAME)
+        codegen.stdlibAssemblyName?.let(codegen::recordAssemblyReference)
         codegen.emit(
-            DotNetStdlibLibrary.arrayIterableFactoryCallInstruction(elementType),
+            DotNetStdlibLibrary.arrayIterableFactoryCallInstruction(elementType, codegen.stdlibAssemblyName),
             pops = 1,
             pushes = 1,
         )
@@ -1603,12 +1609,13 @@ private class DotNetIlStdlibCollectionElementIntrinsic(
         val receiver = call.arguments.single()
             ?: dotNetUnsupported("missing collection receiver for '$functionName'")
         codegen.emitExpression(receiver, receiverType)
-        codegen.recordAssemblyReference(DotNetStdlibLibrary.ASSEMBLY_NAME)
+        codegen.stdlibAssemblyName?.let(codegen::recordAssemblyReference)
         codegen.emit(
             DotNetStdlibLibrary.collectionElementFunctionCallInstruction(
                 functionName,
                 receiverType,
                 elementType,
+                codegen.stdlibAssemblyName,
             ),
             pops = 1,
             pushes = 1,
