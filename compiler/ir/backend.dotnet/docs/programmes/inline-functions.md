@@ -147,18 +147,22 @@ twice. With the first-stage inliner disabled, the binary prefix owns those trans
 
 Add a .NET `PreSerializationLoweringContext` using `PreSerializationKlibSymbols`,
 `KlibSharedVariablesManager`, and `DotNetIrMangler`. Compile the authoritative Common
-`SharedVariableBox.kt` and `SyntheticConstructorMarker.kt` into the stdlib source product. The
-generic box is the first-stage ABI; primitive box specialization is an optimization, not a
-prerequisite for correctness.
+`SharedVariableBox.kt`, `SyntheticConstructorMarker.kt`, and non-JVM `ThrowHelpers.kt` into the
+stdlib source product. The generic box is the first-stage ABI; primitive box specialization is an
+optimization, not a prerequisite for correctness. The shared callable-reference upgrade may call
+`throwUnsupportedOperationException` before target lowering, so that helper must be a real
+cross-library declaration rather than a backend-local stand-in.
 
 Run the shared first-stage phases before target lowering/serialization. Start the binary-stage
 pipeline with the mature-target common prefix before callable-reference, returnable-block, local
 declaration, and other .NET-specific transformations when the first stage did not already run that
 prefix on the same IR. The inliner may introduce returnable blocks, captures, array constructors,
 and accessors, so target lowerings must consume its output rather than precede it. Both stages
-deliberately omit `LateinitLowering`: `lateinit` and its required target throw-helper contract
-remain a separate parked feature. The shared first-stage builder keeps that lowering enabled by
-default for every existing mature target and exposes only this narrow target-capability switch.
+deliberately omit `LateinitLowering`. Publishing Common `ThrowHelpers.kt` for shared lowering does
+not enable `lateinit`: its complete target lowering, field/state representation, diagnostics, and
+adversarial product gate remain a separate parked feature. The shared first-stage builder keeps
+that lowering enabled by default for every existing mature target and exposes only this narrow
+target-capability switch.
 
 Support the CLI's existing `-Xklib-ir-inliner=disabled`, `intra-module`, and `full` modes. Prepared
 inlinable IR serves the modern intra/full paths. The disabled/legacy path requires the binary-stage

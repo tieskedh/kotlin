@@ -104,7 +104,7 @@ post-substitution array-operation audit is complete as well: array construction 
 ordinary carriers and needs no reified-only representation. Do not flip either inliner capability
 gate or mistake that allocation readiness for the whole language feature. Kotlin `KClass` and
 class literals now form a completed nominal floor over classified CLR evidence. `KType`, the
-contracts product, reified enum helpers, the final substituted type-operator matrix, and
+reified enum helpers, the final substituted type-operator matrix, and
 the physical reified throwing-stub contract remain separate boundaries.
 
 ### 2. Expand Common collections by exact dependency closure
@@ -123,22 +123,19 @@ Kotlin runtime owner and one erased virtual hierarchy. Explicit typed C# export 
 fail-closed product. Hybrid class capabilities, wrappers as identity, receiver-only provenance,
 guard hoisting, visibility-dependent ABI, and AOT-specific specialization remain excluded.
 
-The first part of the source-level bootstrap cycle is complete. Common
-`Appendable`, the complete `StringBuilder` expect class and its non-contract extensions do not
-depend on contracts; only the two top-level `buildString` declarations do. The exact fail-closed
-Common projection therefore produces the builder class, generated `joinTo`/`joinToString`, and
-Common abstract collection bases while omitting precisely those two declarations. Its source
-closure is complete over the erased generic-class representation; it is not a target stub or
-rewritten algorithm.
+The source-level builder/contracts bootstrap cycle is complete. Common `Appendable`, the complete
+`StringBuilder` file including both `buildString` declarations, generated
+`joinTo`/`joinToString`, the Common contracts DSL/effects, and Common abstract collection bases
+ship in one self-describing product. `Standard.kt` is exact through `takeUnless`; only its final
+`repeat` declaration remains projected out until the real `Int.until`/range/progression closure
+lands. No admitted body is a target stub or rewritten algorithm.
 
-Modern enums plus the non-reified `EnumEntries` core are now complete as one coherent
-language/product phase. They use
+Modern enums plus the non-reified `EnumEntries` core and the ordinary `InvocationKind` enum are now
+complete as coherent language/product phases. They use
 Kotlin-owned reference classes, the general Comparable mapping, producer-recorded entry-field
 binding, and the existing static-initialization machinery; they are not CLR value-type enums. The
-next bounded language/product phase is ordinary `InvocationKind`, followed by the exact
-contracts/`Standard.kt`/`buildString` closure and replacement of the temporary projection with the
-full ordinary Common file. General reified
-enum functions remain behind the reified gate throughout.
+contracts/`Standard.kt`/`buildString` closure is complete under the precise `repeat` exclusion
+above. General reified enum functions remain behind the reified gate throughout.
 
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin
@@ -154,11 +151,11 @@ implementation follows the shared annotation member generator and covers separat
 valued constructors and Kotlin reflection discovery remain separate. See
 [`../decisions/marker-annotation-classes.md`](../decisions/marker-annotation-classes.md).
 
-After the generic-class, collection, and enum phases, publish the complete contracts product rather
-than a compiler-private cycle breaker. Existing nullability and CodeAnalysis plumbing already
-distinguishes authoritative Kotlin facts from exact CLR projections. Compiler-consumed effects
-belong to KLIB/Common semantics; Roslyn attributes may additionally expose only their exact subset
-and may also be accepted as foreign evidence under Kotlin stability rules.
+The contracts product is now public Common API rather than a compiler-private cycle breaker.
+Compiler-consumed effects belong to KLIB/Common semantics. The next annotation/export slice may
+project only the exact CodeAnalysis subset through a neutral FIR-to-export carrier; it must not
+rediscover contracts from lowered IR or make CLR attributes authoritative. The importer may
+continue accepting those standard attributes as foreign evidence under Kotlin stability rules.
 
 ### 3. Retain and enforce the completed declaration architecture seam
 
@@ -237,7 +234,7 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - suspend inline functions until coroutine state machines are supported;
 - coroutine state machines and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;
-- `lateinit`, plus the two `buildString` declarations pending the contracts closure;
+- `lateinit`;
 - collection/stdlib families outside admitted Common dependency closures; and
 - broad Gradle/KMP distribution integration beyond the current target model.
 

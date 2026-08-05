@@ -28985,6 +28985,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(".class interface public abstract auto ansi 'Kotlin.Text.Appendable'" in il)
         assertTrue(".class public auto ansi sealed beforefieldinit 'Kotlin.Text.StringBuilder'" in il)
         assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Text.StringsKt'" in il)
+        assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.StandardKt'" in il)
+        assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Contracts.ContractBuilderKt'" in il)
+        assertTrue("'Kotlin.Contracts.ContractBuilder'" in il)
+        assertTrue("'Kotlin.Contracts.InvocationKind'" in il)
+        for (entryName in listOf("AT_MOST_ONCE", "AT_LEAST_ONCE", "EXACTLY_ONCE", "UNKNOWN")) {
+            assertTrue("'Kotlin.Contracts.InvocationKind' '$entryName'" in il) {
+                "Missing InvocationKind.$entryName physical entry in:\n$il"
+            }
+        }
         assertTrue(".class public auto ansi sealed beforefieldinit 'Kotlin.NotImplementedError'" in il)
         assertTrue("'joinTo'<" in il)
         assertTrue("'joinToString'<" in il)
@@ -29013,6 +29022,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             ".method private hidebysig specialname rtspecialname instance void .ctor(" +
                     "object 'storage', int32 'marker')" in il
+        )
+        val buildStringFallbacks = il.lineSequence()
+            .filter { line -> ".method assembly " in line && "'buildString'(" in line }
+            .toList()
+        assertEquals(2, buildStringFallbacks.size) {
+            "Both @InlineOnly buildString overloads need assembly-visible physical fallbacks:\n$il"
+        }
+        assertTrue(il.lineSequence().any { line ->
+            ".method assembly " in line && "'contract'(" in line
+        }) {
+            "The @InlineOnly contract DSL entry needs an assembly-visible physical fallback:\n$il"
+        }
+        assertEquals(
+            2,
+            il.lineSequence().count { line -> ".method assembly " in line && "'run'<" in line },
+            "Both @InlineOnly Common run overloads need assembly-visible physical fallbacks",
+        )
+        assertEquals(
+            2,
+            il.lineSequence().count { line -> ".method assembly " in line && "'TODO'(" in line },
+            "Both @InlineOnly Common TODO overloads need assembly-visible physical fallbacks",
         )
         assertTrue(
             ".class public abstract auto ansi beforefieldinit " +
@@ -29536,6 +29566,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractList.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/contracts/ContractBuilder.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/contracts/Effect.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ExceptionsH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ioH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt").absoluteFile
@@ -29547,6 +29579,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SharedVariableBox.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SyntheticConstructorMarker.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/ThrowHelpers.kt").absoluteFile
         sourceFiles.sortBy(File::invariantSeparatorsPath)
         assertEquals(DOTNET_STDLIB_SOURCES.keys.sorted(), sourceFiles.map(File::getName).sorted())
         for (sourceFile in sourceFiles) {
@@ -30284,9 +30317,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val consumerSource = File(tmpdir, "installed-consumer-$target.kt").apply {
             writeText(
                 """
+                @file:OptIn(kotlin.contracts.ExperimentalContracts::class)
+
                 package consumer
 
+                import kotlin.contracts.InvocationKind
+
                 public class InstalledToken
+
+                private open class InstalledCustomMessageError : Error("ignored") {
+                    override val message: String?
+                        get() = "custom"
+                }
+
+                private class InstalledDerivedCustomMessageError : InstalledCustomMessageError()
+
+                private class InstalledLocalDelegate {
+                    operator fun getValue(receiver: Any?, property: kotlin.reflect.KProperty<*>): String =
+                        property.name
+                }
+
+                public fun installedLocalDelegateName(): String {
+                    val installedLocal by InstalledLocalDelegate()
+                    return installedLocal
+                }
 
                 public class InstalledBox<T>(public val value: T)
 
@@ -30621,6 +30675,93 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun installedReadOptional(): String? = readlnOrNull()
 
+                public fun installedContractsAndScopes(): Boolean {
+                    val assigned: String
+                    val token = InstalledToken()
+                    var calls = 0
+                    val runResult = run {
+                        assigned = "assigned"
+                        calls++
+                        "run"
+                    }
+                    val withResult = with(token) {
+                        calls++
+                        this
+                    }
+                    val receiverRunResult = token.run {
+                        calls++
+                        this
+                    }
+                    val applyResult = token.apply { calls++ }
+                    val alsoResult = token.also { calls++ }
+                    val letResult = token.let { calls++; it }
+                    val takeIfResult = token.takeIf { calls++; true }
+                    val rejectedTakeIf = token.takeIf { calls++; false }
+                    val takeUnlessResult = token.takeUnless { calls++; false }
+                    val rejectedTakeUnless = token.takeUnless { calls++; true }
+                    return assigned == "assigned" &&
+                        runResult == "run" &&
+                        withResult === token &&
+                        receiverRunResult === token &&
+                        applyResult === token &&
+                        alsoResult === token &&
+                        letResult === token &&
+                        takeIfResult === token &&
+                        rejectedTakeIf == null &&
+                        takeUnlessResult === token &&
+                        rejectedTakeUnless == null &&
+                        calls == 10
+                }
+
+                public fun installedScopeNonLocalReturn(): String {
+                    run { return "non-local" }
+                }
+
+                public fun installedReceiverScopeNonLocalReturn(): String {
+                    InstalledToken().run { return "receiver-non-local" }
+                }
+
+                public fun installedTodoFunctions(): Boolean {
+                    var noReason = false
+                    try {
+                        TODO()
+                    } catch (failure: NotImplementedError) {
+                        noReason = failure.message == "An operation is not implemented." && failure.cause == null
+                    }
+                    var withReason = false
+                    try {
+                        TODO("reason")
+                    } catch (failure: NotImplementedError) {
+                        withReason = failure.message == "An operation is not implemented: reason"
+                    }
+                    return noReason && withReason
+                }
+
+                public fun installedBuilders(): Boolean {
+                    val firstAssigned: String
+                    val first = buildString {
+                        firstAssigned = "first"
+                        append('O')
+                        append('K')
+                    }
+                    val secondAssigned: String
+                    val second = buildString(2) {
+                        secondAssigned = "second"
+                        append("OK")
+                    }
+                    var rejectedNegativeCapacity = false
+                    try {
+                        buildString(-1) { append("unreachable") }
+                    } catch (_: IllegalArgumentException) {
+                        rejectedNegativeCapacity = true
+                    }
+                    return firstAssigned == "first" &&
+                        secondAssigned == "second" &&
+                        first == "OK" &&
+                        second == "OK" &&
+                        rejectedNegativeCapacity
+                }
+
                 fun main() {
                     val values = Array<String>(2) { index -> if (index == 0) "O" else "K" }
                     val kClassOk = installedKClassFloor()
@@ -30719,9 +30860,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         snapshot.size == 1 &&
                             snapshot[0] === suppressed &&
                             owner.stackTraceToString() != owner.toString()
+                    val contractsOk =
+                        installedContractsAndScopes() &&
+                            installedScopeNonLocalReturn() == "non-local" &&
+                            installedReceiverScopeNonLocalReturn() == "receiver-non-local" &&
+                            installedTodoFunctions() &&
+                            InstalledDerivedCustomMessageError().message == "custom" &&
+                            installedLocalDelegateName() == "installedLocal" &&
+                            installedBuilders() &&
+                            InvocationKind.entries.size == 4 &&
+                            InvocationKind.entries[0] === InvocationKind.AT_MOST_ONCE &&
+                            InvocationKind.entries[1] === InvocationKind.AT_LEAST_ONCE &&
+                            InvocationKind.entries[2] === InvocationKind.EXACTLY_ONCE &&
+                            InvocationKind.entries[3] === InvocationKind.UNKNOWN
                     println(
                         if (kClassOk && collectionsOk && sumsOk && averagesOk && frontierOk &&
-                            inlineOnlyOk && throwableOk
+                            inlineOnlyOk && throwableOk && contractsOk
                         ) {
                             "OK"
                         } else {
@@ -30745,6 +30899,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("[Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'" in il)
         assertTrue("[Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'GetClass'(object)" in il)
         assertTrue("[Kotlin.Runtime]'Kotlin.KClass'::'isInstance'(object)" in il)
+        assertFalse("[Kotlin.Stdlib]'Kotlin.StandardKt'::'run'" in il) {
+            "The installed consumer must inline the Common run body:\n$il"
+        }
+        assertFalse("[Kotlin.Stdlib]'Kotlin.StandardKt'::'TODO'" in il) {
+            "The installed consumer must inline both Common TODO bodies:\n$il"
+        }
+        assertFalse("[Kotlin.Stdlib]'Kotlin.Text.StringsKt'::'buildString'" in il) {
+            "The installed consumer must inline both Common buildString bodies:\n$il"
+        }
+        assertFalse("[Kotlin.Stdlib]'Kotlin.Contracts.ContractBuilderKt'::'contract'" in il) {
+            "Contract DSL calls must not survive into executable consumer paths:\n$il"
+        }
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'" in il)
         assertTrue("::'first'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')" in il)

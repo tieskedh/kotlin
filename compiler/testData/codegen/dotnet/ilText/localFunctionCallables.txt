@@ -3,6 +3,10 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'localFunctionCallables' {}
 .module 'main-localFunctionCallables.il'
 
@@ -183,20 +187,18 @@ IL_whenNext_1:
   {
     .maxstack 2
     .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' 'value'
+      [0] class [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox' 'value'
     )
-    newobj instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::.ctor()
-    stloc.0
-    ldloc.0
     ldc.i4 1
     box [mscorlib]System.Int32
-    stfld object [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::'element'
+    newobj instance void [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox'::.ctor(object)
+    stloc.0
     ldloc.0
     ldc.i4 2
     box [mscorlib]System.Int32
-    stfld object [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::'element'
+    call instance void [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox'::'set_element'(object)
     ldloc.0
-    call int32 'localFunctionCallablesKt'::'mutableLocalFunctionCaptureSupported$local__KotlinErased__b6c52e8702c3e817a1fb3c41bdf9362d'(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef')
+    call int32 'localFunctionCallablesKt'::'mutableLocalFunctionCaptureSupported$local__KotlinErased__8a045e3d8ad7028face449fd2d2d71b4'(class [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox')
     ret
   }
   .method public hidebysig static int32 'lambdaMixtureSupported'() cil managed
@@ -300,11 +302,11 @@ IL_whenEnd_0:
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }
-  .method assembly hidebysig static int32 'mutableLocalFunctionCaptureSupported$local__KotlinErased__b6c52e8702c3e817a1fb3c41bdf9362d'(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' 'value') cil managed
+  .method assembly hidebysig static int32 'mutableLocalFunctionCaptureSupported$local__KotlinErased__8a045e3d8ad7028face449fd2d2d71b4'(class [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox' 'value') cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld object [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::'element'
+    call instance object [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox'::'get_element'()
     unbox.any [mscorlib]System.Int32
     ret
   }

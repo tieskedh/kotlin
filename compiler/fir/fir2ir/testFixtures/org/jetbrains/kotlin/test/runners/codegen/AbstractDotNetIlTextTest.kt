@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelinePhase
+import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetKlibInliningPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.withNewDiagnosticCollector
 import org.jetbrains.kotlin.config.AnalysisFlag
 import org.jetbrains.kotlin.config.AnalysisFlags
@@ -267,7 +268,8 @@ private class BackendCliDotNetFacade(
             "BackendCliDotNetFacade expects DotNetFir2IrPipelineArtifact as input, but ${cliArtifact::class} was found"
         }
         val input = cliArtifact.withNewDiagnosticCollector(DiagnosticsCollectorImpl())
-        return BinaryArtifacts.DotNet(DotNetBackendPipelinePhase.executePhase(input).output)
+        val loweredInput = DotNetKlibInliningPipelinePhase.executePhase(input)
+        return BinaryArtifacts.DotNet(DotNetBackendPipelinePhase.executePhase(loweredInput).output)
     }
 }
 
@@ -308,7 +310,7 @@ private class DotNetEnvironmentConfigurator(
         configuration.dotNetOutput = getOutputFile(module, artifactName)
         configuration.dotNetTarget = target
         configuration.languageVersionSettings =
-            configuration.languageVersionSettings.withDotNetMultiplatformSources()
+            configuration.languageVersionSettings.withDotNetSourceProductSettings()
         configuration.addSourcesForDependsOnClosure(module, testServices)
         for (stdlibSource in getOrCreateStdlibSources()) {
             configuration.addKotlinSourceRoot(
@@ -339,7 +341,7 @@ private class DotNetEnvironmentConfigurator(
         }
 }
 
-private fun LanguageVersionSettings.withDotNetMultiplatformSources(): LanguageVersionSettings {
+private fun LanguageVersionSettings.withDotNetSourceProductSettings(): LanguageVersionSettings {
     val delegate = this
     return object : LanguageVersionSettings by delegate {
         override fun getFeatureSupport(feature: LanguageFeature): LanguageFeature.State =
@@ -359,8 +361,11 @@ private fun LanguageVersionSettings.withDotNetMultiplatformSources(): LanguageVe
         override fun <T> getFlag(flag: AnalysisFlag<T>): T {
             @Suppress("UNCHECKED_CAST")
             if (flag == AnalysisFlags.optIn) {
-                return (delegate.getFlag(AnalysisFlags.optIn) + "kotlin.ExperimentalMultiplatform")
-                    .distinct() as T
+                val productOptIns = listOf(
+                    "kotlin.ExperimentalMultiplatform",
+                    "kotlin.contracts.ExperimentalContracts",
+                )
+                return (delegate.getFlag(AnalysisFlags.optIn) + productOptIns).distinct() as T
             }
             return delegate.getFlag(flag)
         }

@@ -3,6 +3,10 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'anonymousObjectsRejected' {}
 .module 'main-anonymousObjectsRejected.il'
 
@@ -34,13 +38,13 @@
        implements 'RejectedAnonymousValue'
 {
   .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
-  .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' '$value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' '$value') cil managed
+  .field private class [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox' '$value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox' '$value') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    stfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' 'anonymousObjectsRejectedKt$mutableAnonymousCaptureSupported$source$1'::'$value'
+    stfld class [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox' 'anonymousObjectsRejectedKt$mutableAnonymousCaptureSupported$source$1'::'$value'
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -49,8 +53,8 @@
   {
     .maxstack 1
     ldarg.0
-    ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' 'anonymousObjectsRejectedKt$mutableAnonymousCaptureSupported$source$1'::'$value'
-    ldfld object [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::'element'
+    ldfld class [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox' 'anonymousObjectsRejectedKt$mutableAnonymousCaptureSupported$source$1'::'$value'
+    call instance object [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox'::'get_element'()
     unbox.any [mscorlib]System.Int32
     ret
   }
@@ -75,24 +79,42 @@
   {
     .maxstack 2
     .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef' 'value',
+      [0] class [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox' 'value',
       [1] class 'RejectedAnonymousValue' 'source'
     )
-    newobj instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::.ctor()
-    stloc.0
-    ldloc.0
     ldc.i4 1
     box [mscorlib]System.Int32
-    stfld object [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::'element'
+    newobj instance void [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox'::.ctor(object)
+    stloc.0
     ldloc.0
-    newobj instance void 'anonymousObjectsRejectedKt$mutableAnonymousCaptureSupported$source$1'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef')
+    newobj instance void 'anonymousObjectsRejectedKt$mutableAnonymousCaptureSupported$source$1'::.ctor(class [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox')
     stloc.1
     ldloc.0
     ldc.i4 2
     box [mscorlib]System.Int32
-    stfld object [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef'::'element'
+    call instance void [Kotlin.Stdlib]'Kotlin.Internal.SharedVariableBox'::'set_element'(object)
     ldloc.1
     callvirt instance int32 'RejectedAnonymousValue'::'value'()
+    ret
+  }
+  .method public hidebysig static int32 'exceptionAnonymousRejected'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'anonymousObjectsRejectedKt$exceptionAnonymousRejected$failure$1' 'failure'
+    )
+    newobj instance void 'anonymousObjectsRejectedKt$exceptionAnonymousRejected$failure$1'::.ctor()
+    stloc.0
+    ldloc.0
+    callvirt instance string [mscorlib]System.Exception::get_Message()
+    ldstr "bad"
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    brfalse IL_whenNext_1
+    ldc.i4 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.i4 0
+IL_whenEnd_0:
     ret
   }
   .method public hidebysig static void 'main'() cil managed
