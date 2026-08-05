@@ -523,19 +523,11 @@
     call instance void 'Constrained'::.ctor(class 'Marked')
     ret
   }
-  .method public hidebysig newslot virtual instance class 'Marked' 'current'() cil managed
+  .method public hidebysig virtual instance class 'Marked' 'current'() cil managed
   {
     .maxstack 1
     ldarg.0
     call instance class 'Marked' 'Constrained'::'get_stored'()
-    ret
-  }
-  .method private hidebysig newslot virtual final instance class 'Marked' '<CovariantReturnBridge-Constrained-current-a9226df7e3a4e551d885d51f7d14a6eb>'() cil managed
-  {
-    .override method instance class 'Marked' 'Constrained'::'current'()
-    .maxstack 1
-    ldarg.0
-    callvirt instance class 'Marked' 'ConcreteConstrained'::'current'()
     ret
   }
 }

@@ -54,6 +54,15 @@ and fails on source drift; it never maintains a .NET copy. The endpoint is the
 complete Common generated corpus plus narrow target actuals, after which the
 selection layer disappears.
 
+An admitted generated source shard mapped to one physical facade owns the
+complete top-level function closure in that shard, including internal and
+private helpers. Do not maintain a second per-function physical allowlist:
+that can silently omit a helper while retaining its authoritative caller.
+Compiler-only resolution markers are the explicit exception; their exact
+intrinsics or lowerings must remove both calls and declarations before CIL.
+The generator/source projection remains the admission boundary for public
+Kotlin API.
+
 Common abstract collection classes and other source families enter only with
 their complete dependency closure. A missing target feature is not a CLR
 reason to replace a Common algorithm with a BCL call or intrinsic. Explicit
@@ -137,6 +146,14 @@ Same-run ownership separation may emit stdlib-owned and user-owned
 declarations to different assemblies from one lowering session during this
 bootstrap phase. It is not the normal library lifecycle and must disappear
 once distribution-owned pairs are universal.
+
+FIR actualization may retain either a Common expect file or its .NET actual
+file as the physical IR owner. The same-run partition therefore recognizes
+every verified owner filename for one admitted declaration and maps all of
+them to the same stdlib facade. Adding the first executable declaration to an
+actual-only source file must add that owner to the partition; it must not make
+the declaration appear in the following user assembly. Product tests compare
+both DLLs and IL-text tests reject such stdlib-to-user leakage.
 
 ### Reproducibility has an explicit boundary
 

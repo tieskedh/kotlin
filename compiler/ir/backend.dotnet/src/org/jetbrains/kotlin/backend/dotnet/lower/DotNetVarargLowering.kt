@@ -44,7 +44,6 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classOrNull
-import org.jetbrains.kotlin.ir.types.classifierOrNull
 import org.jetbrains.kotlin.ir.types.isInt
 import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.util.constructors
@@ -54,6 +53,8 @@ import org.jetbrains.kotlin.ir.util.getPropertyGetter
 import org.jetbrains.kotlin.ir.util.hasDefaultValue
 import org.jetbrains.kotlin.ir.util.hasShape
 import org.jetbrains.kotlin.ir.util.isVararg
+import org.jetbrains.kotlin.ir.util.substitute
+import org.jetbrains.kotlin.ir.util.typeSubstitutionMap
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.util.OperatorNameConventions
@@ -67,10 +68,10 @@ import org.jetbrains.kotlin.util.OperatorNameConventions
  * This follows the JVM/Native/Wasm lowering contract: omitted varargs become empty vectors,
  * argument and spread expressions are evaluated once in source order, and every expanded call
  * receives a fresh array. Spread copies use the existing array `size`/`get`/`set` surface rather
- * than adding a second codegen-only copying path. Open element types deliberately remain
- * untouched. The read-only `Array<out T>` carrier is now defined, but construction and spread
- * copying for an open `vararg T` are not; the declaration gate therefore keeps generic varargs
- * unsupported instead of publishing a function whose source calls cannot be lowered.
+ * than adding a second codegen-only copying path. An open `vararg T` uses the CLR's native `T[]`
+ * method-generic vector: `newarr !!T`, `ldelem !!T`, and `stelem !!T` are valid for reference- and
+ * value-type substitutions. This is method-owned capability, not CLR-generic identity for a
+ * Kotlin-owned class.
  */
 internal class DotNetVarargLowering(
     context: DotNetBackendContext,
@@ -145,11 +146,15 @@ internal class DotNetVarargLowering(
             val parameter = callee.parameters[index]
             val elementType = parameter.varargElementType ?: continue
             if (parameter.hasDefaultValue()) continue
+            val substitutedElementType = elementType.substitute(expression.typeSubstitutionMap)
             expression.arguments[index] = IrVarargImpl(
                 UNDEFINED_OFFSET,
                 UNDEFINED_OFFSET,
-                parameter.concreteVarargArrayTypeOrNull() ?: parameter.type,
-                elementType,
+                parameter.type
+                    .substitute(expression.typeSubstitutionMap)
+                    .concreteVarargArrayTypeOrNull(substitutedElementType)
+                    ?: parameter.type.substitute(expression.typeSubstitutionMap),
+                substitutedElementType,
             )
         }
         expression.transformChildrenVoid(this)
@@ -311,9 +316,8 @@ internal class DotNetVarargLowering(
         type.concreteVarargArrayTypeOrNull(varargElementType)
 
     private fun IrType.concreteVarargArrayTypeOrNull(elementType: IrType): IrType? {
-        if (elementType.containsTypeParameter()) return null
         return when {
-            isSupportedDotNetPrimitiveArray() -> this
+            isSupportedDotNetPrimitiveArray() && !elementType.containsTypeParameter() -> this
             isDotNetGenericArray() -> irBuiltIns.arrayClass.typeWith(elementType)
             else -> null
         }
@@ -322,13 +326,13 @@ internal class DotNetVarargLowering(
     private fun IrType.concreteProjectedArrayTypeOrNull(): IrType? {
         if (!isDotNetGenericArray()) return null
         val projection = (this as? IrSimpleType)?.arguments?.singleOrNull() as? IrTypeProjection ?: return null
-        if (projection.variance == Variance.INVARIANT || projection.type.containsTypeParameter()) return null
+        if (projection.variance == Variance.INVARIANT) return null
         return irBuiltIns.arrayClass.typeWith(projection.type)
     }
 
     private fun IrType.containsTypeParameter(): Boolean {
         val simpleType = this as? IrSimpleType ?: return true
-        if (simpleType.classifierOrNull is IrTypeParameterSymbol) return true
+        if (simpleType.classifier is IrTypeParameterSymbol) return true
         return simpleType.arguments.any { argument ->
             (argument as? IrTypeProjection)?.type?.containsTypeParameter() != false
         }

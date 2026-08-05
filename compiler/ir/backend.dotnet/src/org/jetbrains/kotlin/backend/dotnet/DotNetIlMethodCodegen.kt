@@ -693,11 +693,60 @@ internal class DotNetIlMethodCodegen(
     }
 
     private fun emitVariable(variable: IrVariable) {
-        val slot = methodContext.declareLocal(variable)
-        val initializer = variable.initializer ?: return
+        val initializer = variable.initializer
+        val exactArrayStorage = if (initializer == null) null else variable.exactCompilerTemporaryArrayStorageOrNull()
+        val slot = methodContext.declareLocal(variable, exactArrayStorage)
+        if (initializer == null) return
         expressionCodegen.emitExpression(initializer, slot.type)
         if (methodContext.isTerminated) return
         methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+    }
+
+    /**
+     * Retains an exact CLR vector through the immutable argument temporaries introduced by the
+     * shared inliner. Kotlin inference can instantiate an InlineOnly parameter at a wider
+     * element type through a contravariant receiver (for example
+     * `MutableCollection<in T>.plusAssign(Array<T>)`), producing a temporary logical
+     * `Array<Any?>` around the original `Array<Int>`. JVM reference arrays tolerate that
+     * temporary covariance; CLR `int32[]` cannot be stored in `object[]`.
+     *
+     * These locals are compiler scaffolding, not ABI. Preserve the initializer's exact vector
+     * type through the complete inliner-temporary chain. The inline body still observes its KLIB
+     * logical type, while projected array consumers widen that exact slot to `System.Array`.
+     * Source locals and mutable compiler locals keep their declared physical type, so this is not
+     * a general invariant-array covariance rule.
+     */
+    private fun IrVariable.exactCompilerTemporaryArrayStorageOrNull(
+        visited: MutableSet<IrVariable> = hashSetOf(),
+    ): DotNetIlValueType.GenericArray? {
+        if (isVar || !type.isDotNetGenericArray() || !visited.add(this)) return null
+        if (origin != IrDeclarationOrigin.IR_TEMPORARY_VARIABLE &&
+            origin != IrDeclarationOrigin.IR_TEMPORARY_VARIABLE_FOR_INLINED_PARAMETER &&
+            origin != IrDeclarationOrigin.IR_TEMPORARY_VARIABLE_FOR_INLINED_EXTENSION_RECEIVER
+        ) {
+            return null
+        }
+        return initializer?.exactArrayStorageProvenanceOrNull(visited)
+    }
+
+    private fun IrExpression.exactArrayStorageProvenanceOrNull(
+        visited: MutableSet<IrVariable>,
+    ): DotNetIlValueType.GenericArray? {
+        return when (this) {
+            is IrTypeOperatorCall -> if (
+                operator == IrTypeOperator.IMPLICIT_CAST &&
+                argument.type.isDotNetGenericArray() &&
+                typeOperand.isDotNetGenericArray()
+            ) {
+                argument.exactArrayStorageProvenanceOrNull(visited)
+            } else {
+                expressionCodegen.toDotNetIlValueType(type) as? DotNetIlValueType.GenericArray
+            }
+            is IrGetValue ->
+                (symbol.owner as? IrVariable)?.exactCompilerTemporaryArrayStorageOrNull(visited)
+                    ?: expressionCodegen.toDotNetIlValueType(type) as? DotNetIlValueType.GenericArray
+            else -> expressionCodegen.toDotNetIlValueType(type) as? DotNetIlValueType.GenericArray
+        }
     }
 
     private fun emitVoidExpression(expression: IrExpression) {

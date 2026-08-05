@@ -116,15 +116,21 @@ algorithm or collection-specific bridge.
 The collection work provides ordinary user value and the foundation now consumed by enums, while exercising
 generic interfaces, arrays, separate products, and profile-compatible stdlib publication.
 
-Further work is foundation-first rather than allowlist-count-first. The next
-tranche closes mutable iterator/collection/list contracts, Common abstract
-mutable bases, one ordinary Kotlin `ArrayList`, its factories/builders,
-separate-product ABI, truthful C# boundaries, and the applicable shared stdlib
-test product as one architectural unit. Before implementation it records the
-complete Common generator set whose only blocker that unit removes; that set
-lands together unless a member exposes a distinct parked language or
-representation decision. Loose one-function growth is not a substitute for
-closing this substrate.
+The mutable iterator/collection/list contracts, Common abstract mutable bases,
+ordinary Kotlin `ArrayList`, factories/builders, separate-product ABI,
+truthful C# boundary, first staged Common `kotlin.test` product, and complete
+dependency-closed Iterable/List generator family now form one completed
+architectural unit. Preserve its owner-erased class/interface identity,
+method-generic vararg and relative-constraint ABI, projected-array boundary,
+foreign physical-signature authority, and unchanged upstream test path.
+
+Further work remains foundation-first rather than allowlist-count-first. The
+next tranche audits and closes Set/Map plus hash storage as one substrate,
+using Common and the shared JS/Native/Wasm implementations as source authority
+and JVM/BCL host mappings as explicit design attacks. It records the complete
+generator and upstream-test family released by that substrate before
+implementation. Loose one-function growth and implicit BCL
+`Dictionary<K,V>`/`HashSet<T>` identity are not substitutes for closing it.
 
 The semantically erased generic-class route is selected in
 [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md).

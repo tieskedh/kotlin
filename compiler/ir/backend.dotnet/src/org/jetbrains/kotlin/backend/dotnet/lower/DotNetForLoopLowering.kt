@@ -42,7 +42,9 @@ import org.jetbrains.kotlin.util.OperatorNameConventions
  * the IL emitter already supports, so no `IntRange`/`IntIterator` object ever exists at runtime.
  *
  * Follows the mature targets' `ForLoopsLowering` (backend.common, used by JVM/JS/Native/WASM),
- * restricted to the only header shape this backend can profit from today: `Int.rangeTo(Int)`.
+ * restricted to the counted header shapes this backend can profit from today:
+ * `Int.rangeTo(Int)` and the private stdlib-bootstrap `Int.until(Int)`, `Int.downTo(Int)`, and
+ * generic `Array.indices` resolution markers.
  * fir2ir desugars every `for` loop into
  *
  * ```
@@ -80,7 +82,9 @@ import org.jetbrains.kotlin.util.OperatorNameConventions
  * the loop exits on `i == last` first. `continue` correctly re-enters at the `i != last` check
  * since its `i` copy predates the jump and the increment already happened at the top of the body.
  *
- * Non-matching loop headers (`until`, `downTo`, `step`, `Long` ranges, general iterables) are
+ * Public or user-defined `until`/`downTo`/`indices` calls remain non-matching. The private markers are
+ * consumed into counted loops before codegen so the bootstrap product does not publish
+ * `IntRange`/`IntProgression`. Other headers (`step`, `Long` ranges, general iterables) are
  * left untouched; the emitter then reports the containing function as unsupported through its
  * regular skip path ("local '<iterator>' has unsupported type ...").
  *
@@ -95,6 +99,11 @@ internal class DotNetForLoopLowering(
     private val intPlusInt = irBuiltIns.intClass.owner.functions
         .single { function ->
             function.name == OperatorNameConventions.PLUS &&
+                    function.parameters.singleOrNull { it.kind == IrParameterKind.Regular }?.type?.isInt() == true
+        }.symbol
+    private val intMinusInt = irBuiltIns.intClass.owner.functions
+        .single { function ->
+            function.name == OperatorNameConventions.MINUS &&
                     function.parameters.singleOrNull { it.kind == IrParameterKind.Regular }?.type?.isInt() == true
         }.symbol
     private val intLessOrEqual = irBuiltIns.lessOrEqualFunByOperandType.getValue(irBuiltIns.intClass)
@@ -219,10 +228,18 @@ internal class DotNetForLoopLowering(
         if (iteratorVariable.origin != IrDeclarationOrigin.FOR_LOOP_ITERATOR) return
         val iteratorCall = iteratorVariable.initializer as? IrCall ?: return
         if (iteratorCall.symbol.owner.name != OperatorNameConventions.ITERATOR) return
-        val rangeToCall = iteratorCall.arguments.singleOrNull() as? IrCall ?: return
-        if (!rangeToCall.isIntRangeTo()) return
-        val first = rangeToCall.arguments[0] ?: return
-        val last = rangeToCall.arguments[1] ?: return
+        val rangeCall = iteratorCall.arguments.singleOrNull() as? IrCall ?: return
+        val isClosedRange = rangeCall.isIntRangeTo()
+        val arrayIndicesReceiver = rangeCall.dotNetBootstrapArrayIndicesReceiverOrNull()
+        val isEndExclusiveMarker = rangeCall.isDotNetBootstrapIntUntil() || arrayIndicesReceiver != null
+        val isDescendingMarker = rangeCall.isDotNetBootstrapIntDownTo()
+        if (!isClosedRange && !isEndExclusiveMarker && !isDescendingMarker) return
+        val first = if (arrayIndicesReceiver == null) rangeCall.arguments[0] ?: return else null
+        val end = if (arrayIndicesReceiver == null) rangeCall.arguments[1] ?: return else null
+        val arraySizeGetter = arrayIndicesReceiver?.let { receiver ->
+            (receiver.type.classifierOrNull as? IrClassSymbol)?.getPropertyGetter("size")
+        }
+        if (arrayIndicesReceiver != null && arraySizeGetter == null) return
 
         val whileLoop = block.statements[1] as? IrWhileLoop ?: return
         val hasNextCall = whileLoop.condition as? IrCall ?: return
@@ -241,17 +258,22 @@ internal class DotNetForLoopLowering(
             // ProgressionLoopHeader; the IL method context deduplicates same-named locals of
             // sibling/nested loops with @slot suffixes.
             val inductionVariable = scope.createTemporaryVariable(
-                first, nameHint = "inductionVariable", isMutable = true, inventUniqueName = false,
+                arrayIndicesReceiver?.let { irInt(0) } ?: first!!,
+                nameHint = "inductionVariable", isMutable = true, inventUniqueName = false,
             )
-            val lastVariable = scope.createTemporaryVariable(
-                last, nameHint = "last", inventUniqueName = false,
+            val endVariable = scope.createTemporaryVariable(
+                arrayIndicesReceiver?.let { receiver ->
+                    irCall(arraySizeGetter!!).apply { arguments[0] = receiver }
+                } ?: end!!,
+                nameHint = if (isEndExclusiveMarker) "endExclusive" else "last",
+                inventUniqueName = false,
             )
 
             // Reusing the original loop variable keeps every reference in the body valid.
             loopVariable.initializer = irGet(inductionVariable)
             val increment = irSet(
                 inductionVariable,
-                irCall(intPlusInt).apply {
+                irCall(if (isDescendingMarker) intMinusInt else intPlusInt).apply {
                     arguments[0] = irGet(inductionVariable)
                     arguments[1] = irInt(1)
                 },
@@ -260,23 +282,45 @@ internal class DotNetForLoopLowering(
                 whileBody.startOffset, whileBody.endOffset, whileBody.type, whileBody.origin,
                 listOf(loopVariable, increment) + whileBody.statements.drop(1),
             )
-            val newLoop = IrDoWhileLoopImpl(
-                whileLoop.startOffset, whileLoop.endOffset, whileLoop.type, whileLoop.origin,
-            ).apply {
-                label = whileLoop.label
-                condition = irNotEquals(irGet(loopVariable), irGet(lastVariable))
-                body = newBody
+            val newLoop = if (!isEndExclusiveMarker) {
+                IrDoWhileLoopImpl(
+                    whileLoop.startOffset, whileLoop.endOffset, whileLoop.type, whileLoop.origin,
+                ).apply {
+                    label = whileLoop.label
+                    condition = irNotEquals(irGet(loopVariable), irGet(endVariable))
+                    body = newBody
+                }
+            } else {
+                IrWhileLoopImpl(
+                    whileLoop.startOffset, whileLoop.endOffset, whileLoop.type, whileLoop.origin,
+                ).apply {
+                    label = whileLoop.label
+                    condition = irCall(intLess).apply {
+                        arguments[0] = irGet(inductionVariable)
+                        arguments[1] = irGet(endVariable)
+                    }
+                    body = newBody
+                }
             }
             oldLoopToNewLoop[whileLoop] = newLoop
 
-            val notEmptyGuard = irCall(intLessOrEqual).apply {
-                arguments[0] = irGet(inductionVariable)
-                arguments[1] = irGet(lastVariable)
-            }
             block.statements.clear()
             block.statements += inductionVariable
-            block.statements += lastVariable
-            block.statements += irIfThen(notEmptyGuard, newLoop)
+            block.statements += endVariable
+            if (!isEndExclusiveMarker) {
+                val notEmptyGuard = irCall(intLessOrEqual).apply {
+                    if (isDescendingMarker) {
+                        arguments[0] = irGet(endVariable)
+                        arguments[1] = irGet(inductionVariable)
+                    } else {
+                        arguments[0] = irGet(inductionVariable)
+                        arguments[1] = irGet(endVariable)
+                    }
+                }
+                block.statements += irIfThen(notEmptyGuard, newLoop)
+            } else {
+                block.statements += newLoop
+            }
         }
     }
 
@@ -287,6 +331,50 @@ internal class DotNetForLoopLowering(
                 (function.parent as? IrClass)?.symbol == irBuiltIns.intClass &&
                 function.parameters.singleOrNull { it.kind == IrParameterKind.Regular }?.type?.isInt() == true &&
                 arguments.size == 2
+    }
+
+    /** Matches only the private marker emitted by the .NET Common-collections bootstrap source. */
+    private fun IrCall.isDotNetBootstrapIntUntil(): Boolean {
+        val function = symbol.owner
+        val file = function.parent as? IrFile ?: return false
+        return function.name.asString() == "until" &&
+                file.packageFqName.asString() == "kotlin.collections" &&
+                file.fileEntry.name.replace('\\', '/').substringAfterLast('/') ==
+                    "_DotNetBootstrapCollections.kt" &&
+                function.parameters.size == 2 &&
+                function.parameters.all { parameter -> parameter.type.isInt() } &&
+                arguments.size == 2
+    }
+
+    /** Matches only the private marker emitted by the .NET mutable-collections bootstrap source. */
+    private fun IrCall.isDotNetBootstrapIntDownTo(): Boolean {
+        val function = symbol.owner
+        val file = function.parent as? IrFile ?: return false
+        return function.name.asString() == "downTo" &&
+                file.packageFqName.asString() == "kotlin.collections" &&
+                file.fileEntry.name.replace('\\', '/').substringAfterLast('/') ==
+                    "_DotNetBootstrapMutableCollections.kt" &&
+                function.parameters.size == 2 &&
+                function.parameters.all { parameter -> parameter.type.isInt() } &&
+                arguments.size == 2
+    }
+
+    /** Matches only the private generic-array marker in the .NET Common-collections shard. */
+    private fun IrCall.dotNetBootstrapArrayIndicesReceiverOrNull(): IrExpression? {
+        val function = symbol.owner
+        val file = function.parent as? IrFile ?: return null
+        if (
+            function.name.asString() != "<get-indices>" ||
+            file.packageFqName.asString() != "kotlin.collections" ||
+            file.fileEntry.name.replace('\\', '/').substringAfterLast('/') !=
+                "_DotNetBootstrapCollections.kt" ||
+            function.parameters.size != 1 ||
+            function.parameters.single().type.classifierOrNull != irBuiltIns.arrayClass ||
+            arguments.size != 1
+        ) {
+            return null
+        }
+        return arguments.single()
     }
 
     private fun IrExpression?.isGetOf(variable: IrVariable): Boolean =

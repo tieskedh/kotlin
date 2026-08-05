@@ -10,6 +10,7 @@ package kotlin.js
 // See: https://github.com/JetBrains/kotlin/tree/master/libraries/stdlib
 //
 import kotlin.annotation.AnnotationTarget.*
+import kotlin.internal.UsedFromCompilerGeneratedCode
 
 /**
  * Gives a declaration (a function, a property or a class) specific name in JavaScript.
@@ -19,3 +20,12 @@ import kotlin.annotation.AnnotationTarget.*
 @Target(CLASS, FUNCTION, PROPERTY, CONSTRUCTOR, PROPERTY_GETTER, PROPERTY_SETTER)
 @OptionalExpectation
 public expect annotation class JsName(val name: String)
+
+/**
+ * The annotation is needed for annotating class declarations and type alias which are used inside exported declarations, but
+ * doesn't contain @JsExport annotation
+ * This information is used for generating special tagged types inside d.ts files, for more strict usage of implicitly exported entities
+ */
+@Target(AnnotationTarget.CLASS)
+@UsedFromCompilerGeneratedCode
+internal annotation class JsImplicitExport(val couldBeConvertedToExplicitExport: Boolean)

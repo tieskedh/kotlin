@@ -117,13 +117,15 @@ This decision does not admit:
 
 - input projections such as `Array<in Base>`;
 - open nullable elements such as `Array<T?>`;
-- value-vector widening to `Array<out Any?>` or arbitrary out projections;
+- bounded output projections, which are governed by the separate
+  [read-only projection decision](bounded-output-projected-arrays.md);
 - rectangular/non-zero-based CLR arrays as Kotlin generic arrays; or
 - star-projected Kotlin-owned generic classes other than `Array`.
 
 Those shapes have different read/write, nested-carrier, or declaration-erased
-identity requirements. In particular, solving the read-only `Any?` star view
-does not establish a general covariance adapter.
+identity requirements. The later bounded-output decision reuses `System.Array`
+only after separately specifying its stronger typed-read recovery; this star
+decision alone did not establish that rule.
 
 ## Design attack
 

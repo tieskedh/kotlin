@@ -196,19 +196,11 @@
       call instance void 'GenericFamily'/'Base'::.ctor(object)
       ret
     }
-    .method public hidebysig newslot virtual instance object 'item'() cil managed
+    .method public hidebysig virtual instance object 'item'() cil managed
     {
       .maxstack 1
       ldarg.0
       call instance object 'GenericFamily'/'Base'::'item'()
-      ret
-    }
-    .method private hidebysig newslot virtual final instance object '<CovariantReturnBridge-GenericFamily.Base-item-47c466db7ccdf0b2237956e23a543a69>'() cil managed
-    {
-      .override method instance object 'GenericFamily'/'Base'::'item'()
-      .maxstack 1
-      ldarg.0
-      callvirt instance object 'GenericFamily'/'Derived'::'item'()
       ret
     }
   }
