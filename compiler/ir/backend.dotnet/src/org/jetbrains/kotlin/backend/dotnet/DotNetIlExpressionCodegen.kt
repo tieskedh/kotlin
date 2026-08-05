@@ -39,6 +39,7 @@ import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isAnonymousObject
 import org.jetbrains.kotlin.ir.util.isInterface
@@ -50,6 +51,8 @@ import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.name.FqName
+
+private val DOTNET_VOLATILE_MARKER_FQ_NAME = FqName("kotlin.concurrent.Volatile")
 
 /**
  * Emits statement-bearing constructs in value position. Implemented by [DotNetIlMethodCodegen]:
@@ -82,6 +85,8 @@ internal class DotNetIlExpressionCodegen(
     private val statementScopeEmitter: DotNetIlStatementScopeEmitter,
 ) {
     internal val coreLibraryReference = typeMapper.coreLibrary.reference
+    internal val stdlibAssemblyName: String?
+        get() = typeMapper.stdlibAssemblyName
     private val canonicalGenericSignatureTypeMapper by lazy(LazyThreadSafetyMode.NONE) {
         typeMapper.canonicalGenericInterfaceSignatureView()
     }
@@ -1791,6 +1796,7 @@ internal class DotNetIlExpressionCodegen(
                 )
             }
             emitExpression(receiver, receiverType)
+            emitVolatilePrefix(field, fieldType)
             methodContext.emit(
                 "ldfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString(), ownerView.nameInSignature)}",
                 pops = 1,
@@ -1801,12 +1807,14 @@ internal class DotNetIlExpressionCodegen(
         if (!declaredFieldType.isDotNetAssignableTo(expectedType)) {
             if (declaredFieldType == DotNetIlValueType.Object) {
                 if (isStatic) {
+                    emitVolatilePrefix(field, declaredFieldType)
                     methodContext.emit(
                         "ldsfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}",
                         pushes = 1,
                     )
                 } else {
                     emitFieldReceiver(expression.receiver, field, classInfo)
+                    emitVolatilePrefix(field, declaredFieldType)
                     methodContext.emit(
                         "ldfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}",
                         pops = 1,
@@ -1822,10 +1830,12 @@ internal class DotNetIlExpressionCodegen(
             )
         }
         if (isStatic) {
+            emitVolatilePrefix(field, declaredFieldType)
             methodContext.emit("ldsfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}", pushes = 1)
             return
         }
         emitFieldReceiver(expression.receiver, field, classInfo)
+        emitVolatilePrefix(field, declaredFieldType)
         methodContext.emit(
             "ldfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}",
             pops = 1,
@@ -1852,6 +1862,7 @@ internal class DotNetIlExpressionCodegen(
             val fieldType = declaredFieldType.substituteDotNetTypeParameters(ownerView.arguments)
             emitExpression(receiver, receiverType)
             emitExpression(expression.value, fieldType)
+            emitVolatilePrefix(field, fieldType)
             methodContext.emit(
                 "stfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString(), ownerView.nameInSignature)}",
                 pops = 2,
@@ -1860,12 +1871,37 @@ internal class DotNetIlExpressionCodegen(
         }
         if (isStatic) {
             emitExpression(expression.value, declaredFieldType)
+            emitVolatilePrefix(field, declaredFieldType)
             methodContext.emit("stsfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}", pops = 1)
             return
         }
         emitFieldReceiver(expression.receiver, field, classInfo)
         emitExpression(expression.value, declaredFieldType)
+        emitVolatilePrefix(field, declaredFieldType)
         methodContext.emit("stfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}", pops = 2)
+    }
+
+    private fun emitVolatilePrefix(field: IrField, fieldType: DotNetIlValueType) {
+        if (!field.hasAnnotation(DOTNET_VOLATILE_MARKER_FQ_NAME)) return
+        val isReferenceCarrier = when (fieldType) {
+            DotNetIlValueType.String,
+            DotNetIlValueType.Object,
+            is DotNetIlValueType.PrimitiveArray,
+            is DotNetIlValueType.GenericArray,
+            is DotNetIlValueType.ErasedGenericArray,
+            is DotNetIlValueType.UserClass,
+            is DotNetIlValueType.MappedClass,
+            is DotNetIlValueType.GenericInstance,
+            -> true
+            else -> false
+        }
+        if (!isReferenceCarrier) {
+            dotNetUnsupported(
+                "volatile field '${field.name.asString()}' uses unsupported CLR carrier " +
+                        fieldType.nameInSignature
+            )
+        }
+        methodContext.emit("volatile.")
     }
 
     /**

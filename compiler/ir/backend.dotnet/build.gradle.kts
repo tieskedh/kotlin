@@ -57,6 +57,8 @@ tasks.named<ProcessResources>("processResources") {
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractList.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractMap.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractSet.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/IndexedValue.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/Iterables.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/Iterators.kt"),
@@ -66,7 +68,13 @@ tasks.named<ProcessResources>("processResources") {
     from(files(
         rootProject.file("libraries/stdlib/common/src/kotlin/collections/AbstractMutableCollection.kt"),
         rootProject.file("libraries/stdlib/common/src/kotlin/collections/AbstractMutableList.kt"),
+        rootProject.file("libraries/stdlib/common/src/kotlin/collections/AbstractMutableMap.kt"),
+        rootProject.file("libraries/stdlib/common/src/kotlin/collections/AbstractMutableSet.kt"),
         rootProject.file("libraries/stdlib/common/src/kotlin/collections/ArrayList.kt"),
+        rootProject.file("libraries/stdlib/common/src/kotlin/collections/HashMap.kt"),
+        rootProject.file("libraries/stdlib/common/src/kotlin/collections/HashSet.kt"),
+        rootProject.file("libraries/stdlib/common/src/kotlin/collections/LinkedHashMap.kt"),
+        rootProject.file("libraries/stdlib/common/src/kotlin/collections/LinkedHashSet.kt"),
     )) {
         into("kotlin-dotnet-stdlib/common/src/kotlin/collections")
     }
