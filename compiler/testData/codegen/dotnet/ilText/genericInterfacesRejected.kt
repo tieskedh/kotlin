@@ -2,7 +2,9 @@ interface RejectProducer<out T> {
     fun produce(): T
 }
 
-interface UnsupportedInterfaceBound<T : List<String>> {
+// A constructed Kotlin-owned interface bound is the supported control: its CLR constraint is
+// the one erased List owner while KLIB retains List<String>.
+interface ErasedInterfaceBound<T : List<String>> {
     fun value(): T
 }
 
