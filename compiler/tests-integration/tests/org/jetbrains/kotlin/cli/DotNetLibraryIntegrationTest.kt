@@ -29223,6 +29223,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "lastIndexOf" to 2,
                 "lastOrNull" to 4,
                 "none" to 2,
+                "onEach" to 1,
+                "onEachIndexed" to 1,
                 "reduce" to 1,
                 "reduceIndexed" to 1,
                 "reduceIndexedOrNull" to 1,
@@ -29272,6 +29274,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         "lastIndexOf",
                         "lastOrNull",
                         "none",
+                        "onEach",
+                        "onEachIndexed",
                         "reduce",
                         "reduceIndexed",
                         "reduceIndexedOrNull",
@@ -29324,6 +29328,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "lastIndexOf",
                 "lastOrNull",
                 "none",
+                "onEach",
+                "onEachIndexed",
                 "reduce",
                 "reduceIndexed",
                 "reduceIndexedOrNull",
@@ -29634,6 +29640,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
                     "class [Kotlin.Runtime]'Kotlin.Function2' 'action')" in il
         )
+        assertTrue(
+            ".method public hidebysig static !!1 'onEach'<'T', " +
+                    "(class [Kotlin.Runtime]'Kotlin.Collections.Iterable') 'C'>(" +
+                    "!!1 '<this>', class [Kotlin.Runtime]'Kotlin.Function1' 'action')" in il
+        )
+        assertTrue(
+            ".method public hidebysig static !!1 'onEachIndexed'<'T', " +
+                    "(class [Kotlin.Runtime]'Kotlin.Collections.Iterable') 'C'>(" +
+                    "!!1 '<this>', class [Kotlin.Runtime]'Kotlin.Function2' 'action')" in il
+        )
+        val onEachIndexedStart = il.indexOf("'onEachIndexed'<'T'")
+        assertTrue(onEachIndexedStart >= 0)
+        val onEachIndexedEnd = il.indexOf("  .method", onEachIndexedStart + 1)
+            .takeIf { index -> index >= 0 } ?: il.length
+        assertTrue("::'checkIndexOverflow'(int32)" in il.substring(onEachIndexedStart, onEachIndexedEnd)) {
+            "The physical onEachIndexed fallback must retain Common's index-overflow path"
+        }
         assertTrue(
             ".method public hidebysig static !!0 'reduce'<'S', (!!0) 'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>', " +
@@ -30182,6 +30205,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     action: (Int, T) -> Unit,
                 ): Unit = values.forEachIndexed(action)
 
+                public fun <T, C : Iterable<T>> observeEach(
+                    values: C,
+                    action: (T) -> Unit,
+                ): C = values.onEach(action)
+
+                public fun <T, C : Iterable<T>> observeEachIndexed(
+                    values: C,
+                    action: (Int, T) -> Unit,
+                ): C = values.onEachIndexed(action)
+
                 public fun <S, T : S> reduceLeft(
                     values: Iterable<T>,
                     operation: (S, T) -> S,
@@ -30542,6 +30575,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("::'forEachIndexed'<" !in il) {
             "The separate consumer must inline the Common forEachIndexed body:\n$il"
         }
+        assertTrue("::'onEach'<" !in il) {
+            "The separate consumer must inline the Common onEach body:\n$il"
+        }
+        assertTrue("::'onEachIndexed'<" !in il) {
+            "The separate consumer must inline the Common onEachIndexed body:\n$il"
+        }
         for (functionName in listOf(
             "reduce",
             "reduceIndexed",
@@ -30629,7 +30668,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "The separate consumer must inline both Common indexOfLast bodies:\n$il"
         }
         assertEquals(
-            6,
+            7,
             Regex(
                 "\\[Kotlin\\.Stdlib]'Kotlin\\.Collections\\.CollectionsKt'::" +
                         "'checkIndexOverflow'\\(int32\\)"
@@ -30918,6 +30957,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     values: Iterable<T>,
                     action: (Int, T) -> Unit,
                 ): Unit = values.forEachIndexed(action)
+
+                public fun <T, C : Iterable<T>> installedObserveEach(
+                    values: C,
+                    action: (T) -> Unit,
+                ): C = values.onEach(action)
+
+                public fun <T, C : Iterable<T>> installedObserveEachIndexed(
+                    values: C,
+                    action: (Int, T) -> Unit,
+                ): C = values.onEachIndexed(action)
 
                 public fun <S, T : S> installedReduceLeft(
                     values: Iterable<T>,
@@ -31249,6 +31298,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val guardedList: List<String?> = arrayOf<String?>("a", "b").asList()
                     val guardedIterableResult: Iterable<String> = guardedIterable.requireNoNulls()
                     val guardedListResult: List<String> = guardedList.requireNoNulls()
+                    val observedOnEach = arrayOf(1, 2, 3).asIterable()
+                    var observedOnEachTrace = 0
+                    val observedOnEachResult = installedObserveEach(observedOnEach) { value ->
+                        observedOnEachTrace = observedOnEachTrace * 10 + value
+                    }
+                    val observedOnEachIndexedResult = installedObserveEachIndexed(observedOnEach) { index, value ->
+                        observedOnEachTrace += index * value
+                    }
                     @Suppress("DEPRECATION")
                     val frontierOk =
                         arrayOf(Int.MAX_VALUE, 1).asIterable().sumBy { it } == Int.MIN_VALUE &&
@@ -31258,7 +31315,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 arrayOf(Int.MAX_VALUE, 1).asIterable()
                             ) { it } == Int.MIN_VALUE &&
                             (guardedIterableResult as Any) === (guardedIterable as Any) &&
-                            (guardedListResult as Any) === (guardedList as Any)
+                            (guardedListResult as Any) === (guardedList as Any) &&
+                            (observedOnEachResult as Any) === (observedOnEach as Any) &&
+                            (observedOnEachIndexedResult as Any) === (observedOnEach as Any) &&
+                            observedOnEachTrace == 131
                     val inlineOnlyList = arrayOf(1, 2, 3, 4, 5).asList()
                     val inlineOnlyIterable = arrayOf(1, 2, 3, 2).asIterable()
                     val installedIdentity = installedInlineOnlyIterableIdentity(inlineOnlyIterable)
@@ -31460,6 +31520,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue("::'forEachIndexed'<" !in il) {
             "The installed consumer must inline the Common forEachIndexed body:\n$il"
+        }
+        assertTrue("::'onEach'<" !in il) {
+            "The installed consumer must inline the Common onEach body:\n$il"
+        }
+        assertTrue("::'onEachIndexed'<" !in il) {
+            "The installed consumer must inline the Common onEachIndexed body:\n$il"
         }
         for (functionName in listOf(
             "reduce",
@@ -31802,6 +31868,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 fun nonLocalForEachIndexedMatch(values: Iterable<Int>): Int {
                     values.forEachIndexed { index, value ->
                         if (value == 2) return index
+                    }
+                    return -1
+                }
+
+                fun nonLocalOnEachMatch(values: Iterable<Int>): Int {
+                    values.onEach { value ->
+                        if (value == 2) return 27
+                    }
+                    return -1
+                }
+
+                fun nonLocalOnEachIndexedMatch(values: Iterable<Int>): Int {
+                    values.onEachIndexed { index, _ ->
+                        if (index == 1) return 28
                     }
                     return -1
                 }
@@ -32212,6 +32292,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     var emptyForEachCalls = 0
                     emptyList<Int>().forEach { emptyForEachCalls++ }
                     emptyList<Int>().forEachIndexed { _, _ -> emptyForEachCalls++ }
+                    val observing = CountingInts(arrayOf(1, 2, 3))
+                    var onEachTrace = 0
+                    val onEachResult: CountingInts = observing.onEach { value ->
+                        onEachTrace = onEachTrace * 10 + value
+                    }
+                    val onEachIndexedResult: CountingInts = observing.onEachIndexed { index, value ->
+                        onEachTrace += index * value
+                    }
+                    val emptyObserved = emptyList<Int>()
+                    val emptyOnEachResult: List<Int> = emptyObserved.onEach { emptyForEachCalls++ }
+                    val emptyOnEachIndexedResult: List<Int> =
+                        emptyObserved.onEachIndexed { _, _ -> emptyForEachCalls++ }
                     val forEachOk =
                         forEachTrace == 123 &&
                             forEachIndexedTrace == 11223 &&
@@ -32221,8 +32313,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             hostileForEach.memberCalls == 0 &&
                             hostileForEachTrace == 123 &&
                             emptyForEachCalls == 0 &&
+                            onEachResult === observing &&
+                            onEachIndexedResult === observing &&
+                            onEachTrace == 131 &&
+                            observing.iteratorCalls == 2 &&
+                            observing.nextCalls == 6 &&
+                            emptyOnEachResult === emptyObserved &&
+                            emptyOnEachIndexedResult === emptyObserved &&
                             nonLocalForEachMatch(arrayOf(1, 2, 3).asIterable()) == 2 &&
-                            nonLocalForEachIndexedMatch(arrayOf(1, 2, 3).asIterable()) == 1
+                            nonLocalForEachIndexedMatch(arrayOf(1, 2, 3).asIterable()) == 1 &&
+                            nonLocalOnEachMatch(arrayOf(1, 2, 3).asIterable()) == 27 &&
+                            nonLocalOnEachIndexedMatch(arrayOf(1, 2, 3).asIterable()) == 28
                     val firstMatching = CountingInts(arrayOf(1, 2, 3))
                     var firstPredicateTrace = 0
                     val firstPredicate = firstMatching.first { value ->
@@ -33182,8 +33283,44 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ldloc.s 5
                     ldfld int32 ForEachIndexedAction::Trace
                     ldc.i4 1122332
-                    beq.s FOLD
+                    beq.s ON_EACH
                     ldstr "forEachIndexed fallback changed"
+                    call void Program::Fail(string)
+                ON_EACH:
+                    newobj instance void ForEachAction::.ctor()
+                    stloc.s 4
+                    ldloc.2
+                    dup
+                    ldloc.s 4
+                    call !!1 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'onEach'<int32, class [Kotlin.Runtime]'Kotlin.Collections.Iterable'>(!!1, class [Kotlin.Runtime]'Kotlin.Function1')
+                    ceq
+                    brtrue.s ON_EACH_TRACE
+                    ldstr "onEach fallback identity changed"
+                    call void Program::Fail(string)
+                ON_EACH_TRACE:
+                    ldloc.s 4
+                    ldfld int32 ForEachAction::Trace
+                    ldc.i4 1232
+                    beq.s ON_EACH_INDEXED
+                    ldstr "onEach fallback traversal changed"
+                    call void Program::Fail(string)
+                ON_EACH_INDEXED:
+                    newobj instance void ForEachIndexedAction::.ctor()
+                    stloc.s 5
+                    ldloc.2
+                    dup
+                    ldloc.s 5
+                    call !!1 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'onEachIndexed'<int32, class [Kotlin.Runtime]'Kotlin.Collections.Iterable'>(!!1, class [Kotlin.Runtime]'Kotlin.Function2')
+                    ceq
+                    brtrue.s ON_EACH_INDEXED_TRACE
+                    ldstr "onEachIndexed fallback identity changed"
+                    call void Program::Fail(string)
+                ON_EACH_INDEXED_TRACE:
+                    ldloc.s 5
+                    ldfld int32 ForEachIndexedAction::Trace
+                    ldc.i4 1122332
+                    beq.s FOLD
+                    ldstr "onEachIndexed fallback traversal changed"
                     call void Program::Fail(string)
                 FOLD:
                     ldloc.2

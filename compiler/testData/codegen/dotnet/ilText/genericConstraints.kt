@@ -89,6 +89,15 @@ fun <T : Any> nonNullBound(value: T): T = value
 
 fun <T, U> typeParameterBound(value: T): T where T : U = value
 
+fun <T : Any, C : NonNullValue<T>> keepGenericInterfaceBound(value: C): C = value
+
+fun <T, C : Iterable<T>> keepExternalGenericInterfaceBound(value: C): C = value
+
+fun <T, C : Iterable<T>> observeExternalGenericInterfaceBound(
+    value: C,
+    action: (T) -> Unit,
+): C = value.onEach(action)
+
 class BoundBox<T>(val value: T) where T : Left, T : Right {
     fun total(): Int = value.left(value.right)
 }
@@ -112,5 +121,6 @@ fun main() {
     NonNullValueBox("reference").read()
     NonNullValueBox(42).read()
     typeParameterBound<Impl, Left>(value)
+    keepGenericInterfaceBound<String, NonNullValueBox<String>>(NonNullValueBox("generic")).read()
     BoundBox(value).total()
 }

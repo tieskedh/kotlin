@@ -12,6 +12,12 @@
   {
   }
 }
+.class interface public abstract auto ansi 'ErasedInterfaceBound'
+{
+  .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__af9871a63508cb636c7bb2bb57368872'() cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'EvictedArgumentView'
        implements 'RejectProducer'
 {
