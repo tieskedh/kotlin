@@ -49,6 +49,8 @@ tasks {
                 "_DotNetBootstrapEnum.kt",
                 "_DotNetBootstrapEnumEntries.kt",
                 "_DotNetBootstrapJsName.kt",
+                "_DotNetBootstrapExperimentalTypeInference.kt",
+                "_DotNetBootstrapOverloadResolutionByLambdaReturnType.kt",
             ).map { fileName ->
                 rootProject.file("libraries/stdlib/dotnet/common/src/generated/$fileName")
             }
@@ -69,6 +71,8 @@ tasks {
             rootProject.file("libraries/stdlib/src/kotlin/Enum.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/enums/EnumEntries.kt"),
             rootProject.file("libraries/stdlib/common/src/kotlin/JsAnnotationsH.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/experimental/inferenceMarker.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/annotations/Inference.kt"),
         )
     }
 

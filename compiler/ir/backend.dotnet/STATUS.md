@@ -254,17 +254,20 @@ and CoreCLR. The producer/consumer tests use an actual self-describing KLIB;
 the same-frontend bootstrap box harness is not misrepresented as an external
 library boundary.
 
-Common `Iterable<T>.sumOf((T) -> Int)` now uses its exact generated body and
-logical KLIB name. Its assembly-visible CLR fallback is named `sumOfInt`, the
-explicit platform spelling already owned by the Common generator, because the
-future selector-return overloads erase to the same CLR `Function1` parameter.
-Separate and installed consumers inline the body and cannot call that method;
-C# cannot bind it. Adversarial portable execution pins empty zero, wrapping
-overflow, nullable/widened inputs, traversal and callback order, failure
-identity, and non-local return across Framework CLR and CoreCLR. The Long and
-Double selector variants remain outside the source product because their exact
-Common declarations publish the still-parked type-inference annotation-class
-closure; UInt and ULong additionally require unsigned value classes.
+Common `Iterable<T>.sumOf` now publishes its complete signed selector family:
+`Int`, `Long`, and `Double`. Their assembly-visible CLR fallbacks use the exact
+generator-owned `sumOfInt`, `sumOfLong`, and `sumOfDouble` spellings because the
+three logical overloads erase to the same CLR `Function1` parameter shape.
+KLIB retains logical `sumOf`; separate and installed consumers inline every
+body and cannot call the fallbacks, while C# cannot bind them. The exact Common
+`ExperimentalTypeInference` and `OverloadResolutionByLambdaReturnType` marker
+declarations now participate in the stdlib source product and receive truthful
+physical TypeDefs, but their BINARY applications remain KLIB-only rather than
+CLR custom attributes. Adversarial portable execution pins empty zero, `Int`
+and `Long` wrapping overflow, ordered IEEE `Double` addition and NaN,
+nullable/widened inputs, traversal and callback order, failure identity, and
+non-local return across Framework CLR and CoreCLR. UInt and ULong remain
+outside this closure because they require the parked unsigned value classes.
 
 Common `Iterable.single(predicate)` and `singleOrNull(predicate)` now use their
 exact generated bodies; Common defines no distinct List predicate overload.
@@ -417,9 +420,12 @@ CodeAnalysis row was stripped. KLIB remains the independent authority.
 
 ## Active state
 
-No implementation slice is half-landed. Common Int-selector `sumOf` is
-published under the generated logical declaration and its pinned `sumOfInt`
-physical spelling. The Common `@InlineOnly` physical ABI remains selected and
+No implementation slice is half-landed. The complete Common signed-selector
+`sumOf` family is published under its generated logical declarations and the
+pinned `sumOfInt`, `sumOfLong`, and `sumOfDouble` physical spellings. Its exact
+type-inference markers are present as Kotlin declaration TypeDefs while their
+BINARY applications remain KLIB-only. The Common `@InlineOnly` physical ABI
+remains selected and
 its first 14-declaration generated collection batch remains published with
 assembly-visible physical bodies and mandatory external KLIB inlining. The
 generated Common signed numeric averages remain published with
@@ -561,12 +567,14 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Audit and, if the already-admitted marker/overload-name closure remains
-   exact, add the Common Long- and Double-selector `sumOf` pair under the
-   generator-owned `sumOfLong`/`sumOfDouble` physical spellings.
-2. Continue the Common collection programme by exact dependency closure,
-   preferring families that exercise enum/contracts foundations or unlock
-   ordinary application code without introducing target-owned algorithms.
+1. Perform the deep mutable-collection/list foundation audit as one explicit
+   unlock tranche: mutable iterator and collection contracts, Common abstract
+   mutable bases, an ordinary Kotlin `ArrayList`, factories/builders,
+   separate-DLL ABI, C# boundary behavior, and the applicable upstream stdlib
+   test product. Record every Common generator family whose only blocker this
+   foundation removes before implementation.
+2. Implement that foundation and admit the complete dependency-homogeneous
+   Common family set it unlocks; do not resume one-function allowlist growth.
 3. Extend CLR contract projection only when a new standard attribute has an
    exact Common effect, stable target rule, verified profile identity, and the
    same strip-without-Kotlin-semantic-change evidence as the closed first set.

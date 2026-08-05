@@ -93,6 +93,16 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "_DotNetBootstrapExperimentalTypeInference.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapExperimentalTypeInference.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapOverloadResolutionByLambdaReturnType.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapOverloadResolutionByLambdaReturnType.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "Exceptions.kt",
         "common-non-jvm/src/kotlin/Exceptions.kt",
     ),

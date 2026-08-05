@@ -143,6 +143,14 @@ private class FrontierNamedNullableListIterator(
 
 private fun frontierFail(message: String): String = "fail: $message"
 
+private fun sumOfLongNonLocal(values: Iterable<Int>): Long {
+    values.sumOf { value ->
+        if (value == 2) return 31L
+        value.toLong()
+    }
+    return -1L
+}
+
 @Suppress("DEPRECATION")
 fun box(): String {
     var selectorCalls = 0
@@ -183,6 +191,58 @@ fun box(): String {
     val sumNaN = arrayOf(1.0, Double.NaN).asIterable().sumByDouble { it }
     if (sumNaN == sumNaN) return frontierFail("sumByDouble NaN")
 
+    var sumOfCalls = 0
+    val emptySumOfInt = emptyArray<Int>().asIterable().sumOf { value ->
+        sumOfCalls++
+        value
+    }
+    val emptySumOfLong = emptyArray<Int>().asIterable().sumOf { value ->
+        sumOfCalls++
+        value.toLong()
+    }
+    val emptySumOfDouble = emptyArray<Int>().asIterable().sumOf { value ->
+        sumOfCalls++
+        value.toDouble()
+    }
+    if (
+        emptySumOfInt != 0 || emptySumOfLong != 0L || emptySumOfDouble != 0.0 ||
+        sumOfCalls != 0
+    ) {
+        return frontierFail("empty signed sumOf")
+    }
+    if (arrayOf(Int.MAX_VALUE, 1).asIterable().sumOf { it } != Int.MIN_VALUE) {
+        return frontierFail("sumOf Int overflow")
+    }
+    if (arrayOf(Long.MAX_VALUE, 1L).asIterable().sumOf { it } != Long.MIN_VALUE) {
+        return frontierFail("sumOf Long overflow")
+    }
+    val sumOfOrdered = arrayOf(1.0e16, 1.0, -1.0e16).asIterable().sumOf { it }
+    if (sumOfOrdered != 0.0) return frontierFail("sumOf Double order")
+    val sumOfNaN = arrayOf(1.0, Double.NaN).asIterable().sumOf { it }
+    if (sumOfNaN == sumOfNaN) return frontierFail("sumOf Double NaN")
+
+    val sumOfCounting = FrontierCountingIterable(arrayOf(1, 2, 3))
+    var sumOfTrace = 0
+    var sumOfCaptured = 4L
+    val selectedLong = sumOfCounting.sumOf { value ->
+        sumOfTrace = sumOfTrace * 10 + value
+        sumOfCaptured += value.toLong()
+        value.toLong()
+    }
+    if (selectedLong != 6L || sumOfTrace != 123 || sumOfCaptured != 10L) {
+        return frontierFail("sumOf Long result")
+    }
+    if (
+        sumOfCounting.iteratorCalls != 1 || sumOfCounting.hasNextCalls != 4 ||
+        sumOfCounting.nextCalls != 3
+    ) {
+        return frontierFail("sumOf Long traversal")
+    }
+    val widenedSumOf: Iterable<Any?> = arrayOf<Any?>(null, "K", 3).asIterable()
+    if (widenedSumOf.sumOf { value -> if (value == null) 1L else 2L } != 5L) {
+        return frontierFail("sumOf Long widened nullable")
+    }
+
     val selectorFailure = Error("selector failure")
     var failingSelectorCalls = 0
     try {
@@ -196,6 +256,23 @@ fun box(): String {
         if (caught !== selectorFailure) return frontierFail("selector failure identity")
     }
     if (failingSelectorCalls != 2) return frontierFail("selector failure timing")
+
+    val sumOfFailure = Error("sumOf selector failure")
+    var failingSumOfCalls = 0
+    try {
+        arrayOf(1, 2, 3).asIterable().sumOf { value ->
+            failingSumOfCalls++
+            if (value == 2) throw sumOfFailure
+            value.toDouble()
+        }
+        return frontierFail("sumOf selector failure swallowed")
+    } catch (caught: Throwable) {
+        if (caught !== sumOfFailure) return frontierFail("sumOf selector failure identity")
+    }
+    if (failingSumOfCalls != 2) return frontierFail("sumOf selector failure timing")
+    if (sumOfLongNonLocal(arrayOf(1, 2, 3).asIterable()) != 31L) {
+        return frontierFail("sumOf Long non-local return")
+    }
 
     val guarded = FrontierNamedNullableIterable(arrayOf("a", "b"))
     val guardedResult: Iterable<String> = guarded.requireNoNulls()

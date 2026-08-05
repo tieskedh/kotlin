@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — builder/Common abstract-base foundation complete; enums selected next**
+- Status: **Active — signed selector sums complete; mutable collection/list foundation selected next**
 - ABI foundation: [`../decisions/generic-interface-erased-identity.md`](../decisions/generic-interface-erased-identity.md)
 
 ## Purpose
@@ -546,10 +546,10 @@ silently switch to indexed access: Common specifies iteration for both overloads
 The audit deliberately excludes the rest of the nearby generator frontier:
 
 - `elementAtOrElse`, `getOrElse`, and therefore general `elementAt` reach the public contracts DSL;
-- the Long and Double `sumOf` overloads publish the now-admitted parameterless
-  `ExperimentalTypeInference` and `OverloadResolutionByLambdaReturnType` markers, so their
-  remaining prerequisite is the erased physical overload audit; the unsigned overloads
-  additionally require unsigned value classes;
+- the Long and Double `sumOf` overloads were excluded from that batch until their parameterless
+  `ExperimentalTypeInference` and `OverloadResolutionByLambdaReturnType` marker sources and erased
+  physical overloads could land together; the subsequent signed-selector-sum tranche below
+  completes them, while the unsigned overloads still require unsigned value classes;
 - mapping, filtering, snapshot, running-fold, and running-reduce families construct collection
   implementations that do not yet exist;
 - min/max families require truthful `Comparable`/`Comparator` representation plus their own
@@ -560,7 +560,7 @@ The audit deliberately excludes the rest of the nearby generator frontier:
 - random, Sequence, unsigned, array, Set, and Map variants retain their separate dependency and
   representation closures.
 
-Completion must prove empty and overflowing selector sums, Double rounding and NaN, nullable and
+The completed gate proves empty and overflowing selector sums, Double rounding and NaN, nullable and
 widened elements, capture/non-local return, callback failure identity and timing, same-object null
 guard success, exact first-null stopping and message, hostile iterator behavior, both physical
 guard overloads, packaged inlining versus fallback calls, and direct execution on Framework CLR
@@ -613,34 +613,46 @@ test is the authoritative adversarial execution route for List `elementAtOrNull`
 indexing, bounds, and propagated `get` exception identity, because it compiles the consumer from
 the producer's embedded KLIB exactly as an external Kotlin user does.
 
-### Int selector sum
+### Completed signed selector sums
 
-The next closed Common frontier is exactly `Iterable<T>.sumOf(selector: (T) -> Int)`. Its
-authoritative `Aggregates.f_sumOf` body starts from `0.toInt()`, traverses the receiver once in
-encounter order, invokes the selector once per element, and uses ordinary wrapping `Int`
-addition. JVM selects the template's explicit `sumOfInt` platform spelling because erased
+The completed signed selector-sum frontier is exactly the Common `Int`-, `Long`-, and
+`Double`-selector overloads of `Iterable<T>.sumOf`. Their authoritative
+`Aggregates.f_sumOf` bodies start from `0.toInt()`, `0.toLong()`, and `0.toDouble()`, traverse the
+receiver once in encounter order, invoke the selector once per element, and use ordinary wrapping
+`Int`/`Long` or encounter-ordered IEEE `Double` addition. JVM compiles the same three Common
+declarations and uses
+their explicit `sumOfInt`, `sumOfLong`, and `sumOfDouble` platform spellings because erased
 function types cannot distinguish selector return types. JS, Wasm, and Native retain the same
-logical KLIB declaration and body without publishing a separately callable CLR-style fallback.
+logical declarations and bodies without publishing a separately callable CLR-style fallback.
 
-.NET keeps logical `sumOf` in KLIB and uses the same Common-supplied `sumOfInt` spelling for the
-assembly-visible physical body. The mapping is keyed by the exact logical selector-result/return
-type and is recorded in the self-describing physical binding. Naming the MethodDef `sumOf`,
-overloading only by its CLR return type, deriving a hash from the current overload set, omitting
-the physical body, or widening it for C# are rejected: each either produces invalid/unstable CLR
-metadata or contradicts the accepted inline-only contract without a CLR necessity.
+.NET keeps logical `sumOf` in KLIB and uses the same Common-supplied `sumOfInt`, `sumOfLong`, and
+`sumOfDouble` spellings for the assembly-visible physical bodies. Each selector overload may share
+that name with the existing one-parameter numeric `sum()` fallback because the selector adds a
+distinct CLR `Function1` parameter; it may not collide with another selector overload. The mapping
+is keyed by the exact logical selector-result/return type and is recorded in the self-describing
+physical binding. Naming any MethodDef `sumOf`, overloading selector functions only by their CLR
+return type, deriving a hash from the current overload set, omitting the physical body, or widening
+it for C# are rejected: each either produces invalid/unstable CLR metadata or contradicts the
+accepted inline-only contract without a CLR necessity.
 
-The Int overload is independently complete rather than a convenient subset of an otherwise
-available signed family. The Long and Double Common declarations carry
-`@OptIn(ExperimentalTypeInference::class)` and `@OverloadResolutionByLambdaReturnType`; the new
-general marker foundation now admits those exact parameterless annotation declarations without
-removing their metadata. Long and Double may therefore be audited next, including their stable
-physical overload names. UInt and ULong still require the parked unsigned value-class family.
+The `Long` and `Double` declarations carry `@OptIn(ExperimentalTypeInference::class)` and
+`@OverloadResolutionByLambdaReturnType`. The general marker foundation now admits those exact
+parameterless annotation declarations without removing their KLIB metadata. The temporary source
+product therefore projects the complete authoritative Common `ExperimentalTypeInference` source
+and the exact final Common `OverloadResolutionByLambdaReturnType` declaration; it does not invent
+target-local marker stubs or pull the adjacent deprecated `BuilderInference` declaration into this
+closure. Both extraction markers fail generation if upstream moves or reshapes either declaration.
+Source overload resolution must then select all three signed functions from the lambda result.
+This is not permission to select the complete generator group: `UInt` and `ULong` still require
+the parked unsigned value-class family, while JVM-only big-number overloads are not Common .NET
+declarations.
 
-Completion must prove empty zero, signed overflow, encounter and callback order, nullable and
-widened receiver elements, callback failure identity and stopping point, non-local return,
-assembly visibility under `sumOfInt`, logical KLIB identity under `sumOf`, no external call from
-separate and installed Kotlin consumers, C# inaccessibility, and execution through the portable
-stdlib on Framework CLR and CoreCLR.
+The completed gate proves empty zero for all three overloads, `Int` and `Long` wrapping overflow,
+`Double` encounter order and NaN, nullable and widened receiver elements, callback order and
+capture, callback failure identity and stopping point, non-local return, lambda-result overload
+resolution, assembly visibility under all three stable names, logical KLIB identity under
+`sumOf`, no external call from separate and installed Kotlin consumers, C# inaccessibility, and
+execution through the portable stdlib on Framework CLR and CoreCLR.
 
 ### Completed same-receiver observation
 
@@ -705,6 +717,21 @@ Select the next exact Common/generated family only when all of these are closed:
 4. the direct, packaged fallback, installed, and portable stdlib products use the same source;
 5. no public or protected declaration is evicted; and
 6. adversarial behavior can be executed on both runtime profiles.
+
+Do not use allowlist size as the unit of progress. Close a reusable language,
+runtime, collection, importer, or test-product foundation first; inventory
+every Common generator family whose only blocker that foundation removes; and
+admit that complete dependency-homogeneous set in the same tranche. If one
+candidate reveals another independent language or representation decision, it
+stays out with that exact blocker recorded rather than shrinking the
+foundation or receiving a target workaround.
+
+Each foundation tranche must test its Kotlin-to-Kotlin separate-product ABI
+and the truthful C# boundary, including negative interop claims. Once its
+source closure can compile the relevant shared stdlib tests, wire those tests
+through a real .NET stdlib-test product in the same programme. Target-owned
+tests remain responsible for CIL, CLR profiles, physical ABI, foreign
+metadata, packaging, and other genuinely .NET-specific evidence.
 
 Do not choose a family solely because one downstream feature, such as enums, needs it.
 
