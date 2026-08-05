@@ -1,6 +1,6 @@
 # .NET compiler architecture programme
 
-- Status: **Active — retained foreign-declaration carrier and FIR ownership extracted; physical ABI serialization is the next seam**
+- Status: **Active — neutral foreign-linkage and exact-contract carriers extracted; physical ABI serialization is the next seam**
 - Current ownership: [`../../STATUS.md`](../../STATUS.md)
 
 ## Governing rule
@@ -36,7 +36,7 @@ to copy into a new target.
 - CLR content-root carrier: `cli-base`, in `org.jetbrains.kotlin.cli.dotnet.config`.
 - PE/ECMA-335 reading and objective evidence: `compiler:frontend.common.dotnet`, in
   `org.jetbrains.kotlin.load.dotnet`.
-- Retained selected foreign-declaration linkage: `compiler:dotnet.imports`, in
+- Neutral cross-phase CLR-facing carriers: `compiler:dotnet.imports`, in
   `org.jetbrains.kotlin.load.dotnet`.
 - Kotlin interpretation of foreign evidence: `compiler:fir:fir-dotnet`, in
   `org.jetbrains.kotlin.fir.dotnet`.
@@ -106,13 +106,26 @@ FIR; the .NET FIR2IR overridability condition preserves that accepted override e
 physical declaration carrier. CIL codegen must not reconstruct it by names or signatures after
 the edge has been lost.
 
-### Retained import linkage
+### Neutral cross-phase carriers
 
-`compiler:dotnet.imports` owns only the compiler carrier that preserves one already-selected
-resource-free assembly, declaring TypeDef, member, and structural signature through FIR2IR. The
-carrier references the immutable objective rows selected by the loader and validates their exact
-assembly and owner membership when it is constructed. It does not select a classpath, enhance a
-Kotlin type, construct FIR, bind IR, or render CIL.
+`compiler:dotnet.imports` owns small, versioned compiler carriers shared across
+the FIR/backend boundary. The foreign-declaration carrier preserves one
+already-selected resource-free assembly, declaring TypeDef, member, and
+structural signature through FIR2IR. It references immutable objective rows
+selected by the loader and validates their exact assembly and owner membership
+when constructed.
+
+The exact-contract carrier preserves only an already-derived additive CLR
+projection while resolved FIR and the corresponding IR declaration coexist.
+It contains the five closed effect kinds and ordinary value-parameter indices,
+not the Kotlin contract graph, FIR/IR nodes, Roslyn symbols, or CIL. The CLI
+only transports the carrier; the explicit export backend is its sole consumer.
+Discarding it cannot change Kotlin analysis, KLIB, or execution.
+
+The module does not select a classpath, enhance a Kotlin type, construct FIR,
+bind IR, or render CIL. Producing the exact-contract carrier is a FIR-owned
+semantic decision; owning its neutral validated shape here does not move that
+interpretation into the carrier module.
 
 The carrier protocol has an explicit version. A producer must construct a supported version and a
 consumer must match it exhaustively; an unknown version or carrier shape is not reinterpreted from

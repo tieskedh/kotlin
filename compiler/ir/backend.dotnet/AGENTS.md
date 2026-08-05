@@ -179,6 +179,16 @@ contract store. Import an attribute effect only where its target and effect
 algebra match Kotlin and still apply Kotlin stability rules; retain effects
 that CLR cannot express in KLIB alone. Do not infer Kotlin contracts merely
 because a C# analysis attribute is suggestive.
+
+The closed first export projection contains only `NotNull`, `NotNullWhen`,
+`NotNullIfNotNull`, `DoesNotReturnIf`, and `DoesNotReturn`. FIR2IR derives its
+versioned neutral carrier; only explicit exports consume it. Emit the standard
+attribute only when the selected profile physically supplies the exact type
+(`net10.0` does; `net48` and `netstandard2.0` do not), and omit any fact whose
+named/defaulted parameter is absent from a generated overload. Do not widen
+this set without updating the Common-contracts ADR and proving implication
+direction, multiplicity, target, profile identity, Roslyn behavior, and KLIB
+independence after attribute stripping.
 See the
 [Common-contracts ADR](docs/decisions/common-contracts-product.md).
 

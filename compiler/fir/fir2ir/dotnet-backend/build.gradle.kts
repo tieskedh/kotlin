@@ -12,7 +12,10 @@ dependencies {
     api(project(":compiler:ir.tree"))
     api(kotlinStdlib())
 
-    implementation(project(":compiler:dotnet.imports"))
+    api(project(":compiler:dotnet.imports"))
+    implementation(project(":compiler:fir:cones"))
+    implementation(project(":compiler:fir:providers"))
+    api(project(":compiler:fir:tree"))
     implementation(project(":compiler:frontend.common.dotnet"))
     implementation(project(":core:language.model"))
     implementation(project(":core:names"))
