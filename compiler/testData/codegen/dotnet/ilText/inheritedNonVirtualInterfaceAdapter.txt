@@ -1,0 +1,75 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'inheritedNonVirtualInterfaceAdapter' {}
+.module 'main-inheritedNonVirtualInterfaceAdapter.il'
+
+.class interface public abstract auto ansi 'Able'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'f'() cil managed
+  {
+  }
+}
+.class public auto ansi beforefieldinit 'Provider'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'f'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 42
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Combined'
+       extends 'Provider'
+       implements 'Able'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void 'Provider'::.ctor()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<CovariantReturnBridge-Able-f-1af414f0c7e2fffe1505a743e9a9ea72>'() cil managed
+  {
+    .override method instance int32 'Able'::'f'()
+    .maxstack 1
+    ldarg.0
+    call instance int32 'Provider'::'f'()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'inheritedNonVirtualInterfaceAdapterKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'throughInterface'(class 'Able' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'Able'::'f'()
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    newobj instance void 'Combined'::.ctor()
+    call int32 'inheritedNonVirtualInterfaceAdapterKt'::'throughInterface'(class 'Able')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

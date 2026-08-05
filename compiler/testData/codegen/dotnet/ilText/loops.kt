@@ -40,6 +40,13 @@ fun firstMultipleAbove(step: Int, limit: Int): Int {
     return candidate
 }
 
+// A literal infinite loop is a complete Nothing-valued body. Its CIL must not expose an
+// impossible verifier-visible edge which falls off this non-Unit method without returning.
+fun neverReturns(): Int {
+    while (true) {
+    }
+}
+
 fun sumOfOdds(limit: Int): Int {
     var sum = 0
     var i = 0

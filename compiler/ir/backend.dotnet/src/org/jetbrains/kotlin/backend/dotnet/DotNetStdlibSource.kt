@@ -22,12 +22,36 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/collections/DotNetAbstractMutableCollection.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetAbstractMutableMap.kt",
+        "dotnet/src/kotlin/collections/DotNetAbstractMutableMap.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetAbstractMutableSet.kt",
+        "dotnet/src/kotlin/collections/DotNetAbstractMutableSet.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetAbstractMutableList.kt",
         "dotnet/src/kotlin/collections/DotNetAbstractMutableList.kt",
     ),
     DotNetStdlibSourceResource(
         "DotNetArrayList.kt",
         "dotnet/src/kotlin/collections/DotNetArrayList.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetHashMap.kt",
+        "dotnet/src/kotlin/collections/DotNetHashMap.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetHashSet.kt",
+        "dotnet/src/kotlin/collections/DotNetHashSet.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapMapsActuals.kt",
+        "dotnet/src/generated/_DotNetBootstrapMapsActuals.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapSetsActuals.kt",
+        "dotnet/src/generated/_DotNetBootstrapSetsActuals.kt",
     ),
     DotNetStdlibSourceResource(
         "DotNetStringBuilder.kt",
@@ -54,6 +78,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/coroutines/cancellation/DotNetStdlibCancellation.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetVolatileMarker.kt",
+        "dotnet/src/kotlin/concurrent/DotNetVolatileMarker.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "DotNetExceptions.kt",
         "dotnet/src/kotlin/DotNetExceptions.kt",
     ),
@@ -72,6 +101,16 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "_DotNetBootstrapCollections.kt",
         "dotnet/common/src/generated/_DotNetBootstrapCollections.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapMaps.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapMaps.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapSets.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapSets.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
@@ -226,6 +265,16 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "AbstractMap.kt",
+        "src/kotlin/collections/AbstractMap.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "AbstractSet.kt",
+        "src/kotlin/collections/AbstractSet.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "AbstractList.kt",
         "src/kotlin/collections/AbstractList.kt",
         isCommon = true,
@@ -251,6 +300,16 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "AbstractMutableMap.kt",
+        "common/src/kotlin/collections/AbstractMutableMap.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "AbstractMutableSet.kt",
+        "common/src/kotlin/collections/AbstractMutableSet.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "AbstractMutableList.kt",
         "common/src/kotlin/collections/AbstractMutableList.kt",
         isCommon = true,
@@ -258,6 +317,26 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "ArrayList.kt",
         "common/src/kotlin/collections/ArrayList.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "HashMap.kt",
+        "common/src/kotlin/collections/HashMap.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "HashSet.kt",
+        "common/src/kotlin/collections/HashSet.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "LinkedHashMap.kt",
+        "common/src/kotlin/collections/LinkedHashMap.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "LinkedHashSet.kt",
+        "common/src/kotlin/collections/LinkedHashSet.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

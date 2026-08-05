@@ -7,6 +7,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_HOLDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZATION_ENTRY
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZATION_FAILURE_STATE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COVARIANT_RETURN_BRIDGE
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
@@ -465,8 +466,13 @@ internal class DotNetIlEmitter(
             externalDeclarations,
             genericInterfaces,
             genericClasses,
-            referencedAssemblies::add,
-            referencedForeignAssemblies::add,
+            stdlibAssemblyName = if (emissionScope == DotNetIlEmissionScope.STDLIB) {
+                null
+            } else {
+                DotNetStdlibLibrary.ASSEMBLY_NAME
+            },
+            assemblyReferenceSink = referencedAssemblies::add,
+            foreignAssemblyReferenceSink = referencedForeignAssemblies::add,
         )
         val declaredGenericTypeMapper = typeMapper.declaredGenericInterfaceView()
         val exactGenericTypeMapper = typeMapper.exactGenericInterfaceView()
@@ -1927,11 +1933,20 @@ internal class DotNetIlEmitter(
                 .filter { it.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER }
                 .flatMapTo(hashSetOf()) { it.overriddenSymbols }
             if (interfaceSlots.any { it.symbol in implementedSlots }) continue
+            val canonicalGenericInterfaceSlots = irClass.declarations.filterIsInstance<IrSimpleFunction>()
+                .filter { it.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE }
+                .flatMapTo(hashSetOf()) { it.overriddenSymbols }
+            if (interfaceSlots.any { it.symbol in canonicalGenericInterfaceSlots }) continue
             val recordedCurrentForwarders = interfaceDefaultClassForwarders
                 .asSequence()
                 .filter { forwarder -> forwarder.owner == irClass }
                 .mapTo(hashSetOf()) { forwarder -> forwarder.inheritedMember }
             if (interfaceSlots.any { it in recordedCurrentForwarders }) continue
+            val recordedOrdinarySlotAdapters = covariantReturnBridges
+                .asSequence()
+                .filter { bridge -> bridge.owner == irClass }
+                .mapTo(hashSetOf()) { bridge -> bridge.inheritedMember }
+            if (interfaceSlots.any { it in recordedOrdinarySlotAdapters }) continue
             if (inheritsCompilerDefaultForwarder(interfaceSlots)) continue
             val implementation = member.resolveFakeOverride()
             if (implementation == null) {

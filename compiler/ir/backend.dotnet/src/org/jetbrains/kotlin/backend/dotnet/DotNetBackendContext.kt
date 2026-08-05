@@ -68,7 +68,7 @@ internal data class DotNetLoweredGenericInterfaceViewBridge(
     val physicalView: DotNetInterfaceDefaultPromotionView,
 )
 
-/** One exact Kotlin implementation adapted to a wider ordinary CLR class or interface slot. */
+/** One exact Kotlin implementation adapted to an ordinary CLR class or interface slot. */
 internal data class DotNetLoweredCovariantReturnBridge(
     val owner: IrClass,
     val inheritedMember: IrSimpleFunction,

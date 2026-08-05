@@ -116,21 +116,22 @@ algorithm or collection-specific bridge.
 The collection work provides ordinary user value and the foundation now consumed by enums, while exercising
 generic interfaces, arrays, separate products, and profile-compatible stdlib publication.
 
-The mutable iterator/collection/list contracts, Common abstract mutable bases,
-ordinary Kotlin `ArrayList`, factories/builders, separate-product ABI,
-truthful C# boundary, first staged Common `kotlin.test` product, and complete
-dependency-closed Iterable/List generator family now form one completed
-architectural unit. Preserve its owner-erased class/interface identity,
-method-generic vararg and relative-constraint ABI, projected-array boundary,
-foreign physical-signature authority, and unchanged upstream test path.
+The mutable iterator/collection/list and Set/Map contracts, Common abstract mutable bases,
+ordinary Kotlin `ArrayList`, Native/Wasm-derived open-addressed `HashMap`/`HashSet`,
+factories/builders, separate-product ABI, truthful C# boundary, staged Common `kotlin.test`
+product, and dependency-closed Iterable/List/Map/Set generator families now form one completed
+architectural unit. Preserve its owner-erased class/interface identity, method-generic vararg and
+relative-constraint ABI, projected-array boundary, foreign physical-signature authority, local
+stdlib-helper binding, and unchanged upstream test path.
 
-Further work remains foundation-first rather than allowlist-count-first. The
-next tranche audits and closes Set/Map plus hash storage as one substrate,
-using Common and the shared JS/Native/Wasm implementations as source authority
-and JVM/BCL host mappings as explicit design attacks. It records the complete
-generator and upstream-test family released by that substrate before
-implementation. Loose one-function growth and implicit BCL
-`Dictionary<K,V>`/`HashSet<T>` identity are not substitutes for closing it.
+Further work remains foundation-first rather than allowlist-count-first. Recompute the remaining
+Common generator/source dependency graph around the actual missing substrates: ordinary
+ranges/progressions, Sequence, Grouping aggregates, sorting/comparators/random, reified operations,
+and open nullable projected arrays. Select and document one substrate with the largest coherent
+release before admitting its generated family. The narrow `Array<out T?>` boundary may land
+independently because it restores authoritative `setOfNotNull(vararg T?)` and object-array nullable
+filtering without changing collection identity. Loose one-function growth and implicit BCL
+collection identity remain excluded.
 
 The semantically erased generic-class route is selected in
 [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md).

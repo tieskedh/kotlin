@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — mutable collection/list foundation and first bulk Common family complete; Set/Map substrate next**
+- Status: **Active — erased Set/Map/hash foundation and its dependency-closed Common batch complete**
 - ABI foundation: [`../decisions/generic-interface-erased-identity.md`](../decisions/generic-interface-erased-identity.md)
 
 ## Purpose
@@ -50,16 +50,96 @@ missing, changed, or ambiguous marker fails generation.
 This allowlist is temporary. It grows with real backend capability and is eventually removed in
 favor of compiling the complete ordinary Common/generated corpus.
 
-Generated and target-private collection shards explicitly share
-`Kotlin.Collections.CollectionsKt`. Callable/accessor-only shards may aggregate into that one
-physical facade. At most one shard may own top-level physical state and its initializer; multiple
-state owners require a separately designed initialization order and are rejected meanwhile.
-Once a generated shard is admitted and assigned to that facade, the complete function closure in
-the shard is physically owned there; there is no second hand-maintained function allowlist which
-can omit private Common helpers. Exact resolution markers remain declaration-suppressed after
-their consuming lowerings.
+Generated and extracted shards preserve their authoritative source ownership in three physical
+facades: ordinary generated collection templates use `Kotlin.Collections.CollectionsKt`,
+`Maps.kt` uses `Kotlin.Collections.MapsKt`, and `Sets.kt` uses
+`Kotlin.Collections.SetsKt`. This mirrors the mature source/JVM facade split and prevents CLR
+erasure from collapsing unrelated generic-receiver overloads such as collection and map
+`ifEmpty` onto one signature. It is physical naming, not a fork of the Kotlin declarations.
+At most one shard may own top-level physical state and its initializer in a facade; multiple state
+owners require a separately designed initialization order and are rejected meanwhile. Once a
+generated shard is admitted, its complete function closure is physically owned by the selected
+facade; there is no second hand-maintained function allowlist which can omit private Common
+helpers. Exact resolution markers remain declaration-suppressed after their consuming lowerings.
 
 ## Current admitted product
+
+### Completed Set/Map and hash-storage foundation
+
+The completed tranche extends the same one-owner rule from lists to `Set`, `MutableSet`, `Map`,
+`MutableMap`, `Map.Entry`, and `MutableMap.MutableEntry`. Each Kotlin-owned declaration has one
+non-generic CLR interface identity and one erased virtual slot family. `HashMap`, `HashSet`, and
+their linked aliases are ordinary Kotlin-owned erased classes; KLIB remains authoritative for all
+key, value, entry, variance, and mutability relationships. No BCL collection becomes a second
+runtime identity, and no typed export is implied by this substrate.
+
+The implementation authority is the shared Native/Wasm open-addressed hash table and its set
+facade. It preserves Common structural equality and hash rules, nullable keys and values,
+insertion-order iteration, mutable key/value/entry views, fail-fast iterators and detached entry
+comparison, builder sealing, and overflow behavior. The one necessary CLR adaptation is private
+storage: an erased Kotlin-owned map has no physical `K` or `V` token with which to allocate
+`K[]`/`V[]`, so keys and values use `object[]`; the hash and presence tables remain `int[]`.
+Logical reads narrow at their declared use sites. Disabling or changing that private carrier may
+affect performance, but may not alter DLL signatures, casts, reflection, dispatch, or identity.
+
+JVM's `java.util.HashMap`/`HashSet` typealiases are the required host-mapping counterexample, not
+the default architecture. Java's collection hierarchy already participates in Kotlin/JVM's
+erased mapping and bridge model. `System.Collections.Generic.Dictionary<K,V>` and
+`HashSet<T>` expose constructed CLR identity, and `Dictionary` rejects null keys; their comparer,
+enumerator, view, entry-mutation, and versioning contracts are not the complete Kotlin contracts.
+Legacy `Hashtable` also rejects null keys and exposes `IDictionaryEnumerator` plus mutation slots
+that do not match Kotlin. They therefore remain importable native .NET types and possible private
+or export-layer implementation choices, but neither may define Kotlin runtime identity.
+
+The completed dependency closure is one bounded product:
+
+- the six erased interfaces including both nested entry interfaces, Common
+  `AbstractMutableSet`/`AbstractMutableMap`, the Native/Wasm `HashMap` algorithm adapted only at
+  its private storage boundary, and `HashSet` over that map;
+- Common `HashMap`, `HashSet`, `LinkedHashMap`, and `LinkedHashSet` expect/actual surfaces plus the
+  exact empty, singleton, mutable, hash, linked, and builder factories;
+- Common Map entry/components/basic access and mutation, eager conversions, filters,
+  key/value transforms, `getOrElse`/`getOrPut`, and non-Sequence plus/minus operations;
+- generated Iterable and object-array association, grouping to eager lists, distinct, Set
+  algebra, and Set snapshots; and
+- unchanged upstream `IteratorsTest` and `HashMapCompactTest` compiled through the portable
+  Kotlin.Test/stdlib product, with target-owned tests retained for erased CLR ABI, metadata,
+  profile execution, C# calls, collisions, views, exceptions, and non-local inline returns.
+
+The linked declarations remain Kotlin aliases over the insertion-ordered hash implementation;
+they do not manufacture separate `LinkedHashMap` or `LinkedHashSet` CLR TypeDefs for C#. That
+absence is part of the low-level runtime boundary, not an export policy for a future typed C# API.
+
+The closure also repaired four compiler-wide boundaries exposed by authoritative Common source:
+
+- a final method inherited from a base class can satisfy an interface first declared by a derived
+  class through one private forwarding MethodImpl, matching Kotlin/JVM source semantics;
+- a literal final `while (true)` emits no impossible verifier-visible fallthrough edge;
+- the Common AbstractMap caches emit the CLR `volatile.` prefix on every marked field access; and
+- a stdlib product resolves calls to admitted stdlib helpers locally and can never create a
+  self-reference to an older external `Kotlin.Stdlib` assembly.
+
+The admitted runtime surface is version 16. Product metadata proves that all top-level and nested
+Kotlin collection interfaces are non-generic CLR TypeDefs, while Roslyn executes ordinary erased
+`HashMap` and `HashSet` calls without observing `Dictionary<K,V>`, `HashSet<T>`, or another BCL
+generic interface as Kotlin identity.
+
+Sequence overloads, sorting/min/max/comparator families not yet admitted for ordinary Iterables,
+`Grouping` and its aggregate product, reified operations, concurrency, and BCL adapters remain
+separate closures. The vararg `setOfNotNull(vararg T?)` and object-array
+`filterNotNullTo` variants are also held at one explicit compiler boundary: their authoritative
+signatures require an open nullable projected array (`Array<out T?>`), which the current array
+representation rejects rather than approximating with `object[]`. The singleton
+`setOfNotNull(T?)` is admitted. A source member that reaches any excluded boundary must fail
+closed rather than receive a .NET-specific body.
+
+The gate proves null keys and values, primitive/reference/widened keys, hash collisions,
+replacement without reordering, resize and upstream compaction, entry `setValue`, live
+key/value/entry removals, iterator removal and concurrent modification, map/set rendering and
+ordering, builder sealing, Framework CLR/CoreCLR execution, public metadata, C# reflection/calls,
+and the absence of implicit `Dictionary<K,V>`/`HashSet<T>` identity. Changed-key behavior and a
+broader foreign-implementation equality matrix remain useful additions to the shared-test product;
+they are tests of the same accepted representation, not missing architectural decisions.
 
 ### Completed mutable collection/list foundation
 
@@ -150,9 +230,10 @@ adapter work removable and prevents it from determining Kotlin runtime identity.
 The bootstrap generator now admits every Common collection-template
 variant whose dependency closure consists only of the already published read-only foundation,
 this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
-The exact inventory is generator-owned and fail-closed. Set/Map, ranges as public values,
-sequences, random/sorting, reified operations, reflection, and unsigned families remain excluded
-when they introduce an independent dependency rather than being approximated or copied.
+The exact inventory is generator-owned and fail-closed and now includes the completed Set/Map
+closure above. Ranges as public values, sequences, random/sorting, reified operations, reflection,
+and unsigned families remain excluded when they introduce an independent dependency rather than
+being approximated or copied.
 
 The first bulk admission is intentionally collection-facing and homogeneous. It includes the
 complete dependency-closed Iterable/List variants of:
@@ -200,21 +281,22 @@ User locals, invariant ABI and writable destinations receive no such widening.
 This batch is one compiler-foundation test: it combines erased class and interface dispatch,
 method-owned CLR generics, relative constraints, projected arrays, nullable type-parameter
 recovery, inline non-local control flow, data classes, anonymous generic classes, and
-cross-library inlining. Array-receiver overloads are not silently bundled into this
-collection-facing batch; they remain owned by the array product and may be admitted as a separate
-homogeneous source family. Sequence, Set/Map, sorting/random, range-signature, reified, reflection,
-and unsigned variants fail closed outside the batch.
+cross-library inlining. That first batch did not silently bundle array-receiver overloads. The
+later Set/Map tranche admits only the object-array association, grouping, snapshot, and Set-op
+variants whose array carriers are already exact. Sequence, sorting/random, range-signature,
+reified, reflection, and unsigned variants fail closed outside the admitted batches.
 
 The first shared semantic-test product is deliberately built from repository-owned sources rather
 than a .NET transcription. Its generator projects the exact Common `Test` expectation,
 `assertEquals`, `Asserter`, `messagePrefix`, `AssertionErrorWithCause`, and `DefaultAsserter`
 closure into a staged `Kotlin.Test.dll`; the .NET source supplies only the parameterless CLR marker,
 default-asserter selection, and exception-construction actual. The existing
-`libraries/stdlib/test/collections/IteratorsTest.kt` is then compiled unchanged against a portable
-stdlib and that test product and executed on Framework CLR and CoreCLR. The test also forces the
-exact Common assertion failure message and verifies that `@Test` becomes a real CLR custom
-attribute. This proves the upstream-test path and the portable producer/consumer ABI; it does not
-claim the complete kotlin.test API or an external test-framework adapter yet.
+`libraries/stdlib/test/collections/IteratorsTest.kt` and dependency-closed
+`HashMapCompactTest.kt` are compiled unchanged against a portable stdlib and that test product and
+executed on Framework CLR and CoreCLR. The test also forces the exact Common assertion failure
+message and verifies that `@Test` becomes a real CLR custom attribute. This proves the upstream-
+test path, hash-compaction behavior, and portable producer/consumer ABI; it does not claim the
+complete kotlin.test API or an external test-framework adapter yet.
 
 Several bodies use scalar dependencies that are smaller than the independently parked range
 product. Exact Common `require`, `Int.coerceAtLeast`, and two-argument `Int.minOf` are admitted;
@@ -996,8 +1078,8 @@ reified `toTypedArray` remains outside this completed prerequisite.
 3. **Completed:** publish exact contracts, `Standard.kt` through `takeUnless`, and both
    `buildString` declarations once `InvocationKind` exists. Admit `repeat` only with its range
    closure.
-4. Add mutable collection/list contracts and an ordinary implementation.
-5. Add sets and maps from their exact Common dependency closures.
+4. **Completed:** add mutable collection/list contracts and an ordinary implementation.
+5. **Selected:** add sets and maps from their exact Common dependency closures.
 6. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
 7. Remove the bootstrap allowlist when the complete generated product is supportable.
 

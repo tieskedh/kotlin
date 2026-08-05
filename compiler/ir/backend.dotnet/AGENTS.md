@@ -653,6 +653,12 @@ IL-text golden, change the `.kt`, run the scoped test with
 `-Pkotlin.test.update.test.data=true`, then read and assemble the resulting
 `.txt`; generated goldens can faithfully preserve broken IL.
 
+When invoking that property from PowerShell, pass it as one quoted native
+argument before the task, for example
+`./gradlew "-Pkotlin.test.update.test.data=true" :compiler:fir:fir2ir:dotNetTest ...`.
+The unquoted spelling can be split so Gradle reports a nonexistent
+`.test.update.test.data=true` task instead of updating the golden.
+
 Focused compilation/tests are the commit gate for a bounded Common-stdlib
 source addition that changes no shared compiler representation, lowering,
 code generation, runtime surface or ABI. Its matrix must still cover every

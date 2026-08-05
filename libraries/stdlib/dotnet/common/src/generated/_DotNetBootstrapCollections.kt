@@ -130,6 +130,260 @@ public inline fun <T> Iterable<T>.asIterable(): Iterable<T> {
 }
 
 /**
+ * Returns a [Map] containing key-value pairs provided by [transform] function
+ * applied to elements of the given collection.
+ *
+ * If any of two pairs would have the same key the last one gets added to the map.
+ *
+ * The returned map preserves the entry iteration order of the original collection.
+ *
+ * @sample samples.collections.Collections.Transformations.associate
+ */
+public inline fun <T, K, V> Iterable<T>.associate(transform: (T) -> Pair<K, V>): Map<K, V> {
+    val capacity = mapCapacity(collectionSizeOrDefault(10)).coerceAtLeast(16)
+    return associateTo(LinkedHashMap<K, V>(capacity), transform)
+}
+
+/**
+ * Returns a [Map] containing key-value pairs provided by [transform] function
+ * applied to elements of the given array.
+ *
+ * If any of two pairs would have the same key the last one gets added to the map.
+ *
+ * The returned map preserves the entry iteration order of the original array.
+ *
+ * @sample samples.collections.Arrays.Transformations.associateArrayOfPrimitives
+ */
+public inline fun <T, K, V> Array<out T>.associate(transform: (T) -> Pair<K, V>): Map<K, V> {
+    val capacity = mapCapacity(size).coerceAtLeast(16)
+    return associateTo(LinkedHashMap<K, V>(capacity), transform)
+}
+
+/**
+ * Returns a [Map] containing the elements from the given collection indexed by the key
+ * returned from [keySelector] function applied to each element.
+ *
+ * If any two elements would have the same key returned by [keySelector] the last one gets added to the map.
+ *
+ * The returned map preserves the entry iteration order of the original collection.
+ *
+ * @sample samples.collections.Collections.Transformations.associateBy
+ */
+public inline fun <T, K> Iterable<T>.associateBy(keySelector: (T) -> K): Map<K, T> {
+    val capacity = mapCapacity(collectionSizeOrDefault(10)).coerceAtLeast(16)
+    return associateByTo(LinkedHashMap<K, T>(capacity), keySelector)
+}
+
+/**
+ * Returns a [Map] containing the elements from the given array indexed by the key
+ * returned from [keySelector] function applied to each element.
+ *
+ * If any two elements would have the same key returned by [keySelector] the last one gets added to the map.
+ *
+ * The returned map preserves the entry iteration order of the original array.
+ *
+ * @sample samples.collections.Arrays.Transformations.associateArrayOfPrimitivesBy
+ */
+public inline fun <T, K> Array<out T>.associateBy(keySelector: (T) -> K): Map<K, T> {
+    val capacity = mapCapacity(size).coerceAtLeast(16)
+    return associateByTo(LinkedHashMap<K, T>(capacity), keySelector)
+}
+
+/**
+ * Returns a [Map] containing the values provided by [valueTransform] and indexed by [keySelector] functions applied to elements of the given collection.
+ *
+ * If any two elements would have the same key returned by [keySelector] the last one gets added to the map.
+ *
+ * The returned map preserves the entry iteration order of the original collection.
+ *
+ * @sample samples.collections.Collections.Transformations.associateByWithValueTransform
+ */
+public inline fun <T, K, V> Iterable<T>.associateBy(keySelector: (T) -> K, valueTransform: (T) -> V): Map<K, V> {
+    val capacity = mapCapacity(collectionSizeOrDefault(10)).coerceAtLeast(16)
+    return associateByTo(LinkedHashMap<K, V>(capacity), keySelector, valueTransform)
+}
+
+/**
+ * Returns a [Map] containing the values provided by [valueTransform] and indexed by [keySelector] functions applied to elements of the given array.
+ *
+ * If any two elements would have the same key returned by [keySelector] the last one gets added to the map.
+ *
+ * The returned map preserves the entry iteration order of the original array.
+ *
+ * @sample samples.collections.Arrays.Transformations.associateArrayOfPrimitivesByWithValueTransform
+ */
+public inline fun <T, K, V> Array<out T>.associateBy(keySelector: (T) -> K, valueTransform: (T) -> V): Map<K, V> {
+    val capacity = mapCapacity(size).coerceAtLeast(16)
+    return associateByTo(LinkedHashMap<K, V>(capacity), keySelector, valueTransform)
+}
+
+/**
+ * Populates and returns the [destination] mutable map with key-value pairs,
+ * where key is provided by the [keySelector] function applied to each element of the given collection
+ * and value is the element itself.
+ *
+ * If any two elements would have the same key returned by [keySelector] the last one gets added to the map.
+ *
+ * @sample samples.collections.Collections.Transformations.associateByTo
+ */
+@IgnorableReturnValue
+public inline fun <T, K, M : MutableMap<in K, in T>> Iterable<T>.associateByTo(destination: M, keySelector: (T) -> K): M {
+    for (element in this) {
+        destination.put(keySelector(element), element)
+    }
+    return destination
+}
+
+/**
+ * Populates and returns the [destination] mutable map with key-value pairs,
+ * where key is provided by the [keySelector] function applied to each element of the given array
+ * and value is the element itself.
+ *
+ * If any two elements would have the same key returned by [keySelector] the last one gets added to the map.
+ *
+ * @sample samples.collections.Arrays.Transformations.associateArrayOfPrimitivesByTo
+ */
+@IgnorableReturnValue
+public inline fun <T, K, M : MutableMap<in K, in T>> Array<out T>.associateByTo(destination: M, keySelector: (T) -> K): M {
+    for (element in this) {
+        destination.put(keySelector(element), element)
+    }
+    return destination
+}
+
+/**
+ * Populates and returns the [destination] mutable map with key-value pairs,
+ * where key is provided by the [keySelector] function and
+ * and value is provided by the [valueTransform] function applied to elements of the given collection.
+ *
+ * If any two elements would have the same key returned by [keySelector] the last one gets added to the map.
+ *
+ * @sample samples.collections.Collections.Transformations.associateByToWithValueTransform
+ */
+@IgnorableReturnValue
+public inline fun <T, K, V, M : MutableMap<in K, in V>> Iterable<T>.associateByTo(destination: M, keySelector: (T) -> K, valueTransform: (T) -> V): M {
+    for (element in this) {
+        destination.put(keySelector(element), valueTransform(element))
+    }
+    return destination
+}
+
+/**
+ * Populates and returns the [destination] mutable map with key-value pairs,
+ * where key is provided by the [keySelector] function and
+ * and value is provided by the [valueTransform] function applied to elements of the given array.
+ *
+ * If any two elements would have the same key returned by [keySelector] the last one gets added to the map.
+ *
+ * @sample samples.collections.Arrays.Transformations.associateArrayOfPrimitivesByToWithValueTransform
+ */
+@IgnorableReturnValue
+public inline fun <T, K, V, M : MutableMap<in K, in V>> Array<out T>.associateByTo(destination: M, keySelector: (T) -> K, valueTransform: (T) -> V): M {
+    for (element in this) {
+        destination.put(keySelector(element), valueTransform(element))
+    }
+    return destination
+}
+
+/**
+ * Populates and returns the [destination] mutable map with key-value pairs
+ * provided by [transform] function applied to each element of the given collection.
+ *
+ * If any of two pairs would have the same key the last one gets added to the map.
+ *
+ * @sample samples.collections.Collections.Transformations.associateTo
+ */
+@IgnorableReturnValue
+public inline fun <T, K, V, M : MutableMap<in K, in V>> Iterable<T>.associateTo(destination: M, transform: (T) -> Pair<K, V>): M {
+    for (element in this) {
+        destination += transform(element)
+    }
+    return destination
+}
+
+/**
+ * Populates and returns the [destination] mutable map with key-value pairs
+ * provided by [transform] function applied to each element of the given array.
+ *
+ * If any of two pairs would have the same key the last one gets added to the map.
+ *
+ * @sample samples.collections.Arrays.Transformations.associateArrayOfPrimitivesTo
+ */
+@IgnorableReturnValue
+public inline fun <T, K, V, M : MutableMap<in K, in V>> Array<out T>.associateTo(destination: M, transform: (T) -> Pair<K, V>): M {
+    for (element in this) {
+        destination += transform(element)
+    }
+    return destination
+}
+
+/**
+ * Returns a [Map] where keys are elements from the given collection and values are
+ * produced by the [valueSelector] function applied to each element.
+ *
+ * If any two elements are equal, the last one gets added to the map.
+ *
+ * The returned map preserves the entry iteration order of the original collection.
+ *
+ * @sample samples.collections.Collections.Transformations.associateWith
+ */
+@SinceKotlin("1.3")
+public inline fun <K, V> Iterable<K>.associateWith(valueSelector: (K) -> V): Map<K, V> {
+    val result = LinkedHashMap<K, V>(mapCapacity(collectionSizeOrDefault(10)).coerceAtLeast(16))
+    return associateWithTo(result, valueSelector)
+}
+
+/**
+ * Returns a [Map] where keys are elements from the given array and values are
+ * produced by the [valueSelector] function applied to each element.
+ *
+ * If any two elements are equal, the last one gets added to the map.
+ *
+ * The returned map preserves the entry iteration order of the original array.
+ *
+ * @sample samples.collections.Collections.Transformations.associateWith
+ */
+@SinceKotlin("1.4")
+public inline fun <K, V> Array<out K>.associateWith(valueSelector: (K) -> V): Map<K, V> {
+    val result = LinkedHashMap<K, V>(mapCapacity(size).coerceAtLeast(16))
+    return associateWithTo(result, valueSelector)
+}
+
+/**
+ * Populates and returns the [destination] mutable map with key-value pairs for each element of the given collection,
+ * where key is the element itself and value is provided by the [valueSelector] function applied to that key.
+ *
+ * If any two elements are equal, the last one overwrites the former value in the map.
+ *
+ * @sample samples.collections.Collections.Transformations.associateWithTo
+ */
+@SinceKotlin("1.3")
+@IgnorableReturnValue
+public inline fun <K, V, M : MutableMap<in K, in V>> Iterable<K>.associateWithTo(destination: M, valueSelector: (K) -> V): M {
+    for (element in this) {
+        destination.put(element, valueSelector(element))
+    }
+    return destination
+}
+
+/**
+ * Populates and returns the [destination] mutable map with key-value pairs for each element of the given array,
+ * where key is the element itself and value is provided by the [valueSelector] function applied to that key.
+ *
+ * If any two elements are equal, the last one overwrites the former value in the map.
+ *
+ * @sample samples.collections.Collections.Transformations.associateWithTo
+ */
+@SinceKotlin("1.4")
+@IgnorableReturnValue
+public inline fun <K, V, M : MutableMap<in K, in V>> Array<out K>.associateWithTo(destination: M, valueSelector: (K) -> V): M {
+    for (element in this) {
+        destination.put(element, valueSelector(element))
+    }
+    return destination
+}
+
+/**
  * Returns an average value of elements in the collection.
  */
 @kotlin.jvm.JvmName("averageOfByte")
@@ -305,6 +559,70 @@ public inline fun <T> Iterable<T>.count(predicate: (T) -> Boolean): Int {
     var count = 0
     for (element in this) if (predicate(element)) checkCountOverflow(++count)
     return count
+}
+
+/**
+ * Returns a list containing only distinct elements from the given collection.
+ *
+ * Among equal elements of the given collection, only the first one will be present in the resulting list.
+ * The elements in the resulting list are in the same order as they were in the source collection.
+ *
+ * @sample samples.collections.Collections.Transformations.distinctAndDistinctBy
+ */
+public fun <T> Iterable<T>.distinct(): List<T> {
+    return this.toMutableSet().toList()
+}
+
+/**
+ * Returns a list containing only distinct elements from the given array.
+ *
+ * Among equal elements of the given array, only the first one will be present in the resulting list.
+ * The elements in the resulting list are in the same order as they were in the source array.
+ *
+ * @sample samples.collections.Collections.Transformations.distinctAndDistinctBy
+ */
+public fun <T> Array<out T>.distinct(): List<T> {
+    return this.toMutableSet().toList()
+}
+
+/**
+ * Returns a list containing only elements from the given collection
+ * having distinct keys returned by the given [selector] function.
+ *
+ * Among elements of the given collection with equal keys, only the first one will be present in the resulting list.
+ * The elements in the resulting list are in the same order as they were in the source collection.
+ *
+ * @sample samples.collections.Collections.Transformations.distinctAndDistinctBy
+ */
+public inline fun <T, K> Iterable<T>.distinctBy(selector: (T) -> K): List<T> {
+    val set = HashSet<K>()
+    val list = ArrayList<T>()
+    for (e in this) {
+        val key = selector(e)
+        if (set.add(key))
+            list.add(e)
+    }
+    return list
+}
+
+/**
+ * Returns a list containing only elements from the given array
+ * having distinct keys returned by the given [selector] function.
+ *
+ * Among elements of the given array with equal keys, only the first one will be present in the resulting list.
+ * The elements in the resulting list are in the same order as they were in the source array.
+ *
+ * @sample samples.collections.Collections.Transformations.distinctAndDistinctBy
+ */
+public inline fun <T, K> Array<out T>.distinctBy(selector: (T) -> K): List<T> {
+    val set = HashSet<K>()
+    val list = ArrayList<T>()
+    for (e in this) {
+        val key = selector(e)
+        if (set.add(key))
+            list.add(e)
+    }
+    return list
 }
 
 /**
@@ -873,6 +1191,130 @@ public fun <T> Array<out T>.getOrNull(index: Int): T? {
 }
 
 /**
+ * Groups elements of the original collection by the key returned by the given [keySelector] function
+ * applied to each element and returns a map where each group key is associated with a list of corresponding elements.
+ *
+ * The returned map preserves the entry iteration order of the keys produced from the original collection.
+ *
+ * @sample samples.collections.Collections.Transformations.groupBy
+ */
+public inline fun <T, K> Iterable<T>.groupBy(keySelector: (T) -> K): Map<K, List<T>> {
+    return groupByTo(LinkedHashMap<K, MutableList<T>>(), keySelector)
+}
+
+/**
+ * Groups elements of the original array by the key returned by the given [keySelector] function
+ * applied to each element and returns a map where each group key is associated with a list of corresponding elements.
+ *
+ * The returned map preserves the entry iteration order of the keys produced from the original array.
+ *
+ * @sample samples.collections.Collections.Transformations.groupBy
+ */
+public inline fun <T, K> Array<out T>.groupBy(keySelector: (T) -> K): Map<K, List<T>> {
+    return groupByTo(LinkedHashMap<K, MutableList<T>>(), keySelector)
+}
+
+/**
+ * Groups values returned by the [valueTransform] function applied to each element of the original collection
+ * by the key returned by the given [keySelector] function applied to the element
+ * and returns a map where each group key is associated with a list of corresponding values.
+ *
+ * The returned map preserves the entry iteration order of the keys produced from the original collection.
+ *
+ * @sample samples.collections.Collections.Transformations.groupByKeysAndValues
+ */
+public inline fun <T, K, V> Iterable<T>.groupBy(keySelector: (T) -> K, valueTransform: (T) -> V): Map<K, List<V>> {
+    return groupByTo(LinkedHashMap<K, MutableList<V>>(), keySelector, valueTransform)
+}
+
+/**
+ * Groups values returned by the [valueTransform] function applied to each element of the original array
+ * by the key returned by the given [keySelector] function applied to the element
+ * and returns a map where each group key is associated with a list of corresponding values.
+ *
+ * The returned map preserves the entry iteration order of the keys produced from the original array.
+ *
+ * @sample samples.collections.Collections.Transformations.groupByKeysAndValues
+ */
+public inline fun <T, K, V> Array<out T>.groupBy(keySelector: (T) -> K, valueTransform: (T) -> V): Map<K, List<V>> {
+    return groupByTo(LinkedHashMap<K, MutableList<V>>(), keySelector, valueTransform)
+}
+
+/**
+ * Groups elements of the original collection by the key returned by the given [keySelector] function
+ * applied to each element and puts to the [destination] map each group key associated with a list of corresponding elements.
+ *
+ * @return The [destination] map.
+ *
+ * @sample samples.collections.Collections.Transformations.groupBy
+ */
+@IgnorableReturnValue
+public inline fun <T, K, M : MutableMap<in K, MutableList<T>>> Iterable<T>.groupByTo(destination: M, keySelector: (T) -> K): M {
+    for (element in this) {
+        val key = keySelector(element)
+        val list = destination.getOrPut(key) { ArrayList<T>() }
+        list.add(element)
+    }
+    return destination
+}
+
+/**
+ * Groups elements of the original array by the key returned by the given [keySelector] function
+ * applied to each element and puts to the [destination] map each group key associated with a list of corresponding elements.
+ *
+ * @return The [destination] map.
+ *
+ * @sample samples.collections.Collections.Transformations.groupBy
+ */
+@IgnorableReturnValue
+public inline fun <T, K, M : MutableMap<in K, MutableList<T>>> Array<out T>.groupByTo(destination: M, keySelector: (T) -> K): M {
+    for (element in this) {
+        val key = keySelector(element)
+        val list = destination.getOrPut(key) { ArrayList<T>() }
+        list.add(element)
+    }
+    return destination
+}
+
+/**
+ * Groups values returned by the [valueTransform] function applied to each element of the original collection
+ * by the key returned by the given [keySelector] function applied to the element
+ * and puts to the [destination] map each group key associated with a list of corresponding values.
+ *
+ * @return The [destination] map.
+ *
+ * @sample samples.collections.Collections.Transformations.groupByKeysAndValues
+ */
+@IgnorableReturnValue
+public inline fun <T, K, V, M : MutableMap<in K, MutableList<V>>> Iterable<T>.groupByTo(destination: M, keySelector: (T) -> K, valueTransform: (T) -> V): M {
+    for (element in this) {
+        val key = keySelector(element)
+        val list = destination.getOrPut(key) { ArrayList<V>() }
+        list.add(valueTransform(element))
+    }
+    return destination
+}
+
+/**
+ * Groups values returned by the [valueTransform] function applied to each element of the original array
+ * by the key returned by the given [keySelector] function applied to the element
+ * and puts to the [destination] map each group key associated with a list of corresponding values.
+ *
+ * @return The [destination] map.
+ *
+ * @sample samples.collections.Collections.Transformations.groupByKeysAndValues
+ */
+@IgnorableReturnValue
+public inline fun <T, K, V, M : MutableMap<in K, MutableList<V>>> Array<out T>.groupByTo(destination: M, keySelector: (T) -> K, valueTransform: (T) -> V): M {
+    for (element in this) {
+        val key = keySelector(element)
+        val list = destination.getOrPut(key) { ArrayList<V>() }
+        list.add(valueTransform(element))
+    }
+    return destination
+}
+
+/**
  * Returns first index of [element], or -1 if the collection does not contain element.
  */
 public fun <@kotlin.internal.OnlyInputTypes T> Iterable<T>.indexOf(element: T): Int {
@@ -968,6 +1410,48 @@ public inline fun <T> List<T>.indexOfLast(predicate: (T) -> Boolean): Int {
         }
     }
     return -1
+}
+
+/**
+ * Returns a set containing elements of this collection that are also contained in the specified [other] collection.
+ *
+ * The returned set preserves the element iteration order of the original collection.
+ *
+ * The returned set uses structural equality (`==`) to distinguish elements, meaning there will be no two
+ * structurally equal, but otherwise different elements in it.
+ *
+ * To get a set containing all elements that are contained at least in one of these collections use [union].
+ */
+public infix fun <T> Iterable<T>.intersect(other: Iterable<T>): Set<T> {
+    val otherCollection = other.convertToListIfNotCollection()
+    val set = mutableSetOf<T>()
+    for (e in this) {
+        if (otherCollection.contains(e)) {
+            set.add(e)
+        }
+    }
+    return set
+}
+
+/**
+ * Returns a set containing elements of this array that are also contained in the specified [other] array.
+ *
+ * The returned set preserves the element iteration order of the original array.
+ *
+ * The returned set uses structural equality (`==`) to distinguish elements, meaning there will be no two
+ * structurally equal, but otherwise different elements in it.
+ *
+ * To get a set containing all elements that are contained at least in one of these collections use [union].
+ */
+public infix fun <T> Array<out T>.intersect(other: Iterable<T>): Set<T> {
+    val otherCollection = other.convertToListIfNotCollection()
+    val set = mutableSetOf<T>()
+    for (e in this) {
+        if (otherCollection.contains(e)) {
+            set.add(e)
+        }
+    }
+    return set
 }
 
 /**
@@ -1909,6 +2393,44 @@ public fun <T> List<T>.slice(indices: Iterable<Int>): List<T> {
 }
 
 /**
+ * Returns a set containing all elements that are contained by this collection and not contained by the specified collection.
+ *
+ * The returned set preserves the element iteration order of the original collection.
+ *
+ * The returned set uses structural equality (`==`) to distinguish elements, meaning there will be no two
+ * structurally equal, but otherwise different elements in it.
+ */
+public infix fun <T> Iterable<T>.subtract(other: Iterable<T>): Set<T> {
+    val otherCollection = other.convertToListIfNotCollection()
+    val result = mutableSetOf<T>()
+    for (e in this) {
+        if (!otherCollection.contains(e)) {
+            result.add(e)
+        }
+    }
+    return result
+}
+
+/**
+ * Returns a set containing all elements that are contained by this array and not contained by the specified collection.
+ *
+ * The returned set preserves the element iteration order of the original array.
+ *
+ * The returned set uses structural equality (`==`) to distinguish elements, meaning there will be no two
+ * structurally equal, but otherwise different elements in it.
+ */
+public infix fun <T> Array<out T>.subtract(other: Iterable<T>): Set<T> {
+    val otherCollection = other.convertToListIfNotCollection()
+    val result = mutableSetOf<T>()
+    for (e in this) {
+        if (!otherCollection.contains(e)) {
+            result.add(e)
+        }
+    }
+    return result
+}
+
+/**
  * Returns the sum of all elements in the collection.
  */
 @kotlin.jvm.JvmName("sumOfByte")
@@ -2183,6 +2705,17 @@ public fun <T, C : MutableCollection<in T>> Iterable<T>.toCollection(destination
 }
 
 /**
+ * Appends all elements to the given [destination] collection.
+ */
+@IgnorableReturnValue
+public fun <T, C : MutableCollection<in T>> Array<out T>.toCollection(destination: C): C {
+    for (item in this) {
+        destination.add(item)
+    }
+    return destination
+}
+
+/**
  * Returns an array of Double containing all of the elements of this collection.
  */
 public fun Collection<Double>.toDoubleArray(): DoubleArray {
@@ -2202,6 +2735,20 @@ public fun Collection<Float>.toFloatArray(): FloatArray {
     for (element in this)
         result[index++] = element
     return result
+}
+
+/**
+ * Returns a new [HashSet] of all elements.
+ */
+public fun <T> Iterable<T>.toHashSet(): HashSet<T> {
+    return toCollection(HashSet<T>(mapCapacity(collectionSizeOrDefault(12))))
+}
+
+/**
+ * Returns a new [HashSet] of all elements.
+ */
+public fun <T> Array<out T>.toHashSet(): HashSet<T> {
+    return toCollection(HashSet<T>(mapCapacity(size)))
 }
 
 /**
@@ -2257,6 +2804,56 @@ public fun <T> Collection<T>.toMutableList(): MutableList<T> {
 }
 
 /**
+ * Returns a new [MutableSet] containing all distinct elements from the given collection.
+ *
+ * The returned set preserves the element iteration order of the original collection.
+ */
+public fun <T> Iterable<T>.toMutableSet(): MutableSet<T> {
+    return when (this) {
+        is Collection<T> -> LinkedHashSet(this)
+        else -> toCollection(LinkedHashSet<T>())
+    }
+}
+
+/**
+ * Returns a new [MutableSet] containing all distinct elements from the given array.
+ *
+ * The returned set preserves the element iteration order of the original array.
+ */
+public fun <T> Array<out T>.toMutableSet(): MutableSet<T> {
+    return toCollection(LinkedHashSet<T>(mapCapacity(size)))
+}
+
+/**
+ * Returns a [Set] of all elements.
+ *
+ * The returned set preserves the element iteration order of the original collection.
+ */
+public fun <T> Iterable<T>.toSet(): Set<T> {
+    if (this is Collection) {
+        return when (size) {
+            0 -> emptySet()
+            1 -> setOf(if (this is List) this[0] else iterator().next())
+            else -> toCollection(LinkedHashSet<T>(mapCapacity(size)))
+        }
+    }
+    return toCollection(LinkedHashSet<T>()).optimizeReadOnlySet()
+}
+
+/**
+ * Returns a [Set] of all elements.
+ *
+ * The returned set preserves the element iteration order of the original array.
+ */
+public fun <T> Array<out T>.toSet(): Set<T> {
+    return when (size) {
+        0 -> emptySet()
+        1 -> setOf(this[0])
+        else -> toCollection(LinkedHashSet<T>(mapCapacity(size)))
+    }
+}
+
+/**
  * Returns an array of Short containing all of the elements of this collection.
  */
 public fun Collection<Short>.toShortArray(): ShortArray {
@@ -2265,6 +2862,42 @@ public fun Collection<Short>.toShortArray(): ShortArray {
     for (element in this)
         result[index++] = element
     return result
+}
+
+/**
+ * Returns a set containing all distinct elements from both collections.
+ *
+ * The returned set preserves the element iteration order of the original collection.
+ * Those elements of the [other] collection that are unique are iterated in the end
+ * in the order of the [other] collection.
+ *
+ * The returned set uses structural equality (`==`) to distinguish elements, meaning there will be no two
+ * structurally equal, but otherwise different elements in it.
+ *
+ * To get a set containing all elements that are contained in both collections use [intersect].
+ */
+public infix fun <T> Iterable<T>.union(other: Iterable<T>): Set<T> {
+    val set = this.toMutableSet()
+    set.addAll(other)
+    return set
+}
+
+/**
+ * Returns a set containing all distinct elements from both collections.
+ *
+ * The returned set preserves the element iteration order of the original array.
+ * Those elements of the [other] collection that are unique are iterated in the end
+ * in the order of the [other] collection.
+ *
+ * The returned set uses structural equality (`==`) to distinguish elements, meaning there will be no two
+ * structurally equal, but otherwise different elements in it.
+ *
+ * To get a set containing all elements that are contained in both collections use [intersect].
+ */
+public infix fun <T> Array<out T>.union(other: Iterable<T>): Set<T> {
+    val set = this.toMutableSet()
+    set.addAll(other)
+    return set
 }
 
 /**

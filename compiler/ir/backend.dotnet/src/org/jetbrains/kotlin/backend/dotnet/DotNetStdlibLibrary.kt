@@ -38,9 +38,15 @@ internal object DotNetStdlibLibrary {
     const val ARRAY_AS_LIST_IL_NAME = "Kotlin.Collections.ArrayAsList"
     const val ABSTRACT_COLLECTION_IL_NAME = "Kotlin.Collections.AbstractCollection"
     const val ABSTRACT_LIST_IL_NAME = "Kotlin.Collections.AbstractList"
+    const val ABSTRACT_MAP_IL_NAME = "Kotlin.Collections.AbstractMap"
+    const val ABSTRACT_SET_IL_NAME = "Kotlin.Collections.AbstractSet"
     const val ABSTRACT_MUTABLE_COLLECTION_IL_NAME = "Kotlin.Collections.AbstractMutableCollection"
     const val ABSTRACT_MUTABLE_LIST_IL_NAME = "Kotlin.Collections.AbstractMutableList"
+    const val ABSTRACT_MUTABLE_MAP_IL_NAME = "Kotlin.Collections.AbstractMutableMap"
+    const val ABSTRACT_MUTABLE_SET_IL_NAME = "Kotlin.Collections.AbstractMutableSet"
     const val ARRAY_LIST_IL_NAME = "Kotlin.Collections.ArrayList"
+    const val HASH_MAP_IL_NAME = "Kotlin.Collections.HashMap"
+    const val HASH_SET_IL_NAME = "Kotlin.Collections.HashSet"
     const val ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayIterator"
     const val ARRAY_ITERABLE_IL_NAME = "Kotlin.Collections.ArrayIterable"
     const val ERASED_ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ErasedArrayIterator"
@@ -51,6 +57,8 @@ internal object DotNetStdlibLibrary {
     const val SERIALIZABLE_IL_NAME = "Kotlin.Io.Serializable"
     const val READ_AFTER_EOF_EXCEPTION_IL_NAME = "Kotlin.Io.ReadAfterEOFException"
     const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
+    const val MAPS_FACADE_IL_NAME = "Kotlin.Collections.MapsKt"
+    const val SETS_FACADE_IL_NAME = "Kotlin.Collections.SetsKt"
     const val TUPLES_FACADE_IL_NAME = "Kotlin.TuplesKt"
     const val TEXT_FACADE_IL_NAME = "Kotlin.Text.StringsKt"
     const val STANDARD_FACADE_IL_NAME = "Kotlin.StandardKt"
@@ -78,9 +86,22 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.ArrayAsList" to ARRAY_AS_LIST_IL_NAME,
         "kotlin.collections.AbstractCollection" to ABSTRACT_COLLECTION_IL_NAME,
         "kotlin.collections.AbstractList" to ABSTRACT_LIST_IL_NAME,
+        "kotlin.collections.AbstractMap" to ABSTRACT_MAP_IL_NAME,
+        "kotlin.collections.AbstractSet" to ABSTRACT_SET_IL_NAME,
         "kotlin.collections.AbstractMutableCollection" to ABSTRACT_MUTABLE_COLLECTION_IL_NAME,
         "kotlin.collections.AbstractMutableList" to ABSTRACT_MUTABLE_LIST_IL_NAME,
+        "kotlin.collections.AbstractMutableMap" to ABSTRACT_MUTABLE_MAP_IL_NAME,
+        "kotlin.collections.AbstractMutableSet" to ABSTRACT_MUTABLE_SET_IL_NAME,
         "kotlin.collections.ArrayList" to ARRAY_LIST_IL_NAME,
+        "kotlin.collections.HashMap" to HASH_MAP_IL_NAME,
+        "kotlin.collections.HashSet" to HASH_SET_IL_NAME,
+        "kotlin.collections.HashMapKeys" to "Kotlin.Collections.HashMapKeys",
+        "kotlin.collections.HashMapValues" to "Kotlin.Collections.HashMapValues",
+        "kotlin.collections.HashMapEntrySetBase" to "Kotlin.Collections.HashMapEntrySetBase",
+        "kotlin.collections.HashMapEntrySet" to "Kotlin.Collections.HashMapEntrySet",
+        "kotlin.collections.EmptyMap" to "Kotlin.Collections.EmptyMap",
+        "kotlin.collections.EmptySet" to "Kotlin.Collections.EmptySet",
+        "kotlin.collections.DetachedMapEntry" to "Kotlin.Collections.DetachedMapEntry",
         "kotlin.collections.ArrayIterator" to ARRAY_ITERATOR_IL_NAME,
         "kotlin.collections.ArrayIterable" to ARRAY_ITERABLE_IL_NAME,
         "kotlin.collections.ErasedArrayIterator" to ERASED_ARRAY_ITERATOR_IL_NAME,
@@ -312,22 +333,32 @@ internal object DotNetStdlibLibrary {
     )
 
     /** Calls the stdlib-owned iterator factory for a vector already on the IL stack. */
-    fun arrayIteratorFactoryCallInstruction(elementType: DotNetIlValueType): String =
-        ARRAY_ITERATOR_FACTORY_INFO.renderStdlibCall(ARRAY_ITERATOR_FACTORY_NAME, elementType)
+    fun arrayIteratorFactoryCallInstruction(
+        elementType: DotNetIlValueType,
+        assemblyName: String? = ASSEMBLY_NAME,
+    ): String = ARRAY_ITERATOR_FACTORY_INFO.renderStdlibCall(ARRAY_ITERATOR_FACTORY_NAME, elementType, assemblyName)
 
     /** Calls the stdlib-owned Iterable factory for a vector already on the IL stack. */
-    fun arrayIterableFactoryCallInstruction(elementType: DotNetIlValueType): String =
-        ARRAY_ITERABLE_FACTORY_INFO.renderStdlibCall(ARRAY_ITERABLE_FACTORY_NAME, elementType)
+    fun arrayIterableFactoryCallInstruction(
+        elementType: DotNetIlValueType,
+        assemblyName: String? = ASSEMBLY_NAME,
+    ): String = ARRAY_ITERABLE_FACTORY_INFO.renderStdlibCall(ARRAY_ITERABLE_FACTORY_NAME, elementType, assemblyName)
 
-    fun erasedArrayIteratorFactoryCallInstruction(coreLibraryReference: String): String =
+    fun erasedArrayIteratorFactoryCallInstruction(
+        coreLibraryReference: String,
+        assemblyName: String? = ASSEMBLY_NAME,
+    ): String =
         "call class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]${"Kotlin.Collections.Iterator".toIlIdentifier()} " +
-                "[$ASSEMBLY_NAME]${COLLECTIONS_FACADE_IL_NAME.toIlIdentifier()}::" +
+                "${assemblyName.ilAssemblyQualifier()}${COLLECTIONS_FACADE_IL_NAME.toIlIdentifier()}::" +
                 "${ERASED_ARRAY_ITERATOR_FACTORY_NAME.toIlIdentifier()}(" +
                 "class ${coreLibraryReference}System.Array)"
 
-    fun erasedArrayIterableFactoryCallInstruction(coreLibraryReference: String): String =
+    fun erasedArrayIterableFactoryCallInstruction(
+        coreLibraryReference: String,
+        assemblyName: String? = ASSEMBLY_NAME,
+    ): String =
         "call class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]${"Kotlin.Collections.Iterable".toIlIdentifier()} " +
-                "[$ASSEMBLY_NAME]${COLLECTIONS_FACADE_IL_NAME.toIlIdentifier()}::" +
+                "${assemblyName.ilAssemblyQualifier()}${COLLECTIONS_FACADE_IL_NAME.toIlIdentifier()}::" +
                 "${ERASED_ARRAY_ITERABLE_FACTORY_NAME.toIlIdentifier()}(" +
                 "class ${coreLibraryReference}System.Array)"
 
@@ -337,7 +368,10 @@ internal object DotNetStdlibLibrary {
     }
 
     /** Public target-stdlib declarations referenced while bootstrap sources remain same-module. */
-    fun publicImplementationClassInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
+    fun publicImplementationClassInfoOrNull(
+        irClass: IrClass,
+        assemblyName: String? = ASSEMBLY_NAME,
+    ): DotNetIlClassInfo? {
         if (irClass.visibility != DescriptorVisibilities.PUBLIC && !irClass.isPublishedApi()) return null
         val ilName = implementationClassIlName(irClass) ?: return null
         return DotNetIlClassInfo(
@@ -347,18 +381,21 @@ internal object DotNetStdlibLibrary {
             } else {
                 irClass.typeParameters.map { it.variance }
             },
-            assemblyName = ASSEMBLY_NAME,
+            assemblyName = assemblyName,
         )
     }
 
     /** The single erased owner of a public generic stdlib class in bootstrap USER emission. */
-    fun publicGenericImplementationClassInfoOrNull(irClass: IrClass): DotNetGenericClassInfo? {
+    fun publicGenericImplementationClassInfoOrNull(
+        irClass: IrClass,
+        assemblyName: String? = ASSEMBLY_NAME,
+    ): DotNetGenericClassInfo? {
         if (irClass.isInterface || irClass.typeParameters.isEmpty()) return null
         val ilName = implementationClassIlName(irClass) ?: return null
         return DotNetGenericClassInfo(
             classInfo = DotNetIlClassInfo(
                 ilClassName = ilName,
-                assemblyName = ASSEMBLY_NAME,
+                assemblyName = assemblyName,
             ),
         )
     }
@@ -491,13 +528,14 @@ internal object DotNetStdlibLibrary {
     fun implementationFunctionInfoOrNull(
         function: IrSimpleFunction,
         typeMapper: DotNetIlTypeMapper,
+        assemblyName: String? = ASSEMBLY_NAME,
     ): DotNetIlFunctionInfo? {
         val containingClass = function.parent as? IrClass
         val genericClassInfo = containingClass?.let(typeMapper::genericClassInfoOrNull)
         val owner = genericClassInfo?.classInfo
-            ?: containingClass?.let(::publicImplementationClassInfoOrNull)
+            ?: containingClass?.let { irClass -> publicImplementationClassInfoOrNull(irClass, assemblyName) }
             ?: implementationFunctionFacadeIlName(function)?.let { facadeName ->
-                DotNetIlClassInfo(facadeName, assemblyName = ASSEMBLY_NAME)
+                DotNetIlClassInfo(facadeName, assemblyName = assemblyName)
             }
             ?: return null
         return DotNetIlFunctionInfo(
@@ -514,6 +552,7 @@ internal object DotNetStdlibLibrary {
         functionName: String,
         receiverType: DotNetIlValueType,
         elementType: DotNetIlValueType,
+        assemblyName: String? = ASSEMBLY_NAME,
     ): String {
         val functionInfo = when (receiverType) {
             DotNetRuntimeTypes.iterableType -> ITERABLE_ELEMENT_FUNCTION_INFO
@@ -522,7 +561,7 @@ internal object DotNetStdlibLibrary {
         }
         return functionInfo.renderCallInstruction(
             methodName = functionName,
-            ownerToken = "[$ASSEMBLY_NAME]${functionInfo.owner.ilTypeRef}",
+            ownerToken = "${assemblyName.ilAssemblyQualifier()}${functionInfo.owner.ilTypeRef}",
             methodInstantiation = listOf(elementType),
         )
     }
@@ -590,11 +629,14 @@ internal object DotNetStdlibLibrary {
     private fun DotNetIlFunctionInfo.renderStdlibCall(
         methodName: String,
         elementType: DotNetIlValueType,
+        assemblyName: String?,
     ): String = renderCallInstruction(
         methodName = methodName,
-        ownerToken = "[$ASSEMBLY_NAME]${owner.ilTypeRef}",
+        ownerToken = "${assemblyName.ilAssemblyQualifier()}${owner.ilTypeRef}",
         methodInstantiation = listOf(elementType),
     )
+
+    private fun String?.ilAssemblyQualifier(): String = this?.let { "[$it]" }.orEmpty()
 
     private data class ImplementationSource(
         val packageFqName: String,
@@ -621,6 +663,14 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
+        "_DotNetBootstrapMaps.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = MAPS_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapSets.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = SETS_FACADE_IL_NAME,
+        ),
         "_DotNetBootstrapCollectionFactories.kt" to ImplementationSource(
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
@@ -635,13 +685,33 @@ internal object DotNetStdlibLibrary {
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
         "AbstractCollection.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "AbstractMap.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "AbstractSet.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "AbstractList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "AbstractMutableCollection.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "AbstractMutableMap.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "AbstractMutableSet.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "AbstractMutableList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "ArrayList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "HashMap.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "HashSet.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "LinkedHashMap.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "LinkedHashSet.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "DotNetAbstractMutableCollection.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "DotNetAbstractMutableMap.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "DotNetAbstractMutableSet.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "DotNetAbstractMutableList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "DotNetArrayList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "DotNetHashMap.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "DotNetHashSet.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "_DotNetBootstrapMapsActuals.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = MAPS_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapSetsActuals.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = SETS_FACADE_IL_NAME,
+        ),
         "_DotNetBootstrapMutableCollections.kt" to ImplementationSource(
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
@@ -748,6 +818,7 @@ internal object DotNetStdlibLibrary {
         "KClassifier.kt" to "kotlin.reflect",
         "DotNetKClass.kt" to "kotlin.reflect",
         "_DotNetBootstrapJsName.kt" to "kotlin.js",
+        "DotNetVolatileMarker.kt" to "kotlin.concurrent",
     )
 
     internal fun isImplementationSource(file: IrFile): Boolean =
