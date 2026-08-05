@@ -310,38 +310,44 @@ See the
   signature, or generalize this rule to input/out projections, open
   `Array<T?>`, or other Kotlin generic classes. See
   [the star-projected-array ADR](docs/decisions/star-projected-arrays.md).
-- Every Kotlin-owned ordinary generic class has one non-generic physical CLR
-  owner and one authoritative erased type identity, storage model, and
-  runtime/virtual ABI. Erasure is the semantic runtime representation, not
-  merely the default public ABI. KLIB remains authoritative for its logical
-  parameters, arguments, variance, projections, nullability, and bounds.
-  Owner-type storage and member positions use `object`, an erased upper bound,
-  or an already accepted erased Kotlin carrier; generic results narrow only at
-  their logical use site. A closed CLR `C<T>` is neither Kotlin runtime identity
-  nor an implementation capability. Imported CLR generic classes remain
-  reified and explicit typed C# export is a separate fail-closed product.
-  CLR generics may describe method-owned parameters, imported types, truthful
-  exact interface capabilities, export artifacts, or invisible implementation
-  specialization; they must never redefine a Kotlin-owned class's runtime
-  identity, authoritative state, or class-dependent dispatch.
+- Every Kotlin-owned ordinary generic class has one canonical non-generic CLR
+  owner, one authoritative declaration-erased runtime classifier/virtual ABI,
+  and one authoritative mutable state. Erasure is authoritative semantics and
+  canonical Kotlin ABI, not a permanent prohibition on private physical
+  reification. KLIB remains authoritative for logical parameters, arguments,
+  variance, projections, nullability, and bounds. Public, protected, and
+  cross-module owner-dependent positions use `object`, an erased upper bound,
+  or an accepted erased Kotlin carrier; generic results narrow only at their
+  logical use site. The current baseline uses the same erased forms in private
+  storage, but that private layout is not frozen. A closed CLR `C<T>` is neither
+  Kotlin runtime identity nor the canonical class ABI. Imported CLR generics
+  remain reified and explicit typed C# export is a separate fail-closed
+  product. CLR generics may describe method parameters, imported types,
+  truthful interface capabilities, export artifacts, scalar replacement, or
+  removable private helpers/storage; they must never redefine runtime identity,
+  authoritative state, delayed-use behavior, or class-dependent dispatch.
   Do not emit the prototype's canonical interface, typed class, capability
   probes, ancestry classifier, class bridge records, wrappers, copies, or
-  duplicate authoritative storage. Do not add a `BoxImpl<T>`-style physical
-  implementation or make an annotation/compiler switch alternate one Kotlin
-  declaration between erased and CLR-generic meanings. An optimization must be
-  removable without changing public/protected ABI, supported Kotlin/.NET
-  reflection, casts, identity, virtual dispatch, or cross-module observable
-  semantics; private helpers and metadata may differ. Never narrow a nested
+  duplicate authoritative storage. Do not add a `BoxImpl<T>`-style alternative
+  implementation of ordinary Kotlin objects or make an annotation/compiler
+  switch alternate one declaration between erased and CLR-generic meanings. A
+  future typed-storage/deoptimization scheme requires a separate ADR covering
+  concurrency and must remain removable without changing public/protected ABI,
+  supported reflection, casts, identity, virtual dispatch, cross-module
+  semantics, or DLL signatures. Optimize only after measurement justifies the
+  compiler, metadata, JIT/AOT, and maintenance cost. Never narrow a nested
   carrier such as `Collection<object>` to `Collection<int>` or special-case one
   Common method.
   Kotlin/.NET deliberately selects classifier-only unchecked casts and delayed
   typed failure for Kotlin-owned classes as a cross-target compatibility
   contract, although the language specification would permit earlier platform
   failure. Preserve same-object identity, mutation, virtual dispatch, and
-  separate compilation. A C# export adapter may have a separate explicit CLR
-  identity but never becomes an alternative Kotlin implementation or owns
-  authoritative Kotlin state. Its public rule is: Kotlin classes remain Kotlin
-  classes; C# consumes only explicitly exported, safe .NET APIs. See
+  separate compilation. An export-created same-object CLR subtype or an export
+  adapter requires a separate explicit export contract; neither changes the
+  underlying Kotlin classifier or creates competing state. An arbitrary
+  existing instance needs an adapter rather than a retroactive CLR generic
+  identity. The public rule is: Kotlin classes remain Kotlin classes; C#
+  consumes only explicitly exported, safe .NET APIs. See
   [the generic-class ADR](docs/decisions/generic-class-erased-identity.md).
 - `KClass` is a nominal Kotlin runtime value over exact or classified CLR type
   evidence. KLIB owns logical `KClass<T>` and declaration identity;

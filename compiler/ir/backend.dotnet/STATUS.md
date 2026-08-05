@@ -145,13 +145,16 @@ consumed separately by Kotlin and Roslyn on Framework CLR and CoreCLR, while
 input projections, open nullable elements, and value-vector covariance remain
 negative.
 
-Every Kotlin-owned ordinary generic class now has one non-generic physical
-owner and one erased runtime/virtual ABI. KLIB remains authoritative for type
-parameters, bounds, variance, arguments, projections, and nullability. Owner
-storage and members use an accepted erased carrier, an erased upper bound, or
-`object`; reads narrow only at their logical use site. Ordinary CLR
+Every Kotlin-owned ordinary generic class now has one canonical non-generic
+owner, one erased runtime/virtual ABI, and one authoritative state. KLIB
+remains authoritative for type parameters, bounds, variance, arguments,
+projections, and nullability. Public/protected owner-dependent positions and
+the current baseline storage use an accepted erased carrier, an erased upper
+bound, or `object`; reads narrow only at their logical use site. Ordinary CLR
 `castclass`/`isinst` over the one owner supplies Kotlin's declaration-erased
-identity, including inherited and separate-library cases.
+identity, including inherited and separate-library cases. The baseline private
+layout is not an ABI freeze: removable measured specialization may later use
+more exact CLR helpers or storage without changing any semantic observation.
 
 Physical ABI 20 records that one erased generic owner plus producer-owned enum
 entry fields. It retains the removal of class capability paths, class-member
@@ -502,10 +505,16 @@ an implicit CLR `C<T>` surface.
 ## Open architectural blockers
 
 - Typed .NET export for Kotlin-owned generics remains a separate product
-  programme. It may publish a facade, adapter, or independently truthful host
-  capability, but it must not reintroduce a second Kotlin runtime identity,
-  storage model, or virtual ABI. The concrete export surface and identity
-  policy remain open; the erased Kotlin runtime ABI does not.
+  programme. It may publish a facade, read-only interface, adapter, or
+  same-object CLR subtype for export-created instances, but it must not
+  reintroduce a second Kotlin runtime identity, competing state, or virtual
+  ABI. Arbitrary existing instances require an adapter. The concrete export
+  surface and identity policy remain open; the erased Kotlin runtime ABI does
+  not.
+- Private generic specialization remains on hold until core feature coverage,
+  representative boxing/allocation/JIT/AOT measurements, and the concurrency
+  and memory model can justify it. Scalar replacement and immutable/private
+  shapes precede any escaped mutable typed-storage/deoptimization system.
 - Common `repeat` remains outside the exact `Standard.kt` projection until the
   ordinary `Int.until`/range/progression closure lands; no target loop stands
   in for that dependency.

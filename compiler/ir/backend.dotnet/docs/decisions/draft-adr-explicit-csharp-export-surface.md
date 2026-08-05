@@ -34,10 +34,11 @@ Kotlin semantics and runtime ABI
 ```
 
 The desired C# shape never drives Kotlin runtime identity in the reverse
-direction. Kotlin-owned generic classes and interfaces therefore remain erased
-implementation types. A future typed class/interface export is a separately
-generated facade, interface, or adapter contract and may not alter Kotlin
-casts, reflection, object identity, virtual dispatch, or cross-module ABI.
+direction. Kotlin-owned generic classes and interfaces therefore retain their
+semantically erased canonical implementation ABI. A future typed
+class/interface export is a separately generated facade, interface, adapter,
+or export-created CLR subtype contract and may not alter Kotlin casts,
+reflection, virtual dispatch, authoritative state, or cross-module ABI.
 Unsupported generic, inheritance, mutation, variance, or identity shapes fail
 closed. This direction is accepted; the concrete generic export forms and
 source-selection mechanism remain on hold.
@@ -70,6 +71,21 @@ Kotlin object nor owns its authoritative state. Reference identity between an
 adapter and its implementation object is not implied. An export must state any
 identity guarantee explicitly rather than appearing transparently identical
 to the implementation type.
+
+A future generic-class export may select one of four explicit categories:
+
+- a same-object CLR subtype for instances constructed through the export;
+- an adapter for arbitrary existing Kotlin instances;
+- a read-only facade where mutation or identity is not promised; or
+- unsupported when no truthful CLR contract exists.
+
+An existing erased implementation object cannot acquire a CLR generic subtype
+retroactively. A same-object export-created instance must still execute the
+complete erased Kotlin ABI, retain one authoritative state, and satisfy the
+generic-class ADR's delayed-use semantics. Typed private storage or
+deoptimization is not implied by selecting that export category. Kotlin type
+tests and supported reflection normalize its export TypeDef to the original
+Kotlin declaration; a shape for which that is not truthful fails closed.
 
 ### Export is explicit and additive
 
@@ -226,6 +242,8 @@ Before promotion, decide and validate:
 
 - source annotation versus typed Gradle/export DSL and stable naming rules;
 - member, constructor, class, extension, generic, and suspend exports;
+- same-object export-created, adapter, read-only, and unsupported class
+  categories, including their construction and reference-identity rules;
 - delegate reuse, callback registration/removal, and both projection
   round-trips across assemblies;
 - nullability on nested generics, arrays, delegates, properties, and defaults;
