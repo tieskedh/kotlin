@@ -57,6 +57,12 @@ fun main(args: Array<String>) {
     val jsNameOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapJsName.kt"
     )
+    val experimentalTypeInferenceOutputFile = baseDir.resolve(
+        "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapExperimentalTypeInference.kt"
+    )
+    val overloadResolutionByLambdaReturnTypeOutputFile = baseDir.resolve(
+        "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapOverloadResolutionByLambdaReturnType.kt"
+    )
     val commonCollectionsFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/collections/Collections.kt")
     val commonCollectionsHeaderFile =
@@ -74,6 +80,10 @@ fun main(args: Array<String>) {
     val commonEnumFile = baseDir.resolve("libraries/stdlib/src/kotlin/Enum.kt")
     val commonJsAnnotationsFile =
         baseDir.resolve("libraries/stdlib/common/src/kotlin/JsAnnotationsH.kt")
+    val commonExperimentalTypeInferenceFile =
+        baseDir.resolve("libraries/stdlib/src/kotlin/experimental/inferenceMarker.kt")
+    val commonInferenceAnnotationsFile =
+        baseDir.resolve("libraries/stdlib/src/kotlin/annotations/Inference.kt")
     val arrayAsListDeclaration = extractCommonDeclaration(
         commonArraysFile,
         "public expect fun <T> Array<out T>.asList(): List<T>",
@@ -126,10 +136,12 @@ fun main(args: Array<String>) {
         commonCollectionsFile,
         "internal expect fun <T> terminateCollectionToArray(collectionSize: Int, array: Array<T>): Array<T>",
     )
-    val iterableSumOfInt = Aggregates.f_sumOf().singleCommonTemplate(
-        family = Family.Iterables,
-        signature = "sumOf(selector: (T) -> Int)",
-    )
+    val iterableSelectorSums = listOf("Double", "Int", "Long").map { selectorType ->
+        Aggregates.f_sumOf().singleCommonTemplate(
+            family = Family.Iterables,
+            signature = "sumOf(selector: (T) -> $selectorType)",
+        )
+    }
     val selectedTemplates = sequenceOf(
         Aggregates.f_all selectedFor setOf(Family.Iterables),
         Aggregates.f_any selectedFor setOf(Family.Iterables),
@@ -156,7 +168,6 @@ fun main(args: Array<String>) {
         Aggregates.f_reduceRightOrNullSuper selectedFor setOf(Family.Lists),
         Aggregates.f_sumBy selectedFor setOf(Family.Iterables),
         Aggregates.f_sumByDouble selectedFor setOf(Family.Iterables),
-        iterableSumOfInt selectedFor setOf(Family.Iterables),
         Elements.f_contains selectedFor setOf(Family.Iterables),
         Elements.f_elementAt selectedFor setOf(Family.Lists),
         Elements.f_elementAtOrNull selectedFor setOf(Family.Iterables, Family.Lists),
@@ -189,7 +200,9 @@ fun main(args: Array<String>) {
         SequenceOps.f_asIterable selectedFor setOf(Family.Iterables),
         StringJoinOps.f_joinTo selectedFor setOf(Family.Iterables),
         StringJoinOps.f_joinToString selectedFor setOf(Family.Iterables),
-    ) + Elements.f_components.asSequence().map { component ->
+    ) + iterableSelectorSums.asSequence().map { selectorSum ->
+        selectorSum selectedFor setOf(Family.Iterables)
+    } + Elements.f_components.asSequence().map { component ->
         component selectedFor setOf(Family.Lists)
     }
     val members = selectedTemplates
@@ -285,6 +298,26 @@ fun main(args: Array<String>) {
                 extractCommonDeclaration(
                     commonJsAnnotationsFile,
                     "public expect annotation class JsName(val name: String)",
+                ),
+            ),
+        ),
+        Charsets.UTF_8,
+    )
+    experimentalTypeInferenceOutputFile.writeText(
+        projectWholeCommonFile(commonExperimentalTypeInferenceFile),
+        Charsets.UTF_8,
+    )
+    overloadResolutionByLambdaReturnTypeOutputFile.writeText(
+        buildProjectedSource(
+            packageName = "kotlin",
+            imports = listOf(
+                "kotlin.annotation.AnnotationTarget.*",
+                "kotlin.experimental.ExperimentalTypeInference",
+            ),
+            declarations = listOf(
+                extractFinalCommonDeclaration(
+                    commonInferenceAnnotationsFile,
+                    "public annotation class OverloadResolutionByLambdaReturnType",
                 ),
             ),
         ),
@@ -492,6 +525,29 @@ private fun extractCommonDeclaration(sourceFile: File, declarationHeader: String
         "Cannot find the end of Common declaration '$declarationHeader' in ${sourceFile.path}"
     }
     return source.substring(documentationIndex, nextDocumentationIndex).trimEnd()
+}
+
+/**
+ * Copies one documented declaration that is authoritatively the final declaration in its Common
+ * source file. Both the unique header and empty trailing source fail closed under regrouping.
+ */
+private fun extractFinalCommonDeclaration(sourceFile: File, declarationHeader: String): String {
+    val source = sourceFile.readText().replace("\r\n", "\n")
+    val declarationIndex = source.indexOf(declarationHeader)
+    check(declarationIndex >= 0) {
+        "Cannot find final Common declaration '$declarationHeader' in ${sourceFile.path}"
+    }
+    check(source.indexOf(declarationHeader, declarationIndex + declarationHeader.length) < 0) {
+        "Final Common declaration header '$declarationHeader' is not unique in ${sourceFile.path}"
+    }
+    val documentationIndex = source.lastIndexOf("/**", declarationIndex)
+    check(documentationIndex >= 0) {
+        "Cannot find KDoc for final Common declaration '$declarationHeader' in ${sourceFile.path}"
+    }
+    check(source.indexOf("\n/**", declarationIndex) < 0) {
+        "Common declaration '$declarationHeader' is no longer final in ${sourceFile.path}"
+    }
+    return source.substring(documentationIndex).trimEnd()
 }
 
 /**

@@ -116,6 +116,16 @@ algorithm or collection-specific bridge.
 The collection work provides ordinary user value and the foundation now consumed by enums, while exercising
 generic interfaces, arrays, separate products, and profile-compatible stdlib publication.
 
+Further work is foundation-first rather than allowlist-count-first. The next
+tranche closes mutable iterator/collection/list contracts, Common abstract
+mutable bases, one ordinary Kotlin `ArrayList`, its factories/builders,
+separate-product ABI, truthful C# boundaries, and the applicable shared stdlib
+test product as one architectural unit. Before implementation it records the
+complete Common generator set whose only blocker that unit removes; that set
+lands together unless a member exposes a distinct parked language or
+representation decision. Loose one-function growth is not a substitute for
+closing this substrate.
+
 The semantically erased generic-class route is selected in
 [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md).
 The disproven primary-typed/exceptional-canonical model has been replaced by one canonical
