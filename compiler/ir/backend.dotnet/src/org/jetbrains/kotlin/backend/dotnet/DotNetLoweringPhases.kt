@@ -158,9 +158,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // wrappers, flatten IrLocalDelegatedProperty into its ordinary getter/setter/delegate
     // declarations before local closure conversion sees those accessors.
     ::LocalDelegatedPropertiesLowering,
-    // JS/Common precedent adapted to the CLR constraint: use the original parameterless marker
+    // JS/Common precedent adapted to the CLR constraint: use the original annotation declaration
     // as its concrete System.Attribute implementation and generate Common value members before
-    // varargs or constructor bodies are normalized. No synthetic second annotation identity.
+    // varargs or constructor bodies are normalized. No synthetic second annotation identity;
+    // exact CLR custom-attribute projection is selected independently during metadata emission.
     ::DotNetAnnotationImplementationLowering,
     // Match the mature backends before closure conversion and default stubs: normalize concrete
     // vararg parameters to their vector ABI, materialize omitted arguments, and lower spread

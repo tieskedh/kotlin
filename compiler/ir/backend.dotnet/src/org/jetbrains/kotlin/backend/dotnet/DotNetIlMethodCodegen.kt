@@ -232,14 +232,14 @@ internal class DotNetIlMethodCodegen(
                     "    ${DotNetCompilerAbi.editorBrowsableNeverAttributeIl(typeMapper.coreLibrary.editorBrowsableReference)}"
                 )
             }
-            for (attribute in function.dotNetRuntimeMarkerAttributes(typeMapper)) {
+            for (attribute in function.dotNetRuntimeAttributes(typeMapper)) {
                 appendLine("    $attribute")
             }
             function.parameters.zip(signature.parameterTypes)
                 .drop(if (signature.hasThis) 1 else 0)
                 .forEachIndexed { index, parameterAndType ->
                     val parameter = parameterAndType.first
-                    val attributes = parameter.dotNetRuntimeMarkerAttributes(typeMapper)
+                    val attributes = parameter.dotNetRuntimeAttributes(typeMapper)
                     if (attributes.isNotEmpty()) {
                         appendLine("    .param [${index + 1}]")
                         for (attribute in attributes) appendLine("    $attribute")

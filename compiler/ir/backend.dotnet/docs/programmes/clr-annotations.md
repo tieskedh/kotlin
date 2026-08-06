@@ -1,7 +1,8 @@
 # CLR annotation interoperability programme
 
-- Status: **Active — exact Common-contract export and foreign flow-contract
-  import implemented; wider annotation grammar remains open**
+- Status: **Active — exact Common-contract export, foreign flow-contract
+  import, and Kotlin valued-annotation production implemented; discovery and
+  wider foreign grammar remain open**
 - Owner: .NET importer and foreign FIR integration
 - Governing decision:
   [`../decisions/draft-adr-clr-importer-boundary.md`](../decisions/draft-adr-clr-importer-boundary.md)
@@ -86,8 +87,9 @@ type.
 | Deprecation | Exact admitted targets closed | Extend alongside each new declaration family |
 | Required/init/read-only/ref-like | Physical evidence partly available | Specify profile usability and overrides |
 | Tooling markers | Retained selectively | Never infer a Kotlin role or hide ABI from a marker alone |
-| Parameterless Kotlin marker annotations | Implemented | Extend only together with exact new declaration-parent mappings |
-| Valued user annotations | Parked | Needs the complete values/enums/arrays/defaults codec and later reflection |
+| Kotlin annotation declarations and values | Implemented | Preserve Common/KLIB authority and one runtime class |
+| Kotlin-to-CLR annotation projection | Exact fixed-argument subset implemented | Extend only with exact physical carriers and parent mappings |
+| Annotation discovery | Parked | Enumerate KLIB first; merge recognized foreign CLR evidence without duplicates |
 | Kotlin-to-.NET export controls | Undecided public API | Make one language-facing proposal |
 
 ## Ordered work
@@ -191,27 +193,25 @@ Do not omit the same fact from KLIB. A Kotlin-produced DLL remains self-describi
 are stripped by external tooling, and KLIB-only consumers must not need the PE attribute graph to
 recover Kotlin semantics.
 
-### 6. Grow general annotations and reflection as a separate prerequisite chain
+### 6. Grow annotation discovery from the completed value foundation
 
-Known CLR attributes can be decoded and emitted without general Kotlin annotation-class support or
-runtime reflection. That is why this programme can progress now.
+Known CLR attributes can be decoded and emitted without broad Kotlin reflection. Kotlin annotation
+declaration, construction, Common value members, defaults, KLIB applications, cross-module
+identity, and the exact CLR fixed-argument subset are now selected by
+[`../decisions/valued-annotation-classes.md`](../decisions/valued-annotation-classes.md).
 
-Allowing users to declare arbitrary Kotlin annotation classes, instantiate them in metadata, read
-them through Kotlin reflection, or expose them naturally to C# requires a wider feature chain:
+The remaining chain starts with discovery:
 
-1. annotation-class declaration and constructor semantics;
-2. legal argument constants, enums, arrays, and retention; the nominal class-literal/`KClass`
-   floor is already selected;
-3. use-site target to CLR-parent mapping;
-4. KLIB serialization and cross-module identity;
-5. CLR CustomAttribute emission and round-trip validation; and
-6. reflection enumeration and value reconstruction.
+1. enumerate Kotlin-produced applications from authoritative embedded KLIB;
+2. reconstruct the already selected concrete annotation runtime values;
+3. preserve target/use-site and retention distinctions which CLR rows cannot express;
+4. recognize foreign CLR attributes only through the importer identity/value rules;
+5. avoid duplicates when a Kotlin-produced application also has a derived CLR row; and
+6. extend the value/parent grammar only when its physical representation is exact.
 
-The accepted first step is the general parameterless marker rule in
-[`../decisions/marker-annotation-classes.md`](../decisions/marker-annotation-classes.md). It emits
-only runtime-retained applications on exact CLR parents, keeps source/binary applications in
-KLIB, and deliberately provides no annotation discovery. The remaining chain should reuse the
-importer value algebra, but it must not be smuggled in as one more standard-attribute mapping.
+This is a bounded annotation-reflection layer, not permission to build broad member enumeration or
+invocation first. The foreign decoder and Kotlin producer may share a neutral value algebra, but a
+derived custom-attribute row must never become the round-trip store for a Kotlin-produced library.
 
 Shared PSI and decompiler support for rich annotation constants is the canonical future semantic
 test reservoir. Enable its unary/binary/parenthesized constants, strings, class literals, arrays,
