@@ -6,6 +6,13 @@
 .assembly 'interfaceRedeclarations' {}
 .module 'main-interfaceRedeclarations.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class interface public abstract auto ansi 'BaseView'
 {
   .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__599de141ced331e43447b1e5f5a51f18'() cil managed

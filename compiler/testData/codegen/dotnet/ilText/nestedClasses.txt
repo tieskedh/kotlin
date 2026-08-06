@@ -11,6 +11,13 @@
 .assembly 'nestedClasses' {}
 .module 'main-nestedClasses.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class interface public abstract auto ansi 'NestedLabel'
 {
   .method public hidebysig newslot abstract virtual instance string 'label'() cil managed

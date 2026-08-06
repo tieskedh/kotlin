@@ -6,6 +6,13 @@
 .assembly 'genericInheritanceChains' {}
 .module 'main-genericInheritanceChains.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class interface public abstract auto ansi 'View'
 {
   .method public hidebysig newslot abstract virtual instance object 'first__KotlinErased__c3acfb3c7d811a0f954025950ac2e9cc'() cil managed

@@ -11,6 +11,13 @@
 .assembly 'localDataClasses' {}
 .module 'main-localDataClasses.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class private auto ansi sealed beforefieldinit 'localDataClassesKt$localData$Local'
        extends [mscorlib]System.Object
 {

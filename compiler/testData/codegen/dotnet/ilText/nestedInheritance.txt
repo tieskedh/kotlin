@@ -6,6 +6,13 @@
 .assembly 'nestedInheritance' {}
 .module 'main-nestedInheritance.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class interface public abstract auto ansi 'NestedValue'
 {
   .method public hidebysig newslot abstract virtual instance int32 'value'() cil managed

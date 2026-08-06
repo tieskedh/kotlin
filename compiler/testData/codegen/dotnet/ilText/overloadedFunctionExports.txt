@@ -46,6 +46,13 @@
     }
   }
 }
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi sealed beforefieldinit 'demo.Box'
        extends [mscorlib]System.Object
 {

@@ -11,6 +11,13 @@
 .assembly 'abstractClasses' {}
 .module 'main-abstractClasses.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class interface public abstract auto ansi 'Named'
 {
   .method public hidebysig newslot abstract virtual instance object 'name__KotlinErased__489b96762c05856ad7d43c19bc03506a'() cil managed

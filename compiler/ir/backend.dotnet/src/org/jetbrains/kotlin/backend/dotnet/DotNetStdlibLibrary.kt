@@ -1007,6 +1007,7 @@ internal object DotNetStdlibLibrary {
         "KClass.kt" to "kotlin.reflect",
         "KClassifier.kt" to "kotlin.reflect",
         "DotNetKClass.kt" to "kotlin.reflect",
+        "DotNetKAnnotatedElement.kt" to "kotlin.reflect",
         "_DotNetBootstrapJsName.kt" to "kotlin.js",
         "DotNetVolatileMarker.kt" to "kotlin.concurrent",
     )

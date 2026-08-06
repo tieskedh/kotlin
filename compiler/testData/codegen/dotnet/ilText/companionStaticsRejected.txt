@@ -11,6 +11,13 @@
 .assembly 'companionStaticsRejected' {}
 .module 'main-companionStaticsRejected.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi 'Parent'
        extends [mscorlib]System.Object
 {

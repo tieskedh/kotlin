@@ -6,6 +6,13 @@
 .assembly 'classShapeRejected' {}
 .module 'main-classShapeRejected.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi sealed beforefieldinit 'B'
        extends [mscorlib]System.Object
 {

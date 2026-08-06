@@ -383,9 +383,10 @@ See the
   classifiers, generic arguments do not participate in class identity, and
   equality/hash never use names. Local/anonymous naming attributes carry only
   nullable source names, while exact Kotlin exception-constructor ids reuse
-  weak identity-associated throwable state. Do not infer `KType`, member or
-  annotation reflection, or reified support from this floor. See
-  [the KClass decision](docs/decisions/kclass-and-class-literals.md).
+  weak identity-associated throwable state. Do not infer `KType`, callable or
+  property reflection, or reified support from this floor. Class-level runtime
+  annotation discovery is a separately admitted JVM-shaped platform extension.
+  See [the KClass decision](docs/decisions/kclass-and-class-literals.md).
 - `KType` is the Common logical type graph, not `System.Type` plus flags. The
   backend materializes it after shared reified substitution, preserving
   classifiers, arguments, projections, nullability, declaration parameters,
@@ -404,10 +405,16 @@ See the
   custom-attribute row; otherwise omit the whole derived row and retain the
   KLIB application. Never infer `KClass` as `System.Type`, Kotlin reference
   enums as CLR enums, primitive-array wrappers as raw vectors, or nested
-  annotations as CLR constants. A C#-authored application is foreign
-  runtime-visible CLR metadata, not a Kotlin application reconstructed from
-  retention. Annotation discovery and arbitrary foreign import remain
-  separate. See [the annotation-value decision](docs/decisions/valued-annotation-classes.md).
+  annotations as CLR constants. `KClass.annotations` reconstructs
+  Kotlin-produced runtime applications through a private factory derived after
+  KLIB serialization, never by decoding those narrower CLR rows. Every
+  Kotlin-produced assembly carries a private marker; a missing factory in such
+  an assembly means an empty list. Only an unmarked foreign assembly uses
+  inherited CLR custom-attribute discovery, and mapped BCL-backed Kotlin
+  classifiers expose no host implementation attributes. Typed foreign
+  attribute import and member annotation reflection remain separate. See
+  [the annotation-value decision](docs/decisions/valued-annotation-classes.md)
+  and [the annotation-discovery decision](docs/decisions/annotation-discovery.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
   Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve
@@ -626,11 +633,13 @@ carrier. A later-admitted classifier extends the ordinary and reified
 type-operation matrix together before publication. The completed
 `KType`/`typeOf` foundation is a separate logical reflection graph and must
 not be approximated by `System.Type` or the nominal `KClass` floor. Valued
-annotation construction is complete through its Common/KLIB authority and
-fail-closed CLR projection; do not infer annotation discovery from it. Suspend
-inline functions, value classes, member/annotation reflection, coroutines, concurrency
-primitives, and broad KMP/Gradle product integration remain separate
-programmes until `STATUS.md` or the way forward selects one.
+annotation construction and class-level runtime discovery are complete through
+Common/KLIB authority, fail-closed CLR projection, and a disjoint foreign CLR
+fallback; do not infer callable, property, field, accessor, parameter, or
+type-use reflection from that class surface. Suspend inline functions, value
+classes, member reflection, coroutines, concurrency primitives, and broad
+KMP/Gradle product integration remain separate programmes until `STATUS.md` or
+the way forward selects one.
 
 ## Verification contract
 

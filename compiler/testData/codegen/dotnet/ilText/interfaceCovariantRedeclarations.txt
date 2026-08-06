@@ -6,6 +6,13 @@
 .assembly 'interfaceCovariantRedeclarations' {}
 .module 'main-interfaceCovariantRedeclarations.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi beforefieldinit 'ReturnTop'
        extends [mscorlib]System.Object
 {

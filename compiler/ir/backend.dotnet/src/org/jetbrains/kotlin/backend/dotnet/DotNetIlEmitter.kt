@@ -1549,6 +1549,12 @@ internal class DotNetIlEmitter(
             if (exportsUseNullableMetadata) {
                 append(DotNetNullableMetadata.attributeClassIl(coreLibrary.reference))
             }
+            // Runtime reflection must choose one authority path before inspecting any custom
+            // attributes. Every assembly produced by this backend carries a private marker;
+            // foreign CLR assemblies do not. Absence of a per-class annotation factory in a
+            // marked assembly therefore truthfully means an empty Kotlin runtime annotation set.
+            append(DotNetKClassRuntime.producedAssemblyMarkerTypeIl(coreLibrary.reference))
+            appendLine()
             append(moduleBody)
         }
         return DotNetIlEmissionResult(
