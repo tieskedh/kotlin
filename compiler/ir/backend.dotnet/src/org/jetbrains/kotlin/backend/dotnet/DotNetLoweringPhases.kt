@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.backend.common.lower.KotlinNothingValueExceptionLowe
 import org.jetbrains.kotlin.backend.common.lower.LocalDelegatedPropertiesLowering
 import org.jetbrains.kotlin.backend.common.lower.RedundantCastsRemoverLowering
 import org.jetbrains.kotlin.backend.common.lower.RangeContainsLowering
+import org.jetbrains.kotlin.backend.common.lower.loops.ForLoopsLowering
 import org.jetbrains.kotlin.backend.common.lower.inline.InlineCallCycleCheckerLowering
 import org.jetbrains.kotlin.backend.common.lower.inline.LocalClassesInInlineLambdasLowering
 import org.jetbrains.kotlin.backend.common.phaser.IrValidationAfterInliningAllFunctionsOnTheSecondStagePhase
@@ -24,7 +25,6 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterCleaner
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterInjector
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetEnumClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenationLowering
-import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInterfaceDefaultArgumentsLowering
@@ -41,6 +41,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPropertyReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrivateNestedAccessLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrimitiveRangeUntilLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetRenameFieldsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReturnableBlockLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSharedVariablesLowering
@@ -201,8 +202,7 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // physical copies and the original enclosing type-constructor parameters.
     ::DotNetInnerClassPhysicalizationLowering,
     // Initializer merging first — a stated deviation from the JVM phase order for a CLR-neutral
-    // reason: DotNetForLoopLowering is an IrBuildingTransformer whose builder only exists inside
-    // functions (LowerUtils installs it in visitFunction), so a `for` loop inside an `init {}`
+    // reason: the shared ForLoopsLowering is a body pass, so a `for` loop inside an `init {}`
     // block must already have been inlined into a constructor before the loop rewrite runs.
     ::DotNetInitializersLowering,
     ::DotNetInitializersCleanupLowering,
@@ -243,7 +243,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // comparisons. Keep that shared order so generated Common bodies such as List.getOrNull do not
     // require a materialized IntRange or a target-specific source rewrite.
     ::RangeContainsLowering,
-    ::DotNetForLoopLowering,
+    ::ForLoopsLowering,
+    // JS precedent: loop-only `..<` has already been consumed above; materialized signed
+    // primitive ranges now redirect from the bodyless builtin member to Common `until`.
+    ::DotNetPrimitiveRangeUntilLowering,
     // The DotNet subclass keeps floating-point constants unfolded; see
     // DotNetFlattenStringConcatenationLowering for the CLR rendering reason.
     ::DotNetFlattenStringConcatenationLowering,

@@ -114,6 +114,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "_DotNetBootstrapRanges.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapRanges.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "_DotNetBootstrapCollectionFactories.kt",
         "dotnet/common/src/generated/_DotNetBootstrapCollectionFactories.kt",
         isCommon = true,
@@ -235,6 +240,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "progressionUtil.kt",
+        "src/kotlin/internal/progressionUtil.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "KClass.kt",
         "src/kotlin/reflect/KClass.kt",
         isCommon = true,
@@ -292,6 +302,36 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "Iterators.kt",
         "src/kotlin/collections/Iterators.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "PrimitiveIterators.kt",
+        "src/kotlin/collections/PrimitiveIterators.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Range.kt",
+        "src/kotlin/ranges/Range.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Ranges.kt",
+        "src/kotlin/ranges/Ranges.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Progressions.kt",
+        "src/kotlin/ranges/Progressions.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "ProgressionIterators.kt",
+        "src/kotlin/ranges/ProgressionIterators.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "PrimitiveRanges.kt",
+        "src/kotlin/ranges/PrimitiveRanges.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

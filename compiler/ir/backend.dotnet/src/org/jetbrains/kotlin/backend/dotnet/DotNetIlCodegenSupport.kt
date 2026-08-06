@@ -859,6 +859,10 @@ internal class DotNetIlTypeMapper private constructor(
             // narrows non-null T to string, but T? still has the uniform open-nullable ABI.
             type.isOpenNullableTypeParameter() -> DotNetIlValueType.Object
             type.isDotNetStringType() -> DotNetIlValueType.String
+            // The CLR has no root that contains exactly Kotlin's six numeric primitive boxes.
+            // Number therefore uses the same classified-object carrier already selected by
+            // KClass/RTTI; exact scalar values remain unmodified and keep their own box identity.
+            type.classFqName == StandardNames.FqNames.number.toSafe() -> DotNetIlValueType.Object
             // System.String is sealed and cannot implement a Kotlin-owned interface. As on JS,
             // the logical interface therefore uses an object carrier plus runtime classification;
             // this arm is only the direct CharSequence classifier, never an arbitrary subtype or

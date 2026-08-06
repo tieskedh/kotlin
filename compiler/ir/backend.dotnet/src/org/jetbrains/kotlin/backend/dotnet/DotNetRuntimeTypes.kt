@@ -501,7 +501,6 @@ internal object DotNetRuntimeTypes {
             irClass.dotNetExactFunctionArity != null -> exactFunctionClasses[irClass.dotNetExactFunctionArity!!]
             irClass.dotNetTypedArgumentsFunctionArity != null ->
                 typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
-            irClass.isDotNetSupportedPrimitiveIterator -> iteratorBase
             irClass.isDotNetPropertyReferenceFactory == true -> propertyReferenceFactory
             irClass.isDotNetKClassifierBase -> kClassifierBase
             irClass.isDotNetKClassBase -> kClassBase
@@ -656,7 +655,6 @@ internal object DotNetRuntimeTypes {
         if (irClass.fqNameWhenAvailable == SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(syntheticConstructorMarkerClass)
         }
-        if (irClass.isDotNetSupportedPrimitiveIterator && simpleType.arguments.isEmpty()) return iteratorType
         return mapCallableType(type)
     }
 
@@ -844,20 +842,6 @@ private val IrClass.isDotNetKPropertyBase: Boolean
 
 private val IrClass.isDotNetKMutablePropertyBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KMutableProperty" && typeParameters.size == 1
-
-internal val IrClass.isDotNetSupportedPrimitiveIterator: Boolean
-    get() = fqNameWhenAvailable?.asString() in DOTNET_SUPPORTED_PRIMITIVE_ITERATOR_FQ_NAMES && typeParameters.isEmpty()
-
-private val DOTNET_SUPPORTED_PRIMITIVE_ITERATOR_FQ_NAMES = setOf(
-    "kotlin.collections.ByteIterator",
-    "kotlin.collections.ShortIterator",
-    "kotlin.collections.IntIterator",
-    "kotlin.collections.LongIterator",
-    "kotlin.collections.FloatIterator",
-    "kotlin.collections.DoubleIterator",
-    "kotlin.collections.BooleanIterator",
-    "kotlin.collections.CharIterator",
-)
 
 internal fun IrClass.dotNetFixedFunctionArityOrNull(): Int? {
     val fqName = fqNameWhenAvailable?.asString() ?: return null
