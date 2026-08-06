@@ -309,6 +309,11 @@ See the
   including transitive relative bounds. `box C` alone is not an `R` value when
   `R` has a value-type substitution. Preserve this rule through direct,
   separate-library, and erased foreign-callable fallback paths.
+- A nullable relative method bound `X : Y?` remains exact in KLIB but
+  contributes no CLR `X : Y` constraint. That spelling would reject legal
+  value substitutions such as `X = Int?`, `Y = Int`; `object` is not a CLR
+  constraint. Preserve both generic tokens and reconstruct the logical bound
+  in `KType`.
 - Explicit casts to the eight selected Common primitive scalars preserve exact
   boxed identity and never perform numeric conversion. Checked non-null casts
   unbox the exact `System.<T>` box; checked nullable casts unbox as
@@ -381,6 +386,16 @@ See the
   weak identity-associated throwable state. Do not infer `KType`, member or
   annotation reflection, or reified support from this floor. See
   [the KClass decision](docs/decisions/kclass-and-class-literals.md).
+- `KType` is the Common logical type graph, not `System.Type` plus flags. The
+  backend materializes it after shared reified substitution, preserving
+  classifiers, arguments, projections, nullability, declaration parameters,
+  recursive bounds, and stable container identity. Allocate all reachable
+  parameter identities before initializing any bound. A classifier with no
+  physical CLR Type uses a separate KLIB-mangled logical key; never use its
+  display name as identity. Compiler helpers are runtime/stdlib ABI, and a
+  separate-module test must use the CLI's metadata-serialization and
+  finalization phases rather than a same-invocation source dependency. See
+  [the KType decision](docs/decisions/ktype-and-typeof.md).
 - A supported parameterless Kotlin marker annotation is one concrete sealed
   CLR `System.Attribute` subtype. KLIB owns its logical declaration, targets,
   retention, and applications; only runtime-retained applications on exact
@@ -402,7 +417,8 @@ See the
   an assembly-visible throwing remainder; an unrepresentable signature is
   omitted. Neither form belongs to the producer physical declaration index or
   explicit C# export. No Kotlin call may reach either remainder. `KType` and
-  `typeOf`, suspend inline, valued annotations, and future classifier families
+  `typeOf` compose this substitution path through their own completed logical
+  graph; suspend inline, valued annotations, and future classifier families
   remain separate closures. See [the reified-inline decision](docs/decisions/reified-inline-functions.md)
   and its [array prerequisite](docs/decisions/reified-array-operations.md).
 - Ordinary runtime type tests evaluate their operand once at the erased object
@@ -605,9 +621,10 @@ remainder. Never compile a Kotlin-owned generic-class type test/cast as closed
 CLR `C<T>` identity: Kotlin generic arguments do not participate in runtime
 class identity, and the private data-class equality view is not a general
 carrier. A later-admitted classifier extends the ordinary and reified
-type-operation matrix together before publication. `KType`/`typeOf` remains a
-separate logical reflection graph and must not be approximated by `System.Type`
-or the nominal `KClass` floor. Suspend inline functions, valued annotation
+type-operation matrix together before publication. The completed
+`KType`/`typeOf` foundation is a separate logical reflection graph and must
+not be approximated by `System.Type` or the nominal `KClass` floor. Suspend
+inline functions, valued annotation
 classes, value classes, member/annotation reflection, coroutines, concurrency
 primitives, and broad KMP/Gradle product integration remain separate
 programmes until `STATUS.md` or the way forward selects one.

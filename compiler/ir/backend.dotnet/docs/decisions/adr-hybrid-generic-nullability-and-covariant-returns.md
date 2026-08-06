@@ -2,8 +2,9 @@
 
 - Status: **Accepted**
 - Date: 2026-07-21
-- Amended: 2026-08-05 for relative method-type-parameter recovery, inherited class-slot closure,
-  and declaration-erased carrier comparison
+- Amended: 2026-08-06 for relative method-type-parameter recovery, nullable
+  relative-bound weakening, inherited class-slot closure, and
+  declaration-erased carrier comparison
 - Scope: Kotlin-owned declarations on `net48`, `netstandard2.0`, and `net10.0`
 
 This is a pre-ABI decision for the experimental Kotlin/.NET backend. No Kotlin/.NET binary has
@@ -139,6 +140,16 @@ This rule applies only when the source type parameter's retained physical constr
 the expected parameter. Unrelated open parameters remain non-convertible. Owner-relative bounds
 which cannot be encoded after the accepted Kotlin-owned class/interface erasure continue to follow
 their separate weakening rules; this method-owned case does not restore an erased owner token.
+
+### 4a. Nullable relative method bounds remain logical
+
+A relationship such as `X : Y?` cannot be encoded truthfully as the CLR
+constraint `X : Y`. In particular, Kotlin permits `X = Int?`, `Y = Int`, while
+the stronger CLR constraint rejects `Nullable<Int32>` as an `Int32`. The
+physical generic method therefore keeps both CLR generic parameters but omits
+that constraint. Embedded KLIB retains `X : Y?`, `KType` reconstructs it, and
+Kotlin callers remain checked by FIR. This does not weaken the separate
+non-null `C : R` rule above.
 
 ### 5. The bridge model is uniform across profiles
 

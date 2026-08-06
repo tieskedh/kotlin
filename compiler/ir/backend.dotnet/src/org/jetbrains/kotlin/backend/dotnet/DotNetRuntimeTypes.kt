@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.isKFunction
+import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.functions
 import org.jetbrains.kotlin.ir.util.properties
 import org.jetbrains.kotlin.name.FqName
@@ -527,6 +528,11 @@ internal object DotNetRuntimeTypes {
     /** Runtime-owned erased interfaces plus profile-mapped Common interfaces handled by codegen. */
     fun hasBuiltInGenericInterfaceMapping(irClass: IrClass): Boolean =
         genericInterfaceDescriptorFor(irClass) != null || irClass.isDotNetComparableClass()
+
+    /** Any interface whose physical owner is supplied by Kotlin.Runtime rather than this module. */
+    fun hasBuiltInInterfaceMapping(irClass: IrClass): Boolean =
+        hasBuiltInGenericInterfaceMapping(irClass) ||
+                irClass.isInterface && classInfoFor(irClass) != null
 
     /**
      * Runtime-owned Kotlin interfaces whose complete physical implementation contract is emitted
