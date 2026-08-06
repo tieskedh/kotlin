@@ -1,12 +1,13 @@
 # Nominal `KClass` and class literals over classified CLR evidence
 
 - Status: Accepted (pre-ABI)
+- Amended: 2026-08-06 for KLIB-logical classifiers without physical CLR type evidence
 - Scope: the Common `KClass` floor, static `C::class`, dynamic `value::class`,
   `KClass.isInstance`, names, equality, hashing, and the compiler/runtime CLR
   type bridge
-- Does not enable: `KType`, `typeOf`, member reflection, annotation discovery,
-  reified declarations, enums, annotation-class code generation, or value
-  classes
+- Does not enable: member reflection, annotation discovery, valued
+  annotation-class code generation, or value classes. The later `KType` and
+  `typeOf` decision composes this floor without changing its identity rules.
 
 ## Context
 
@@ -120,8 +121,10 @@ existing callable-reflection floor.
 
 - optional `System.Type` evidence;
 - the Kotlin simple and qualified names;
-- one versioned classifier kind; and
-- an optional versioned logical classifier id.
+- one versioned classifier kind;
+- an optional versioned logical classifier id; and
+- an optional stable KLIB-mangled logical key when no truthful physical CLR
+  Type exists.
 
 The stored `System.Type` is an additive CLR bridge. Exact CLR-backed
 classifiers expose an exact type; an ordinary Kotlin-owned generic class
@@ -144,6 +147,7 @@ the authoritative IR declaration and one of these classifier shapes:
 | mapped Kotlin exception | the existing exception classifier id |
 | `Number` | the admitted signed Common numeric scalar set |
 | `Nothing` | an always-false classifier |
+| a logical compiler/builtin classifier with no emitted CLR Type | its stable KLIB-mangled declaration key; `isInstance` is false because no runtime instance carrier exists |
 
 A surviving type-parameter class literal remains rejected until the complete
 reified gate substitutes it.
@@ -196,11 +200,14 @@ CLR type.
 - the signed Common numeric-box set for `Number`; and
 - constant false for `Nothing`.
 
-Equality and hashing use classifier kind plus logical id or normalized
-`System.Type`, never names. Two wrappers for the same classifier are equal
-without requiring reference interning. Every logical `Box<T>` construction
-therefore produces the same dynamic `KClass` value for the one physical
-declaration `Box`.
+Equality and hashing use classifier kind plus logical id, normalized
+`System.Type`, or the explicitly stored KLIB-mangled declaration key, never
+display names. The key is separate from `simpleName`/`qualifiedName`; changing
+or omitting a display name cannot change identity. Two wrappers for the same
+classifier are equal without requiring reference interning. Every logical
+`Box<T>` construction therefore produces the same dynamic `KClass` value for
+the one physical declaration `Box`, while a logical-only compiler classifier
+remains stable across separately compiled type graphs.
 
 ## Design attack
 
@@ -258,8 +265,9 @@ The Common `KClass` floor does not require them.
 7. Exception construction tags are identity-associated state on the original
    `System.Exception` object.
 8. `System.Type` does not become `KClass` or `KType` authority.
-9. `KType`, public reified support, enums, and annotation-class codegen remain
-   disabled after this feature.
+9. A classifier without CLR Type evidence uses a KLIB-derived key that is
+   physically distinct from all display-name fields; it never infers runtime
+   instance support.
 
 ## Verification
 
@@ -280,8 +288,9 @@ portable producer/consumer binaries where applicable:
 - exact assembly identity for same-named classes from separate producers;
 - physical reflection over `KClass`, `KClassifier`, helper visibility, local
   naming attributes, and the retained `System.Type` bridge; and
-- continued rejection of `T::class`, `typeOf`, enum/annotation reflection,
-  and broad member reflection outside their selected programmes.
+- logical-only classifier equality/hashing through independently constructed
+  `KType` graphs, plus continued rejection of annotation and broad member
+  reflection outside their selected programmes.
 
 The strict target gate and JUnit XML audit remain mandatory before this
 pre-ABI decision is recorded as implemented.

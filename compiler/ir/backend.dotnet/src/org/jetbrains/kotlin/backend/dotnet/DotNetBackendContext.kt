@@ -232,6 +232,42 @@ internal class DotNetSymbols(
             it.hasShape(regularParameters = 1) && it.parameters[0].type.classOrNull == irBuiltIns.arrayClass
         }
     }
+    val dotNetCreateKType: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(StandardNames.KOTLIN_REFLECT_FQ_NAME, Name.identifier("dotNetCreateKType")).functionSymbol {
+            it.hasShape(regularParameters = 3)
+        }
+    }
+    val dotNetCreateKTypeParameter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(StandardNames.KOTLIN_REFLECT_FQ_NAME, Name.identifier("dotNetCreateKTypeParameter")).functionSymbol {
+            it.hasShape(regularParameters = 4)
+        }
+    }
+    val dotNetInitializeKTypeParameterUpperBounds: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(
+            StandardNames.KOTLIN_REFLECT_FQ_NAME,
+            Name.identifier("dotNetInitializeKTypeParameterUpperBounds"),
+        ).functionSymbol { it.hasShape(regularParameters = 2) }
+    }
+    val dotNetStarKTypeProjection: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(StandardNames.KOTLIN_REFLECT_FQ_NAME, Name.identifier("dotNetStarKTypeProjection")).functionSymbol {
+            it.hasShape(regularParameters = 0)
+        }
+    }
+    val dotNetInvariantKTypeProjection: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(StandardNames.KOTLIN_REFLECT_FQ_NAME, Name.identifier("dotNetInvariantKTypeProjection")).functionSymbol {
+            it.hasShape(regularParameters = 1)
+        }
+    }
+    val dotNetContravariantKTypeProjection: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(StandardNames.KOTLIN_REFLECT_FQ_NAME, Name.identifier("dotNetContravariantKTypeProjection")).functionSymbol {
+            it.hasShape(regularParameters = 1)
+        }
+    }
+    val dotNetCovariantKTypeProjection: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(StandardNames.KOTLIN_REFLECT_FQ_NAME, Name.identifier("dotNetCovariantKTypeProjection")).functionSymbol {
+            it.hasShape(regularParameters = 1)
+        }
+    }
     override val syntheticConstructorMarker: IrClassSymbol = run {
         val fqName = DotNetRuntimeTypes.SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME
         val markerPackage = createEmptyExternalPackageFragment(irModuleFragment, fqName.parent())

@@ -15375,6 +15375,184 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testKTypeGraphAcrossLibraryBoundary() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+
+        val producerDirectory = File(tmpdir, "ktype-producer")
+        val producerSource = File(tmpdir, "KTypeBoundary.kt").apply {
+            writeText(
+                """
+                package ktype.boundary
+
+                import kotlin.reflect.KType
+                import kotlin.reflect.typeOf
+
+                public class LibraryBox<T>
+
+                public fun concreteType(): KType = typeOf<LibraryBox<String?>>()
+
+                public fun projectedType(): KType = typeOf<LibraryBox<out CharSequence>>()
+
+                public fun <T> declarationType(): KType = typeOf<LibraryBox<T>>()
+
+                public fun <T : Comparable<T>> recursiveDeclarationType(): KType = typeOf<LibraryBox<T>>()
+
+                public fun <X, Y> nullableRelativeType(): KType where X : Y? = typeOf<LibraryBox<X>>()
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "KType.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val producerAssembly = producerDirectory.resolve("KType.Library.dll")
+        val producerIl = producerDirectory.resolve("KType.Library.il").readText()
+        assertTrue("'ktype.boundary.LibraryBox`1'" !in producerIl) { producerIl }
+        assertTrue("'ktype.boundary.LibraryBox'" in producerIl) { producerIl }
+        assertTrue("dotNetCreateKType" in producerIl) { producerIl }
+        assertTrue("::'typeOf'" !in producerIl) { "A typeOf intrinsic survived library lowering:\n$producerIl" }
+        assertTrue("'nullableRelativeType'<'X', 'Y'>()" in producerIl) {
+            "The unrepresentable nullable relative bound became a stronger CLR constraint:\n$producerIl"
+        }
+
+        var modernConsumerDirectory: File? = null
+        for (target in listOf("net48", "net10.0")) {
+            val targetSuffix = if (target == "net48") "Framework" else "Core"
+            val consumerDirectory = File(tmpdir, "ktype-consumer-$targetSuffix").apply { mkdirs() }
+            if (target == "net10.0") modernConsumerDirectory = consumerDirectory
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package consumer
+
+                    import kotlin.reflect.KTypeParameter
+                    import kotlin.reflect.typeOf
+                    import ktype.boundary.*
+
+                    fun main() {
+                        val concrete = concreteType()
+                        if (concrete != typeOf<LibraryBox<String?>>()) throw Error("concrete graph")
+                        if (concrete == typeOf<LibraryBox<Int>>()) throw Error("erased arguments became equal")
+                        if (concrete.classifier != LibraryBox::class) throw Error("classifier identity")
+                        if (concrete.arguments.single().type?.isMarkedNullable != true) throw Error("argument nullability")
+
+                        val projected = projectedType().arguments.single()
+                        if (projected.toString() != "out kotlin.CharSequence") throw Error("projection: ${'$'}projected")
+
+                        val declarationString = declarationType<String>()
+                        val declarationInt = declarationType<Int>()
+                        if (declarationString != declarationInt) throw Error("CLR instantiation changed declaration graph")
+                        val declarationParameter = declarationString.arguments.single().type?.classifier as KTypeParameter
+                        if (declarationParameter.name != "T" || declarationParameter.isReified) {
+                            throw Error("declaration parameter flags")
+                        }
+
+                        val recursive = recursiveDeclarationType<String>()
+                        val recursiveParameter = recursive.arguments.single().type?.classifier as KTypeParameter
+                        val recursiveArgument = recursiveParameter.upperBounds.single().arguments.single().type?.classifier
+                        if (recursiveArgument != recursiveParameter) throw Error("recursive parameter identity")
+
+                        val nullableReference = nullableRelativeType<String?, String>()
+                        val nullableValue = nullableRelativeType<Int?, Int>()
+                        if (nullableReference != nullableValue) throw Error("nullable relative declaration identity")
+                        val relativeParameter = nullableReference.arguments.single().type?.classifier as KTypeParameter
+                        val relativeBound = relativeParameter.upperBounds.single()
+                        if (!relativeBound.isMarkedNullable || (relativeBound.classifier as KTypeParameter).name != "Y") {
+                            throw Error("nullable relative bound")
+                        }
+                        println("OK")
+                    }
+                    """.trimIndent()
+                )
+            }
+            val assemblyName = "KType${targetSuffix}Consumer"
+            val consumerAssembly = consumerDirectory.resolve(
+                if (target == "net48") "$assemblyName.exe" else "$assemblyName.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, producerAssembly.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, assemblyName,
+                K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+            )
+            val consumerIl = consumerDirectory.resolve("$assemblyName.il").readText()
+            assertTrue("[KType.Library]'ktype.boundary.KTypeBoundaryKt'::'concreteType'()" in consumerIl) {
+                consumerIl
+            }
+            if (target == "net48") {
+                runAssemblerPairing(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), consumerAssembly),
+                    consumerDirectory,
+                    "Framework KType consumer failed",
+                )
+            } else {
+                runDotNet(
+                    modernDotNetHostOrSkip(),
+                    consumerAssembly,
+                    consumerDirectory,
+                    "CoreCLR KType consumer failed",
+                )
+            }
+        }
+
+        val csharpDirectory = checkNotNull(modernConsumerDirectory)
+        val csharpSource = csharpDirectory.resolve("KTypeConsumer.cs").apply {
+            writeText(
+                """
+                public static class KTypeConsumer
+                {
+                    public static int Main()
+                    {
+                        Kotlin.Reflection.KType concrete = ktype.boundary.KTypeBoundaryKt.concreteType();
+                        if (concrete.classifier == null || concrete.isMarkedNullable) return 1;
+                        Kotlin.Reflection.KType declared =
+                            ktype.boundary.KTypeBoundaryKt.declarationType<string>();
+                        Kotlin.Reflection.KTypeProjection projection =
+                            (Kotlin.Reflection.KTypeProjection)declared.arguments.Get(0);
+                        Kotlin.Reflection.KTypeParameter parameter =
+                            projection.type.classifier as Kotlin.Reflection.KTypeParameter;
+                        if (parameter == null || parameter.name != "T" || parameter.isReified) return 2;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = csharpDirectory.resolve("KTypeCSharpConsumer.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            checkNotNull(csharpToolchain),
+            csharpSource,
+            csharpAssembly,
+            producerAssembly,
+            csharpDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME),
+            csharpDirectory.resolve("Kotlin.Stdlib.dll"),
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        csharpDirectory.resolve("KTypeCSharpConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            checkNotNull(csharpToolchain).dotNetHost,
+            csharpAssembly,
+            csharpDirectory,
+            "C# KType consumer failed",
+        )
+    }
+
+    @Test
     fun testKClassIdentityAcrossLibraryBoundary() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
@@ -30767,6 +30945,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles +=
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/util/Tuples.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/util/HashCode.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractList.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractMap.kt").absoluteFile
@@ -30804,10 +30983,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClass.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClasses.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClassifier.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KType.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KTypeParameter.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KTypeProjection.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KVariance.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/typeOf.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SharedVariableBox.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SyntheticConstructorMarker.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/ThrowHelpers.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/reflect/KTypeImpl.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/reflect/KTypeParameterBase.kt").absoluteFile
         sourceFiles.sortBy(File::invariantSeparatorsPath)
         assertEquals(DOTNET_STDLIB_SOURCES.keys.sorted(), sourceFiles.map(File::getName).sorted())
         for (sourceFile in sourceFiles) {
