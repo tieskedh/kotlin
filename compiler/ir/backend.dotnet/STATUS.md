@@ -11,9 +11,9 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: one erased Set/Map/hash runtime foundation, the
-  dependency-closed Common Map/Set family it unlocks, and unchanged upstream
-  iterator plus hash-compaction tests
+- Last completed feature: the ordinary signed Common range/progression
+  foundation, real primitive-iterator classes, shared range/loop lowerings,
+  and the dependency-closed generated operations that substrate releases
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -21,25 +21,46 @@ This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
 stdlib. The target is not close to 98% feature-complete: valued annotations
 and annotation reflection, `KType`/member reflection, reified public APIs and
-enum helpers, value classes, coroutines, ranges/progressions, Sequence and
-Grouping families, sorting/random, and Gradle/KMP product integration remain
+enum helpers, value classes, coroutines, Sequence and Grouping families,
+sorting/random, and Gradle/KMP product integration remain
 substantial open programmes.
 
 ## Current green gate
 
-The current Set/Map/hash production head passed:
+The current signed range/progression production head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The JUnit audit covered 24 fresh XML files and 1075 tests, written between
-2026-08-06 00:53 and 01:20 local time:
+The JUnit audit covered 24 fresh XML files and 1081 tests, written between
+2026-08-06 05:29 and 06:32 local time:
 
-- 966 FIR, IL-text, and box tests
+- 972 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 88 library-integration tests
 - zero failures, errors, or skips
+
+The target now compiles the authoritative Common `ClosedRange`,
+`OpenEndRange`, floating/comparable range, signed `Char`/`Int`/`Long`
+range/progression, progression-utility, and primitive-iterator sources. The
+repository's shared `RangeContainsLowering` and `ForLoopsLowering` replace the
+former counted-loop matcher; materialized ranges and optimized loops therefore
+share the same Kotlin model used by the mature targets. Primitive arrays and
+progressions return the real eight Common primitive-iterator base classes
+rather than aliases of erased `Iterator`.
+
+The generator-owned product includes signed non-random range operations,
+array `lastIndex`/`indices`, exact `Char.code`, and Common `repeat`; private
+`until`, `downTo`, and counted-loop bootstrap markers are gone. Adversarial
+tests cover empty/extreme ranges, positive and negative steps, iteration and
+exhaustion, nullable/mixed contains, non-local return, exact physical fields
+and signatures, separate and installed consumers, portable execution, and a
+truthful raw C# concrete-class view on Framework CLR and CoreCLR. A general
+array-intrinsic result-type correction preserves exact concrete/method-generic
+vector elements while treating a star-projection capture as its fixed
+`Any?`/`object` read; both IL text and execution pin the absence of an invalid
+free CLR `!n` token.
 
 `Set`, `MutableSet`, `Map`, `MutableMap`, `Map.Entry`, and
 `MutableMap.MutableEntry` now use one declaration-erased CLR TypeDef and one
@@ -373,8 +394,8 @@ The builder, contracts, and Common abstract-collection tranches publish the
 authoritative Common `Appendable`, complete `StringBuilder` including both
 `buildString` declarations, generated `Iterable.joinTo`/`joinToString`, Common
 `AbstractCollection`/`AbstractList`, the public contracts DSL/effect model, and
-`Standard.kt` through `takeUnless`. Only Common's final `repeat` declaration is
-projected out until its real `Int.until`/range/progression closure exists.
+the complete Common `Standard.kt`, including `repeat` over the real signed
+range/progression closure.
 The Kotlin-owned builder wraps private profile-selected BCL storage without
 exposing `System.Text.StringBuilder` in public or protected metadata; its
 colliding `Any?` overloads have the stable physical names `appendAny`,
@@ -578,9 +599,6 @@ an implicit CLR `C<T>` surface.
   representative boxing/allocation/JIT/AOT measurements, and the concurrency
   and memory model can justify it. Scalar replacement and immutable/private
   shapes precede any escaped mutable typed-storage/deoptimization system.
-- Common `repeat` remains outside the exact `Standard.kt` projection until the
-  ordinary `Int.until`/range/progression closure lands; no target loop stands
-  in for that dependency.
 - Open nullable projected arrays remain unsupported. This blocks the exact
   `Array<out T?>` signatures used by `setOfNotNull(vararg T?)` and the
   object-array `filterNotNullTo` variant; the singleton Set overload is
@@ -599,18 +617,18 @@ an implicit CLR `C<T>` surface.
 ## Next bounded work
 
 1. Recompute the remaining Common stdlib dependency graph by substrate rather
-   than declaration count: ordinary ranges/progressions, Sequence, Grouping
-   aggregates, sorting/comparators/random, reified operations, and open
-   nullable projected arrays. Record which complete generated/source families
-   each substrate releases before choosing the next tranche.
-2. Prefer the largest coherent low-risk foundation from that audit. Ordinary
-   ranges/progressions are the leading major candidate because they restore
-   Common `repeat` and remove counted-loop projection markers; verify JVM,
-   JS, Wasm and Native representation before selecting it.
-3. The narrow open-nullable-projected-array closure may land independently if
+   than declaration count, now around Sequence, Grouping aggregates,
+   sorting/comparators/random, reified operations, and open nullable projected
+   arrays. Record which complete generated/source families each substrate
+   releases before choosing the next broad tranche.
+2. Audit the narrow open-nullable-projected-array closure as the next compiler
+   foundation. It may land independently if
    it remains an exact removable carrier correction; use it to restore the
    authoritative nullable vararg/filter variants, not to infer general input
    projections or value-vector covariance.
+3. Compare the remaining Sequence and Grouping dependency closures against the
+   same mature-target and CLR matrix before selecting either; do not admit
+   generated leaf functions merely to increase the declaration count.
 4. Extend CLR contract projection only when a new standard attribute has an
    exact Common effect, stable target rule, verified profile identity, and the
    same strip-without-Kotlin-semantic-change evidence as the closed first set.

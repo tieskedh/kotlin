@@ -572,6 +572,51 @@ IL_whileEnd_1:
     ldloc.0
     ret
   }
+  .method public hidebysig static object 'starLast'(class [mscorlib]System.Array 'values') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] object 'result',
+      [1] class [mscorlib]System.Array 'indexedObject',
+      [2] int32 'inductionVariable',
+      [3] int32 'last',
+      [4] object 'value',
+      [5] class [mscorlib]System.Array '<arrayGet>',
+      [6] int32 '<arrayIndex>'
+    )
+    ldnull
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldc.i4 0
+    stloc.2
+    ldloc.1
+    callvirt instance int32 [mscorlib]System.Array::get_Length()
+    stloc.3
+IL_whileCond_0:
+    ldloc.2
+    ldloc.3
+    clt
+    brfalse IL_whileEnd_1
+    ldloc.1
+    stloc 5
+    ldloc.2
+    stloc 6
+    ldloc 5
+    ldloc 6
+    callvirt instance object [mscorlib]System.Array::GetValue(int32)
+    stloc 4
+    ldloc.2
+    ldc.i4 1
+    add
+    stloc.2
+    ldloc 4
+    stloc.0
+    br IL_whileCond_0
+IL_whileEnd_1:
+    ldloc.0
+    ret
+  }
   .method public hidebysig static bool 'sameArray'(string[] 'left', string[] 'right') cil managed
   {
     .maxstack 2
@@ -662,6 +707,9 @@ IL_whileEnd_1:
     call void 'test.genericarrays.genericArraysKt'::'protectedSet'(string[], string)
     ldloc.0
     call !!0 'test.genericarrays.genericArraysKt'::'last'<string>(!!0[])
+    pop
+    ldloc.0
+    call object 'test.genericarrays.genericArraysKt'::'starLast'(class [mscorlib]System.Array)
     pop
     ldloc.0
     newobj instance void 'test.genericarrays.ArrayBox'::.ctor(class [mscorlib]System.Array)

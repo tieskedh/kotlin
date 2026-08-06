@@ -135,15 +135,18 @@ internal class DotNetIlExpressionCodegen(
             val slotType = methodContext.reference(expression.symbol).type
             if (slotType is DotNetIlValueType.GenericArray) return slotType
         }
-        if (
-            expression is IrCall &&
-            intrinsicMethods.getIntrinsic(expression.symbol) == null &&
-            !expression.symbol.owner.isDotNetErasedObjectResult() &&
-            !expression.symbol.owner.isErasedGenericInterfaceMember() &&
-            !expression.symbol.owner.isErasedGenericClassMember()
-        ) {
-            val returnType = resolveCall(expression).returnType
-            if (returnType is DotNetIlReturnType.Value) return returnType.type
+        if (expression is IrCall) {
+            val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
+            intrinsic?.naturalReturnType(expression, this)?.let { return it }
+            if (
+                intrinsic == null &&
+                !expression.symbol.owner.isDotNetErasedObjectResult() &&
+                !expression.symbol.owner.isErasedGenericInterfaceMember() &&
+                !expression.symbol.owner.isErasedGenericClassMember()
+            ) {
+                val returnType = resolveCall(expression).returnType
+                if (returnType is DotNetIlReturnType.Value) return returnType.type
+            }
         }
         return typeMapper.toDotNetIlValueType(expression.type)
     }
