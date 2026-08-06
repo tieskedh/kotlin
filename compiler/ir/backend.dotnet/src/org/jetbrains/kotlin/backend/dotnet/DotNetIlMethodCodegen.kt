@@ -133,6 +133,11 @@ internal class DotNetIlMethodCodegen(
                 override fun emitBlockExpression(block: IrContainerExpression, expectedType: DotNetIlValueType) =
                     emitValueExpression(block, expectedType)
 
+                override fun emitControlFlowValueExpression(
+                    expression: IrExpression,
+                    expectedType: DotNetIlValueType,
+                ) = emitValueExpression(expression, expectedType)
+
                 override fun emitUnitEffectExpression(expression: IrExpression) {
                     emitVoidExpression(expression)
                     if (!methodContext.isTerminated) {
@@ -1376,6 +1381,14 @@ internal class DotNetIlMethodCodegen(
      * enclosing expression bookkeeping; everything else is emitted against [expectedType].
      */
     private fun emitValueExpression(expression: IrExpression, expectedType: DotNetIlValueType) {
+        if (expression is IrReturn) {
+            val entryStackDepth = methodContext.stackDepth
+            emitReturn(expression)
+            if (methodContext.isTerminated) {
+                methodContext.notePhantomValueAtTerminatedExpression(entryStackDepth)
+            }
+            return
+        }
         if (expression !is IrContainerExpression) {
             expressionCodegen.emitExpression(expression, expectedType)
             return

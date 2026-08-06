@@ -12,9 +12,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
+import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
 import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
+import org.jetbrains.kotlin.cli.dotnet.config.addDotNetClasspathRoot
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSourceLocation
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
@@ -24,6 +26,8 @@ import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetKlibInliningPipelinePhase
+import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetLibraryMetadataFinalizationPipelinePhase
+import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetLibraryMetadataSerializationPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.withNewDiagnosticCollector
 import org.jetbrains.kotlin.config.AnalysisFlag
 import org.jetbrains.kotlin.config.AnalysisFlags
@@ -35,6 +39,7 @@ import org.jetbrains.kotlin.config.LanguageVersion
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.config.dotNetAssemblyName
 import org.jetbrains.kotlin.config.dotNetOutput
+import org.jetbrains.kotlin.config.dotNetProducesLibrary
 import org.jetbrains.kotlin.config.dotNetTarget
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.targetPlatform
@@ -269,7 +274,18 @@ private class BackendCliDotNetFacade(
         }
         val input = cliArtifact.withNewDiagnosticCollector(DiagnosticsCollectorImpl())
         val loweredInput = DotNetKlibInliningPipelinePhase.executePhase(input)
-        return BinaryArtifacts.DotNet(DotNetBackendPipelinePhase.executePhase(loweredInput).output)
+        val metadataInput = if (loweredInput.configuration.dotNetProducesLibrary) {
+            DotNetLibraryMetadataSerializationPipelinePhase.executePhase(loweredInput)
+        } else {
+            loweredInput
+        }
+        val backendOutput = DotNetBackendPipelinePhase.executePhase(metadataInput)
+        val completedOutput = if (loweredInput.configuration.dotNetProducesLibrary) {
+            DotNetLibraryMetadataFinalizationPipelinePhase.executePhase(backendOutput)
+        } else {
+            backendOutput
+        }
+        return BinaryArtifacts.DotNet(completedOutput.output)
     }
 }
 
@@ -303,12 +319,27 @@ private class DotNetEnvironmentConfigurator(
         configuration.put(CommonConfigurationKeys.MODULE_NAME, module.name)
         configuration.targetPlatform = DotNetPlatforms.defaultDotNetPlatform
         configuration.dotNetAssemblyName = artifactName
+        configuration.dotNetProducesLibrary = isLibraryModule(module)
         configuration.dotNetExports = module.directives[DotNetCodegenDirectives.DOTNET_EXPORT]
             .map(DotNetExport::parse)
         configuration.dotNetPropertyExports = module.directives[DotNetCodegenDirectives.DOTNET_EXPORT_PROPERTY]
             .map(DotNetPropertyExport::parse)
-        configuration.dotNetOutput = getOutputFile(module, artifactName)
+        configuration.dotNetOutput = getConfiguredOutput(module, artifactName)
         configuration.dotNetTarget = target
+        val binaryLibraries = (module.regularDependencies + module.friendDependencies)
+            .filter { dependency -> dependency.kind == DependencyKind.Binary }
+        for (dependency in binaryLibraries) {
+            val dependencyModule = dependency.dependencyModule
+            val dependencyOutput = getProducedAssembly(dependencyModule, getArtifactName(dependencyModule))
+            check(dependencyOutput.isFile) { "Missing compiled test dependency: ${dependencyOutput.path}" }
+            configuration.addDotNetClasspathRoot(dependencyOutput)
+        }
+        configuration.dotNetFriendPaths = module.friendDependencies
+            .filter { dependency -> dependency.kind == DependencyKind.Binary }
+            .map { dependency ->
+                val dependencyModule = dependency.dependencyModule
+                getProducedAssembly(dependencyModule, getArtifactName(dependencyModule)).path
+            }
         configuration.languageVersionSettings =
             configuration.languageVersionSettings.withDotNetSourceProductSettings()
         configuration.addSourcesForDependsOnClosure(module, testServices)
@@ -325,8 +356,25 @@ private class DotNetEnvironmentConfigurator(
         return module.name.takeUnless { it == "main" } ?: testName
     }
 
-    private fun getOutputFile(module: TestModule, artifactName: String) =
-        testServices.getOrCreateTempDirectory("dotnet").resolve("${module.name}-$artifactName.$outputExtension")
+    private fun isLibraryModule(module: TestModule): Boolean =
+        outputExtension != "il" &&
+                module.files.none { file ->
+                    MainFunctionForBlackBoxTestsSourceProvider.containsBoxMethod(file.originalContent)
+                }
+
+    private fun getConfiguredOutput(module: TestModule, artifactName: String): File {
+        val outputDirectory = testServices.getOrCreateTempDirectory("dotnet")
+        return if (isLibraryModule(module)) {
+            outputDirectory.resolve("${module.name}-$artifactName-library")
+        } else {
+            outputDirectory.resolve("${module.name}-$artifactName.$outputExtension")
+        }
+    }
+
+    private fun getProducedAssembly(module: TestModule, artifactName: String): File {
+        val configuredOutput = getConfiguredOutput(module, artifactName)
+        return if (isLibraryModule(module)) configuredOutput.resolve("$artifactName.dll") else configuredOutput
+    }
 
     private fun getOrCreateStdlibSources() =
         DOTNET_STDLIB_SOURCES.map { [fileName, source] ->
@@ -518,11 +566,90 @@ private class DotNetBoxMainSourceProvider(testServices: TestServices) : Addition
             appendLine("    println(box())")
             appendLine("}")
         }
-        val file = testServices.temporaryDirectoryManager.getOrCreateTempDirectory("src")
+        val sourceDirectory = testServices.temporaryDirectoryManager.getOrCreateTempDirectory("src")
+        val file = sourceDirectory
             .resolve(MainFunctionForBlackBoxTestsSourceProvider.BOX_MAIN_FILE_NAME)
         file.writeText(code)
 
-        return listOf(file.toTestFile())
+        return buildList {
+            add(file.toTestFile())
+            if (module.files.any { source -> "kotlin.test" in source.originalContent }) {
+                val assertions = sourceDirectory.resolve("DotNetTestAssertions.kt")
+                assertions.writeText(
+                    """
+                    package kotlin.test
+
+                    public fun <T> assertEquals(expected: T, actual: T, message: String? = null) {
+                        if (expected != actual) {
+                            throw AssertionError(message ?: "Expected <${'$'}expected>, actual <${'$'}actual>.")
+                        }
+                    }
+
+                    public fun <T> assertNotEquals(illegal: T, actual: T, message: String? = null) {
+                        if (illegal == actual) {
+                            throw AssertionError(message ?: "Illegal value: <${'$'}actual>.")
+                        }
+                    }
+
+                    public fun assertTrue(actual: Boolean, message: String? = null) {
+                        if (!actual) throw AssertionError(message ?: "Expected value to be true.")
+                    }
+
+                    public fun assertFalse(actual: Boolean, message: String? = null) {
+                        if (actual) throw AssertionError(message ?: "Expected value to be false.")
+                    }
+                    """.trimIndent()
+                )
+                add(assertions.toTestFile())
+            }
+            if (module.files.any { source ->
+                    "substringAfterLast(" in source.originalContent || ".endsWith(" in source.originalContent
+                }
+            ) {
+                // Transitional test-only floor: these helpers let the unchanged upstream
+                // reflection corpus assert names without making an unrelated String stdlib
+                // expansion part of the KType feature. Product sources remain untouched.
+                val textAssertions = sourceDirectory.resolve("DotNetTestTextAssertions.kt")
+                textAssertions.writeText(
+                    """
+                    package kotlin.text
+
+                    public fun String.substringAfterLast(
+                        delimiter: Char,
+                        missingDelimiterValue: String = this,
+                    ): String {
+                        var index = length - 1
+                        while (index >= 0) {
+                            if (this[index] == delimiter) {
+                                val result = StringBuilder()
+                                var resultIndex = index + 1
+                                while (resultIndex < length) {
+                                    result.append(this[resultIndex])
+                                    resultIndex += 1
+                                }
+                                return result.toString()
+                            }
+                            index -= 1
+                        }
+                        return missingDelimiterValue
+                    }
+
+                    public fun String.endsWith(suffix: String, ignoreCase: Boolean = false): Boolean {
+                        if (ignoreCase) throw UnsupportedOperationException("ignoreCase test helper is not implemented")
+                        if (suffix.length > length) return false
+                        val offset = length - suffix.length
+                        var index = 0
+                        while (index < suffix.length) {
+                            if (this[offset + index] != suffix[index]) return false
+                            index += 1
+                        }
+                        return true
+                    }
+                    """.trimIndent()
+                )
+                add(textAssertions.toTestFile())
+            }
+        }
     }
 }
 
@@ -533,15 +660,16 @@ private class DotNetFrameworkBoxRunner(testServices: TestServices) :
     AbstractDotNetBoxRunner(testServices, DotNetTarget.NET48)
 
 private abstract class AbstractDotNetBoxRunner(
-    testServices: TestServices,
+    private val dotNetTestServices: TestServices,
     private val target: DotNetTarget,
-) : DotNetBinaryArtifactHandler(testServices) {
+) : DotNetBinaryArtifactHandler(dotNetTestServices) {
     private var boxMethodFound = false
 
     override fun processModule(module: TestModule, info: BinaryArtifacts.DotNet) {
         if (module.files.none { MainFunctionForBlackBoxTestsSourceProvider.containsBoxMethod(it.originalContent) }) return
 
         boxMethodFound = true
+        stageRuntimeDependencies(module, info.outputFile)
         val result = runExecutable(info.outputFile).trim()
         val outputFile = testServices.moduleStructure.originalTestDataFiles.first().withExtension(OUTPUT_EXTENSION)
         if (outputFile.exists()) {
@@ -554,6 +682,26 @@ private abstract class AbstractDotNetBoxRunner(
     override fun processAfterAllModules(someAssertionWasFailed: Boolean) {
         if (!boxMethodFound) {
             assertions.fail { "Can't find box methods" }
+        }
+    }
+
+    private fun stageRuntimeDependencies(module: TestModule, executable: File) {
+        val outputDirectory = executable.parentFile ?: return
+        for (dependency in module.regularDependencies + module.friendDependencies) {
+            if (dependency.kind != DependencyKind.Binary) continue
+            val dependencyModule = dependency.dependencyModule
+            val artifactName = dependencyModule.name.takeUnless { it == "main" }
+                ?: dotNetTestServices.moduleStructure.originalTestDataFiles.first().nameWithoutExtension
+            val producedAssembly = outputDirectory
+                .resolve("${dependencyModule.name}-$artifactName-library")
+                .resolve("$artifactName.dll")
+            check(producedAssembly.isFile) {
+                "Compiled .NET test dependency was not produced: ${producedAssembly.path}"
+            }
+            val runtimeAssembly = outputDirectory.resolve("$artifactName.dll")
+            if (producedAssembly.canonicalFile != runtimeAssembly.canonicalFile) {
+                producedAssembly.copyTo(runtimeAssembly, overwrite = true)
+            }
         }
     }
 

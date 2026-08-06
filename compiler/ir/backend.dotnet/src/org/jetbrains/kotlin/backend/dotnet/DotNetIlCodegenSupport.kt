@@ -1176,7 +1176,10 @@ internal class DotNetIlTypeMapper private constructor(
  * capability interface would reject the legal Kotlin substitution `T = String`, because sealed
  * `System.String` cannot implement that interface. KLIB retains the authoritative bound and
  * member operations classify the boxed/widened value at runtime.
- * A bound on another type parameter is normally retained as its positional `!n`/`!!n` TypeSpec.
+ * A non-null bound on another type parameter is normally retained as its positional `!n`/`!!n`
+ * TypeSpec. A nullable type-parameter bound (`X : Y?`) is omitted physically: spelling it as
+ * `X : Y` would reject legal nullable value-type substitutions such as `X = Int?`, `Y = Int`.
+ * KLIB retains the exact nullable relationship and Kotlin callers remain checked by FIR.
  * The exceptions are method bounds which depend on a type parameter of a split Kotlin generic
  * interface or of a declaration-erased Kotlin class. Such a relationship remains part of the
  * logical Kotlin signature, but the erased physical owner has no CLR `T` token with which to
@@ -1223,6 +1226,14 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
             val erasedGenericClassBound = boundClass?.let(typeMapper::isErasedGenericClass) == true
             val erasedGenericInterfaceBound = boundClass?.let(typeMapper::isErasedGenericInterface) == true
             val erasedGenericClassifierBound = erasedGenericClassBound || erasedGenericInterfaceBound
+            val nullableBoundParameter = (simpleBound.classifier as? IrTypeParameterSymbol)
+                ?.takeIf { simpleBound.isMarkedNullable() }
+            if (nullableBoundParameter != null) {
+                // There is no truthful CLR GenericParamConstraint for `X : Y?`: `Y` is too
+                // strong for nullable value substitutions and the boxed-or-null `object` carrier
+                // is not a constraint. The logical graph remains authoritative in KLIB/KType.
+                return@mapIndexedNotNull null
+            }
             if (
                 simpleBound.isMarkedNullable() ||
                 (simpleBound.arguments.isNotEmpty() && !isComparableSelfBound && !erasedGenericClassifierBound)
@@ -1410,7 +1421,8 @@ internal fun checkDotNetTypeParametersSupported(
                 superType.isDotNetComparableSelfBound(typeParameter) -> false
                 else -> {
                     val simpleType = superType as? IrSimpleType
-                    simpleType == null || simpleType.isMarkedNullable() ||
+                    simpleType == null ||
+                            (simpleType.isMarkedNullable() && simpleType.classifier !is IrTypeParameterSymbol) ||
                             (simpleType.arguments.isNotEmpty() &&
                                     !simpleType.isPotentialErasedKotlinClassifierBound()) ||
                             (simpleType.classifier !is IrClassSymbol &&

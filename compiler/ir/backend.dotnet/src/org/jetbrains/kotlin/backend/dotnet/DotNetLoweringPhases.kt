@@ -50,6 +50,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSharedVariablesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticCallableReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetTypeOfLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetUpgradeCallableReferences
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetVarargLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
@@ -133,6 +134,9 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // callable host generic. Every Kotlin call has disappeared through the shared inliner above;
     // replace the physical remainder before any target lowering can mistake it for ordinary code.
     ::DotNetReifiedFunctionLowering,
+    // JVM/JS/Wasm/Native architecture: after reified substitution, materialize the complete
+    // logical Kotlin type graph. CLR System.Type remains KClass evidence, never KType authority.
+    ::DotNetTypeOfLowering,
     // JS/Wasm/Native precedent: the shared inliner has substituted T, so bind the three enum
     // intrinsics to the concrete enum's ordinary synthetic values/valueOf/entries declarations.
     ::DotNetEnumUsageLowering,

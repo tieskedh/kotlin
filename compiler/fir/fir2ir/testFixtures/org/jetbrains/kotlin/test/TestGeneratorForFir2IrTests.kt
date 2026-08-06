@@ -57,6 +57,26 @@ fun main(args: Array<String>) {
                 // the stdlib builtin and is ignored by the other non-JVM backends as well.
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model("box/ktype")
+                model(
+                    "box/reflection/typeOf",
+                    pattern = "^(arrayOfNullableReified|classes|definitelyNotNullType|inNestedInline|intersectionType|" +
+                            "ktype1_anonymousObject|localClass|manyTypeArguments|multiModuleNullCheck|multipleLayers|" +
+                            "reifiedAsNestedArgument|typeAliasedType|typeOfCapturedStar)\\.kt$",
+                    recursive = false,
+                )
+                model(
+                    "box/reflection/typeOf/nonReifiedTypeParameters",
+                    pattern = "^(defaultUpperBound|equalsOnClassParameters|equalsOnFunctionParameters|innerGeneric|" +
+                            "insideInlineLambda_class|insideNonInlineLambda_class|recursiveBoundWithInline|" +
+                            "recursiveBoundWithoutInline|simpleClassParameter|simpleFunctionParameter|" +
+                            "simplePropertyParameter|starProjectionInUpperBound|typeParameterFlags|upperBounds|" +
+                            "upperBoundUsesOuterClassParameter)\\.kt$",
+                )
+                model(
+                    "box/reflection/typeOf/noReflect",
+                    pattern = "^(typeReferenceEqualsHashCode)\\.kt$",
+                )
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
@@ -65,6 +85,26 @@ fun main(args: Array<String>) {
             testClass<AbstractFirPsiDotNetBoxTest> {
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model("box/ktype")
+                model(
+                    "box/reflection/typeOf",
+                    pattern = "^(arrayOfNullableReified|classes|definitelyNotNullType|inNestedInline|intersectionType|" +
+                            "ktype1_anonymousObject|localClass|manyTypeArguments|multiModuleNullCheck|multipleLayers|" +
+                            "reifiedAsNestedArgument|typeAliasedType|typeOfCapturedStar)\\.kt$",
+                    recursive = false,
+                )
+                model(
+                    "box/reflection/typeOf/nonReifiedTypeParameters",
+                    pattern = "^(defaultUpperBound|equalsOnClassParameters|equalsOnFunctionParameters|innerGeneric|" +
+                            "insideInlineLambda_class|insideNonInlineLambda_class|recursiveBoundWithInline|" +
+                            "recursiveBoundWithoutInline|simpleClassParameter|simpleFunctionParameter|" +
+                            "simplePropertyParameter|starProjectionInUpperBound|typeParameterFlags|upperBounds|" +
+                            "upperBoundUsesOuterClassParameter)\\.kt$",
+                )
+                model(
+                    "box/reflection/typeOf/noReflect",
+                    pattern = "^(typeReferenceEqualsHashCode)\\.kt$",
+                )
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
@@ -73,6 +113,26 @@ fun main(args: Array<String>) {
             testClass<AbstractFirLightTreeDotNetFrameworkBoxTest> {
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model("box/ktype")
+                model(
+                    "box/reflection/typeOf",
+                    pattern = "^(arrayOfNullableReified|classes|definitelyNotNullType|inNestedInline|intersectionType|" +
+                            "ktype1_anonymousObject|localClass|manyTypeArguments|multiModuleNullCheck|multipleLayers|" +
+                            "reifiedAsNestedArgument|typeAliasedType|typeOfCapturedStar)\\.kt$",
+                    recursive = false,
+                )
+                model(
+                    "box/reflection/typeOf/nonReifiedTypeParameters",
+                    pattern = "^(defaultUpperBound|equalsOnClassParameters|equalsOnFunctionParameters|innerGeneric|" +
+                            "insideInlineLambda_class|insideNonInlineLambda_class|recursiveBoundWithInline|" +
+                            "recursiveBoundWithoutInline|simpleClassParameter|simpleFunctionParameter|" +
+                            "simplePropertyParameter|starProjectionInUpperBound|typeParameterFlags|upperBounds|" +
+                            "upperBoundUsesOuterClassParameter)\\.kt$",
+                )
+                model(
+                    "box/reflection/typeOf/noReflect",
+                    pattern = "^(typeReferenceEqualsHashCode)\\.kt$",
+                )
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
@@ -81,6 +141,26 @@ fun main(args: Array<String>) {
             testClass<AbstractFirPsiDotNetFrameworkBoxTest> {
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model("box/ktype")
+                model(
+                    "box/reflection/typeOf",
+                    pattern = "^(arrayOfNullableReified|classes|definitelyNotNullType|inNestedInline|intersectionType|" +
+                            "ktype1_anonymousObject|localClass|manyTypeArguments|multiModuleNullCheck|multipleLayers|" +
+                            "reifiedAsNestedArgument|typeAliasedType|typeOfCapturedStar)\\.kt$",
+                    recursive = false,
+                )
+                model(
+                    "box/reflection/typeOf/nonReifiedTypeParameters",
+                    pattern = "^(defaultUpperBound|equalsOnClassParameters|equalsOnFunctionParameters|innerGeneric|" +
+                            "insideInlineLambda_class|insideNonInlineLambda_class|recursiveBoundWithInline|" +
+                            "recursiveBoundWithoutInline|simpleClassParameter|simpleFunctionParameter|" +
+                            "simplePropertyParameter|starProjectionInUpperBound|typeParameterFlags|upperBounds|" +
+                            "upperBoundUsesOuterClassParameter)\\.kt$",
+                )
+                model(
+                    "box/reflection/typeOf/noReflect",
+                    pattern = "^(typeReferenceEqualsHashCode)\\.kt$",
+                )
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")

@@ -1,6 +1,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_EXACT_CALL
+import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
@@ -66,6 +67,9 @@ internal interface DotNetIlStatementScopeEmitter {
 
     /** A block in value position: leading statements, then the trailing expression as the value. */
     fun emitBlockExpression(block: IrContainerExpression, expectedType: DotNetIlValueType)
+
+    /** A branch value which may transfer control instead of producing a physical value. */
+    fun emitControlFlowValueExpression(expression: IrExpression, expectedType: DotNetIlValueType)
 
     /** Executes a Unit-typed effect expression, then materializes the Kotlin Unit value. */
     fun emitUnitEffectExpression(expression: IrExpression)
@@ -376,6 +380,17 @@ internal class DotNetIlExpressionCodegen(
         val irClass = (simpleType.classifier as? IrClassSymbol)?.owner
             ?: dotNetUnsupported("class literal has no class declaration: ${expression.classType.render()}")
         val classifier = staticKClassClassifier(expression.classType, irClass)
+        classifier.logicalKey?.let { logicalKey ->
+            emitNullableString(classifier.simpleName)
+            emitNullableString(classifier.qualifiedName)
+            emitNullableString(logicalKey)
+            methodContext.emit(
+                DotNetKClassRuntime.createLogicalCallInstruction(),
+                pops = 3,
+                pushes = 1,
+            )
+            return
+        }
         emitSystemTypeOrNull(classifier.clrTypeRef)
         emitNullableString(classifier.simpleName)
         emitNullableString(classifier.qualifiedName)
@@ -413,6 +428,7 @@ internal class DotNetIlExpressionCodegen(
         val qualifiedName: String?,
         val kind: DotNetKClassClassifierKind,
         val classifierId: Int = 0,
+        val logicalKey: String? = null,
     )
 
     private fun staticKClassClassifier(classType: IrType, irClass: IrClass): StaticKClassClassifier {
@@ -478,7 +494,15 @@ internal class DotNetIlExpressionCodegen(
             )
         }
         val mappedType = typeMapper.toDotNetIlValueType(classType)
-            ?: dotNetUnsupported("class literal has no CLR evidence type: ${classType.render()}")
+            ?: return StaticKClassClassifier(
+                clrTypeRef = null,
+                simpleName = sourceSimpleName,
+                qualifiedName = sourceQualifiedName,
+                kind = DotNetKClassClassifierKind.LOGICAL,
+                logicalKey = with(DotNetIrMangler) {
+                    irClass.mangleString(compatibleMode = false)
+                },
+            )
         val clrTypeRef = when (mappedType) {
             DotNetIlValueType.String -> "${coreLibraryReference}System.String"
             DotNetIlValueType.Object -> "${coreLibraryReference}System.Object"
@@ -2699,14 +2723,14 @@ internal class DotNetIlExpressionCodegen(
             if (branch.condition.isFalseConst()) continue
 
             if (branch.condition.isTrueConst()) {
-                emitExpression(branch.result, expectedType)
+                statementScopeEmitter.emitControlFlowValueExpression(branch.result, expectedType)
                 hasElse = true
                 break
             }
 
             val nextBranchLabel = methodContext.nextLabel("whenNext")
             emitBranchIfFalse(branch.condition, nextBranchLabel)
-            emitExpression(branch.result, expectedType)
+            statementScopeEmitter.emitControlFlowValueExpression(branch.result, expectedType)
             methodContext.emitGoto(endLabel)
             methodContext.emitLabel(nextBranchLabel)
         }

@@ -102,6 +102,10 @@ internal class PreSerializationNonPrivateInlineFunctionResolver(
             return declarationMaybeFromOtherModule
         }
         if (inlineMode != InlineMode.ALL_INLINE_FUNCTIONS) return null
+        // Target compiler intrinsics can deliberately be bodyless inline declarations. They are
+        // not Kotlin libraries and therefore have no serialized inline body to deserialize; keep
+        // the call for target lowering/codegen instead of asking the KLIB deserializer to fail.
+        if (declarationMaybeFromOtherModule.containerSource == null) return null
         return deserializer.deserializeInlineFunction(declarationMaybeFromOtherModule)
     }
 

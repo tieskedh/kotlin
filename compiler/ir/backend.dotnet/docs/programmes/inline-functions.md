@@ -188,9 +188,9 @@ The ordinary tranche first removed the blanket rejection only for non-reified ge
 functions once both stages were active. They retain an ordinary CLR generic method as their
 non-inlined physical fallback. The later reified tranche then enabled shared call-site
 substitution only after the type-test/cast, class-literal, array, enum, and physical-remainder
-closure was complete. `KType`/`typeOf` remains independent, matching mature-target pipeline
-ownership; a later classifier family extends the same operation matrix before it becomes a legal
-published reified argument.
+closure was complete. The completed `KType`/`typeOf` graph composes that substitution while
+remaining independently owned, matching mature-target pipeline ownership; a later classifier
+family extends the same operation matrix before it becomes a legal published reified argument.
 
 ## Design attack and rejected shortcuts
 
@@ -815,6 +815,7 @@ explicit C# export; Kotlin consumers must inline the authoritative KLIB body in 
 modes. The adversarial gate covers both frontends, Framework CLR, CoreCLR, same-module execution,
 separate libraries, physical metadata, and fail-closed C# export.
 
-`KType` and `typeOf` are the next deep reflection boundary. They require a logical type graph with
-arguments, variance, nullability, classifiers, equality, and separate-library ownership; they are
-not inferred from the already completed `KClass` token or from CLR `System.Type`.
+`KType` and `typeOf` now compose this completed substitution boundary through their own accepted
+logical-graph decision. Arguments, variance, nullability, classifiers, equality, recursive bounds,
+and separate-library ownership remain Kotlin graph facts; they are never inferred from the
+already completed `KClass` token or from CLR `System.Type`.

@@ -46,10 +46,10 @@ class DotNetPreSerializationLoweringContext(
     override val sharedVariablesManager = KlibSharedVariablesManager(symbols)
     override val irMangler: KotlinMangler.IrMangler = DotNetIrMangler
     override val linkInlineFunctionReferencesFromMainIr: Boolean = true
-    // The .NET builtin array intrinsics are bodyless reified compiler declarations. Keep them
-    // intact during KLIB production; the target-stage inliner still expands every Kotlin-owned
-    // reified body, while target codegen consumes these compiler-owned calls after substitution.
-    override val supportsReifiedInlineFunctions: Boolean = false
+    // Match the other KLIB targets: nested reified calls must be expanded while surrounding
+    // non-reified parameters still belong to a visible declaration scope. Bodyless compiler
+    // intrinsics are retained by the inline resolver and consumed by target codegen.
+    override val supportsReifiedInlineFunctions: Boolean = true
 }
 
 fun dotNetLoweringsOfTheFirstPhase(

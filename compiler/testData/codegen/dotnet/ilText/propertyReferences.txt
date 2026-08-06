@@ -464,11 +464,6 @@
     call instance void 'ExtensionHost'::'set_delegatedValue'(class 'Cell', int32)
     ret
   }
-  .property instance int32 'delegatedValue'()
-  {
-    .get instance int32 'ExtensionHost'::'get_delegatedValue'(class 'Cell')
-    .set instance void 'ExtensionHost'::'set_delegatedValue'(class 'Cell', int32)
-  }
 }
 .class private auto ansi sealed beforefieldinit 'LocalDelegate'
        extends [mscorlib]System.Object

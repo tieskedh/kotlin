@@ -71,7 +71,8 @@ The following decisions constrain new work; their ADRs own the detail:
 - [profile-aware interface defaults](../decisions/adr-profile-aware-interface-default-implementations.md);
 - [companion placement and initialization](../decisions/adr-companion-static-placement-and-initialization.md);
 - [static-initialization failures](../decisions/adr-kotlin-static-initialization-failures.md);
-- [reified inline call-site substitution](../decisions/reified-inline-functions.md); and
+- [reified inline call-site substitution](../decisions/reified-inline-functions.md);
+- [logical `KType` and `typeOf`](../decisions/ktype-and-typeof.md); and
 - [CIL/PE production direction](../decisions/cil-and-pe-production.md).
 
 New features build on these decisions or amend them explicitly. They do not restate a competing
@@ -102,23 +103,28 @@ The completed reified programme composes its independently truthful non-generic 
 boxed-scalar, type-test/cast, array, declaration-erased generic-class/interface, `KClass`, enum,
 and physical-remainder foundations through shared call-site substitution. Preserve the three KLIB
 inliner modes, the bodyless-intrinsic pipeline boundary, and the rule that no physical remainder
-belongs to Kotlin ABI or explicit C# export. `KType` and `typeOf` are the next independent deep
-reflection boundary; neither `KClass` nor CLR `System.Type` is a substitute for that logical graph.
+belongs to Kotlin ABI or explicit C# export. The completed `KType`/`typeOf` graph composes that
+substitution after inlining; neither `KClass` nor CLR `System.Type` substitutes for it.
 
-### 2. Select `KType` and `typeOf` as the next deep reflection foundation
+### 2. Preserve the completed `KType` and `typeOf` reflection foundation
 
-Start from Common `KType`, `KTypeProjection`, `KVariance`, and `typeOf` semantics and compare the
-JVM, JS, Wasm, and Native reflection graphs before choosing a CLR carrier. The product must retain
-Kotlin classifiers, nested type arguments, star projections, declaration-site and use-site
-variance, nullability, equality/hash, and separate-library identity. `System.Type` may be retained
-as useful exact CLR evidence but cannot become the logical graph or its equality authority.
+Common `KType`, `KTypeProjection`, `KVariance`, `KTypeParameter`, and `typeOf` now form one logical
+Kotlin graph following the mature-target compiler-intrinsic architecture. Preserve nested type
+arguments, stars, declaration/use-site variance, nullability, equality/hash, recursive parameter
+bounds, and separate-library identity. `System.Type` remains optional `KClass` evidence only.
+Logical-only classifiers use a distinct KLIB-mangled key, never a display name.
 
-The first tranche must be a complete language/compiler foundation rather than a `typeOf`-only
-token shortcut: static creation, reified substitution, generic classes/interfaces under erased
-runtime identity, arrays, imported CLR generic types, metadata/KLIB round trips, and truthful C#
-exposure or fail-closed hiding belong to one adversarial matrix. Member enumeration, invocation,
-annotation discovery, and valued annotation instances remain follow-on reflection features unless
-their representation is forced by the graph itself.
+The product matrix covers static creation, reified substitution, declaration parameters and
+recursive bounds, erased Kotlin classifiers, arrays, nullable relative bounds, production-pipeline
+separate compilation, both CLR profiles, and direct C# graph inspection. Member enumeration,
+invocation, annotation discovery, and valued annotation instances remain follow-on features.
+
+The next deep language tranche is valued annotation classes and arguments. Start from the Common
+annotation rules and the JVM/JS/Wasm/Native annotation member representations, then map only the
+ECMA-335 custom-attribute values that are exact. KLIB remains authoritative for every legal Kotlin
+argument; CLR custom attributes are an additional runtime/C# projection. Do not make reflection
+discovery or a broad `kotlin-reflect` product an accidental prerequisite, and fail closed for any
+value or use-site target whose physical projection is not truthful.
 
 ### 3. Expand Common collections by exact dependency closure
 
@@ -270,11 +276,11 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 
 - valued annotation constructors and arguments, wider use-site targets, and runtime annotation
   reflection; parameterless markers, retention, and their exact CLR-parent projection are selected;
-- `KType`, `typeOf`, and member/annotation reflection; the nominal `KClass`/class-literal floor is
-  complete;
+- member and annotation reflection; the nominal `KClass` floor and logical `KType`/`typeOf` graph
+  are complete;
 - value/inline classes;
-- reflection-dependent inline operations beyond the completed reified type/class/array/enum
-  closure, including `typeOf` until the `KType` graph is selected;
+- reflection-dependent inline operations beyond the completed reified
+  type/class/array/enum/`typeOf` closure;
 - suspend inline functions until coroutine state machines are supported;
 - coroutine state machines and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;

@@ -75,12 +75,20 @@ internal object DotNetStdlibLibrary {
     const val PROGRESSION_UTIL_FACADE_IL_NAME = "Kotlin.Internal.ProgressionUtilKt"
     const val EXCEPTIONS_FACADE_IL_NAME = "Kotlin.DotNetExceptionsKt"
     const val KCLASSES_FACADE_IL_NAME = "Kotlin.Reflection.KClasses"
+    const val KTYPE_INTRINSICS_FACADE_IL_NAME = "Kotlin.Reflection.TypeOfIntrinsics"
     const val ARRAY_ITERATOR_FACTORY_NAME = "dotNetArrayIterator"
     const val ARRAY_ITERABLE_FACTORY_NAME = "dotNetArrayIterable"
     const val ERASED_ARRAY_ITERATOR_FACTORY_NAME = "dotNetErasedArrayIterator"
     const val ERASED_ARRAY_ITERABLE_FACTORY_NAME = "dotNetErasedArrayIterable"
 
     private val implementationClassIlNames = mapOf(
+        "kotlin.reflect.KType" to "Kotlin.Reflection.KType",
+        "kotlin.reflect.KTypeParameter" to "Kotlin.Reflection.KTypeParameter",
+        "kotlin.reflect.KTypeProjection" to "Kotlin.Reflection.KTypeProjection",
+        "kotlin.reflect.KVariance" to "Kotlin.Reflection.KVariance",
+        "kotlin.reflect.KTypeImpl" to "Kotlin.Reflection.KTypeImpl",
+        "kotlin.reflect.KTypeParameterBase" to "Kotlin.Reflection.KTypeParameterBase",
+        "kotlin.reflect.DotNetKTypeParameter" to "Kotlin.Reflection.DotNetKTypeParameter",
         "kotlin.Enum" to "Kotlin.Enum",
         "kotlin.Pair" to "Kotlin.Pair",
         "kotlin.Triple" to "Kotlin.Triple",
@@ -908,6 +916,10 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin",
             facadeIlName = TUPLES_FACADE_IL_NAME,
         ),
+        "HashCode.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = STANDARD_FACADE_IL_NAME,
+        ),
         "_DotNetBootstrapExperimentalTypeInference.kt" to ImplementationSource(
             packageFqName = "kotlin.experimental",
         ),
@@ -969,6 +981,21 @@ internal object DotNetStdlibLibrary {
         "DotNetKClasses.kt" to ImplementationSource(
             packageFqName = "kotlin.reflect",
             facadeIlName = KCLASSES_FACADE_IL_NAME,
+        ),
+        "KType.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
+        "DotNetKType.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
+        "KTypeParameter.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
+        "KTypeProjection.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
+        "KVariance.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
+        "KTypeImpl.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
+        "KTypeParameterBase.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
+        "typeOf.kt" to ImplementationSource(
+            packageFqName = "kotlin.reflect",
+            facadeIlName = KTYPE_INTRINSICS_FACADE_IL_NAME,
+        ),
+        "DotNetKTypes.kt" to ImplementationSource(
+            packageFqName = "kotlin.reflect",
+            facadeIlName = KTYPE_INTRINSICS_FACADE_IL_NAME,
         ),
     )
     private val resolutionOnlySources = mapOf(

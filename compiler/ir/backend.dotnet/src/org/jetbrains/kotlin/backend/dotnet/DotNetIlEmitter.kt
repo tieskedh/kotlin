@@ -2046,7 +2046,7 @@ internal class DotNetIlEmitter(
             if (
                 !superInterface.isInterface ||
                 superInterface !in moduleInterfaces &&
-                !DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(superInterface) &&
+                !DotNetRuntimeTypes.hasBuiltInInterfaceMapping(superInterface) &&
                 !superInterface.isDotNetCharSequenceClass() &&
                 !externalDeclarations.hasClass(superInterface)
             ) {
@@ -2717,7 +2717,7 @@ internal class DotNetIlEmitter(
                         val setter = declaration.setter?.takeUnless { it.isFakeOverride }
                         getter?.let(::renderMemberFunction)
                         setter?.let(::renderMemberFunction)
-                        if (getter != null || setter != null) {
+                        if ((getter != null || setter != null) && !declaration.isDotNetExtensionProperty()) {
                             renderedProperties += renderPropertyBlock(
                                 declaration,
                                 getter,

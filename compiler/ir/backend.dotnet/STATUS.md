@@ -11,34 +11,37 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: complete reified-inline call-site substitution,
-  including arrays, type operations, class literals, enum helpers,
-  separate-library KLIB bodies, and fail-closed physical remainders
+- Last completed feature: the Common logical `KType`/`typeOf` graph, including
+  reified substitution, declaration parameters and recursive bounds,
+  projections/nullability, separate-library identity, and truthful C# reading
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
 stdlib. The target is not close to 98% feature-complete: valued annotations
-and annotation reflection, `KType`/member reflection, value classes,
+and annotation reflection, member reflection, value classes,
 coroutines, Sequence and Grouping families,
 sorting/random, and Gradle/KMP product integration remain
 substantial open programmes.
 
 ## Current green gate
 
-The current reified-inline production head passed:
+The current logical `KType`/`typeOf` production head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The JUnit audit covered 24 fresh XML files and 1087 tests, written between
-2026-08-06 10:25 and 10:54 local time:
+The completion audit covered 40 XML files and 1232 tests. The final invocation
+completed at 2026-08-06 15:21 local time. Gradle reused the 38 green compiler
+reports written at 14:17 by the immediately preceding run of the unchanged
+compiler worktree, then freshly rewrote both integration reports after the
+integration source-list fixture was corrected:
 
-- 976 FIR, IL-text, and box tests
+- 1120 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 90 library-integration tests
+- 91 library-integration tests
 - zero failures, errors, or skips
 
 The target now compiles the authoritative Common `ClosedRange`,
@@ -372,8 +375,25 @@ constructor identity reuses weak identity-associated throwable state and never
 wraps or mutates foreign `Exception.Data`. Portable Kotlin libraries are
 consumed separately by Kotlin and Roslyn, installed stdlib products expose only
 the public Common surface, and the retained `System.Type` bridge remains
-compiler ABI. This floor now supports substituted `T::class`; `KType`,
-`typeOf`, and member/annotation reflection remain separate programmes.
+compiler ABI. This floor now supports substituted `T::class`; member and
+annotation reflection remain separate programmes.
+
+The Common logical `KType`/`typeOf` graph is now complete as a layer above that
+nominal floor. A post-inlining lowering builds classifiers, nested arguments,
+stars, variance, nullability, declaration parameters, and recursive bounds in
+two phases, so recursive parameter identity is preserved without using CLR
+generic instantiations as Kotlin identity. Exact CLR classifiers reuse their
+`KClass` evidence; logical classifiers without a truthful `System.Type` carry a
+separate KLIB-mangled identity key and never compare by display name. Runtime
+surface 17 pins that compiler/runtime construction ABI.
+
+The selected upstream matrix runs on both FIR frontends and both runtime
+profiles. It covers nested and reified types, projections, equality and hashes,
+recursive and nullable relative bounds, and a real self-describing portable
+library consumed independently by Kotlin on Framework CLR/CoreCLR and by
+Roslyn. A bound such as `X : Y?` remains exact in KLIB and `KType`, while its
+unrepresentable CLR `GenericParamConstraint` is deliberately omitted rather
+than strengthened to `X : Y`.
 
 Common `Comparable<in T>` now retains its full logical identity and recursive
 bounds in KLIB while one object exposes the profile-selected canonical
@@ -516,9 +536,9 @@ Parameterless annotation classes are admitted generally; ordinary enums, the
 non-reified `EnumEntries` core, and the reified Common enum helpers are now
 published. The classified `CharSequence` carrier, Common collection
 predicates, and complete ordinary/reified inline boundary remain intact;
-suspend inline remains an explicit error. The nominal `KClass` floor is
-selected and published; it does not imply `KType`, member reflection, or
-annotation discovery.
+suspend inline remains an explicit error. The nominal `KClass` floor and
+logical `KType`/`typeOf` graph are selected and published; they do not imply
+member reflection or annotation discovery.
 
 Parameterless marker annotation classes now use the shared Common annotation-
 member generator on one concrete sealed CLR `System.Attribute` subtype. KLIB
@@ -547,8 +567,9 @@ their ordinary runtime paths. Truthfully representable declarations receive
 assembly-visible throwing remainders; signatures without one truthful open CLR
 shape are omitted. Neither form enters the physical Kotlin declaration index
 or explicit C# export, and cross-library calls disappear in all three KLIB
-inliner modes. `KType`/`typeOf`, valued-annotation reflection, future
-classifier families, and suspend inline remain separate programmes.
+inliner modes. The completed `KType`/`typeOf` graph composes this same
+substitution path; valued-annotation reflection, future classifier families,
+and suspend inline remain separate programmes.
 Physically exact non-generic reference casts are
 complete for Kotlin classes/interfaces, imported CLR interfaces, strings,
 `Any`, primitive-array wrappers, and exact CLR vectors without admitting closed
@@ -621,15 +642,16 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Select the `KType`/`typeOf` reflection graph as the next deep language
-   foundation. Audit Common plus JVM, JS, Wasm, and Native before choosing a
-   CLR carrier, and keep classifiers, nested arguments, stars, variance,
-   nullability, equality, separate-library identity, and reified substitution
-   in one complete matrix. Do not equate `KType` with `System.Type`.
-2. Keep member enumeration/invocation, annotation discovery, and valued
-   annotation instances outside that first graph tranche unless their
-   representation is forced by the authoritative Common model.
-3. After the reflection graph, recompute the remaining stdlib dependency graph
+1. Select valued annotation classes and arguments as the next deep language
+   foundation. Audit authoritative Common behavior plus JVM, JS, Wasm, Native,
+   and ECMA-335 constant/custom-attribute shapes before choosing the carrier.
+   Keep KLIB authoritative and expose a CLR attribute projection only where the
+   complete value and target semantics are truthful.
+2. Keep broad member enumeration/invocation and annotation discovery outside
+   that tranche unless the annotation representation itself forces a bounded
+   reflection primitive. Do not make full `kotlin-reflect` a prerequisite for
+   declaring, storing, loading, or consuming valued annotations.
+3. After that foundation, recompute the remaining stdlib dependency graph
    around Sequence, Grouping, sorting/comparators/random, dependency-blocked
    reified variants, and open nullable projected arrays; do not admit leaves
    merely to increase declaration count.

@@ -49,12 +49,26 @@ tasks.named<ProcessResources>("processResources") {
     from(rootProject.file("libraries/stdlib/src/kotlin/util/Tuples.kt")) {
         into("kotlin-dotnet-stdlib/src/kotlin/util")
     }
+    from(rootProject.file("libraries/stdlib/src/kotlin/util/HashCode.kt")) {
+        into("kotlin-dotnet-stdlib/src/kotlin/util")
+    }
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KClass.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KClasses.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KClassifier.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/reflect/KType.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/reflect/KTypeParameter.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/reflect/KTypeProjection.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/reflect/KVariance.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/reflect/typeOf.kt"),
     )) {
         into("kotlin-dotnet-stdlib/src/kotlin/reflect")
+    }
+    from(files(
+        rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/reflect/KTypeImpl.kt"),
+        rootProject.file("libraries/stdlib/common-non-jvm/src/kotlin/reflect/KTypeParameterBase.kt"),
+    )) {
+        into("kotlin-dotnet-stdlib/common-non-jvm/src/kotlin/reflect")
     }
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt"),
