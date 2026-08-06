@@ -303,6 +303,10 @@ internal class DotNetIlMethodCodegen(
         if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER) return "private"
         if (origin.isDotNetGenericInterfaceBridge) return "private"
         if (origin == DOTNET_COVARIANT_RETURN_BRIDGE) return "private"
+        // The embedded KLIB declaration is public Kotlin API, but the surviving CLR method is
+        // only the Native-shaped deterministic throwing remainder. A Kotlin consumer must inline
+        // it; publishing it as a normal C# generic would falsely advertise executable semantics.
+        if (isInline && typeParameters.any { it.isReified }) return "assembly"
         if (isDotNetInlineOnly()) return "assembly"
         // @PublishedApi stdlib carriers used by cross-module inline bodies need CLR-public
         // constructors even when their Kotlin declaration is internal. Ordinary stdlib classes
@@ -770,11 +774,13 @@ internal class DotNetIlMethodCodegen(
             expression is IrBreakContinue -> emitBreakContinue(expression)
             expression is IrTypeOperatorCall && expression.operator == IrTypeOperator.IMPLICIT_COERCION_TO_UNIT ->
                 emitDiscardableExpression(expression.argument)
-            // A deserialized generic inline body can end in an erased value which is implicitly
-            // recovered to the substituted result type even when the caller discards that result.
-            // Keep the recovery observable (including its checked unbox) and discard only the
-            // produced value; `Iterable.fold<Int, Int>(...)` is the canonical Common shape.
-            expression is IrTypeOperatorCall && expression.operator == IrTypeOperator.IMPLICIT_CAST ->
+            // A deserialized inline body can expose any substituted type operation in statement
+            // position through an unused compiler temporary. The operation is still observable:
+            // checked casts and implicit not-null assertions may throw, and type tests still have
+            // to evaluate their operand. Execute the ordinary expression path and discard only
+            // its result. `Iterable.fold<Int, Int>(...)` is the canonical implicit-cast shape;
+            // reified `Nothing?` and erased-interface substitutions cover the wider matrix.
+            expression is IrTypeOperatorCall ->
                 emitDiscardableExpression(expression)
             expression is IrGetObjectValue && expression.type.isUnit() -> Unit
             expression is IrContainerExpression -> emitBlockStatement(expression)

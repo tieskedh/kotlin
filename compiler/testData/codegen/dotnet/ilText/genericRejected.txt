@@ -8,6 +8,10 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'genericRejected' {}
 .module 'main-genericRejected.il'
 
@@ -215,6 +219,15 @@ IL_notNull_0:
     .maxstack 1
     ldarg.0
     ret
+  }
+  .method assembly hidebysig static bool 'reifiedCheck'<'T'>(object 'x') cil managed
+  {
+    .maxstack 1
+    ldstr "unsupported call of reified inline function `reifiedCheck`"
+    call class [Kotlin.Runtime]'Kotlin.Nothing' [Kotlin.Stdlib]'Kotlin.Internal.ThrowHelpersKt'::'throwUnsupportedOperationException'(string)
+    pop
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
   }
   .method public hidebysig static int32 'varargsOf'<'T'>(!!0[] 'xs') cil managed
   {

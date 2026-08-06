@@ -70,7 +70,8 @@ The following decisions constrain new work; their ADRs own the detail:
 - [generic nullability and covariant returns](../decisions/adr-hybrid-generic-nullability-and-covariant-returns.md);
 - [profile-aware interface defaults](../decisions/adr-profile-aware-interface-default-implementations.md);
 - [companion placement and initialization](../decisions/adr-companion-static-placement-and-initialization.md);
-- [static-initialization failures](../decisions/adr-kotlin-static-initialization-failures.md); and
+- [static-initialization failures](../decisions/adr-kotlin-static-initialization-failures.md);
+- [reified inline call-site substitution](../decisions/reified-inline-functions.md); and
 - [CIL/PE production direction](../decisions/cil-and-pe-production.md).
 
 New features build on these decisions or amend them explicitly. They do not restate a competing
@@ -82,32 +83,44 @@ The current bounded work order is intentional. It may interleave small slices, b
 must not pull an earlier responsibility back into the backend or publish a shape whose prerequisites
 are still undecided.
 
-### 1. Preserve the completed selected-graph ordinary inline foundation
+### 1. Preserve the completed selected-graph inline foundation
 
 [`inline-functions.md`](inline-functions.md) records the completed component-aware embedded KLIB
 loading, target IR serialization, shared first-/second-stage inliner phases, Common shared-variable
 ABI, and all existing KLIB inliner modes. New work must keep its separate-DLL, friend/compiler-ABI,
 main/prepared IR, and cross-profile matrix green.
 
-Ordinary non-reified inline is available for exact Common-source adoption. Reified and suspend
-inline functions remain separate programmes and must continue to fail clearly.
+Ordinary and reified inline are available for exact Common-source adoption. Suspend inline
+functions remain a separate programme and must continue to fail clearly.
 
 The selected-graph breadth is now pinned explicitly: a body from library A binds declarations in an
 explicitly selected library B through the existing non-linking deserializer and frontend-owned IR
 symbol finder. Preserve that boundary without introducing a general IR linker or transitive
 dependency discovery.
 
-The reified programme has completed its independently truthful non-generic reference,
-boxed-scalar, ordinary type-test, signed primitive-array, nullable-primitive generic-array,
-classified `Array<*>`, and declaration-erased generic-class prerequisites. The concrete
-post-substitution array-operation audit is complete as well: array construction reuses those
-ordinary carriers and needs no reified-only representation. Do not flip either inliner capability
-gate or mistake that allocation readiness for the whole language feature. Kotlin `KClass` and
-class literals now form a completed nominal floor over classified CLR evidence. `KType`, the
-reified enum helpers, the final substituted type-operator matrix, and
-the physical reified throwing-stub contract remain separate boundaries.
+The completed reified programme composes its independently truthful non-generic reference,
+boxed-scalar, type-test/cast, array, declaration-erased generic-class/interface, `KClass`, enum,
+and physical-remainder foundations through shared call-site substitution. Preserve the three KLIB
+inliner modes, the bodyless-intrinsic pipeline boundary, and the rule that no physical remainder
+belongs to Kotlin ABI or explicit C# export. `KType` and `typeOf` are the next independent deep
+reflection boundary; neither `KClass` nor CLR `System.Type` is a substitute for that logical graph.
 
-### 2. Expand Common collections by exact dependency closure
+### 2. Select `KType` and `typeOf` as the next deep reflection foundation
+
+Start from Common `KType`, `KTypeProjection`, `KVariance`, and `typeOf` semantics and compare the
+JVM, JS, Wasm, and Native reflection graphs before choosing a CLR carrier. The product must retain
+Kotlin classifiers, nested type arguments, star projections, declaration-site and use-site
+variance, nullability, equality/hash, and separate-library identity. `System.Type` may be retained
+as useful exact CLR evidence but cannot become the logical graph or its equality authority.
+
+The first tranche must be a complete language/compiler foundation rather than a `typeOf`-only
+token shortcut: static creation, reified substitution, generic classes/interfaces under erased
+runtime identity, arrays, imported CLR generic types, metadata/KLIB round trips, and truthful C#
+exposure or fail-closed hiding belong to one adversarial matrix. Member enumeration, invocation,
+annotation discovery, and valued annotation instances remain follow-on reflection features unless
+their representation is forced by the graph itself.
+
+### 3. Expand Common collections by exact dependency closure
 
 Use [`common-collections.md`](common-collections.md). Its builder and Common abstract-base
 foundation now composes with the selected erased generic-class ABI without a target-authored
@@ -126,7 +139,7 @@ stdlib-helper binding, and unchanged upstream test path.
 
 Further work remains foundation-first rather than allowlist-count-first. Recompute the remaining
 Common generator/source dependency graph around the actual missing substrates: Sequence,
-Grouping aggregates, sorting/comparators/random, reified operations, and open nullable projected
+Grouping aggregates, sorting/comparators/random, dependency-blocked reified variants, and open nullable projected
 arrays. Select and document one substrate with the largest coherent release before admitting its
 generated family. The narrow `Array<out T?>` boundary may land
 independently because it restores authoritative `setOfNotNull(vararg T?)` and object-array nullable
@@ -155,8 +168,9 @@ Modern enums plus the non-reified `EnumEntries` core and the ordinary `Invocatio
 complete as coherent language/product phases. They use
 Kotlin-owned reference classes, the general Comparable mapping, producer-recorded entry-field
 binding, and the existing static-initialization machinery; they are not CLR value-type enums. The
-contracts/`Standard.kt`/`buildString` closure is complete, including `repeat`. General reified enum
-functions remain behind the reified gate throughout.
+contracts/`Standard.kt`/`buildString` closure is complete, including `repeat`. Common
+`enumValues`, `enumValueOf`, and `enumEntries` now use the completed shared reified-substitution
+path and the existing enum synthetic members; no CLR reflection lookup was added.
 
 The completed ordinary signed range/progression and primitive-iterator closure compiles the shared
 stdlib classes, removes the temporary counted-loop resolution markers, and
@@ -187,7 +201,7 @@ explicit exports on profiles that physically supply the standard attributes. It 
 rediscovers contracts from lowered IR nor makes CLR attributes authoritative. The importer may
 continue accepting those standard attributes as foreign evidence under Kotlin stability rules.
 
-### 3. Retain and enforce the completed declaration architecture seam
+### 4. Retain and enforce the completed declaration architecture seam
 
 Use [`compiler-architecture.md`](compiler-architecture.md). The versioned neutral carrier is now
 shared by the foreign FIR provider and backend binding, and Kotlin-facing provider policy lives in
@@ -197,7 +211,7 @@ backend. Preserve and validate that dependency direction as the importer grows.
 Further extraction still requires concrete independent consumers. It is not a request to split
 large classes or create layers for their own sake.
 
-### 4. Broaden foreign CLR interoperability only through exact mappings
+### 5. Broaden foreign CLR interoperability only through exact mappings
 
 Use [`clr-annotations.md`](clr-annotations.md) and the
 [importer ADR](../decisions/draft-adr-clr-importer-boundary.md). Admit complete declaration families
@@ -207,7 +221,7 @@ semantics are all specified.
 Do not flatten property/ref/out state, bypass Common smart-cast stability, or infer a declaration
 role from an attribute name.
 
-### 5. Close the remaining draft ABI decisions before wider breadth
+### 6. Close the remaining draft ABI decisions before wider breadth
 
 The accepted runtime decisions must be frozen and the remaining drafts accepted, revised, or
 explicitly excluded before third-party binary publication:
@@ -259,8 +273,8 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - `KType`, `typeOf`, and member/annotation reflection; the nominal `KClass`/class-literal floor is
   complete;
 - value/inline classes;
-- reified functions, including `enumValues`, `enumValueOf`, and `enumEntries`, plus `typeOf` and
-  reflection-dependent inline substitution;
+- reflection-dependent inline operations beyond the completed reified type/class/array/enum
+  closure, including `typeOf` until the `KType` graph is selected;
 - suspend inline functions until coroutine state machines are supported;
 - coroutine state machines and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;

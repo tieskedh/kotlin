@@ -6,8 +6,9 @@
 //   assignability;
 // - `===` on `T` operands: an unconstrained `T` may instantiate to a value type with no stable
 //   reference identity, and boxing would manufacture two unrelated references;
-// - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
-// - reified inline functions: ordinary inlining is supported, but reified operations are not;
+// - `as`/`is` on open non-reified generic types: the type-operator rejection stays authoritative.
+// Reified inline functions are the supported control: Kotlin call sites substitute their runtime
+// operations, while a truthfully representable physical remainder is assembly-visible and throws.
 // Method-owned varargs of `T` are now supported as exact CLR `T[]` parameters. They remain in this
 // mixed rejection fixture to pin that admitted boundary beside the still rejected shapes above.
 // Widening an unconstrained `T` to `Any?`, structural `==`/`== null`, templates, and `toString`

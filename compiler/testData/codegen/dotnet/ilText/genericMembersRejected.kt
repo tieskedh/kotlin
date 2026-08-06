@@ -1,5 +1,6 @@
-// Ordinary non-reified inline methods and method parameters bounded by Kotlin-owned erased
-// interfaces are the supported controls. Reified members remain unsupported and are omitted.
+// Ordinary and reified inline methods plus method parameters bounded by Kotlin-owned erased
+// interfaces are the supported controls. A reified member has only an assembly-visible throwing
+// physical remainder; Kotlin calls consume its KLIB body instead of dispatching to that MethodDef.
 
 class InlineMember {
     inline fun <T> id(value: T): T = value

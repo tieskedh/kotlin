@@ -51,7 +51,8 @@ object DotNetBackend {
                 irModuleFragment,
                 scope,
             ) { function ->
-                preLoweringIntrinsics.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true
+                preLoweringIntrinsics.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true ||
+                        (function.isInline && function.typeParameters.any { typeParameter -> typeParameter.isReified })
             }
         }
         val preLoweringDeclarationKeys = if (producesStdlib || producesLibrary) {

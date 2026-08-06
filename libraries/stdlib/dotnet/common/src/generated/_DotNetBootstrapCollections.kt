@@ -26,6 +26,21 @@ public val <T> List<T>.lastIndex: Int
 
 public expect interface RandomAccess
 
+/**
+ * Returns the array if it's not `null`, or an empty array otherwise.
+ * @sample samples.collections.Arrays.Usage.arrayOrEmpty
+ */
+public expect inline fun <reified T> Array<out T>?.orEmpty(): Array<out T>
+
+/**
+ * Returns a *typed* array containing all the elements of this collection.
+ *
+ * Allocates an array of runtime type `T` having its size equal to the size of this collection
+ * and populates the array with the elements of this collection.
+ * @sample samples.collections.Collections.Collections.collectionToTypedArray
+ */
+public expect inline fun <reified T> Collection<T>.toTypedArray(): Array<T>
+
 @PublishedApi
 @SinceKotlin("1.3")
 @IgnorableReturnValue
@@ -830,6 +845,46 @@ public inline fun <T, C : MutableCollection<in T>> Iterable<T>.filterIndexedTo(d
     forEachIndexed { index, element ->
         if (predicate(index, element)) destination.add(element)
     }
+    return destination
+}
+
+/**
+ * Returns a list containing all elements that are instances of specified type parameter R.
+ *
+ * @sample samples.collections.Collections.Filtering.filterIsInstance
+ */
+public inline fun <reified R> Iterable<*>.filterIsInstance(): List<@kotlin.internal.NoInfer R> {
+    return filterIsInstanceTo(ArrayList<R>())
+}
+
+/**
+ * Returns a list containing all elements that are instances of specified type parameter R.
+ *
+ * @sample samples.collections.Collections.Filtering.filterIsInstance
+ */
+public inline fun <reified R> Array<*>.filterIsInstance(): List<@kotlin.internal.NoInfer R> {
+    return filterIsInstanceTo(ArrayList<R>())
+}
+
+/**
+ * Appends all elements that are instances of specified type parameter R to the given [destination].
+ *
+ * @sample samples.collections.Collections.Filtering.filterIsInstanceTo
+ */
+@IgnorableReturnValue
+public inline fun <reified R, C : MutableCollection<in R>> Iterable<*>.filterIsInstanceTo(destination: C): C {
+    for (element in this) if (element is R) destination.add(element)
+    return destination
+}
+
+/**
+ * Appends all elements that are instances of specified type parameter R to the given [destination].
+ *
+ * @sample samples.collections.Collections.Filtering.filterIsInstanceTo
+ */
+@IgnorableReturnValue
+public inline fun <reified R, C : MutableCollection<in R>> Array<*>.filterIsInstanceTo(destination: C): C {
+    for (element in this) if (element is R) destination.add(element)
     return destination
 }
 

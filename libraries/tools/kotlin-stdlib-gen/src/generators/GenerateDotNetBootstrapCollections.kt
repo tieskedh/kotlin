@@ -132,6 +132,8 @@ fun main(args: Array<String>) {
         baseDir.resolve("libraries/stdlib/src/kotlin/util/Standard.kt")
     val commonCharCodeFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/CharCode.kt")
+    val commonLibraryFile =
+        baseDir.resolve("libraries/stdlib/src/kotlin/Library.kt")
     val commonEnumEntriesFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/enums/EnumEntries.kt")
     val commonEnumFile = baseDir.resolve("libraries/stdlib/src/kotlin/Enum.kt")
@@ -172,6 +174,14 @@ fun main(args: Array<String>) {
     val randomAccessDeclaration = extractCommonSingleLineDeclaration(
         commonCollectionsHeaderFile,
         "public expect interface RandomAccess",
+    )
+    val arrayOrEmptyDeclaration = extractCommonDeclaration(
+        commonCollectionsHeaderFile,
+        "public expect inline fun <reified T> Array<out T>?.orEmpty(): Array<out T>",
+    )
+    val collectionToTypedArrayDeclaration = extractCommonDeclaration(
+        commonCollectionsHeaderFile,
+        "public expect inline fun <reified T> Collection<T>.toTypedArray(): Array<T>",
     )
     val typedCollectionToArrayDeclaration = extractCommonSingleLineDeclaration(
         commonCollectionsHeaderFile,
@@ -545,6 +555,8 @@ fun main(args: Array<String>) {
         Filtering.f_filter selectedFor setOf(Family.Iterables),
         Filtering.f_filterIndexed selectedFor setOf(Family.Iterables),
         Filtering.f_filterIndexedTo selectedFor setOf(Family.Iterables),
+        Filtering.f_filterIsInstance selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
+        Filtering.f_filterIsInstanceTo selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         Filtering.f_filterNot selectedFor setOf(Family.Iterables),
         Filtering.f_filterNotNull selectedFor setOf(Family.Iterables),
         Filtering.f_filterNotNullTo selectedFor setOf(Family.Iterables),
@@ -645,6 +657,10 @@ fun main(args: Array<String>) {
     generatedSource.appendLine(lastIndexDeclaration)
     generatedSource.appendLine()
     generatedSource.appendLine(randomAccessDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(arrayOrEmptyDeclaration)
+    generatedSource.appendLine()
+    generatedSource.appendLine(collectionToTypedArrayDeclaration)
     generatedSource.appendLine()
     generatedSource.appendLine(checkIndexOverflowDeclaration)
     generatedSource.appendLine()
@@ -766,6 +782,14 @@ fun main(args: Array<String>) {
                 extractFinalCommonDeclaration(
                     commonCharCodeFile,
                     "public inline val Char.code: Int",
+                ) + "\n\n" +
+                extractCommonDeclaration(
+                    commonLibraryFile,
+                    "public expect inline fun <reified T : Enum<T>> enumValues(): Array<T>",
+                ) + "\n\n" +
+                extractFinalCommonDeclaration(
+                    commonLibraryFile,
+                    "public expect inline fun <reified T : Enum<T>> enumValueOf(name: String): T",
                 ) + "\n",
         Charsets.UTF_8,
     )
@@ -1154,15 +1178,6 @@ private fun projectEnumEntriesFile(sourceFile: File): String {
     // split has no same-module expect/actual declaration and its test harness correctly rejects
     // suppressing an error diagnostic in injected bootstrap source.
     projectedSource = projectedSource.replace(commonFileSuppression, "")
-    val reifiedSurface = extractCommonDeclarationPrefix(
-        sourceFile,
-        "public inline fun <reified T : Enum<T>> enumEntries(): EnumEntries<T>",
-        "@PublishedApi\n@SinceKotlin(\"1.8\") // Used by pre-1.9.0 JVM compiler for the feature in preview mode.",
-    )
-    check(projectedSource.countOccurrences(reifiedSurface) == 1) {
-        "Expected exactly one reified enum-entries surface in ${sourceFile.path}"
-    }
-    projectedSource = projectedSource.replace(reifiedSurface, "")
     return injectGeneratedWarning(projectedSource)
 }
 

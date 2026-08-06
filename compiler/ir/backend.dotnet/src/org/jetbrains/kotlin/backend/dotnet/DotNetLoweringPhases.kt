@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultArgumentStubGenera
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterCleaner
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterInjector
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetEnumClassLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetEnumUsageLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
@@ -43,6 +44,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPropertyReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrivateNestedAccessLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrimitiveRangeUntilLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetRenameFieldsLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReifiedFunctionLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReturnableBlockLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSharedVariablesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
@@ -82,8 +84,7 @@ private fun createValidateIrAfterInliningOnlyPrivateFunctionsPhase(
     IrValidationAfterInliningOnlyPrivateFunctionsPhase(
         context,
         checkInlineFunctionCallSites = { useSite ->
-            useSite.symbol.owner.typeParameters.any { it.isReified } ||
-                    !useSite.symbol.isConsideredAsPrivateForInlining()
+            !useSite.symbol.isConsideredAsPrivateForInlining()
         },
     )
 
@@ -94,8 +95,7 @@ private fun createValidateIrAfterInliningAllFunctionsPhase(
         context,
         checkInlineFunctionCallSites = { useSite ->
             val function = useSite.symbol.owner
-            function.typeParameters.any { it.isReified } ||
-                    function.symbol.isTypeOfIntrinsic() ||
+            function.symbol.isTypeOfIntrinsic() ||
                     function.body == null
         },
     )
@@ -119,7 +119,23 @@ private val dotNetInlineLowerings: List<NamedCompilerPhase<DotNetBackendContext,
     // END: Common Native/JS/Wasm inline prefix.
 )
 
+private val dotNetReifiedInlineCompletionLowerings:
+        List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
+    // The first KLIB stage deliberately preserves bodyless .NET reified intrinsics. Complete the
+    // remaining Kotlin-owned reified substitutions after KLIB serialization without repeating
+    // the non-idempotent shared prefix that already handled ordinary inline declarations.
+    ::DotNetAllFunctionInlining,
+    ::createValidateIrAfterInliningAllFunctionsPhase,
+)
+
 internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
+    // Native precedent: a reified declaration is Kotlin compiler input, not an independently
+    // callable host generic. Every Kotlin call has disappeared through the shared inliner above;
+    // replace the physical remainder before any target lowering can mistake it for ordinary code.
+    ::DotNetReifiedFunctionLowering,
+    // JS/Wasm/Native precedent: the shared inliner has substituted T, so bind the three enum
+    // intrinsics to the concrete enum's ordinary synthetic values/valueOf/entries declarations.
+    ::DotNetEnumUsageLowering,
     // Normalize companion-block backing fields before any shared lowering can classify state.
     // The receiver-free accessor pair is the FIR2IR semantic marker; later phases may synthesize
     // additional static functions which are not companion declarations.
@@ -274,6 +290,10 @@ internal object DotNetLoweringPhases {
         // dependency bodies from the main graph, so no second prefix is required in that mode.
         if (!context.configuration.languageVersionSettings.supportsFeature(LanguageFeature.IrIntraModuleInlinerBeforeKlibSerialization)) {
             for (lowering in dotNetInlineLowerings) {
+                engine.runPhase(lowering, irModuleFragment)
+            }
+        } else {
+            for (lowering in dotNetReifiedInlineCompletionLowerings) {
                 engine.runPhase(lowering, irModuleFragment)
             }
         }

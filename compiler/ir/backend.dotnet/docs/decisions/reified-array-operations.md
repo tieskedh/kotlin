@@ -1,9 +1,14 @@
 # Reified array operations reuse ordinary substituted carriers
 
-- Status: Accepted (pre-ABI)
+- Status: Completed prerequisite consumed by reified inline (pre-ABI)
 - Scope: Kotlin call-site substitution for generic-array construction and varargs
-- Does not enable: reified inline declarations, `KClass`, `KType`, enums,
-  annotations, value classes, unsigned arrays, or suspend inline functions
+- Does not enable: `KType`, annotations, value classes, unsigned arrays, or
+  suspend inline functions
+
+This document records the array-specific prerequisite. The later
+[reified-inline decision](reified-inline-functions.md) completed the public
+language feature and is authoritative for the current pipeline, physical
+remainder, enum helpers, and published stdlib closure.
 
 ## Context
 
@@ -113,42 +118,33 @@ classifier already admitted by the target:
 - `Array<T>(size) { ... }`, including nested constructors; and
 - the allocation side of `orEmpty` and `toTypedArray`.
 
-The shared inliner must first replace every reified parameter at a valid call
-site. Target codegen must then see only the same concrete or ordinary open
-types it already maps. If a reified type parameter survives into a target
-operation, compilation must still fail until the complete public reified
-feature and its physical fallback are enabled.
+The shared inliner first replaces every reified parameter at a valid call
+site. Target codegen then sees only the same concrete or ordinary open types
+it already maps. A reified type parameter that survives into a target array
+operation is an internal feature-closure error.
 
-`orEmpty` and `toTypedArray` remain excluded from the currently published
-.NET stdlib surface even though their allocation primitives are ready. Their
-exact Common/target source products must be adopted with the complete public
-reified stdlib closure, not copied into the emitter.
+`orEmpty` and `toTypedArray` are now published through their exact Common
+declarations and narrow target actuals as part of the complete reified stdlib
+closure. Their algorithms were not copied into the emitter.
 
-## Remaining public-feature blockers
+## Prerequisites subsequently closed
 
-Array construction readiness does not close the reified language feature.
-Any public reified declaration can later be instantiated with every type that
-the target admits, and its body may also contain non-array operations. The
-following blockers remain independent and real:
+Array construction readiness did not by itself close the reified language
+feature. The completed reified feature subsequently closed these adjacent
+boundaries:
 
-- `T::class` needs a Kotlin `KClass` identity and truthful `System.Type`
-  bridge;
-- `typeOf<T>()` needs `KType`, type arguments, variance, and nullability;
-- enum intrinsics need the selected builder/abstract-base foundation followed
-  by ordinary enums and the non-reified `EnumEntries` product;
-- annotation-associated operations need annotation-class representation and
-  retention/association policy;
-- value-class and unsigned-array instantiations remain outside the current
-  type model;
-- array `is`/`as` substitutions still need their final call-site execution
-  matrix because ordinary Kotlin source cannot spell every concrete generic
-  array runtime test; and
-- every published reified logical declaration needs one selected, coherent
-  physical throwing-stub contract in a self-describing DLL.
+- `T::class` uses the selected nominal `KClass` identity and truthful
+  `System.Type` bridge;
+- enum intrinsics use ordinary enums and the non-reified `EnumEntries` core;
+- array `is`/`as` substitutions execute in the final call-site matrix; and
+- each truthfully representable physical remainder is a non-public throwing
+  stub, while a signature with no truthful open CLR shape is omitted.
 
-The two .NET reified-support gates remain false until those items form one
-truthful closure. This decision may remove array allocation from the blocker
-list; it must not be used to enable a subset of public reified declarations.
+`typeOf<T>()` still needs `KType`, type arguments, variance, and nullability.
+Valued annotations, value classes, and unsigned arrays retain their own
+ordinary representation prerequisites. They do not reopen this array
+decision; when admitted, they extend the same reified operation matrix before
+publication.
 
 ## Design attack
 
@@ -195,7 +191,8 @@ reflection operations, enum/annotation intrinsics, or the physical fallback.
    primitive arrays remain Kotlin.Runtime wrappers.
 5. An unsupported substituted element classifier rejects the operation; it
    never falls back to `object[]` merely to make reified code compile.
-6. Neither public reified-support gate changes in this slice.
+6. The final public feature changes the gates only as one complete closure;
+   this prerequisite did not authorize partial enablement.
 
 ## Verification
 
@@ -215,7 +212,6 @@ must execute on both FIR frontends and both runtime profiles and cover:
   `Array<T?>`.
 
 Existing portable-library tests remain the cross-module evidence for each
-underlying carrier. When the final reified gates are enabled, a separate
-producer/consumer matrix must execute the actual shared substitution in all
-three KLIB inliner modes before this prerequisite can be considered full
-reified-feature evidence.
+underlying carrier. The final reified producer/consumer matrix now executes
+actual shared substitution in all three KLIB inliner modes; this concrete
+carrier matrix remains the array-specific regression floor.

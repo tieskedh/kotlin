@@ -3,6 +3,10 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'genericArraysRejected' {}
 .module 'main-genericArraysRejected.il'
 
@@ -51,6 +55,15 @@
     .maxstack 1
     ldarg.0
     ret
+  }
+  .method assembly hidebysig static !!0[] 'initializedOpen'<'T'>(int32 'size', !!0 'value') cil managed
+  {
+    .maxstack 1
+    ldstr "unsupported call of reified inline function `test.genericarrays.rejected.initializedOpen`"
+    call class [Kotlin.Runtime]'Kotlin.Nothing' [Kotlin.Stdlib]'Kotlin.Internal.ThrowHelpersKt'::'throwUnsupportedOperationException'(string)
+    pop
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
   }
   .method public hidebysig static void 'main'() cil managed
   {

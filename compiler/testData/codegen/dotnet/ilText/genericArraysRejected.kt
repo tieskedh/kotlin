@@ -24,6 +24,8 @@ fun valueProjection(values: Array<Int>): Array<out Any> = values
 
 fun <T> nullableTypeParameter(values: Array<T?>): T? = values[0]
 
+// Reified substitution makes the initialized open array valid at Kotlin call sites. Its Array<T>
+// physical remainder is representable and therefore emitted only as a non-public throwing stub.
 inline fun <reified T> initializedOpen(size: Int, value: T): Array<T> = Array(size) { value }
 
 fun <T> openCopy(values: Array<T>): Array<T> = values.copyOf()

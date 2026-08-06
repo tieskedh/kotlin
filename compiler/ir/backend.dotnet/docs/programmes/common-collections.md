@@ -125,7 +125,7 @@ Kotlin collection interfaces are non-generic CLR TypeDefs, while Roslyn executes
 generic interface as Kotlin identity.
 
 Sequence overloads, sorting/min/max/comparator families not yet admitted for ordinary Iterables,
-`Grouping` and its aggregate product, reified operations, concurrency, and BCL adapters remain
+`Grouping` and its aggregate product, dependency-blocked reified variants, concurrency, and BCL adapters remain
 separate closures. The vararg `setOfNotNull(vararg T?)` and object-array
 `filterNotNullTo` variants are also held at one explicit compiler boundary: their authoritative
 signatures require an open nullable projected array (`Array<out T?>`), which the current array
@@ -231,7 +231,7 @@ The bootstrap generator now admits every Common collection-template
 variant whose dependency closure consists only of the already published read-only foundation,
 this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
 The exact inventory is generator-owned and fail-closed and now includes the completed Set/Map
-closure above. Ranges as public values, sequences, random/sorting, reified operations, reflection,
+closure above. Ranges as public values, sequences, random/sorting, dependency-blocked reified variants, reflection,
 and unsigned families remain excluded when they introduce an independent dependency rather than
 being approximated or copied.
 
@@ -284,7 +284,8 @@ recovery, inline non-local control flow, data classes, anonymous generic classes
 cross-library inlining. That first batch did not silently bundle array-receiver overloads. The
 later Set/Map tranche admits only the object-array association, grouping, snapshot, and Set-op
 variants whose array carriers are already exact. Sequence, sorting/random, range-signature,
-reified, reflection, and unsigned variants fail closed outside the admitted batches.
+reflection, unsigned, and still dependency-blocked reified variants fail closed outside the
+admitted batches.
 
 The first shared semantic-test product is deliberately built from repository-owned sources rather
 than a .NET transcription. Its generator projects the exact Common `Test` expectation,
@@ -1033,8 +1034,9 @@ The completed first phase combines that builder surface with exact generated `It
 
 Modern enums and the non-reified `EnumEntries` core are complete. They consume the completed
 general Comparable representation and Common abstract-list substrate. A Kotlin enum is a
-Kotlin-owned reference class with static entry fields, not a CLR value-type enum. Reified
-`enumEntries`, `enumValues`, and `enumValueOf` remain behind the general reified gate.
+Kotlin-owned reference class with static entry fields, not a CLR value-type enum. The later
+completed reified tranche publishes Common `enumEntries`, `enumValues`, and `enumValueOf` by
+substituting the enum class and binding those same synthetic members.
 
 The third phase published the exact Common contracts DSL/effects, `Standard.kt` through
 `takeUnless`, and both `buildString` declarations. The completed range phase subsequently admitted
@@ -1049,7 +1051,7 @@ The completed [runtime-typed allocation decision](../decisions/collection-to-arr
 loops in exact Common source. The .NET actual supplies only the CLR-specific allocation needed to
 reproduce the reference array's runtime vector element type and a non-Java termination policy.
 This is independently implementable with ordinary generic functions: public reified
-`Collection<T>.toTypedArray()` remains parked with the reified-inline programme.
+`Collection<T>.toTypedArray()` was deliberately parked until the reified-inline programme.
 
 JVM is the closest physical precedent because both JVM and CLR arrays carry runtime component
 identity and permit reference-array covariance. JS, Native, and Wasm remain the algorithmic
@@ -1057,11 +1059,12 @@ precedent for delegating to `collectionToArrayCommonImpl` and, unlike JVM's Java
 performing no tail null-termination. A static-token `T[]`, erased `object[]`, LINQ loop, or copied
 target algorithm is rejected.
 
-The source product now extracts the exact Common expects and both complete Common loops. Its
+The source product extracts the exact Common expects and both complete Common loops. Its
 target actuals preserve empty/reuse/iteration/store behavior, while one declaration-suppressing
 intrinsic reproduces the supplied CLR vector's runtime element type. The Common `as T` store path
 uses the CLR's open `unbox.any !!T` operation for both value and reference instantiations. Public
-reified `toTypedArray` remains outside this completed prerequisite.
+reified `toTypedArray` now composes this prerequisite with shared call-site substitution; no
+second loop or collection-specific type-token path was added.
 
 ## Programme order
 
@@ -1078,8 +1081,10 @@ reified `toTypedArray` remains outside this completed prerequisite.
    foundation, replace private counted-loop markers with the shared loop lowering, and admit the
    exact Common declarations this substrate releases, including the final `repeat`. See
    [the range/progression decision](../decisions/ordinary-ranges-and-progressions.md).
-7. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-8. Remove the bootstrap allowlist when the complete generated product is supportable.
+7. **Completed:** publish the dependency-closed reified collection/array operations whose ordinary
+   carriers are already selected, including `filterIsInstance`, `orEmpty`, and `toTypedArray`.
+8. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+9. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

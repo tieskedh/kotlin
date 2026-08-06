@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.ir.declarations.impl.IrFileImpl
 import org.jetbrains.kotlin.ir.declarations.impl.IrModuleFragmentImpl
 import org.jetbrains.kotlin.ir.overrides.isEffectivelyPrivate
 import org.jetbrains.kotlin.ir.symbols.IrSymbol
+import org.jetbrains.kotlin.ir.symbols.impl.IrFakeOverrideSymbolBase
 import org.jetbrains.kotlin.ir.symbols.impl.IrFileSymbolImpl
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.*
@@ -159,8 +160,30 @@ class NonLinkingIrInlineFunctionDeserializer(
     ): IrSymbol? {
         fun IrSymbol.matches(target: IdSignature): Boolean {
             if (this.signature == target) return true
+            // Fake-override symbols deliberately have no owner. Their synthetic signature may
+            // still match directly above; otherwise only a genuinely bound declaration can be
+            // inspected or have a signature recomputed.
+            if (!isBound) return false
             val declaration = owner as? IrDeclaration ?: return false
             return runCatching { signatureComputer.computeSignature(declaration) }.getOrNull() == target
+        }
+
+        fun IrSymbol.unwrapFakeOverride(): IrSymbol {
+            var current = this
+            while (current is IrFakeOverrideSymbolBase<*, *, *>) {
+                current = current.originalSymbol
+            }
+            return current
+        }
+
+        fun resolveCandidate(candidate: IrSymbol?, symbolKind: BinarySymbolData.SymbolKind): IrSymbol? {
+            val unwrapped = candidate?.unwrapFakeOverride() ?: return null
+            val originalSignature = unwrapped.signature
+            return if (!unwrapped.isBound && originalSignature != null && originalSignature != signature) {
+                findSelectedDependencySymbol(originalSignature, symbolKind)
+            } else {
+                unwrapped
+            }
         }
 
         if (signature is IdSignature.AccessorSignature) {
@@ -168,9 +191,8 @@ class NonLinkingIrInlineFunctionDeserializer(
                 signature.propertySignature,
                 BinarySymbolData.SymbolKind.PROPERTY_SYMBOL,
             )?.owner as? IrProperty ?: return null
-            return listOfNotNull(property.getter, property.setter)
-                .map { it.symbol }
-                .firstOrNull { it.matches(signature) }
+            val accessors = listOfNotNull(property.getter, property.setter).map { it.symbol }
+            return accessors.firstOrNull { it.matches(signature) } ?: accessors.singleOrNull()
         }
 
         val commonSignature = signature as? IdSignature.CommonSignature ?: return null
@@ -207,16 +229,26 @@ class NonLinkingIrInlineFunctionDeserializer(
             BinarySymbolData.SymbolKind.FUNCTION_SYMBOL -> {
                 val callableId = callableId()
                 val knownBuiltIns = eagerlyKnownBuiltInFunctions.filter { it.owner.callableId == callableId }
+                val selectedFunctions = irBuiltIns.symbolFinder.findFunctions(callableId)
                 // Synthetic built-ins can be reconstructed with a signature variant different
-                // from the serialized copy. As for eagerly known built-in classes above, accept
-                // the stable logical identity only when it names exactly one compiler-owned
-                // function; overloaded operators still require an exact signature match.
-                knownBuiltIns.firstOrNull { it.matches(signature) }
+                // from the serialized copy. The same is true for a selected fake override: its
+                // synthetic owner signature may differ from the serialized call while its stable
+                // callable identity names exactly one inherited declaration. Accept that logical
+                // identity only when unambiguous; overloaded operators still require an exact
+                // signature match.
+                resolveCandidate(knownBuiltIns.firstOrNull { it.matches(signature) }
                     ?: knownBuiltIns.singleOrNull()
-                    ?: irBuiltIns.symbolFinder.findFunctions(callableId).firstOrNull { it.matches(signature) }
+                    ?: selectedFunctions.firstOrNull { it.matches(signature) }
+                    ?: selectedFunctions.singleOrNull(), symbolKind)
             }
-            BinarySymbolData.SymbolKind.PROPERTY_SYMBOL ->
-                irBuiltIns.symbolFinder.findProperties(callableId()).firstOrNull { it.matches(signature) }
+            BinarySymbolData.SymbolKind.PROPERTY_SYMBOL -> {
+                val selectedProperties = irBuiltIns.symbolFinder.findProperties(callableId())
+                resolveCandidate(
+                    selectedProperties.firstOrNull { it.matches(signature) }
+                        ?: selectedProperties.singleOrNull(),
+                    symbolKind,
+                )
+            }
             BinarySymbolData.SymbolKind.CONSTRUCTOR_SYMBOL ->
                 classId(segments.lastIndex)?.let(irBuiltIns.symbolFinder::findClass)?.owner?.constructors
                     ?.firstOrNull { it.symbol.matches(signature) }?.symbol

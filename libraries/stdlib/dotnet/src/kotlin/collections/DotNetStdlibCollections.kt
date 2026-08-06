@@ -9,6 +9,22 @@ package kotlin.collections
 // CLR collection interface; algorithms use it only as a Kotlin-owned capability marker.
 public actual interface RandomAccess
 
+/** Common contract with the JVM allocation body over the target's ordinary array intrinsic. */
+public actual inline fun <reified T> Array<out T>?.orEmpty(): Array<out T> {
+    if (this != null) return this
+    @Suppress("UNCHECKED_CAST")
+    return arrayOfNulls<T>(0) as Array<T>
+}
+
+/** Exact Native implementation: allocate the substituted carrier and preserve encounter order. */
+public actual inline fun <reified T> Collection<T>.toTypedArray(): Array<T> {
+    val result = arrayOfNulls<T>(size)
+    var index = 0
+    for (element in this) result[index++] = element
+    @Suppress("UNCHECKED_CAST")
+    return result as Array<T>
+}
+
 @IgnorableReturnValue
 @PublishedApi
 internal actual fun checkIndexOverflow(index: Int): Int {

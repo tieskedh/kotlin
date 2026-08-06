@@ -16,6 +16,7 @@ dependencies {
     implementation(project(":compiler:ir.inline"))
     api(project(":compiler:ir.serialization.common"))
     api(project(":compiler:ir.serialization.dotnet"))
+    implementation(project(":kotlin-util-klib-metadata"))
     implementation(project(":compiler:util"))
     implementation(project(":core:descriptors"))
 

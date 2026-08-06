@@ -1350,7 +1350,8 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
     (dotNetBaseSuperTypeOrNull()?.classifier as? IrClassSymbol)?.owner
 
 /**
- * The shared generic type-parameter gate: a supported parameter is non-reified and is either
+ * The shared generic type-parameter gate: a supported parameter is either a reified parameter of
+ * an inline function whose physical body has already become the deterministic throwing stub, or
  * unconstrained (`Any?`), logically non-null but physically unconstrained (`Any`), or has direct
  * non-null type-parameter, non-generic class/interface, or declaration-erased Kotlin classifier
  * bounds.
@@ -1360,7 +1361,8 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
  * [dotNetConstraintTypes] performs the live
  * module-local mapping later, once the class registry exists. Everything else is rejected loudly
  * at the declaration (never erased):
- * - `reified` requires target support for the reified operations that can survive ordinary inlining;
+ * - `reified` is accepted only for an inline function; classes and independently callable
+ *   non-inline methods never acquire reified semantics from CLR generic dispatch;
  * - declaration-site variance (`out`/`in`) is rejected unless the owner has either the direct
  *   interface representation or the erased Kotlin class representation above;
  * - nullable and generic-instantiation constraints stay outside this stage; direct bounds on
@@ -1380,13 +1382,14 @@ internal fun checkDotNetTypeParametersSupported(
     ownerDescription: String,
     allowStringBounds: Boolean = false,
     allowDeclarationSiteVariance: Boolean = false,
+    allowReified: Boolean = false,
 ) {
     for (typeParameter in typeParameters) {
         val parameterName = typeParameter.name.asString()
-        if (typeParameter.isReified) {
+        if (typeParameter.isReified && !allowReified) {
             dotNetUnsupported(
                 "$ownerDescription has a reified type parameter '$parameterName'; " +
-                        "reified type parameters are not supported"
+                        "reified type parameters require an inline function"
             )
         }
         if (!allowDeclarationSiteVariance && typeParameter.variance != Variance.INVARIANT) {
@@ -1441,14 +1444,19 @@ private fun IrSimpleType.isPotentialErasedKotlinClassifierBound(): Boolean {
 
 /**
  * The generic-method gate, run over top-level functions during gathering and over member
- * functions by their owning class/interface shape gate. Ordinary non-reified inline functions
- * use the same physical CLR generic method representation; reified parameters remain rejected by
- * the shared type-parameter gate. Non-generic functions pass untouched.
+ * functions by their owning class/interface shape gate. Ordinary generic functions retain their
+ * callable CLR generic method. A reified inline function retains only an assembly-visible CLR
+ * generic throwing stub after call-site substitution. Non-generic functions pass untouched.
  */
 internal fun IrSimpleFunction.checkDotNetGenericFunctionSupported() {
     if (typeParameters.isEmpty()) return
     val functionName = name.asString()
-    checkDotNetTypeParametersSupported(typeParameters, "function '$functionName'", allowStringBounds = true)
+    checkDotNetTypeParametersSupported(
+        typeParameters,
+        "function '$functionName'",
+        allowStringBounds = true,
+        allowReified = isInline,
+    )
 }
 
 /**
