@@ -1,0 +1,1375 @@
+.assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
+.assembly 'annotationValues' {}
+.module 'main-annotationValues.il'
+
+.class public auto ansi sealed beforefieldinit 'test.ExactValues'
+       extends [mscorlib]System.Attribute
+{
+  .custom instance void [mscorlib]System.AttributeUsageAttribute::.ctor(valuetype [mscorlib]System.AttributeTargets) = (01 00 fc 0d 00 00 02 00 54 02 0d 41 6c 6c 6f 77 4d 75 6c 74 69 70 6c 65 00 54 02 09 49 6e 68 65 72 69 74 65 64 00)
+  .field private bool 'booleanValue'
+  .field private int8 'byteValue'
+  .field private int16 'shortValue'
+  .field private int32 'intValue'
+  .field private int64 'longValue'
+  .field private float32 'floatValue'
+  .field private float64 'doubleValue'
+  .field private char 'charValue'
+  .field private string 'stringValue'
+  .field private string[] 'stringArray'
+  .method public hidebysig specialname rtspecialname instance void .ctor(bool 'booleanValue', int8 'byteValue', int16 'shortValue', int32 'intValue', int64 'longValue', float32 'floatValue', float64 'doubleValue', char 'charValue', string 'stringValue', string[] 'stringArray') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Attribute::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld bool 'test.ExactValues'::'booleanValue'
+    ldarg.0
+    ldarg.2
+    stfld int8 'test.ExactValues'::'byteValue'
+    ldarg.0
+    ldarg.3
+    stfld int16 'test.ExactValues'::'shortValue'
+    ldarg.0
+    ldarg 4
+    stfld int32 'test.ExactValues'::'intValue'
+    ldarg.0
+    ldarg 5
+    stfld int64 'test.ExactValues'::'longValue'
+    ldarg.0
+    ldarg 6
+    stfld float32 'test.ExactValues'::'floatValue'
+    ldarg.0
+    ldarg 7
+    stfld float64 'test.ExactValues'::'doubleValue'
+    ldarg.0
+    ldarg 8
+    stfld char 'test.ExactValues'::'charValue'
+    ldarg.0
+    ldarg 9
+    stfld string 'test.ExactValues'::'stringValue'
+    ldarg.0
+    ldarg 10
+    stfld string[] 'test.ExactValues'::'stringArray'
+    ret
+  }
+  .method public hidebysig specialname instance bool 'get_booleanValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld bool 'test.ExactValues'::'booleanValue'
+    ret
+  }
+  .method public hidebysig specialname instance int8 'get_byteValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int8 'test.ExactValues'::'byteValue'
+    ret
+  }
+  .method public hidebysig specialname instance int16 'get_shortValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int16 'test.ExactValues'::'shortValue'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_intValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'test.ExactValues'::'intValue'
+    ret
+  }
+  .method public hidebysig specialname instance int64 'get_longValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int64 'test.ExactValues'::'longValue'
+    ret
+  }
+  .method public hidebysig specialname instance float32 'get_floatValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld float32 'test.ExactValues'::'floatValue'
+    ret
+  }
+  .method public hidebysig specialname instance float64 'get_doubleValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld float64 'test.ExactValues'::'doubleValue'
+    ret
+  }
+  .method public hidebysig specialname instance char 'get_charValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld char 'test.ExactValues'::'charValue'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_stringValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'test.ExactValues'::'stringValue'
+    ret
+  }
+  .method public hidebysig specialname instance string[] 'get_stringArray'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string[] 'test.ExactValues'::'stringArray'
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] class 'test.ExactValues' 'tmp0_other_with_cast',
+      [1] float32 '<annotationFloatLeft>',
+      [2] float32 '<annotationFloatRight>',
+      [3] float64 '<annotationFloatLeft>@3',
+      [4] float64 '<annotationFloatRight>@4'
+    )
+    ldarg.1
+    isinst class 'test.ExactValues'
+    ldnull
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    ret
+IL_whenNext_1:
+    ldarg.1
+    castclass class 'test.ExactValues'
+    dup
+    brtrue IL_notNull_2
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    stloc.0
+    ldarg.0
+    call instance bool 'test.ExactValues'::'get_booleanValue'()
+    ldloc.0
+    call instance bool 'test.ExactValues'::'get_booleanValue'()
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_4
+    ldc.i4.0
+    ret
+IL_whenNext_4:
+    ldarg.0
+    call instance int8 'test.ExactValues'::'get_byteValue'()
+    ldloc.0
+    call instance int8 'test.ExactValues'::'get_byteValue'()
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_6
+    ldc.i4.0
+    ret
+IL_whenNext_6:
+    ldarg.0
+    call instance int16 'test.ExactValues'::'get_shortValue'()
+    ldloc.0
+    call instance int16 'test.ExactValues'::'get_shortValue'()
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_8
+    ldc.i4.0
+    ret
+IL_whenNext_8:
+    ldarg.0
+    call instance int32 'test.ExactValues'::'get_intValue'()
+    ldloc.0
+    call instance int32 'test.ExactValues'::'get_intValue'()
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_10
+    ldc.i4.0
+    ret
+IL_whenNext_10:
+    ldarg.0
+    call instance int64 'test.ExactValues'::'get_longValue'()
+    ldloc.0
+    call instance int64 'test.ExactValues'::'get_longValue'()
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_12
+    ldc.i4.0
+    ret
+IL_whenNext_12:
+    ldarg.0
+    call instance float32 'test.ExactValues'::'get_floatValue'()
+    stloc.1
+    ldloc.0
+    call instance float32 'test.ExactValues'::'get_floatValue'()
+    stloc.2
+    ldloc.1
+    ldloc.2
+    ceq
+    brfalse IL_annotationFloatNaN_15
+    ldloc.1
+    ldc.r4 0.0
+    ceq
+    brfalse IL_annotationFloatEqual_16
+    ldc.r4 1.0
+    ldloc.1
+    div
+    ldc.r4 1.0
+    ldloc.2
+    div
+    ceq
+    br IL_annotationFloatEnd_17
+IL_annotationFloatNaN_15:
+    ldloc.1
+    ldloc.1
+    ceq
+    ldc.i4.0
+    ceq
+    ldloc.2
+    ldloc.2
+    ceq
+    ldc.i4.0
+    ceq
+    and
+    br IL_annotationFloatEnd_17
+IL_annotationFloatEqual_16:
+    ldc.i4.1
+IL_annotationFloatEnd_17:
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_14
+    ldc.i4.0
+    ret
+IL_whenNext_14:
+    ldarg.0
+    call instance float64 'test.ExactValues'::'get_doubleValue'()
+    stloc.3
+    ldloc.0
+    call instance float64 'test.ExactValues'::'get_doubleValue'()
+    stloc 4
+    ldloc.3
+    ldloc 4
+    ceq
+    brfalse IL_annotationFloatNaN_20
+    ldloc.3
+    ldc.r8 0.0
+    ceq
+    brfalse IL_annotationFloatEqual_21
+    ldc.r8 1.0
+    ldloc.3
+    div
+    ldc.r8 1.0
+    ldloc 4
+    div
+    ceq
+    br IL_annotationFloatEnd_22
+IL_annotationFloatNaN_20:
+    ldloc.3
+    ldloc.3
+    ceq
+    ldc.i4.0
+    ceq
+    ldloc 4
+    ldloc 4
+    ceq
+    ldc.i4.0
+    ceq
+    and
+    br IL_annotationFloatEnd_22
+IL_annotationFloatEqual_21:
+    ldc.i4.1
+IL_annotationFloatEnd_22:
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_19
+    ldc.i4.0
+    ret
+IL_whenNext_19:
+    ldarg.0
+    call instance char 'test.ExactValues'::'get_charValue'()
+    ldloc.0
+    call instance char 'test.ExactValues'::'get_charValue'()
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_24
+    ldc.i4.0
+    ret
+IL_whenNext_24:
+    ldarg.0
+    call instance string 'test.ExactValues'::'get_stringValue'()
+    ldloc.0
+    call instance string 'test.ExactValues'::'get_stringValue'()
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_26
+    ldc.i4.0
+    ret
+IL_whenNext_26:
+    ldarg.0
+    call instance string[] 'test.ExactValues'::'get_stringArray'()
+    ldloc.0
+    call instance string[] 'test.ExactValues'::'get_stringArray'()
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(class [mscorlib]System.Array, class [mscorlib]System.Array)
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_28
+    ldc.i4.0
+    ret
+IL_whenNext_28:
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'result'
+    )
+    ldstr "booleanValue"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance bool 'test.ExactValues'::'get_booleanValue'()
+    box [mscorlib]System.Boolean
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    stloc.0
+    ldloc.0
+    ldstr "byteValue"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance int8 'test.ExactValues'::'get_byteValue'()
+    box [mscorlib]System.SByte
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ldstr "shortValue"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance int16 'test.ExactValues'::'get_shortValue'()
+    box [mscorlib]System.Int16
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ldstr "intValue"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance int32 'test.ExactValues'::'get_intValue'()
+    box [mscorlib]System.Int32
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ldstr "longValue"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance int64 'test.ExactValues'::'get_longValue'()
+    box [mscorlib]System.Int64
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ldstr "floatValue"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance float32 'test.ExactValues'::'get_floatValue'()
+    box [mscorlib]System.Single
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ldstr "doubleValue"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance float64 'test.ExactValues'::'get_doubleValue'()
+    box [mscorlib]System.Double
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ldstr "charValue"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance char 'test.ExactValues'::'get_charValue'()
+    box [mscorlib]System.Char
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ldstr "stringValue"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance string 'test.ExactValues'::'get_stringValue'()
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ldstr "stringArray"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance string[] 'test.ExactValues'::'get_stringArray'()
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'DataClassArrayHashCode'(class [mscorlib]System.Array)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 4
+    ldstr "@test.ExactValues(booleanValue="
+    ldarg.0
+    call instance bool 'test.ExactValues'::'get_booleanValue'()
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", byteValue="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance int8 'test.ExactValues'::'get_byteValue'()
+    box [mscorlib]System.SByte
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", shortValue="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance int16 'test.ExactValues'::'get_shortValue'()
+    box [mscorlib]System.Int16
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", intValue="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance int32 'test.ExactValues'::'get_intValue'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", longValue="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance int64 'test.ExactValues'::'get_longValue'()
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", floatValue="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance float32 'test.ExactValues'::'get_floatValue'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.DoubleFormatting'::'FloatToString'(float32)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", doubleValue="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance float64 'test.ExactValues'::'get_doubleValue'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.DoubleFormatting'::'DoubleToString'(float64)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", charValue="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance char 'test.ExactValues'::'get_charValue'()
+    call string [mscorlib]System.Char::ToString(char)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", stringValue="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance string 'test.ExactValues'::'get_stringValue'()
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", stringArray="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance string[] 'test.ExactValues'::'get_stringArray'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'DataClassArrayToString'(class [mscorlib]System.Array)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ")"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .property instance bool 'booleanValue'()
+  {
+    .get instance bool 'test.ExactValues'::'get_booleanValue'()
+  }
+  .property instance int8 'byteValue'()
+  {
+    .get instance int8 'test.ExactValues'::'get_byteValue'()
+  }
+  .property instance int16 'shortValue'()
+  {
+    .get instance int16 'test.ExactValues'::'get_shortValue'()
+  }
+  .property instance int32 'intValue'()
+  {
+    .get instance int32 'test.ExactValues'::'get_intValue'()
+  }
+  .property instance int64 'longValue'()
+  {
+    .get instance int64 'test.ExactValues'::'get_longValue'()
+  }
+  .property instance float32 'floatValue'()
+  {
+    .get instance float32 'test.ExactValues'::'get_floatValue'()
+  }
+  .property instance float64 'doubleValue'()
+  {
+    .get instance float64 'test.ExactValues'::'get_doubleValue'()
+  }
+  .property instance char 'charValue'()
+  {
+    .get instance char 'test.ExactValues'::'get_charValue'()
+  }
+  .property instance string 'stringValue'()
+  {
+    .get instance string 'test.ExactValues'::'get_stringValue'()
+  }
+  .property instance string[] 'stringArray'()
+  {
+    .get instance string[] 'test.ExactValues'::'get_stringArray'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.ExactDefault'
+       extends [mscorlib]System.Attribute
+{
+  .custom instance void [mscorlib]System.AttributeUsageAttribute::.ctor(valuetype [mscorlib]System.AttributeTargets) = (01 00 fc 0d 00 00 02 00 54 02 0d 41 6c 6c 6f 77 4d 75 6c 74 69 70 6c 65 00 54 02 09 49 6e 68 65 72 69 74 65 64 00)
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Attribute::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'test.ExactDefault'::'value'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value', int32 '$mask0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.DefaultConstructorMarker' '$marker') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 42
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    call instance void 'test.ExactDefault'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'test.ExactDefault'::'value'
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'test.ExactDefault' 'tmp0_other_with_cast'
+    )
+    ldarg.1
+    isinst class 'test.ExactDefault'
+    ldnull
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    ret
+IL_whenNext_1:
+    ldarg.1
+    castclass class 'test.ExactDefault'
+    dup
+    brtrue IL_notNull_2
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    stloc.0
+    ldarg.0
+    call instance int32 'test.ExactDefault'::'get_value'()
+    ldloc.0
+    call instance int32 'test.ExactDefault'::'get_value'()
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_4
+    ldc.i4.0
+    ret
+IL_whenNext_4:
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 2
+    ldstr "value"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance int32 'test.ExactDefault'::'get_value'()
+    box [mscorlib]System.Int32
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 4
+    ldstr "@test.ExactDefault(value="
+    ldarg.0
+    call instance int32 'test.ExactDefault'::'get_value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ")"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'test.ExactDefault'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.NestedValue'
+       extends [mscorlib]System.Attribute
+{
+  .custom instance void [mscorlib]System.AttributeUsageAttribute::.ctor(valuetype [mscorlib]System.AttributeTargets) = (01 00 fc 0d 00 00 02 00 54 02 0d 41 6c 6c 6f 77 4d 75 6c 74 69 70 6c 65 00 54 02 09 49 6e 68 65 72 69 74 65 64 00)
+  .field private string 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Attribute::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'test.NestedValue'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'test.NestedValue'::'value'
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'test.NestedValue' 'tmp0_other_with_cast'
+    )
+    ldarg.1
+    isinst class 'test.NestedValue'
+    ldnull
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    ret
+IL_whenNext_1:
+    ldarg.1
+    castclass class 'test.NestedValue'
+    dup
+    brtrue IL_notNull_2
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    stloc.0
+    ldarg.0
+    call instance string 'test.NestedValue'::'get_value'()
+    ldloc.0
+    call instance string 'test.NestedValue'::'get_value'()
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_4
+    ldc.i4.0
+    ret
+IL_whenNext_4:
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 2
+    ldstr "value"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance string 'test.NestedValue'::'get_value'()
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 2
+    ldstr "@test.NestedValue(value="
+    ldarg.0
+    call instance string 'test.NestedValue'::'get_value'()
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ")"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .property instance string 'value'()
+  {
+    .get instance string 'test.NestedValue'::'get_value'()
+  }
+}
+.class public auto ansi sealed 'test.KotlinEnum'
+       extends [Kotlin.Stdlib]'Kotlin.Enum'
+       implements class [mscorlib]'System.IComparable`1'<class 'test.KotlinEnum'>
+{
+  .field public static initonly class 'test.KotlinEnum' 'FIRST'
+  .field public static initonly class 'test.KotlinEnum' 'SECOND'
+  .field private static class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' '$ENTRIES'
+  .field private static object '<static-initialization-failure>'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] class 'test.KotlinEnum'[] 'tmp0_<enumValues>',
+      [1] class 'test.KotlinEnum'[] '<arraySet>',
+      [2] int32 '<arrayIndex>',
+      [3] class 'test.KotlinEnum' '<arrayValue>',
+      [4] class 'test.KotlinEnum'[] '<arraySet>@4',
+      [5] int32 '<arrayIndex>@5',
+      [6] class 'test.KotlinEnum' '<arrayValue>@6',
+      [7] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      call void [Kotlin.Stdlib]'Kotlin.Enum'/'<CompanionStatics>'::'<EnsureInitialized>'()
+      ldstr "FIRST"
+      ldc.i4 0
+      newobj instance void 'test.KotlinEnum'::.ctor(string, int32)
+      stsfld class 'test.KotlinEnum' 'test.KotlinEnum'::'FIRST'
+      ldstr "SECOND"
+      ldc.i4 1
+      newobj instance void 'test.KotlinEnum'::.ctor(string, int32)
+      stsfld class 'test.KotlinEnum' 'test.KotlinEnum'::'SECOND'
+      ldc.i4 2
+      dup
+      ldc.i4.0
+      clt
+      brfalse IL_arraySizeNonNegative_1
+      pop
+      newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
+      throw
+IL_arraySizeNonNegative_1:
+      newarr class 'test.KotlinEnum'
+      stloc.0
+      ldloc.0
+      stloc.1
+      ldc.i4 0
+      stloc.2
+      call void 'test.KotlinEnum'::'<EnsureInitialized>'()
+      ldsfld class 'test.KotlinEnum' 'test.KotlinEnum'::'FIRST'
+      stloc.3
+      ldloc.1
+      ldloc.2
+      ldloc.3
+      stelem class 'test.KotlinEnum'
+      ldloc.0
+      stloc 4
+      ldc.i4 1
+      stloc 5
+      call void 'test.KotlinEnum'::'<EnsureInitialized>'()
+      ldsfld class 'test.KotlinEnum' 'test.KotlinEnum'::'SECOND'
+      stloc 6
+      ldloc 4
+      ldloc 5
+      ldloc 6
+      stelem class 'test.KotlinEnum'
+      ldloc.0
+      call class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' [Kotlin.Stdlib]'Kotlin.Enums.EnumEntriesKt'::'enumEntries'<class 'test.KotlinEnum'>(!!0[])
+      stsfld class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'test.KotlinEnum'::'$ENTRIES'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc 7
+      ldloc 7
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'test.KotlinEnum'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method public hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldsfld object 'test.KotlinEnum'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'test.KotlinEnum'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "test.KotlinEnum"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
+    ret
+  }
+  .method private hidebysig specialname rtspecialname instance void .ctor(string '$enum$name', int32 '$enum$ordinal') cil managed
+  {
+    .maxstack 3
+    call void 'test.KotlinEnum'::'<EnsureInitialized>'()
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call instance void [Kotlin.Stdlib]'Kotlin.Enum'::.ctor(string, int32)
+    ret
+  }
+  .method public hidebysig static class 'test.KotlinEnum'[] 'values'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] class 'test.KotlinEnum'[] 'tmp0_<enumValues>',
+      [1] class 'test.KotlinEnum'[] '<arraySet>',
+      [2] int32 '<arrayIndex>',
+      [3] class 'test.KotlinEnum' '<arrayValue>',
+      [4] class 'test.KotlinEnum'[] '<arraySet>@4',
+      [5] int32 '<arrayIndex>@5',
+      [6] class 'test.KotlinEnum' '<arrayValue>@6'
+    )
+    ldc.i4 2
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr class 'test.KotlinEnum'
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldc.i4 0
+    stloc.2
+    call void 'test.KotlinEnum'::'<EnsureInitialized>'()
+    ldsfld class 'test.KotlinEnum' 'test.KotlinEnum'::'FIRST'
+    stloc.3
+    ldloc.1
+    ldloc.2
+    ldloc.3
+    stelem class 'test.KotlinEnum'
+    ldloc.0
+    stloc 4
+    ldc.i4 1
+    stloc 5
+    call void 'test.KotlinEnum'::'<EnsureInitialized>'()
+    ldsfld class 'test.KotlinEnum' 'test.KotlinEnum'::'SECOND'
+    stloc 6
+    ldloc 4
+    ldloc 5
+    ldloc 6
+    stelem class 'test.KotlinEnum'
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static class 'test.KotlinEnum' 'valueOf'(string 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldstr "FIRST"
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    brfalse IL_whenNext_1
+    call void 'test.KotlinEnum'::'<EnsureInitialized>'()
+    ldsfld class 'test.KotlinEnum' 'test.KotlinEnum'::'FIRST'
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    ldstr "SECOND"
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    brfalse IL_whenNext_2
+    call void 'test.KotlinEnum'::'<EnsureInitialized>'()
+    ldsfld class 'test.KotlinEnum' 'test.KotlinEnum'::'SECOND'
+    br IL_whenEnd_0
+IL_whenNext_2:
+    ldstr "No enum constant test.KotlinEnum."
+    ldarg.0
+    call string [mscorlib]System.String::Concat(string, string)
+    newobj instance void [mscorlib]System.ArgumentException::.ctor(string)
+    dup
+    ldc.i4 5
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
+    throw
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig specialname static class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'get_entries'() cil managed
+  {
+    .maxstack 1
+    ldsfld class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'test.KotlinEnum'::'$ENTRIES'
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.Comparable-compareTo-0f838f77390826ba738a927e521071fe>'(object 'other') cil managed
+  {
+    .override method instance int32 [mscorlib]'System.IComparable'::'CompareTo'(object)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    castclass class 'test.KotlinEnum'
+    callvirt instance int32 [Kotlin.Stdlib]'Kotlin.Enum'::'compareTo'(object)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.Comparable-compareTo-0f838f77390826ba738a927e521071fe>'(class 'test.KotlinEnum' 'other') cil managed
+  {
+    .override method instance int32 class [mscorlib]'System.IComparable`1'<class 'test.KotlinEnum'>::'CompareTo'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 [Kotlin.Stdlib]'Kotlin.Enum'::'compareTo'(object)
+    ret
+  }
+  .property class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'entries'()
+  {
+    .get class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'test.KotlinEnum'::'get_entries'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.KotlinOnlyValues'
+       extends [mscorlib]System.Attribute
+{
+  .custom instance void [mscorlib]System.AttributeUsageAttribute::.ctor(valuetype [mscorlib]System.AttributeTargets) = (01 00 fc 0d 00 00 02 00 54 02 0d 41 6c 6c 6f 77 4d 75 6c 74 69 70 6c 65 00 54 02 09 49 6e 68 65 72 69 74 65 64 00)
+  .field private class [Kotlin.Runtime]'Kotlin.IntArray' 'primitiveArray'
+  .field private class [Kotlin.Runtime]'Kotlin.KClass' 'klass'
+  .field private class 'test.KotlinEnum' 'enumValue'
+  .field private class 'test.NestedValue' 'nested'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.IntArray' 'primitiveArray', class [Kotlin.Runtime]'Kotlin.KClass' 'klass', class 'test.KotlinEnum' 'enumValue', class 'test.NestedValue' 'nested') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Attribute::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class [Kotlin.Runtime]'Kotlin.IntArray' 'test.KotlinOnlyValues'::'primitiveArray'
+    ldarg.0
+    ldarg.2
+    stfld class [Kotlin.Runtime]'Kotlin.KClass' 'test.KotlinOnlyValues'::'klass'
+    ldarg.0
+    ldarg.3
+    stfld class 'test.KotlinEnum' 'test.KotlinOnlyValues'::'enumValue'
+    ldarg.0
+    ldarg 4
+    stfld class 'test.NestedValue' 'test.KotlinOnlyValues'::'nested'
+    ret
+  }
+  .method public hidebysig specialname instance class [Kotlin.Runtime]'Kotlin.IntArray' 'get_primitiveArray'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.IntArray' 'test.KotlinOnlyValues'::'primitiveArray'
+    ret
+  }
+  .method public hidebysig specialname instance class [Kotlin.Runtime]'Kotlin.KClass' 'get_klass'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.KClass' 'test.KotlinOnlyValues'::'klass'
+    ret
+  }
+  .method public hidebysig specialname instance class 'test.KotlinEnum' 'get_enumValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'test.KotlinEnum' 'test.KotlinOnlyValues'::'enumValue'
+    ret
+  }
+  .method public hidebysig specialname instance class 'test.NestedValue' 'get_nested'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'test.NestedValue' 'test.KotlinOnlyValues'::'nested'
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'test.KotlinOnlyValues' 'tmp0_other_with_cast'
+    )
+    ldarg.1
+    isinst class 'test.KotlinOnlyValues'
+    ldnull
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    ret
+IL_whenNext_1:
+    ldarg.1
+    castclass class 'test.KotlinOnlyValues'
+    dup
+    brtrue IL_notNull_2
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    stloc.0
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.IntArray' 'test.KotlinOnlyValues'::'get_primitiveArray'()
+    call class [mscorlib]System.Array [Kotlin.Runtime]'Kotlin.Runtime.Internal.PrimitiveArrays'::'GetStorageOrNull'(object)
+    ldloc.0
+    call instance class [Kotlin.Runtime]'Kotlin.IntArray' 'test.KotlinOnlyValues'::'get_primitiveArray'()
+    call class [mscorlib]System.Array [Kotlin.Runtime]'Kotlin.Runtime.Internal.PrimitiveArrays'::'GetStorageOrNull'(object)
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(class [mscorlib]System.Array, class [mscorlib]System.Array)
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_4
+    ldc.i4.0
+    ret
+IL_whenNext_4:
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.KClass' 'test.KotlinOnlyValues'::'get_klass'()
+    ldloc.0
+    call instance class [Kotlin.Runtime]'Kotlin.KClass' 'test.KotlinOnlyValues'::'get_klass'()
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_6
+    ldc.i4.0
+    ret
+IL_whenNext_6:
+    ldarg.0
+    call instance class 'test.KotlinEnum' 'test.KotlinOnlyValues'::'get_enumValue'()
+    ldloc.0
+    call instance class 'test.KotlinEnum' 'test.KotlinOnlyValues'::'get_enumValue'()
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_8
+    ldc.i4.0
+    ret
+IL_whenNext_8:
+    ldarg.0
+    call instance class 'test.NestedValue' 'test.KotlinOnlyValues'::'get_nested'()
+    ldloc.0
+    call instance class 'test.NestedValue' 'test.KotlinOnlyValues'::'get_nested'()
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_10
+    ldc.i4.0
+    ret
+IL_whenNext_10:
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'result'
+    )
+    ldstr "primitiveArray"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.IntArray' 'test.KotlinOnlyValues'::'get_primitiveArray'()
+    call class [mscorlib]System.Array [Kotlin.Runtime]'Kotlin.Runtime.Internal.PrimitiveArrays'::'GetStorageOrNull'(object)
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'DataClassArrayHashCode'(class [mscorlib]System.Array)
+    xor
+    stloc.0
+    ldloc.0
+    ldstr "klass"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.KClass' 'test.KotlinOnlyValues'::'get_klass'()
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ldstr "enumValue"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance class 'test.KotlinEnum' 'test.KotlinOnlyValues'::'get_enumValue'()
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ldstr "nested"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance class 'test.NestedValue' 'test.KotlinOnlyValues'::'get_nested'()
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    add
+    stloc.0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 2
+    ldstr "@test.KotlinOnlyValues(primitiveArray="
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.IntArray' 'test.KotlinOnlyValues'::'get_primitiveArray'()
+    call class [mscorlib]System.Array [Kotlin.Runtime]'Kotlin.Runtime.Internal.PrimitiveArrays'::'GetStorageOrNull'(object)
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'DataClassArrayToString'(class [mscorlib]System.Array)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", klass="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.KClass' 'test.KotlinOnlyValues'::'get_klass'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", enumValue="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance class 'test.KotlinEnum' 'test.KotlinOnlyValues'::'get_enumValue'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", nested="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    call instance class 'test.NestedValue' 'test.KotlinOnlyValues'::'get_nested'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ")"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .property instance class [Kotlin.Runtime]'Kotlin.IntArray' 'primitiveArray'()
+  {
+    .get instance class [Kotlin.Runtime]'Kotlin.IntArray' 'test.KotlinOnlyValues'::'get_primitiveArray'()
+  }
+  .property instance class [Kotlin.Runtime]'Kotlin.KClass' 'klass'()
+  {
+    .get instance class [Kotlin.Runtime]'Kotlin.KClass' 'test.KotlinOnlyValues'::'get_klass'()
+  }
+  .property instance class 'test.KotlinEnum' 'enumValue'()
+  {
+    .get instance class 'test.KotlinEnum' 'test.KotlinOnlyValues'::'get_enumValue'()
+  }
+  .property instance class 'test.NestedValue' 'nested'()
+  {
+    .get instance class 'test.NestedValue' 'test.KotlinOnlyValues'::'get_nested'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.BinaryValue'
+       extends [mscorlib]System.Attribute
+{
+  .custom instance void [mscorlib]System.AttributeUsageAttribute::.ctor(valuetype [mscorlib]System.AttributeTargets) = (01 00 fc 0d 00 00 02 00 54 02 0d 41 6c 6c 6f 77 4d 75 6c 74 69 70 6c 65 00 54 02 09 49 6e 68 65 72 69 74 65 64 00)
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Attribute::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'test.BinaryValue'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'test.BinaryValue'::'value'
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'test.BinaryValue' 'tmp0_other_with_cast'
+    )
+    ldarg.1
+    isinst class 'test.BinaryValue'
+    ldnull
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    ret
+IL_whenNext_1:
+    ldarg.1
+    castclass class 'test.BinaryValue'
+    dup
+    brtrue IL_notNull_2
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    stloc.0
+    ldarg.0
+    call instance int32 'test.BinaryValue'::'get_value'()
+    ldloc.0
+    call instance int32 'test.BinaryValue'::'get_value'()
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_4
+    ldc.i4.0
+    ret
+IL_whenNext_4:
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 2
+    ldstr "value"
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ldc.i4 127
+    mul
+    ldarg.0
+    call instance int32 'test.BinaryValue'::'get_value'()
+    box [mscorlib]System.Int32
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    xor
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 4
+    ldstr "@test.BinaryValue(value="
+    ldarg.0
+    call instance int32 'test.BinaryValue'::'get_value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ")"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'test.BinaryValue'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.Applied'
+       extends [mscorlib]System.Object
+{
+  .custom instance void 'test.ExactValues'::.ctor(bool, int8, int16, int32, int64, float32, float64, char, string, string[]) = (01 00 01 fe fd ff 78 56 34 12 08 07 06 05 04 03 02 01 00 00 00 80 00 00 00 00 00 00 f8 7f bb 03 03 68 c3 a9 02 00 00 00 01 61 02 ce b2 00 00)
+  .custom instance void 'test.ExactDefault'::.ctor(int32) = (01 00 2a 00 00 00 00 00)
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'test.annotationValuesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static string 'constructValues'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'test.ExactDefault' 'left',
+      [1] class 'test.ExactDefault' 'right'
+    )
+    ldc.i4 42
+    newobj instance void 'test.ExactDefault'::.ctor(int32)
+    stloc.0
+    ldc.i4 42
+    newobj instance void 'test.ExactDefault'::.ctor(int32)
+    stloc.1
+    ldloc.0
+    ldloc.1
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    brfalse IL_whenNext_1
+    ldloc.0
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldstr "FAIL"
+IL_whenEnd_0:
+    ret
+  }
+}

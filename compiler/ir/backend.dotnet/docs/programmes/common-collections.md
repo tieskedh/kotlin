@@ -257,9 +257,10 @@ internal `JsImplicitExport(Boolean)` directive. The bootstrap source product ret
 declaration and both applications in KLIB. Like the existing optional `JsName` expectation, its
 declaration lives in the resolution-only `kotlin.js` shard and receives no .NET TypeDef or CLR
 custom-attribute row: the payload controls JS declaration-file export and has no truthful .NET
-meaning. This does not admit valued annotation classes generally; user/runtime construction,
-Common value semantics, CLR value encoding, foreign import, and annotation reflection remain one
-separate feature boundary. Dropping the applications from `Tuples.kt`, inventing a parameterless
+meaning. This collection-source decision does not itself define valued annotation classes;
+user/runtime construction, Common value semantics, CLR value encoding, foreign import, and
+annotation reflection remain separate feature boundaries. Dropping the applications from
+`Tuples.kt`, inventing a parameterless
 stub, or treating this JS compiler directive as a CLR attribute would make target source rather
 than Common authoritative.
 
@@ -337,8 +338,8 @@ arity; Common `AbstractList.IteratorImpl`, `ListIteratorImpl`, and `SubList` exe
 
 Common `AbstractCollection` has an optional valued `@JsName("toArray")`
 expectation. The .NET bootstrap declaration is resolution-only and is erased
-before product IR: it neither admits valued annotation classes nor emits a CLR
-attribute.
+before product IR: it neither relies on the general annotation-value runtime
+nor emits a CLR attribute for a JS-only directive.
 
 ### Generated terminal and cardinality operations
 

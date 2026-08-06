@@ -1,10 +1,11 @@
 // Static-style declarations inside objects and companions fail at their own metadata subtree.
-// The valid parent/siblings remain available, while real inheritance dependents of a rejected
-// nested base still disappear through the live-map fixpoint. Generic nested classes with
-// companions survive through one non-generic static holder.
+// Valued nested annotations are ordinary admitted declarations; the other valid parent/siblings
+// remain available, while real inheritance dependents of a rejected nested base still disappear
+// through the live-map fixpoint. Generic nested classes with companions survive through one
+// non-generic static holder.
 
 object BrokenObjectOwner {
-    annotation class BrokenAnnotation(val value: Int)
+    annotation class NestedAnnotation(val value: Int)
 
     class Good {
         fun value(): Int = 1
@@ -31,7 +32,7 @@ object BrokenObjectOwner {
 
 class BrokenCompanionOwner {
     companion object {
-        annotation class BrokenAnnotation(val value: Int)
+        annotation class NestedAnnotation(val value: Int)
 
         class Good {
             fun value(): Int = 3

@@ -26054,7 +26054,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testMarkerAnnotationsAcrossPortableLibraryAndCSharpBoundaries() {
+    fun testAnnotationsAcrossPortableLibraryAndCSharpBoundaries() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,
             ".NET Framework ILAsm is not available",
@@ -26100,7 +26100,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 @Retention(AnnotationRetention.SOURCE)
                 public annotation class SourceMarker
 
+                @Retention(AnnotationRetention.RUNTIME)
+                public annotation class RuntimeValues(
+                    val number: Int,
+                    val text: String,
+                    val names: Array<String> = ["default"],
+                )
+
+                @Retention(AnnotationRetention.RUNTIME)
+                public annotation class KotlinOnlyValues(val klass: kotlin.reflect.KClass<*>)
+
                 @RuntimeMarker
+                @RuntimeValues(7, "kotlin")
+                @KotlinOnlyValues(String::class)
                 @BinaryMarker
                 @SourceMarker
                 public class KotlinApplied @RuntimeMarker constructor(public var value: Int) {
@@ -26133,6 +26145,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "valuetype [netstandard]System.AttributeTargets)" in libraryIl
         ) { libraryIl }
         assertTrue(".custom instance void 'markerabi.RuntimeMarker'::.ctor()" in libraryIl) { libraryIl }
+        assertTrue(
+            ".custom instance void 'markerabi.RuntimeValues'::.ctor(int32, string, string[]) = " in libraryIl
+        ) { libraryIl }
+        assertFalse(".custom instance void 'markerabi.KotlinOnlyValues'::.ctor(" in libraryIl) { libraryIl }
         assertFalse(".custom instance void 'markerabi.BinaryMarker'::.ctor()" in libraryIl) { libraryIl }
         assertFalse(".custom instance void 'markerabi.SourceMarker'::.ctor()" in libraryIl) { libraryIl }
 
@@ -26143,6 +26159,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 using System.Reflection;
 
                 [markerabi.RuntimeMarker, markerabi.RuntimeMarker]
+                [markerabi.RuntimeValues(9, "csharp", new string[] { "x", "y" })]
                 public sealed class CSharpApplied
                 {
                     [markerabi.RuntimeMarker]
@@ -26160,6 +26177,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     private static int Count(MemberInfo member)
                     {
                         return member.GetCustomAttributes(typeof(markerabi.RuntimeMarker), false).Length;
+                    }
+
+                    private static markerabi.RuntimeValues Values(Type type)
+                    {
+                        return (markerabi.RuntimeValues) Attribute.GetCustomAttribute(
+                            type, typeof(markerabi.RuntimeValues));
                     }
 
                     public static int Main()
@@ -26180,6 +26203,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (Count(update) != 1) return 7;
                         if (update.GetParameters()[0].GetCustomAttributes(
                                 typeof(markerabi.RuntimeMarker), false).Length != 1) return 8;
+                        markerabi.RuntimeValues kotlinValues = Values(typeof(markerabi.KotlinApplied));
+                        if (kotlinValues == null || kotlinValues.number != 7 ||
+                            kotlinValues.text != "kotlin" || kotlinValues.names.Length != 1 ||
+                            kotlinValues.names[0] != "default") return 9;
+                        markerabi.RuntimeValues csharpValues = Values(typeof(CSharpApplied));
+                        if (csharpValues == null || csharpValues.number != 9 ||
+                            csharpValues.text != "csharp" || csharpValues.names.Length != 2 ||
+                            csharpValues.names[0] != "x" || csharpValues.names[1] != "y") return 10;
+                        if (Attribute.GetCustomAttribute(
+                                typeof(markerabi.KotlinApplied),
+                                typeof(markerabi.KotlinOnlyValues)) != null) return 11;
                         return 0;
                     }
                 }
@@ -26204,9 +26238,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     """
                     package markerconsumer
 
+                    import markerabi.KotlinOnlyValues
                     import markerabi.RuntimeMarker
+                    import markerabi.RuntimeValues
 
                     @RuntimeMarker
+                    @RuntimeValues(11, "downstream", ["d"])
+                    @KotlinOnlyValues(String::class)
                     class DownstreamApplied
 
                     fun main() {
@@ -26216,6 +26254,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             first.toString() != "@markerabi.RuntimeMarker()"
                         ) {
                             throw Error("external marker value semantics")
+                        }
+                        val defaultValues = RuntimeValues(1, "external")
+                        val explicitValues = RuntimeValues(1, "external", arrayOf("default"))
+                        if (defaultValues != explicitValues ||
+                            defaultValues.hashCode() != explicitValues.hashCode()
+                        ) {
+                            throw Error("external valued annotation semantics")
+                        }
+                        val kotlinOnly = KotlinOnlyValues(String::class)
+                        if (kotlinOnly.klass != String::class) {
+                            throw Error("KLIB-only annotation construction")
                         }
                     }
                     """.trimIndent()
@@ -26235,6 +26284,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val consumerIl = consumerDirectory.resolve("MarkerKotlinConsumer.il").readText()
             assertTrue(
                 ".custom instance void [Marker.Annotation.Library]'markerabi.RuntimeMarker'::.ctor()" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".custom instance void [Marker.Annotation.Library]'markerabi.RuntimeValues'::.ctor(" in consumerIl
+            ) { consumerIl }
+            assertFalse(
+                ".custom instance void [Marker.Annotation.Library]'markerabi.KotlinOnlyValues'::.ctor(" in consumerIl
             ) { consumerIl }
             if (target == "net10.0") {
                 runDotNet(dotnetHost, application, consumerDirectory, "Kotlin marker consumer failed for $target")

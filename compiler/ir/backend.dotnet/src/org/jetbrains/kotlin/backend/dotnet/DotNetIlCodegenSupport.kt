@@ -91,16 +91,12 @@ private fun IrType.isDotNetComparableSelfBound(typeParameter: IrTypeParameter): 
 }
 
 /**
- * The deliberately small first annotation-class ABI tranche. Keep this predicate shared by the
- * lowering and shape validator: a declaration which receives a concrete runtime implementation
- * must also be one the emitter can truthfully encode as a parameterless CLR custom attribute.
+ * Whether this Common annotation declaration can be the target's single concrete runtime value.
+ * CLR custom-attribute projection is a separate, narrower question: Kotlin-only values remain
+ * authoritative in KLIB and must not prevent ordinary runtime construction of the declaration.
  */
-internal fun IrClass.isSupportedDotNetMarkerAnnotationClass(): Boolean =
-    isAnnotationClass &&
-            !isExpect &&
-            typeParameters.isEmpty() &&
-            primaryConstructor?.parameters?.isEmpty() == true &&
-            declarations.filterIsInstance<IrProperty>().none { !it.isFakeOverride }
+internal fun IrClass.isSupportedDotNetAnnotationClass(): Boolean =
+    isAnnotationClass && !isExpect && primaryConstructor != null
 
 /** The exact invariant element type used by the indexed-loop lowering, or null for projections. */
 internal fun IrType.dotNetInvariantArrayElementTypeOrNull(): IrType? {

@@ -20,12 +20,14 @@ import org.jetbrains.kotlin.ir.expressions.IrGetObjectValue
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
+import org.jetbrains.kotlin.ir.expressions.IrSpreadElement
 import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.expressions.IrThrow
 import org.jetbrains.kotlin.ir.expressions.IrTry
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
+import org.jetbrains.kotlin.ir.expressions.IrVararg
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
@@ -343,6 +345,7 @@ internal class DotNetIlExpressionCodegen(
             }
             is IrTry -> statementScopeEmitter.emitTryExpression(expression, expectedType)
             is IrTypeOperatorCall -> emitTypeOperatorCall(expression, expectedType)
+            is IrVararg -> emitVarargLiteral(expression, expectedType)
             is IrCall -> {
                 val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
                 if (intrinsic == null || !intrinsic.tryEmitAsExpression(expression, this, expectedType)) {
@@ -355,6 +358,56 @@ internal class DotNetIlExpressionCodegen(
             else -> dotNetUnsupported(
                 "unsupported ${expectedType.nameInSignature} expression ${expression.javaClass.simpleName}: ${expression.render()}"
             )
+        }
+    }
+
+    private fun emitVarargLiteral(expression: IrVararg, expectedType: DotNetIlValueType) {
+        val elements = expression.elements.mapIndexed { index, element ->
+            when (element) {
+                is IrSpreadElement -> dotNetUnsupported(
+                    "spread element at index $index in a residual IR vararg is not supported"
+                )
+                is IrExpression -> element
+                else -> error("Internal .NET backend error: unknown IrVarargElement ${element.javaClass.simpleName}")
+            }
+        }
+        val literalType = when (expectedType) {
+            is DotNetIlValueType.PrimitiveArray -> expectedType
+            is DotNetIlValueType.GenericArray -> {
+                val elementType = toDotNetIlValueType(expression.varargElementType)
+                    ?: dotNetUnsupported(
+                        "residual IR vararg has unsupported element type ${expression.varargElementType.render()}"
+                    )
+                DotNetIlValueType.GenericArray(elementType)
+            }
+            else -> dotNetUnsupported(
+                "residual IR vararg cannot produce ${expectedType.nameInSignature}"
+            )
+        }
+        if (!literalType.isDotNetAssignableTo(expectedType)) {
+            dotNetUnsupported(
+                "residual IR vararg produces ${literalType.nameInSignature}, not ${expectedType.nameInSignature}"
+            )
+        }
+        when (literalType) {
+            is DotNetIlValueType.PrimitiveArray -> emitArrayLiteralElements(
+                elements,
+                this,
+                literalType.storageType,
+                literalType.elementType,
+                literalType.newStorageInstruction,
+                literalType.storageType.storeElementInstruction,
+                literalType.wrapStorageInstruction,
+            )
+            is DotNetIlValueType.GenericArray -> emitArrayLiteralElements(
+                elements,
+                this,
+                literalType,
+                literalType.elementType,
+                literalType.newArrayInstruction,
+                literalType.storeElementInstruction,
+            )
+            else -> error("Internal .NET backend error: residual vararg literal type is not an array")
         }
     }
 
