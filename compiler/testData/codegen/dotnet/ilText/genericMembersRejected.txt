@@ -3,6 +3,10 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'genericMembersRejected' {}
 .module 'main-genericMembersRejected.il'
 
@@ -21,6 +25,26 @@
     .maxstack 1
     ldarg.1
     ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ReifiedMember'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method assembly hidebysig instance !!0 'id'<'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldstr "unsupported call of reified inline function `ReifiedMember.id`"
+    call class [Kotlin.Runtime]'Kotlin.Nothing' [Kotlin.Stdlib]'Kotlin.Internal.ThrowHelpersKt'::'throwUnsupportedOperationException'(string)
+    pop
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
   }
 }
 .class public auto ansi sealed beforefieldinit 'GenericBoundMember'

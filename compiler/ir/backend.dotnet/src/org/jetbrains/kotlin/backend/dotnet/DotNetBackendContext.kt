@@ -247,8 +247,17 @@ internal class DotNetSymbols(
     }
     override val throwUninitializedPropertyAccessException: IrSimpleFunctionSymbol
         get() = unsupportedSymbol("throwUninitializedPropertyAccessException")
-    override val throwUnsupportedOperationException: IrSimpleFunctionSymbol =
-        buildInternalThrowFunction("throwUnsupportedOperationException", hasMessageParameter = true)
+    // Unlike compiler-only throw intrinsics, reified physical stubs must call the selected
+    // Common runtime declaration so separately emitted libraries retain one ordinary ABI edge.
+    override val throwUnsupportedOperationException: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(
+            StandardNames.KOTLIN_INTERNAL_FQ_NAME,
+            Name.identifier("throwUnsupportedOperationException"),
+        ).functionSymbol { function ->
+            function.hasShape(regularParameters = 1) &&
+                    function.parameters.single().type == irBuiltIns.stringType
+        }
+    }
     override val coroutineContextGetter: IrSimpleFunctionSymbol
         get() = unsupportedSymbol("coroutineContextGetter")
     override val suspendCoroutineUninterceptedOrReturn: IrSimpleFunctionSymbol

@@ -11,34 +11,34 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: the ordinary signed Common range/progression
-  foundation, real primitive-iterator classes, shared range/loop lowerings,
-  and the dependency-closed generated operations that substrate releases
+- Last completed feature: complete reified-inline call-site substitution,
+  including arrays, type operations, class literals, enum helpers,
+  separate-library KLIB bodies, and fail-closed physical remainders
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
 stdlib. The target is not close to 98% feature-complete: valued annotations
-and annotation reflection, `KType`/member reflection, reified public APIs and
-enum helpers, value classes, coroutines, Sequence and Grouping families,
+and annotation reflection, `KType`/member reflection, value classes,
+coroutines, Sequence and Grouping families,
 sorting/random, and Gradle/KMP product integration remain
 substantial open programmes.
 
 ## Current green gate
 
-The current signed range/progression production head passed:
+The current reified-inline production head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The JUnit audit covered 24 fresh XML files and 1081 tests, written between
-2026-08-06 05:29 and 06:32 local time:
+The JUnit audit covered 24 fresh XML files and 1087 tests, written between
+2026-08-06 10:25 and 10:54 local time:
 
-- 972 FIR, IL-text, and box tests
+- 976 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 88 library-integration tests
+- 90 library-integration tests
 - zero failures, errors, or skips
 
 The target now compiles the authoritative Common `ClosedRange`,
@@ -354,8 +354,8 @@ interface, nested, star-element, primitive-array-wrapper, and `Throwable`
 elements; empty, nullable, initialized, negative-size, vararg, and spread
 operations execute on both FIR frontends and runtime profiles. These operations
 reuse the ordinary `Array<E>` mapper and intrinsics. No reified-only token,
-wrapper, or `object[]` fallback was added, and both public reified gates remain
-closed.
+wrapper, or `object[]` fallback was added. The later complete reified tranche
+now consumes this carrier matrix without changing it.
 
 The Common `KClassifier`/`KClass` floor and class literals are now complete
 without equating Kotlin reflection identity with `System.Type`. Static
@@ -372,8 +372,8 @@ constructor identity reuses weak identity-associated throwable state and never
 wraps or mutates foreign `Exception.Data`. Portable Kotlin libraries are
 consumed separately by Kotlin and Roslyn, installed stdlib products expose only
 the public Common surface, and the retained `System.Type` bridge remains
-compiler ABI. `KType`, `typeOf`, member/annotation reflection, annotation-class
-code generation, and public reified declarations remain separate programmes.
+compiler ABI. This floor now supports substituted `T::class`; `KType`,
+`typeOf`, and member/annotation reflection remain separate programmes.
 
 Common `Comparable<in T>` now retains its full logical identity and recursive
 bounds in KLIB while one object exposes the profile-selected canonical
@@ -491,8 +491,8 @@ post-inline/pre-target-lowering boundary instead of crashing an arbitrary
 lowering. The non-reified Common collection-to-array closure uses the exact
 shared loops. Its narrow CLR actual reproduces a supplied vector's runtime
 element type, retains sufficiently large destination identity without JVM's
-Java-specific tail terminator, and keeps public reified `toTypedArray` outside
-the admitted surface. The backend's
+Java-specific tail terminator. Public reified `toTypedArray` now composes that
+same loop with shared call-site substitution. The backend's
 explicit erased-object cast to an open type parameter uses `unbox.any`; safe
 generic casts remain unsupported. The Kotlin-owned builder, exact generated
 joins, Common abstract bases, and migrated array-backed list are published.
@@ -512,12 +512,13 @@ The exact Common-contract export subset is additive and complete for
 `DoesNotReturn`. Its neutral carrier contains neither FIR/IR nodes nor the
 authoritative contract graph; ordinary Kotlin declarations and profiles
 without the exact standard TypeDefs remain physically unchanged.
-Parameterless annotation classes are admitted generally; ordinary enums and
-the non-reified `EnumEntries` core are now published. The
-classified `CharSequence` carrier, Common collection predicates, and ordinary
-inline-function boundary remain intact; reified and suspend inline are still
-explicit errors. The nominal `KClass` floor is selected and published; it does
-not imply `KType`, member reflection, annotation discovery, or reified support.
+Parameterless annotation classes are admitted generally; ordinary enums, the
+non-reified `EnumEntries` core, and the reified Common enum helpers are now
+published. The classified `CharSequence` carrier, Common collection
+predicates, and complete ordinary/reified inline boundary remain intact;
+suspend inline remains an explicit error. The nominal `KClass` floor is
+selected and published; it does not imply `KType`, member reflection, or
+annotation discovery.
 
 Parameterless marker annotation classes now use the shared Common annotation-
 member generator on one concrete sealed CLR `System.Attribute` subtype. KLIB
@@ -537,14 +538,18 @@ The general Common Comparable mapping is independently published and the enum
 product consumes the same KLIB identity, canonical classifier, typed C# view,
 and semantic operation boundary rather than an enum-private substitute.
 
-The reified audit established that shared IR substitution is ready. Its
-ordinary runtime prerequisites now include declaration-erased Kotlin generic
-classes and classified star-projected arrays, and the complete admitted array-
-operation substitution matrix has passed without a target-specific reified
-representation. Public reified support remains parked while `KType`,
-enum/valued-annotation reflection, final substituted type-test/cast, and
-physical throwing-stub contracts remain unselected. Physically exact
-non-generic reference casts are
+Reified inline functions now use shared IR call-site substitution as their only
+semantic mechanism. The target-stage completion consumes selected KLIB bodies
+after pre-serialization has preserved bodyless compiler intrinsics. Substituted
+type tests/casts, nullable and bottom types, arrays, `T::class`, nested calls,
+erased Kotlin generic classes/interfaces, and Common enum helpers all reuse
+their ordinary runtime paths. Truthfully representable declarations receive
+assembly-visible throwing remainders; signatures without one truthful open CLR
+shape are omitted. Neither form enters the physical Kotlin declaration index
+or explicit C# export, and cross-library calls disappear in all three KLIB
+inliner modes. `KType`/`typeOf`, valued-annotation reflection, future
+classifier families, and suspend inline remain separate programmes.
+Physically exact non-generic reference casts are
 complete for Kotlin classes/interfaces, imported CLR interfaces, strings,
 `Any`, primitive-array wrappers, and exact CLR vectors without admitting closed
 generic instances.
@@ -616,19 +621,18 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Recompute the remaining Common stdlib dependency graph by substrate rather
-   than declaration count, now around Sequence, Grouping aggregates,
-   sorting/comparators/random, reified operations, and open nullable projected
-   arrays. Record which complete generated/source families each substrate
-   releases before choosing the next broad tranche.
-2. Audit the narrow open-nullable-projected-array closure as the next compiler
-   foundation. It may land independently if
-   it remains an exact removable carrier correction; use it to restore the
-   authoritative nullable vararg/filter variants, not to infer general input
-   projections or value-vector covariance.
-3. Compare the remaining Sequence and Grouping dependency closures against the
-   same mature-target and CLR matrix before selecting either; do not admit
-   generated leaf functions merely to increase the declaration count.
+1. Select the `KType`/`typeOf` reflection graph as the next deep language
+   foundation. Audit Common plus JVM, JS, Wasm, and Native before choosing a
+   CLR carrier, and keep classifiers, nested arguments, stars, variance,
+   nullability, equality, separate-library identity, and reified substitution
+   in one complete matrix. Do not equate `KType` with `System.Type`.
+2. Keep member enumeration/invocation, annotation discovery, and valued
+   annotation instances outside that first graph tranche unless their
+   representation is forced by the authoritative Common model.
+3. After the reflection graph, recompute the remaining stdlib dependency graph
+   around Sequence, Grouping, sorting/comparators/random, dependency-blocked
+   reified variants, and open nullable projected arrays; do not admit leaves
+   merely to increase declaration count.
 4. Extend CLR contract projection only when a new standard attribute has an
    exact Common effect, stable target rule, verified profile identity, and the
    same strip-without-Kotlin-semantic-change evidence as the closed first set.
