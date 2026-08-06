@@ -150,3 +150,34 @@ public inline fun <T> T.takeUnless(predicate: (T) -> Boolean): T? {
     }
     return if (!predicate(this)) this else null
 }
+
+/**
+ * Executes the given function [action] specified number of [times].
+ *
+ * A zero-based index of current iteration is passed as a parameter to the [action] function.
+ *
+ * If the [times] parameter is negative or equal to zero, the [action] function is not invoked.
+ *
+ * @sample samples.misc.ControlFlow.repeat
+ */
+@kotlin.internal.InlineOnly
+public inline fun repeat(times: Int, action: (Int) -> Unit) {
+    contract { callsInPlace(action) }
+
+    for (index in 0 until times) {
+        action(index)
+    }
+}
+
+/**
+ * Returns the code of this Char.
+ *
+ * Code of a Char is the value it was constructed with, and the UTF-16 code unit corresponding to this Char.
+ *
+ * @sample samples.text.Chars.code
+ */
+@SinceKotlin("1.5")
+@kotlin.internal.InlineOnly
+@Suppress("DEPRECATION")
+@kotlin.internal.IntrinsicConstEvaluation
+public inline val Char.code: Int get() = this.toInt()

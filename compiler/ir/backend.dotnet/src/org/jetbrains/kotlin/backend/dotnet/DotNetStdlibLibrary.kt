@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
@@ -59,6 +60,7 @@ internal object DotNetStdlibLibrary {
     const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
     const val MAPS_FACADE_IL_NAME = "Kotlin.Collections.MapsKt"
     const val SETS_FACADE_IL_NAME = "Kotlin.Collections.SetsKt"
+    const val RANGES_FACADE_IL_NAME = "Kotlin.Ranges.RangesKt"
     const val TUPLES_FACADE_IL_NAME = "Kotlin.TuplesKt"
     const val TEXT_FACADE_IL_NAME = "Kotlin.Text.StringsKt"
     const val STANDARD_FACADE_IL_NAME = "Kotlin.StandardKt"
@@ -69,6 +71,7 @@ internal object DotNetStdlibLibrary {
     const val THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME =
         "kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt"
     const val SERIALIZATION_UTIL_FACADE_IL_NAME = "Kotlin.Internal.SerializationUtilKt"
+    const val PROGRESSION_UTIL_FACADE_IL_NAME = "Kotlin.Internal.ProgressionUtilKt"
     const val EXCEPTIONS_FACADE_IL_NAME = "Kotlin.DotNetExceptionsKt"
     const val KCLASSES_FACADE_IL_NAME = "Kotlin.Reflection.KClasses"
     const val ARRAY_ITERATOR_FACTORY_NAME = "dotNetArrayIterator"
@@ -103,6 +106,14 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.EmptySet" to "Kotlin.Collections.EmptySet",
         "kotlin.collections.DetachedMapEntry" to "Kotlin.Collections.DetachedMapEntry",
         "kotlin.collections.ArrayIterator" to ARRAY_ITERATOR_IL_NAME,
+        "kotlin.collections.BooleanArrayIterator" to "Kotlin.Collections.BooleanArrayIterator",
+        "kotlin.collections.ByteArrayIterator" to "Kotlin.Collections.ByteArrayIterator",
+        "kotlin.collections.ShortArrayIterator" to "Kotlin.Collections.ShortArrayIterator",
+        "kotlin.collections.IntArrayIterator" to "Kotlin.Collections.IntArrayIterator",
+        "kotlin.collections.LongArrayIterator" to "Kotlin.Collections.LongArrayIterator",
+        "kotlin.collections.FloatArrayIterator" to "Kotlin.Collections.FloatArrayIterator",
+        "kotlin.collections.DoubleArrayIterator" to "Kotlin.Collections.DoubleArrayIterator",
+        "kotlin.collections.CharArrayIterator" to "Kotlin.Collections.CharArrayIterator",
         "kotlin.collections.ArrayIterable" to ARRAY_ITERABLE_IL_NAME,
         "kotlin.collections.ErasedArrayIterator" to ERASED_ARRAY_ITERATOR_IL_NAME,
         "kotlin.collections.ErasedArrayIterable" to ERASED_ARRAY_ITERABLE_IL_NAME,
@@ -111,7 +122,33 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.IndexedValue" to "Kotlin.Collections.IndexedValue",
         "kotlin.collections.IndexingIterable" to "Kotlin.Collections.IndexingIterable",
         "kotlin.collections.IndexingIterator" to "Kotlin.Collections.IndexingIterator",
+        "kotlin.collections.ByteIterator" to "Kotlin.Collections.ByteIterator",
+        "kotlin.collections.CharIterator" to "Kotlin.Collections.CharIterator",
+        "kotlin.collections.ShortIterator" to "Kotlin.Collections.ShortIterator",
+        "kotlin.collections.IntIterator" to "Kotlin.Collections.IntIterator",
+        "kotlin.collections.LongIterator" to "Kotlin.Collections.LongIterator",
+        "kotlin.collections.FloatIterator" to "Kotlin.Collections.FloatIterator",
+        "kotlin.collections.DoubleIterator" to "Kotlin.Collections.DoubleIterator",
+        "kotlin.collections.BooleanIterator" to "Kotlin.Collections.BooleanIterator",
         "kotlin.collections.RandomAccess" to RANDOM_ACCESS_IL_NAME,
+        "kotlin.ranges.ClosedRange" to "Kotlin.Ranges.ClosedRange",
+        "kotlin.ranges.OpenEndRange" to "Kotlin.Ranges.OpenEndRange",
+        "kotlin.ranges.ClosedFloatingPointRange" to "Kotlin.Ranges.ClosedFloatingPointRange",
+        "kotlin.ranges.ComparableRange" to "Kotlin.Ranges.ComparableRange",
+        "kotlin.ranges.ComparableOpenEndRange" to "Kotlin.Ranges.ComparableOpenEndRange",
+        "kotlin.ranges.ClosedDoubleRange" to "Kotlin.Ranges.ClosedDoubleRange",
+        "kotlin.ranges.OpenEndDoubleRange" to "Kotlin.Ranges.OpenEndDoubleRange",
+        "kotlin.ranges.ClosedFloatRange" to "Kotlin.Ranges.ClosedFloatRange",
+        "kotlin.ranges.OpenEndFloatRange" to "Kotlin.Ranges.OpenEndFloatRange",
+        "kotlin.ranges.CharProgression" to "Kotlin.Ranges.CharProgression",
+        "kotlin.ranges.IntProgression" to "Kotlin.Ranges.IntProgression",
+        "kotlin.ranges.LongProgression" to "Kotlin.Ranges.LongProgression",
+        "kotlin.ranges.CharProgressionIterator" to "Kotlin.Ranges.CharProgressionIterator",
+        "kotlin.ranges.IntProgressionIterator" to "Kotlin.Ranges.IntProgressionIterator",
+        "kotlin.ranges.LongProgressionIterator" to "Kotlin.Ranges.LongProgressionIterator",
+        "kotlin.ranges.CharRange" to "Kotlin.Ranges.CharRange",
+        "kotlin.ranges.IntRange" to "Kotlin.Ranges.IntRange",
+        "kotlin.ranges.LongRange" to "Kotlin.Ranges.LongRange",
         "kotlin.io.Serializable" to SERIALIZABLE_IL_NAME,
         "kotlin.io.ReadAfterEOFException" to READ_AFTER_EOF_EXCEPTION_IL_NAME,
         "kotlin.text.Appendable" to "Kotlin.Text.Appendable",
@@ -270,6 +307,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.reflect.safeCast" to KCLASSES_FACADE_IL_NAME,
     )
     private val implementationPropertyFacadeIlNames = mapOf(
+        "kotlin.code" to STANDARD_FACADE_IL_NAME,
+        "kotlin.collections.indices" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.lastIndex" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.suppressedExceptions" to EXCEPTIONS_FACADE_IL_NAME,
         "kotlin.reflect.qualifiedOrSimpleName" to KCLASSES_FACADE_IL_NAME,
@@ -337,6 +376,26 @@ internal object DotNetStdlibLibrary {
         elementType: DotNetIlValueType,
         assemblyName: String? = ASSEMBLY_NAME,
     ): String = ARRAY_ITERATOR_FACTORY_INFO.renderStdlibCall(ARRAY_ITERATOR_FACTORY_NAME, elementType, assemblyName)
+
+    /** Calls the exact primitive-array iterator factory without exposing the private iterator. */
+    fun primitiveArrayIteratorFactoryCallInstruction(
+        arrayType: DotNetIlValueType.PrimitiveArray,
+        iteratorType: DotNetIlValueType,
+        assemblyName: String? = ASSEMBLY_NAME,
+    ): String {
+        val methodName = "dotNet${arrayType.abi.wrapperSimpleName}Iterator"
+        val functionInfo = DotNetIlFunctionInfo(
+            owner = DotNetIlClassInfo(COLLECTIONS_FACADE_IL_NAME),
+            signature = DotNetIlMethodSignature(
+                returnType = DotNetIlReturnType.Value(iteratorType),
+                parameterTypes = listOf(arrayType),
+            ),
+        )
+        return functionInfo.renderCallInstruction(
+            methodName = methodName,
+            ownerToken = "${assemblyName.ilAssemblyQualifier()}${functionInfo.owner.ilTypeRef}",
+        )
+    }
 
     /** Calls the stdlib-owned Iterable factory for a vector already on the IL stack. */
     fun arrayIterableFactoryCallInstruction(
@@ -425,6 +484,7 @@ internal object DotNetStdlibLibrary {
     /** Selects a pinned Common-generator spelling for a bounded erased stdlib overload family. */
     fun implementationPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
         stringBuilderPlatformMethodNameOrNull(function)?.let { return it }
+        rangePlatformMethodNameOrNull(function)?.let { return it }
         val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
         val elementPlatformNames = signedIterableNumericPlatformNames[functionFqName]
         val selectorPlatformNames = signedIterableSelectorSumPlatformNames[functionFqName]
@@ -491,6 +551,61 @@ internal object DotNetStdlibLibrary {
             )
     }
 
+    /** Preserves the Common generator's `@JvmName` disambiguation after generic range erasure. */
+    private fun rangePlatformMethodNameOrNull(function: IrSimpleFunction): String? {
+        if (function.fqNameWhenAvailable?.asString() != "kotlin.ranges.contains") return null
+        if (implementationFunctionFacadeIlName(function) != RANGES_FACADE_IL_NAME) return null
+        val receiverType = function.parameters
+            .singleOrNull { parameter -> parameter.kind == IrParameterKind.ExtensionReceiver }
+            ?.type as? IrSimpleType
+            ?: return null
+        val rangeFqNames = setOf(
+            "kotlin.ranges.ClosedRange",
+            "kotlin.ranges.OpenEndRange",
+        )
+        val receiverRangeFqName = receiverType.classFqName?.asString()
+            ?: (receiverType.classifier as? IrTypeParameterSymbol)
+                ?.owner
+                ?.superTypes
+                ?.mapNotNull { bound -> bound.classFqName?.asString() }
+                ?.singleOrNull { boundFqName -> boundFqName in rangeFqNames }
+            ?: return null
+        if (receiverRangeFqName !in rangeFqNames) return null
+        if (receiverType.classifier is IrTypeParameterSymbol) {
+            val elementType = function.parameters
+                .singleOrNull { parameter -> parameter.kind == IrParameterKind.Regular }
+                ?.type as? IrSimpleType
+                ?: dotNetUnsupported(
+                    "Common generic range contains has no single simple element parameter"
+                )
+            val elementParameter = elementType.classifier as? IrTypeParameterSymbol
+                ?: dotNetUnsupported(
+                    "Common generic range contains element '${elementType.render()}' is not a type parameter"
+                )
+            val hasComparableBound = elementParameter.owner.superTypes.any { bound ->
+                bound.classFqName?.asString() == "kotlin.Comparable"
+            }
+            val receiverName = when (receiverRangeFqName) {
+                "kotlin.ranges.ClosedRange" -> "closedRange"
+                "kotlin.ranges.OpenEndRange" -> "openEndRange"
+                else -> error("Internal .NET backend error: unrecognized range bound $receiverRangeFqName")
+            }
+            val elementBoundName = if (hasComparableBound) "Comparable" else "Any"
+            return "${receiverName}ContainsNullable$elementBoundName"
+        }
+        val rangeElementFqName = (receiverType.arguments.singleOrNull() as? IrTypeProjection)
+            ?.type
+            ?.classFqName
+            ?.asString()
+            ?: dotNetUnsupported(
+                "Common range contains receiver '${receiverType.render()}' has no exact element type"
+            )
+        return rangeContainsPlatformNames[rangeElementFqName]
+            ?: dotNetUnsupported(
+                "Common range contains element '${receiverType.render()}' has no pinned CLR method name"
+            )
+    }
+
     /**
      * CLR carries classified `CharSequence` as `object`, so the Common StringBuilder `Any?`
      * overloads would otherwise collide with their `CharSequence?` siblings. Keep the interface
@@ -531,6 +646,16 @@ internal object DotNetStdlibLibrary {
         assemblyName: String? = ASSEMBLY_NAME,
     ): DotNetIlFunctionInfo? {
         val containingClass = function.parent as? IrClass
+        if (containingClass != null && typeMapper.isErasedGenericInterface(containingClass)) {
+            val owner = typeMapper.genericInterfaceInfoOrNull(containingClass)?.canonicalClassInfo
+                ?: publicImplementationClassInfoOrNull(containingClass, assemblyName)
+                ?: return null
+            return DotNetIlFunctionInfo(
+                owner = owner,
+                signature = function.dotNetSignature(typeMapper.canonicalGenericInterfaceSignatureView()),
+                physicalMethodName = function.dotNetGenericInterfaceCanonicalMethodName(),
+            )
+        }
         val genericClassInfo = containingClass?.let(typeMapper::genericClassInfoOrNull)
         val owner = genericClassInfo?.classInfo
             ?: containingClass?.let { irClass -> publicImplementationClassInfoOrNull(irClass, assemblyName) }
@@ -616,6 +741,14 @@ internal object DotNetStdlibLibrary {
             "kotlin.Long" to "sumOfLong",
         ),
     )
+    private val rangeContainsPlatformNames = mapOf(
+        "kotlin.Byte" to "byteRangeContains",
+        "kotlin.Short" to "shortRangeContains",
+        "kotlin.Int" to "intRangeContains",
+        "kotlin.Long" to "longRangeContains",
+        "kotlin.Float" to "floatRangeContains",
+        "kotlin.Double" to "doubleRangeContains",
+    )
 
     private fun arrayFactoryInfo(returnType: DotNetIlValueType): DotNetIlFunctionInfo =
         DotNetIlFunctionInfo(
@@ -684,6 +817,19 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
+        "PrimitiveIterators.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "Range.kt" to ImplementationSource(packageFqName = "kotlin.ranges"),
+        "Ranges.kt" to ImplementationSource(
+            packageFqName = "kotlin.ranges",
+            facadeIlName = RANGES_FACADE_IL_NAME,
+        ),
+        "Progressions.kt" to ImplementationSource(packageFqName = "kotlin.ranges"),
+        "ProgressionIterators.kt" to ImplementationSource(packageFqName = "kotlin.ranges"),
+        "PrimitiveRanges.kt" to ImplementationSource(packageFqName = "kotlin.ranges"),
+        "_DotNetBootstrapRanges.kt" to ImplementationSource(
+            packageFqName = "kotlin.ranges",
+            facadeIlName = RANGES_FACADE_IL_NAME,
+        ),
         "AbstractCollection.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "AbstractMap.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "AbstractSet.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
@@ -732,11 +878,10 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin",
             facadeIlName = STANDARD_FACADE_IL_NAME,
         ),
-        // Char.code is intrinsic and previously left this actual-only file with no physical
-        // declaration. The scalar-bounds tranche adds the executable minOf actual here. FIR
-        // actualization may retain either the Common expect or this .NET actual as owner, so both
-        // source names must designate the same Kotlin.Stdlib facade and neither may leak into the
-        // following user assembly.
+        // The Common Char.code getter and the .NET minOf actual share Kotlin.StandardKt. FIR
+        // actualization may retain either a Common expect or this .NET actual as owner, so both
+        // source names must designate that facade and neither may leak into the following user
+        // assembly.
         "DotNetStdlibKotlin.kt" to ImplementationSource(
             packageFqName = "kotlin",
             facadeIlName = STANDARD_FACADE_IL_NAME,
@@ -792,6 +937,10 @@ internal object DotNetStdlibLibrary {
         "DotNetSerializationUtil.kt" to ImplementationSource(
             packageFqName = "kotlin.internal",
             facadeIlName = SERIALIZATION_UTIL_FACADE_IL_NAME,
+        ),
+        "progressionUtil.kt" to ImplementationSource(
+            packageFqName = "kotlin.internal",
+            facadeIlName = PROGRESSION_UTIL_FACADE_IL_NAME,
         ),
         "SharedVariableBox.kt" to ImplementationSource(packageFqName = "kotlin.internal"),
         "SyntheticConstructorMarker.kt" to ImplementationSource(packageFqName = "kotlin.internal"),

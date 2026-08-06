@@ -29238,6 +29238,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         return 0;
                     }
 
+                    private static int VerifySignedRanges()
+                    {
+                        Type[] kotlinTypes = {
+                            typeof(Kotlin.Ranges.ClosedRange),
+                            typeof(Kotlin.Ranges.OpenEndRange),
+                            typeof(Kotlin.Ranges.IntProgression),
+                            typeof(Kotlin.Ranges.IntRange),
+                            typeof(Kotlin.Collections.IntIterator),
+                        };
+                        foreach (Type type in kotlinTypes)
+                        {
+                            if (type.IsGenericType || type.GetGenericArguments().Length != 0)
+                                return 20;
+                        }
+
+                        var range = new Kotlin.Ranges.IntRange(1, 3);
+                        if (range.first != 1 || range.last != 3 || range.step != 1 || !range.contains(2))
+                            return 21;
+                        Kotlin.Collections.IntIterator iterator = range.iterator();
+                        Kotlin.Collections.Iterator iteratorCapability = iterator;
+                        if (!iteratorCapability.HasNext() || iterator.nextInt() != 1 || iterator.nextInt() != 2 ||
+                            iterator.nextInt() != 3 || iteratorCapability.HasNext())
+                            return 22;
+                        return 0;
+                    }
+
                     public static int Main()
                     {
                         var foreign = new ForeignAppendable();
@@ -29248,7 +29274,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         builder.appendAny(42).append('!');
                         if (builder.ToString() != "42!")
                             return 2;
-                        return VerifyErasedKotlinCollections();
+                        int collectionResult = VerifyErasedKotlinCollections();
+                        return collectionResult == 0 ? VerifySignedRanges() : collectionResult;
                     }
                 }
                 """.trimIndent()
@@ -29303,6 +29330,52 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         val implementationLibrary = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
         assertTrue(implementationLibrary.isFile) { "Expected self-describing CLR library at $implementationLibrary" }
+        val implementationMetadata = DotNetClrMetadataReader.read(implementationLibrary)
+        fun implementationType(namespaceName: String, metadataName: String): DotNetClrTypeDefinition =
+            implementationMetadata.typeDefinitions.single { type ->
+                type.namespaceName == namespaceName && type.metadataName == metadataName
+            }
+        val closedRangeType = implementationType("Kotlin.Ranges", "ClosedRange")
+        val openEndRangeType = implementationType("Kotlin.Ranges", "OpenEndRange")
+        val intProgressionType = implementationType("Kotlin.Ranges", "IntProgression")
+        val intRangeType = implementationType("Kotlin.Ranges", "IntRange")
+        val intIteratorType = implementationType("Kotlin.Collections", "IntIterator")
+        val physicalRangeTypes = setOf(
+            closedRangeType.handle,
+            openEndRangeType.handle,
+            intProgressionType.handle,
+            intRangeType.handle,
+            intIteratorType.handle,
+        )
+        assertTrue(closedRangeType.isInterface && openEndRangeType.isInterface)
+        assertTrue(intIteratorType.isAbstract && !intIteratorType.isInterface)
+        assertTrue(intRangeType.isSealed && intRangeType.baseType == intProgressionType.handle)
+        assertTrue(implementationMetadata.genericParameterDefinitions.none { parameter ->
+            parameter.owner in physicalRangeTypes
+        }) {
+            "Kotlin range interfaces and signed concrete range types must have one non-generic CLR identity"
+        }
+        assertEquals(
+            setOf(closedRangeType.handle, openEndRangeType.handle),
+            implementationMetadata.interfaceImplementations
+                .filter { implementation -> implementation.implementingType == intRangeType.handle }
+                .mapTo(linkedSetOf()) { implementation -> implementation.interfaceType },
+        )
+        assertEquals(
+            setOf("first", "last", "step"),
+            implementationMetadata.fieldDefinitions
+                .filter { field -> field.declaringType == intProgressionType.handle }
+                .filter { field ->
+                    field.signature.fieldType == DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                }
+                .mapTo(linkedSetOf(), DotNetClrFieldDefinition::name),
+        )
+        assertEquals(
+            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+            implementationMetadata.methodDefinitions.single { method ->
+                method.declaringType == intIteratorType.handle && method.name == "nextInt"
+            }.signature.returnType,
+        )
         val runtimeLibrary = stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
         assertTrue(runtimeLibrary.isFile) {
             "Expected the profile-paired CLR runtime at $runtimeLibrary"
@@ -30458,6 +30531,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/IndexedValue.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/Iterables.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/Iterators.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/collections/PrimitiveIterators.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/ranges/Range.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/ranges/Ranges.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/ranges/Progressions.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/ranges/ProgressionIterators.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/ranges/PrimitiveRanges.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/internal/progressionUtil.kt").absoluteFile
         sourceFiles +=
             File("libraries/stdlib/common/src/kotlin/collections/AbstractMutableCollection.kt").absoluteFile
         sourceFiles +=
@@ -30853,6 +30933,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun firstArray(values: Array<String>): String = values.iterator().next()
 
+                public fun firstPrimitiveInt(values: IntArray): Int = values.iterator().nextInt()
+
+                public fun materializedIntRange(first: Int, last: Int): IntRange = first..last
+
+                public fun signedRangeTotal(first: Int, last: Int): Int {
+                    var total = 0
+                    for (value in first..last) total += value
+                    return total
+                }
+
+                public fun closedRangeContains(range: ClosedRange<Int>, value: Int): Boolean =
+                    value in range
+
+                public fun openEndRangeContains(range: OpenEndRange<Int>, value: Int): Boolean =
+                    value in range
+
                 public fun firstArrayIterable(values: Array<String>): String = values.asIterable().first()
 
                 public fun <T> arrayView(values: Array<out T>): List<T> = values.asList()
@@ -31170,7 +31266,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'mutableListOf'<!!0>(!!0[])" in il)
         assertFalse("Kotlin.Collections.MutableList`" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterator'<string>" in il)
+        assertTrue(
+            "[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetIntArrayIterator'(" +
+                    "class [Kotlin.Runtime]'Kotlin.IntArray')" in il
+        )
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<string>" in il)
+        assertTrue("newobj instance void [Kotlin.Stdlib]'Kotlin.Ranges.IntRange'::.ctor(int32, int32)" in il)
+        assertFalse("System.Range" in il)
         assertTrue(
             "[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'asList'<!!0>(class " +
                     "${coreLibraryReference}System.Array)" in il
@@ -31641,6 +31743,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun <T> installedArrayView(values: Array<out T>): List<T> = values.asList()
 
+                public fun installedSignedRangeTotal(first: Int, last: Int): Int {
+                    var total = 0
+                    for (value in first..last) total += value
+                    return total
+                }
+
+                public fun installedMaterializedRange(first: Int, last: Int): IntRange = first..last
+
+                public fun installedFirstPrimitiveInt(values: IntArray): Int = values.iterator().nextInt()
+
                 public fun installedEmptyInts(): List<Int> = emptyList()
 
                 public fun installedRandomAccess(values: List<Int>): Boolean = values is RandomAccess
@@ -31802,6 +31914,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             arrayOf("only").asList().singleOrNull() == "only" &&
                             view.singleOrNull() == null &&
                             emptyList<String>().lastIndex == -1
+                    val rangesOk =
+                        installedSignedRangeTotal(1, 4) == 10 &&
+                            installedMaterializedRange(1, 3) == IntRange(1, 3) &&
+                            installedFirstPrimitiveInt(intArrayOf(7)) == 7
                     val sumsOk =
                         emptyArray<Byte>().asIterable().sum() == 0 &&
                             arrayOf(120.toByte(), 120.toByte()).asIterable().sum() == 240 &&
@@ -31894,7 +32010,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             InvocationKind.entries[2] === InvocationKind.EXACTLY_ONCE &&
                             InvocationKind.entries[3] === InvocationKind.UNKNOWN
                     println(
-                        if (kClassOk && collectionsOk && mutableOk && sumsOk && averagesOk && frontierOk &&
+                        if (kClassOk && collectionsOk && rangesOk && mutableOk && sumsOk && averagesOk && frontierOk &&
                             inlineOnlyOk && throwableOk && contractsOk
                         ) {
                             "OK"
@@ -32145,6 +32261,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "${coreLibraryReference}System.Array)" in il
         )
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>" in il)
+        assertTrue(
+            "[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetIntArrayIterator'(" +
+                    "class [Kotlin.Runtime]'Kotlin.IntArray')" in il
+        )
+        assertTrue("newobj instance void [Kotlin.Stdlib]'Kotlin.Ranges.IntRange'::.ctor(int32, int32)" in il)
+        assertFalse("System.Range" in il)
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Io.ConsoleKt'::'readlnOrNull'()" in il)
         assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'" !in il)
@@ -32540,6 +32662,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             externalList.subList(1, 2).toString() == "[right]" &&
                             externalBuilderIdentity === externalBuilder &&
                             externalBuilderChars.toString() == "items:[left|right]"
+                    var signedRangeTotal = 0
+                    for (value in 5 downTo 1 step 2) signedRangeTotal += value
+                    val primitiveRangeIterator = (1..3).iterator()
+                    val rangeAndProgressionOk =
+                        signedRangeTotal == 9 &&
+                            primitiveRangeIterator is IntIterator &&
+                            primitiveRangeIterator.nextInt() == 1 &&
+                            primitiveRangeIterator.nextInt() == 2 &&
+                            primitiveRangeIterator.nextInt() == 3 &&
+                            !primitiveRangeIterator.hasNext() &&
+                            (2 in (1..3)) &&
+                            (3 in (1..<4)) &&
+                            intArrayOf(7).iterator().nextInt() == 7
                     val indexedOptionalOk =
                         view.getOrNull(-1) == null &&
                             view.getOrNull(0) == 1 &&
@@ -33161,7 +33296,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             provenFrontierOk + "|" + foldOk + "|" + reduceOk + "|" + forEachOk + "|" +
                             firstPredicateOk + "|" + lastPredicateOk + "|" +
                             singlePredicateOk + "|" + inlinePredicatesOk + "|" + inlineOnlyOk + "|" +
-                            sumOfSelectorOk + "|" + commonBaseAndBuilderOk
+                            sumOfSelectorOk + "|" + commonBaseAndBuilderOk + "|" + rangeAndProgressionOk
                     )
                 }
                 """.trimIndent()
@@ -33195,7 +33330,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), processOutput)
         assertEquals(
-            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
+            "false|null|alpha|beta|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true|true\n",
             processOutput.replace("\r\n", "\n"),
         )
     }

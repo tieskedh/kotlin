@@ -14,14 +14,3 @@ package kotlin
  */
 @SinceKotlin("1.1")
 public expect inline fun minOf(a: Int, b: Int): Int
-
-/**
- * Ensures that this value is not less than the specified [minimumValue].
- *
- * @return this value if it's greater than or equal to the [minimumValue] or the [minimumValue] otherwise.
- *
- * @sample samples.comparisons.ComparableOps.coerceAtLeast
- */
-public fun Int.coerceAtLeast(minimumValue: Int): Int {
-    return if (this < minimumValue) minimumValue else this
-}

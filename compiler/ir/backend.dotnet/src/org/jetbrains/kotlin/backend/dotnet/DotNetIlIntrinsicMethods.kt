@@ -156,25 +156,6 @@ internal class DotNetIlIntrinsicMethods(
         // without a source `else`, exactly the symbol the JVM backend intrinsifies.
         irBuiltIns.noWhenBranchMatchedExceptionSymbol.toKey()!! to DotNetIlNoWhenBranchMatchedIntrinsic,
         irBuiltIns.illegalArgumentExceptionSymbol.toKey()!! to DotNetIlIllegalArgumentExceptionIntrinsic,
-        // The bootstrap stdlib keeps the authoritative Common Array.getOrNull body, whose
-        // `index in indices` is erased by shared RangeContainsLowering. A private target marker
-        // lets FIR resolve that exact body without publishing Array.indices/IntRange yet. It has
-        // no physical declaration, and any surviving call proves the shared lowering missed it.
-        Key(kotlinCollectionsFqn, arrayFqn, "<get-indices>", emptyList())
-                to DotNetIlUnsupportedIntrinsic(
-            reason = "private Array.indices bootstrap marker survived range/for-loop lowering",
-            excludesDeclarationFromCodegen = true,
-        ),
-        Key(kotlinCollectionsFqn, intFqn, "until", listOf(intFqn))
-                to DotNetIlUnsupportedIntrinsic(
-            reason = "private Int.until bootstrap marker survived for-loop lowering",
-            excludesDeclarationFromCodegen = true,
-        ),
-        Key(kotlinCollectionsFqn, intFqn, "downTo", listOf(intFqn))
-                to DotNetIlUnsupportedIntrinsic(
-            reason = "private Int.downTo bootstrap marker survived for-loop lowering",
-            excludesDeclarationFromCodegen = true,
-        ),
         Key(kotlinInternalFqn, null, "throwKotlinNothingValueException", emptyList())
                 to DotNetIlThrowKotlinNothingValueExceptionIntrinsic,
         Key(kotlinInternalFqn, null, "captureStaticInitializationFailure", listOf(throwableFqn))
@@ -213,9 +194,10 @@ internal class DotNetIlIntrinsicMethods(
         Key(charFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(booleanFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
     ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
+            primitiveRangeToIntrinsics() +
             conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
             genericArrayIntrinsics() + arrayCopyIntrinsics() + arrayContentIntrinsics() +
-            arrayAsIterableIntrinsics() + primitiveIteratorIntrinsics() + stringBuilderStorageIntrinsics() +
+            arrayAsIterableIntrinsics() + stringBuilderStorageIntrinsics() +
             if (emissionScope == DotNetIlEmissionScope.USER) stdlibFunctionIntrinsics() else emptyList()
 
     /** Private storage mechanics for the Kotlin-owned `kotlin.text.StringBuilder` wrapper. */
@@ -498,29 +480,6 @@ internal class DotNetIlIntrinsicMethods(
     }
 
     /**
-     * Primitive-specialized iterator calls retain their abstract stdlib class as the static IR
-     * owner. Those classes still alias the canonical Iterator identity until they are produced as
-     * ordinary target-stdlib classes; generic Iterator/Iterable calls already use the general
-     * erased-interface call path and therefore need no intrinsic entries here.
-     */
-    private fun primitiveIteratorIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
-        for (info in listOf(
-            FqName("kotlin.collections.ByteIterator") to "nextByte",
-            FqName("kotlin.collections.ShortIterator") to "nextShort",
-            FqName("kotlin.collections.IntIterator") to "nextInt",
-            FqName("kotlin.collections.LongIterator") to "nextLong",
-            FqName("kotlin.collections.FloatIterator") to "nextFloat",
-            FqName("kotlin.collections.DoubleIterator") to "nextDouble",
-            FqName("kotlin.collections.BooleanIterator") to "nextBoolean",
-            FqName("kotlin.collections.CharIterator") to "nextChar",
-        )) {
-            add(Key(info.first, null, "hasNext", emptyList()) to DotNetIlIteratorHasNextIntrinsic)
-            add(Key(info.first, null, "next", emptyList()) to DotNetIlIteratorNextIntrinsic)
-            add(Key(info.first, null, info.second, emptyList()) to DotNetIlIteratorNextIntrinsic)
-        }
-    }
-
-    /**
      * `Throwable.message`/`Throwable.cause` on every [mapped exception type][DotNetMappedExceptions],
      * compiled to `System.Exception::get_Message()`/`get_InnerException()` (both callvirt
      * signatures ilasm-probe-verified). A key is registered per mapped FqName for direct and
@@ -686,6 +645,50 @@ internal class DotNetIlIntrinsicMethods(
         Key(charFqn, null, "dec", emptyList()) to DotNetIlCharIncrementIntrinsic("sub"),
     )
 
+    /** Materializes the signed primitive ranges whose loop-only form uses the shared lowering. */
+    private fun primitiveRangeToIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
+        val integralTypes = listOf(
+            byteFqn to DotNetIlValueType.Int8,
+            shortFqn to DotNetIlValueType.Int16,
+            intFqn to DotNetIlValueType.Int32,
+            longFqn to DotNetIlValueType.Int64,
+        )
+        for ([receiverFqName, receiverType] in integralTypes) {
+            for ([argumentFqName, argumentType] in integralTypes) {
+                val elementType = if (
+                    receiverType == DotNetIlValueType.Int64 || argumentType == DotNetIlValueType.Int64
+                ) {
+                    DotNetIlValueType.Int64
+                } else {
+                    DotNetIlValueType.Int32
+                }
+                val rangeClassName = if (elementType == DotNetIlValueType.Int64) {
+                    "Kotlin.Ranges.LongRange"
+                } else {
+                    "Kotlin.Ranges.IntRange"
+                }
+                add(
+                    Key(receiverFqName, null, "rangeTo", listOf(argumentFqName)) to
+                            DotNetIlPrimitiveRangeToIntrinsic(
+                                receiverType,
+                                argumentType,
+                                elementType,
+                                rangeClassName,
+                            )
+                )
+            }
+        }
+        add(
+            Key(charFqn, null, "rangeTo", listOf(charFqn)) to
+                    DotNetIlPrimitiveRangeToIntrinsic(
+                        DotNetIlValueType.Char,
+                        DotNetIlValueType.Char,
+                        DotNetIlValueType.Char,
+                        "Kotlin.Ranges.CharRange",
+                    )
+        )
+    }
+
     /**
      * `to<Type>()` conversions between the supported primitives, following the JVM backend's
      * `numberConversionMethods`/`NumberCast` (JVM registers every `NUMBER_CONVERSIONS` name on
@@ -697,9 +700,9 @@ internal class DotNetIlIntrinsicMethods(
      * them precisely because their two-step truncation semantics surprise users, and this
      * backend has no legacy code to stay compatible with.
      *
-     * `Char.code` is `Char.toInt()` under an extension-property hat (`@InlineOnly` in the real
-     * stdlib, a plain property in the fake .NET stdlib because this backend does not run an IR
-     * inliner); its getter call is intercepted here so no property access is ever emitted.
+     * `Char.code` is `Char.toInt()` under an extension-property hat. The target admits the exact
+     * Common `@InlineOnly` declaration and its assembly-visible physical getter, while this
+     * intrinsic keeps ordinary Kotlin call sites on the direct conversion path.
      */
     private fun conversionIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         val conversionNamesToTargets = listOf(
@@ -737,14 +740,11 @@ internal class DotNetIlIntrinsicMethods(
                     to DotNetIlUnsupportedIntrinsic("'Double.toChar()' is deprecated in Kotlin; use 'toInt().toChar()'")
         )
         add(
-            // The injected `val Char.code` declaration (see DotNetStdlibSource) must not be
-            // emitted as a top-level property of a `kotlin.DotNetStdlibKotlinKt` facade: like
-            // `println`, the declaration exists for frontend resolution only, so its getter
-            // excludes the property from codegen and every call site is intercepted here.
+            // The exact Common InlineOnly declaration is emitted in Kotlin.StandardKt for the
+            // selected physical ABI. Ordinary call sites still use the direct conversion path.
             Key(kotlinFqn, charFqn, "<get-code>", emptyList())
                     to DotNetIlNumberConversionIntrinsic(
                 DotNetIlValueType.Char, DotNetIlValueType.Int32, emptyList(),
-                excludesDeclarationFromCodegen = true,
             )
         )
     }
@@ -910,6 +910,12 @@ private fun IrSimpleFunction.dotNetCharSequenceIntrinsicOrNull(): DotNetIlIntrin
  */
 internal abstract class DotNetIlIntrinsicMethod {
     open val excludesDeclarationFromCodegen: Boolean = false
+
+    /** The CLR stack type produced when it is more exact than the unsubstituted IR result. */
+    open fun naturalReturnType(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+    ): DotNetIlValueType? = null
 
     open fun tryEmitConstructorAsExpression(
         call: IrConstructorCall,
@@ -1358,6 +1364,34 @@ private object DotNetIlGenericArraySizeIntrinsic : DotNetIlIntrinsicMethod() {
 
 /** Generic-array indexed read -> `ldelem E`, including an open `!n`/`!!n` token. */
 private object DotNetIlGenericArrayGetIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun naturalReturnType(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+    ): DotNetIlValueType? {
+        if (call.arguments.size != 2) return null
+        val receiver = call.arguments.firstOrNull() ?: return null
+        return when (val arrayType = codegen.toDotNetIlValueType(receiver.type)) {
+            is DotNetIlValueType.GenericArray -> when (val elementType = arrayType.elementType) {
+                // Shared loop lowering can represent Array<*> reads through the Array
+                // declaration's captured owner parameter. Its `!n` token belongs to Array,
+                // not to the method currently being emitted, and is therefore not a legal
+                // stack type here. The classified read is object. Method parameters (`!!n`)
+                // and concrete exact vector elements do belong to the current signature.
+                is DotNetIlValueType.TypeParameter ->
+                    if (elementType.isMethodParameter) elementType else DotNetIlValueType.Object
+                else -> elementType
+            }
+            is DotNetIlValueType.ErasedGenericArray ->
+                // A concrete imported/use-site result (for example String) must fall through so
+                // normal checked narrowing still runs. Only a captured Array-owner `!n`, which
+                // cannot exist in this method's signature, is the fixed Array<*> object read.
+                (codegen.toDotNetIlValueType(call.type) as? DotNetIlValueType.TypeParameter)
+                    ?.takeUnless { it.isMethodParameter }
+                    ?.let { DotNetIlValueType.Object }
+            else -> null
+        }
+    }
+
     override fun tryEmitAsExpression(
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
@@ -1501,7 +1535,7 @@ private class DotNetIlArrayIteratorIntrinsic(
         codegen: DotNetIlExpressionCodegen,
         expectedType: DotNetIlValueType,
     ): Boolean {
-        if (expectedType != DotNetRuntimeTypes.iteratorType || call.arguments.size != 1) return false
+        if (call.arguments.size != 1) return false
         val receiver = call.arguments.single()
             ?: dotNetUnsupported("missing array receiver for 'iterator'")
         val arrayType = fixedArrayType ?: codegen.toDotNetIlValueType(receiver.type)
@@ -1510,6 +1544,12 @@ private class DotNetIlArrayIteratorIntrinsic(
             }
             ?: dotNetUnsupported("'iterator' has unsupported array receiver ${receiver.type.render()}")
         if (arrayType is DotNetIlValueType.ErasedGenericArray) {
+            if (expectedType != DotNetRuntimeTypes.iteratorType) {
+                dotNetUnsupported(
+                    "erased Array<*>.iterator produces ${DotNetRuntimeTypes.iteratorType.nameInSignature}, " +
+                            "not ${expectedType.nameInSignature}"
+                )
+            }
             codegen.emitExpression(receiver, arrayType)
             codegen.stdlibAssemblyName?.let(codegen::recordAssemblyReference)
             codegen.emit(
@@ -1522,11 +1562,31 @@ private class DotNetIlArrayIteratorIntrinsic(
             )
             return true
         }
+        if (arrayType is DotNetIlValueType.PrimitiveArray) {
+            val expectedIteratorName =
+                "Kotlin.Collections.${arrayType.abi.wrapperSimpleName.removeSuffix("Array")}Iterator"
+            if ((expectedType as? DotNetIlValueType.UserClass)?.classInfo?.ilClassName != expectedIteratorName) {
+                dotNetUnsupported(
+                    "primitive ${arrayType.abi.wrapperSimpleName}.iterator produces $expectedIteratorName, " +
+                            "not ${expectedType.nameInSignature}"
+                )
+            }
+            codegen.emitExpression(receiver, arrayType)
+            codegen.stdlibAssemblyName?.let(codegen::recordAssemblyReference)
+            codegen.emit(
+                DotNetStdlibLibrary.primitiveArrayIteratorFactoryCallInstruction(
+                    arrayType,
+                    expectedType,
+                    codegen.stdlibAssemblyName,
+                ),
+                pops = 1,
+                pushes = 1,
+            )
+            return true
+        }
+        if (expectedType != DotNetRuntimeTypes.iteratorType) return false
         val elementType = arrayType.elementTypeForArrayProducer("iterator")
         codegen.emitExpression(receiver, arrayType)
-        if (arrayType is DotNetIlValueType.PrimitiveArray) {
-            codegen.emit(arrayType.getStorageCallInstruction, pops = 1, pushes = 1)
-        }
         codegen.stdlibAssemblyName?.let(codegen::recordAssemblyReference)
         codegen.emit(
             DotNetStdlibLibrary.arrayIteratorFactoryCallInstruction(elementType, codegen.stdlibAssemblyName),
@@ -2706,6 +2766,36 @@ private object DotNetIlCheckNotNullIntrinsic : DotNetIlIntrinsicMethod() {
             }
             else -> codegen.emitExpression(argument, expectedType)
         }
+        return true
+    }
+}
+
+/** Constructs the exact signed range object for a materialized primitive `rangeTo` call. */
+private class DotNetIlPrimitiveRangeToIntrinsic(
+    private val receiverType: DotNetIlValueType,
+    private val argumentType: DotNetIlValueType,
+    private val elementType: DotNetIlValueType,
+    private val rangeClassName: String,
+) : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val rangeType = expectedType as? DotNetIlValueType.UserClass ?: return false
+        if (rangeType.classInfo.ilClassName != rangeClassName || call.arguments.size != 2) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing receiver of primitive 'rangeTo'")
+        val argument = call.arguments[1]
+            ?: dotNetUnsupported("missing argument of primitive 'rangeTo'")
+        codegen.emitWidenedOperand(receiver, receiverType, elementType)
+        codegen.emitWidenedOperand(argument, argumentType, elementType)
+        codegen.emit(
+            "newobj instance void ${rangeType.classInfo.ilTypeRef}::.ctor(" +
+                    "${elementType.nameInSignature}, ${elementType.nameInSignature})",
+            pops = 2,
+            pushes = 1,
+        )
         return true
     }
 }

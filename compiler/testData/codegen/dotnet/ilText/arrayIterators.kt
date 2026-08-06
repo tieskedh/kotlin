@@ -44,6 +44,18 @@ class IntValueIterator(private val value: Int) : Iterator<Int> {
     }
 }
 
+class CustomIntIterator(private val value: Int) : IntIterator() {
+    private var available = true
+
+    override fun hasNext(): Boolean = available
+
+    override fun nextInt(): Int {
+        if (!hasNext()) throw NoSuchElementException()
+        available = false
+        return value
+    }
+}
+
 class GenericValueIterator<T>(private val value: T) : Iterator<T> {
     private var available = true
 
@@ -91,6 +103,7 @@ fun main() {
     println(nextInt(intArrayOf(7).iterator()))
     println(erasedStringNext(StringValueIterator("user")))
     println(erasedIntNext(IntValueIterator(8)))
+    println(nextInt(CustomIntIterator(9)))
     println(erasedGenericNext(GenericValueIterator("generic")))
     println(erasedStringNext(DeferredStringValueIterator("deferred")))
     println(firstFromOpenArray(arrayOf("open")))

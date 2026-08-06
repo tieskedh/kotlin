@@ -39,6 +39,7 @@ tasks.named<ProcessResources>("processResources") {
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/internal/Annotations.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/internal/AnnotationsBuiltin.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/internal/progressionUtil.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/internal/serializationUtil.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt"),
     )) {
@@ -62,8 +63,18 @@ tasks.named<ProcessResources>("processResources") {
         rootProject.file("libraries/stdlib/src/kotlin/collections/IndexedValue.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/Iterables.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/Iterators.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/collections/PrimitiveIterators.kt"),
     )) {
         into("kotlin-dotnet-stdlib/src/kotlin/collections")
+    }
+    from(files(
+        rootProject.file("libraries/stdlib/src/kotlin/ranges/Range.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/ranges/Ranges.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/ranges/Progressions.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/ranges/ProgressionIterators.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/ranges/PrimitiveRanges.kt"),
+    )) {
+        into("kotlin-dotnet-stdlib/src/kotlin/ranges")
     }
     from(files(
         rootProject.file("libraries/stdlib/common/src/kotlin/collections/AbstractMutableCollection.kt"),
