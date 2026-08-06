@@ -396,16 +396,18 @@ See the
   separate-module test must use the CLI's metadata-serialization and
   finalization phases rather than a same-invocation source dependency. See
   [the KType decision](docs/decisions/ktype-and-typeof.md).
-- A supported parameterless Kotlin marker annotation is one concrete sealed
-  CLR `System.Attribute` subtype. KLIB owns its logical declaration, targets,
-  retention, and applications; only runtime-retained applications on exact
-  metadata parents receive an additional CLR custom-attribute row. Reuse the
-  common annotation member generator, reject valued annotation shapes
-  explicitly, and do not infer annotation reflection or arbitrary foreign
-  annotation declarations from this floor. A C#-authored application of a
-  non-runtime Kotlin marker is foreign runtime-visible CLR metadata, not a
-  Kotlin application reconstructed from retention. See
-  [the marker-annotation decision](docs/decisions/marker-annotation-classes.md).
+- A Kotlin annotation is one concrete sealed CLR `System.Attribute` subtype
+  with Common-generated value semantics. KLIB owns its logical declaration,
+  values, defaults, targets, retention, and applications. Only a complete
+  runtime-retained application whose parent, constructor, and every fixed
+  value have an exact ECMA-335 representation receives an additional CLR
+  custom-attribute row; otherwise omit the whole derived row and retain the
+  KLIB application. Never infer `KClass` as `System.Type`, Kotlin reference
+  enums as CLR enums, primitive-array wrappers as raw vectors, or nested
+  annotations as CLR constants. A C#-authored application is foreign
+  runtime-visible CLR metadata, not a Kotlin application reconstructed from
+  retention. Annotation discovery and arbitrary foreign import remain
+  separate. See [the annotation-value decision](docs/decisions/valued-annotation-classes.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
   Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve
@@ -418,7 +420,7 @@ See the
   omitted. Neither form belongs to the producer physical declaration index or
   explicit C# export. No Kotlin call may reach either remainder. `KType` and
   `typeOf` compose this substitution path through their own completed logical
-  graph; suspend inline, valued annotations, and future classifier families
+  graph; suspend inline and future classifier families
   remain separate closures. See [the reified-inline decision](docs/decisions/reified-inline-functions.md)
   and its [array prerequisite](docs/decisions/reified-array-operations.md).
 - Ordinary runtime type tests evaluate their operand once at the erased object
@@ -623,9 +625,10 @@ class identity, and the private data-class equality view is not a general
 carrier. A later-admitted classifier extends the ordinary and reified
 type-operation matrix together before publication. The completed
 `KType`/`typeOf` foundation is a separate logical reflection graph and must
-not be approximated by `System.Type` or the nominal `KClass` floor. Suspend
-inline functions, valued annotation
-classes, value classes, member/annotation reflection, coroutines, concurrency
+not be approximated by `System.Type` or the nominal `KClass` floor. Valued
+annotation construction is complete through its Common/KLIB authority and
+fail-closed CLR projection; do not infer annotation discovery from it. Suspend
+inline functions, value classes, member/annotation reflection, coroutines, concurrency
 primitives, and broad KMP/Gradle product integration remain separate
 programmes until `STATUS.md` or the way forward selects one.
 

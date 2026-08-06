@@ -63,7 +63,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Reified inline functions use complete call-site substitution](decisions/reified-inline-functions.md)
 - [`KType` and `typeOf` retain the logical Kotlin type graph](decisions/ktype-and-typeof.md)
 - [Nominal `KClass` and class literals over classified CLR evidence](decisions/kclass-and-class-literals.md)
-- [Parameterless Kotlin marker annotation classes](decisions/marker-annotation-classes.md)
+- [Kotlin annotation classes and exact CLR value projection](decisions/valued-annotation-classes.md)
 - [Semantic erasure and canonical ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)

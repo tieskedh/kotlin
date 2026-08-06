@@ -70,6 +70,99 @@
 .class public auto ansi sealed beforefieldinit 'NestedAnnotationHost'
        extends [mscorlib]System.Object
 {
+  .class nested public auto ansi sealed beforefieldinit 'Nested'
+         extends [mscorlib]System.Attribute
+  {
+    .custom instance void [mscorlib]System.AttributeUsageAttribute::.ctor(valuetype [mscorlib]System.AttributeTargets) = (01 00 fc 0d 00 00 02 00 54 02 0d 41 6c 6c 6f 77 4d 75 6c 74 69 70 6c 65 00 54 02 09 49 6e 68 65 72 69 74 65 64 00)
+    .field private int32 'value'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'NestedAnnotationHost'/'Nested'::'value'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'NestedAnnotationHost'/'Nested'::'value'
+      ret
+    }
+    .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+    {
+      .maxstack 2
+      .locals init (
+        [0] class 'NestedAnnotationHost'/'Nested' 'tmp0_other_with_cast'
+      )
+      ldarg.1
+      isinst class 'NestedAnnotationHost'/'Nested'
+      ldnull
+      ceq
+      brfalse IL_whenNext_1
+      ldc.i4.0
+      ret
+  IL_whenNext_1:
+      ldarg.1
+      castclass class 'NestedAnnotationHost'/'Nested'
+      dup
+      brtrue IL_notNull_2
+      pop
+      newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+      throw
+  IL_notNull_2:
+      stloc.0
+      ldarg.0
+      call instance int32 'NestedAnnotationHost'/'Nested'::'get_value'()
+      ldloc.0
+      call instance int32 'NestedAnnotationHost'/'Nested'::'get_value'()
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_4
+      ldc.i4.0
+      ret
+  IL_whenNext_4:
+      ldc.i4.1
+      ret
+    }
+    .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+    {
+      .maxstack 2
+      ldstr "value"
+      call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+      ldc.i4 127
+      mul
+      ldarg.0
+      call instance int32 'NestedAnnotationHost'/'Nested'::'get_value'()
+      box [mscorlib]System.Int32
+      call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+      xor
+      ret
+    }
+    .method public hidebysig virtual instance string 'ToString'() cil managed
+    {
+      .maxstack 4
+      ldstr "@NestedAnnotationHost.Nested(value="
+      ldarg.0
+      call instance int32 'NestedAnnotationHost'/'Nested'::'get_value'()
+      box [mscorlib]System.Int32
+      ldnull
+      call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+      callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+      call string [mscorlib]System.String::Concat(string, string)
+      ldstr ")"
+      call string [mscorlib]System.String::Concat(string, string)
+      ret
+    }
+    .property instance int32 'value'()
+    {
+      .get instance int32 'NestedAnnotationHost'/'Nested'::'get_value'()
+    }
+  }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1

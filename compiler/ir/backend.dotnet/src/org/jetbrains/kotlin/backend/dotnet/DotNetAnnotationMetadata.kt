@@ -10,23 +10,23 @@ import org.jetbrains.kotlin.descriptors.annotations.KotlinRetention
 import org.jetbrains.kotlin.descriptors.annotations.KotlinTarget
 import org.jetbrains.kotlin.ir.declarations.IrAnnotationContainer
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.expressions.IrConst
+import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrAnnotation
+import org.jetbrains.kotlin.ir.expressions.IrVararg
 import org.jetbrains.kotlin.ir.util.getAnnotationRetention
 import org.jetbrains.kotlin.ir.util.getAnnotationTargets
 import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.isAnnotationClass
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 
-/** The selected custom-attribute grammar contains exactly a prolog and zero arguments. */
-private const val EMPTY_CUSTOM_ATTRIBUTE_BLOB = "(01 00 00 00)"
-
-internal fun IrAnnotationContainer.dotNetRuntimeMarkerAttributes(
+internal fun IrAnnotationContainer.dotNetRuntimeAttributes(
     typeMapper: DotNetIlTypeMapper,
 ): List<String> = annotations.mapNotNull { annotation ->
-    annotation.dotNetRuntimeMarkerAttributeOrNull(typeMapper)
+    annotation.dotNetRuntimeAttributeOrNull(typeMapper)
 }
 
-private fun IrAnnotation.dotNetRuntimeMarkerAttributeOrNull(
+private fun IrAnnotation.dotNetRuntimeAttributeOrNull(
     typeMapper: DotNetIlTypeMapper,
 ): String? {
     val annotationClass = classSymbol.owner
@@ -38,13 +38,128 @@ private fun IrAnnotation.dotNetRuntimeMarkerAttributeOrNull(
     val classInfo = typeMapper.classInfoOrNull(annotationClass) ?: return null
     val constructor = annotationClass.primaryConstructor
         ?: dotNetUnsupported("annotation class '${annotationClass.name.asString()}' has no primary constructor")
-    if (constructor.parameters.isNotEmpty() || argumentMapping.isNotEmpty()) {
-        dotNetUnsupported(
-            "annotation class '${annotationClass.name.asString()}' has values; " +
-                    "only parameterless marker annotations are supported"
-        )
+    // Kotlin-owned generic annotation classes follow the target's erased class identity. A CLR
+    // attribute row cannot spell the omitted logical type arguments, so construction remains
+    // available to Kotlin but its application is deliberately KLIB-only.
+    if (annotationClass.typeParameters.isNotEmpty()) return null
+
+    val parameterTypes = constructor.dotNetSignature(typeMapper).parameterTypes
+    if (parameterTypes.size != constructor.parameters.size) return null
+    val fixedArguments = constructor.parameters.map { parameter ->
+        arguments[parameter.indexInParameters]
+            ?: parameter.defaultValue?.expression
+            ?: return null
     }
-    return ".custom ${classInfo.renderConstructorReference(emptyList())} = $EMPTY_CUSTOM_ATTRIBUTE_BLOB"
+    val blob = DotNetCustomAttributeEncoder.encode(parameterTypes, fixedArguments) ?: return null
+    return ".custom ${classInfo.renderConstructorReference(parameterTypes)} = $blob"
+}
+
+/**
+ * Exact producer for the ECMA-335 custom-attribute fixed-argument subset whose physical Kotlin
+ * constructor signatures already match CLR metadata. Unsupported values return null so the
+ * authoritative KLIB application survives without a partial or misleading CLR row.
+ */
+private object DotNetCustomAttributeEncoder {
+    fun encode(
+        parameterTypes: List<DotNetIlValueType>,
+        arguments: List<IrExpression>,
+    ): String? {
+        if (parameterTypes.size != arguments.size) return null
+        val bytes = mutableListOf(0x01, 0x00) // custom-attribute prolog
+        for (argumentEntry in parameterTypes.zip(arguments)) {
+            if (!bytes.addFixedArgument(argumentEntry.first, argumentEntry.second)) return null
+        }
+        bytes += 0x00 // NumNamed = 0
+        bytes += 0x00
+        return bytes.joinToString(" ", prefix = "(", postfix = ")") { byte ->
+            byte.toString(16).padStart(2, '0')
+        }
+    }
+
+    private fun MutableList<Int>.addFixedArgument(
+        type: DotNetIlValueType,
+        expression: IrExpression,
+    ): Boolean = when (type) {
+        DotNetIlValueType.Boolean -> addConst<Boolean>(expression) { value -> add(if (value) 1 else 0) }
+        DotNetIlValueType.Int8 -> addConst<Byte>(expression) { value -> add(value.toInt() and 0xff) }
+        DotNetIlValueType.Int16 -> addConst<Short>(expression) { value -> addLittleEndian(value.toLong(), 2) }
+        DotNetIlValueType.Int32 -> addConst<Int>(expression) { value -> addLittleEndian(value.toLong(), 4) }
+        DotNetIlValueType.Int64 -> addConst<Long>(expression) { value -> addLittleEndian(value, 8) }
+        DotNetIlValueType.Float32 -> addConst<Float>(expression) { value ->
+            addLittleEndian(value.toRawBits().toLong(), 4)
+        }
+        DotNetIlValueType.Float64 -> addConst<Double>(expression) { value ->
+            addLittleEndian(value.toRawBits(), 8)
+        }
+        DotNetIlValueType.Char -> addConst<Char>(expression) { value -> addLittleEndian(value.code.toLong(), 2) }
+        DotNetIlValueType.String -> addConst<String>(expression) { value -> addSerString(value) }
+        is DotNetIlValueType.GenericArray -> addArray(type.elementType, expression)
+        // PrimitiveArray is a Kotlin wrapper rather than the raw SZARRAY required by a custom
+        // attribute constructor. KClass, Kotlin enums, nested annotations, erased classes and
+        // open types likewise have no exact fixed-argument carrier in this tranche.
+        DotNetIlValueType.Object,
+        is DotNetIlValueType.PrimitiveArray,
+        is DotNetIlValueType.ErasedGenericArray,
+        is DotNetIlValueType.NullableValue,
+        is DotNetIlValueType.UserClass,
+        is DotNetIlValueType.MappedClass,
+        is DotNetIlValueType.TypeParameter,
+        is DotNetIlValueType.GenericInstance,
+            -> false
+    }
+
+    private inline fun <reified T> MutableList<Int>.addConst(
+        expression: IrExpression,
+        addValue: MutableList<Int>.(T) -> Unit,
+    ): Boolean {
+        val value = (expression as? IrConst)?.value as? T ?: return false
+        addValue(value)
+        return true
+    }
+
+    private fun MutableList<Int>.addArray(
+        elementType: DotNetIlValueType,
+        expression: IrExpression,
+    ): Boolean {
+        // ECMA-335 permits one SZARRAY layer whose element is an admitted fixed scalar/string,
+        // not an array-of-array. Reject the nested shape here even if malformed or future Kotlin
+        // IR manages to present one, rather than emitting a blob the CLR will misdecode.
+        if (elementType is DotNetIlValueType.GenericArray ||
+            elementType is DotNetIlValueType.PrimitiveArray ||
+            elementType is DotNetIlValueType.ErasedGenericArray
+        ) {
+            return false
+        }
+        // Kotlin annotation arrays are serialized in IR as IrVararg. Spreads or executable array
+        // builders are not fixed constants and therefore cannot be projected safely here.
+        val vararg = expression as? IrVararg ?: return false
+        val elements = vararg.elements.map { element -> element as? IrExpression ?: return false }
+        addLittleEndian(elements.size.toLong(), 4)
+        return elements.all { element -> addFixedArgument(elementType, element) }
+    }
+
+    private fun MutableList<Int>.addLittleEndian(value: Long, byteCount: Int) {
+        repeat(byteCount) { index -> add(((value ushr (index * 8)) and 0xff).toInt()) }
+    }
+
+    private fun MutableList<Int>.addSerString(value: String) {
+        val encoded = value.encodeToByteArray()
+        when (encoded.size) {
+            in 0..0x7f -> add(encoded.size)
+            in 0x80..0x3fff -> {
+                add(0x80 or (encoded.size ushr 8))
+                add(encoded.size and 0xff)
+            }
+            in 0x4000..0x1fff_ffff -> {
+                add(0xc0 or (encoded.size ushr 24))
+                add((encoded.size ushr 16) and 0xff)
+                add((encoded.size ushr 8) and 0xff)
+                add(encoded.size and 0xff)
+            }
+            else -> error("Internal .NET backend error: custom-attribute string exceeds ECMA-335 SerString limit")
+        }
+        encoded.forEach { byte -> add(byte.toInt() and 0xff) }
+    }
 }
 
 /**

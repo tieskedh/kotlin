@@ -274,7 +274,9 @@ internal object DotNetKClassRuntime {
 
             .method public hidebysig virtual instance string ToString() cil managed
             {
-              .maxstack 2
+              // The retained "class " prefix plus the duplicated nullable name temporarily
+              // occupy three slots before brtrue consumes its condition.
+              .maxstack 3
               ldstr "class "
               ldarg.0
               ldfld string Kotlin.KClassImpl::'_qualifiedName'

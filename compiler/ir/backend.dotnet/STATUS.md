@@ -11,35 +11,32 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: the Common logical `KType`/`typeOf` graph, including
-  reified substitution, declaration parameters and recursive bounds,
-  projections/nullability, separate-library identity, and truthful C# reading
+- Last completed feature: valued Kotlin annotation classes, including Common
+  value semantics, defaults and nested/array construction, separate-library
+  identity, and exact fail-closed CLR custom-attribute projection
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
-stdlib. The target is not close to 98% feature-complete: valued annotations
-and annotation reflection, member reflection, value classes,
+stdlib. The target is not close to 98% feature-complete: annotation discovery,
+member reflection, value classes,
 coroutines, Sequence and Grouping families,
 sorting/random, and Gradle/KMP product integration remain
 substantial open programmes.
 
 ## Current green gate
 
-The current logical `KType`/`typeOf` production head passed:
+The current valued-annotation production head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The completion audit covered 40 XML files and 1232 tests. The final invocation
-completed at 2026-08-06 15:21 local time. Gradle reused the 38 green compiler
-reports written at 14:17 by the immediately preceding run of the unchanged
-compiler worktree, then freshly rewrote both integration reports after the
-integration source-list fixture was corrected:
+The completion audit covered 44 XML files and 1262 tests. The final full
+`--rerun` invocation completed at 2026-08-06 19:43 local time:
 
-- 1120 FIR, IL-text, and box tests
+- 1150 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 91 library-integration tests
 - zero failures, errors, or skips
@@ -532,7 +529,7 @@ The exact Common-contract export subset is additive and complete for
 `DoesNotReturn`. Its neutral carrier contains neither FIR/IR nodes nor the
 authoritative contract graph; ordinary Kotlin declarations and profiles
 without the exact standard TypeDefs remain physically unchanged.
-Parameterless annotation classes are admitted generally; ordinary enums, the
+Valued annotation classes are admitted generally; ordinary enums, the
 non-reified `EnumEntries` core, and the reified Common enum helpers are now
 published. The classified `CharSequence` carrier, Common collection
 predicates, and complete ordinary/reified inline boundary remain intact;
@@ -540,19 +537,21 @@ suspend inline remains an explicit error. The nominal `KClass` floor and
 logical `KType`/`typeOf` graph are selected and published; they do not imply
 member reflection or annotation discovery.
 
-Parameterless marker annotation classes now use the shared Common annotation-
-member generator on one concrete sealed CLR `System.Attribute` subtype. KLIB
-remains authoritative for declaration identity, targets, retention, and
-applications; only runtime-retained applications receive an additional exact
-CLR row on class, constructor, method, property, field, parameter, getter, or
-setter parents. Source/binary applications remain absent from CLR reflection.
-Because every public declaration is one `System.Attribute` subtype, a C#-
-authored application of a non-runtime marker is foreign CLR metadata rather
-than a Kotlin-produced application; it does not alter KLIB retention. The gate
-includes two compatible shared upstream annotation box tests in all four .NET
-runners, plus target-owned CIL, C# reflection/application, and portable Kotlin
-producer/consumer evidence. Valued annotations and annotation discovery remain
-outside this foundation.
+Kotlin annotation classes use the shared Common annotation-member generator on
+one concrete sealed CLR `System.Attribute` subtype. Ordinary Kotlin
+construction, defaults, nested values, arrays, equality/hash/string behavior,
+NaNs, signed zero, and separate KLIB consumption therefore share one runtime
+identity. KLIB remains authoritative for declaration identity, complete
+values, targets, retention, and applications. Runtime-retained applications
+receive an additional CLR row only when the complete parent, constructor, and
+fixed-argument blob are exact; unsupported `KClass`, Kotlin enum, nested
+annotation, primitive-array-wrapper, open, generic, or non-constant shapes
+remain KLIB-only. Source/binary applications remain absent from CLR reflection.
+The gate directly adopts seven compatible upstream annotation-instance tests
+in all four .NET runners, adds exact IL blobs and nested metadata parents, and
+proves portable Kotlin defaults plus bidirectional typed C# application and
+reflection on Framework CLR and CoreCLR. Annotation discovery remains a
+separate reflection feature.
 
 The general Common Comparable mapping is independently published and the enum
 product consumes the same KLIB identity, canonical classifier, typed C# view,
@@ -568,7 +567,7 @@ assembly-visible throwing remainders; signatures without one truthful open CLR
 shape are omitted. Neither form enters the physical Kotlin declaration index
 or explicit C# export, and cross-library calls disappear in all three KLIB
 inliner modes. The completed `KType`/`typeOf` graph composes this same
-substitution path; valued-annotation reflection, future classifier families,
+substitution path; annotation discovery, future classifier families,
 and suspend inline remain separate programmes.
 Physically exact non-generic reference casts are
 complete for Kotlin classes/interfaces, imported CLR interfaces, strings,
@@ -642,15 +641,14 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Select valued annotation classes and arguments as the next deep language
-   foundation. Audit authoritative Common behavior plus JVM, JS, Wasm, Native,
-   and ECMA-335 constant/custom-attribute shapes before choosing the carrier.
-   Keep KLIB authoritative and expose a CLR attribute projection only where the
-   complete value and target semantics are truthful.
-2. Keep broad member enumeration/invocation and annotation discovery outside
-   that tranche unless the annotation representation itself forces a bounded
-   reflection primitive. Do not make full `kotlin-reflect` a prerequisite for
-   declaring, storing, loading, or consuming valued annotations.
+1. Select annotation discovery as the next deep reflection foundation.
+   Enumerate Kotlin-produced applications from authoritative KLIB, reconstruct
+   the existing concrete runtime values, preserve use-site/retention facts,
+   and merge only recognized foreign CLR evidence without duplicating derived
+   rows from Kotlin-produced DLLs.
+2. Keep broad member enumeration/invocation outside that tranche. Annotation
+   lookup must not require a premature full `kotlin-reflect` product or make
+   CLR custom attributes the round-trip store for Kotlin applications.
 3. After that foundation, recompute the remaining stdlib dependency graph
    around Sequence, Grouping, sorting/comparators/random, dependency-blocked
    reified variants, and open nullable projected arrays; do not admit leaves

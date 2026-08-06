@@ -41,6 +41,8 @@ import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.classifierOrFail
 import org.jetbrains.kotlin.ir.types.makeNullable
+import org.jetbrains.kotlin.ir.types.makeNotNull
+import org.jetbrains.kotlin.ir.util.isNullable
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.util.hasShape
 import org.jetbrains.kotlin.ir.util.SymbolTable
@@ -211,6 +213,17 @@ internal class DotNetSymbols(
             if (hasMessageParameter) listOf("message" to irBuiltIns.stringType) else emptyList(),
         )
 
+    val dotNetAnnotationFloatEquals: IrSimpleFunctionSymbol = buildInternalFunction(
+        "annotationFloatEquals",
+        irBuiltIns.booleanType,
+        listOf("left" to irBuiltIns.floatType, "right" to irBuiltIns.floatType),
+    )
+    val dotNetAnnotationDoubleEquals: IrSimpleFunctionSymbol = buildInternalFunction(
+        "annotationDoubleEquals",
+        irBuiltIns.booleanType,
+        listOf("left" to irBuiltIns.doubleType, "right" to irBuiltIns.doubleType),
+    )
+
     override val getProgressionLastElementByReturnType: Map<IrClassifierSymbol, IrSimpleFunctionSymbol> by CallableId(
         StandardNames.KOTLIN_INTERNAL_FQ_NAME,
         Name.identifier("getProgressionLastElement"),
@@ -221,6 +234,17 @@ internal class DotNetSymbols(
     ).functionSymbolAssociatedBy(
         condition = { function -> function.hasShape(extensionReceiver = true, regularParameters = 1) },
         getKey = { function -> function.parameters[0].type to function.parameters[1].type },
+    )
+    /** Common annotation-value equality for generic and primitive arrays. */
+    val arraysContentEquals: Map<IrType, IrSimpleFunctionSymbol> by CallableId(
+        StandardNames.COLLECTIONS_PACKAGE_FQ_NAME,
+        Name.identifier("contentEquals"),
+    ).functionSymbolAssociatedBy(
+        condition = { function ->
+            function.hasShape(extensionReceiver = true, regularParameters = 1) &&
+                    function.parameters[0].type.isNullable()
+        },
+        getKey = { function -> function.parameters[0].type.makeNotNull() },
     )
     val enumEntries: IrClassSymbol by lazy {
         with(irBuiltIns) {

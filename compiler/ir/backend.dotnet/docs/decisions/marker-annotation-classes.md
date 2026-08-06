@@ -1,12 +1,17 @@
 # Parameterless Kotlin marker annotation classes
 
-- Status: Accepted (pre-ABI)
+- Status: Superseded by
+  [`valued-annotation-classes.md`](valued-annotation-classes.md)
 - Scope: general parameterless annotation-class declarations, construction,
   Kotlin value semantics, KLIB applications, retention, use-site placement, and
   exact CLR custom-attribute projection
 - Does not enable: annotation constructor values, enums, annotation arrays,
   annotation discovery through Kotlin reflection, arbitrary foreign CLR
   attribute import, or public .NET-specific source annotations
+
+This document records the first parameterless floor. Its identity, retention,
+parent-mapping, and no-wrapper rules remain in force; the later decision lifts
+only its value-shape restriction and defines exact fail-closed CLR projection.
 
 ## Context
 
