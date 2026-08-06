@@ -18,6 +18,7 @@ internal enum class DotNetKClassClassifierKind(val abiValue: Int) {
     EXCEPTION(4),
     NUMBER(5),
     NOTHING(6),
+    LOGICAL(7),
 }
 
 /** Physical Common-KClass floor and the compiler/runtime factory used by class-literal codegen. */
@@ -45,6 +46,11 @@ internal object DotNetKClassRuntime {
     fun getClassCallInstruction(coreLibraryReference: String): String =
         "call class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]${KCLASS_TYPE_NAME.toIlIdentifier()} " +
                 "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]${FACTORY_TYPE_NAME.toIlIdentifier()}::'GetClass'(object)"
+
+    fun createLogicalCallInstruction(): String =
+        "call class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]${KCLASS_TYPE_NAME.toIlIdentifier()} " +
+                "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]${FACTORY_TYPE_NAME.toIlIdentifier()}::'CreateLogical'(" +
+                "string, string, string)"
 
     fun localClassNameAttributeIl(simpleName: String?): String {
         val value = simpleName?.let(::serializedCustomAttributeString) ?: listOf(0xff)
@@ -94,6 +100,7 @@ internal object DotNetKClassRuntime {
             .field private initonly string '_qualifiedName'
             .field private initonly int32 '_kind'
             .field private initonly int32 '_classifierId'
+            .field private initonly string '_logicalKey'
 
             .method assembly hidebysig specialname rtspecialname instance void .ctor(
                 class ${coreLibraryReference}System.Type 'clrType',
@@ -120,6 +127,32 @@ internal object DotNetKClassRuntime {
               ldarg.0
               ldarg.s 'classifierId'
               stfld int32 Kotlin.KClassImpl::'_classifierId'
+              ldarg.0
+              ldnull
+              stfld string Kotlin.KClassImpl::'_logicalKey'
+              ret
+            }
+
+            .method assembly hidebysig specialname rtspecialname instance void .ctor(
+                class ${coreLibraryReference}System.Type 'clrType',
+                string 'simpleName',
+                string 'qualifiedName',
+                int32 'kind',
+                int32 'classifierId',
+                string 'logicalKey') cil managed
+            {
+              .maxstack 6
+              ldarg.0
+              ldarg.1
+              ldarg.2
+              ldarg.3
+              ldarg.s 'kind'
+              ldarg.s 'classifierId'
+              call instance void Kotlin.KClassImpl::.ctor(
+                  class ${coreLibraryReference}System.Type, string, string, int32, int32)
+              ldarg.0
+              ldarg.s 'logicalKey'
+              stfld string Kotlin.KClassImpl::'_logicalKey'
               ret
             }
 
@@ -175,10 +208,23 @@ internal object DotNetKClassRuntime {
               bne.un.s KC_EqualsFalse
               ldarg.0
               ldfld class ${coreLibraryReference}System.Type Kotlin.KClassImpl::'_clrType'
+              dup
+              brfalse.s KC_EqualsLogical
               ldloc.0
               ldfld class ${coreLibraryReference}System.Type Kotlin.KClassImpl::'_clrType'
               call bool ${coreLibraryReference}System.Type::op_Equality(
                   class ${coreLibraryReference}System.Type, class ${coreLibraryReference}System.Type)
+              ret
+            KC_EqualsLogical:
+              pop
+              ldloc.0
+              ldfld class ${coreLibraryReference}System.Type Kotlin.KClassImpl::'_clrType'
+              brtrue.s KC_EqualsFalse
+              ldarg.0
+              ldfld string Kotlin.KClassImpl::'_logicalKey'
+              ldloc.0
+              ldfld string Kotlin.KClassImpl::'_logicalKey'
+              call bool ${coreLibraryReference}System.String::op_Equality(string, string)
               ret
             KC_EqualsFalse:
               ldc.i4.0
@@ -199,12 +245,25 @@ internal object DotNetKClassRuntime {
               stloc.0
               ldarg.0
               ldfld class ${coreLibraryReference}System.Type Kotlin.KClassImpl::'_clrType'
-              brfalse.s KC_HashReady
+              brfalse.s KC_HashLogical
               ldloc.0
               ldc.i4 397
               mul
               ldarg.0
               ldfld class ${coreLibraryReference}System.Type Kotlin.KClassImpl::'_clrType'
+              callvirt instance int32 ${coreLibraryReference}System.Object::GetHashCode()
+              xor
+              stloc.0
+              br.s KC_HashReady
+            KC_HashLogical:
+              ldarg.0
+              ldfld string Kotlin.KClassImpl::'_logicalKey'
+              brfalse.s KC_HashReady
+              ldloc.0
+              ldc.i4 397
+              mul
+              ldarg.0
+              ldfld string Kotlin.KClassImpl::'_logicalKey'
               callvirt instance int32 ${coreLibraryReference}System.Object::GetHashCode()
               xor
               stloc.0
@@ -258,6 +317,7 @@ internal object DotNetKClassRuntime {
         val exception = DotNetKClassClassifierKind.EXCEPTION.abiValue
         val number = DotNetKClassClassifierKind.NUMBER.abiValue
         val nothing = DotNetKClassClassifierKind.NOTHING.abiValue
+        val logical = DotNetKClassClassifierKind.LOGICAL.abiValue
         return """
   .class public sealed auto ansi beforefieldinit KotlinLocalClassNameAttribute
          extends ${coreLibraryReference}System.Attribute
@@ -298,6 +358,23 @@ internal object DotNetKClassRuntime {
       ldarg.s 'classifierId'
       newobj instance void Kotlin.KClassImpl::.ctor(
           class ${coreLibraryReference}System.Type, string, string, int32, int32)
+      ret
+    }
+
+    .method public hidebysig static class Kotlin.KClass 'CreateLogical'(
+        string 'simpleName',
+        string 'qualifiedName',
+        string 'logicalKey') cil managed
+    {
+      .maxstack 6
+      ldnull
+      ldarg.0
+      ldarg.1
+      ldc.i4 $logical
+      ldc.i4.0
+      ldarg.2
+      newobj instance void Kotlin.KClassImpl::.ctor(
+          class ${coreLibraryReference}System.Type, string, string, int32, int32, string)
       ret
     }
 
@@ -460,8 +537,13 @@ ${dynamicExactTypeCases(coreLibraryReference).prependIndent("      ")}
       ldarg.2
       ldc.i4 $nothing
       beq KCF_InstanceFalse
+      ldarg.2
+      ldc.i4 $logical
+      beq KCF_InstanceFalse
       br KCF_InstanceFalse
     KCF_InstanceExact:
+      ldarg.1
+      brfalse KCF_InstanceFalse
       ldarg.1
       ldarg.0
       callvirt instance bool ${coreLibraryReference}System.Type::IsInstanceOfType(object)

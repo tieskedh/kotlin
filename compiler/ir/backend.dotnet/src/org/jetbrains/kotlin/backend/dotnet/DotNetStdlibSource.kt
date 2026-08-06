@@ -99,6 +99,14 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/reflect/DotNetKClass.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetKType.kt",
+        "dotnet/src/kotlin/reflect/DotNetKType.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetKTypes.kt",
+        "dotnet/src/kotlin/reflect/DotNetKTypes.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetKClasses.kt",
         "dotnet/src/kotlin/reflect/DotNetKClasses.kt",
     ),
@@ -268,6 +276,39 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "KType.kt",
+        "src/kotlin/reflect/KType.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "KTypeParameter.kt",
+        "src/kotlin/reflect/KTypeParameter.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "KTypeProjection.kt",
+        "src/kotlin/reflect/KTypeProjection.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "KVariance.kt",
+        "src/kotlin/reflect/KVariance.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "typeOf.kt",
+        "src/kotlin/reflect/typeOf.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "KTypeImpl.kt",
+        "common-non-jvm/src/kotlin/reflect/KTypeImpl.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "KTypeParameterBase.kt",
+        "common-non-jvm/src/kotlin/reflect/KTypeParameterBase.kt",
+    ),
+    DotNetStdlibSourceResource(
         "throwNoWhenBranchMatchedException.kt",
         "src/kotlin/internal/throwNoWhenBranchMatchedException.kt",
         isCommon = true,
@@ -275,6 +316,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "Tuples.kt",
         "src/kotlin/util/Tuples.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "HashCode.kt",
+        "src/kotlin/util/HashCode.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
