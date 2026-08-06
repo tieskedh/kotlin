@@ -99,6 +99,10 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/reflect/DotNetKClass.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetKAnnotatedElement.kt",
+        "dotnet/src/kotlin/reflect/DotNetKAnnotatedElement.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetKType.kt",
         "dotnet/src/kotlin/reflect/DotNetKType.kt",
     ),

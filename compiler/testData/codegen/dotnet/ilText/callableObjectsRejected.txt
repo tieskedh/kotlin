@@ -6,6 +6,13 @@
 .assembly 'callableObjectsRejected' {}
 .module 'main-callableObjectsRejected.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'callableObjectsRejectedKt'
        extends [mscorlib]System.Object
 {

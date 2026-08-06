@@ -195,7 +195,7 @@ internal fun IrClass.dotNetAttributeUsageAttribute(typeMapper: DotNetIlTypeMappe
             ".ctor(valuetype ${typeMapper.coreLibrary.reference}System.AttributeTargets) = ($bytes)"
 }
 
-private fun IrClass.isDotNetRuntimeRetainedAnnotation(): Boolean {
+internal fun IrClass.isDotNetRuntimeRetainedAnnotation(): Boolean {
     val retention = getAnnotationRetention()
     return retention != KotlinRetention.SOURCE && retention != KotlinRetention.BINARY
 }

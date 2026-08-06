@@ -1,11 +1,13 @@
 # CLR annotation interoperability programme
 
 - Status: **Active — exact Common-contract export, foreign flow-contract
-  import, and Kotlin valued-annotation production implemented; discovery and
-  wider foreign grammar remain open**
+  import, Kotlin valued-annotation production, and class discovery implemented;
+  member discovery and wider foreign grammar remain open**
 - Owner: .NET importer and foreign FIR integration
 - Governing decision:
   [`../decisions/draft-adr-clr-importer-boundary.md`](../decisions/draft-adr-clr-importer-boundary.md)
+- Class-discovery decision:
+  [`../decisions/annotation-discovery.md`](../decisions/annotation-discovery.md)
 
 ## Purpose
 
@@ -89,7 +91,8 @@ type.
 | Tooling markers | Retained selectively | Never infer a Kotlin role or hide ABI from a marker alone |
 | Kotlin annotation declarations and values | Implemented | Preserve Common/KLIB authority and one runtime class |
 | Kotlin-to-CLR annotation projection | Exact fixed-argument subset implemented | Extend only with exact physical carriers and parent mappings |
-| Annotation discovery | Parked | Enumerate KLIB first; merge recognized foreign CLR evidence without duplicates |
+| Class annotation discovery | Implemented | Reconstruct Kotlin applications from KLIB-derived factories; use CLR reflection only for unmarked foreign assemblies |
+| Member/parameter/type-use discovery | Parked | Select declaration ownership, use sites, overrides, and lookup identity before exposing a surface |
 | Kotlin-to-.NET export controls | Undecided public API | Make one language-facing proposal |
 
 ## Ordered work
@@ -193,21 +196,29 @@ Do not omit the same fact from KLIB. A Kotlin-produced DLL remains self-describi
 are stripped by external tooling, and KLIB-only consumers must not need the PE attribute graph to
 recover Kotlin semantics.
 
-### 6. Grow annotation discovery from the completed value foundation
+### 6. Grow annotation discovery from the completed class foundation
 
 Known CLR attributes can be decoded and emitted without broad Kotlin reflection. Kotlin annotation
 declaration, construction, Common value members, defaults, KLIB applications, cross-module
 identity, and the exact CLR fixed-argument subset are now selected by
 [`../decisions/valued-annotation-classes.md`](../decisions/valued-annotation-classes.md).
 
-The remaining chain starts with discovery:
+The first bounded discovery slice is now complete under
+[`../decisions/annotation-discovery.md`](../decisions/annotation-discovery.md):
 
-1. enumerate Kotlin-produced applications from authoritative embedded KLIB;
-2. reconstruct the already selected concrete annotation runtime values;
-3. preserve target/use-site and retention distinctions which CLR rows cannot express;
-4. recognize foreign CLR attributes only through the importer identity/value rules;
-5. avoid duplicates when a Kotlin-produced application also has a derived CLR row; and
-6. extend the value/parent grammar only when its physical representation is exact.
+1. post-KLIB factories reconstruct Kotlin-produced class applications with the
+   already selected concrete annotation values;
+2. the producer marker prevents projected CLR rows and compiler attributes from
+   becoming duplicate or invented Kotlin values;
+3. class-level runtime retention and declaration order remain authoritative;
+4. unmarked foreign CLR types use their native inherited attribute discovery;
+5. mapped BCL classifiers do not leak host implementation attributes.
+
+The remaining chain covers built-in Kotlin meta-annotation runtime values,
+typed foreign attribute import, and callable/property/field/accessor/parameter/
+type-use ownership. Each needs an admitted declaration identity and use-site
+model before it can extend the class surface. The exact CLR value/parent grammar
+may grow independently only when its physical representation is exact.
 
 This is a bounded annotation-reflection layer, not permission to build broad member enumeration or
 invocation first. The foreign decoder and Kotlin producer may share a neutral value algebra, but a

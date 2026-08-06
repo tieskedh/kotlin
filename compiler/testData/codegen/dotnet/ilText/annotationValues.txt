@@ -15,6 +15,13 @@
 .assembly 'annotationValues' {}
 .module 'main-annotationValues.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi sealed beforefieldinit 'test.ExactValues'
        extends [mscorlib]System.Attribute
 {
@@ -1336,6 +1343,171 @@ IL_whenNext_4:
 {
   .custom instance void 'test.ExactValues'::.ctor(bool, int8, int16, int32, int64, float32, float64, char, string, string[]) = (01 00 01 fe fd ff 78 56 34 12 08 07 06 05 04 03 02 01 00 00 00 80 00 00 00 00 00 00 f8 7f bb 03 03 68 c3 a9 02 00 00 00 01 61 02 ce b2 00 00)
   .custom instance void 'test.ExactDefault'::.ctor(int32) = (01 00 2a 00 00 00 00 00)
+  .class nested private abstract sealed auto ansi beforefieldinit '<AnnotationFactory>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method private hidebysig static class [mscorlib]System.Attribute[] '<GetKotlinAnnotations>'() cil managed
+    {
+      .maxstack 12
+      .locals init (
+        [0] class [mscorlib]System.Attribute[] 'tmp2_<vararg>',
+        [1] class [mscorlib]System.Attribute[] '<arraySet>',
+        [2] int32 '<arrayIndex>',
+        [3] string[] 'tmp0_<vararg>',
+        [4] string[] '<arraySet>@4',
+        [5] int32 '<arrayIndex>@5',
+        [6] string '<arrayValue>',
+        [7] string[] '<arraySet>@7',
+        [8] int32 '<arrayIndex>@8',
+        [9] string '<arrayValue>@9',
+        [10] class [mscorlib]System.Attribute '<arrayValue>@10',
+        [11] class [mscorlib]System.Attribute[] '<arraySet>@11',
+        [12] int32 '<arrayIndex>@12',
+        [13] class [mscorlib]System.Attribute '<arrayValue>@13',
+        [14] class [mscorlib]System.Attribute[] '<arraySet>@14',
+        [15] int32 '<arrayIndex>@15',
+        [16] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp1_<vararg>',
+        [17] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>@17',
+        [18] int32 '<arrayIndex>@18',
+        [19] int32 '<arrayValue>@19',
+        [20] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>@20',
+        [21] int32 '<arrayIndex>@21',
+        [22] int32 '<arrayValue>@22',
+        [23] class [mscorlib]System.Attribute '<arrayValue>@23'
+      )
+      ldc.i4 3
+      dup
+      ldc.i4.0
+      clt
+      brfalse IL_arraySizeNonNegative_0
+      pop
+      newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
+      throw
+  IL_arraySizeNonNegative_0:
+      newarr class [mscorlib]System.Attribute
+      stloc.0
+      ldloc.0
+      stloc.1
+      ldc.i4 0
+      stloc.2
+      ldc.i4.1
+      ldc.i4 -2
+      ldc.i4 -3
+      ldc.i4 305419896
+      ldc.i8 72623859790382856
+      ldc.r4 float32(0x80000000)
+      ldc.r8 float64(0x7FF8000000000000)
+      ldc.i4 955
+      ldstr "hé"
+      ldc.i4 2
+      dup
+      ldc.i4.0
+      clt
+      brfalse IL_arraySizeNonNegative_1
+      pop
+      newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
+      throw
+  IL_arraySizeNonNegative_1:
+      newarr string
+      stloc.3
+      ldloc.3
+      stloc 4
+      ldc.i4 0
+      stloc 5
+      ldstr "a"
+      stloc 6
+      ldloc 4
+      ldloc 5
+      ldloc 6
+      stelem string
+      ldloc.3
+      stloc 7
+      ldc.i4 1
+      stloc 8
+      ldstr "β"
+      stloc 9
+      ldloc 7
+      ldloc 8
+      ldloc 9
+      stelem string
+      ldloc.3
+      newobj instance void 'test.ExactValues'::.ctor(bool, int8, int16, int32, int64, float32, float64, char, string, string[])
+      stloc 10
+      ldloc.1
+      ldloc.2
+      ldloc 10
+      stelem class [mscorlib]System.Attribute
+      ldloc.0
+      stloc 11
+      ldc.i4 1
+      stloc 12
+      ldc.i4 42
+      newobj instance void 'test.ExactDefault'::.ctor(int32)
+      stloc 13
+      ldloc 11
+      ldloc 12
+      ldloc 13
+      stelem class [mscorlib]System.Attribute
+      ldloc.0
+      stloc 14
+      ldc.i4 2
+      stloc 15
+      ldc.i4 2
+      dup
+      ldc.i4.0
+      clt
+      brfalse IL_arraySizeNonNegative_2
+      pop
+      newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
+      throw
+  IL_arraySizeNonNegative_2:
+      newarr int32
+      newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
+      stloc 16
+      ldloc 16
+      stloc 17
+      ldc.i4 0
+      stloc 18
+      ldc.i4 1
+      stloc 19
+      ldloc 17
+      ldloc 18
+      ldloc 19
+      call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
+      ldloc 16
+      stloc 20
+      ldc.i4 1
+      stloc 21
+      ldc.i4 2
+      stloc 22
+      ldloc 20
+      ldloc 21
+      ldloc 22
+      call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
+      ldloc 16
+      ldtoken [mscorlib]System.String
+      call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+      ldstr "String"
+      ldstr "kotlin.String"
+      ldc.i4 0
+      ldc.i4 0
+      call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+      call void 'test.KotlinEnum'::'<EnsureInitialized>'()
+      ldsfld class 'test.KotlinEnum' 'test.KotlinEnum'::'SECOND'
+      ldstr "nested"
+      newobj instance void 'test.NestedValue'::.ctor(string)
+      newobj instance void 'test.KotlinOnlyValues'::.ctor(class [Kotlin.Runtime]'Kotlin.IntArray', class [Kotlin.Runtime]'Kotlin.KClass', class 'test.KotlinEnum', class 'test.NestedValue')
+      stloc 23
+      ldloc 14
+      ldloc 15
+      ldloc 23
+      stelem class [mscorlib]System.Attribute
+      ldloc.0
+      ret
+    }
+  }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1

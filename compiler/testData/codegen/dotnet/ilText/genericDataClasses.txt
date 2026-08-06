@@ -11,6 +11,13 @@
 .assembly 'genericDataClasses' {}
 .module 'main-genericDataClasses.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GenericData'
        extends [mscorlib]System.Object
 {

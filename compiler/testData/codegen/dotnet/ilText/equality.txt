@@ -6,6 +6,13 @@
 .assembly 'equality' {}
 .module 'main-equality.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'test.equalityKt'
        extends [mscorlib]System.Object
 {

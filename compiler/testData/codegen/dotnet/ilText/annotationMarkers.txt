@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -6,6 +11,13 @@
 .assembly 'annotationMarkers' {}
 .module 'main-annotationMarkers.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi sealed beforefieldinit 'test.RuntimeMarker'
        extends [mscorlib]System.Attribute
 {
@@ -160,6 +172,45 @@ IL_notNull_2:
        extends [mscorlib]System.Object
 {
   .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
+  .class nested private abstract sealed auto ansi beforefieldinit '<AnnotationFactory>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method private hidebysig static class [mscorlib]System.Attribute[] '<GetKotlinAnnotations>'() cil managed
+    {
+      .maxstack 3
+      .locals init (
+        [0] class [mscorlib]System.Attribute[] 'tmp0_<vararg>',
+        [1] class [mscorlib]System.Attribute[] '<arraySet>',
+        [2] int32 '<arrayIndex>',
+        [3] class [mscorlib]System.Attribute '<arrayValue>'
+      )
+      ldc.i4 1
+      dup
+      ldc.i4.0
+      clt
+      brfalse IL_arraySizeNonNegative_0
+      pop
+      newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
+      throw
+  IL_arraySizeNonNegative_0:
+      newarr class [mscorlib]System.Attribute
+      stloc.0
+      ldloc.0
+      stloc.1
+      ldc.i4 0
+      stloc.2
+      newobj instance void 'test.RuntimeMarker'::.ctor()
+      stloc.3
+      ldloc.1
+      ldloc.2
+      ldloc.3
+      stelem class [mscorlib]System.Attribute
+      ldloc.0
+      ret
+    }
+  }
   .field private int32 'state'
   .custom instance void 'test.RuntimeMarker'::.ctor() = (01 00 00 00)
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
