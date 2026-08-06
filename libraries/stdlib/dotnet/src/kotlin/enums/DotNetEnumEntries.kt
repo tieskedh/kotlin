@@ -1,0 +1,15 @@
+/*
+ * Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
+
+package kotlin.enums
+
+import kotlin.internal.UsedFromCompilerGeneratedCode
+
+@SinceKotlin("1.9")
+@PublishedApi
+@UsedFromCompilerGeneratedCode
+internal actual fun <T : Enum<T>> enumEntriesIntrinsic(): EnumEntries<T> {
+    throw NotImplementedError("Implemented as a Kotlin/.NET compiler intrinsic")
+}

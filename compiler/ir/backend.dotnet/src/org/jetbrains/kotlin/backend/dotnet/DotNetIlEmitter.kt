@@ -652,9 +652,10 @@ internal class DotNetIlEmitter(
                 if (intrinsicMethods.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true) continue
                 try {
                     // Generic top-level functions use real CLR generic methods (`!!n`-indexed,
-                    // with no monomorphization or erasure machinery). Ordinary non-reified
-                    // inline methods keep that physical fallback; suspend/reified, variance,
-                    // and unsupported constraints fail loudly before the signature maps.
+                    // with no monomorphization or erasure machinery). A reified declaration gets
+                    // only a non-public throwing remainder when its signature maps truthfully;
+                    // its already-serialized KLIB body remains usable when no such MethodDef can
+                    // exist (for example Array<T?> across both CLR value/reference substitutions).
                     function.checkDotNetFunctionShapeSupported()
                     availableFunctions[function] = DotNetIlFunctionInfo(
                         facadeClassInfo,
@@ -664,7 +665,9 @@ internal class DotNetIlEmitter(
                         ),
                     )
                 } catch (e: DotNetIlUnsupportedException) {
-                    skipReasons[function] = e.reason
+                    if (!function.isReifiedInlinePhysicalRemainder()) {
+                        skipReasons[function] = e.reason
+                    }
                 }
             }
         }
@@ -854,7 +857,12 @@ internal class DotNetIlEmitter(
                         continue
                     }
                     val signatureMapper = memberTypeMapper(member)
-                    val signature = member.dotNetSignature(signatureMapper)
+                    val signature = try {
+                        member.dotNetSignature(signatureMapper)
+                    } catch (e: DotNetIlUnsupportedException) {
+                        if (member.isReifiedInlinePhysicalRemainder()) continue
+                        throw e
+                    }
                     checkOverrideKeepsIlReturnType(member, signature, signatureMapper)
                     val physicalMethodName = when {
                         irClass in genericInterfaces -> member.dotNetGenericInterfaceCanonicalMethodName()
@@ -1619,6 +1627,9 @@ internal class DotNetIlEmitter(
         }
         checkDotNetGenericFunctionSupported()
     }
+
+    private fun IrSimpleFunction.isReifiedInlinePhysicalRemainder(): Boolean =
+        isInline && typeParameters.any { typeParameter -> typeParameter.isReified }
 
     /**
      * Gives a lifted local function the user's metadata namespace without letting it evict a

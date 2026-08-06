@@ -62,12 +62,20 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/DotNetStdlibKotlin.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetLibrary.kt",
+        "dotnet/src/kotlin/DotNetLibrary.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetEnum.kt",
         "dotnet/src/kotlin/DotNetEnum.kt",
     ),
     DotNetStdlibSourceResource(
         "DotNetEnumEntriesSerializationProxy.kt",
         "dotnet/src/kotlin/enums/DotNetEnumEntriesSerializationProxy.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetEnumEntries.kt",
+        "dotnet/src/kotlin/enums/DotNetEnumEntries.kt",
     ),
     DotNetStdlibSourceResource(
         "DotNetSerializationUtil.kt",

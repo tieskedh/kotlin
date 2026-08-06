@@ -181,3 +181,27 @@ public inline fun repeat(times: Int, action: (Int) -> Unit) {
 @Suppress("DEPRECATION")
 @kotlin.internal.IntrinsicConstEvaluation
 public inline val Char.code: Int get() = this.toInt()
+
+/**
+ * Returns an array containing enum entries of the enum type [T].
+ *
+ * The function returns a new instance of the array on every call.
+ * The array could be mutated, so working with it may also require defensive copying.
+ * Consider using [kotlin.enums.enumEntries] as a more efficient alternative
+ * returning an immutable list of enum entries.
+ *
+ * @see kotlin.enums.enumEntries
+ */
+@SinceKotlin("1.1")
+public expect inline fun <reified T : Enum<T>> enumValues(): Array<T>
+
+/**
+ * Returns the enum entry of type [T] with the specified [name].
+ *
+ * The [name] must exactly match an existing enum constant of type [T] (case-sensitive).
+ *
+ * @throws IllegalArgumentException if no enum constant with the specified [name] exists in [T].
+ * @sample samples.misc.Enums.enumValueOfSample
+ */
+@SinceKotlin("1.1")
+public expect inline fun <reified T : Enum<T>> enumValueOf(name: String): T
