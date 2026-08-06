@@ -1,9 +1,15 @@
-# Ordinary inline functions programme
+# Inline functions programme
 
-- Status: **Completed compiler foundation — selected Common collection adoption may begin**
-- Scope: ordinary Kotlin `inline`, inline lambda control flow, and same-/cross-module compiler ABI
-- Explicitly excluded: reified type parameters, `typeOf`, broad reflection, suspend inline functions,
-  and target-specific source substitutes
+- Status: **Completed ordinary and reified compiler foundation**
+- Scope: Kotlin `inline`, reified call-site substitution, inline lambda control flow, and
+  same-/cross-module compiler ABI
+- Explicitly excluded: `typeOf`/`KType`, broad reflection, suspend inline functions, and
+  target-specific source substitutes
+
+This programme is chronological evidence. The accepted
+[reified-inline ADR](../decisions/reified-inline-functions.md) owns the final
+reified representation and supersedes earlier prerequisite text that says the
+gate remained closed at that historical point.
 
 ## Kotlin authority
 
@@ -64,8 +70,8 @@ target substitute:
   fallback, and binds exact public signatures through the frontend-selected dependency symbol
   finder without starting a general IR linker;
 - captured mutable state uses Common's `kotlin.internal.SharedVariableBox<T>` compiler ABI; and
-- ordinary non-reified generic inline methods are admitted while reified and suspend functions
-  still fail explicitly.
+- ordinary generic inline methods and complete call-site-substituted reified methods are admitted,
+  while suspend inline functions still fail explicitly.
 
 An ordinary physical CLR method remains for each supported inline declaration. It is a callable
 fallback and useful C# shape, but the tests require Kotlin call sites to disappear after IR
@@ -176,14 +182,15 @@ semantics: ordinary inline support is available in a complete Kotlin stdlib envi
 stdlib-free diagnostic compilation retains its pre-existing behavior instead of crashing during
 eager symbol lookup.
 
-### 4. Separate ordinary generic inline from reified inline
+### 4. Complete ordinary generic inline before reified inline
 
-Remove the blanket rejection only for non-reified generic inline functions once both stages are
-active. They retain an ordinary CLR generic method as their non-inlined physical fallback. Keep
-reified type parameters rejected until the remaining type-test/cast matrix, `KType`/`typeOf`,
-enum/annotation operations, all later classifier families, and the physical fallback contract form
-one complete feature. The selected class-literal/`KClass` and array-construction prerequisites do
-not open that gate by themselves.
+The ordinary tranche first removed the blanket rejection only for non-reified generic inline
+functions once both stages were active. They retain an ordinary CLR generic method as their
+non-inlined physical fallback. The later reified tranche then enabled shared call-site
+substitution only after the type-test/cast, class-literal, array, enum, and physical-remainder
+closure was complete. `KType`/`typeOf` remains independent, matching mature-target pipeline
+ownership; a later classifier family extends the same operation matrix before it becomes a legal
+published reified argument.
 
 ## Design attack and rejected shortcuts
 
@@ -224,11 +231,12 @@ The completed slice proves:
 - no injected bootstrap stdlib IR in a user-produced library; and
 - byte-identical embedded stdlib KLIBs for repository sources and packaged fallback sources, plus
   successful stdlib-free foreign/diagnostic compilation; and
-- continued explicit rejection of reified and suspend-inline declarations outside this slice.
+- continued explicit rejection of suspend-inline declarations outside this slice.
 
-This matrix is green. Reified substitution, coroutine lowering, `lateinit`, reflection, and
-adjacent parked features did not enter the slice. The selected Common collection inline families
-may now enter the stdlib product through their exact dependency closures.
+This ordinary-inline matrix is green. Reified substitution subsequently entered through the
+separate completed tranche below; coroutine lowering, `lateinit`, and broad reflection remain
+outside it. Selected Common inline families may enter the stdlib product through their exact
+dependency closures.
 
 ## Return control transfer from an expression operand
 
@@ -783,3 +791,30 @@ enable a public reified declaration. The remaining closure includes `KType`/`typ
 annotation operations, the final substituted type-test/cast matrix, every later-admitted
 classifier, and the physical throwing-stub contract. An actual reified producer/consumer matrix
 through both inliner stages remains mandatory when that complete boundary is selected.
+
+### Selected tenth feature: complete reified call-site substitution
+
+The [reified-inline decision](../decisions/reified-inline-functions.md) closes the language feature
+without treating CLR generic dispatch as Kotlin reification. Embedded KLIB retains the logical
+body; a target-stage shared inliner completion substitutes every Kotlin call before target type,
+array, enum, and code-generation lowerings. This ordering deliberately preserves bodyless
+compiler intrinsics during the pre-serialization stage while allowing selected dependency KLIB
+bodies to deserialize normally.
+
+Substituted `is`, `as`, `as?`, nullable and bottom types, `T::class`, arrays, nested reified calls,
+declaration-erased Kotlin generic classes/interfaces, and the Common enum helpers all reuse their
+ordinary carriers. The exact Common `filterIsInstance` families, `orEmpty`, `toTypedArray`,
+`enumValues`, `enumValueOf`, and `enumEntries` now ship through that same closure. A shared
+non-linking-deserializer correction resolves inherited fake-override accessors in separate KLIB
+bodies rather than introducing .NET name lookup.
+
+A logical declaration whose open CLR signature is truthful receives an assembly-visible throwing
+remainder. One whose signature cannot truthfully represent every substitution, such as
+`Array<T?>`, receives no MethodDef. Neither form is in the producer physical declaration index or
+explicit C# export; Kotlin consumers must inline the authoritative KLIB body in all three inliner
+modes. The adversarial gate covers both frontends, Framework CLR, CoreCLR, same-module execution,
+separate libraries, physical metadata, and fail-closed C# export.
+
+`KType` and `typeOf` are the next deep reflection boundary. They require a logical type graph with
+arguments, variance, nullability, classifiers, equality, and separate-library ownership; they are
+not inferred from the already completed `KClass` token or from CLR `System.Type`.

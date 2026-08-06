@@ -18,9 +18,10 @@ import org.jetbrains.kotlin.ir.overrides.isEffectivelyPrivate
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideOrSelf
+import org.jetbrains.kotlin.library.metadata.KlibDeserializedContainerSource
 
 /**
- * Resolves ordinary inline bodies without linking a dependency's complete IR graph.
+ * Resolves ordinary and reified inline bodies without linking a dependency's complete IR graph.
  *
  * Prepared inline IR is authoritative when present. The main IR fallback keeps libraries
  * produced with `-Xklib-ir-inliner=disabled` consumable; it remains opt-in here so this target
@@ -41,10 +42,14 @@ private class DotNetInlineFunctionResolver(
     override fun getFunctionDeclaration(symbol: IrFunctionSymbol): IrFunction? {
         if (!symbol.isBound) return null
         val function = symbol.owner.resolveFakeOverrideOrSelf()
-        if (!function.isInline || function.typeParameters.any { it.isReified }) return null
+        if (!function.isInline) return null
         if (inlineMode == InlineMode.PRIVATE_INLINE_FUNCTIONS && !function.isEffectivelyPrivate()) return null
         if (function.body != null || function !is IrSimpleFunction) return function
         if (inlineMode != InlineMode.ALL_INLINE_FUNCTIONS || function.isFakeOverride) return null
+        // Bodyless compiler intrinsics such as emptyArray are not Kotlin libraries and must
+        // survive for target codegen. Only a selected KLIB can authoritatively provide an inline
+        // body at this boundary; foreign CLR declarations never acquire Kotlin bodies by guess.
+        if (function.containerSource !is KlibDeserializedContainerSource) return null
         return deserializer.deserializeInlineFunction(function)
     }
 }

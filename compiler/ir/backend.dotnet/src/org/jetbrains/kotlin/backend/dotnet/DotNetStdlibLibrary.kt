@@ -64,6 +64,7 @@ internal object DotNetStdlibLibrary {
     const val TUPLES_FACADE_IL_NAME = "Kotlin.TuplesKt"
     const val TEXT_FACADE_IL_NAME = "Kotlin.Text.StringsKt"
     const val STANDARD_FACADE_IL_NAME = "Kotlin.StandardKt"
+    const val LIBRARY_FACADE_IL_NAME = "Kotlin.LibraryKt"
     const val CONTRACTS_FACADE_IL_NAME = "Kotlin.Contracts.ContractBuilderKt"
     const val IO_FACADE_IL_NAME = "Kotlin.Io.ConsoleKt"
     const val ENUM_ENTRIES_FACADE_IL_NAME = "Kotlin.Enums.EnumEntriesKt"
@@ -181,7 +182,12 @@ internal object DotNetStdlibLibrary {
         "kotlin.internal.SyntheticConstructorMarker" to "Kotlin.Internal.SyntheticConstructorMarker",
     )
     private val implementationFunctionFacadeIlNames = mapOf(
+        "kotlin.enumValues" to LIBRARY_FACADE_IL_NAME,
+        "kotlin.enumValueOf" to LIBRARY_FACADE_IL_NAME,
+        "kotlin.dotNetEnumValuesIntrinsic" to LIBRARY_FACADE_IL_NAME,
+        "kotlin.dotNetEnumValueOfIntrinsic" to LIBRARY_FACADE_IL_NAME,
         "kotlin.enums.enumEntries" to ENUM_ENTRIES_FACADE_IL_NAME,
+        "kotlin.enums.enumEntriesIntrinsic" to ENUM_ENTRIES_FACADE_IL_NAME,
         "kotlin.collections.all" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.any" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.collections.asIterable" to COLLECTIONS_FACADE_IL_NAME,
@@ -788,6 +794,10 @@ internal object DotNetStdlibLibrary {
             facadeIlName = ENUM_ENTRIES_FACADE_IL_NAME,
         ),
         "DotNetEnumEntriesSerializationProxy.kt" to ImplementationSource(packageFqName = "kotlin.enums"),
+        "DotNetEnumEntries.kt" to ImplementationSource(
+            packageFqName = "kotlin.enums",
+            facadeIlName = ENUM_ENTRIES_FACADE_IL_NAME,
+        ),
         "DotNetStdlibCollections.kt" to ImplementationSource(
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
@@ -885,6 +895,10 @@ internal object DotNetStdlibLibrary {
         "DotNetStdlibKotlin.kt" to ImplementationSource(
             packageFqName = "kotlin",
             facadeIlName = STANDARD_FACADE_IL_NAME,
+        ),
+        "DotNetLibrary.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = LIBRARY_FACADE_IL_NAME,
         ),
         "_DotNetBootstrapScalarBounds.kt" to ImplementationSource(
             packageFqName = "kotlin",

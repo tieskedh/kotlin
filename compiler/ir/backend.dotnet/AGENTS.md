@@ -391,15 +391,20 @@ See the
   non-runtime Kotlin marker is foreign runtime-visible CLR metadata, not a
   Kotlin application reconstructed from retention. See
   [the marker-annotation decision](docs/decisions/marker-annotation-classes.md).
-- Reified array construction, once enabled, must reuse the ordinary carrier
-  selected after shared IR substitution. Do not add a reified-only array
-  token/wrapper, fall back to `object[]` for an unsupported element, or use a
-  closed typed CLR generic class as Kotlin element identity. Array-allocation
-  readiness does not enable either public reified gate: `KType`, reified enum
-  helpers, valued annotations and annotation reflection, remaining classifier
-  families, the final substituted type-operator matrix, and the physical
-  throwing-stub contract stay one complete feature boundary. See
-  [the reified-array decision](docs/decisions/reified-array-operations.md).
+- Reified functions use shared IR call-site substitution only. A selected KLIB
+  body is authoritative; CLR generic dispatch, `System.Type`, and a closed
+  Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve
+  bodyless compiler intrinsics during the pre-serialization stage, then run the
+  target-stage shared inlining completion before enum and physical-remainder
+  lowerings. Array operations reuse the ordinary substituted carrier: never add
+  a reified-only token/wrapper, fall back to `object[]`, or change Kotlin-owned
+  generic identity. A truthfully representable open CLR signature may receive
+  an assembly-visible throwing remainder; an unrepresentable signature is
+  omitted. Neither form belongs to the producer physical declaration index or
+  explicit C# export. No Kotlin call may reach either remainder. `KType` and
+  `typeOf`, suspend inline, valued annotations, and future classifier families
+  remain separate closures. See [the reified-inline decision](docs/decisions/reified-inline-functions.md)
+  and its [array prerequisite](docs/decisions/reified-array-operations.md).
 - Ordinary runtime type tests evaluate their operand once at the erased object
   boundary, implement Kotlin nullable-target semantics before the non-null
   check, and then use either an existing Kotlin classifier or one physically
@@ -574,7 +579,7 @@ Also:
   becomes visible during implementation; and
 - keep temporary probes, playgrounds, and IDE projects outside the repository.
 
-Ordinary non-reified inline support is selected by
+Ordinary and reified inline support is selected by
 `docs/programmes/inline-functions.md`. Non-linking inline deserialization may
 bind an exact public signature through `IrBuiltIns.symbolFinder`: that finder
 is the logical dependency graph already selected by the frontend, including
@@ -595,20 +600,17 @@ accessor whose property carries the annotation. A separate Kotlin consumer
 must inline it; never widen it into C# API, mark it as public compiler ABI, omit
 the physical body, or allow an external fallback call. See
 [the inline-only physical ABI ADR](docs/decisions/inline-only-physical-abi.md).
-Do not enable either reified-inline support gate until the complete operation
-closure in `docs/programmes/inline-functions.md` is truthful. In particular,
-never compile a Kotlin-owned generic-class type test/cast as closed CLR
-`C<T>` identity: Kotlin generic arguments do not participate in runtime class
-identity, and the private data-class equality view is not a general carrier.
-Physically exact non-generic casts and scalar/array prerequisites may land
-independently, but must reject rather than generalize to `GenericInstance`.
-Reified Common stdlib declarations remain outside the product meanwhile.
-Suspend inline functions, valued annotation classes, value classes,
-`KType`, member/annotation reflection, coroutines, concurrency primitives, and
-broad KMP/Gradle product integration remain separate programmes until
-`STATUS.md` or the way forward selects one. Parameterless marker annotation
-classes and the selected `KClass`/class-literal floor are not part of that
-parked remainder.
+Reified call-site substitution must leave no Kotlin call to a physical
+remainder. Never compile a Kotlin-owned generic-class type test/cast as closed
+CLR `C<T>` identity: Kotlin generic arguments do not participate in runtime
+class identity, and the private data-class equality view is not a general
+carrier. A later-admitted classifier extends the ordinary and reified
+type-operation matrix together before publication. `KType`/`typeOf` remains a
+separate logical reflection graph and must not be approximated by `System.Type`
+or the nominal `KClass` floor. Suspend inline functions, valued annotation
+classes, value classes, member/annotation reflection, coroutines, concurrency
+primitives, and broad KMP/Gradle product integration remain separate
+programmes until `STATUS.md` or the way forward selects one.
 
 ## Verification contract
 

@@ -16627,7 +16627,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
         }
 
-        for (case in listOf("intra-module" to "Prepared", "disabled" to "Main")) {
+        for (case in listOf(
+            "intra-module" to "Prepared",
+            "full" to "Full",
+            "disabled" to "Main",
+        )) {
             val mode = case.first
             val suffix = case.second
             val libraryBDirectory = File(tmpdir, "inline-graph-b-$suffix").apply { mkdirs() }
@@ -16811,21 +16815,82 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testReifiedInlineFunctionsRemainRejected() {
+    fun testReifiedInlineFunctionsSubstituteCompleteRuntimeOperations() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val source = File(tmpdir, "inline-reified.kt").apply {
             writeText(
                 """
                 package inline.reified
 
-                inline fun <reified T> isType(value: Any): Boolean = value is T
+                import kotlin.enums.enumEntries
+
+                class Box<T>(val value: T)
+                interface Marker<T>
+                class MarkerImpl : Marker<String>
+
+                enum class State { READY, BUSY }
+
+                inline fun <reified T> isType(value: Any?): Boolean = value is T
+                inline fun <reified T> cast(value: Any?): T = value as T
+                inline fun <reified T> safeCast(value: Any?): T? = value as? T
+                inline fun <reified T : Any> token() = T::class
+                inline fun <reified T> nested(value: Any?): Boolean = isType<T>(value)
+                inline fun <reified T> makeArray(value: T): Array<T> = arrayOf(value)
+                inline fun <reified T> makeNullArray(size: Int): Array<T?> = arrayOfNulls<T>(size)
 
                 fun main() {
-                    if (!isType<String>("ok")) throw Error("reified inline")
+                    if (!isType<String>("ok") || isType<String>(42)) throw Error("reference is")
+                    if (!isType<Int>(42) || isType<Int>("42")) throw Error("value is")
+                    if (!isType<String?>(null) || isType<String>(null)) throw Error("nullable is")
+                    if (!isType<Int?>(null) || !isType<Int?>(42)) throw Error("nullable value is")
+                    if (!isType<Nothing?>(null) || isType<Nothing?>("value")) throw Error("Nothing? is")
+                    if (!isType<Throwable>(Error("classified"))) throw Error("throwable is")
+                    if (!isType<IntArray>(intArrayOf(1)) || !isType<Array<*>>(arrayOf("a"))) throw Error("array is")
+                    if (cast<String>("cast") != "cast") throw Error("cast")
+                    if (cast<Array<String>>(arrayOf("cast"))[0] != "cast") throw Error("array cast")
+                    if (safeCast<String>(42) != null || safeCast<Int>(42) != 42) throw Error("safe cast")
+                    try {
+                        cast<Int>("wrong")
+                        throw Error("failing cast returned")
+                    } catch (_: ClassCastException) {
+                    }
+                    if (token<String>() != String::class || token<Int>() != Int::class) throw Error("class literal")
+                    if (!nested<CharSequence>("nested")) throw Error("nested substitution")
+
+                    val erased: Any = Box("text")
+                    if (!isType<Box<Int>>(erased)) throw Error("erased generic is")
+                    val wrong = cast<Box<Int>>(erased)
+                    if (wrong as Any !== erased) throw Error("erased generic cast identity")
+                    val marker: Any = MarkerImpl()
+                    if (!isType<Marker<Int>>(marker)) throw Error("erased generic interface is")
+
+                    val strings = makeArray("array")
+                    if (strings.size != 1 || strings[0] != "array") throw Error("arrayOf")
+                    val nulls = makeNullArray<String>(2)
+                    if (nulls.size != 2 || nulls[0] != null || nulls[1] != null) throw Error("arrayOfNulls")
+
+                    val mixed: Array<Any?> = arrayOf("a", 1, null, "b")
+                    val filtered = mixed.filterIsInstance<String>()
+                    if (filtered.size != 2 || filtered[0] != "a" || filtered[1] != "b") throw Error("filterIsInstance")
+                    val filteredTo = mixed.asIterable().filterIsInstanceTo(ArrayList<Int>())
+                    if (filteredTo.size != 1 || filteredTo[0] != 1) throw Error("filterIsInstanceTo")
+                    val typed = arrayOf("x", "y").asList().toTypedArray()
+                    if (typed.size != 2 || typed[0] != "x" || typed[1] != "y") throw Error("toTypedArray")
+                    val absent: Array<String>? = null
+                    if (absent.orEmpty().size != 0) throw Error("orEmpty")
+
+                    val values = enumValues<State>()
+                    if (values.size != 2 || values[0] !== State.READY || values[1] !== State.BUSY) throw Error("enumValues")
+                    if (enumValueOf<State>("BUSY") !== State.BUSY) throw Error("enumValueOf")
+                    val entries = enumEntries<State>()
+                    if (entries.size != 2 || entries[0] !== State.READY || entries[1] !== State.BUSY) throw Error("enumEntries")
+                    println("OK")
                 }
                 """.trimIndent()
             )
         }
-        val output = File(tmpdir, "InlineReified.dll")
+        val outputDirectory = File(tmpdir, "inline-reified-output").apply { mkdirs() }
+        val output = outputDirectory.resolve("InlineReified.dll")
         val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
             K2DotNetCompiler(),
             listOf(
@@ -16836,39 +16901,217 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
         )
 
-        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
-        assertTrue("call to unsupported function 'isType'" in diagnostics) { diagnostics }
-        assertFalse(output.exists()) { "A rejected reified program must not leave a runnable artifact" }
+        assertEquals(ExitCode.OK, exitCode, diagnostics)
+        val il = outputDirectory.resolve("InlineReified.il").readText()
+        for (functionName in listOf("isType", "cast", "safeCast", "token", "nested", "makeArray")) {
+            assertTrue(".method assembly hidebysig static" in il && "'$functionName'<" in il) { il }
+        }
+        for (functionName in listOf("isType", "cast", "safeCast", "token", "nested", "makeArray", "makeNullArray")) {
+            assertTrue("::'$functionName'<" !in il) { "A Kotlin reified call survived substitution:\n$il" }
+        }
+        // Array<T?> is not one truthful CLR signature for both value- and reference-type T. The
+        // Kotlin call is still fully substituted, but the defensive non-public remainder fails
+        // closed instead of publishing a physically misleading generic MethodDef.
+        assertTrue("'makeNullArray'<" !in il) { il }
+        assertTrue("throwUnsupportedOperationException" in il) { il }
+        assertTrue("dotNetEnumValuesIntrinsic" !in il) { il }
+        assertTrue("dotNetEnumValueOfIntrinsic" !in il) { il }
+        runDotNet(modernDotNetHostOrSkip(), output, outputDirectory, "Reified-inline executable failed")
+    }
 
-        val enumSource = File(tmpdir, "inline-reified-enum.kt").apply {
+    @Test
+    fun testReifiedInlineBodiesRemainAuthoritativeAcrossLibraryBoundaries() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+
+        val producerSource = File(tmpdir, "reified-library.kt").apply {
             writeText(
                 """
-                package inline.reified.enums
+                package reified.library
 
-                enum class State { READY }
+                import kotlin.enums.enumEntries
 
-                fun main() {
-                    val values = enumValues<State>()
-                    if (values.size != 1 || values[0] !== State.READY) throw Error("enumValues")
-                    if (enumValueOf<State>("READY") !== State.READY) throw Error("enumValueOf")
+                public inline fun <reified T> matches(value: Any?): Boolean = value is T
+                public inline fun <reified T> cast(value: Any?): T = value as T
+                public inline fun <reified T : Any> typeToken() = T::class
+                public inline fun <reified T> nested(value: Any?): Boolean = matches<T>(value)
+                public inline fun <reified T> defaultMatches(
+                    value: Any?,
+                    expected: Boolean = value is T,
+                ): Boolean = expected
+                public inline fun <reified T> make(value: T): Array<T> = arrayOf(value)
+                public inline fun <reified T> makeNulls(size: Int): Array<T?> = arrayOfNulls<T>(size)
+                public inline fun <reified T : Enum<T>> firstValue(): T = enumValues<T>()[0]
+                public inline fun <reified T : Enum<T>> namedValue(name: String): T = enumValueOf<T>(name)
+                public inline fun <reified T : Enum<T>> lastEntry(): T {
+                    val entries = enumEntries<T>()
+                    return entries[entries.size - 1]
                 }
                 """.trimIndent()
             )
         }
-        val enumOutput = File(tmpdir, "InlineReifiedEnum.dll")
-        val [enumDiagnostics, enumExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+        val consumerSource = File(tmpdir, "reified-consumer.kt").apply {
+            writeText(
+                """
+                package reified.consumer
+
+                import reified.library.*
+
+                class Box<T>(val value: T)
+                enum class State { FIRST, LAST }
+
+                fun main() {
+                    if (!matches<String>("text") || matches<String>(1)) throw Error("matches")
+                    if (!matches<String?>(null) || matches<String>(null)) throw Error("nullable matches")
+                    if (cast<String>("cast") != "cast") throw Error("cast")
+                    if (typeToken<Int>() != Int::class) throw Error("type token")
+                    if (!nested<CharSequence>("nested")) throw Error("nested")
+                    if (!defaultMatches<String>("default") || defaultMatches<String>(1)) throw Error("default")
+
+                    val erased: Any = Box("value")
+                    val wrong = cast<Box<Int>>(erased)
+                    if (wrong as Any !== erased) throw Error("erased cast identity")
+
+                    val made = make(42)
+                    if (made.size != 1 || made[0] != 42) throw Error("array")
+                    val nulls = makeNulls<String>(2)
+                    if (nulls.size != 2 || nulls[0] != null || nulls[1] != null) throw Error("nullable array")
+
+                    if (firstValue<State>() !== State.FIRST) throw Error("enumValues")
+                    if (namedValue<State>("LAST") !== State.LAST) throw Error("enumValueOf")
+                    if (lastEntry<State>() !== State.LAST) throw Error("enumEntries")
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+
+        for (case in listOf(
+            "intra-module" to "Prepared",
+            "full" to "Full",
+            "disabled" to "Main",
+        )) {
+            val mode = case.first
+            val suffix = case.second
+            val producerDirectory = File(tmpdir, "reified-library-$suffix").apply { mkdirs() }
+            val producerAssemblyName = "Reified.Library.$suffix"
+            compileInProcess(
+                K2DotNetCompiler(),
+                producerSource.path,
+                K2DotNetCompilerArguments::irInlinerBeforeKlibSerialization.cliArgument, mode,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+                K2DotNetCompilerArguments::moduleName.cliArgument, producerAssemblyName,
+                K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+            )
+            val producerAssembly = producerDirectory.resolve("$producerAssemblyName.dll")
+            val packedLibrary = loadPackedKlib(producerAssembly.toPath(), producerAssembly.readKlibCarrier())
+            assertEquals(mode != "disabled", packedLibrary.inlinableFunctionsIr != null)
+            assertTrue(packedLibrary.ir != null)
+
+            val producerIl = producerDirectory.resolve("$producerAssemblyName.il").readText()
+            for (functionName in listOf(
+                "matches", "cast", "typeToken", "nested", "defaultMatches", "make",
+                "firstValue", "namedValue", "lastEntry",
+            )) {
+                assertTrue(".method assembly hidebysig static" in producerIl && "'$functionName'<" in producerIl) {
+                    producerIl
+                }
+            }
+            assertTrue("'makeNulls'<" !in producerIl) { producerIl }
+            assertTrue("throwUnsupportedOperationException" in producerIl) { producerIl }
+            val physicalFunctions = DotNetLibraryAbiCodec.decode(producerAssembly.readKlibManifest())
+                .values
+                .filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            for (functionName in listOf(
+                "matches", "cast", "typeToken", "nested", "defaultMatches", "make", "makeNulls",
+                "firstValue", "namedValue", "lastEntry",
+            )) {
+                assertTrue(physicalFunctions.none { declaration -> declaration.methodName == functionName }) {
+                    "A reified physical remainder entered the Kotlin ABI index: $functionName"
+                }
+            }
+
+            val targets = if (mode == "intra-module") listOf("net48", "net10.0") else listOf("net10.0")
+            for (target in targets) {
+                val targetSuffix = if (target == "net48") "Framework" else "Core"
+                val consumerDirectory = File(tmpdir, "reified-consumer-$suffix-$targetSuffix").apply { mkdirs() }
+                val consumerAssemblyName = "Reified${suffix}${targetSuffix}Consumer"
+                val consumerAssembly = consumerDirectory.resolve(
+                    if (target == "net48") "$consumerAssemblyName.exe" else "$consumerAssemblyName.dll"
+                )
+                compileInProcess(
+                    K2DotNetCompiler(),
+                    consumerSource.path,
+                    K2DotNetCompilerArguments::classpath.cliArgument, producerAssembly.path,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, consumerAssemblyName,
+                    K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+                )
+
+                val consumerIl = consumerDirectory.resolve("$consumerAssemblyName.il").readText()
+                for (functionName in listOf(
+                    "matches", "cast", "typeToken", "nested", "defaultMatches", "make", "makeNulls",
+                    "firstValue", "namedValue", "lastEntry",
+                )) {
+                    assertTrue("::'$functionName'<" !in consumerIl) {
+                        "A cross-library reified call survived for -Xklib-ir-inliner=$mode on $target:\n$consumerIl"
+                    }
+                }
+                assertTrue(".assembly extern '$producerAssemblyName'" !in consumerIl) { consumerIl }
+                assertFalse(consumerDirectory.resolve(producerAssembly.name).exists()) {
+                    "A fully substituted reified producer must not remain a runtime dependency"
+                }
+
+                if (target == "net48") {
+                    runAssemblerPairing(
+                        frameworkExecutionCommand(checkNotNull(frameworkHost), consumerAssembly),
+                        consumerDirectory,
+                        "Framework reified consumer failed for $mode",
+                    )
+                } else {
+                    runDotNet(
+                        modernDotNetHostOrSkip(),
+                        consumerAssembly,
+                        consumerDirectory,
+                        "CoreCLR reified consumer failed for $mode",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun testReifiedInlineDeclarationCannotBecomeExplicitCSharpExport() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val source = File(tmpdir, "reified-export.kt").apply {
+            writeText(
+                """
+                package reified.export
+
+                public inline fun <reified T> matches(value: Any?): Boolean = value is T
+                """.trimIndent()
+            )
+        }
+        val outputDirectory = File(tmpdir, "reified-export-output")
+        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
             K2DotNetCompiler(),
             listOf(
-                enumSource.path,
-                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
-                K2DotNetCompilerArguments::moduleName.cliArgument, "InlineReifiedEnum",
-                K2DotNetCompilerArguments::destination.cliArgument, enumOutput.path,
+                source.path,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+                K2DotNetCompilerArguments::dotNetExports.cliArgument, "reified.export.matches=Matches",
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Reified.Export",
+                K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
             ),
         )
 
-        assertEquals(ExitCode.COMPILATION_ERROR, enumExitCode, enumDiagnostics)
-        assertTrue("call to unsupported function 'enumValues'" in enumDiagnostics) { enumDiagnostics }
-        assertFalse(enumOutput.exists()) { "Rejected reified enum helpers must not leave a runnable artifact" }
+        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+        assertTrue("cannot export 'reified.export.matches'" in diagnostics) { diagnostics }
+        assertFalse(outputDirectory.resolve("Reified.Export.dll").exists()) {
+            "A rejected reified export must not leave a misleading C# artifact"
+        }
     }
 
     @Test
