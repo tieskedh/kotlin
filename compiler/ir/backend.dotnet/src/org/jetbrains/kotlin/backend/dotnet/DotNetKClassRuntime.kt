@@ -26,11 +26,20 @@ internal object DotNetKClassRuntime {
     private const val KCLASS_TYPE_NAME = "Kotlin.KClass"
     private const val KCLASS_IMPL_TYPE_NAME = "Kotlin.KClassImpl"
     private const val FACTORY_TYPE_NAME = "Kotlin.Runtime.Internal.KClassFactory"
+    internal const val ANNOTATION_FACTORY_HOLDER_NAME = "<AnnotationFactory>"
+    internal const val COMPANION_STATICS_HOLDER_NAME = "<CompanionStatics>"
+    internal const val ANNOTATION_FACTORY_METHOD_NAME = "<GetKotlinAnnotations>"
+    internal const val PRODUCED_ASSEMBLY_MARKER_TYPE_NAME =
+        "Kotlin.Runtime.Internal.<KotlinProducedAssembly>"
     private const val LOCAL_NAME_ATTRIBUTE_TYPE_NAME =
         "Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute"
 
     val kClassifierClassInfo = DotNetIlClassInfo(
         ilClassName = "Kotlin.KClassifier",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+    val kAnnotatedElementClassInfo = DotNetIlClassInfo(
+        ilClassName = "Kotlin.KAnnotatedElement",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
     val kClassClassInfo = DotNetIlClassInfo(
@@ -52,6 +61,16 @@ internal object DotNetKClassRuntime {
                 "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]${FACTORY_TYPE_NAME.toIlIdentifier()}::'CreateLogical'(" +
                 "string, string, string)"
 
+    fun producedAssemblyMarkerTypeIl(coreLibraryReference: String): String = """
+        .namespace Kotlin.Runtime.Internal
+        {
+          .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+                 extends ${coreLibraryReference}System.Object
+          {
+          }
+        }
+    """.trimIndent()
+
     fun localClassNameAttributeIl(simpleName: String?): String {
         val value = simpleName?.let(::serializedCustomAttributeString) ?: listOf(0xff)
         val blob = (listOf(0x01, 0x00) + value + listOf(0x00, 0x00))
@@ -65,8 +84,21 @@ internal object DotNetKClassRuntime {
           {
           }
 
+          .class interface public abstract auto ansi KAnnotatedElement
+          {
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.List 'get_annotations'() cil managed
+            {
+            }
+
+            .property instance class Kotlin.Collections.List annotations()
+            {
+              .get instance class Kotlin.Collections.List Kotlin.KAnnotatedElement::'get_annotations'()
+            }
+          }
+
           .class interface public abstract auto ansi KClass
-                 implements Kotlin.KClassifier
+                 implements Kotlin.KClassifier,
+                            Kotlin.KAnnotatedElement
           {
             .method public hidebysig specialname newslot abstract virtual instance string 'get_simpleName'() cil managed
             {
@@ -89,6 +121,7 @@ internal object DotNetKClassRuntime {
             {
               .get instance string Kotlin.KClass::'get_qualifiedName'()
             }
+
           }
 
           .class private sealed auto ansi beforefieldinit KClassImpl
@@ -101,6 +134,7 @@ internal object DotNetKClassRuntime {
             .field private initonly int32 '_kind'
             .field private initonly int32 '_classifierId'
             .field private initonly string '_logicalKey'
+            .field private class Kotlin.Collections.List '_annotations'
 
             .method assembly hidebysig specialname rtspecialname instance void .ctor(
                 class ${coreLibraryReference}System.Type 'clrType',
@@ -130,6 +164,9 @@ internal object DotNetKClassRuntime {
               ldarg.0
               ldnull
               stfld string Kotlin.KClassImpl::'_logicalKey'
+              ldarg.0
+              ldnull
+              stfld class Kotlin.Collections.List Kotlin.KClassImpl::'_annotations'
               ret
             }
 
@@ -184,6 +221,30 @@ internal object DotNetKClassRuntime {
               ldfld int32 Kotlin.KClassImpl::'_classifierId'
               call bool Kotlin.Runtime.Internal.KClassFactory::'IsInstance'(
                   object, class ${coreLibraryReference}System.Type, int32, int32)
+              ret
+            }
+
+            .method public hidebysig specialname newslot virtual final instance class Kotlin.Collections.List 'get_annotations'() cil managed
+            {
+              .maxstack 3
+              .locals init ([0] class Kotlin.Collections.List 'annotations')
+              ldarg.0
+              ldfld class Kotlin.Collections.List Kotlin.KClassImpl::'_annotations'
+              stloc.0
+              ldloc.0
+              brtrue.s KC_AnnotationsReady
+              ldarg.0
+              ldfld class ${coreLibraryReference}System.Type Kotlin.KClassImpl::'_clrType'
+              ldarg.0
+              ldfld string Kotlin.KClassImpl::'_qualifiedName'
+              call class Kotlin.Collections.List Kotlin.Runtime.Internal.KClassFactory::'GetAnnotations'(
+                  class ${coreLibraryReference}System.Type, string)
+              stloc.0
+              ldarg.0
+              ldloc.0
+              stfld class Kotlin.Collections.List Kotlin.KClassImpl::'_annotations'
+            KC_AnnotationsReady:
+              ldloc.0
               ret
             }
 
@@ -303,6 +364,11 @@ internal object DotNetKClassRuntime {
             {
               .get instance string Kotlin.KClassImpl::'get_qualifiedName'()
             }
+
+            .property instance class Kotlin.Collections.List annotations()
+            {
+              .get instance class Kotlin.Collections.List Kotlin.KClassImpl::'get_annotations'()
+            }
           }
     """.trimIndent().prependIndent("          ").trimStart()
 
@@ -320,6 +386,7 @@ internal object DotNetKClassRuntime {
         val number = DotNetKClassClassifierKind.NUMBER.abiValue
         val nothing = DotNetKClassClassifierKind.NOTHING.abiValue
         val logical = DotNetKClassClassifierKind.LOGICAL.abiValue
+        val annotationListSupportIl = annotationListSupportIl(coreLibraryReference)
         return """
   .class public sealed auto ansi beforefieldinit KotlinLocalClassNameAttribute
          extends ${coreLibraryReference}System.Attribute
@@ -338,6 +405,8 @@ internal object DotNetKClassRuntime {
       ret
     }
   }
+
+$annotationListSupportIl
 
   // Public only as compiler/runtime ABI. Logical KClass identity remains in KLIB; System.Type is
   // retained as exact or partial physical evidence and never becomes the metadata authority.
@@ -393,6 +462,100 @@ internal object DotNetKClassRuntime {
       ret
     KCF_GetClrType:
       ldfld class ${coreLibraryReference}System.Type Kotlin.KClassImpl::'_clrType'
+      ret
+    }
+
+    .method assembly hidebysig static class Kotlin.Collections.List 'GetAnnotations'(
+        class ${coreLibraryReference}System.Type 'clrType', string 'qualifiedName') cil managed
+    {
+      .maxstack 3
+      .locals init (
+        [0] class ${coreLibraryReference}System.Reflection.Assembly 'assembly',
+        [1] class ${coreLibraryReference}System.Type 'holder',
+        [2] class ${coreLibraryReference}System.Reflection.MethodInfo 'factory',
+        [3] object[] 'values'
+      )
+      ldarg.0
+      brfalse KCF_AnnotationsEmpty
+      ldarg.0
+      callvirt instance class ${coreLibraryReference}System.Reflection.Assembly ${coreLibraryReference}System.Type::get_Assembly()
+      stloc.0
+
+      // The marker selects the authoritative KLIB-derived factory path. In particular, an empty
+      // factory result never falls through to the same class's derived CLR attribute rows.
+      ldloc.0
+      ldstr "$PRODUCED_ASSEMBLY_MARKER_TYPE_NAME"
+      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Reflection.Assembly::GetType(string)
+      brfalse KCF_AnnotationsForeignOrMapped
+      ldarg.0
+      ldstr "$ANNOTATION_FACTORY_HOLDER_NAME"
+      ldc.i4.s 48
+      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetNestedType(
+          string, valuetype ${coreLibraryReference}System.Reflection.BindingFlags)
+      stloc.1
+      ldloc.1
+      brtrue.s KCF_AnnotationsFindFactory
+      ldarg.0
+      ldstr "$COMPANION_STATICS_HOLDER_NAME"
+      ldc.i4.s 48
+      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetNestedType(
+          string, valuetype ${coreLibraryReference}System.Reflection.BindingFlags)
+      stloc.1
+    KCF_AnnotationsFindFactory:
+      ldloc.1
+      brfalse KCF_AnnotationsEmpty
+      ldloc.1
+      ldstr "$ANNOTATION_FACTORY_METHOD_NAME"
+      ldc.i4.s 56
+      callvirt instance class ${coreLibraryReference}System.Reflection.MethodInfo ${coreLibraryReference}System.Type::GetMethod(
+          string, valuetype ${coreLibraryReference}System.Reflection.BindingFlags)
+      stloc.2
+      ldloc.2
+      brfalse KCF_AnnotationsEmpty
+      ldloc.2
+      ldnull
+      ldnull
+      callvirt instance object ${coreLibraryReference}System.Reflection.MethodBase::Invoke(object, object[])
+      isinst object[]
+      stloc.3
+      ldloc.3
+      brfalse KCF_AnnotationsEmpty
+      ldloc.3
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[])
+      ret
+
+    KCF_AnnotationsForeignOrMapped:
+      // BCL-backed Kotlin classifiers expose the Kotlin view, not implementation attributes on
+      // System.String, boxed primitives, System.Array, or mapped exception carriers. A foreign
+      // assembly is still allowed to use the namespace `kotlin`.
+      ldarg.1
+      brfalse.s KCF_AnnotationsForeign
+      ldarg.1
+      ldstr "kotlin."
+      callvirt instance bool ${coreLibraryReference}System.String::StartsWith(string)
+      brfalse.s KCF_AnnotationsForeign
+      ldloc.0
+      ldtoken ${coreLibraryReference}System.Object
+      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+      callvirt instance class ${coreLibraryReference}System.Reflection.Assembly ${coreLibraryReference}System.Type::get_Assembly()
+      ceq
+      brtrue.s KCF_AnnotationsEmpty
+      ldloc.0
+      ldtoken Kotlin.KClass
+      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+      callvirt instance class ${coreLibraryReference}System.Reflection.Assembly ${coreLibraryReference}System.Type::get_Assembly()
+      ceq
+      brtrue.s KCF_AnnotationsEmpty
+    KCF_AnnotationsForeign:
+      ldarg.0
+      ldc.i4.1
+      callvirt instance object[] ${coreLibraryReference}System.Reflection.MemberInfo::GetCustomAttributes(bool)
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[])
+      ret
+    KCF_AnnotationsEmpty:
+      call class Kotlin.Collections.List Kotlin.Runtime.Internal.ReflectionAnnotationList::'Empty'()
       ret
     }
 
@@ -776,6 +939,556 @@ $createExceptionBody
   }
         """.trimIndent()
     }
+
+    private fun annotationListSupportIl(coreLibraryReference: String): String = """
+  // Private transport for KClass.annotations. The object-array storage is never exposed as
+  // Kotlin Array identity; this class supplies the complete read-only Kotlin List surface.
+  .class private sealed auto ansi beforefieldinit ReflectionAnnotationList
+         extends ${coreLibraryReference}System.Object
+         implements Kotlin.Collections.List
+  {
+    .field private initonly object[] '_items'
+    .field private initonly int32 '_from'
+    .field private initonly int32 '_size'
+
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(object[] 'items') cil managed
+    {
+      .maxstack 4
+      ldarg.0
+      ldarg.1
+      ldc.i4.0
+      ldarg.1
+      ldlen
+      conv.i4
+      call instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[], int32, int32)
+      ret
+    }
+
+    .method private hidebysig specialname rtspecialname instance void .ctor(
+        object[] 'items', int32 'from', int32 'size') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void ${coreLibraryReference}System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld object[] Kotlin.Runtime.Internal.ReflectionAnnotationList::'_items'
+      ldarg.0
+      ldarg.2
+      stfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_from'
+      ldarg.0
+      ldarg.3
+      stfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      ret
+    }
+
+    .method assembly hidebysig static class Kotlin.Collections.List 'Empty'() cil managed
+    {
+      .maxstack 1
+      ldc.i4.0
+      newarr ${coreLibraryReference}System.Object
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[])
+      ret
+    }
+
+    .method public hidebysig specialname newslot virtual final instance int32 'get_Size'() cil managed
+    {
+      .override method instance int32 Kotlin.Collections.List::'get_Size'()
+      .override method instance int32 Kotlin.Collections.Collection::'get_Size'()
+      .maxstack 1
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance bool 'IsEmpty'() cil managed
+    {
+      .override method instance bool Kotlin.Collections.List::'IsEmpty'()
+      .override method instance bool Kotlin.Collections.Collection::'IsEmpty'()
+      .maxstack 2
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      ldc.i4.0
+      ceq
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance object 'Get'(int32 'index') cil managed
+    {
+      .override method instance object Kotlin.Collections.List::'Get'(int32)
+      .maxstack 3
+      ldarg.1
+      ldc.i4.0
+      blt RAL_GetOutOfBounds
+      ldarg.1
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      bge RAL_GetOutOfBounds
+      ldarg.0
+      ldfld object[] Kotlin.Runtime.Internal.ReflectionAnnotationList::'_items'
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_from'
+      ldarg.1
+      add
+      ldelem.ref
+      ret
+    RAL_GetOutOfBounds:
+      newobj instance void ${coreLibraryReference}System.IndexOutOfRangeException::.ctor()
+      throw
+    }
+
+    .method public hidebysig newslot virtual final instance bool 'ContainsErased'(object 'element') cil managed
+    {
+      .override method instance bool Kotlin.Collections.List::'ContainsErased'(object)
+      .override method instance bool Kotlin.Collections.Collection::'ContainsErased'(object)
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      call instance int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'IndexOfErased'(object)
+      ldc.i4.0
+      clt
+      ldc.i4.0
+      ceq
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance int32 'IndexOfErased'(object 'element') cil managed
+    {
+      .override method instance int32 Kotlin.Collections.List::'IndexOfErased'(object)
+      .maxstack 2
+      .locals init ([0] int32 'index')
+      ldc.i4.0
+      stloc.0
+    RAL_IndexNext:
+      ldloc.0
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      bge RAL_IndexMissing
+      ldarg.0
+      ldloc.0
+      call instance object Kotlin.Runtime.Internal.ReflectionAnnotationList::'Get'(int32)
+      ldarg.1
+      call bool ${coreLibraryReference}System.Object::Equals(object, object)
+      brtrue RAL_IndexFound
+      ldloc.0
+      ldc.i4.1
+      add
+      stloc.0
+      br RAL_IndexNext
+    RAL_IndexFound:
+      ldloc.0
+      ret
+    RAL_IndexMissing:
+      ldc.i4.m1
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance int32 'LastIndexOfErased'(object 'element') cil managed
+    {
+      .override method instance int32 Kotlin.Collections.List::'LastIndexOfErased'(object)
+      .maxstack 2
+      .locals init ([0] int32 'index')
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      ldc.i4.1
+      sub
+      stloc.0
+    RAL_LastIndexNext:
+      ldloc.0
+      ldc.i4.0
+      blt RAL_LastIndexMissing
+      ldarg.0
+      ldloc.0
+      call instance object Kotlin.Runtime.Internal.ReflectionAnnotationList::'Get'(int32)
+      ldarg.1
+      call bool ${coreLibraryReference}System.Object::Equals(object, object)
+      brtrue RAL_LastIndexFound
+      ldloc.0
+      ldc.i4.1
+      sub
+      stloc.0
+      br RAL_LastIndexNext
+    RAL_LastIndexFound:
+      ldloc.0
+      ret
+    RAL_LastIndexMissing:
+      ldc.i4.m1
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance bool 'ContainsAll'(
+        class Kotlin.Collections.Collection 'elements') cil managed
+    {
+      .override method instance bool Kotlin.Collections.List::'ContainsAll'(class Kotlin.Collections.Collection)
+      .override method instance bool Kotlin.Collections.Collection::'ContainsAll'(class Kotlin.Collections.Collection)
+      .maxstack 2
+      .locals init ([0] class Kotlin.Collections.Iterator 'iterator')
+      ldarg.1
+      callvirt instance class Kotlin.Collections.Iterator Kotlin.Collections.Collection::'GetIterator'()
+      stloc.0
+    RAL_ContainsAllNext:
+      ldloc.0
+      callvirt instance bool Kotlin.Collections.Iterator::'HasNext'()
+      brfalse RAL_ContainsAllTrue
+      ldarg.0
+      ldloc.0
+      callvirt instance object Kotlin.Collections.Iterator::'Next'()
+      call instance bool Kotlin.Runtime.Internal.ReflectionAnnotationList::'ContainsErased'(object)
+      brtrue RAL_ContainsAllNext
+      ldc.i4.0
+      ret
+    RAL_ContainsAllTrue:
+      ldc.i4.1
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance class Kotlin.Collections.Iterator 'GetIterator'() cil managed
+    {
+      .override method instance class Kotlin.Collections.Iterator Kotlin.Collections.List::'GetIterator'()
+      .override method instance class Kotlin.Collections.Iterator Kotlin.Collections.Collection::'GetIterator'()
+      .override method instance class Kotlin.Collections.Iterator Kotlin.Collections.Iterable::'GetIterator'()
+      .maxstack 2
+      ldarg.0
+      ldc.i4.0
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationIterator::.ctor(
+          class Kotlin.Runtime.Internal.ReflectionAnnotationList, int32)
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance class Kotlin.Collections.ListIterator 'GetListIterator'() cil managed
+    {
+      .override method instance class Kotlin.Collections.ListIterator Kotlin.Collections.List::'GetListIterator'()
+      .maxstack 2
+      ldarg.0
+      ldc.i4.0
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationIterator::.ctor(
+          class Kotlin.Runtime.Internal.ReflectionAnnotationList, int32)
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance class Kotlin.Collections.ListIterator 'GetListIterator'(
+        int32 'index') cil managed
+    {
+      .override method instance class Kotlin.Collections.ListIterator Kotlin.Collections.List::'GetListIterator'(int32)
+      .maxstack 2
+      ldarg.1
+      ldc.i4.0
+      blt RAL_ListIteratorOutOfBounds
+      ldarg.1
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      bgt RAL_ListIteratorOutOfBounds
+      ldarg.0
+      ldarg.1
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationIterator::.ctor(
+          class Kotlin.Runtime.Internal.ReflectionAnnotationList, int32)
+      ret
+    RAL_ListIteratorOutOfBounds:
+      newobj instance void ${coreLibraryReference}System.IndexOutOfRangeException::.ctor()
+      throw
+    }
+
+    .method public hidebysig newslot virtual final instance class Kotlin.Collections.List 'SubList'(
+        int32 'fromIndex', int32 'toIndex') cil managed
+    {
+      .override method instance class Kotlin.Collections.List Kotlin.Collections.List::'SubList'(int32, int32)
+      .maxstack 4
+      ldarg.1
+      ldc.i4.0
+      blt RAL_SubListOutOfBounds
+      ldarg.2
+      ldarg.1
+      blt RAL_SubListOutOfBounds
+      ldarg.2
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      bgt RAL_SubListOutOfBounds
+      ldarg.0
+      ldfld object[] Kotlin.Runtime.Internal.ReflectionAnnotationList::'_items'
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_from'
+      ldarg.1
+      add
+      ldarg.2
+      ldarg.1
+      sub
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[], int32, int32)
+      ret
+    RAL_SubListOutOfBounds:
+      newobj instance void ${coreLibraryReference}System.IndexOutOfRangeException::.ctor()
+      throw
+    }
+
+    .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+    {
+      .maxstack 3
+      .locals init (
+        [0] class Kotlin.Collections.List 'otherList',
+        [1] int32 'index'
+      )
+      ldarg.0
+      ldarg.1
+      ceq
+      brtrue RAL_EqualsTrue
+      ldarg.1
+      isinst Kotlin.Collections.List
+      stloc.0
+      ldloc.0
+      brfalse RAL_EqualsFalse
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      ldloc.0
+      callvirt instance int32 Kotlin.Collections.List::'get_Size'()
+      bne.un RAL_EqualsFalse
+      ldc.i4.0
+      stloc.1
+    RAL_EqualsNext:
+      ldloc.1
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      bge RAL_EqualsTrue
+      ldarg.0
+      ldloc.1
+      call instance object Kotlin.Runtime.Internal.ReflectionAnnotationList::'Get'(int32)
+      ldloc.0
+      ldloc.1
+      callvirt instance object Kotlin.Collections.List::'Get'(int32)
+      call bool ${coreLibraryReference}System.Object::Equals(object, object)
+      brfalse RAL_EqualsFalse
+      ldloc.1
+      ldc.i4.1
+      add
+      stloc.1
+      br RAL_EqualsNext
+    RAL_EqualsTrue:
+      ldc.i4.1
+      ret
+    RAL_EqualsFalse:
+      ldc.i4.0
+      ret
+    }
+
+    .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+    {
+      .maxstack 2
+      .locals init (
+        [0] int32 'hash',
+        [1] int32 'index',
+        [2] object 'element'
+      )
+      ldc.i4.1
+      stloc.0
+      ldc.i4.0
+      stloc.1
+    RAL_HashNext:
+      ldloc.1
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      bge RAL_HashDone
+      ldarg.0
+      ldloc.1
+      call instance object Kotlin.Runtime.Internal.ReflectionAnnotationList::'Get'(int32)
+      stloc.2
+      ldloc.0
+      ldc.i4.s 31
+      mul
+      ldloc.2
+      brfalse RAL_HashNull
+      ldloc.2
+      callvirt instance int32 ${coreLibraryReference}System.Object::GetHashCode()
+      br RAL_HashAdd
+    RAL_HashNull:
+      ldc.i4.0
+    RAL_HashAdd:
+      add
+      stloc.0
+      ldloc.1
+      ldc.i4.1
+      add
+      stloc.1
+      br RAL_HashNext
+    RAL_HashDone:
+      ldloc.0
+      ret
+    }
+
+    .method public hidebysig virtual instance string 'ToString'() cil managed
+    {
+      .maxstack 3
+      .locals init (
+        [0] class ${coreLibraryReference}System.Text.StringBuilder 'builder',
+        [1] int32 'index'
+      )
+      newobj instance void ${coreLibraryReference}System.Text.StringBuilder::.ctor()
+      stloc.0
+      ldloc.0
+      ldstr "["
+      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
+      pop
+      ldc.i4.0
+      stloc.1
+    RAL_StringNext:
+      ldloc.1
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'_size'
+      bge RAL_StringDone
+      ldloc.1
+      brfalse RAL_StringElement
+      ldloc.0
+      ldstr ", "
+      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
+      pop
+    RAL_StringElement:
+      ldloc.0
+      ldarg.0
+      ldloc.1
+      call instance object Kotlin.Runtime.Internal.ReflectionAnnotationList::'Get'(int32)
+      call string Kotlin.Runtime.Internal.Intrinsics::'StringValueOf'(object)
+      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
+      pop
+      ldloc.1
+      ldc.i4.1
+      add
+      stloc.1
+      br RAL_StringNext
+    RAL_StringDone:
+      ldloc.0
+      ldstr "]"
+      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
+      pop
+      ldloc.0
+      callvirt instance string ${coreLibraryReference}System.Object::ToString()
+      ret
+    }
+
+    .property instance int32 Size()
+    {
+      .get instance int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'get_Size'()
+    }
+  }
+
+  .class private sealed auto ansi beforefieldinit ReflectionAnnotationIterator
+         extends ${coreLibraryReference}System.Object
+         implements Kotlin.Collections.ListIterator,
+                    Kotlin.Collections.Iterator
+  {
+    .field private initonly class Kotlin.Runtime.Internal.ReflectionAnnotationList '_list'
+    .field private int32 '_index'
+
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(
+        class Kotlin.Runtime.Internal.ReflectionAnnotationList 'list', int32 'index') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void ${coreLibraryReference}System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld class Kotlin.Runtime.Internal.ReflectionAnnotationList Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_list'
+      ldarg.0
+      ldarg.2
+      stfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance bool 'HasNext'() cil managed
+    {
+      .override method instance bool Kotlin.Collections.ListIterator::'HasNext'()
+      .override method instance bool Kotlin.Collections.Iterator::'HasNext'()
+      .maxstack 2
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
+      ldarg.0
+      ldfld class Kotlin.Runtime.Internal.ReflectionAnnotationList Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_list'
+      callvirt instance int32 Kotlin.Runtime.Internal.ReflectionAnnotationList::'get_Size'()
+      clt
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance object 'Next'() cil managed
+    {
+      .override method instance object Kotlin.Collections.ListIterator::'Next'()
+      .override method instance object Kotlin.Collections.Iterator::'Next'()
+      .maxstack 3
+      .locals init ([0] int32 'index')
+      ldarg.0
+      call instance bool Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'HasNext'()
+      brfalse RAI_NextMissing
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
+      stloc.0
+      ldarg.0
+      ldloc.0
+      ldc.i4.1
+      add
+      stfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
+      ldarg.0
+      ldfld class Kotlin.Runtime.Internal.ReflectionAnnotationList Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_list'
+      ldloc.0
+      callvirt instance object Kotlin.Runtime.Internal.ReflectionAnnotationList::'Get'(int32)
+      ret
+    RAI_NextMissing:
+      newobj instance void Kotlin.NoSuchElementException::.ctor()
+      throw
+    }
+
+    .method public hidebysig newslot virtual final instance bool 'HasPrevious'() cil managed
+    {
+      .override method instance bool Kotlin.Collections.ListIterator::'HasPrevious'()
+      .maxstack 2
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
+      ldc.i4.0
+      cgt
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance object 'Previous'() cil managed
+    {
+      .override method instance object Kotlin.Collections.ListIterator::'Previous'()
+      .maxstack 3
+      .locals init ([0] int32 'index')
+      ldarg.0
+      call instance bool Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'HasPrevious'()
+      brfalse RAI_PreviousMissing
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
+      ldc.i4.1
+      sub
+      stloc.0
+      ldarg.0
+      ldloc.0
+      stfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
+      ldarg.0
+      ldfld class Kotlin.Runtime.Internal.ReflectionAnnotationList Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_list'
+      ldloc.0
+      callvirt instance object Kotlin.Runtime.Internal.ReflectionAnnotationList::'Get'(int32)
+      ret
+    RAI_PreviousMissing:
+      newobj instance void Kotlin.NoSuchElementException::.ctor()
+      throw
+    }
+
+    .method public hidebysig newslot virtual final instance int32 'NextIndex'() cil managed
+    {
+      .override method instance int32 Kotlin.Collections.ListIterator::'NextIndex'()
+      .maxstack 1
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
+      ret
+    }
+
+    .method public hidebysig newslot virtual final instance int32 'PreviousIndex'() cil managed
+    {
+      .override method instance int32 Kotlin.Collections.ListIterator::'PreviousIndex'()
+      .maxstack 2
+      ldarg.0
+      ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
+      ldc.i4.1
+      sub
+      ret
+    }
+  }
+    """.trimIndent()
 
     private fun mappedExceptionIdBody(coreLibraryReference: String): String {
         val entries = DotNetMappedExceptions.entries.entries

@@ -5,8 +5,8 @@
 
 package kotlin.reflect
 
-/** The minimal Common KClass contract physically implemented by Kotlin.Runtime. */
-public actual interface KClass<T : Any> : KClassifier {
+/** The Common KClass contract plus truthful class-annotation discovery on CLR. */
+public actual interface KClass<T : Any> : KClassifier, KAnnotatedElement {
     public actual val simpleName: String?
 
     public actual val qualifiedName: String?

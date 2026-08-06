@@ -10,6 +10,13 @@
 .assembly 'localFunctionCallables' {}
 .module 'main-localFunctionCallables.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi sealed beforefieldinit 'SurvivingLocalFunctionSibling'
        extends [mscorlib]System.Object
 {

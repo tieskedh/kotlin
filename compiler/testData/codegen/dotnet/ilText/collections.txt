@@ -6,6 +6,13 @@
 .assembly 'collections' {}
 .module 'main-collections.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class private auto ansi sealed beforefieldinit 'OneIterator'
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'

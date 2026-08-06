@@ -6,6 +6,13 @@
 .assembly 'comparable' {}
 .module 'main-comparable.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi sealed beforefieldinit 'Score'
        extends [mscorlib]System.Object
        implements [mscorlib]'System.IComparable', class [mscorlib]'System.IComparable`1'<class 'Score'>

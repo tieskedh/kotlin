@@ -11,6 +11,13 @@
 .assembly 'objectInstanceFieldClash' {}
 .module 'main-objectInstanceFieldClash.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi sealed 'A'
        extends [mscorlib]System.Object
 {

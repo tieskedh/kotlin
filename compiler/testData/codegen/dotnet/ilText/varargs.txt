@@ -11,6 +11,13 @@
 .assembly 'varargs' {}
 .module 'main-varargs.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public auto ansi sealed beforefieldinit 'VarargMember'
        extends [mscorlib]System.Object
 {
