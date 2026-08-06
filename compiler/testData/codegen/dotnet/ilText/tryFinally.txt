@@ -6,6 +6,13 @@
 .assembly 'tryFinally' {}
 .module 'main-tryFinally.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'test.tryFinallyKt'
        extends [mscorlib]System.Object
 {

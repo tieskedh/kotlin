@@ -15568,6 +15568,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 import kotlin.reflect.KClass
 
+                @Retention(AnnotationRetention.RUNTIME)
+                @Target(AnnotationTarget.CLASS)
+                public annotation class LibraryMarker(public val value: String = "library")
+
+                @LibraryMarker
                 public class LibraryToken
 
                 public class LibraryBox<T>(public val value: T)
@@ -15590,11 +15595,45 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
 
         val consumerDirectory = File(tmpdir, "kclass-consumer").apply { mkdirs() }
+        val foreignSource = consumerDirectory.resolve("ForeignAnnotations.cs").apply {
+            writeText(
+                """
+                using System;
+
+                namespace ForeignAnnotations
+                {
+                    [AttributeUsage(
+                        AttributeTargets.Class | AttributeTargets.Interface,
+                        AllowMultiple = true,
+                        Inherited = true)]
+                    public sealed class ForeignMarkerAttribute : Attribute
+                    {
+                        public ForeignMarkerAttribute(string value) { Value = value; }
+                        public string Value { get; }
+                    }
+
+                    [ForeignMarker("direct")]
+                    public interface ForeignAnnotated
+                    {
+                        void Touch();
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val foreignAssembly = consumerDirectory.resolve("Foreign.Annotations.dll")
+        val foreignCompile = runModernCSharpCompiler(
+            checkNotNull(csharpToolchain),
+            foreignSource,
+            foreignAssembly,
+        )
+        assertEquals(0, foreignCompile.exitCode, foreignCompile.output)
         val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
             writeText(
                 """
                 package consumer
 
+                import ForeignAnnotations.ForeignAnnotated
                 import kclassboundary.*
 
                 fun main() {
@@ -15605,6 +15644,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (runtimeToken(intBox) != runtimeToken(stringBox)) throw Error("generic erasure")
                     if (runtimeToken(intBox) != staticBox()) throw Error("static generic identity")
                     if (!staticBox().isInstance(stringBox)) throw Error("generic instance")
+
+                    val kotlinAnnotations = staticToken().annotations
+                    if (kotlinAnnotations.size != 1) throw Error("KLIB annotation count")
+                    val marker = kotlinAnnotations[0] as? LibraryMarker
+                        ?: throw Error("KLIB annotation identity")
+                    if (marker.value != "library") throw Error("KLIB annotation default")
+
+                    val foreignAnnotations = ForeignAnnotated::class.annotations
+                    if (foreignAnnotations.size != 1) throw Error("foreign annotation count")
+                    if (foreignAnnotations[0]::class.simpleName != "ForeignMarkerAttribute") {
+                        throw Error("foreign annotation identity")
+                    }
                 }
                 """.trimIndent()
             )
@@ -15614,7 +15665,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             consumerSource.path,
             K2DotNetCompilerArguments::classpath.cliArgument,
-            producerDirectory.resolve("KClass.Library.dll").path,
+            listOf(
+                producerDirectory.resolve("KClass.Library.dll"),
+                foreignAssembly,
+                checkNotNull(csharpToolchain).referenceDirectory.resolve("System.Runtime.dll"),
+            ).joinToString(File.pathSeparator) { it.path },
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "KClassConsumer",
             K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
@@ -15623,6 +15678,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val consumerIl = consumerDirectory.resolve("KClassConsumer.il").readText()
         assertTrue("[KClass.Library]'kclassboundary.KClassLibraryKt'::'staticToken'()" in consumerIl)
         assertTrue("[KClass.Library]'kclassboundary.KClassLibraryKt'::'runtimeToken'(object)" in consumerIl)
+        val producerIl = producerDirectory.resolve("KClass.Library.il").readText()
+        assertTrue("'<AnnotationFactory>'" in producerIl) { producerIl }
+        assertTrue("'<GetKotlinAnnotations>'" in producerIl) { producerIl }
         runDotNet(
             modernDotNetHostOrSkip(),
             consumerAssembly,
@@ -15633,6 +15691,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val csharpSource = consumerDirectory.resolve("KClassConsumer.cs").apply {
             writeText(
                 """
+                using System;
+
+                [Obsolete("foreign class")]
+                public sealed class ForeignAnnotatedClass { }
+
                 public static class KClassConsumer
                 {
                     public static int Main()
@@ -15640,6 +15703,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         Kotlin.KClass token = kclassboundary.KClassLibraryKt.staticToken();
                         if (token.simpleName != "LibraryToken") return 1;
                         if (!token.isInstance(new kclassboundary.LibraryToken())) return 2;
+                        Kotlin.KClass foreign =
+                            Kotlin.Runtime.Internal.KClassFactory.GetClass(new ForeignAnnotatedClass());
+                        Kotlin.Collections.List annotations =
+                            ((Kotlin.KAnnotatedElement)foreign).annotations;
+                        if (annotations.Size != 1) return 3;
+                        ObsoleteAttribute obsolete = annotations.Get(0) as ObsoleteAttribute;
+                        if (obsolete == null || obsolete.Message != "foreign class") return 4;
                         return 0;
                     }
                 }

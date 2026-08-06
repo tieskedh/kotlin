@@ -11,32 +11,33 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: valued Kotlin annotation classes, including Common
-  value semantics, defaults and nested/array construction, separate-library
-  identity, and exact fail-closed CLR custom-attribute projection
+- Last completed feature: KLIB-first class annotation discovery, including the
+  JVM-shaped `KAnnotatedElement` platform surface, executable private factories
+  for Kotlin-produced classes, and a disjoint native CLR-attribute path for
+  foreign classes
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
-stdlib. The target is not close to 98% feature-complete: annotation discovery,
-member reflection, value classes,
+stdlib. The target is not close to 98% feature-complete: member/property/
+parameter reflection, value classes,
 coroutines, Sequence and Grouping families,
 sorting/random, and Gradle/KMP product integration remain
 substantial open programmes.
 
 ## Current green gate
 
-The current valued-annotation production head passed:
+The current KLIB-first class annotation-discovery head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The completion audit covered 44 XML files and 1262 tests. The final full
-`--rerun` invocation completed at 2026-08-06 19:43 local time:
+The completion audit covered 44 XML files and 1266 tests. The final full
+`--rerun` invocation completed at 2026-08-06 23:41 local time:
 
-- 1150 FIR, IL-text, and box tests
+- 1154 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 91 library-integration tests
 - zero failures, errors, or skips
@@ -535,7 +536,7 @@ published. The classified `CharSequence` carrier, Common collection
 predicates, and complete ordinary/reified inline boundary remain intact;
 suspend inline remains an explicit error. The nominal `KClass` floor and
 logical `KType`/`typeOf` graph are selected and published; they do not imply
-member reflection or annotation discovery.
+member reflection.
 
 Kotlin annotation classes use the shared Common annotation-member generator on
 one concrete sealed CLR `System.Attribute` subtype. Ordinary Kotlin
@@ -550,8 +551,22 @@ remain KLIB-only. Source/binary applications remain absent from CLR reflection.
 The gate directly adopts seven compatible upstream annotation-instance tests
 in all four .NET runners, adds exact IL blobs and nested metadata parents, and
 proves portable Kotlin defaults plus bidirectional typed C# application and
-reflection on Framework CLR and CoreCLR. Annotation discovery remains a
-separate reflection feature.
+reflection on Framework CLR and CoreCLR.
+
+Class-level runtime annotation discovery is now selected as a separate
+JVM-shaped platform extension above Common `KClass`. Kotlin-produced classes
+are reconstructed from private executable factories derived only after KLIB
+serialization, so exact and KLIB-only values share the existing annotation
+objects and projected CLR rows never become a duplicate authority. A private
+assembly marker makes absence of a factory an authoritative empty result.
+Unmarked foreign CLR types instead retain native inherited
+`GetCustomAttributes` behavior; mapped BCL-backed Kotlin classifiers expose no
+host implementation attributes. Adversarial coverage exercises defaults,
+nested values, arrays, enums, `KClass`, repetition, retention, local/generic/
+interface classes, read-only list behavior, separate KLIB consumption, real C#
+interfaces and unimported concrete classes, both runtime profiles, and
+`-no-stdlib` compilation. Member, property, accessor, parameter, and type-use
+annotation discovery remain separate reflection decisions.
 
 The general Common Comparable mapping is independently published and the enum
 product consumes the same KLIB identity, canonical classifier, typed C# view,

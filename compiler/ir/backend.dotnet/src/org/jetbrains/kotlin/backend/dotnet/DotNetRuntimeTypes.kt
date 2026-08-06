@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
@@ -386,6 +387,7 @@ internal object DotNetRuntimeTypes {
     )
 
     private val kClassifierBase = DotNetKClassRuntime.kClassifierClassInfo
+    private val kAnnotatedElementBase = DotNetKClassRuntime.kAnnotatedElementClassInfo
     private val kClassBase = DotNetKClassRuntime.kClassClassInfo
 
     private val kFunctionBase = DotNetIlClassInfo(
@@ -469,7 +471,10 @@ internal object DotNetRuntimeTypes {
         listIteratorBase.interfaces = listOf(iteratorType)
         collectionBase.interfaces = listOf(iterableType)
         listBase.interfaces = listOf(collectionType)
-        kClassBase.interfaces = listOf(DotNetIlValueType.UserClass(kClassifierBase))
+        kClassBase.interfaces = listOf(
+            DotNetIlValueType.UserClass(kClassifierBase),
+            DotNetIlValueType.UserClass(kAnnotatedElementBase),
+        )
         kFunctionBase.interfaces = listOf(
             DotNetIlValueType.UserClass(kCallableBase),
             DotNetIlValueType.UserClass(functionBase),
@@ -504,6 +509,7 @@ internal object DotNetRuntimeTypes {
                 typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
             irClass.isDotNetPropertyReferenceFactory == true -> propertyReferenceFactory
             irClass.isDotNetKClassifierBase -> kClassifierBase
+            irClass.isDotNetKAnnotatedElementBase -> kAnnotatedElementBase
             irClass.isDotNetKClassBase -> kClassBase
             irClass.isDotNetKCallableBase -> kCallableBase
             irClass.isDotNetKFunctionBase || irClass.dotNetFixedKFunctionArityOrNull() != null -> kFunctionBase
@@ -650,6 +656,9 @@ internal object DotNetRuntimeTypes {
         if (irClass.isDotNetKClassifierBase && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(kClassifierBase)
         }
+        if (irClass.isDotNetKAnnotatedElementBase && simpleType.arguments.isEmpty()) {
+            return DotNetIlValueType.UserClass(kAnnotatedElementBase)
+        }
         if (irClass.isDotNetKClassBase && simpleType.arguments.size == 1) {
             // KClass's type argument remains authoritative in IR/KLIB. Runtime equality and
             // instance checks use the declaration-erased Kotlin classifier carried by KClassImpl.
@@ -693,6 +702,22 @@ internal object DotNetRuntimeTypes {
             availableFunctions[getter] = DotNetIlFunctionInfo(
                 kClassBase,
                 getter.dotNetSignature(typeMapper),
+            )
+        }
+        val kAnnotatedElement = kClass.superTypes
+            .mapNotNull { type -> type.classOrNull?.owner }
+            .singleOrNull { superClass -> superClass.isDotNetKAnnotatedElementBase }
+        // -no-stdlib compilation retains the compiler's minimal Common KClass floor and does not
+        // load platform stdlib extensions. Register this physical member only when the .NET
+        // KAnnotatedElement declaration is actually present; if present, its shape is mandatory.
+        if (kAnnotatedElement != null) {
+            val annotationsGetter = kAnnotatedElement.properties
+                .single { property -> property.name.asString() == "annotations" }
+                .getter
+                ?: error("Internal .NET backend error: kotlin.reflect.KAnnotatedElement.annotations has no getter")
+            availableFunctions[annotationsGetter] = DotNetIlFunctionInfo(
+                kAnnotatedElementBase,
+                annotationsGetter.dotNetSignature(typeMapper),
             )
         }
         val isInstance = kClass.functions.single { function -> function.name.asString() == "isInstance" }
@@ -836,6 +861,9 @@ private val IrClass.isDotNetKCallableBase: Boolean
 
 private val IrClass.isDotNetKClassifierBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KClassifier" && typeParameters.isEmpty()
+
+private val IrClass.isDotNetKAnnotatedElementBase: Boolean
+    get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KAnnotatedElement" && typeParameters.isEmpty()
 
 private val IrClass.isDotNetKClassBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KClass" && typeParameters.size == 1

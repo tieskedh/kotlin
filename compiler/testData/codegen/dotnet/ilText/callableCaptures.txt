@@ -10,6 +10,13 @@
 .assembly 'callableCaptures' {}
 .module 'main-callableCaptures.il'
 
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
 .class private auto ansi sealed beforefieldinit 'Offset'
        extends [mscorlib]System.Object
 {

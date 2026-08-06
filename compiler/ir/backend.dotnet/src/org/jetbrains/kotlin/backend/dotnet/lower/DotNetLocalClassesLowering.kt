@@ -60,6 +60,10 @@ internal class DotNetInventNamesForLocalClasses(
     override fun sanitizeNameIfNeeded(name: String): String = name
 
     override fun putLocalClassName(declaration: IrElement, localClassName: String) {
+        // A compiler-owned static holder nested in a source-local class is metadata structure,
+        // not another source-local classifier. Its reserved name is consumed by runtime ABI
+        // discovery (for example KClass annotation factories) and must survive local naming.
+        if (declaration is IrClass && declaration.origin == DOTNET_STATIC_HOLDER) return
         if (declaration.dotNetInventedLocalClassName != null) return
         val anchor = when (declaration) {
             is IrClass -> declaration
