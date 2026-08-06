@@ -658,6 +658,10 @@ argument before the task, for example
 `./gradlew "-Pkotlin.test.update.test.data=true" :compiler:fir:fir2ir:dotNetTest ...`.
 The unquoted spelling can be split so Gradle reports a nonexistent
 `.test.update.test.data=true` task instead of updating the golden.
+Treat `Task '.test.update.test.data=true' not found` as this recurring
+PowerShell invocation error, not as a compiler or test failure: stop, quote the
+complete `-P...` argument, place it before the task name, and rerun the same
+command.
 
 Focused compilation/tests are the commit gate for a bounded Common-stdlib
 source addition that changes no shared compiler representation, lowering,

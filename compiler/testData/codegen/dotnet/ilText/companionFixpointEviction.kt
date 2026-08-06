@@ -15,19 +15,17 @@ class Early {
 class C {
     companion object {
         fun tag(): Int = 3
-        fun viaSkipped(): Long = skippedBody()
+        fun viaSkipped(): Long = skippedBody(arrayOf("value"))
     }
 }
 
-// This loop shape is NOT lowered (only Int.rangeTo(Int) is; this is Long.rangeTo(Long)): the
-// function keeps its iterator-based desugaring whose LongIterator local has no IL mapping, so
-// the emitter skips it with its regular unsupported-function warning.
-fun skippedBody(): Long {
-    var lastSeen = 0L
-    for (i in 1L..3L) {
-        lastSeen = i
-    }
-    return lastSeen
+// The signature has an ordinary open T, but the body creates Array<T?>. That open nullable
+// element carrier remains deliberately unsupported, so the emitter skips this function only
+// after call resolution has admitted it into the first render round.
+@Suppress("UNCHECKED_CAST")
+fun <T> skippedBody(value: Array<T>): Long {
+    val values: Array<T?> = value as Array<T?>
+    return values.size.toLong()
 }
 
 fun main() {

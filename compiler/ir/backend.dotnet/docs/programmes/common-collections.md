@@ -305,17 +305,12 @@ mature non-JVM targets. `optimizeReadOnlyList` is extracted from its authoritati
 
 `drop` and `takeLast` spell counted implementation loops with `Int.until`, the exact
 random-access mutable-list filter compacts its tail with `Int.downTo`, and selected generic-array
-search spells `for (index in indices)`. Publishing those calls
-would publish `IntRange`/`IntProgression`, which are outside this batch. The bootstrap sources
-therefore own private `kotlin.collections.until` and `downTo` resolution markers plus the existing
-private generic `Array.indices` marker. The general .NET for-loop lowering consumes those exact
-markers as zero-based array-size, end-exclusive ascending, and inclusive descending counted loops
-before code generation. Receivers and bounds are evaluated once; `index < size`,
-`first < endExclusive`, and `last <= first` are the respective continuation/emptiness tests; and
-no range/progression object or callable survives. A public helper, arbitrary user-defined
-lookalike, `step`, Long progression, or range value remains rejected. These are temporary
-source-product resolution markers, not target-authored replacement bodies for Common collection
-functions.
+search spells `for (index in indices)`. This programme initially kept those dependencies behind
+private resolution markers and a bounded target loop matcher. The completed ordinary-range
+tranche removed all three markers, compiles the real Common declarations, and routes both these
+collection bodies and user code through shared `RangeContainsLowering`/`ForLoopsLowering`.
+Materialized ranges, `step`, Long progressions, and ordinary iteration now use the same public
+range/progression object model rather than a collection-specific counted-loop exception.
 
 ### Builder and Common abstract-base foundation
 
@@ -1041,12 +1036,12 @@ general Comparable representation and Common abstract-list substrate. A Kotlin e
 Kotlin-owned reference class with static entry fields, not a CLR value-type enum. Reified
 `enumEntries`, `enumValues`, and `enumValueOf` remain behind the general reified gate.
 
-The third phase now publishes the exact Common contracts DSL/effects, `Standard.kt` through
-`takeUnless`, and both `buildString` declarations. Common's `returnsResultOf` effect remains
-authoritative in KLIB even though it has no exact Roslyn CodeAnalysis representation. `repeat` is
-the sole final-file Standard projection until its real `Int.until`/range/progression closure lands;
-it is not rewritten as a target loop. A one-enum exception, target-authored `EnumEntries`, contract
-shim, rewritten `buildString`, or temporarily broader KLIB remains rejected.
+The third phase published the exact Common contracts DSL/effects, `Standard.kt` through
+`takeUnless`, and both `buildString` declarations. The completed range phase subsequently admitted
+the final exact `repeat` declaration over real `Int.until`, so `Standard.kt` is no longer
+projected. Common's `returnsResultOf` effect remains authoritative in KLIB even though it has no
+exact Roslyn CodeAnalysis representation. A one-enum exception, target-authored `EnumEntries`,
+contract shim, rewritten `buildString`, or temporarily broader KLIB remains rejected.
 
 ### Typed collection-to-array prerequisite
 
@@ -1075,13 +1070,16 @@ reified `toTypedArray` remains outside this completed prerequisite.
    `AbstractList`, and migrate the private direct array-list view over the erased class ABI.
 2. **Completed:** add ordinary Kotlin enums plus the non-reified `EnumEntries` core over that substrate, with
    producer-recorded entry-field binding and no CLR value-type enum identity.
-3. **Completed:** publish exact contracts, `Standard.kt` through `takeUnless`, and both
-   `buildString` declarations once `InvocationKind` exists. Admit `repeat` only with its range
-   closure.
+3. **Completed:** publish exact contracts, the initially dependency-closed `Standard.kt`
+   projection, and both `buildString` declarations once `InvocationKind` exists.
 4. **Completed:** add mutable collection/list contracts and an ordinary implementation.
-5. **Selected:** add sets and maps from their exact Common dependency closures.
-6. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
-7. Remove the bootstrap allowlist when the complete generated product is supportable.
+5. **Completed:** add sets and maps from their exact Common dependency closures.
+6. **Completed:** compile the ordinary signed ranges/progressions and primitive-iterator
+   foundation, replace private counted-loop markers with the shared loop lowering, and admit the
+   exact Common declarations this substrate releases, including the final `repeat`. See
+   [the range/progression decision](../decisions/ordinary-ranges-and-progressions.md).
+7. Add explicit BCL adapters and C# conveniences without changing Kotlin identity.
+8. Remove the bootstrap allowlist when the complete generated product is supportable.
 
 ## Alternatives rejected
 

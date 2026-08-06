@@ -67,18 +67,16 @@ class NestedDerivedFromBrokenNestedBase {
     class Derived : BrokenNestedBaseFamily.Base()
 }
 
-fun brokenNestedSingletonInitializer(): Int {
-    var count = 0
-    for (value in 1L..2L) {
-        count += 1
-    }
-    return count
+@Suppress("UNCHECKED_CAST")
+fun <T> brokenNestedSingletonInitializer(value: Array<T>): Int {
+    val values: Array<T?> = value as Array<T?>
+    return values.size
 }
 
 class BrokenNestedSingletonFamily {
     class Nested {
         companion object {
-            val captured: Int = brokenNestedSingletonInitializer()
+            val captured: Int = brokenNestedSingletonInitializer(arrayOf("value"))
         }
     }
 }
@@ -86,12 +84,10 @@ class BrokenNestedSingletonFamily {
 class DeepBrokenFamily {
     class Middle {
         class Bad {
-            fun unsupported(): Long {
-                var lastSeen = 0L
-                for (value in 1L..3L) {
-                    lastSeen = value
-                }
-                return lastSeen
+            @Suppress("UNCHECKED_CAST")
+            fun <T> unsupported(value: Array<T>): Int {
+                val values: Array<T?> = value as Array<T?>
+                return values.size
             }
         }
     }

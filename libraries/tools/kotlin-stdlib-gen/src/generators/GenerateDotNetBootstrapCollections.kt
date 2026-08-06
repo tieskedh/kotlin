@@ -8,6 +8,7 @@ package generators
 import templates.Aggregates
 import templates.ArrayOps
 import templates.COPYRIGHT_NOTICE
+import templates.ComparableOps
 import templates.Elements
 import templates.Family
 import templates.Filtering
@@ -19,6 +20,7 @@ import templates.MemberTemplate
 import templates.Numeric
 import templates.Ordering
 import templates.PrimitiveType
+import templates.RangeOps
 import templates.SequenceOps
 import templates.SetOps
 import templates.Snapshots
@@ -29,12 +31,12 @@ import java.io.StringWriter
 import kotlin.system.exitProcess
 
 /**
- * Materializes only the Common collection templates whose dependency closure the experimental
- * Kotlin/.NET stdlib currently supports.
+ * Materializes only the Common stdlib templates whose dependency closure the experimental
+ * Kotlin/.NET stdlib currently supports, including the ordinary signed range/progression slice.
  *
  * This is a temporary source-product allowlist, not a .NET algorithm fork. Every emitted member
  * is built by the same Common template object used for the mature targets. Delete this generator
- * once Kotlin/.NET can compile the complete Common generated collection corpus.
+ * once Kotlin/.NET can compile the complete Common generated stdlib corpus.
  */
 fun main(args: Array<String>) {
     if (args.size != 1) {
@@ -91,6 +93,9 @@ fun main(args: Array<String>) {
     val setsOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapSets.kt"
     )
+    val rangesOutputFile = baseDir.resolve(
+        "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapRanges.kt"
+    )
     val mapsActualsOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/src/generated/_DotNetBootstrapMapsActuals.kt"
     )
@@ -119,14 +124,14 @@ fun main(args: Array<String>) {
         baseDir.resolve("libraries/stdlib/common/src/generated/_Arrays.kt")
     val commonComparisonsFile =
         baseDir.resolve("libraries/stdlib/common/src/generated/_Comparisons.kt")
-    val commonRangesFile =
-        baseDir.resolve("libraries/stdlib/common/src/generated/_Ranges.kt")
     val commonAppendableFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/text/Appendable.kt")
     val commonStringBuilderFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/text/StringBuilder.kt")
     val commonStandardFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/util/Standard.kt")
+    val commonCharCodeFile =
+        baseDir.resolve("libraries/stdlib/src/kotlin/CharCode.kt")
     val commonEnumEntriesFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/enums/EnumEntries.kt")
     val commonEnumFile = baseDir.resolve("libraries/stdlib/src/kotlin/Enum.kt")
@@ -499,6 +504,12 @@ fun main(args: Array<String>) {
         Aggregates.f_sumByDouble selectedFor setOf(Family.Iterables),
         ArrayOps.f_isEmpty selectedFor setOf(Family.ArraysOfObjects),
         ArrayOps.f_isNotEmpty selectedFor setOf(Family.ArraysOfObjects),
+        ArrayOps.f_lastIndex selectedFor setOf(Family.ArraysOfObjects),
+        (ArrayOps.f_lastIndex selectedFor setOf(Family.ArraysOfPrimitives))
+            .limitedTo(PrimitiveType.defaultPrimitives),
+        ArrayOps.f_indices selectedFor setOf(Family.ArraysOfObjects),
+        (ArrayOps.f_indices selectedFor setOf(Family.ArraysOfPrimitives))
+            .limitedTo(PrimitiveType.defaultPrimitives),
         Elements.f_contains selectedFor setOf(Family.Iterables),
         Elements.f_contains selectedFor setOf(Family.ArraysOfObjects),
         Elements.f_elementAt selectedFor setOf(Family.Iterables, Family.Lists),
@@ -658,32 +669,6 @@ fun main(args: Array<String>) {
     for (member in members) {
         member.build(generatedSource)
     }
-    generatedSource.appendLine(
-        """
-        /**
-         * Private resolution marker for the exact Common `Array.getOrNull` body above.
-         *
-         * The shared range-contains lowering consumes every call before CIL generation. This is
-         * intentionally not a public `Array.indices` product: publishing that property requires
-         * the complete `IntRange` dependency closure, which is outside this bootstrap slice.
-         */
-        private val <T> Array<out T>.indices: IntRange
-            get() = throw AssertionError("Array.indices bootstrap marker survived lowering")
-        """.trimIndent()
-    )
-    generatedSource.appendLine()
-    generatedSource.appendLine(
-        """
-        /**
-         * Private resolution marker for end-exclusive counted loops in the exact Common bodies.
-         *
-         * [DotNetForLoopLowering] consumes every call before CIL generation. Publishing the real
-         * function would publish `IntRange`, whose product remains outside this bootstrap batch.
-         */
-        private infix fun Int.until(to: Int): IntRange =
-            throw AssertionError("Int.until bootstrap marker survived lowering: ${'$'}this until ${'$'}to")
-        """.trimIndent()
-    )
     val normalizedSource = generatedSource.toString()
         .replace("\r\n", "\n")
         .lineSequence()
@@ -708,6 +693,66 @@ fun main(args: Array<String>) {
         Charsets.UTF_8,
     )
 
+    val signedRangePrimitives = setOf(PrimitiveType.Int, PrimitiveType.Long, PrimitiveType.Char)
+    val rangeSelections = listOf(
+        (Elements.f_first selectedFor setOf(Family.ProgressionsOfPrimitives))
+            .limitedTo(signedRangePrimitives),
+        (Elements.f_firstOrNull selectedFor setOf(Family.ProgressionsOfPrimitives))
+            .limitedTo(signedRangePrimitives),
+        (Elements.f_last selectedFor setOf(Family.ProgressionsOfPrimitives))
+            .limitedTo(signedRangePrimitives),
+        (Elements.f_lastOrNull selectedFor setOf(Family.ProgressionsOfPrimitives))
+            .limitedTo(signedRangePrimitives),
+        (RangeOps.f_reversed selectedFor setOf(Family.ProgressionsOfPrimitives))
+            .limitedTo(signedRangePrimitives),
+        (RangeOps.f_step selectedFor setOf(Family.ProgressionsOfPrimitives))
+            .limitedTo(signedRangePrimitives),
+        (RangeOps.f_downTo selectedFor setOf(Family.Primitives))
+            .limitedTo(PrimitiveType.defaultPrimitives),
+        (RangeOps.f_until selectedFor setOf(Family.Primitives))
+            .limitedTo(PrimitiveType.defaultPrimitives),
+        RangeOps.f_containsMixedClosed selectedFor setOf(Family.Ranges),
+        RangeOps.f_containsMixedOpenAndPrimitive selectedFor
+                setOf(Family.OpenRanges, Family.RangesOfPrimitives),
+        (RangeOps.f_contains_nullable selectedFor setOf(Family.RangesOfPrimitives))
+            .limitedTo(signedRangePrimitives),
+        RangeOps.f_toPrimitiveExactOrNull selectedFor setOf(Family.Primitives),
+        ComparableOps.f_coerceAtLeast selectedFor setOf(Family.Generic, Family.Primitives),
+        ComparableOps.f_coerceAtMost selectedFor setOf(Family.Generic, Family.Primitives),
+        ComparableOps.f_coerceIn_min_max selectedFor setOf(Family.Generic, Family.Primitives),
+        ComparableOps.f_coerceIn_fpRange selectedFor setOf(Family.Generic),
+        ComparableOps.f_coerceIn_range_primitive selectedFor setOf(Family.Generic, Family.Primitives),
+    )
+    val rangeMembers = rangeSelections
+        .flatMap { selection ->
+            selection.template.instantiate(listOf(KotlinTarget.Common)).filter { member ->
+                member.family in selection.families &&
+                        (selection.primitives == null || member.primitive in selection.primitives)
+            }
+        }
+        .sortedBy { it.sortingSignature }
+        .toList()
+    val rangeSource = StringWriter().apply {
+        appendLine(COPYRIGHT_NOTICE)
+        appendLine("@file:kotlin.jvm.JvmMultifileClass")
+        appendLine("@file:kotlin.jvm.JvmName(\"RangesKt\")")
+        appendLine("@file:Suppress(\"REDUNDANT_CALL_OF_CONVERSION_METHOD\")")
+        appendLine()
+        appendLine("package kotlin.ranges")
+        appendLine()
+        appendLine("import kotlin.contracts.*")
+        appendLine()
+        appendLine(autoGeneratedWarning("GenerateDotNetBootstrapCollections.kt"))
+        for (member in rangeMembers) {
+            member.build(this)
+        }
+    }.toString()
+        .replace("\r\n", "\n")
+        .lineSequence()
+        .joinToString("\n") { line -> line.trimEnd() }
+        .trimEnd() + "\n"
+    rangesOutputFile.writeText(rangeSource, Charsets.UTF_8)
+
     appendableOutputFile.writeText(
         projectWholeCommonFile(commonAppendableFile),
         Charsets.UTF_8,
@@ -717,7 +762,11 @@ fun main(args: Array<String>) {
         Charsets.UTF_8,
     )
     kotlinOutputFile.writeText(
-        projectStandardFile(commonStandardFile),
+        projectWholeCommonFile(commonStandardFile).trimEnd() + "\n\n" +
+                extractFinalCommonDeclaration(
+                    commonCharCodeFile,
+                    "public inline val Char.code: Int",
+                ) + "\n",
         Charsets.UTF_8,
     )
     enumEntriesOutputFile.writeText(
@@ -876,11 +925,6 @@ fun main(args: Array<String>) {
                     commonMutableCollectionsFile,
                     "public fun <T> MutableList<T>.retainAll(predicate: (T) -> Boolean)",
                 ),
-                """
-                /** Private resolution marker consumed by the .NET counted-loop lowering. */
-                private infix fun Int.downTo(to: Int): IntProgression =
-                    throw AssertionError("Int.downTo bootstrap marker survived lowering: ${'$'}this downTo ${'$'}to")
-                """.trimIndent(),
             ),
         ),
         Charsets.UTF_8,
@@ -905,6 +949,10 @@ fun main(args: Array<String>) {
                 extractCommonDeclaration(
                     commonPreconditionsFile,
                     "public inline fun check(value: Boolean, lazyMessage: () -> Any): Unit",
+                ),
+                extractFinalCommonDeclaration(
+                    commonPreconditionsFile,
+                    "public inline fun error(message: Any): Nothing",
                 ),
             ),
         ),
@@ -1019,10 +1067,6 @@ fun main(args: Array<String>) {
                 extractCommonDeclaration(
                     commonComparisonsFile,
                     "public expect inline fun minOf(a: Int, b: Int): Int",
-                ),
-                extractCommonDeclaration(
-                    commonRangesFile,
-                    "public fun Int.coerceAtLeast(minimumValue: Int): Int",
                 ),
             ),
         ),
@@ -1160,35 +1204,6 @@ internal fun projectWholeCommonFile(
 ): String {
     val normalizedSource = sourceFile.readText().replace("\r\n", "\n")
     return injectGeneratedWarning(normalizedSource, generatorName)
-}
-
-/**
- * Retains the complete contract-bearing scope-function closure while `repeat` remains behind the
- * ordinary range/progression product. The declaration is the exact final Common source tail, so
- * upstream movement or added declarations after it fail generation instead of silently widening
- * this temporary projection.
- */
-private fun projectStandardFile(sourceFile: File): String {
-    var projectedSource = sourceFile.readText().replace("\r\n", "\n")
-    val declarationHeader = "public inline fun repeat(times: Int, action: (Int) -> Unit)"
-    val declarationIndex = projectedSource.indexOf(declarationHeader)
-    check(declarationIndex >= 0) {
-        "Cannot find Common declaration '$declarationHeader' in ${sourceFile.path}"
-    }
-    check(projectedSource.indexOf(declarationHeader, declarationIndex + declarationHeader.length) < 0) {
-        "Common declaration header '$declarationHeader' is not unique in ${sourceFile.path}"
-    }
-    val documentationIndex = projectedSource.lastIndexOf("/**", declarationIndex)
-    check(documentationIndex >= 0) {
-        "Cannot find KDoc for Common declaration '$declarationHeader' in ${sourceFile.path}"
-    }
-    val declaration = extractCommonFunction(sourceFile, declarationHeader)
-    val declarationEnd = declarationIndex + declaration.length
-    check(projectedSource.substring(declarationEnd).isBlank()) {
-        "Common repeat is no longer the final declaration in ${sourceFile.path}"
-    }
-    projectedSource = projectedSource.substring(0, documentationIndex)
-    return injectGeneratedWarning(projectedSource)
 }
 
 private fun injectGeneratedWarning(

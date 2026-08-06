@@ -35,7 +35,7 @@ tasks {
 
     register<JavaExec>("generateDotNetBootstrapCollections") {
         group = "application"
-        description = "Generates the supported Common collection slice for the experimental .NET stdlib."
+        description = "Generates the supported Common stdlib slices for the experimental .NET stdlib."
         mainClass = "generators.GenerateDotNetBootstrapCollectionsKt"
         classpath = sourceSets.main.get().runtimeClasspath
         args = listOf("$rootDir")
@@ -58,6 +58,7 @@ tasks {
                 "_DotNetBootstrapScalarBounds.kt",
                 "_DotNetBootstrapMaps.kt",
                 "_DotNetBootstrapSets.kt",
+                "_DotNetBootstrapRanges.kt",
             ).map { fileName ->
                 rootProject.file("libraries/stdlib/dotnet/common/src/generated/$fileName")
             } + listOf(
@@ -74,14 +75,14 @@ tasks {
         inputs.file(
             rootProject.file("libraries/stdlib/common/src/generated/_Arrays.kt")
         )
-        inputs.files(
-            rootProject.file("libraries/stdlib/common/src/generated/_Comparisons.kt"),
-            rootProject.file("libraries/stdlib/common/src/generated/_Ranges.kt"),
+        inputs.file(
+            rootProject.file("libraries/stdlib/common/src/generated/_Comparisons.kt")
         )
         inputs.files(
             rootProject.file("libraries/stdlib/src/kotlin/text/Appendable.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/text/StringBuilder.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/util/Standard.kt"),
+            rootProject.file("libraries/stdlib/src/kotlin/CharCode.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/Enum.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/enums/EnumEntries.kt"),
             rootProject.file("libraries/stdlib/common/src/kotlin/JsAnnotationsH.kt"),

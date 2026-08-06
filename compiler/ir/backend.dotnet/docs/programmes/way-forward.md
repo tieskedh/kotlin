@@ -125,10 +125,10 @@ relative-constraint ABI, projected-array boundary, foreign physical-signature au
 stdlib-helper binding, and unchanged upstream test path.
 
 Further work remains foundation-first rather than allowlist-count-first. Recompute the remaining
-Common generator/source dependency graph around the actual missing substrates: ordinary
-ranges/progressions, Sequence, Grouping aggregates, sorting/comparators/random, reified operations,
-and open nullable projected arrays. Select and document one substrate with the largest coherent
-release before admitting its generated family. The narrow `Array<out T?>` boundary may land
+Common generator/source dependency graph around the actual missing substrates: Sequence,
+Grouping aggregates, sorting/comparators/random, reified operations, and open nullable projected
+arrays. Select and document one substrate with the largest coherent release before admitting its
+generated family. The narrow `Array<out T?>` boundary may land
 independently because it restores authoritative `setOfNotNull(vararg T?)` and object-array nullable
 filtering without changing collection identity. Loose one-function growth and implicit BCL
 collection identity remain excluded.
@@ -147,16 +147,24 @@ their permanent complexity.
 The source-level builder/contracts bootstrap cycle is complete. Common `Appendable`, the complete
 `StringBuilder` file including both `buildString` declarations, generated
 `joinTo`/`joinToString`, the Common contracts DSL/effects, and Common abstract collection bases
-ship in one self-describing product. `Standard.kt` is exact through `takeUnless`; only its final
-`repeat` declaration remains projected out until the real `Int.until`/range/progression closure
-lands. No admitted body is a target stub or rewritten algorithm.
+ship in one self-describing product. `Standard.kt` is now complete: its final `repeat` declaration
+uses the real admitted `Int.until`/range/progression closure. No admitted body is a target stub or
+rewritten algorithm.
 
 Modern enums plus the non-reified `EnumEntries` core and the ordinary `InvocationKind` enum are now
 complete as coherent language/product phases. They use
 Kotlin-owned reference classes, the general Comparable mapping, producer-recorded entry-field
 binding, and the existing static-initialization machinery; they are not CLR value-type enums. The
-contracts/`Standard.kt`/`buildString` closure is complete under the precise `repeat` exclusion
-above. General reified enum functions remain behind the reified gate throughout.
+contracts/`Standard.kt`/`buildString` closure is complete, including `repeat`. General reified enum
+functions remain behind the reified gate throughout.
+
+The completed ordinary signed range/progression and primitive-iterator closure compiles the shared
+stdlib classes, removes the temporary counted-loop resolution markers, and
+replaces the target's bounded loop matcher with the shared
+`ForLoopsLowering`. It admits Common `repeat`, array `indices`, and the signed
+non-random generated range operations. `Random`, unsigned ranges, and reified
+helpers remain independent closures. See
+[`../decisions/ordinary-ranges-and-progressions.md`](../decisions/ordinary-ranges-and-progressions.md).
 
 Common `Comparable<T>` is now selected independently of enums: KLIB identity maps to canonical
 `System.IComparable` plus the truthful typed `System.IComparable<T>` capability, while Kotlin

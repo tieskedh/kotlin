@@ -5,15 +5,6 @@
 
 package kotlin
 
-// The real stdlib's `Char.code` is an `@InlineOnly` extension property; it is declared here as
-// a plain property because this backend does not run an IR inliner — the getter call reaches
-// codegen and is intercepted by the intrinsic registry. The body is never emitted, but it must
-// produce no diagnostics: test infrastructure maps every reported diagnostic back to a test
-// file, and injected files have none (hence the suppressed `Char.toInt()` deprecation).
-public val Char.code: Int
-    @Suppress("DEPRECATION")
-    get() = this.toInt()
-
 // Common owns the expect declaration. This is the same overflow-free Int comparison used by the
 // generated JVM, JS, Wasm, and Native actuals; no CLR-specific ordering rule is substituted.
 @SinceKotlin("1.1")

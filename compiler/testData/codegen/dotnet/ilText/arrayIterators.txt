@@ -179,6 +179,92 @@
     .set instance void 'IntValueIterator'::'set_available'(bool)
   }
 }
+.class public auto ansi sealed beforefieldinit 'CustomIntIterator'
+       extends [Kotlin.Stdlib]'Kotlin.Collections.IntIterator'
+{
+  .field private int32 'value'
+  .field private bool 'available'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [Kotlin.Stdlib]'Kotlin.Collections.IntIterator'::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'CustomIntIterator'::'value'
+    ldarg.0
+    ldc.i4.1
+    stfld bool 'CustomIntIterator'::'available'
+    ret
+  }
+  .method private hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'CustomIntIterator'::'value'
+    ret
+  }
+  .method private hidebysig specialname instance bool 'get_available'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld bool 'CustomIntIterator'::'available'
+    ret
+  }
+  .method private hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld bool 'CustomIntIterator'::'available'
+    ret
+  }
+  .method public hidebysig virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance bool 'CustomIntIterator'::'get_available'()
+    ret
+  }
+  .method public hidebysig virtual instance int32 'nextInt'() cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    callvirt instance bool 'CustomIntIterator'::'hasNext'()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    dup
+    ldc.i4 8
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ThrowableSupport'::'SetExactTypeId'(class [mscorlib]System.Exception, int32)
+    throw
+IL_whenNext_1:
+    ldarg.0
+    ldc.i4.0
+    call instance void 'CustomIntIterator'::'set_available'(bool)
+    ldarg.0
+    call instance int32 'CustomIntIterator'::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool 'CustomIntIterator'::'hasNext'()
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'CustomIntIterator'::'get_value'()
+  }
+  .property instance bool 'available'()
+  {
+    .get instance bool 'CustomIntIterator'::'get_available'()
+    .set instance void 'CustomIntIterator'::'set_available'(bool)
+  }
+}
 .class public auto ansi sealed beforefieldinit 'GenericValueIterator'
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
@@ -410,20 +496,18 @@
 .class public abstract sealed auto ansi beforefieldinit 'arrayIteratorsKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'intIterator'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
+  .method public hidebysig static class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' 'intIterator'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
-    call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterator'<int32>(!!0[])
+    call class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetIntArrayIterator'(class [Kotlin.Runtime]'Kotlin.IntArray')
     ret
   }
-  .method public hidebysig static int32 'nextInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
+  .method public hidebysig static int32 'nextInt'(class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' 'values') cil managed
   {
     .maxstack 1
     ldarg.0
-    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
-    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 [Kotlin.Stdlib]'Kotlin.Collections.IntIterator'::'nextInt'()
     ret
   }
   .method public hidebysig static int32 'nextBoxed'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
@@ -476,8 +560,7 @@
   {
     .maxstack 1
     ldarg.0
-    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
-    call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterator'<int32>(!!0[])
+    call class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetIntArrayIterator'(class [Kotlin.Runtime]'Kotlin.IntArray')
     ret
   }
   .method public hidebysig static int32 'nextOrMinusOne'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
@@ -572,9 +655,8 @@ IL_tryEnd_0:
     stelem int32
     ldloc.0
     newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
-    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
-    call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterator'<int32>(!!0[])
-    call int32 'arrayIteratorsKt'::'nextInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator')
+    call class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetIntArrayIterator'(class [Kotlin.Runtime]'Kotlin.IntArray')
+    call int32 'arrayIteratorsKt'::'nextInt'(class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator')
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -587,6 +669,14 @@ IL_tryEnd_0:
     ldc.i4 8
     newobj instance void 'IntValueIterator'::.ctor(int32)
     call int32 'arrayIteratorsKt'::'erasedIntNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 9
+    newobj instance void 'CustomIntIterator'::.ctor(int32)
+    call int32 'arrayIteratorsKt'::'nextInt'(class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator')
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

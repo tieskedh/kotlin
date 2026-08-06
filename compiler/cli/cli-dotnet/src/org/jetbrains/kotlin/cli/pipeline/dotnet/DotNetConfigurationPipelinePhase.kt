@@ -284,6 +284,8 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
                 enableMultiplatform = usesBootstrapStdlibSources || commonSources.isNotEmpty(),
                 muteExpectActualClassesWarning =
                     arguments.dotNetProduceStdlib || usesBootstrapStdlibSources,
+                dontWarnOnErrorSuppression =
+                    arguments.dotNetProduceStdlib || usesBootstrapStdlibSources,
                 optInExperimentalMultiplatform =
                     arguments.dotNetProduceStdlib || usesBootstrapStdlibSources,
                 optInExperimentalContracts =
@@ -313,6 +315,7 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(
     allowKotlinPackage: Boolean,
     enableMultiplatform: Boolean,
     muteExpectActualClassesWarning: Boolean,
+    dontWarnOnErrorSuppression: Boolean,
     optInExperimentalMultiplatform: Boolean,
     optInExperimentalContracts: Boolean,
 ): LanguageVersionSettings {
@@ -343,6 +346,11 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(
             if (flag == AnalysisFlags.muteExpectActualClassesWarning) {
                 return (muteExpectActualClassesWarning ||
                         delegate.getFlag(AnalysisFlags.muteExpectActualClassesWarning)) as T
+            }
+            @Suppress("UNCHECKED_CAST")
+            if (flag == AnalysisFlags.dontWarnOnErrorSuppression) {
+                return (dontWarnOnErrorSuppression ||
+                        delegate.getFlag(AnalysisFlags.dontWarnOnErrorSuppression)) as T
             }
             @Suppress("UNCHECKED_CAST")
             if (

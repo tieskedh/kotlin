@@ -255,6 +255,15 @@ public external fun CharArray.asIterable(): Iterable<Char>
 // the compiler ABI. This follows the JVM/JS helper boundary for array iteration.
 internal fun <T> dotNetArrayIterator(array: Array<T>): Iterator<T> = ArrayIterator(array)
 
+internal fun dotNetBooleanArrayIterator(array: BooleanArray): BooleanIterator = BooleanArrayIterator(array)
+internal fun dotNetByteArrayIterator(array: ByteArray): ByteIterator = ByteArrayIterator(array)
+internal fun dotNetShortArrayIterator(array: ShortArray): ShortIterator = ShortArrayIterator(array)
+internal fun dotNetIntArrayIterator(array: IntArray): IntIterator = IntArrayIterator(array)
+internal fun dotNetLongArrayIterator(array: LongArray): LongIterator = LongArrayIterator(array)
+internal fun dotNetFloatArrayIterator(array: FloatArray): FloatIterator = FloatArrayIterator(array)
+internal fun dotNetDoubleArrayIterator(array: DoubleArray): DoubleIterator = DoubleArrayIterator(array)
+internal fun dotNetCharArrayIterator(array: CharArray): CharIterator = CharArrayIterator(array)
+
 internal fun <T> dotNetArrayIterable(array: Array<T>): Iterable<T> =
     if (array.size == 0) emptyList() else ArrayIterable(array)
 
@@ -273,6 +282,94 @@ private class ArrayIterator<T>(private val array: Array<T>) : Iterator<T> {
     override fun hasNext(): Boolean = index < array.size
 
     override fun next(): T {
+        if (!hasNext()) throw NoSuchElementException()
+        return array[index++]
+    }
+}
+
+private class BooleanArrayIterator(private val array: BooleanArray) : BooleanIterator() {
+    private var index: Int = 0
+
+    override fun hasNext(): Boolean = index < array.size
+
+    override fun nextBoolean(): Boolean {
+        if (!hasNext()) throw NoSuchElementException()
+        return array[index++]
+    }
+}
+
+private class ByteArrayIterator(private val array: ByteArray) : ByteIterator() {
+    private var index: Int = 0
+
+    override fun hasNext(): Boolean = index < array.size
+
+    override fun nextByte(): Byte {
+        if (!hasNext()) throw NoSuchElementException()
+        return array[index++]
+    }
+}
+
+private class ShortArrayIterator(private val array: ShortArray) : ShortIterator() {
+    private var index: Int = 0
+
+    override fun hasNext(): Boolean = index < array.size
+
+    override fun nextShort(): Short {
+        if (!hasNext()) throw NoSuchElementException()
+        return array[index++]
+    }
+}
+
+private class IntArrayIterator(private val array: IntArray) : IntIterator() {
+    private var index: Int = 0
+
+    override fun hasNext(): Boolean = index < array.size
+
+    override fun nextInt(): Int {
+        if (!hasNext()) throw NoSuchElementException()
+        return array[index++]
+    }
+}
+
+private class LongArrayIterator(private val array: LongArray) : LongIterator() {
+    private var index: Int = 0
+
+    override fun hasNext(): Boolean = index < array.size
+
+    override fun nextLong(): Long {
+        if (!hasNext()) throw NoSuchElementException()
+        return array[index++]
+    }
+}
+
+private class FloatArrayIterator(private val array: FloatArray) : FloatIterator() {
+    private var index: Int = 0
+
+    override fun hasNext(): Boolean = index < array.size
+
+    override fun nextFloat(): Float {
+        if (!hasNext()) throw NoSuchElementException()
+        return array[index++]
+    }
+}
+
+private class DoubleArrayIterator(private val array: DoubleArray) : DoubleIterator() {
+    private var index: Int = 0
+
+    override fun hasNext(): Boolean = index < array.size
+
+    override fun nextDouble(): Double {
+        if (!hasNext()) throw NoSuchElementException()
+        return array[index++]
+    }
+}
+
+private class CharArrayIterator(private val array: CharArray) : CharIterator() {
+    private var index: Int = 0
+
+    override fun hasNext(): Boolean = index < array.size
+
+    override fun nextChar(): Char {
         if (!hasNext()) throw NoSuchElementException()
         return array[index++]
     }

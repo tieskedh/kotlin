@@ -70,3 +70,11 @@ public inline fun check(value: Boolean, lazyMessage: () -> Any): Unit {
         throw IllegalStateException(message.toString())
     }
 }
+
+/**
+ * Throws an [IllegalStateException] with the given [message].
+ *
+ * @sample samples.misc.Preconditions.failWithError
+ */
+@kotlin.internal.InlineOnly
+public inline fun error(message: Any): Nothing = throw IllegalStateException(message.toString())

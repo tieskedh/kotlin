@@ -38,12 +38,10 @@ class BrokenCompanionOwner {
         }
 
         object BrokenObject {
-            fun unsupported(): Long {
-                var result = 0L
-                for (value in 1L..2L) {
-                    result = value
-                }
-                return result
+            @Suppress("UNCHECKED_CAST")
+            fun <T> unsupported(value: Array<T>): Int {
+                val values: Array<T?> = value as Array<T?>
+                return values.size
             }
         }
 

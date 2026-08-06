@@ -85,6 +85,14 @@ fun <T> last(values: Array<T>): T {
     return result
 }
 
+fun starLast(values: Array<*>): Any? {
+    var result: Any? = null
+    for (value in values) {
+        result = value
+    }
+    return result
+}
+
 fun sameArray(left: Array<String>, right: Array<String>): Boolean = left == right
 
 fun nullArray(values: Array<String>?): Boolean = values == null
@@ -106,6 +114,7 @@ fun main(args: Array<String>) {
     protectedGet(values)
     protectedSet(values, "d")
     last(values)
+    starLast(values)
     val holder = ArrayBox(values)
     holder.first()
     holder.replace("e")

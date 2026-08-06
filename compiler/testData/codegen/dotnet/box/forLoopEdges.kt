@@ -1,7 +1,7 @@
-// Executing twin of the forLoops.kt ilText golden: iteration counts and sums for `a..b`
-// ranges (only Int.rangeTo(Int) headers are lowered by DotNetForLoopLowering; until/downTo/step
-// are deliberately not used), nesting, break/continue, and the Int.MAX_VALUE boundary that a
-// naive `i <= last` lowering would turn into an infinite loop via wraparound.
+// Executing twin of the forLoops.kt ilText golden: baseline iteration counts and sums for `a..b`
+// ranges, nesting, break/continue, and the Int.MAX_VALUE boundary that a naive `i <= last`
+// lowering would turn into an infinite loop via wraparound. The broader shared range/progression
+// lowering matrix lives in rangesAndProgressions.kt.
 
 fun sum(from: Int, to: Int): Int {
     var total = 0

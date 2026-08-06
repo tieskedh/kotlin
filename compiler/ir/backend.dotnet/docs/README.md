@@ -67,6 +67,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
 - [Erased ABI for Kotlin-owned generic interfaces](decisions/generic-interface-erased-identity.md)
 - [Ordinary Kotlin enums as reference classes](decisions/ordinary-enum-reference-classes.md)
+- [Ordinary ranges, progressions, and primitive iterators](decisions/ordinary-ranges-and-progressions.md)
 - [Common contracts with additive CLR projections](decisions/common-contracts-product.md)
 - [Callable and callable-reference ABI](decisions/draft-adr-callable-and-reference-abi.md)
 - [Runtime and stdlib product ownership](decisions/runtime-and-stdlib-ownership.md)

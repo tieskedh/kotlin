@@ -1413,6 +1413,60 @@ public inline fun <T> List<T>.indexOfLast(predicate: (T) -> Boolean): Int {
 }
 
 /**
+ * Returns the range of valid indices for the array.
+ */
+public val <T> Array<out T>.indices: IntRange
+    get() = IntRange(0, lastIndex)
+
+/**
+ * Returns the range of valid indices for the array.
+ */
+public val ByteArray.indices: IntRange
+    get() = IntRange(0, lastIndex)
+
+/**
+ * Returns the range of valid indices for the array.
+ */
+public val ShortArray.indices: IntRange
+    get() = IntRange(0, lastIndex)
+
+/**
+ * Returns the range of valid indices for the array.
+ */
+public val IntArray.indices: IntRange
+    get() = IntRange(0, lastIndex)
+
+/**
+ * Returns the range of valid indices for the array.
+ */
+public val LongArray.indices: IntRange
+    get() = IntRange(0, lastIndex)
+
+/**
+ * Returns the range of valid indices for the array.
+ */
+public val FloatArray.indices: IntRange
+    get() = IntRange(0, lastIndex)
+
+/**
+ * Returns the range of valid indices for the array.
+ */
+public val DoubleArray.indices: IntRange
+    get() = IntRange(0, lastIndex)
+
+/**
+ * Returns the range of valid indices for the array.
+ */
+public val BooleanArray.indices: IntRange
+    get() = IntRange(0, lastIndex)
+
+/**
+ * Returns the range of valid indices for the array.
+ */
+public val CharArray.indices: IntRange
+    get() = IntRange(0, lastIndex)
+
+/**
  * Returns a set containing elements of this collection that are also contained in the specified [other] collection.
  *
  * The returned set preserves the element iteration order of the original collection.
@@ -1582,6 +1636,60 @@ public inline fun <T> List<T>.last(predicate: (T) -> Boolean): T {
     }
     throw NoSuchElementException("List contains no element matching the predicate.")
 }
+
+/**
+ * Returns the last valid index for the array.
+ */
+public val <T> Array<out T>.lastIndex: Int
+    get() = size - 1
+
+/**
+ * Returns the last valid index for the array.
+ */
+public val ByteArray.lastIndex: Int
+    get() = size - 1
+
+/**
+ * Returns the last valid index for the array.
+ */
+public val ShortArray.lastIndex: Int
+    get() = size - 1
+
+/**
+ * Returns the last valid index for the array.
+ */
+public val IntArray.lastIndex: Int
+    get() = size - 1
+
+/**
+ * Returns the last valid index for the array.
+ */
+public val LongArray.lastIndex: Int
+    get() = size - 1
+
+/**
+ * Returns the last valid index for the array.
+ */
+public val FloatArray.lastIndex: Int
+    get() = size - 1
+
+/**
+ * Returns the last valid index for the array.
+ */
+public val DoubleArray.lastIndex: Int
+    get() = size - 1
+
+/**
+ * Returns the last valid index for the array.
+ */
+public val BooleanArray.lastIndex: Int
+    get() = size - 1
+
+/**
+ * Returns the last valid index for the array.
+ */
+public val CharArray.lastIndex: Int
+    get() = size - 1
 
 /**
  * Returns last index of [element], or -1 if the collection does not contain element.
@@ -2996,22 +3104,3 @@ public inline fun <T, R> Iterable<T>.zipWithNext(transform: (a: T, b: T) -> R): 
     }
     return result
 }
-
-/**
- * Private resolution marker for the exact Common `Array.getOrNull` body above.
- *
- * The shared range-contains lowering consumes every call before CIL generation. This is
- * intentionally not a public `Array.indices` product: publishing that property requires
- * the complete `IntRange` dependency closure, which is outside this bootstrap slice.
- */
-private val <T> Array<out T>.indices: IntRange
-    get() = throw AssertionError("Array.indices bootstrap marker survived lowering")
-
-/**
- * Private resolution marker for end-exclusive counted loops in the exact Common bodies.
- *
- * [DotNetForLoopLowering] consumes every call before CIL generation. Publishing the real
- * function would publish `IntRange`, whose product remains outside this bootstrap batch.
- */
-private infix fun Int.until(to: Int): IntRange =
-    throw AssertionError("Int.until bootstrap marker survived lowering: $this until $to")

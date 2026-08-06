@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.backend.common.ir.BackendSymbols
 import org.jetbrains.kotlin.backend.common.ir.SharedVariablesManager
 import org.jetbrains.kotlin.backend.common.lower.InnerClassesSupport
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesSupport
+import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.cli.common.diagnosticsCollector
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.languageVersionSettings
@@ -18,6 +19,7 @@ import org.jetbrains.kotlin.ir.IrDiagnosticReporter
 import org.jetbrains.kotlin.ir.KtDiagnosticReporterWithImplicitIrBasedContext
 import org.jetbrains.kotlin.ir.classSymbol
 import org.jetbrains.kotlin.ir.functionSymbol
+import org.jetbrains.kotlin.ir.functionSymbolAssociatedBy
 import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
@@ -37,6 +39,7 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContext
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
 import org.jetbrains.kotlin.ir.types.classOrNull
+import org.jetbrains.kotlin.ir.types.classifierOrFail
 import org.jetbrains.kotlin.ir.types.makeNullable
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.util.hasShape
@@ -208,7 +211,17 @@ internal class DotNetSymbols(
             if (hasMessageParameter) listOf("message" to irBuiltIns.stringType) else emptyList(),
         )
 
-    override val getProgressionLastElementByReturnType: Map<IrClassifierSymbol, IrSimpleFunctionSymbol> = emptyMap()
+    override val getProgressionLastElementByReturnType: Map<IrClassifierSymbol, IrSimpleFunctionSymbol> by CallableId(
+        StandardNames.KOTLIN_INTERNAL_FQ_NAME,
+        Name.identifier("getProgressionLastElement"),
+    ).functionSymbolAssociatedBy { function -> function.returnType.classifierOrFail }
+    val signedRangeUntilFunctions: Map<Pair<IrType, IrType>, IrSimpleFunctionSymbol> by CallableId(
+        FqName("kotlin.ranges"),
+        Name.identifier("until"),
+    ).functionSymbolAssociatedBy(
+        condition = { function -> function.hasShape(extensionReceiver = true, regularParameters = 1) },
+        getKey = { function -> function.parameters[0].type to function.parameters[1].type },
+    )
     val enumEntries: IrClassSymbol by lazy {
         with(irBuiltIns) {
             ClassId(StandardClassIds.BASE_ENUMS_PACKAGE, Name.identifier("EnumEntries")).classSymbol()

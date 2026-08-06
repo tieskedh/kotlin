@@ -360,6 +360,8 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(): LanguageV
 
         override fun <T> getFlag(flag: AnalysisFlag<T>): T {
             @Suppress("UNCHECKED_CAST")
+            if (flag == AnalysisFlags.dontWarnOnErrorSuppression) return true as T
+            @Suppress("UNCHECKED_CAST")
             if (flag == AnalysisFlags.optIn) {
                 val productOptIns = listOf(
                     "kotlin.ExperimentalMultiplatform",

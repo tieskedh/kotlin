@@ -41,13 +41,11 @@ fun maxValueBoundary(): Int {
     return iterations
 }
 
-// This loop shape is NOT lowered (only Int.rangeTo(Int) is; this is Long.rangeTo(Long)): the
-// function must be skipped by the emitter with its regular unsupported-function warning — it
-// keeps its iterator-based desugaring whose LongIterator local has no IL mapping. main must not
-// call it, or main itself would be skipped.
-fun unsupportedLongRange(): Long {
+// The shared Kotlin loop lowering owns the Long progression boundary as well as Int. The generated
+// loop must exit after Long.MAX_VALUE instead of overflowing and repeating from Long.MIN_VALUE.
+fun longRange(): Long {
     var lastSeen = 0L
-    for (i in 1L..3L) {
+    for (i in 9223372036854775806L..9223372036854775807L) {
         lastSeen = i
     }
     return lastSeen
@@ -60,4 +58,5 @@ fun main() {
     println(nested())
     println(breakContinue(7))
     println(maxValueBoundary())
+    println(longRange())
 }

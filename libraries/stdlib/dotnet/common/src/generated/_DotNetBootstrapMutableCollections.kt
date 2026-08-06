@@ -270,7 +270,3 @@ private fun <T> MutableList<T>.filterInPlace(predicate: (T) -> Boolean, predicat
         return false
     }
 }
-
-/** Private resolution marker consumed by the .NET counted-loop lowering. */
-private infix fun Int.downTo(to: Int): IntProgression =
-    throw AssertionError("Int.downTo bootstrap marker survived lowering: $this downTo $to")

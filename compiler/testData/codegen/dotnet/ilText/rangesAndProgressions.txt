@@ -1,0 +1,285 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
+.assembly 'rangesAndProgressions' {}
+.module 'main-rangesAndProgressions.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.rangesAndProgressionsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class [Kotlin.Stdlib]'Kotlin.Ranges.IntRange' 'materializedIntRange'(int32 'first', int32 'last') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    newobj instance void [Kotlin.Stdlib]'Kotlin.Ranges.IntRange'::.ctor(int32, int32)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Stdlib]'Kotlin.Ranges.IntProgression' 'steppedIntProgression'(int32 'first', int32 'last') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    newobj instance void [Kotlin.Stdlib]'Kotlin.Ranges.IntRange'::.ctor(int32, int32)
+    ldc.i4 2
+    call class [Kotlin.Stdlib]'Kotlin.Ranges.IntProgression' [Kotlin.Stdlib]'Kotlin.Ranges.RangesKt'::'step'(class [Kotlin.Stdlib]'Kotlin.Ranges.IntProgression', int32)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' 'primitiveArrayIterator'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetIntArrayIterator'(class [Kotlin.Runtime]'Kotlin.IntArray')
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' 'primitiveRangeIterator'(int32 'first', int32 'last') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    newobj instance void [Kotlin.Stdlib]'Kotlin.Ranges.IntRange'::.ctor(int32, int32)
+    callvirt instance class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' [Kotlin.Stdlib]'Kotlin.Ranges.IntProgression'::'iterator'()
+    ret
+  }
+  .method public hidebysig static int32 'closedStart'(class [Kotlin.Stdlib]'Kotlin.Ranges.ClosedRange' 'range') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance object [Kotlin.Stdlib]'Kotlin.Ranges.ClosedRange'::'get_start__KotlinErased__e1370f15b6bd786f777688ba282c43d1'()
+    unbox.any [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig static int32 'openEnd'(class [Kotlin.Stdlib]'Kotlin.Ranges.OpenEndRange' 'range') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance object [Kotlin.Stdlib]'Kotlin.Ranges.OpenEndRange'::'get_endExclusive__KotlinErased__be3267f1000ec6f00f31bad466913fe8'()
+    unbox.any [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig static int32 'intLoop'(int32 'first', int32 'last') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'total',
+      [1] int32 'inductionVariable',
+      [2] int32 'value'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    ldarg.1
+    cgt
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+IL_doWhileBody_2:
+    ldloc.1
+    stloc.2
+    ldloc.1
+    ldc.i4 1
+    add
+    stloc.1
+    ldloc.0
+    ldloc.2
+    add
+    stloc.0
+    ldloc.2
+    ldarg.1
+    ceq
+    ldc.i4.0
+    ceq
+    brtrue IL_doWhileBody_2
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int64 'longLoop'(int64 'first', int64 'last') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int64 'total',
+      [1] int64 'inductionVariable',
+      [2] int64 'value'
+    )
+    ldc.i8 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    ldarg.1
+    cgt
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+IL_doWhileBody_2:
+    ldloc.1
+    stloc.2
+    ldloc.1
+    ldc.i8 1
+    add
+    stloc.1
+    ldloc.0
+    ldloc.2
+    add
+    stloc.0
+    ldloc.2
+    ldarg.1
+    ceq
+    ldc.i4.0
+    ceq
+    brtrue IL_doWhileBody_2
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int32 'charLoop'(char 'first', char 'last') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'total',
+      [1] char 'inductionVariable',
+      [2] char 'value',
+      [3] char 'tmp0',
+      [4] char 'this'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    ldarg.1
+    cgt
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+IL_doWhileBody_2:
+    ldloc.1
+    stloc.2
+    ldloc.1
+    ldc.i4 1
+    add
+    conv.u2
+    stloc.1
+    ldloc.0
+    ldloc.2
+    stloc.3
+    ldloc.3
+    stloc 4
+    ldloc 4
+    add
+    stloc.0
+    ldloc.2
+    ldarg.1
+    ceq
+    ldc.i4.0
+    ceq
+    brtrue IL_doWhileBody_2
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] int32[] '<arrayOfStorage>',
+      [1] int32 '<arrayElement>'
+    )
+    ldc.i4 1
+    ldc.i4 3
+    call class [Kotlin.Stdlib]'Kotlin.Ranges.IntRange' 'test.rangesAndProgressionsKt'::'materializedIntRange'(int32, int32)
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    ldc.i4 5
+    call class [Kotlin.Stdlib]'Kotlin.Ranges.IntProgression' 'test.rangesAndProgressionsKt'::'steppedIntProgression'(int32, int32)
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    newarr int32
+    stloc.0
+    ldc.i4 7
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem int32
+    ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
+    call class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' 'test.rangesAndProgressionsKt'::'primitiveArrayIterator'(class [Kotlin.Runtime]'Kotlin.IntArray')
+    callvirt instance int32 [Kotlin.Stdlib]'Kotlin.Collections.IntIterator'::'nextInt'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 8
+    ldc.i4 8
+    call class [Kotlin.Stdlib]'Kotlin.Collections.IntIterator' 'test.rangesAndProgressionsKt'::'primitiveRangeIterator'(int32, int32)
+    callvirt instance int32 [Kotlin.Stdlib]'Kotlin.Collections.IntIterator'::'nextInt'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    ldc.i4 3
+    newobj instance void [Kotlin.Stdlib]'Kotlin.Ranges.IntRange'::.ctor(int32, int32)
+    call int32 'test.rangesAndProgressionsKt'::'closedStart'(class [Kotlin.Stdlib]'Kotlin.Ranges.ClosedRange')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    ldc.i4 3
+    call class [Kotlin.Stdlib]'Kotlin.Ranges.IntRange' [Kotlin.Stdlib]'Kotlin.Ranges.RangesKt'::'until'(int32, int32)
+    call int32 'test.rangesAndProgressionsKt'::'openEnd'(class [Kotlin.Stdlib]'Kotlin.Ranges.OpenEndRange')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    ldc.i4 3
+    call int32 'test.rangesAndProgressionsKt'::'intLoop'(int32, int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i8 1
+    ldc.i8 3
+    call int64 'test.rangesAndProgressionsKt'::'longLoop'(int64, int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 97
+    ldc.i4 99
+    call int32 'test.rangesAndProgressionsKt'::'charLoop'(char, char)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
