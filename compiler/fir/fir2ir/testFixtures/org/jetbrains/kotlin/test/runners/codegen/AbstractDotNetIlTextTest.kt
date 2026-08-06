@@ -37,11 +37,13 @@ import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.LanguageVersion
 import org.jetbrains.kotlin.config.LanguageVersionSettings
+import org.jetbrains.kotlin.config.MessageCollectorAccess
 import org.jetbrains.kotlin.config.dotNetAssemblyName
 import org.jetbrains.kotlin.config.dotNetOutput
 import org.jetbrains.kotlin.config.dotNetProducesLibrary
 import org.jetbrains.kotlin.config.dotNetTarget
 import org.jetbrains.kotlin.config.languageVersionSettings
+import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.config.targetPlatform
 import org.jetbrains.kotlin.diagnostics.impl.DiagnosticsCollectorImpl
 import org.jetbrains.kotlin.fir.moduleData
@@ -88,6 +90,7 @@ import org.jetbrains.kotlin.test.services.configuration.CommonEnvironmentConfigu
 import org.jetbrains.kotlin.test.services.configuration.addSourcesForDependsOnClosure
 import org.jetbrains.kotlin.test.services.sourceProviders.MainFunctionForBlackBoxTestsSourceProvider
 import org.jetbrains.kotlin.test.utils.MultiModuleInfoDumper
+import org.jetbrains.kotlin.test.utils.MessageCollectorForCompilerTests
 import org.jetbrains.kotlin.test.utils.withExtension
 import org.jetbrains.kotlin.utils.bind
 import org.junit.jupiter.api.Assumptions
@@ -264,6 +267,7 @@ private class BackendCliDotNetFacade(
     BackendKinds.IrBackend,
     ArtifactKinds.DotNet,
 ) {
+    @OptIn(MessageCollectorAccess::class)
     override fun transform(module: TestModule, inputArtifact: IrBackendInput): BinaryArtifacts.DotNet {
         require(inputArtifact is Fir2IrCliBasedOutputArtifact<*>) {
             "BackendCliDotNetFacade expects Fir2IrCliBasedOutputArtifact as input, but ${inputArtifact::class} was found"
@@ -284,6 +288,13 @@ private class BackendCliDotNetFacade(
             DotNetLibraryMetadataFinalizationPipelinePhase.executePhase(backendOutput)
         } else {
             backendOutput
+        }
+        check(completedOutput.output.isFile) {
+            val messages = (input.configuration.messageCollector as? MessageCollectorForCompilerTests)
+                ?.nonSourceMessages
+                ?.joinToString("\n")
+                .orEmpty()
+            "The .NET backend produced no file at ${completedOutput.output.path}:\n$messages"
         }
         return BinaryArtifacts.DotNet(completedOutput.output)
     }

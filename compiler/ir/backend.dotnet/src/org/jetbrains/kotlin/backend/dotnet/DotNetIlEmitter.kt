@@ -1708,10 +1708,8 @@ internal class DotNetIlEmitter(
             }
             ClassKind.ENUM_CLASS, ClassKind.ENUM_ENTRY -> dotNetUnsupported("enum class '$name' is not supported")
             ClassKind.ANNOTATION_CLASS -> {
-                if (!irClass.isSupportedDotNetMarkerAnnotationClass()) {
-                    dotNetUnsupported(
-                        "annotation class '$name' has values; only parameterless marker annotations are supported"
-                    )
+                if (!irClass.isSupportedDotNetAnnotationClass()) {
+                    dotNetUnsupported("annotation class '$name' has no supported concrete runtime declaration")
                 }
             }
             ClassKind.CLASS, ClassKind.OBJECT -> Unit
@@ -2809,7 +2807,7 @@ internal class DotNetIlEmitter(
             val instance = if (isStatic) "" else "instance "
             appendLine("  .property $instance${propertyType.nameInSignature} ${propertyName.toIlIdentifier()}()")
             appendLine("  {")
-            for (attribute in property.dotNetRuntimeMarkerAttributes(typeMapper)) {
+            for (attribute in property.dotNetRuntimeAttributes(typeMapper)) {
                 appendLine("    $attribute")
             }
             if (getter != null && getterInfo != null) {
@@ -2861,7 +2859,7 @@ internal class DotNetIlEmitter(
      * This is runtime naming evidence only; KLIB remains authoritative declaration metadata.
      */
     private fun IrClass.dotNetPhysicalTypeAttributes(typeMapper: DotNetIlTypeMapper): List<String> =
-        dotNetCompilerAbiTypeAttributes() + dotNetRuntimeMarkerAttributes(typeMapper) +
+        dotNetCompilerAbiTypeAttributes() + dotNetRuntimeAttributes(typeMapper) +
                 (if (isAnnotationClass) listOf(dotNetAttributeUsageAttribute(typeMapper)) else emptyList()) +
                 if (isOriginallyLocalDeclaration) {
             listOf(
@@ -2894,7 +2892,7 @@ internal class DotNetIlEmitter(
             ?: dotNetUnsupported("field '${field.name.asString()}' has unsupported type ${field.type.render()}")
         val static = if (isStatic) "static " else ""
         val declaration = ".field private $static${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
-        val attributes = field.dotNetRuntimeMarkerAttributes(typeMapper)
+        val attributes = field.dotNetRuntimeAttributes(typeMapper)
         if (attributes.isEmpty()) return declaration
         return buildString {
             appendLine(declaration)
@@ -2929,7 +2927,7 @@ internal class DotNetIlEmitter(
             ?: dotNetUnsupported("enum-entry field '${field.name.asString()}' has unsupported type ${field.type.render()}")
         val declaration =
             ".field public static initonly ${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
-        val attributes = field.dotNetRuntimeMarkerAttributes(typeMapper)
+        val attributes = field.dotNetRuntimeAttributes(typeMapper)
         if (attributes.isEmpty()) return declaration
         return buildString {
             appendLine(declaration)
@@ -2958,7 +2956,7 @@ internal class DotNetIlEmitter(
         val visibility = if (isCompilerAbi) "public" else property.visibility.dotNetIlVisibility(default = "private")
         val declaration = ".field $visibility static literal ${fieldType.nameInSignature} " +
                 "${field.name.asString().toIlIdentifier()} = ${renderConstFieldInitializer(constant, fieldType, name)}"
-        val attributes = field.dotNetRuntimeMarkerAttributes(typeMapper)
+        val attributes = field.dotNetRuntimeAttributes(typeMapper)
         if (!isCompilerAbi && attributes.isEmpty()) return declaration
         val renderedAttributes = buildList {
             if (isCompilerAbi) {

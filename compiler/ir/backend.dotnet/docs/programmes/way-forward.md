@@ -116,15 +116,17 @@ Logical-only classifiers use a distinct KLIB-mangled key, never a display name.
 
 The product matrix covers static creation, reified substitution, declaration parameters and
 recursive bounds, erased Kotlin classifiers, arrays, nullable relative bounds, production-pipeline
-separate compilation, both CLR profiles, and direct C# graph inspection. Member enumeration,
-invocation, annotation discovery, and valued annotation instances remain follow-on features.
+separate compilation, both CLR profiles, and direct C# graph inspection. Member enumeration and
+invocation remain follow-on features. Valued annotation classes now use the Common member
+generator and embedded KLIB as their complete semantic representation; exact runtime-retained
+scalar/string/vector values receive an additive CLR custom-attribute row, while unsupported values
+fail closed to KLIB-only without weakening Kotlin construction.
 
-The next deep language tranche is valued annotation classes and arguments. Start from the Common
-annotation rules and the JVM/JS/Wasm/Native annotation member representations, then map only the
-ECMA-335 custom-attribute values that are exact. KLIB remains authoritative for every legal Kotlin
-argument; CLR custom attributes are an additional runtime/C# projection. Do not make reflection
-discovery or a broad `kotlin-reflect` product an accidental prerequisite, and fail closed for any
-value or use-site target whose physical projection is not truthful.
+The next reflection tranche is annotation discovery. It should enumerate authoritative KLIB
+applications and reconstruct the existing annotation runtime values, then merge only recognized
+foreign CLR attributes under the importer rules. It must not infer Kotlin applications from a
+Kotlin-produced DLL's derived CLR rows, duplicate values when both stores exist, or require broad
+member invocation before annotation lookup itself can be made truthful.
 
 ### 3. Expand Common collections by exact dependency closure
 
@@ -274,8 +276,8 @@ The current verified count and command belong only in [`../../STATUS.md`](../../
 
 Parking means “fail clearly and do not constrain a future ABI,” not “approximate now.”
 
-- valued annotation constructors and arguments, wider use-site targets, and runtime annotation
-  reflection; parameterless markers, retention, and their exact CLR-parent projection are selected;
+- runtime annotation discovery, wider use-site targets, and unsupported CLR-value projections;
+  valued construction, defaults, KLIB applications, and the exact CLR fixed-argument subset are selected;
 - member and annotation reflection; the nominal `KClass` floor and logical `KType`/`typeOf` graph
   are complete;
 - value/inline classes;
@@ -289,8 +291,9 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - broad Gradle/KMP distribution integration beyond the current target model.
 
 An adjacent feature must not assume a parked representation. In particular, value classes
-constrain generic interfaces; coroutines constrain callables and cancellation; valued annotation
-arguments constrain reflection and custom-attribute emission; enums consume collection identity.
+constrain generic interfaces; coroutines constrain callables and cancellation; annotation
+discovery must consume the completed KLIB value authority rather than re-decoding derived CLR
+rows; enums consume collection identity.
 
 ## Post-core wrapper minimization
 

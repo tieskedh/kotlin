@@ -158,6 +158,10 @@ internal class DotNetIlIntrinsicMethods(
         irBuiltIns.illegalArgumentExceptionSymbol.toKey()!! to DotNetIlIllegalArgumentExceptionIntrinsic,
         Key(kotlinInternalFqn, null, "throwKotlinNothingValueException", emptyList())
                 to DotNetIlThrowKotlinNothingValueExceptionIntrinsic,
+        Key(kotlinInternalFqn, null, "annotationFloatEquals", listOf(floatFqn, floatFqn))
+                to DotNetIlAnnotationFloatingEqualsIntrinsic(DotNetIlValueType.Float32),
+        Key(kotlinInternalFqn, null, "annotationDoubleEquals", listOf(doubleFqn, doubleFqn))
+                to DotNetIlAnnotationFloatingEqualsIntrinsic(DotNetIlValueType.Float64),
         Key(kotlinInternalFqn, null, "captureStaticInitializationFailure", listOf(throwableFqn))
                 to DotNetIlCaptureStaticInitializationFailureIntrinsic,
         Key(kotlinInternalFqn, null, "observeStaticInitializationFailure", listOf(anyFqn))
@@ -1095,6 +1099,28 @@ private fun emitArrayLiteral(
         }
     }
 
+    emitArrayLiteralElements(
+        elements,
+        codegen,
+        storageType,
+        elementType,
+        newArrayInstruction,
+        storeElementInstruction,
+        wrapStorageInstruction,
+    )
+    return true
+}
+
+/** One physical vector-literal path for builtin calls and residual Common [IrVararg] nodes. */
+internal fun emitArrayLiteralElements(
+    elements: List<IrExpression>,
+    codegen: DotNetIlExpressionCodegen,
+    storageType: DotNetIlValueType,
+    elementType: DotNetIlValueType,
+    newArrayInstruction: String,
+    storeElementInstruction: String,
+    wrapStorageInstruction: String? = null,
+) {
     codegen.emit("ldc.i4 ${elements.size}", pushes = 1)
     codegen.emit(newArrayInstruction, pops = 1, pushes = 1)
     val arraySlot = codegen.spillToSyntheticLocal(storageType, "<arrayOfStorage>")
@@ -1116,7 +1142,6 @@ private fun emitArrayLiteral(
     }
     codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
     wrapStorageInstruction?.let { codegen.emit(it, pops = 1, pushes = 1) }
-    return true
 }
 
 /** Literal `intArrayOf(a, b)` and peers -> one vector plus ordered typed stores. */
@@ -2665,6 +2690,74 @@ private class DotNetIlEqualityIntrinsic(
         if (operand.isNullConst()) return
         codegen.emitExpression(operand, operandType ?: DotNetIlValueType.Object)
         codegen.emit("pop", pops = 1)
+    }
+}
+
+/**
+ * Annotation floating equality follows the JVM annotation contract rather than Kotlin's ordinary
+ * IEEE `==`: every NaN payload compares equal, while positive and negative zero stay distinct.
+ * The generated comparison remains local to the annotation member and introduces no runtime ABI.
+ */
+private class DotNetIlAnnotationFloatingEqualsIntrinsic(
+    private val operandType: DotNetIlValueType,
+) : DotNetIlIntrinsicMethod() {
+    init {
+        check(operandType == DotNetIlValueType.Float32 || operandType == DotNetIlValueType.Float64)
+    }
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Boolean || call.arguments.size != 2) return false
+        val left = call.arguments[0] ?: dotNetUnsupported("missing left annotation floating value")
+        val right = call.arguments[1] ?: dotNetUnsupported("missing right annotation floating value")
+        codegen.emitExpression(left, operandType)
+        val leftSlot = codegen.spillToSyntheticLocal(operandType, "<annotationFloatLeft>")
+        codegen.emitExpression(right, operandType)
+        val rightSlot = codegen.spillToSyntheticLocal(operandType, "<annotationFloatRight>")
+
+        val nanLabel = codegen.nextLabel("annotationFloatNaN")
+        val equalLabel = codegen.nextLabel("annotationFloatEqual")
+        val endLabel = codegen.nextLabel("annotationFloatEnd")
+        val zero = if (operandType == DotNetIlValueType.Float32) "ldc.r4 0.0" else "ldc.r8 0.0"
+        val one = if (operandType == DotNetIlValueType.Float32) "ldc.r4 1.0" else "ldc.r8 1.0"
+
+        // Ordinary equal nonzero values are done. Equal zero values need reciprocal signs to
+        // distinguish +0.0 from -0.0; unordered values take the canonical all-NaNs-equal path.
+        codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(rightSlot.index), pushes = 1)
+        codegen.emit("ceq", pops = 2, pushes = 1)
+        codegen.emitBranch("brfalse", nanLabel, pops = 1)
+        codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
+        codegen.emit(zero, pushes = 1)
+        codegen.emit("ceq", pops = 2, pushes = 1)
+        codegen.emitBranch("brfalse", equalLabel, pops = 1)
+        codegen.emit(one, pushes = 1)
+        codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
+        codegen.emit("div", pops = 2, pushes = 1)
+        codegen.emit(one, pushes = 1)
+        codegen.emit(loadLocalInstruction(rightSlot.index), pushes = 1)
+        codegen.emit("div", pops = 2, pushes = 1)
+        codegen.emit("ceq", pops = 2, pushes = 1)
+        codegen.emitGoto(endLabel)
+
+        codegen.emitLabel(nanLabel)
+        for (slot in listOf(leftSlot, rightSlot)) {
+            codegen.emit(loadLocalInstruction(slot.index), pushes = 1)
+            codegen.emit(loadLocalInstruction(slot.index), pushes = 1)
+            codegen.emit("ceq", pops = 2, pushes = 1)
+            codegen.emit("ldc.i4.0", pushes = 1)
+            codegen.emit("ceq", pops = 2, pushes = 1)
+        }
+        codegen.emit("and", pops = 2, pushes = 1)
+        codegen.emitGoto(endLabel)
+
+        codegen.emitLabel(equalLabel)
+        codegen.emit("ldc.i4.1", pushes = 1)
+        codegen.emitLabel(endLabel)
+        return true
     }
 }
 
