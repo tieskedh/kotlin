@@ -7,15 +7,15 @@ verification, and work state.
 ## Current branch
 
 - Branch: `dotnet`
-- Upstream base: reviewed upstream commit `76ca9aa1af`
-- Last integration checkpoint: the complete reviewed 179-commit range was
-  rebased without semantic cleanup
-- Pending upstream boundary: every commit in the 195-commit range through
-  `0e8c5f3f53` has been reviewed by subject, changed paths, and relevant
-  patch; the conflict-free virtual merge and its three shared paths are
+- Upstream base: exact reviewed upstream commit `0e8c5f3f53`
+- Last integration checkpoint: the complete reviewed 195-commit range was
+  integrated by a pure rebase on 2026-08-07. All 409 target commits were
+  retained: range-diff classified 408 patches as identical and one inline
+  patch as context-only because upstream renamed its validator factory. The
+  three shared paths, virtual-merge evidence, contract-level
+  reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
-  [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md),
-  but that range has not yet been rebased
+  [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
 - Last completed feature: declaration-owned `KCallable.typeParameters`,
   including JVM's function/property/constructor ownership rules, one identity
   graph shared with `returnType` and recursive bounds, feature-detected
@@ -34,26 +34,24 @@ substantial open programmes.
 
 ## Current green gate
 
-The current callable-type-parameter head passed:
+The rebased upstream-integration head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The completion audit covered 52 XML files and 1287 tests. The final full
-`--rerun` invocation completed at 2026-08-07 10:24 local time:
+That audit covered 52 XML files and 1287 tests. The final full
+`--rerun` invocation completed at 2026-08-07 12:42 local time:
 
 - 1174 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 92 library-integration tests
 - zero failures, errors, or skips
 
-After that audit, a source-only correction replaced an accidental
-`THROWABLE.abiValue` spelling in an unrelated array-length comparison with
-the literal `1`; both spellings emit the same `ldc.i4.1`. The final source
-head was recompiled and executed by the four callable-type-parameter
-PSI/LightTree and Framework/CoreCLR box lanes (4 tests, 0 failures, errors, or
-skips).
+The same head also passed the packed-KLIB loader owner suite (8 tests), the
+BTA API-dump and FIR2IR test-generation owners without tracked generated
+churn, twelve focused callable-type-parameter/exhaustive-when FIR/IL/runtime
+tests, and six embedded-library/inliner integration tests.
 
 The target now compiles the authoritative Common `ClosedRange`,
 `OpenEndRange`, floating/comparable range, signed `Char`/`Int`/`Long`

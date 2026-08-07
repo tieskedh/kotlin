@@ -226,6 +226,12 @@ implementation or final distribution design. Installed selection treats each
 profile's runtime/stdlib as one pair and copies their bytes unchanged beside
 applications.
 
+A self-describing DLL's packed KLIB retains the DLL itself as
+`KotlinLibrary.path` and its resolved physical path as
+`KotlinLibrary.canonicalPath`. Never extract the resource to manufacture a
+second filesystem identity or treat an embedded ZIP path as the library's
+canonical path.
+
 Collections follow exact Common generator/source dependency closures.
 Kotlin collection identity is not replaced by BCL collection identity;
 explicit BCL adapters are a separate interop programme. Common I/O owns EOF
@@ -589,6 +595,13 @@ commit in the pending range by subject and changed paths, inspect the patches
 for every shared owner that can affect .NET, and compute both the path overlap
 and a virtual merge. A thematic review may omit irrelevant commits from its
 prose only after that complete accounting exists.
+
+For every upstream change to an interface, abstract base, sealed hierarchy,
+constructor contract, or factory contract, also perform a repository-wide
+reverse-dependency audit of target-owned implementations, subclasses,
+exhaustive branches, and call sites. Changed-path overlap and a clean virtual
+merge are insufficient evidence because a target-owned implementation may not
+have been touched upstream.
 
 Route lasting conclusions to their existing owners: ADRs for decisions,
 programmes for ordering and open work, `STATUS.md` for current state, and this
