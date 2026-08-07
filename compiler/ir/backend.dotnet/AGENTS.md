@@ -654,6 +654,11 @@ external calls still bind only through the producer-recorded physical ABI.
 After the shared inline prefix, traverse the actual IR graph and reject every
 remaining unbound symbol before target lowerings; do not make an arbitrary
 lowering or the CIL emitter the missing-dependency detector.
+Cross-module IR inlining is the upstream production default for stdlib and
+`kotlin-test`. Exercise that default in ordinary Common semantic coverage;
+retain target-owned mode variants only where they prove the supported
+disabled/intra-module/full compiler ABI, embedded-KLIB linkage, or physical
+fallback. Do not create a duplicate runner merely to force the default mode.
 An inlined caller-targeted return may occur with older expression operands on
 the CIL evaluation stack. Preserve Kotlin evaluation order: spill the return
 value, drain only those older operands, reload the result, and then `ret`, or
@@ -758,6 +763,13 @@ owned tests for CIL, CLR profiles, physical ABI, self-describing DLLs, foreign
 interop, target diagnostics, and other genuinely target-specific boundaries.
 Do not remove a duplicate target behavior test until the upstream test itself
 executes through the supported .NET product on every applicable profile.
+
+If the aggregate is split into smaller Gradle test tasks, their groups must be
+disjoint and exhaustive, their union must remain behind `dotNetTest`, and the
+repository test-lifecycle model must see every task. Do not parallelize
+separate tasks that can reach Framework ILAsm/CLR4 until their resource lock
+works across Gradle worker processes; a JUnit lock inside one worker is not
+such proof.
 
 During one coherent feature tranche, use focused tests for each internal slice
 and run the selected commit gate once against the final semantic head before

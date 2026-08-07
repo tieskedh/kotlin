@@ -87,6 +87,14 @@ deoptimization is not implied by selecting that export category. Kotlin type
 tests and supported reflection normalize its export TypeDef to the original
 Kotlin declaration; a shape for which that is not truthful fails closed.
 
+Export admission is declaration-family complete. A generic-input rule applies
+to functions, constructors, properties, getters, and setters before any one
+surface is published, and compares resolved logical Kotlin bounds rather than
+raw parameter spellings. It may not accept a property getter while silently
+dropping an incompatible public setter, or validate named functions while
+forgetting constructors and properties. This is a fail-closed export check,
+not a reason to remove generics from the Kotlin declaration.
+
 ### Export is explicit and additive
 
 One export request selects exactly one supported public declaration and an
@@ -127,6 +135,14 @@ same delegate shape returns the stored original delegate. Foreign adaptation
 may allocate and is outside Kotlin upcast `===` guarantees.
 
 Exceptions pass through unchanged; this facade adds no catch or translation.
+Host exception protocols or throwing conventions, when selected, are bridge
+projections over that same throwable object. They do not alter the Runtime
+classifier, Kotlin ancestry, suppressed state, or stacktrace contract.
+
+Any reverse bridge used for C# implementation or cross-language inheritance
+selects its slot by the producer-recorded Kotlin declaration plus the complete
+physical CLR signature. Name-only slot matching is invalid for overloads,
+generic substitutions, receivers, and generated facade members.
 
 ### Property exports are real static CLR properties
 
@@ -173,6 +189,10 @@ Each shorter overload:
 No facade overload evaluates or copies a default expression. Allocation,
 calls, dependencies on earlier parameters, and later library changes retain
 Kotlin's callee-executed semantics.
+
+The Kotlin `$default` dispatcher is compiler ABI, never an exported method in
+its own right and never the carrier of a host-exposure marker. Only the
+ordinary facade overloads form the C# default-argument surface.
 
 The draft emits neither CLR optional flags nor constant `.param` values, even
 for Kotlin literals. Roslyn embeds such constants in callers and would create

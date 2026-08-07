@@ -146,6 +146,9 @@ the one array without exposing it as Kotlin `Array` identity.
    Kotlin callable signature.
 7. Absence of the platform property disables this slice; it never preempts a
    `-no-stdlib` or malformed-library diagnostic with an internal error.
+8. Second-stage KLIB validation must accept every captured type-parameter use;
+   the target may not suppress the shared scope checker to preserve a
+   malformed callable graph.
 
 ## Verification
 
@@ -156,3 +159,10 @@ properties, ordinary properties with generic enclosing classes, invocation on
 the same objects, separate KLIB consumption, both FIR parsers, both CLR
 profiles, exact IL, manual reflection-interface implementations, and the full
 XML-audited aggregate.
+
+Shared KLIB/IR cases with member extension properties and multiple
+callable-owned receiver type parameters are direct adoption candidates. The
+corresponding nested/context-parameter cases remain evidence for the later
+`KParameter` tranche: they extend this same declaration-owner graph only after
+context parameters themselves are admitted, and never pull enclosing class
+parameters into the callable's own list.

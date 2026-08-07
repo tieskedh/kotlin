@@ -9,8 +9,13 @@ verification, and work state.
 - Branch: `dotnet`
 - Upstream base: reviewed upstream commit `76ca9aa1af`
 - Last integration checkpoint: the complete reviewed 179-commit range was
-  rebased without semantic cleanup; later `origin/master` commits remain
-  outside this deliberately selected boundary until they are reviewed
+  rebased without semantic cleanup
+- Pending upstream boundary: every commit in the 195-commit range through
+  `0e8c5f3f53` has been reviewed by subject, changed paths, and relevant
+  patch; the conflict-free virtual merge and its three shared paths are
+  recorded in
+  [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md),
+  but that range has not yet been rebased
 - Last completed feature: declaration-owned `KCallable.typeParameters`,
   including JVM's function/property/constructor ownership rules, one identity
   graph shared with `returnType` and recursive bounds, feature-detected
@@ -710,8 +715,9 @@ an implicit CLR `C<T>` surface.
    and Wasm; define stable instance, extension, context, and value positions,
    names, optional/vararg flags, bound-reference reindexing, and separate
    property/accessor ownership on the existing reference object. Parameter
-   types must reuse the existing return/type-parameter graph; do not
-   reconstruct Kotlin signatures from CLR metadata.
+   types must reuse the existing return/type-parameter graph; cover multiple
+   receiver/context-owned type parameters and second-stage scope validation;
+   do not reconstruct Kotlin signatures from CLR metadata.
 2. Keep broad member enumeration/invocation, accessor objects, and foreign CLR
    enhancement outside that tranche. The owner model should unblock exact
    parameter/type-use annotation work without pretending that a reference is
