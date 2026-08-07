@@ -262,6 +262,15 @@ IL_whenNext_1:
     callvirt instance bool 'CustomIntIterator'::'hasNext'()
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 [Kotlin.Stdlib]'Kotlin.Collections.IntIterator'::'next'()
+    box [mscorlib]System.Int32
+    ret
+  }
   .property instance int32 'value'()
   {
     .get instance int32 'CustomIntIterator'::'get_value'()

@@ -89,6 +89,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Friend assemblies and compiler ABI](decisions/adr-friend-assemblies-and-compiler-abi.md)
 - [.NET platform and target frameworks](decisions/dotnet-platform-and-target-frameworks.md)
 - [Compiler and Gradle integration](decisions/compiler-and-gradle-integration.md)
+- [.NET test product and validation ownership](decisions/test-product-and-validation-ownership.md)
 - [Explicit C# export surface](decisions/draft-adr-explicit-csharp-export-surface.md)
 
 ## Implementation and verification
