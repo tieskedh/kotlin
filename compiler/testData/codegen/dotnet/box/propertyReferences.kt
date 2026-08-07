@@ -27,6 +27,8 @@ private class ManualProperty : kotlin.reflect.KMutableProperty1<Cell, Int> {
 
     override val typeParameters = emptyList<kotlin.reflect.KTypeParameter>()
 
+    override fun call(vararg args: Any?): Int = get(args[0] as Cell)
+
     override fun get(receiver: Cell): Int = receiver.value
 
     override fun invoke(receiver: Cell): Int = get(receiver)
@@ -47,6 +49,8 @@ private class ManualProperty2 : KMutableProperty2<ExtensionHost, Cell, Int> {
     override val parameters = emptyList<kotlin.reflect.KParameter>()
 
     override val typeParameters = emptyList<kotlin.reflect.KTypeParameter>()
+
+    override fun call(vararg args: Any?): Int = get(args[0] as ExtensionHost, args[1] as Cell)
 
     override fun get(receiver1: ExtensionHost, receiver2: Cell): Int = receiver2.value
 
@@ -85,6 +89,7 @@ private var observedLocalName: String = ""
 private var observedLocalMutable: Boolean = false
 private var observedLocalGetFailure: Boolean = false
 private var observedLocalInvokeFailure: Boolean = false
+private var observedLocalCallFailure: Boolean = false
 private var observedLocalRendering: String = ""
 
 private fun observeLocalProperty(property: KProperty<*>) {
@@ -104,9 +109,16 @@ private fun observeLocalProperty(property: KProperty<*>) {
         } catch (exception: UnsupportedOperationException) {
             exception.message == "Not supported for local property reference."
         }
+        observedLocalCallFailure = try {
+            property.call()
+            false
+        } catch (exception: UnsupportedOperationException) {
+            exception.message == "Not supported for local property reference."
+        }
     } else {
         observedLocalGetFailure = false
         observedLocalInvokeFailure = false
+        observedLocalCallFailure = false
     }
 }
 
@@ -166,6 +178,7 @@ fun box(): String {
     val read = ::topRead
     if (read.name != "topRead") return "fail 1: name"
     if (read.get() != 42 || read() != 42) return "fail 2: KProperty0 get/invoke"
+    if (read.call() != 42) return "fail 2a: KProperty0 call"
     val callable: () -> Any = read
     if (callable !== read || callable() != 42) return "fail 3: callable identity"
 
@@ -177,6 +190,7 @@ fun box(): String {
     val unbound = Cell::value
     if (unbound.name != "value") return "fail 5: unbound name"
     if (unbound.get(cell) != 40 || unbound(cell) != 40) return "fail 6: KProperty1 get/invoke"
+    if (unbound.call(cell) != 40) return "fail 6a: KProperty1 call"
     unbound.set(cell, 41)
     if (cell.value != 41) return "fail 7: KMutableProperty1 set"
 
@@ -235,7 +249,7 @@ fun box(): String {
 
     if (readLocalDelegate() != 40) return "fail 25: local delegated val"
     if (observedLocalName != "localRead" || observedLocalMutable) return "fail 26: local val token"
-    if (!observedLocalGetFailure || !observedLocalInvokeFailure) {
+    if (!observedLocalGetFailure || !observedLocalInvokeFailure || !observedLocalCallFailure) {
         return "fail 27: local val unsupported access"
     }
     if (observedLocalRendering != "property localRead (Kotlin reflection is not available)") {
@@ -244,7 +258,7 @@ fun box(): String {
 
     if (writeLocalDelegate() != 42) return "fail 29: local delegated var"
     if (observedLocalName != "localWrite" || !observedLocalMutable) return "fail 30: local var token"
-    if (!observedLocalGetFailure || !observedLocalInvokeFailure) {
+    if (!observedLocalGetFailure || !observedLocalInvokeFailure || !observedLocalCallFailure) {
         return "fail 31: local var unsupported access"
     }
     if (observedLocalRendering != "property localWrite (Kotlin reflection is not available)") {

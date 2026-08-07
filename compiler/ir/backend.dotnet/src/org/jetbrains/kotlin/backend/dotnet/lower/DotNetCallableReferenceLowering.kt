@@ -29,6 +29,7 @@ import org.jetbrains.kotlin.ir.builders.irElseBranch
 import org.jetbrains.kotlin.ir.builders.irEquals
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irGetField
+import org.jetbrains.kotlin.ir.builders.irImplicitCast
 import org.jetbrains.kotlin.ir.builders.irInt
 import org.jetbrains.kotlin.ir.builders.irNull
 import org.jetbrains.kotlin.ir.builders.irReturn
@@ -61,6 +62,7 @@ import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassPare
 import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fileOrNull
+import org.jetbrains.kotlin.ir.util.functions
 import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.isLambda
@@ -281,6 +283,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         }
         if (!reference.type.isKFunction() || reference.type.isKSuspendFunction()) return
         if (reference.reflectionTargetSymbol == null) return
+        addPositionalCall(functionReferenceClass, reference)
         val superProperty = context.irBuiltIns.kCallableClass.owner.properties
             .single { it.name.asString() == "name" }
         val superGetter = superProperty.getter
@@ -405,6 +408,38 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         }
     }
 
+    /** Implements KCallable.call while sharing count validation and arity dispatch in Runtime. */
+    private fun addPositionalCall(functionReferenceClass: IrClass, reference: IrRichFunctionReference) {
+        val superCall = context.irBuiltIns.kCallableClass.owner.functions
+            .singleOrNull { function -> function.name.asString() == "call" }
+            ?: return
+        val argumentParameter = superCall.parameters.single { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        }
+        functionReferenceClass.addFunction {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = superCall.name
+            visibility = superCall.visibility
+            modality = Modality.FINAL
+            returnType = reference.invokeFunction.returnType
+        }.apply call@{
+            overriddenSymbols = listOf(superCall.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            parameters += argumentParameter.copyTo(this)
+            body = context.createIrBuilder(symbol).irBlockBody {
+                val erasedCall = irCall(
+                    this@DotNetCallableReferenceLowering.context.functionReferenceSymbols.callErased
+                ).apply {
+                    arguments[0] = irGet(this@call.dispatchReceiverParameter!!)
+                    arguments[1] = irGet(this@call.parameters.single { it.kind == IrParameterKind.Regular })
+                }
+                +irReturn(irImplicitCast(erasedCall, this@call.returnType))
+            }
+        }
+    }
+
     /** Exposes exactly the rich reference's bound values to the runtime identity base. */
     private fun addBoundValueAccess(functionReferenceClass: IrClass) {
         val fields = functionReferenceClass.declarations.filterIsInstance<IrField>()
@@ -455,8 +490,10 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             functionReferenceClass.declarations.removeAll { declaration ->
                 declaration.origin == IrDeclarationOrigin.FAKE_OVERRIDE && when (declaration) {
                     is IrProperty -> declaration.name in concretePropertyNames
-                    is IrSimpleFunction -> declaration.correspondingPropertySymbol?.owner?.name
-                        ?.let { name -> name in concretePropertyNames } == true
+                    is IrSimpleFunction ->
+                        declaration.name.asString() == "call" ||
+                                declaration.correspondingPropertySymbol?.owner?.name
+                                    ?.let { name -> name in concretePropertyNames } == true
                     else -> false
                 }
             }

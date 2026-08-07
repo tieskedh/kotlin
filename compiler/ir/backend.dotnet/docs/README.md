@@ -75,6 +75,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [KLIB-first callable return types](decisions/callable-return-types.md)
 - [Declaration-owned callable type parameters](decisions/callable-type-parameters.md)
 - [Declaration-owned callable parameters](decisions/callable-parameters.md)
+- [Positional callable invocation](decisions/callable-positional-invocation.md)
 - [Semantic erasure and canonical ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
