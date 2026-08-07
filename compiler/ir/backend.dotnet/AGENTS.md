@@ -411,10 +411,17 @@ See the
   Kotlin-produced assembly carries a private marker; a missing factory in such
   an assembly means an empty list. Only an unmarked foreign assembly uses
   inherited CLR custom-attribute discovery, and mapped BCL-backed Kotlin
-  classifiers expose no host implementation attributes. Typed foreign
-  attribute import and member annotation reflection remain separate. See
-  [the annotation-value decision](docs/decisions/valued-annotation-classes.md)
-  and [the annotation-discovery decision](docs/decisions/annotation-discovery.md).
+  classifiers expose no host implementation attributes. `KCallable` is the
+  JVM-shaped platform `KAnnotatedElement` view on the same function/property
+  reference object. Kotlin callable applications come from the exact
+  KLIB-derived reflection target; imported CLR methods/properties use their
+  retained declaring type and exact metadata token. Never merge a property's
+  annotations with getter/setter annotations or match foreign members by name.
+  Typed foreign attribute import and broader member reflection remain
+  separate. See
+  [the annotation-value decision](docs/decisions/valued-annotation-classes.md),
+  [the class-discovery decision](docs/decisions/annotation-discovery.md), and
+  [the callable-discovery decision](docs/decisions/callable-annotation-discovery.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
   Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve
@@ -633,10 +640,11 @@ carrier. A later-admitted classifier extends the ordinary and reified
 type-operation matrix together before publication. The completed
 `KType`/`typeOf` foundation is a separate logical reflection graph and must
 not be approximated by `System.Type` or the nominal `KClass` floor. Valued
-annotation construction and class-level runtime discovery are complete through
-Common/KLIB authority, fail-closed CLR projection, and a disjoint foreign CLR
-fallback; do not infer callable, property, field, accessor, parameter, or
-type-use reflection from that class surface. Suspend inline functions, value
+annotation construction and class/callable-reference runtime discovery are
+complete through Common/KLIB authority, fail-closed CLR projection, and
+disjoint exact foreign CLR paths; do not infer member enumeration, reflective
+call, accessor objects, parameters, fields, or type-use reflection from those
+surfaces. Suspend inline functions, value
 classes, member reflection, coroutines, concurrency primitives, and broad
 KMP/Gradle product integration remain separate programmes until `STATUS.md` or
 the way forward selects one.

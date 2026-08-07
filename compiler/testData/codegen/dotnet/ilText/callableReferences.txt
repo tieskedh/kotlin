@@ -94,7 +94,7 @@ IL_whenNext_1:
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 6
+    .maxstack 7
     call void 'callableReferencesKt$reflectedReference$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:callableReferences.kt:398:449:#incrementReference(kotlin.Int){}"
@@ -102,7 +102,8 @@ IL_whenNext_1:
     ldc.i4 0
     ldc.i4 0
     ldstr "incrementReference"
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0') cil managed
@@ -190,7 +191,7 @@ IL_whenNext_1:
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 6
+    .maxstack 7
     call void 'callableReferencesKt$main$narrow$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:callableReferences.kt:451:501:#labelReference(kotlin.Any){}"
@@ -198,7 +199,8 @@ IL_whenNext_1:
     ldc.i4 0
     ldc.i4 0
     ldstr "labelReference"
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
     ret
   }
   .method public hidebysig newslot virtual final instance string 'InvokeExact'(object 'p0') cil managed
@@ -235,14 +237,15 @@ IL_whenNext_1:
   .field private class 'BoundValue' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'BoundValue' 'p0') cil managed
   {
-    .maxstack 6
+    .maxstack 7
     ldarg.0
     ldstr "local:callableReferences.kt:371:394:BoundValue#read(){}"
     ldc.i4 0
     ldc.i4 0
     ldc.i4 1
     ldstr "read"
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
     ldarg.0
     ldarg.1
     stfld class 'BoundValue' 'callableReferencesKt$main$bound$1'::'f$0'
@@ -295,14 +298,15 @@ IL_whenNext_1:
   .field private class 'BoundValue' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'BoundValue' 'p0') cil managed
   {
-    .maxstack 6
+    .maxstack 7
     ldarg.0
     ldstr "local:callableReferences.kt:371:394:BoundValue#read(){}"
     ldc.i4 0
     ldc.i4 0
     ldc.i4 1
     ldstr "read"
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
     ldarg.0
     ldarg.1
     stfld class 'BoundValue' 'callableReferencesKt$main$1'::'f$0'
