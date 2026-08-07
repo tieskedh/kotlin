@@ -82,9 +82,6 @@ sourceSets {
 }
 
 fun Test.configureIntegrationTestTask() {
-    dependsOn(":dist")
-    dependsOn(":kotlin-stdlib:compileKotlinWasmJs")
-
     workingDir = rootDir
     useJUnitPlatform()
 
@@ -115,6 +112,9 @@ projectTests {
         garbageCollector = GarbageCollector.Parallel,
     ) {
         configureIntegrationTestTask()
+        @OptIn(KotlinCompilerDistUsage::class)
+        withDist()
+        withWasmRuntime()
         /*
         This test is still using junit3 style tests, neither 'Category' nor 'Tag' mechanics are supported.
         We declare smoke tests here, junit3 compliant.
@@ -164,11 +164,8 @@ projectTests {
     withScriptRuntime()
     withTestJar()
     withThirdPartyAnnotations()
-    @OptIn(KotlinCompilerDistUsage::class)
-    withDist()
     withThirdPartyJsr305()
     withThirdPartyJava8Annotations()
-    withWasmRuntime()
     withMockJdkRuntime()
     withMockJDKModifiedRuntime()
     withMockJdkAnnotationsJar()

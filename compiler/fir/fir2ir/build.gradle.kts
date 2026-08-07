@@ -92,6 +92,44 @@ fun Test.configure(configureJUnit: JUnitPlatformOptions.() -> Unit = {}) {
     testFederationDomains = listOf(Domain.Jvm)
 }
 
+val dotNetTestPlatformProfiles = linkedMapOf(
+    "net48" to "Net48",
+    "net10.0" to "Net100",
+)
+val dotNetTestPlatformDirectories = dotNetTestPlatformProfiles.keys.associateWith { targetFramework ->
+    layout.buildDirectory.dir("dotnet-test-platform/$targetFramework")
+}
+val dotNetTestPlatformTasks = dotNetTestPlatformProfiles.map { (targetFramework, taskSuffix) ->
+    val outputDirectory = dotNetTestPlatformDirectories.getValue(targetFramework)
+    tasks.register<JavaExec>("produceDotNetTestPlatform$taskSuffix") {
+        group = "verification"
+        description = "Produces the reusable $targetFramework Kotlin/.NET test runtime and stdlib."
+
+        classpath = sourceSets["testFixtures"].runtimeClasspath
+        mainClass.set("org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler")
+        javaLauncher.set(project.getToolchainLauncherFor(JdkMajorVersion.JDK_1_8))
+        workingDir = rootDir
+        maxHeapSize = "2g"
+        args(
+            "-Xdotnet-produce-stdlib",
+            "-Xdotnet-target=$targetFramework",
+            "-d", outputDirectory.get().asFile.absolutePath,
+        )
+
+        outputs.files(
+            outputDirectory.map { it.file("Kotlin.Runtime.dll") },
+            outputDirectory.map { it.file("Kotlin.Stdlib.dll") },
+            outputDirectory.map { it.file("Kotlin.Stdlib.il") },
+        )
+        doFirst {
+            outputDirectory.get().asFile.deleteRecursively()
+        }
+    }
+}
+dotNetTestPlatformTasks.zipWithNext().forEach { (earlier, later) ->
+    later.configure { mustRunAfter(earlier) }
+}
+
 projectTests {
     testData(project(":compiler").isolated, "testData/codegen")
     testData(project(":compiler").isolated, "testData/diagnostics")
@@ -136,10 +174,17 @@ projectTests {
         skipInLocalBuild = false,
     ) {
         configure {
+            dependsOn(dotNetTestPlatformTasks)
             filter {
                 includeTestsMatching("*DotNet*")
             }
             environment("KOTLIN_DOTNET_REQUIRE_TOOLCHAIN", "1")
+            dotNetTestPlatformDirectories.forEach { (targetFramework, outputDirectory) ->
+                systemProperty(
+                    "kotlin.dotnet.test.platform.$targetFramework.path",
+                    outputDirectory.get().asFile.absolutePath,
+                )
+            }
         }
     }
 

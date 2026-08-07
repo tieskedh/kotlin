@@ -89,6 +89,23 @@ implementation internals.
 
 ## Dependency invariants
 
+### Test products and orchestration
+
+Ordinary .NET codegen tests consume reusable, profile-selected runtime/stdlib
+products; explicit producer tests alone compile the stdlib source product.
+Canonical IL acceptance and cross-ILAsm compatibility have separate bounded
+owners, and the filtered .NET integration task does not inherit unused
+distribution or Wasm inputs. This follows JVM/JS/Wasm/Native producer-consumer
+direction while retaining the Framework external-tool lock required by CLR4.
+See the
+[test-product decision](../decisions/test-product-and-validation-ownership.md).
+
+The generated runners and configurator still live in generic FIR2IR and
+integration modules. Move them to a dedicated .NET test module only as one
+coherent ownership change whose task groups remain disjoint, exhaustive, and
+visible to the repository test lifecycle. Do not create that module merely to
+shorten build files or claim speed without measurement.
+
 ### Objective CLR load module
 
 `compiler:frontend.common.dotnet` may depend on neutral target vocabulary but not on:
