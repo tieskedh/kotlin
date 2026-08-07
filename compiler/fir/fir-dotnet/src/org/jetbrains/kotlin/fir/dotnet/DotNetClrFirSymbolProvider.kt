@@ -79,6 +79,8 @@ import org.jetbrains.kotlin.fir.contracts.description.ConeReturnsEffectDeclarati
 import org.jetbrains.kotlin.fir.contracts.description.ConeValueParameterReference
 import org.jetbrains.kotlin.fir.contracts.toFirElement
 import org.jetbrains.kotlin.fir.declarations.FirDeclarationOrigin
+import org.jetbrains.kotlin.fir.declarations.FirNamedFunction
+import org.jetbrains.kotlin.fir.declarations.FirProperty
 import org.jetbrains.kotlin.fir.declarations.FirResolvePhase
 import org.jetbrains.kotlin.fir.declarations.FirValueParameter
 import org.jetbrains.kotlin.fir.declarations.builder.buildNamedFunction
@@ -88,6 +90,7 @@ import org.jetbrains.kotlin.fir.declarations.builder.buildRegularClass
 import org.jetbrains.kotlin.fir.declarations.builder.buildValueParameter
 import org.jetbrains.kotlin.fir.declarations.getDeprecationsProviderFromAnnotations
 import org.jetbrains.kotlin.fir.declarations.impl.FirResolvedDeclarationStatusImpl
+import org.jetbrains.kotlin.fir.expressions.FirAnnotation
 import org.jetbrains.kotlin.fir.expressions.builder.buildAnnotation
 import org.jetbrains.kotlin.fir.expressions.builder.buildAnnotationArgumentMapping
 import org.jetbrains.kotlin.fir.expressions.builder.buildEnumEntryDeserializedAccessExpression
@@ -500,7 +503,7 @@ class DotNetClrFirSymbolProvider(
         classSymbol: FirRegularClassSymbol,
         candidate: Candidate,
         candidateProperty: PropertyCandidate,
-    ) = buildProperty {
+    ): FirProperty = buildProperty {
         val assembly = candidate.assembly.metadata
         val physicalProperty = candidateProperty.property
         val propertyName = Name.identifier(physicalProperty.name)
@@ -612,7 +615,7 @@ class DotNetClrFirSymbolProvider(
         classSymbol: FirRegularClassSymbol,
         candidate: Candidate,
         method: DotNetClrMethodDefinition,
-    ) = buildNamedFunction {
+    ): FirNamedFunction = buildNamedFunction {
         val assembly = candidate.assembly.metadata
         resolvePhase = FirResolvePhase.ANALYZED_DEPENDENCIES
         origin = FirDeclarationOrigin.Library
@@ -777,7 +780,7 @@ class DotNetClrFirSymbolProvider(
     private fun buildDeprecatedAnnotation(
         obsolete: DotNetClrObsoleteMetadataResolution.Decoded,
         useSiteTarget: AnnotationUseSiteTarget? = null,
-    ) = buildAnnotation {
+    ): FirAnnotation = buildAnnotation {
         this.useSiteTarget = useSiteTarget
         annotationTypeRef = buildResolvedTypeRef {
             coneType =

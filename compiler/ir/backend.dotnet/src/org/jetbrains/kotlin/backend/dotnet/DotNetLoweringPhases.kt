@@ -8,9 +8,9 @@ import org.jetbrains.kotlin.backend.common.lower.RangeContainsLowering
 import org.jetbrains.kotlin.backend.common.lower.loops.ForLoopsLowering
 import org.jetbrains.kotlin.backend.common.lower.inline.InlineCallCycleCheckerLowering
 import org.jetbrains.kotlin.backend.common.lower.inline.LocalClassesInInlineLambdasLowering
-import org.jetbrains.kotlin.backend.common.phaser.IrValidationAfterInliningAllFunctionsOnTheSecondStagePhase
-import org.jetbrains.kotlin.backend.common.phaser.IrValidationAfterInliningOnlyPrivateFunctionsPhase
-import org.jetbrains.kotlin.backend.common.phaser.KlibIrValidationBeforeLoweringPhase
+import org.jetbrains.kotlin.backend.common.phaser.IrValidationAfterInliningAllFunctionsKlibSecondStagePhase
+import org.jetbrains.kotlin.backend.common.phaser.IrValidationAfterInliningPrivateFunctionsKlibPhase
+import org.jetbrains.kotlin.backend.common.phaser.IrValidationBeforeLoweringsKlibSecondStagePhase
 import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
@@ -79,20 +79,20 @@ private class DotNetKotlinNothingValueExceptionLowering(context: DotNetBackendCo
 private fun createSyntheticAccessorGenerationPhase(context: DotNetBackendContext): SyntheticAccessorLowering =
     SyntheticAccessorLowering(context)
 
-private fun createValidateIrAfterInliningOnlyPrivateFunctionsPhase(
+private fun createIrValidationAfterInliningPrivateFunctionsKlibPhase(
     context: DotNetBackendContext,
-): IrValidationAfterInliningOnlyPrivateFunctionsPhase<DotNetBackendContext> =
-    IrValidationAfterInliningOnlyPrivateFunctionsPhase(
+): IrValidationAfterInliningPrivateFunctionsKlibPhase<DotNetBackendContext> =
+    IrValidationAfterInliningPrivateFunctionsKlibPhase(
         context,
         checkInlineFunctionCallSites = { useSite ->
             !useSite.symbol.isConsideredAsPrivateForInlining()
         },
     )
 
-private fun createValidateIrAfterInliningAllFunctionsPhase(
+private fun createIrValidationAfterInliningAllFunctionsKlibSecondStagePhase(
     context: DotNetBackendContext,
-): IrValidationAfterInliningAllFunctionsOnTheSecondStagePhase<DotNetBackendContext> =
-    IrValidationAfterInliningAllFunctionsOnTheSecondStagePhase(
+): IrValidationAfterInliningAllFunctionsKlibSecondStagePhase<DotNetBackendContext> =
+    IrValidationAfterInliningAllFunctionsKlibSecondStagePhase(
         context,
         checkInlineFunctionCallSites = { useSite ->
             val function = useSite.symbol.owner
@@ -104,7 +104,7 @@ private fun createValidateIrAfterInliningAllFunctionsPhase(
 private val dotNetInlineLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
     // BEGIN: Common Native/JS/Wasm inline prefix. `lateinit` stays parked for the target, so its
     // shared lowering is intentionally absent until .NET owns the required throw-helper symbol.
-    ::KlibIrValidationBeforeLoweringPhase,
+    ::IrValidationBeforeLoweringsKlibSecondStagePhase,
     ::InlineCallCycleCheckerLowering,
     ::DotNetUpgradeCallableReferences,
     ::DotNetSharedVariablesLowering,
@@ -113,10 +113,10 @@ private val dotNetInlineLowerings: List<NamedCompilerPhase<DotNetBackendContext,
     ::DotNetPrivateFunctionInlining,
     ::OuterThisInInlineFunctionsSpecialAccessorLowering,
     ::createSyntheticAccessorGenerationPhase,
-    ::createValidateIrAfterInliningOnlyPrivateFunctionsPhase,
+    ::createIrValidationAfterInliningPrivateFunctionsKlibPhase,
     ::DotNetAllFunctionInlining,
     ::RedundantCastsRemoverLowering,
-    ::createValidateIrAfterInliningAllFunctionsPhase,
+    ::createIrValidationAfterInliningAllFunctionsKlibSecondStagePhase,
     // END: Common Native/JS/Wasm inline prefix.
 )
 
@@ -126,7 +126,7 @@ private val dotNetReifiedInlineCompletionLowerings:
     // remaining Kotlin-owned reified substitutions after KLIB serialization without repeating
     // the non-idempotent shared prefix that already handled ordinary inline declarations.
     ::DotNetAllFunctionInlining,
-    ::createValidateIrAfterInliningAllFunctionsPhase,
+    ::createIrValidationAfterInliningAllFunctionsKlibSecondStagePhase,
 )
 
 internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
