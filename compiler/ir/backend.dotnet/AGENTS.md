@@ -440,13 +440,25 @@ See the
   the exact classifier object reused by return and bound types. Bound and
   unbound references retain the unbound declaration owner. Never build
   independent per-property graphs, enumerate physical CLR generic parameters,
-  or leak enclosing parameters into the own list. Later `KParameter.type` must
-  extend this same graph rather than decode another one. Backend symbol wiring
-  must feature-detect this platform extension: `-no-stdlib`, malformed-library,
-  and older-surface diagnostic paths may initialize the backend without the
-  property and must not crash before their intended diagnostic.
-  Typed foreign attribute import, foreign CLR generic methods, `KParameter`,
-  and broader member reflection remain separate. A foreign generic
+  or leak enclosing parameters into the own list. `KCallable.parameters` and
+  `KParameter` extend that same graph. Follow JVM ordering (instance, context,
+  extension, values), omit captured receiver prefixes and reindex bound
+  references, retain inherited Kotlin defaults, and keep vararg types as their
+  array type. Parameter annotations belong to the exact Kotlin parameter;
+  imported CLR parameters instead use their retained Param row for names,
+  `ParamArray`, and honest custom attributes. CLR optional metadata does not
+  imply Kotlin `isOptional`. Runtime owns the erased callable slot but never
+  names Stdlib's `KParameter` implementation: compiler-produced references pass
+  the Stdlib factory once and Runtime caches the resulting read-only list.
+  Direct member-extension references are prohibited by the Common frontend;
+  their two-receiver view waits for member enumeration rather than a target
+  source exception. Backend symbol wiring must feature-detect every platform
+  extension: `-no-stdlib`, malformed-library, and older-surface diagnostic
+  paths may initialize the backend without the property and must not crash
+  before their intended diagnostic.
+  Typed foreign attribute import, foreign CLR generic methods, accessor
+  objects, reflective invocation, and broader member reflection remain
+  separate. A foreign generic
   method must continue to fail the current interface importer closed until its
   own complete FIR/import/binding feature lands; never decode it privately in
   callable reflection. See
@@ -454,7 +466,8 @@ See the
   [the class-discovery decision](docs/decisions/annotation-discovery.md), and
   [the callable-discovery decision](docs/decisions/callable-annotation-discovery.md), and
   [the callable-return decision](docs/decisions/callable-return-types.md), and
-  [the callable-type-parameter decision](docs/decisions/callable-type-parameters.md).
+  [the callable-type-parameter decision](docs/decisions/callable-type-parameters.md), and
+  [the callable-parameter decision](docs/decisions/callable-parameters.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
   Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve
@@ -693,8 +706,9 @@ type-operation matrix together before publication. The completed
 not be approximated by `System.Type` or the nominal `KClass` floor. Valued
 annotation construction and class/callable-reference runtime discovery are
 complete through Common/KLIB authority, fail-closed CLR projection, and
-disjoint exact foreign CLR paths; do not infer member enumeration, reflective
-call, accessor objects, parameters, fields, or type-use reflection from those
+disjoint exact foreign CLR paths. Callable parameters and their declaration
+annotations extend the same signature graph; do not infer member enumeration,
+reflective call, accessor objects, fields, or type-use reflection from those
 surfaces. Suspend inline functions, value
 classes, member reflection, coroutines, concurrency primitives, and broad
 KMP/Gradle product integration remain separate programmes until `STATUS.md` or

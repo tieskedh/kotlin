@@ -328,7 +328,13 @@ IL_whenNext_1:
     .locals init (
       [0] object[] '<arrayOfStorage>',
       [1] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@1',
-      [2] object '<arrayElement>'
+      [2] object '<arrayElement>',
+      [3] object[] '<arrayOfStorage>@3',
+      [4] object[] '<arrayOfStorage>@4',
+      [5] object[] '<arrayOfStorage>@5',
+      [6] object '<arrayElement>@6',
+      [7] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@7',
+      [8] object '<arrayElement>@8'
     )
     call void 'callableInvocationProvenanceKt$main$reference$1'::'<EnsureInitialized>'()
     ldarg.0
@@ -338,7 +344,7 @@ IL_whenNext_1:
     ldc.i4 0
     ldstr "increment"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    ldc.i4 1
+    ldc.i4 3
     newarr object
     stloc.0
     ldtoken [mscorlib]System.Int32
@@ -359,8 +365,87 @@ IL_whenNext_1:
     ldc.i4 0
     ldloc.2
     stelem object
+    ldc.i4 0
+    newarr object
+    stloc.3
+    ldloc.3
+    stloc.2
     ldloc.0
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', object[])
+    ldc.i4 1
+    ldloc.2
+    stelem object
+    ldc.i4 1
+    newarr object
+    stloc 4
+    ldc.i4 6
+    newarr object
+    stloc 5
+    ldstr "value"
+    stloc 6
+    ldloc 5
+    ldc.i4 0
+    ldloc 6
+    stelem object
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 7
+    ldloc 7
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 6
+    ldloc 5
+    ldc.i4 1
+    ldloc 6
+    stelem object
+    ldc.i4 3
+    box [mscorlib]System.Int32
+    stloc 6
+    ldloc 5
+    ldc.i4 2
+    ldloc 6
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 6
+    ldloc 5
+    ldc.i4 3
+    ldloc 6
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 6
+    ldloc 5
+    ldc.i4 4
+    ldloc 6
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 6
+    ldloc 5
+    ldc.i4 5
+    ldloc 6
+    stelem object
+    ldloc 5
+    stloc 8
+    ldloc 4
+    ldc.i4 0
+    ldloc 8
+    stelem object
+    ldloc 4
+    stloc.2
+    ldloc.0
+    ldc.i4 2
+    ldloc.2
+    stelem object
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', object[], class [Kotlin.Runtime]'Kotlin.Function2')
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0') cil managed
@@ -402,6 +487,13 @@ IL_whenNext_1:
     call instance class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetReturnType'()
     ret
   }
+  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_parameters'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetParameters'()
+    ret
+  }
   .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_typeParameters'() cil managed
   {
     .maxstack 1
@@ -416,6 +508,10 @@ IL_whenNext_1:
   .property instance class [Kotlin.Runtime]'Kotlin.KType' 'returnType'()
   {
     .get instance class [Kotlin.Runtime]'Kotlin.KType' 'callableInvocationProvenanceKt$main$reference$1'::'get_returnType'()
+  }
+  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'parameters'()
+  {
+    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableInvocationProvenanceKt$main$reference$1'::'get_parameters'()
   }
   .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'typeParameters'()
   {

@@ -88,6 +88,7 @@ internal class DotNetCallableAnnotationSymbols(
             addValueParameter("owner", irBuiltIns.kClassClass.starProjectedType)
             addValueParameter("metadataToken", irBuiltIns.intType)
             addValueParameter("memberKind", irBuiltIns.intType)
+            addValueParameter("parameterIndex", irBuiltIns.intType)
         }
     }
 
