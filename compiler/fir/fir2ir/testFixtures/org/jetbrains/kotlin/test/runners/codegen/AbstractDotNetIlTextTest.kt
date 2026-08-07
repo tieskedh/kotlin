@@ -11,6 +11,8 @@ import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE_PATHS
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
+import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
+import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
 import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
@@ -105,12 +107,17 @@ import java.util.concurrent.TimeUnit
 @ResourceLock("kotlin-dotnet-framework-toolchain")
 abstract class AbstractDotNetIlTextTestBase(
     private val parser: FirParser,
+    private val validatesCrossAssemblerCompatibility: Boolean = false,
 ) : AbstractKotlinCompilerDotNetTest() {
     override fun configure(builder: TestConfigurationBuilder): Unit = with(builder) {
         configureDotNetBase(parser, outputExtension = "il")
 
         dotNetArtifactsHandlersStep {
-            useHandlers(::DotNetIlTextHandler)
+            if (validatesCrossAssemblerCompatibility) {
+                useHandlers(::DotNetCrossAssemblerIlTextHandler)
+            } else {
+                useHandlers(::DotNetIlTextHandler)
+            }
         }
     }
 }
@@ -119,6 +126,9 @@ open class AbstractFirLightTreeDotNetIlTextTest : AbstractDotNetIlTextTestBase(F
 
 @FirPsiCodegenTest
 open class AbstractFirPsiDotNetIlTextTest : AbstractDotNetIlTextTestBase(FirParser.Psi)
+
+open class AbstractFirLightTreeDotNetCrossAssemblerTest :
+    AbstractDotNetIlTextTestBase(FirParser.LightTree, validatesCrossAssemblerCompatibility = true)
 
 abstract class AbstractDotNetBoxTestBase(
     private val parser: FirParser,
@@ -319,6 +329,9 @@ private class DotNetEnvironmentConfigurator(
         directives: RegisteredDirectives,
         languageVersion: LanguageVersion,
     ): Map<AnalysisFlag<*>, Any?> {
+        // Selected upstream tests receive narrow kotlin.test/kotlin.text helpers from the
+        // additional-source provider. This permission is test-source policy and is independent
+        // of whether the platform library is consumed as a DLL or produced from source.
         return mapOf(AnalysisFlags.allowKotlinPackage to true)
     }
 
@@ -326,6 +339,7 @@ private class DotNetEnvironmentConfigurator(
         if (!module.targetPlatform(testServices).isDotNet()) return
 
         val artifactName = getArtifactName(module)
+        val producesStdlibFromSource = DotNetCodegenDirectives.DOTNET_STDLIB_FROM_SOURCE in module.directives
         configuration.put(CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE, true)
         configuration.put(CommonConfigurationKeys.MODULE_NAME, module.name)
         configuration.targetPlatform = DotNetPlatforms.defaultDotNetPlatform
@@ -351,14 +365,18 @@ private class DotNetEnvironmentConfigurator(
                 val dependencyModule = dependency.dependencyModule
                 getProducedAssembly(dependencyModule, getArtifactName(dependencyModule)).path
             }
-        configuration.languageVersionSettings =
-            configuration.languageVersionSettings.withDotNetSourceProductSettings()
         configuration.addSourcesForDependsOnClosure(module, testServices)
-        for (stdlibSource in getOrCreateStdlibSources()) {
-            configuration.addKotlinSourceRoot(
-                path = stdlibSource.canonicalPath,
-                isCommon = stdlibSource.name in DOTNET_STDLIB_COMMON_SOURCE_NAMES,
-            )
+        if (producesStdlibFromSource) {
+            configuration.languageVersionSettings =
+                configuration.languageVersionSettings.withDotNetSourceProductSettings()
+            for (stdlibSource in getOrCreateStdlibSources()) {
+                configuration.addKotlinSourceRoot(
+                    path = stdlibSource.canonicalPath,
+                    isCommon = stdlibSource.name in DOTNET_STDLIB_COMMON_SOURCE_NAMES,
+                )
+            }
+        } else {
+            configuration.addDotNetClasspathRoot(getPrebuiltStdlib())
         }
     }
 
@@ -398,6 +416,17 @@ private class DotNetEnvironmentConfigurator(
                 }
             }
         }
+
+    private fun getPrebuiltStdlib(): File {
+        val propertyName = "kotlin.dotnet.test.platform.${target.description}.path"
+        val directory = System.getProperty(propertyName)?.let(::File)
+            ?: error("Missing reusable Kotlin/.NET test platform property '$propertyName'")
+        val stdlib = directory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+        check(stdlib.isFile) { "Missing reusable Kotlin/.NET stdlib: ${stdlib.path}" }
+        val runtime = directory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+        check(runtime.isFile) { "Missing reusable Kotlin/.NET runtime: ${runtime.path}" }
+        return stdlib
+    }
 }
 
 private fun LanguageVersionSettings.withDotNetSourceProductSettings(): LanguageVersionSettings {
@@ -434,6 +463,9 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(): LanguageV
 }
 
 private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
+    val DOTNET_STDLIB_FROM_SOURCE by directive(
+        "Compile the compiler-owned Kotlin/.NET stdlib source product in this test instead of consuming the reusable fixture"
+    )
     val DOTNET_EXPORT by stringDirective(
         "Explicit CLR function export in <kotlin-selector>=<clr-method-name> form"
     )
@@ -442,7 +474,16 @@ private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
     )
 }
 
-private class DotNetIlTextHandler(testServices: TestServices) : DotNetBinaryArtifactHandler(testServices) {
+private class DotNetIlTextHandler(testServices: TestServices) :
+    AbstractDotNetIlTextHandler(testServices, validatesCrossAssemblerCompatibility = false)
+
+private class DotNetCrossAssemblerIlTextHandler(testServices: TestServices) :
+    AbstractDotNetIlTextHandler(testServices, validatesCrossAssemblerCompatibility = true)
+
+private abstract class AbstractDotNetIlTextHandler(
+    testServices: TestServices,
+    private val validatesCrossAssemblerCompatibility: Boolean,
+) : DotNetBinaryArtifactHandler(testServices) {
     private val multiModuleInfoDumper = MultiModuleInfoDumper()
 
     override fun processModule(module: TestModule, info: BinaryArtifacts.DotNet) {
@@ -458,15 +499,20 @@ private class DotNetIlTextHandler(testServices: TestServices) : DotNetBinaryArti
             if (DotNetIlAssembler.findFrameworkIlasm() != null) {
                 add(DotNetIlasmValidation("Framework", DotNetTarget.NET48))
             }
-            if (DotNetIlAssembler.findModernIlasm() != null) {
+            if (validatesCrossAssemblerCompatibility && DotNetIlAssembler.findModernIlasm() != null) {
                 add(DotNetIlasmValidation("modern", DotNetTarget.NET10_0))
             }
         }
-        if (dotNetToolchainIsRequired() && validations.size != 2) {
+        val requiredValidations = if (validatesCrossAssemblerCompatibility) 2 else 1
+        if (dotNetToolchainIsRequired() && validations.size != requiredValidations) {
             val available = validations.joinToString { it.name }.ifEmpty { "none" }
             assertions.fail {
-                "Both .NET Framework and modern ILAsm are required to validate accepted IL text " +
-                        "because KOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled; available: $available"
+                val requirement = if (validatesCrossAssemblerCompatibility) {
+                    "Both .NET Framework and modern ILAsm are required for the cross-assembler compatibility suite"
+                } else {
+                    ".NET Framework ILAsm is required to validate accepted net48 IL text"
+                }
+                "$requirement because KOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled; available: $available"
             }
         }
         validations.forEach { validation ->
@@ -681,7 +727,8 @@ private abstract class AbstractDotNetBoxRunner(
 
         boxMethodFound = true
         stageRuntimeDependencies(module, info.outputFile)
-        val result = runExecutable(info.outputFile).trim()
+        val producesStdlibFromSource = DotNetCodegenDirectives.DOTNET_STDLIB_FROM_SOURCE in module.directives
+        val result = runExecutable(info.outputFile, producesStdlibFromSource).trim()
         val outputFile = testServices.moduleStructure.originalTestDataFiles.first().withExtension(OUTPUT_EXTENSION)
         if (outputFile.exists()) {
             assertions.assertEqualsToFile(outputFile, result)
@@ -716,7 +763,7 @@ private abstract class AbstractDotNetBoxRunner(
         }
     }
 
-    private fun runExecutable(file: File): String {
+    private fun runExecutable(file: File, producesStdlibFromSource: Boolean): String {
         if (!file.isFile) {
             assertions.fail { "Expected .NET assembly was not produced: ${file.path}" }
         }
@@ -731,6 +778,9 @@ private abstract class AbstractDotNetBoxRunner(
         }
         val stdlibIlFile = outputDirectory.resolve("Kotlin.Stdlib.il")
         val stdlibIlText = stdlibIlFile.takeIf(File::isFile)?.readText().orEmpty().replace("\r\n", "\n")
+        if (!producesStdlibFromSource && stdlibIlFile.exists()) {
+            assertions.fail { "An ordinary .NET consumer rebuilt Kotlin.Stdlib from source: ${stdlibIlFile.path}" }
+        }
         val requiredStdlibIl = listOf(
             ".assembly extern mscorlib {}",
             ".assembly 'Kotlin.Stdlib'\n{\n  .ver 1:0:0:0",
@@ -767,20 +817,22 @@ private abstract class AbstractDotNetBoxRunner(
             ".method public hidebysig static object 'singleOrNull'<'T'>(" +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
         )
-        requiredStdlibIl.firstOrNull { it !in stdlibIlText }?.let { missing ->
-            assertions.fail { "Expected Kotlin.Stdlib IL to contain '$missing': ${stdlibIlFile.path}" }
-        }
-        if ("Kotlin.Collections.CollectionsKt1" in stdlibIlText) {
-            assertions.fail {
-                "Compiler-owned collection source shards must share Kotlin.Collections.CollectionsKt: " +
-                        stdlibIlFile.path
+        if (producesStdlibFromSource) {
+            requiredStdlibIl.firstOrNull { it !in stdlibIlText }?.let { missing ->
+                assertions.fail { "Expected Kotlin.Stdlib IL to contain '$missing': ${stdlibIlFile.path}" }
             }
-        }
-        if (".assembly extern Kotlin.Stdlib" in stdlibIlText) {
-            assertions.fail { "Kotlin.Stdlib must not carry an AssemblyRef to itself: ${stdlibIlFile.path}" }
-        }
-        if ("[netstandard]" in stdlibIlText) {
-            assertions.fail { "The box stdlib must use the selected $target API profile: ${stdlibIlFile.path}" }
+            if ("Kotlin.Collections.CollectionsKt1" in stdlibIlText) {
+                assertions.fail {
+                    "Compiler-owned collection source shards must share Kotlin.Collections.CollectionsKt: " +
+                            stdlibIlFile.path
+                }
+            }
+            if (".assembly extern Kotlin.Stdlib" in stdlibIlText) {
+                assertions.fail { "Kotlin.Stdlib must not carry an AssemblyRef to itself: ${stdlibIlFile.path}" }
+            }
+            if ("[netstandard]" in stdlibIlText) {
+                assertions.fail { "The box stdlib must use the selected $target API profile: ${stdlibIlFile.path}" }
+            }
         }
         val ilFile = outputDirectory.resolve("${file.nameWithoutExtension}.il")
         val ilText = ilFile.takeIf(File::isFile)?.readText().orEmpty()

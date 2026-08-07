@@ -16,11 +16,13 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: declaration-owned `KCallable.parameters` and
-  `KParameter`, including JVM's receiver/value ordering, bound-reference
-  reindexing, default/vararg behavior, parameter annotations and identity, one
-  graph shared with `returnType`/`typeParameters`, exact foreign CLR Param-row
-  evidence, and Runtime/Stdlib construction without a reverse dependency
+- Last completed feature: mature-target-shaped test product and validation
+  ownership. Ordinary FIR/IL/box modules consume one reusable self-describing
+  runtime/stdlib pair per profile; explicit producer tests alone compile the
+  stdlib source product; every net48 golden retains canonical Framework ILAsm
+  validation while eight representative shapes own cross-writer evidence; and
+  the filtered `.NET` integration task no longer provisions unused compiler
+  distribution or Wasm products
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -34,19 +36,42 @@ substantial open programmes.
 
 ## Current green gate
 
-The declaration-owned callable-parameter semantic head passed:
+The test-product/validation semantic head passed the ordinary aggregate and
+fresh owner checkpoints. The normal aggregate command is:
 
 ```text
-.\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
+.\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-That audit covered 52 XML files and 1291 tests. The final full
-`--rerun` invocation completed at 2026-08-07 18:01 local time in 69m17s:
+The audited current-head evidence covers 53 XML files and 1299 tests:
 
-- 1178 FIR, IL-text, and box tests
+- 1186 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 92 library-integration tests
 - zero failures, errors, or skips
+
+The dependency-wide FIR owner checkpoint used the exact global Gradle option:
+
+```text
+.\gradlew.bat :compiler:fir:fir2ir:dotNetTest --rerun-tasks -q
+```
+
+It completed at 2026-08-07 19:56 local time in 16m49s, including transitive
+producer rebuilds, and rewrote all 51 XML suites. The clean aggregate invocation
+that supplied the fresh `dn` result completed at 2026-08-07 19:38 local time in
+29m49s; its two XML suites contain 113 green tests. Gradle 9's selected-task
+`--rerun` option is not full-matrix evidence on the empty backend lifecycle
+task and is no longer part of the verification command.
+
+The FIR/IL/box cumulative JUnit suite time fell from 3713.33 seconds on the
+callable-parameter head to 490.85 seconds on this head. Ordinary test modules no
+longer rebuild `Kotlin.Stdlib`; two exact-profile fixture producers do so once.
+The retained explicit source-product case still validates the complete emitted
+stdlib IL. Moving modern ILAsm compatibility to its eight-shape class removes
+318 redundant external writer invocations without dropping canonical assembly
+of any golden. Compiling `arrayIterators` through the normal DLL consumer path
+also exposed and now pins the required erased `Iterator.Next(): object` bridge
+for an `IntIterator` subclass, which the former same-run bootstrap path hid.
 
 The same head also passed the packed-KLIB loader owner suite (8 tests), the
 BTA API-dump and FIR2IR test-generation owners without tracked generated
