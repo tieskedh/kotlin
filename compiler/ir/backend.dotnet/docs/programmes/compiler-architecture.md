@@ -1,6 +1,6 @@
 # .NET compiler architecture programme
 
-- Status: **Active — neutral foreign-linkage and exact-contract carriers extracted; physical ABI serialization is the next seam**
+- Status: **Active — neutral foreign-linkage and exact-contract carriers extracted; structured CLI migration started**
 - Current ownership: [`../../STATUS.md`](../../STATUS.md)
 
 ## Governing rule
@@ -21,6 +21,10 @@ dependency direction.
   production in distinct dependency roles.
 - Native keeps target configuration, KLIB ownership, IR lowering, and native code generation
   separate even when historical packages do not perfectly reflect module ownership.
+- Wasm keeps its reusable physical target vocabulary and text/binary converters in
+  `:wasm:wasm.ir`, below `:compiler:ir.backend.wasm`. Kotlin/.NET follows that dependency shape
+  for policy-free ECMA-335 forms in `:dotnet:dotnet.ir`, while representation and profile choices
+  remain in `backend.dotnet`.
 - JVM's descriptor-less reflection reconstructs logical Kotlin callables from metadata in
   `core:reflection.jvm`; the backend does not become the owner of runtime member discovery. A
   .NET lowering may construct a compile-time callable-reference graph, but later KLIB decoding,
@@ -51,6 +55,8 @@ to copy into a new target.
   `org.jetbrains.kotlin.fir.dotnet`.
 - IR context, lowerings, intrinsics, type mapping, CIL generation, and backend product
   construction: `compiler:ir:backend.dotnet`, in `org.jetbrains.kotlin.backend.dotnet`.
+- Physical ECMA-335 vocabulary, structural validation, deterministic CIL serialization, and the
+  future JVM-hosted PE serializer: `dotnet:dotnet.ir`, in `org.jetbrains.kotlin.dotnet.ir`.
 - CLI pipeline sequencing: `compiler:cli:cli-dotnet`, in
   `org.jetbrains.kotlin.cli.pipeline.dotnet`.
 - Kotlin stdlib declarations/algorithms: `libraries:stdlib` and its generators, in ordinary
@@ -247,17 +253,27 @@ artifact and owns validation. Do not create a packaging abstraction just to relo
 code.
 
 These extractions may interleave with bounded feature work. Module movement without a real new
-consumer or enforceable direction is mechanical churn.
+consumer or enforceable direction is mechanical churn. `:dotnet:dotnet.ir` is the deliberate
+exception only in timing, not in responsibility: its independent physical invariants and
+one-way dependency are immediately enforceable, and the accepted CIL/PE decision already requires
+both deterministic text and direct JVM-hosted PE sinks. It grows only by production migration
+slices, never by speculative ECMA-335 coverage.
 
 ## Responsibilities that remain in the IR backend
 
 - backend context and IR-to-CLR type mapping;
 - target lowerings and synthetic compiler ABI construction;
 - intrinsics and runtime-call selection;
-- CIL instruction, stack, control-flow, metadata, and textual diagnostic production;
-- MethodImpl and physical slot emission;
+- Kotlin-to-CLI instruction selection, stack/control-flow planning, target-profile legalization,
+  and construction of concrete physical declarations;
+- MethodImpl and physical slot selection;
 - backend-owned runtime/stdlib assembly construction; and
 - compilation orchestration from lowered IR to validated backend products.
+
+The backend does not own the reusable representation or serialization of a physical CLI entity
+once that entity has migrated. `:dotnet:dotnet.ir` owns its structural invariants and deterministic
+text, and later binary, encoding. During incremental migration the backend may retain untouched
+textual slices, but a migrated shape has one production renderer only.
 
 Large coordinators such as `DotNetBackend.compile` or `DotNetIlEmitter` are reviewed for mixed
 ownership, but size alone does not authorize extraction. A split component must own a coherent

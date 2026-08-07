@@ -24,6 +24,10 @@ import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.dotnet.ir.CliAssemblyReference
+import org.jetbrains.kotlin.dotnet.ir.CliAssemblyVersion
+import org.jetbrains.kotlin.dotnet.ir.CliPublicKeyToken
+import org.jetbrains.kotlin.dotnet.ir.convertors.CliIrToIlText
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -3757,10 +3761,14 @@ internal class DotNetIlEmitter(
             appendLine("}")
         }
         for (library in referencedExternalLibraries.sortedBy { it.artifact.assemblyName }) {
-            appendLine(".assembly extern ${library.artifact.assemblyName.toIlIdentifier()}")
-            appendLine("{")
-            appendLine("  .ver ${library.artifact.assemblyVersionIl}")
-            appendLine("}")
+            append(
+                CliIrToIlText.render(
+                    CliAssemblyReference(
+                        name = library.artifact.assemblyName,
+                        version = CliAssemblyVersion.parse(library.artifact.assemblyVersion),
+                    )
+                )
+            )
         }
         for (assembly in referencedForeignAssemblies.sortedWith(
             compareBy(
@@ -3770,16 +3778,17 @@ internal class DotNetIlEmitter(
             )
         )) {
             val identity = assembly.metadata.identity
-            appendLine(".assembly extern ${identity.name.toIlIdentifier()}")
-            appendLine("{")
-            appendLine("  .ver ${identity.version.replace('.', ':')}")
-            if (identity.publicKeyToken.isNotEmpty()) {
-                val token = identity.publicKeyToken.joinToString(" ") { byte ->
-                    byte.toString(16).uppercase().padStart(2, '0')
-                }
-                appendLine("  .publickeytoken = ($token)")
-            }
-            appendLine("}")
+            append(
+                CliIrToIlText.render(
+                    CliAssemblyReference(
+                        name = identity.name,
+                        version = CliAssemblyVersion.parse(identity.version),
+                        publicKeyToken = identity.publicKeyToken
+                            .takeIf { it.isNotEmpty() }
+                            ?.let(::CliPublicKeyToken),
+                    )
+                )
+            )
         }
         val emittedAssemblyVersion = when {
             emissionScope == DotNetIlEmissionScope.STDLIB -> DotNetStdlibLibrary.ASSEMBLY_VERSION_IL

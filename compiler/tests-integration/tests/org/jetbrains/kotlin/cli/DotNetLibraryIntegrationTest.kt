@@ -17879,7 +17879,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "The external CLR implementation must be packaged beside an executable consumer"
         }
         val kotlinConsumerIl = kotlinConsumerDirectory.resolve("KotlinConsumer.il").readText()
-        assertTrue(".assembly extern 'Sample.Library'" in kotlinConsumerIl)
+        assertTrue(
+            """
+            .assembly extern 'Sample.Library'
+            {
+              .ver 1:0:0:0
+            }
+            """.trimIndent() in kotlinConsumerIl
+        ) { kotlinConsumerIl }
         assertTrue("[Sample.Library]" in kotlinConsumerIl)
         runDotNet(
             dotnetHost,
@@ -21853,8 +21860,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
 
             val il = applicationDirectory.resolve("ForeignCallConsumer.il").readText()
-            assertTrue(".assembly extern 'Foreign.CallContracts'" in il) { il }
-            assertTrue(".ver 3:4:5:6" in il) { il }
+            assertTrue(
+                """
+                .assembly extern 'Foreign.CallContracts'
+                {
+                  .ver 3:4:5:6
+                }
+                """.trimIndent() in il
+            ) { il }
             assertFalse("<CovariantReturnBridge-ForeignCallContracts.OrdinaryArrayApi" in il) {
                 "Exact foreign SZARRAY overrides must fill their retained CLR slots directly:\n$il"
             }
