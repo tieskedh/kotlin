@@ -6,6 +6,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":dotnet:dotnet.ir"))
     api(project(":core:language.targets.dotnet"))
     api(project(":compiler:config.dotnet"))
     api(project(":compiler:frontend.common.dotnet"))
@@ -145,6 +146,7 @@ tasks.register("dotNetTest") {
     group = "verification"
     description = "Runs the strict Kotlin/.NET semantic, IL, CLI, and library-integration gates."
     dependsOn(
+        ":dotnet:dotnet.ir:test",
         ":compiler:fir:fir2ir:dotNetTest",
         ":compiler:tests-integration:dn",
     )

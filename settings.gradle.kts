@@ -460,6 +460,7 @@ include(
     ":plugins:jvm-abi-gen",
     ":plugins:jvm-abi-gen-embeddable",
     ":test-instrumenter",
+    ":dotnet:dotnet.ir",
     ":wasm:wasm.ir",
     ":wasm:wasm.tests",
     ":wasm:wasm.tests:klib-compatibility",

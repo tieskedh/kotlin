@@ -16,13 +16,13 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: mature-target-shaped test product and validation
-  ownership. Ordinary FIR/IL/box modules consume one reusable self-describing
-  runtime/stdlib pair per profile; explicit producer tests alone compile the
-  stdlib source product; every net48 golden retains canonical Framework ILAsm
-  validation while eight representative shapes own cross-writer evidence; and
-  the filtered `.NET` integration task no longer provisions unused compiler
-  distribution or Wasm products
+- Last completed feature: the first structured-CLI production slice. The new
+  low-level `:dotnet:dotnet.ir` module owns policy-free physical `AssemblyRef`
+  identity, validation, and deterministic CIL serialization; `backend.dotnet`
+  still selects required Kotlin-library and foreign-CLR references but no
+  longer constructs their textual rows directly. The accepted erased runtime
+  identity of Kotlin-owned generic classes and the JVM-hosted direct-PE
+  endpoint remain unchanged
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -36,32 +36,36 @@ substantial open programmes.
 
 ## Current green gate
 
-The test-product/validation semantic head passed the ordinary aggregate and
-fresh owner checkpoints. The normal aggregate command is:
+The structured-CLI `AssemblyRef` head passed the ordinary aggregate. The
+normal aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited current-head evidence covers 53 XML files and 1299 tests:
+The audited full-aggregate evidence covers 54 XML files and 1305 tests:
 
+- 6 policy-free physical CLI model/serializer tests
 - 1186 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 92 library-integration tests
 - zero failures, errors, or skips
 
-The dependency-wide FIR owner checkpoint used the exact global Gradle option:
+The aggregate completed at 2026-08-07 21:20 local time in 37m56s. It rewrote
+all 51 FIR/IL/box XML suites and both `dn` suites on the candidate head; the
+new module's six green tests were already current and reused by that task
+graph. The cumulative JUnit suite time was 2313.98 seconds: 0.10 for the
+physical model, 491.81 for FIR/IL/box, and 1822.07 for `dn`. Gradle 9's
+selected-task `--rerun` option is not full-matrix evidence on the empty backend
+lifecycle task and is not part of the verification command.
 
-```text
-.\gradlew.bat :compiler:fir:fir2ir:dotNetTest --rerun-tasks -q
-```
-
-It completed at 2026-08-07 19:56 local time in 16m49s, including transitive
-producer rebuilds, and rewrote all 51 XML suites. The clean aggregate invocation
-that supplied the fresh `dn` result completed at 2026-08-07 19:38 local time in
-29m49s; its two XML suites contain 113 green tests. Gradle 9's selected-task
-`--rerun` option is not full-matrix evidence on the empty backend lifecycle
-task and is no longer part of the verification command.
+Final review then replaced the serializer input's ILAsm-shaped version string
+with the equivalent dotted CLR assembly-identity value; emitted CIL is
+unchanged. The resulting current head repeated all 6 model tests, the backend
+compile, and the two exact affected end-to-end consumers: portable
+Kotlin-library `AssemblyRef` production and foreign-CLR reference production
+across both runtime profiles. Those focused checks completed green in 18.5s
+and 4m21s respectively.
 
 The FIR/IL/box cumulative JUnit suite time fell from 3713.33 seconds on the
 callable-parameter head to 490.85 seconds on this head. Ordinary test modules no
@@ -503,8 +507,13 @@ CodeAnalysis row was stripped. KLIB remains the independent authority.
 - `:compiler:fir:fir2ir:dotnet-backend` owns the narrow target-specific IR
   overridability rule for retained flexible CLR array declarations and derives
   the neutral exact-contract projection while resolved FIR and IR coexist.
-- `:compiler:ir:backend.dotnet` owns IR lowering, CIL mapping/emission, and
-  backend product construction.
+- `:compiler:ir:backend.dotnet` owns Kotlin-to-CLR representation policy,
+  target-profile legalization, IR lowering, physical-form construction, and
+  backend product orchestration.
+- `:dotnet:dotnet.ir` owns migrated policy-free physical ECMA-335 vocabulary,
+  structural validation, deterministic CIL serialization, and eventually the
+  already-selected JVM-hosted direct PE sink. Its first production-owned form
+  is external `AssemblyRef` metadata.
 - `:compiler:ir:serialization.dotnet` owns .NET KLIB IR serialization and the
   logical IR mangler shared with backend identity mapping.
 - `cli-base` owns the .NET content-root carrier; .NET compilation no longer

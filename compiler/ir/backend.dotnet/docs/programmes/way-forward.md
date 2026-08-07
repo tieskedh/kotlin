@@ -260,6 +260,16 @@ binding split. The completed callable-parameter graph remained compile-time
 lowering over an exact declaration target rather than runtime member discovery;
 future reflective invocation and enumeration must preserve that owner split.
 
+The physical writer boundary now follows
+[`structured-cli-ir.md`](structured-cli-ir.md). `backend.dotnet` chooses Kotlin
+representation, ABI, export, and target-profile policy and lowers those choices
+to concrete ECMA-335 forms. `:dotnet:dotnet.ir` alone owns migrated physical
+CLI vocabulary, structural validation, and deterministic text serialization;
+later it also owns the already-decided JVM-hosted PE sink. Grow that module
+only through complete production slices, remove each superseded string path,
+and do not use CLI generic capability to reopen Kotlin-owned erased runtime
+identity.
+
 ### 5. Broaden foreign CLR interoperability only through exact mappings
 
 Use [`clr-annotations.md`](clr-annotations.md) and the
