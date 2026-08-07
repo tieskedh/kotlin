@@ -47,6 +47,8 @@ import org.jetbrains.kotlin.types.Variance
 internal class DotNetTypeOfLowering(
     private val backendContext: DotNetBackendContext,
 ) : ModuleLoweringPass {
+    private val kTypeBuilder = DotNetKTypeIrBuilder(backendContext, operation = "typeOf")
+
     override fun lower(irModule: IrModuleFragment) {
         irModule.transformChildrenVoid(object : IrElementTransformerVoidWithContext() {
             override fun visitCall(expression: IrCall): IrExpression {
@@ -56,19 +58,30 @@ internal class DotNetTypeOfLowering(
                 val representedType = expression.typeArguments.singleOrNull()
                     ?: dotNetUnsupported("typeOf intrinsic has no single type argument")
                 val builder = backendContext.createIrBuilder(currentScope!!.scope.scopeOwnerSymbol).at(expression)
-                return builder.buildTypeOfGraph(representedType, expression)
+                return kTypeBuilder.run {
+                    builder.buildGraph(representedType, expression.type)
+                }
             }
         })
     }
+}
 
-    private fun IrBuilderWithScope.buildTypeOfGraph(
+/**
+ * Shared logical KType producer for `typeOf` and declaration-owned reflection facts. The caller
+ * chooses the represented semantic IR type; this builder never inspects a physical CLR signature.
+ */
+internal class DotNetKTypeIrBuilder(
+    private val backendContext: DotNetBackendContext,
+    private val operation: String,
+) {
+    fun IrBuilderWithScope.buildGraph(
         representedType: IrType,
-        originalCall: IrCall,
+        resultType: IrType = backendContext.irBuiltIns.kTypeClass.defaultType,
     ): IrExpression {
         val parameters = linkedSetOf<IrTypeParameter>()
         collectTypeParameters(representedType, parameters)
 
-        return irBlock(resultType = originalCall.type) {
+        return irBlock(resultType = resultType) {
             val parameterVariables = linkedMapOf<IrTypeParameter, IrVariable>()
             for (parameter in parameters) {
                 val createParameter = irCall(backendContext.symbols.dotNetCreateKTypeParameter).apply {
@@ -79,7 +92,7 @@ internal class DotNetTypeOfLowering(
                 }
                 parameterVariables[parameter] = irTemporary(
                     createParameter,
-                    nameHint = "<typeOf-${parameter.name.asString()}>",
+                    nameHint = "<${operation.replace(' ', '-')}-${parameter.name.asString()}>",
                 )
             }
 
@@ -101,7 +114,7 @@ internal class DotNetTypeOfLowering(
 
     private fun collectTypeParameters(type: IrType, result: MutableSet<IrTypeParameter>) {
         val simpleType = type as? IrSimpleType
-            ?: dotNetUnsupported("typeOf cannot represent non-denotable type '${type.render()}' yet")
+            ?: dotNetUnsupported("$operation cannot represent non-denotable type '${type.render()}' yet")
         val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
         if (parameter != null && result.add(parameter)) {
             parameter.superTypes.forEach { upperBound -> collectTypeParameters(upperBound, result) }
@@ -116,14 +129,14 @@ internal class DotNetTypeOfLowering(
         parameterVariables: Map<IrTypeParameter, IrVariable>,
     ): IrExpression {
         val simpleType = type as? IrSimpleType
-            ?: dotNetUnsupported("typeOf cannot represent non-denotable type '${type.render()}' yet")
+            ?: dotNetUnsupported("$operation cannot represent non-denotable type '${type.render()}' yet")
         val classifier = when (val symbol = simpleType.classifier) {
             is IrClassSymbol -> kClassReference(symbol.defaultType)
             is IrTypeParameterSymbol -> irGet(
                 parameterVariables[symbol.owner]
-                    ?: error("Internal .NET backend error: unallocated typeOf parameter '${symbol.owner.name}'")
+                    ?: error("Internal .NET backend error: unallocated $operation parameter '${symbol.owner.name}'")
             )
-            else -> dotNetUnsupported("typeOf has unsupported classifier '${symbol.owner.render()}'")
+            else -> dotNetUnsupported("$operation has unsupported classifier '${symbol.owner.render()}'")
         }
         val projections = simpleType.arguments.map { argument ->
             when (argument) {
@@ -155,7 +168,7 @@ internal class DotNetTypeOfLowering(
     private val IrTypeParameter.containerKey: String
         get() {
             val container = parent as? IrDeclaration
-                ?: error("Internal .NET backend error: typeOf parameter '$name' has no declaration container")
+                ?: error("Internal .NET backend error: $operation parameter '$name' has no declaration container")
             return with(DotNetIrMangler) { container.mangleString(compatibleMode = false) }
         }
 

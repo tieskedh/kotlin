@@ -24,6 +24,7 @@ internal enum class DotNetKClassClassifierKind(val abiValue: Int) {
 /** Physical Common-KClass floor and the compiler/runtime factory used by class-literal codegen. */
 internal object DotNetKClassRuntime {
     private const val KCLASS_TYPE_NAME = "Kotlin.KClass"
+    private const val KTYPE_TYPE_NAME = "Kotlin.KType"
     private const val KCLASS_IMPL_TYPE_NAME = "Kotlin.KClassImpl"
     private const val FACTORY_TYPE_NAME = "Kotlin.Runtime.Internal.KClassFactory"
     internal const val ANNOTATION_FACTORY_HOLDER_NAME = "<AnnotationFactory>"
@@ -44,6 +45,10 @@ internal object DotNetKClassRuntime {
     )
     val kClassClassInfo = DotNetIlClassInfo(
         ilClassName = KCLASS_TYPE_NAME,
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+    val kTypeClassInfo = DotNetIlClassInfo(
+        ilClassName = KTYPE_TYPE_NAME,
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
@@ -93,6 +98,39 @@ internal object DotNetKClassRuntime {
             .property instance class Kotlin.Collections.List annotations()
             {
               .get instance class Kotlin.Collections.List Kotlin.KAnnotatedElement::'get_annotations'()
+            }
+          }
+
+          // KCallable is runtime-owned, so its typed returnType slot needs the minimal KType
+          // identity in this assembly as well. Common/Stdlib still owns the graph behavior and
+          // Kotlin.Stdlib owns KTypeImpl; this interface is only the cycle-free physical floor.
+          .class interface public abstract auto ansi KType
+          {
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KClassifier 'get_classifier'() cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.List 'get_arguments'() cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance bool 'get_isMarkedNullable'() cil managed
+            {
+            }
+
+            .property instance class Kotlin.KClassifier classifier()
+            {
+              .get instance class Kotlin.KClassifier Kotlin.KType::'get_classifier'()
+            }
+
+            .property instance class Kotlin.Collections.List arguments()
+            {
+              .get instance class Kotlin.Collections.List Kotlin.KType::'get_arguments'()
+            }
+
+            .property instance bool isMarkedNullable()
+            {
+              .get instance bool Kotlin.KType::'get_isMarkedNullable'()
             }
           }
 

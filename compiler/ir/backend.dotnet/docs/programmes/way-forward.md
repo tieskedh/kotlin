@@ -127,8 +127,14 @@ KLIB applications and reconstruct the existing annotation runtime values.
 Foreign classes use the separately admitted unmarked-assembly path; imported
 foreign callable references use exact MethodDef/Property tokens. Neither path
 infers Kotlin applications from derived CLR rows or requires broad member
-enumeration/invocation. The remaining reflection sequence must add an exact
-owner model before parameter/type-use annotations or general members.
+enumeration/invocation. `KCallable.returnType` now follows Native's exact
+reflection-target rule and reuses the same logical graph producer as `typeOf`;
+Kotlin declarations come from KLIB-derived IR and imported CLR declarations
+from importer-enhanced semantic IR. Runtime owns the minimal physical `KType`
+interface needed by its typed callable slot, while Stdlib retains Common graph
+behavior. The remaining reflection sequence must add an exact parameter/type-
+parameter owner model before parameter/type-use annotations or general
+members.
 
 ### 3. Expand Common collections by exact dependency closure
 
@@ -278,10 +284,14 @@ The current verified count and command belong only in [`../../STATUS.md`](../../
 
 Parking means “fail clearly and do not constrain a future ABI,” not “approximate now.”
 
-- runtime annotation discovery, wider use-site targets, and unsupported CLR-value projections;
-  valued construction, defaults, KLIB applications, and the exact CLR fixed-argument subset are selected;
-- member and annotation reflection; the nominal `KClass` floor and logical `KType`/`typeOf` graph
-  are complete;
+- wider annotation use-site targets, type-use owners, and unsupported CLR-value
+  projections; valued construction, defaults, KLIB applications, and exact
+  class/callable runtime discovery are selected;
+- broad member/parameter reflection and reflective invocation; the nominal
+  `KClass` floor, logical `KType`/`typeOf` graph, callable annotations, and
+  callable return types are complete;
+- foreign CLR generic-method import, including method-owned parameter bounds,
+  overload resolution, invocation/binding, and subsequent callable reflection;
 - value/inline classes;
 - reflection-dependent inline operations beyond the completed reified
   type/class/array/enum/`typeOf` closure;

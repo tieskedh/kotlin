@@ -3,6 +3,10 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'callableInvocationProvenance' {}
 .module 'main-callableInvocationProvenance.il'
 
@@ -320,7 +324,10 @@ IL_whenNext_1:
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 7
+    .maxstack 12
+    .locals init (
+      [0] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>'
+    )
     call void 'callableInvocationProvenanceKt$main$reference$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:callableInvocationProvenance.kt:380:422:#increment(kotlin.Int){}"
@@ -329,7 +336,20 @@ IL_whenNext_1:
     ldc.i4 0
     ldstr "increment"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc.0
+    ldloc.0
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.KType')
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0') cil managed
@@ -364,9 +384,20 @@ IL_whenNext_1:
     ldstr "increment"
     ret
   }
+  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.KType' 'get_returnType'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetReturnType'()
+    ret
+  }
   .property instance string 'name'()
   {
     .get instance string 'callableInvocationProvenanceKt$main$reference$1'::'get_name'()
+  }
+  .property instance class [Kotlin.Runtime]'Kotlin.KType' 'returnType'()
+  {
+    .get instance class [Kotlin.Runtime]'Kotlin.KType' 'callableInvocationProvenanceKt$main$reference$1'::'get_returnType'()
   }
 }
 .class private auto ansi sealed 'callableInvocationProvenanceKt$main$acceptsAny$1'

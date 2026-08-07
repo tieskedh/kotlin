@@ -82,7 +82,6 @@ internal object DotNetStdlibLibrary {
     const val ERASED_ARRAY_ITERABLE_FACTORY_NAME = "dotNetErasedArrayIterable"
 
     private val implementationClassIlNames = mapOf(
-        "kotlin.reflect.KType" to "Kotlin.Reflection.KType",
         "kotlin.reflect.KTypeParameter" to "Kotlin.Reflection.KTypeParameter",
         "kotlin.reflect.KTypeProjection" to "Kotlin.Reflection.KTypeProjection",
         "kotlin.reflect.KVariance" to "Kotlin.Reflection.KVariance",
@@ -982,8 +981,6 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.reflect",
             facadeIlName = KCLASSES_FACADE_IL_NAME,
         ),
-        "KType.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
-        "DotNetKType.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
         "KTypeParameter.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
         "KTypeProjection.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
         "KVariance.kt" to ImplementationSource(packageFqName = "kotlin.reflect"),
@@ -1010,6 +1007,8 @@ internal object DotNetStdlibLibrary {
         "DotNetKClass.kt" to "kotlin.reflect",
         "DotNetKAnnotatedElement.kt" to "kotlin.reflect",
         "DotNetKCallable.kt" to "kotlin.reflect",
+        "KType.kt" to "kotlin.reflect",
+        "DotNetKType.kt" to "kotlin.reflect",
         "_DotNetBootstrapJsName.kt" to "kotlin.js",
         "DotNetVolatileMarker.kt" to "kotlin.concurrent",
     )

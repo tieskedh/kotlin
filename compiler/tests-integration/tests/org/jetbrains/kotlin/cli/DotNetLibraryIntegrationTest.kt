@@ -15517,9 +15517,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 {
                     public static int Main()
                     {
-                        Kotlin.Reflection.KType concrete = ktype.boundary.KTypeBoundaryKt.concreteType();
+                        Kotlin.KType concrete = ktype.boundary.KTypeBoundaryKt.concreteType();
                         if (concrete.classifier == null || concrete.isMarkedNullable) return 1;
-                        Kotlin.Reflection.KType declared =
+                        Kotlin.KType declared =
                             ktype.boundary.KTypeBoundaryKt.declarationType<string>();
                         Kotlin.Reflection.KTypeProjection projection =
                             (Kotlin.Reflection.KTypeProjection)declared.arguments.Get(0);
@@ -15750,6 +15750,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 """
                 package kcallable.boundary
 
+                import kotlin.reflect.KCallable
+
                 @Retention(AnnotationRetention.RUNTIME)
                 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY)
                 public annotation class LibraryCallableMarker(public val value: String = "library")
@@ -15765,6 +15767,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 @LibraryCallableMarker("property")
                 @BinaryCallableMarker
                 public val libraryProperty: Int = 42
+
+                public val nullableLibraryProperty: String? = null
+
+                public fun <T : Comparable<T>> libraryIdentity(value: T): T = value
+
+                public fun libraryFunctionReference(): KCallable<Int> = ::libraryFunction
                 """.trimIndent()
             )
         }
@@ -15776,11 +15784,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::moduleName.cliArgument, "KCallable.Library",
             K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
         )
+        val producerAssembly = producerDirectory.resolve("KCallable.Library.dll")
 
         val consumerDirectory = File(tmpdir, "kcallable-consumer").apply { mkdirs() }
         val foreignSource = consumerDirectory.resolve("ForeignCallables.cs").apply {
             writeText(
                 """
+                #nullable enable
+
                 using System;
 
                 namespace ForeignCallables
@@ -15799,6 +15810,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                         [ForeignCallableMarker("property")]
                         int Value { get; }
+
+                        string? MaybeText { get; }
                     }
                 }
                 """.trimIndent()
@@ -15819,6 +15832,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 import ForeignCallables.ForeignCallable
                 import kcallable.boundary.*
+                import kotlin.reflect.KFunction1
+                import kotlin.reflect.KTypeParameter
 
                 private fun annotationName(value: Annotation): String =
                     value::class.simpleName ?: "<anonymous>"
@@ -15830,6 +15845,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ?: throw Error("KLIB function annotation identity")
                     if (functionMarker.value != "library") throw Error("KLIB function annotation default")
                     if (libraryFunction(41) != 42) throw Error("library function invocation")
+                    if (::libraryFunction.returnType.classifier != Int::class) {
+                        throw Error("KLIB function return type")
+                    }
+
+                    val genericReference: KFunction1<String, String> = ::libraryIdentity
+                    val genericParameter = genericReference.returnType.classifier as? KTypeParameter
+                        ?: throw Error("KLIB generic return classifier")
+                    if (genericParameter.name != "T" ||
+                        genericParameter.upperBounds.single().classifier != Comparable::class
+                    ) {
+                        throw Error("KLIB generic return parameter")
+                    }
 
                     val propertyAnnotations = ::libraryProperty.annotations
                     if (propertyAnnotations.size != 1) throw Error("KLIB property annotation count")
@@ -15837,6 +15864,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ?: throw Error("KLIB property annotation identity")
                     if (propertyMarker.value != "property") throw Error("KLIB property annotation value")
                     if (::libraryProperty.get() != 42) throw Error("library property invocation")
+                    if (::nullableLibraryProperty.returnType.classifier != String::class ||
+                        !::nullableLibraryProperty.returnType.isMarkedNullable
+                    ) {
+                        throw Error("KLIB nullable property return type")
+                    }
+                    val storedReference = libraryFunctionReference()
+                    if (storedReference.returnType.classifier != Int::class) {
+                        throw Error("stored KCallable return type")
+                    }
 
                     val methodAnnotations = ForeignCallable::Transform.annotations
                     if (methodAnnotations.size != 1) throw Error("foreign method annotation count")
@@ -15849,6 +15885,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (annotationName(foreignPropertyAnnotations[0]) != "ForeignCallableMarkerAttribute") {
                         throw Error("foreign property annotation identity")
                     }
+
+                    val nullableForeign = ForeignCallable::MaybeText.returnType
+                    if (nullableForeign.classifier != String::class || !nullableForeign.isMarkedNullable) {
+                        throw Error("foreign nullable return type: ${'$'}nullableForeign")
+                    }
+
                 }
                 """.trimIndent()
             )
@@ -15859,7 +15901,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             consumerSource.path,
             K2DotNetCompilerArguments::classpath.cliArgument,
             listOf(
-                producerDirectory.resolve("KCallable.Library.dll"),
+                producerAssembly,
                 foreignAssembly,
                 checkNotNull(csharpToolchain).referenceDirectory.resolve("System.Runtime.dll"),
             ).joinToString(File.pathSeparator) { it.path },
@@ -15878,6 +15920,44 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             consumerAssembly,
             consumerDirectory,
             "KCallable annotation boundary consumer failed",
+        )
+
+        val csharpSource = consumerDirectory.resolve("KCallableConsumer.cs").apply {
+            writeText(
+                """
+                public static class KCallableConsumer
+                {
+                    public static int Main()
+                    {
+                        Kotlin.KCallable callable =
+                            kcallable.boundary.KCallableLibraryKt.libraryFunctionReference();
+                        Kotlin.KType returnType = callable.returnType;
+                        Kotlin.KClass classifier = returnType.classifier as Kotlin.KClass;
+                        if (classifier == null || classifier.qualifiedName != "kotlin.Int") return 1;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = consumerDirectory.resolve("KCallableCSharpConsumer.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            checkNotNull(csharpToolchain),
+            csharpSource,
+            csharpAssembly,
+            producerAssembly,
+            consumerDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME),
+            consumerDirectory.resolve("Kotlin.Stdlib.dll"),
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        producerAssembly.copyTo(consumerDirectory.resolve(producerAssembly.name), overwrite = true)
+        consumerDirectory.resolve("KCallableCSharpConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            checkNotNull(csharpToolchain).dotNetHost,
+            csharpAssembly,
+            consumerDirectory,
+            "C# KCallable return-type consumer failed",
         )
     }
 
