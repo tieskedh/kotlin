@@ -149,6 +149,19 @@ source-set visibility, selected DLL/KLIB identity, friend authorization,
 physical ABI metadata, and inline bodies. It never consumes a JVM, JS, or Wasm
 switch merely because the shared Gradle machinery is similar.
 
+Its snapshot must also retain logical expanded typealias dependencies from the
+embedded KLIB wherever an alias changes the visible declaration shape. A JVM
+classpath snapshot of CLR files is not a substitute: invalidation needs both
+logical Kotlin ABI and producer-recorded physical CLR binding. Larger
+snapshots and conservative recompilation are acceptable until a target-owned
+diff proves a narrower rule safe.
+
+BTA, daemon, and incremental buffering must preserve structured diagnostic
+identities as well as rendered messages. A `.NET` operation may share the
+repository's diagnostic transport, but it may not route through a collector
+which erases diagnostic IDs or through a JVM operation merely to gain
+incremental execution.
+
 The initial target model is library-first. Executable and test-run products
 must become explicit target products and may never make `netstandard2.0`
 executable.
