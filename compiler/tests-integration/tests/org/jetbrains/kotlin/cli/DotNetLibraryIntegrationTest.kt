@@ -15850,9 +15850,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
 
                     val genericReference: KFunction1<String, String> = ::libraryIdentity
-                    val genericParameter = genericReference.returnType.classifier as? KTypeParameter
+                    val genericParameters = genericReference.typeParameters
+                    if (genericReference.typeParameters !== genericParameters || genericParameters.size != 1) {
+                        throw Error("KLIB generic parameter list")
+                    }
+                    val genericParameter = genericParameters.single()
+                    if (genericReference.returnType.classifier !== genericParameter) {
+                        throw Error("KLIB generic return identity")
+                    }
+                    val recursiveBoundArgument = genericParameter.upperBounds.single()
+                        .arguments.single().type?.classifier
+                    if (recursiveBoundArgument !== genericParameter) {
+                        throw Error("KLIB generic recursive-bound identity")
+                    }
+                    val returnClassifier = genericReference.returnType.classifier as? KTypeParameter
                         ?: throw Error("KLIB generic return classifier")
-                    if (genericParameter.name != "T" ||
+                    if (returnClassifier != genericParameter || genericParameter.name != "T" ||
                         genericParameter.upperBounds.single().classifier != Comparable::class
                     ) {
                         throw Error("KLIB generic return parameter")
@@ -15872,6 +15885,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val storedReference = libraryFunctionReference()
                     if (storedReference.returnType.classifier != Int::class) {
                         throw Error("stored KCallable return type")
+                    }
+                    if (storedReference.typeParameters.isNotEmpty()) {
+                        throw Error("stored KCallable type parameters")
                     }
 
                     val methodAnnotations = ForeignCallable::Transform.annotations
@@ -15934,6 +15950,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         Kotlin.KType returnType = callable.returnType;
                         Kotlin.KClass classifier = returnType.classifier as Kotlin.KClass;
                         if (classifier == null || classifier.qualifiedName != "kotlin.Int") return 1;
+                        if (callable.typeParameters.Size != 0) return 2;
                         return 0;
                     }
                 }

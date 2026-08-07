@@ -6,7 +6,7 @@
 - Depends on:
   [`ktype-and-typeof.md`](ktype-and-typeof.md) and
   [`draft-adr-callable-and-reference-abi.md`](draft-adr-callable-and-reference-abi.md)
-- Does not enable: `KParameter`, callable type-parameter enumeration,
+- Does not enable: `KParameter`,
   visibility/modality flags, accessor objects, member lookup, reflective
   invocation, type-use annotation discovery, or a complete `kotlin-reflect`
   product
@@ -94,9 +94,10 @@ lands, its method-owned type parameters and bounds must feed this same graph;
 `returnType` adds no callable owner object beyond the reference already being
 used. `KParameter` would require stable instance/context/extension/value
 positions, names, optional/vararg semantics, parameter annotations, equality,
-and future `callBy` ownership. Callable type parameters would likewise require
-one shared identity table with parameter and return types. Those are a later
-coherent tranche, not empty or partial lists attached to this one.
+and future `callBy` ownership. Callable type parameters subsequently
+established the one shared identity table required by parameter and return
+types; see [`callable-type-parameters.md`](callable-type-parameters.md). It does
+not make an empty or partial `KParameter` list correct.
 
 ## Design attack
 
@@ -145,7 +146,7 @@ classifiers.
   schema is unchanged.
 - The extracted type-graph builder becomes the single producer for `typeOf`
   and callable return types.
-- Parameters, callable type parameters, accessor objects, type-use
+- Parameters, accessor objects, type-use
   annotations, general members, and reflective invocation remain parked.
 
 ## Invariants

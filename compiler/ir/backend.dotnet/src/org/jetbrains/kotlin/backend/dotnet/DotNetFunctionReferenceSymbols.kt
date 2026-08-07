@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
 import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.types.typeWith
+import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.types.makeNullable
 import org.jetbrains.kotlin.ir.types.defaultType as symbolDefaultType
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
@@ -55,6 +56,7 @@ internal class DotNetFunctionReferenceSymbols(
     val constructor: IrConstructor
     val boundValueAt: IrSimpleFunction
     val getReturnType: IrSimpleFunction
+    val getTypeParameters: IrSimpleFunction?
 
     init {
         val runtimeInternalPackage = createEmptyExternalPackageFragment(
@@ -91,8 +93,12 @@ internal class DotNetFunctionReferenceSymbols(
                 irBuiltIns.listClass.typeWith(irBuiltIns.annotationType),
             )
             // Adapted references that intentionally expose only FunctionN pass null. Every
-            // KFunction reference supplies the declaration-owned logical graph.
-            addValueParameter("returnType", irBuiltIns.kTypeClass.symbolDefaultType.makeNullable())
+            // KFunction reference supplies one declaration-owned signature array whose first
+            // element is KType and whose remainder contains its own KTypeParameter objects.
+            addValueParameter(
+                "signature",
+                irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
+            )
         }
         if (kAnnotatedElement != null) {
             val superProperty = kAnnotatedElement.properties
@@ -134,6 +140,20 @@ internal class DotNetFunctionReferenceSymbols(
             returnType = irBuiltIns.kTypeClass.symbolDefaultType
         }.apply {
             parameters += createDispatchReceiverParameterWithClassParent()
+        }
+        getTypeParameters = irBuiltIns.kCallableClass.owner.properties
+            .singleOrNull { property -> property.name.asString() == "typeParameters" }
+            ?.getter
+            ?.let { typeParametersGetter ->
+                baseClass.addFunction {
+                    origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+                    name = Name.identifier("GetTypeParameters")
+                    visibility = DescriptorVisibilities.PROTECTED
+                    modality = Modality.FINAL
+                    returnType = typeParametersGetter.returnType
+                }.apply {
+                    parameters += createDispatchReceiverParameterWithClassParent()
+                }
         }
     }
 }
