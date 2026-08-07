@@ -143,16 +143,20 @@ behavior. `KCallable.typeParameters` now takes JVM's declaration-owned rule:
 functions and generic extension properties exclude enclosing class parameters,
 while constructors expose the constructed class's own parameters. Return
 types, exposed parameters, recursive bounds, and reachable enclosing parameters
-are allocated in one identity graph. The remaining reflection sequence must
-extend that graph with the exact `KParameter` owner/position model before
-parameter/type-use annotations or general members.
+are allocated in one identity graph. `KCallable.parameters` now extends that
+same graph with JVM's owner, ordering, captured-receiver omission, reindexing,
+default, vararg, and equality rules. Kotlin parameter applications retain their
+exact declaration owners; admitted foreign callables use exact CLR Param rows
+without turning CLR optional flags into Kotlin default-call semantics. General
+members, accessor objects, reflective invocation, and type-use annotations
+remain separate tranches.
 
-That tranche must include member extension properties with multiple
-callable-owned type parameters and, once context parameters are admitted,
-nested/member properties with multiple context-owned types. The second-stage
-`IrTypeParameterScopeChecker` remains enabled: a failure is evidence of an
-invalid graph or deserialization boundary, not a target-specific checker to
-disable.
+Future member enumeration must include member extension properties with
+multiple callable-owned type parameters and, once context parameters are
+admitted, nested/member properties with multiple context-owned types. The
+second-stage `IrTypeParameterScopeChecker` remains enabled: a failure is
+evidence of an invalid graph or deserialization boundary, not a target-specific
+checker to disable.
 
 ### 3. Expand Common collections by exact dependency closure
 
@@ -252,9 +256,9 @@ reflection owner while the backend only supplies executable artifacts.
 Likewise, broader C# export must first separate selector resolution,
 complete-family admission, and its reusable host-facing plan from
 `DotNetIlEmitter`, following Swift Export's provider/model versus backend
-binding split. Neither guard blocks the next callable-reference `KParameter`
-graph tranche, which remains compile-time lowering over an exact declaration
-target rather than runtime member discovery.
+binding split. The completed callable-parameter graph remained compile-time
+lowering over an exact declaration target rather than runtime member discovery;
+future reflective invocation and enumeration must preserve that owner split.
 
 ### 5. Broaden foreign CLR interoperability only through exact mappings
 
@@ -326,9 +330,9 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - wider annotation use-site targets, type-use owners, and unsupported CLR-value
   projections; valued construction, defaults, KLIB applications, and exact
   class/callable runtime discovery are selected;
-- broad member/parameter reflection and reflective invocation; the nominal
+- broad member reflection, accessor objects, and reflective invocation; the nominal
   `KClass` floor, logical `KType`/`typeOf` graph, callable annotations, and
-  callable return types/type parameters are complete;
+  callable return types/type parameters/parameters are complete;
 - foreign CLR generic-method import, including method-owned parameter bounds,
   overload resolution, invocation/binding, and subsequent callable reflection;
 - value/inline classes;
