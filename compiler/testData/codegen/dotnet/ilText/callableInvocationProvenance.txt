@@ -474,6 +474,16 @@ IL_whenNext_1:
     box [mscorlib]System.Int32
     ret
   }
+  .method public hidebysig newslot virtual final instance object 'Call'(object[] 'args') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance object [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'CallErased'(object[])
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ret
+  }
   .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
   {
     .maxstack 1

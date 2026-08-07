@@ -192,6 +192,80 @@ $kClassSupportTypesIl
             |    }
             |  }
             |
+            |  .class private auto ansi abstract sealed beforefieldinit CallableInvoker
+            |         extends ${coreLibraryReference}System.Object
+            |  {
+            |    $compilerAbiTypeAttributesIl
+            |    .method public hidebysig static object Invoke(
+            |        object 'callable', int32 'arity', object[] 'args') cil managed
+            |    {
+            |      .maxstack 5
+            |      .locals init ([0] int32 actual)
+            |      ldarg.2
+            |      ldlen
+            |      conv.i4
+            |      stloc.0
+            |      ldloc.0
+            |      ldarg.1
+            |      beq.s CI_ArityCorrect
+            |      ldstr "Callable expects "
+            |      ldarga.s 1
+            |      call instance string ${coreLibraryReference}System.Int32::ToString()
+            |      ldstr " arguments, but "
+            |      call string ${coreLibraryReference}System.String::Concat(string, string, string)
+            |      ldloca.s 0
+            |      call instance string ${coreLibraryReference}System.Int32::ToString()
+            |      ldstr " were provided."
+            |      call string ${coreLibraryReference}System.String::Concat(string, string, string)
+            |      newobj instance void ${coreLibraryReference}System.ArgumentException::.ctor(string)
+            |      throw
+            |    CI_ArityCorrect:
+            |      ldarg.1
+            |      switch (CI_Call0, CI_Call1, CI_Call2, CI_Call3)
+            |      ldstr "Callable arity is not supported by this Kotlin/.NET runtime."
+            |      newobj instance void ${coreLibraryReference}System.NotSupportedException::.ctor(string)
+            |      throw
+            |    CI_Call0:
+            |      ldarg.0
+            |      castclass Kotlin.Function0
+            |      callvirt instance object Kotlin.Function0::Invoke()
+            |      ret
+            |    CI_Call1:
+            |      ldarg.0
+            |      castclass Kotlin.Function1
+            |      ldarg.2
+            |      ldc.i4.0
+            |      ldelem.ref
+            |      callvirt instance object Kotlin.Function1::Invoke(object)
+            |      ret
+            |    CI_Call2:
+            |      ldarg.0
+            |      castclass Kotlin.Function2
+            |      ldarg.2
+            |      ldc.i4.0
+            |      ldelem.ref
+            |      ldarg.2
+            |      ldc.i4.1
+            |      ldelem.ref
+            |      callvirt instance object Kotlin.Function2::Invoke(object, object)
+            |      ret
+            |    CI_Call3:
+            |      ldarg.0
+            |      castclass Kotlin.Function3
+            |      ldarg.2
+            |      ldc.i4.0
+            |      ldelem.ref
+            |      ldarg.2
+            |      ldc.i4.1
+            |      ldelem.ref
+            |      ldarg.2
+            |      ldc.i4.2
+            |      ldelem.ref
+            |      callvirt instance object Kotlin.Function3::Invoke(object, object, object)
+            |      ret
+            |    }
+            |  }
+            |
             |  .class public abstract auto ansi beforefieldinit FunctionReferenceBase
             |         extends ${coreLibraryReference}System.Object
             |         implements Kotlin.KAnnotatedElement
@@ -307,6 +381,17 @@ $kClassSupportTypesIl
             |      .maxstack 1
             |      ldarg.0
             |      ldfld class Kotlin.KType Kotlin.Runtime.Internal.FunctionReferenceBase::'returnType'
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig instance object CallErased(object[] 'args') cil managed
+            |    {
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'arity'
+            |      ldarg.1
+            |      call object Kotlin.Runtime.Internal.CallableInvoker::Invoke(object, int32, object[])
             |      ret
             |    }
             |
@@ -545,6 +630,19 @@ $kClassSupportTypesIl
             |      .maxstack 1
             |      ldarg.0
             |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.PropertyReferenceBase::'annotations'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Call(object[] 'args') cil managed
+            |    {
+            |      .override method instance object Kotlin.KCallable::Call(object[])
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldarg.0
+            |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.PropertyReferenceBase::'parameters'
+            |      callvirt instance int32 Kotlin.Collections.List::get_Size()
+            |      ldarg.1
+            |      call object Kotlin.Runtime.Internal.CallableInvoker::Invoke(object, int32, object[])
             |      ret
             |    }
             |
@@ -1143,6 +1241,17 @@ $kClassSupportTypesIl
             |      .maxstack 1
             |      ldarg.0
             |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'annotations'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Call(object[] 'args') cil managed
+            |    {
+            |      .override method instance object Kotlin.KCallable::Call(object[])
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldc.i4.0
+            |      ldarg.1
+            |      call object Kotlin.Runtime.Internal.CallableInvoker::Invoke(object, int32, object[])
             |      ret
             |    }
             |
