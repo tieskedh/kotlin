@@ -121,6 +121,12 @@ internal class DotNetPropertyReferenceSymbols(
             irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
         )
         function.addValueParameter(
+            "parameterFactory",
+            irBuiltIns.functionN(2).symbol.typeWithArguments(
+                listOf(irBuiltIns.anyNType, irBuiltIns.anyNType, irBuiltIns.anyNType),
+            ).makeNullable(),
+        )
+        function.addValueParameter(
             "annotations",
             irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),
         )
@@ -145,6 +151,12 @@ internal class DotNetPropertyReferenceSymbols(
         function.addValueParameter(
             "signature",
             irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
+        )
+        function.addValueParameter(
+            "parameterFactory",
+            irBuiltIns.functionN(2).symbol.typeWithArguments(
+                listOf(irBuiltIns.anyNType, irBuiltIns.anyNType, irBuiltIns.anyNType),
+            ).makeNullable(),
         )
         function.addValueParameter(
             "annotations",

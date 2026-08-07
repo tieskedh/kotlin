@@ -1560,14 +1560,16 @@ $createExceptionBody
     }
 
     .method public hidebysig static class Kotlin.Collections.List 'Foreign'(
-        class Kotlin.KClass 'owner', int32 'metadataToken', int32 'memberKind') cil managed
+        class Kotlin.KClass 'owner', int32 'metadataToken', int32 'memberKind',
+        int32 'parameterIndex') cil managed
     {
       .maxstack 2
       .locals init (
         [0] class ${coreLibraryReference}System.Type 'clrType',
         [1] class ${coreLibraryReference}System.Reflection.MemberInfo[] 'members',
         [2] int32 'index',
-        [3] class ${coreLibraryReference}System.Reflection.MemberInfo 'member'
+        [3] class ${coreLibraryReference}System.Reflection.MemberInfo 'member',
+        [4] class ${coreLibraryReference}System.Reflection.ParameterInfo[] 'parameters'
       )
       ldarg.0
       call class ${coreLibraryReference}System.Type Kotlin.Runtime.Internal.KClassFactory::'GetClrType'(
@@ -1580,6 +1582,9 @@ $createExceptionBody
       ldarg.2
       ldc.i4.1
       beq.s CAF_ForeignProperties
+      ldarg.2
+      ldc.i4.2
+      beq.s CAF_ForeignMethods
       br CAF_ForeignEmpty
     CAF_ForeignMethods:
       ldloc.0
@@ -1617,9 +1622,32 @@ $createExceptionBody
       stloc.2
       br.s CAF_ForeignSearch
     CAF_ForeignFound:
+      ldarg.2
+      ldc.i4.2
+      beq.s CAF_ForeignParameter
       ldloc.3
       ldc.i4.0
       callvirt instance object[] ${coreLibraryReference}System.Reflection.MemberInfo::GetCustomAttributes(bool)
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[])
+      ret
+    CAF_ForeignParameter:
+      ldloc.3
+      castclass ${coreLibraryReference}System.Reflection.MethodBase
+      callvirt instance class ${coreLibraryReference}System.Reflection.ParameterInfo[] ${coreLibraryReference}System.Reflection.MethodBase::GetParameters()
+      stloc.s 4
+      ldarg.3
+      ldc.i4.0
+      blt.s CAF_ForeignEmpty
+      ldarg.3
+      ldloc.s 4
+      ldlen
+      conv.i4
+      bge.s CAF_ForeignEmpty
+      ldloc.s 4
+      ldarg.3
+      ldelem.ref
+      ldc.i4.0
+      callvirt instance object[] ${coreLibraryReference}System.Reflection.ParameterInfo::GetCustomAttributes(bool)
       newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[])
       ret
     CAF_ForeignEmpty:

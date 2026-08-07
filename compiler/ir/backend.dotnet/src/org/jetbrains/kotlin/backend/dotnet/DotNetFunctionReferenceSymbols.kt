@@ -56,6 +56,7 @@ internal class DotNetFunctionReferenceSymbols(
     val constructor: IrConstructor
     val boundValueAt: IrSimpleFunction
     val getReturnType: IrSimpleFunction
+    val getParameters: IrSimpleFunction?
     val getTypeParameters: IrSimpleFunction?
 
     init {
@@ -99,6 +100,12 @@ internal class DotNetFunctionReferenceSymbols(
                 "signature",
                 irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
             )
+            addValueParameter(
+                "parameterFactory",
+                irBuiltIns.functionN(2).symbol.typeWithArguments(
+                    listOf(irBuiltIns.anyNType, irBuiltIns.anyNType, irBuiltIns.anyNType),
+                ).makeNullable(),
+            )
         }
         if (kAnnotatedElement != null) {
             val superProperty = kAnnotatedElement.properties
@@ -141,6 +148,20 @@ internal class DotNetFunctionReferenceSymbols(
         }.apply {
             parameters += createDispatchReceiverParameterWithClassParent()
         }
+        getParameters = irBuiltIns.kCallableClass.owner.properties
+            .singleOrNull { property -> property.name.asString() == "parameters" }
+            ?.getter
+            ?.let { parametersGetter ->
+                baseClass.addFunction {
+                    origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+                    name = Name.identifier("GetParameters")
+                    visibility = DescriptorVisibilities.PROTECTED
+                    modality = Modality.FINAL
+                    returnType = parametersGetter.returnType
+                }.apply {
+                    parameters += createDispatchReceiverParameterWithClassParent()
+                }
+            }
         getTypeParameters = irBuiltIns.kCallableClass.owner.properties
             .singleOrNull { property -> property.name.asString() == "typeParameters" }
             ?.getter

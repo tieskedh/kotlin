@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.irBlock
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irGet
+import org.jetbrains.kotlin.ir.builders.irNull
 import org.jetbrains.kotlin.ir.builders.irTemporary
 import org.jetbrains.kotlin.ir.builders.kClassReference
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
@@ -35,6 +36,7 @@ import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.util.isTypeOfIntrinsic
+import org.jetbrains.kotlin.ir.util.properties
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.toIrConst
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
@@ -87,28 +89,59 @@ internal class DotNetKTypeIrBuilder(
     }
 
     /**
-     * Encodes one declaration-owned callable signature as `[returnType, own type parameters...]`.
-     * The private runtime transport is deliberately a single value: all exposed classifiers are
-     * allocated in this block and therefore retain JVM-style object identity across the graph.
+     * Encodes one declaration-owned callable signature as
+     * `[returnType, ownTypeParameters[], parameterDescriptors[]]`. The private runtime transport
+     * is deliberately a single value: every exposed classifier is allocated in this block and
+     * therefore retains JVM-style object identity across the graph.
      */
     fun IrBuilderWithScope.buildCallableSignature(
         returnType: IrType,
         declaredParameters: List<IrTypeParameter>,
+        callableParameters: List<DotNetCallableParameterDescriptor> = emptyList(),
     ): IrExpression {
         val signatureType = backendContext.irBuiltIns.arrayClass.typeWithArguments(
             listOf(backendContext.irBuiltIns.anyNType),
         )
         return buildParameterGraph(
-            representedTypes = listOf(returnType),
+            representedTypes = listOf(returnType) + callableParameters.map { parameter -> parameter.type },
             declaredParameters = declaredParameters,
             resultType = signatureType,
         ) { parameterVariables ->
+            val ownParameters = backendContext.createArrayOfExpression(
+                startOffset,
+                endOffset,
+                backendContext.irBuiltIns.anyNType,
+                declaredParameters.map { parameter -> irGet(parameterVariables.getValue(parameter)) },
+            )
+            val parameterDescriptors = backendContext.createArrayOfExpression(
+                startOffset,
+                endOffset,
+                backendContext.irBuiltIns.anyNType,
+                callableParameters.map { parameter ->
+                    backendContext.createArrayOfExpression(
+                        startOffset,
+                        endOffset,
+                        backendContext.irBuiltIns.anyNType,
+                        listOf(
+                            parameter.name?.toIrConst(backendContext.irBuiltIns.stringType) ?: irNull(),
+                            buildKType(parameter.type, parameterVariables),
+                            parameter.kind.toIrConst(backendContext.irBuiltIns.intType),
+                            parameter.isOptional.toIrConst(backendContext.irBuiltIns.booleanType),
+                            parameter.isVararg.toIrConst(backendContext.irBuiltIns.booleanType),
+                            parameter.annotations,
+                        ),
+                    )
+                },
+            )
             backendContext.createArrayOfExpression(
                 startOffset,
                 endOffset,
                 backendContext.irBuiltIns.anyNType,
-                listOf(buildKType(returnType, parameterVariables)) +
-                        declaredParameters.map { parameter -> irGet(parameterVariables.getValue(parameter)) },
+                listOf(
+                    buildKType(returnType, parameterVariables),
+                    ownParameters,
+                    parameterDescriptors,
+                ),
             )
         }
     }
@@ -225,3 +258,20 @@ internal class DotNetKTypeIrBuilder(
             Variance.OUT_VARIANCE -> "out"
         }
 }
+
+/** One semantic parameter row consumed by the shared callable KType graph. */
+internal data class DotNetCallableParameterDescriptor(
+    val name: String?,
+    val type: IrType,
+    val kind: Int,
+    val isOptional: Boolean,
+    val isVararg: Boolean,
+    val annotations: IrExpression,
+)
+
+/** Feature-detects the JVM-shaped platform extension for diagnostic/older-stdlib paths. */
+internal val DotNetBackendContext.hasCallableParameterSurface: Boolean
+    get() = symbols.dotNetKParameterFactory != null &&
+            irBuiltIns.kCallableClass.owner.properties.any { property ->
+                property.name.asString() == "parameters"
+            }

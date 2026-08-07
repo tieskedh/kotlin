@@ -57,7 +57,7 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
             arguments[0] = propertyReferenceNameExpression(reference)
             arguments[1] = getterReference
             setterReference?.let { arguments[2] = it }
-            arguments[arguments.lastIndex - 1] = if (hasSignatureSurface) {
+            arguments[arguments.lastIndex - 2] = if (hasSignatureSurface) {
                 val property = reference.reflectionTargetSymbol?.owner as? IrProperty
                     ?: error("Internal .NET backend error: KProperty return type has no property target")
                 val getter = property.getter
@@ -66,8 +66,15 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
             } else {
                 irNull()
             }
+            arguments[arguments.lastIndex - 1] = backendContext.symbols.dotNetKParameterFactory
+                ?.takeIf { backendContext.hasCallableParameterSurface }
+                ?.let { factory -> irCall(factory) }
+                ?: irNull()
             arguments[arguments.lastIndex] = irCall(backendContext.callableAnnotationSymbols.empty)
-            dotNetPropertyAnnotationOwner = reference.reflectionTargetSymbol?.owner as? IrAnnotationContainer
+            val property = reference.reflectionTargetSymbol?.owner as? IrProperty
+            dotNetPropertyAnnotationOwner = property
+            dotNetPropertySignatureOwner = property
+            dotNetPropertyBoundReceiverCount = reference.boundValues.size
         }
     }
 
@@ -93,11 +100,25 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
             } else {
                 irNull()
             }
-            arguments[2] = irCall(backendContext.callableAnnotationSymbols.empty)
+            arguments[2] = backendContext.symbols.dotNetKParameterFactory
+                ?.takeIf { backendContext.hasCallableParameterSurface }
+                ?.let { factory -> irCall(factory) }
+                ?: irNull()
+            arguments[3] = irCall(backendContext.callableAnnotationSymbols.empty)
             dotNetPropertyAnnotationOwner = reference.reflectionTargetSymbol?.owner as? IrAnnotationContainer
+            dotNetLocalPropertySignatureType = valueType
         }
     }
 }
 
 /** Original property declaration retained until annotation lowering assigns its own payload. */
 internal var IrCall.dotNetPropertyAnnotationOwner: IrAnnotationContainer? by irAttribute(copyByDefault = false)
+
+/** Original property retained until parameter-annotation lowering builds the shared signature. */
+internal var IrCall.dotNetPropertySignatureOwner: IrProperty? by irAttribute(copyByDefault = false)
+
+/** Number of leading receiver descriptors captured by this exact property reference. */
+internal var IrCall.dotNetPropertyBoundReceiverCount: Int? by irAttribute(copyByDefault = false)
+
+/** Logical return type for a local delegated-property token, whose parameter list is empty. */
+internal var IrCall.dotNetLocalPropertySignatureType: IrType? by irAttribute(copyByDefault = false)

@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.ir.IrDiagnosticReporter
 import org.jetbrains.kotlin.ir.KtDiagnosticReporterWithImplicitIrBasedContext
 import org.jetbrains.kotlin.ir.classSymbol
 import org.jetbrains.kotlin.ir.functionSymbol
+import org.jetbrains.kotlin.ir.functionSymbolOrNull
 import org.jetbrains.kotlin.ir.functionSymbolAssociatedBy
 import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
@@ -273,6 +274,12 @@ internal class DotNetSymbols(
             StandardNames.KOTLIN_REFLECT_FQ_NAME,
             Name.identifier("dotNetInitializeKTypeParameterUpperBounds"),
         ).functionSymbol { it.hasShape(regularParameters = 2) }
+    }
+    val dotNetKParameterFactory: IrSimpleFunctionSymbol? by with(irBuiltIns) {
+        CallableId(
+            StandardNames.KOTLIN_REFLECT_FQ_NAME,
+            Name.identifier("dotNetKParameterFactory"),
+        ).functionSymbolOrNull()
     }
     val dotNetStarKTypeProjection: IrSimpleFunctionSymbol by with(irBuiltIns) {
         CallableId(StandardNames.KOTLIN_REFLECT_FQ_NAME, Name.identifier("dotNetStarKTypeProjection")).functionSymbol {

@@ -93,7 +93,8 @@ type.
 | Kotlin-to-CLR annotation projection | Exact fixed-argument subset implemented | Extend only with exact physical carriers and parent mappings |
 | Class annotation discovery | Implemented | Reconstruct Kotlin applications from KLIB-derived factories; use CLR reflection only for unmarked foreign assemblies |
 | Callable/property-reference annotation discovery | Implemented | Use exact reference targets; keep property and accessor ownership distinct |
-| Member enumeration and parameter/type-use discovery | Parked | Select declaration ownership, use sites, overrides, and lookup identity before exposing a surface |
+| Callable-parameter discovery | Implemented | Reuse the callable signature graph and exact declaration/Param-row owners |
+| Member enumeration and type-use discovery | Parked | Select declaration ownership, use sites, overrides, and lookup identity before exposing a surface |
 | Kotlin-to-.NET export controls | Undecided public API | Make one language-facing proposal |
 
 ## Ordered work
@@ -222,12 +223,15 @@ the existing executable object. Kotlin dependencies use their embedded KLIB;
 foreign methods and properties use retained declaring types plus exact metadata
 tokens. Property applications remain distinct from getter/setter applications.
 
-The remaining chain covers built-in Kotlin meta-annotation runtime values,
-typed foreign attribute import, member enumeration, and field/accessor-object/
-parameter/type-use ownership. Each needs an admitted declaration identity and
-use-site model before it can extend the reflection surface. The exact CLR
-value/parent grammar may grow independently only when its physical
-representation is exact.
+Callable parameters and their declaration applications are complete under
+[`../decisions/callable-parameters.md`](../decisions/callable-parameters.md):
+Kotlin applications use their exact IR/KLIB owner, while admitted foreign
+parameters use exact Param rows. The remaining chain covers built-in Kotlin
+meta-annotation runtime values, typed foreign attribute import, member
+enumeration, and field/accessor-object/type-use ownership. Each needs an
+admitted declaration identity and use-site model before it can extend the
+reflection surface. The exact CLR value/parent grammar may grow independently
+only when its physical representation is exact.
 
 This is a bounded annotation-reflection layer, not permission to build broad member enumeration or
 invocation first. The foreign decoder and Kotlin producer may share a neutral value algebra, but a

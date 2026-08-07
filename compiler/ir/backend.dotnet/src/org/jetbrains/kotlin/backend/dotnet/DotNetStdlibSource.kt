@@ -107,6 +107,10 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/reflect/DotNetKCallable.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetKParameter.kt",
+        "dotnet/src/kotlin/reflect/DotNetKParameter.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetKType.kt",
         "dotnet/src/kotlin/reflect/DotNetKType.kt",
     ),
@@ -256,6 +260,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "WasExperimental.kt",
         "src/kotlin/annotations/WasExperimental.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "ExperimentalContextParameters.kt",
+        "src/kotlin/contextParameters/ExperimentalContextParameters.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

@@ -15753,7 +15753,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 import kotlin.reflect.KCallable
 
                 @Retention(AnnotationRetention.RUNTIME)
-                @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY)
+                @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY, AnnotationTarget.VALUE_PARAMETER)
                 public annotation class LibraryCallableMarker(public val value: String = "library")
 
                 @Retention(AnnotationRetention.BINARY)
@@ -15762,7 +15762,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 @LibraryCallableMarker
                 @BinaryCallableMarker
-                public fun libraryFunction(value: Int): Int = value + 1
+                public fun libraryFunction(@LibraryCallableMarker("parameter") value: Int): Int = value + 1
 
                 @LibraryCallableMarker("property")
                 @BinaryCallableMarker
@@ -15796,7 +15796,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 namespace ForeignCallables
                 {
-                    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Property)]
+                    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Property | AttributeTargets.Parameter)]
                     public sealed class ForeignCallableMarkerAttribute : Attribute
                     {
                         public ForeignCallableMarkerAttribute(string value) { Value = value; }
@@ -15806,7 +15806,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public interface ForeignCallable
                     {
                         [ForeignCallableMarker("method")]
-                        int Transform(int value);
+                        int Transform([ForeignCallableMarker("parameter")] int value = 1);
+
+                        int Count([ForeignCallableMarker("vararg")] params string[] values);
 
                         [ForeignCallableMarker("property")]
                         int Value { get; }
@@ -15848,6 +15850,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (::libraryFunction.returnType.classifier != Int::class) {
                         throw Error("KLIB function return type")
                     }
+                    val libraryFunctionReference = ::libraryFunction
+                    val libraryParameters = libraryFunctionReference.parameters
+                    if (libraryFunctionReference.parameters !== libraryParameters || libraryParameters.size != 1) {
+                        throw Error("KLIB parameter list")
+                    }
+                    val libraryParameter = libraryParameters.single()
+                    if (libraryParameter.index != 0 || libraryParameter.name != "value" ||
+                        libraryParameter.kind != kotlin.reflect.KParameter.Kind.VALUE ||
+                        libraryParameter.type.classifier != Int::class || libraryParameter.isOptional ||
+                        libraryParameter.isVararg
+                    ) {
+                        throw Error("KLIB parameter shape")
+                    }
+                    val libraryParameterMarker = libraryParameter.annotations.singleOrNull()
+                        as? LibraryCallableMarker ?: throw Error("KLIB parameter annotation identity")
+                    if (libraryParameterMarker.value != "parameter") {
+                        throw Error("KLIB parameter annotation value")
+                    }
 
                     val genericReference: KFunction1<String, String> = ::libraryIdentity
                     val genericParameters = genericReference.typeParameters
@@ -15857,6 +15877,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val genericParameter = genericParameters.single()
                     if (genericReference.returnType.classifier !== genericParameter) {
                         throw Error("KLIB generic return identity")
+                    }
+                    if (genericReference.parameters.single().type.classifier !== genericParameter) {
+                        throw Error("KLIB generic parameter identity")
                     }
                     val recursiveBoundArgument = genericParameter.upperBounds.single()
                         .arguments.single().type?.classifier
@@ -15889,11 +15912,41 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (storedReference.typeParameters.isNotEmpty()) {
                         throw Error("stored KCallable type parameters")
                     }
+                    if (storedReference.parameters.single().name != "value") {
+                        throw Error("stored KCallable parameters")
+                    }
 
                     val methodAnnotations = ForeignCallable::Transform.annotations
                     if (methodAnnotations.size != 1) throw Error("foreign method annotation count")
                     if (annotationName(methodAnnotations[0]) != "ForeignCallableMarkerAttribute") {
                         throw Error("foreign method annotation identity")
+                    }
+                    val foreignParameters = ForeignCallable::Transform.parameters
+                    if (foreignParameters.size != 2 ||
+                        foreignParameters[0].kind != kotlin.reflect.KParameter.Kind.INSTANCE ||
+                        foreignParameters[0].name != null ||
+                        foreignParameters[1].kind != kotlin.reflect.KParameter.Kind.VALUE ||
+                        foreignParameters[1].name != "value" || foreignParameters[1].isOptional ||
+                        foreignParameters[1].isVararg
+                    ) {
+                        throw Error("foreign parameter shape")
+                    }
+                    val foreignParameterAnnotations = foreignParameters[1].annotations
+                    val foreignParameterAnnotationNames = foreignParameterAnnotations.map(::annotationName)
+                    if ("ForeignCallableMarkerAttribute" !in foreignParameterAnnotationNames ||
+                        "OptionalAttribute" !in foreignParameterAnnotationNames
+                    ) {
+                        throw Error("foreign parameter annotation identity: ${'$'}foreignParameterAnnotationNames")
+                    }
+                    val foreignVararg = ForeignCallable::Count.parameters[1]
+                    if (foreignVararg.name != "values" || !foreignVararg.isVararg || foreignVararg.isOptional) {
+                        throw Error("foreign ParamArray shape")
+                    }
+                    val foreignVarargAnnotationNames = foreignVararg.annotations.map(::annotationName)
+                    if ("ForeignCallableMarkerAttribute" !in foreignVarargAnnotationNames ||
+                        "ParamArrayAttribute" !in foreignVarargAnnotationNames
+                    ) {
+                        throw Error("foreign ParamArray annotation: ${'$'}foreignVarargAnnotationNames")
                     }
 
                     val foreignPropertyAnnotations = ForeignCallable::Value.annotations
@@ -15931,6 +15984,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             consumerIl
         }
         assertTrue("CallableAnnotationFactory'::'Foreign'" in consumerIl) { consumerIl }
+        assertTrue("dotNetKParameterFactory" in consumerIl) { consumerIl }
         runDotNet(
             modernDotNetHostOrSkip(),
             consumerAssembly,
@@ -15951,6 +16005,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         Kotlin.KClass classifier = returnType.classifier as Kotlin.KClass;
                         if (classifier == null || classifier.qualifiedName != "kotlin.Int") return 1;
                         if (callable.typeParameters.Size != 0) return 2;
+                        if (callable.parameters.Size != 1) return 3;
                         return 0;
                     }
                 }
@@ -31348,6 +31403,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/annotations/WasExperimental.kt").absoluteFile
+        sourceFiles +=
+            File("libraries/stdlib/src/kotlin/contextParameters/ExperimentalContextParameters.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClass.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KCallable.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClasses.kt").absoluteFile

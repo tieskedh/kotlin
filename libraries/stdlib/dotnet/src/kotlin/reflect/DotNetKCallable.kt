@@ -13,6 +13,9 @@ public actual interface KCallable<out R> : KAnnotatedElement {
     /** The KLIB/importer-IR return type of the reflected declaration, never its CLR erasure. */
     public val returnType: KType
 
+    /** JVM-shaped declaration parameters on this exact bound or unbound callable object. */
+    public val parameters: List<KParameter>
+
     /** Declaration-owned parameters; constructors expose their constructed class's own parameters. */
     public val typeParameters: List<KTypeParameter>
 }

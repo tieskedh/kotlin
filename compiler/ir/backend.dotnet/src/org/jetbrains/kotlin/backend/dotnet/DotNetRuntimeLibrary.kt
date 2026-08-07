@@ -666,6 +666,14 @@ $throwableExceptionTypesIl
             {
               .get instance class Kotlin.Collections.List Kotlin.KCallable::'get_typeParameters'()
             }
+
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.List 'get_parameters'() cil managed
+            {
+            }
+            .property instance class Kotlin.Collections.List parameters()
+            {
+              .get instance class Kotlin.Collections.List Kotlin.KCallable::'get_parameters'()
+            }
           }
 
           .class interface public abstract auto ansi KFunction

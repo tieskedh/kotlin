@@ -139,10 +139,16 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
                 } else {
                     target.typeParameters
                 }
-                kTypeBuilder.run { buildCallableSignature(target.returnType, declaredParameters) }
+                functionReference.dotNetCallableSignature ?: kTypeBuilder.run {
+                    buildCallableSignature(target.returnType, declaredParameters)
+                }
             } else {
                 irNull()
             }
+            arguments[7] = this@DotNetCallableReferenceLowering.context.symbols.dotNetKParameterFactory
+                ?.takeIf { this@DotNetCallableReferenceLowering.context.hasCallableParameterSurface }
+                ?.let { factory -> irCall(factory) }
+                ?: irNull()
         }
     }
 
@@ -333,6 +339,39 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             }
         }
 
+        val parametersProperty = context.irBuiltIns.kCallableClass.owner.properties
+            .singleOrNull { property -> property.name.asString() == "parameters" }
+        if (parametersProperty != null) {
+            val parametersSuperGetter = parametersProperty.getter
+                ?: error("Internal .NET backend error: kotlin.reflect.KCallable.parameters has no getter")
+            val generatedParametersProperty = functionReferenceClass.addProperty {
+                startOffset = reference.startOffset
+                endOffset = reference.endOffset
+                origin = IrDeclarationOrigin.DEFINED
+                name = parametersProperty.name
+                visibility = parametersProperty.visibility
+            }.apply {
+                overriddenSymbols = listOf(parametersProperty.symbol)
+            }
+            generatedParametersProperty.addGetter {
+                startOffset = reference.startOffset
+                endOffset = reference.endOffset
+                origin = IrDeclarationOrigin.DEFINED
+                returnType = parametersSuperGetter.returnType
+                visibility = parametersSuperGetter.visibility
+            }.apply getter@{
+                overriddenSymbols = listOf(parametersSuperGetter.symbol)
+                parameters += createDispatchReceiverParameterWithClassParent()
+                body = context.createIrBuilder(symbol).irBlockBody {
+                    val getParameters = this@DotNetCallableReferenceLowering.context.functionReferenceSymbols.getParameters
+                        ?: error("Internal .NET backend error: KCallable.parameters has no runtime helper")
+                    +irReturn(irCall(getParameters).apply {
+                        arguments[0] = irGet(this@getter.dispatchReceiverParameter!!)
+                    })
+                }
+            }
+        }
+
         val typeParametersProperty = context.irBuiltIns.kCallableClass.owner.properties
             .singleOrNull { property -> property.name.asString() == "typeParameters" }
             ?: return
@@ -410,7 +449,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             val concretePropertyNames = context.irBuiltIns.kCallableClass.owner.properties
                 .mapNotNullTo(linkedSetOf()) { property ->
                     property.name.takeIf { name ->
-                        name.asString() in setOf("name", "returnType", "typeParameters")
+                        name.asString() in setOf("name", "returnType", "parameters", "typeParameters")
                     }
                 }
             functionReferenceClass.declarations.removeAll { declaration ->

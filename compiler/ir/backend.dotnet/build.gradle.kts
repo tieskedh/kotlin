@@ -117,6 +117,9 @@ tasks.named<ProcessResources>("processResources") {
     from(rootProject.file("libraries/stdlib/src/kotlin/annotations/WasExperimental.kt")) {
         into("kotlin-dotnet-stdlib/src/kotlin/annotations")
     }
+    from(rootProject.file("libraries/stdlib/src/kotlin/contextParameters/ExperimentalContextParameters.kt")) {
+        into("kotlin-dotnet-stdlib/src/kotlin/contextParameters")
+    }
     from(files(
         rootProject.file("libraries/stdlib/common/src/kotlin/ExceptionsH.kt"),
         rootProject.file("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt"),
