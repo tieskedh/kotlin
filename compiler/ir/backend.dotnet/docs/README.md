@@ -66,6 +66,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Kotlin annotation classes and exact CLR value projection](decisions/valued-annotation-classes.md)
 - [KLIB-first class annotation discovery](decisions/annotation-discovery.md)
 - [KLIB-first callable annotation discovery](decisions/callable-annotation-discovery.md)
+- [KLIB-first callable return types](decisions/callable-return-types.md)
 - [Semantic erasure and canonical ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)

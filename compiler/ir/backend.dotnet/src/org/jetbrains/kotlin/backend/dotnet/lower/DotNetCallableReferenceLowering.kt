@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.ir.builders.irEquals
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irGetField
 import org.jetbrains.kotlin.ir.builders.irInt
+import org.jetbrains.kotlin.ir.builders.irNull
 import org.jetbrains.kotlin.ir.builders.irReturn
 import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.builders.irWhen
@@ -93,6 +94,7 @@ internal class DotNetUpgradeCallableReferences(context: DotNetBackendContext) :
  */
 internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     AbstractFunctionReferenceLowering<DotNetBackendContext>(context) {
+    private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable return type")
 
     override fun getReferenceClassName(reference: IrRichFunctionReference): Name =
         Name.identifier(if (reference.origin.isLambda) "lambda" else "functionReference")
@@ -123,6 +125,17 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
                 functionReference.dotNetCallableAnnotationFactory
                     ?: this@DotNetCallableReferenceLowering.context.callableAnnotationSymbols.empty
             )
+            val hasReturnTypeSurface = functionReference.type.isKFunction() &&
+                    !functionReference.type.isKSuspendFunction() &&
+                    this@DotNetCallableReferenceLowering.context.irBuiltIns.kCallableClass.owner.properties
+                        .any { property -> property.name.asString() == "returnType" }
+            arguments[6] = if (hasReturnTypeSurface) {
+                val target = functionReference.reflectionTargetSymbol?.owner
+                    ?: error("Internal .NET backend error: KFunction return type has no reflection target")
+                kTypeBuilder.run { buildGraph(target.returnType) }
+            } else {
+                irNull()
+            }
         }
     }
 
@@ -282,6 +295,36 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
                 +irReturn(irString(reference.reflectedName()))
             }
         }
+
+        val returnTypeProperty = context.irBuiltIns.kCallableClass.owner.properties
+            .singleOrNull { property -> property.name.asString() == "returnType" }
+            ?: return
+        val returnTypeSuperGetter = returnTypeProperty.getter
+            ?: error("Internal .NET backend error: kotlin.reflect.KCallable.returnType has no getter")
+        val generatedReturnTypeProperty = functionReferenceClass.addProperty {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = returnTypeProperty.name
+            visibility = returnTypeProperty.visibility
+        }.apply {
+            overriddenSymbols = listOf(returnTypeProperty.symbol)
+        }
+        generatedReturnTypeProperty.addGetter {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            returnType = returnTypeSuperGetter.returnType
+            visibility = returnTypeSuperGetter.visibility
+        }.apply getter@{
+            overriddenSymbols = listOf(returnTypeSuperGetter.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            body = context.createIrBuilder(symbol).irBlockBody {
+                +irReturn(irCall(this@DotNetCallableReferenceLowering.context.functionReferenceSymbols.getReturnType).apply {
+                    arguments[0] = irGet(this@getter.dispatchReceiverParameter!!)
+                })
+            }
+        }
     }
 
     /** Exposes exactly the rich reference's bound values to the runtime identity base. */
@@ -322,16 +365,18 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         functionReferenceClass.dotNetInventedLocalClassName = functionReference.dotNetInventedLocalClassName
         if (functionReference.type.isKFunction() && !functionReference.type.isKSuspendFunction()) {
             // AbstractFunctionReferenceLowering adds fake overrides after generateExtraMethods.
-            // Its KFunctionN view does not recognize the concrete KCallable.name property above
-            // as satisfying the inherited property, so discard only that redundant fake pair.
-            // The concrete getter remains the single CLR implementation of KCallable.get_name.
-            val name = context.irBuiltIns.kCallableClass.owner.properties
-                .single { it.name.asString() == "name" }
-                .name
+            // Its KFunctionN view does not recognize the concrete KCallable properties above as
+            // satisfying the inherited members, so discard only those redundant fake pairs.
+            // The concrete getters remain the single CLR implementations.
+            val concretePropertyNames = context.irBuiltIns.kCallableClass.owner.properties
+                .mapNotNullTo(linkedSetOf()) { property ->
+                    property.name.takeIf { name -> name.asString() == "name" || name.asString() == "returnType" }
+                }
             functionReferenceClass.declarations.removeAll { declaration ->
                 declaration.origin == IrDeclarationOrigin.FAKE_OVERRIDE && when (declaration) {
-                    is IrProperty -> declaration.name == name
-                    is IrSimpleFunction -> declaration.correspondingPropertySymbol?.owner?.name == name
+                    is IrProperty -> declaration.name in concretePropertyNames
+                    is IrSimpleFunction -> declaration.correspondingPropertySymbol?.owner?.name
+                        ?.let { name -> name in concretePropertyNames } == true
                     else -> false
                 }
             }

@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
 import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.types.makeNullable
 import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.name.FqName
@@ -115,6 +116,7 @@ internal class DotNetPropertyReferenceSymbols(
                 irBuiltIns.functionN(arity + 1).symbol.typeWithArguments(typeArguments + irBuiltIns.unitType),
             )
         }
+        function.addValueParameter("returnType", irBuiltIns.kTypeClass.defaultType.makeNullable())
         function.addValueParameter(
             "annotations",
             irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),
@@ -137,6 +139,7 @@ internal class DotNetPropertyReferenceSymbols(
         function.returnType = irBuiltIns.getKPropertyClass(mutable, 0)
             .typeWithArguments(listOf(function.typeParameters.single().defaultType))
         function.addValueParameter("name", irBuiltIns.stringType)
+        function.addValueParameter("returnType", irBuiltIns.kTypeClass.defaultType.makeNullable())
         function.addValueParameter(
             "annotations",
             irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),
