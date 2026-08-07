@@ -264,6 +264,15 @@ fun main(args: Array<String>) {
                 model("codegen/dotnet/ilText")
             }
 
+            testClass<AbstractFirLightTreeDotNetCrossAssemblerTest> {
+                model(
+                    "codegen/dotnet/ilText",
+                    pattern = "^(annotationValues|genericConstraints|genericFunctions|interfaceDefaultBodiesPortable|" +
+                            "mainOverloads|nestedClasses|printlnEscapedString|propertyReferences)\\.kt$",
+                    recursive = false,
+                )
+            }
+
             testClass<AbstractFirPsiAsmLikeInstructionListingTest> {
                 model("codegen/asmLike")
             }

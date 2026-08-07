@@ -1,3 +1,5 @@
+// DOTNET_STDLIB_FROM_SOURCE
+
 package user.bootstrap
 
 // A user source file may share a bootstrap implementation filename. Its package and declarations

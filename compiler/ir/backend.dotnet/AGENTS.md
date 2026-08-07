@@ -720,8 +720,16 @@ Choose verification from the boundary changed, not from the number of source
 files. During local development, the full target aggregate is:
 
 ```text
-./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q
+./gradlew :compiler:backend.dotnet:dotNetTest -q
 ```
+
+Gradle 9's `--rerun` is a selected-task option. On the empty backend
+`dotNetTest` lifecycle task it reruns only that aggregate task, not its FIR or
+integration dependencies, and therefore adds no fresh evidence. Use the exact
+global `--rerun-tasks` option only when a deliberately dependency-wide clean
+checkpoint is required; it also rebuilds every transitive producer and is not
+the default local feature gate. Never describe `--rerun` on the aggregate as a
+fresh full matrix.
 
 Use `--no-daemon` only for CI-equivalent clean-room evidence, after suspected
 daemon/toolchain contamination, or when an explicitly selected checkpoint
@@ -804,6 +812,14 @@ its commit and push. Do not split a coherent feature into microcommits merely
 to repeat a gate, and do not batch unrelated semantics merely to amortize test
 time.
 
+Ordinary FIR/IL/box tests consume the Gradle-produced exact-profile
+`Kotlin.Runtime.dll`/`Kotlin.Stdlib.dll` fixture. Only a test whose subject is
+stdlib source production may request `DOTNET_STDLIB_FROM_SOURCE`; do not restore
+unconditional source injection. The filtered `dn` integration task must not
+inherit compiler-distribution or Wasm products without an actual target test
+consumer. See the
+[test-product ADR](docs/decisions/test-product-and-validation-ownership.md).
+
 ## Box tests
 
 Like mature targets, Kotlin/.NET box tests execute on real runtimes. PSI and
@@ -820,7 +836,10 @@ nondeterministic under unbounded fan-out. Do not serialize ordinary compiler
 or modern-runtime work.
 
 The IL-text suite compares text even without a toolchain and assembles every
-supported golden with each available compatible ILAsm. Text equality does not
+net48 golden with its canonical Framework ILAsm. The bounded cross-assembler
+class submits representative writer-sensitive shapes to both Framework and
+modern ILAsm; extend that corpus when a new physical family needs it instead
+of restoring a second writer pass for every golden. Text equality does not
 replace execution: add real runtime coverage for dispatch, exception,
 initialization, reflection-map, cross-assembly, or profile behavior.
 

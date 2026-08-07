@@ -321,6 +321,13 @@ duplicated setup and has a cross-process strategy for Framework ILAsm/CLR4
 resources. Wasm's tagged task split is precedent for that proof, not evidence
 that more Gradle tasks alone make the full local gate faster.
 
+The platform producer/consumer boundary is now selected independently of task
+partitioning: ordinary codegen tests consume reusable exact-profile
+runtime/stdlib pairs, source production is explicit, every IL golden retains
+canonical Framework validation, and cross-writer validation uses a bounded
+shape-based class. The remaining dedicated-test-module move is architectural
+ownership work, not a prerequisite for these cache and process-count gains.
+
 The current verified count and command belong only in [`../../STATUS.md`](../../STATUS.md).
 
 ## Explicitly parked feature families
