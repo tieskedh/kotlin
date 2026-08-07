@@ -227,7 +227,12 @@ C#-ambiguous facade metadata.
 - Kotlin source/KLIB: original declarations, logical types, nullability,
   defaults, visibility, and identity.
 - Export configuration/DSL: explicit selection and CLR naming.
-- Backend facade builder: collision validation and wrapper/property emission.
+- Export admission/model owner: selector resolution, complete declaration-family
+  admission, logical collision planning, and one validated host-facing export
+  plan independent of CIL rendering.
+- Backend facade builder: consumes that validated plan and owns physical CLR
+  signature collision validation, wrapper/property CIL emission, and bridge
+  binding.
 - Runtime interop helpers: delegate projection/adaptation and round trips.
 - Standard CLR attributes: truthful foreign-language nullability view.
 - Shared physical ABI/placement model: the single answer for compiler, export,
@@ -235,6 +240,14 @@ C#-ambiguous facade metadata.
   or intentional absence.
 - C# presentation/tooling: KDoc projection and C# keyword escaping without
   changing Kotlin identity or the canonical implementation ABI.
+
+The current POC still performs selector resolution and much of export-model
+construction inside `DotNetIlEmitter`. Swift Export's Analysis-API/SIR-provider
+versus Native-backend split is the mature-target dependency precedent: move
+the reusable admission/model concern to a precisely named export/interop owner
+before adding generic, member, or inheritance export. This extraction does not
+move physical CIL decisions out of the backend and does not require a generic
+architecture layer.
 
 ## Rejected alternatives
 

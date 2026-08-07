@@ -16,15 +16,21 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.io.TempDir
 import java.io.ByteArrayOutputStream
+import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class PackedMetadataKlibLoaderTest {
+    @field:TempDir
+    lateinit var tempDirectory: Path
+
     @Test
     fun `loads metadata while retaining the physical container path`() {
-        val libraryPath = Paths.get("Sample.Library.dll")
+        val libraryPath = physicalContainer("Sample.Library.dll")
         val library = loadPackedMetadataKlib(
             libraryPath,
             packedKlib(
@@ -39,6 +45,7 @@ class PackedMetadataKlibLoaderTest {
         )
 
         assertEquals(libraryPath, library.path)
+        assertEquals(libraryPath.toRealPath(), library.canonicalPath)
         assertEquals("Sample.Library", library.uniqueName)
         assertArrayEquals(byteArrayOf(1, 2, 3), library.metadata.moduleHeaderData)
         assertEquals(setOf("root"), library.metadata.getPackageFragmentNames(""))
@@ -50,7 +57,7 @@ class PackedMetadataKlibLoaderTest {
     @Test
     fun `accepts a central directory whose order differs from the local entries`() {
         val library = loadPackedMetadataKlib(
-            Paths.get("Reordered.dll"),
+            physicalContainer("Reordered.dll"),
             packedKlib(
                 "default/manifest" to "unique_name=Reordered\n".toByteArray(),
                 "default/linkdata/module" to byteArrayOf(1),
@@ -67,7 +74,7 @@ class PackedMetadataKlibLoaderTest {
         val mainIr = packedIrComponent("default/ir/", 10)
         val preparedIr = packedIrComponent("default/ir_inlinable_functions/", 20)
         val library = loadPackedKlib(
-            Paths.get("Inline.Library.dll"),
+            physicalContainer("Inline.Library.dll"),
             packedKlib(
                 "default/manifest" to "unique_name=Inline.Library\n".toByteArray(),
                 "default/linkdata/module" to byteArrayOf(1),
@@ -187,6 +194,9 @@ class PackedMetadataKlibLoaderTest {
             }
             bytes.toByteArray()
         }
+
+    private fun physicalContainer(name: String): Path =
+        Files.createFile(tempDirectory.resolve(name))
 
     private fun packedIrComponent(directory: String, seed: Int): Array<Pair<String, ByteArray>> {
         val fileData = byteArrayOf(seed.toByte())

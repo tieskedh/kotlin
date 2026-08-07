@@ -24,9 +24,11 @@ Archived snapshots:
   and durable Kotlin/.NET consequences before a later rebase. Git and the exact
   range own its reproducible per-commit ledger.
 - [`upstream-impact-2026-08-07.md`](upstream-impact-2026-08-07.md) records the
-  next exact 195-commit pending range, conflict-free three-path virtual merge,
-  normalized compiler/export/test directions, and the rebase checklist. Git
-  and the exact range own its exhaustive per-commit ledger.
+  exact 195-commit reviewed and integrated range, conflict-free three-path
+  virtual merge, contract-level reverse-dependency and architecture audit,
+  normalized compiler/export/test directions, strict post-rebase gate, and
+  pure-rebase evidence. Git and the exact range own its exhaustive per-commit
+  ledger.
 - [`common-io-source-partition.md`](common-io-source-partition.md) preserves a
   completed programme whose durable rules now live in the runtime/stdlib ADR.
 - [`superseded-hybrid-exception-identity.md`](superseded-hybrid-exception-identity.md)

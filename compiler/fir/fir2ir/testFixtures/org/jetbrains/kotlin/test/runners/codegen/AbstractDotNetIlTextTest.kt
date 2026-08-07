@@ -387,7 +387,7 @@ private class DotNetEnvironmentConfigurator(
         return if (isLibraryModule(module)) configuredOutput.resolve("$artifactName.dll") else configuredOutput
     }
 
-    private fun getOrCreateStdlibSources() =
+    private fun getOrCreateStdlibSources(): List<File> =
         DOTNET_STDLIB_SOURCES.map { [fileName, source] ->
             testServices.getOrCreateTempDirectory("dotnet-stdlib")
                 .resolve(DOTNET_STDLIB_SOURCE_PATHS.getValue(fileName))

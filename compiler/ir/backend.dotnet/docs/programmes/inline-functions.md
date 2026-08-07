@@ -130,7 +130,9 @@ exports and the C# implementation manifest.
 Add a component-complete packed-KLIB loader in shared `compiler:util-klib` infrastructure. It
 reuses the existing canonical ZIP, central-directory, duplicate-entry, CRC, and expansion-budget
 validation, retains metadata, main IR, and prepared-inlinable IR components, and keeps the
-containing DLL as `KotlinLibrary.path`.
+containing DLL as `KotlinLibrary.path`. The adapter resolves that physical container once as
+`KotlinLibrary.canonicalPath`; the embedded ZIP never acquires a second filesystem or library
+identity.
 
 Keep `loadPackedMetadataKlib` as the explicit metadata-only compatibility entry point and its test
 that ignores unknown components. The .NET loader switches to the component-complete entry point.

@@ -245,6 +245,17 @@ backend. Preserve and validate that dependency direction as the importer grows.
 Further extraction still requires concrete independent consumers. It is not a request to split
 large classes or create layers for their own sake.
 
+The post-rebase upstream architecture pass adds two explicit placement guards.
+Runtime KLIB decoding, member enumeration, and reflective lookup may not grow
+inside `backend.dotnet`; JVM keeps descriptor-less reflection in its dedicated
+reflection owner while the backend only supplies executable artifacts.
+Likewise, broader C# export must first separate selector resolution,
+complete-family admission, and its reusable host-facing plan from
+`DotNetIlEmitter`, following Swift Export's provider/model versus backend
+binding split. Neither guard blocks the next callable-reference `KParameter`
+graph tranche, which remains compile-time lowering over an exact declaration
+target rather than runtime member discovery.
+
 ### 5. Broaden foreign CLR interoperability only through exact mappings
 
 Use [`clr-annotations.md`](clr-annotations.md) and the
