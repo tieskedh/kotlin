@@ -3,7 +3,8 @@
 - Status: **Accepted — pre-ABI**
 - Date: 2026-08-04
 - Amended: 2026-08-05 to distinguish canonical erasure from private
-  implementation reification
+  implementation reification; 2026-08-07 to park the materially different
+  true-CLR-generic-owner/early-cast alternative without authorizing it
 - Scope: Kotlin-owned ordinary generic classes, including their storage,
   member ABI, inheritance, casts, runtime identity, separate compilation, and
   default CLR surface
@@ -317,10 +318,11 @@ has shipped, so every producer and consumer moves together.
   strict.
 - **Treat `C<object>` as `C<*>`.** CLR classes are invariant; value and
   reference constructions are unrelated to that type.
-- **Hybrid typed class plus canonical interface.** Rejected because canonical
-  dispatch is an ordinary correctness path, mutable state still needs erasure,
-  and the second TypeDef/member/metadata/runtime system has no hard product
-  requirement.
+- **Primary typed class plus exceptional canonical fallback.** Rejected because
+  erased/projected dispatch is an ordinary correctness path, not an uncommon
+  recovery route. The distinct design with a complete erased capability ABI
+  and deliberately early failure of physically incompatible unchecked casts is
+  on hold below rather than rejected by this argument.
 - **Wrap, copy, or proxy on casts.** Breaks identity, mutation, dispatch, and
   synchronization.
 - **Maintain two concurrently authoritative typed and erased stores.** Creates
@@ -338,6 +340,8 @@ has shipped, so every producer and consumer moves together.
 
 This decision does not authorize:
 
+- a true CLR-generic `C<T>` owner plus a complete erased Kotlin capability ABI
+  whose physically incompatible unchecked casts fail at the cast boundary;
 - typed C# generic-class export;
 - typed private storage with deoptimization for escaped mutable objects;
 - SSA/CFG escape/provenance analysis, capability guards, or loop versioning;
@@ -353,6 +357,24 @@ measurements. Prefer scalar replacement and immutable/private shapes before a
 mutable escaped-object deoptimization system. An optimization may not change
 the supported public or cross-module observations listed in the decision
 above.
+
+The first on-hold item is not an optimization. It would change TypeDefs, DLL
+signatures, runtime identities, cast timing, reflection normalization, and
+cross-module ABI, so it can land only by reopening this ADR and replacing the
+current baseline atomically. Kotlin already diagnoses the uncheckable generic
+argument portion of casts such as `value as Box<Int>`; the language permits a
+platform to fail that cast earlier when the physical runtime can inspect it.
+That observation removes the former requirement that an incompatible value be
+writable through the same object after such a cast, and therefore makes typed
+single-state storage technically plausible. It does not permit any ordinary
+type-correct star, projection, variance, widened-call, or collection candidate
+to fail early.
+
+The exact question, admissible failures, forbidden rejections, evidence matrix,
+and locked scope are recorded in
+[`../programmes/generic-class-owner-reopening.md`](../programmes/generic-class-owner-reopening.md).
+Until that programme is explicitly activated and this ADR is revised, the
+non-generic owner and delayed-use behavior above remain authoritative.
 
 ## Verification gate
 
