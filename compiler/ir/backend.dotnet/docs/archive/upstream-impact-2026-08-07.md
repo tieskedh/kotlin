@@ -1,8 +1,8 @@
-# Pending upstream integration review — 2026-08-07
+# Upstream integration record — 2026-08-07
 
 ## Scope and accounting
 
-This snapshot reviews the exact pending range:
+This snapshot reviews and records integration of the exact range:
 
 ```text
 76ca9aa1af7247c4f091f2f0d10c6f25b6fa80b9..0e8c5f3f53f0ed2af01c6165d5a5ec7d8f58ba54
@@ -16,9 +16,9 @@ ledger contained all 195 short hashes exactly once with no omissions; it was
 then normalized into the current owners listed below. Git and the exact range
 above remain the reproducible per-commit ledger.
 
-This file records review and integration evidence. The branch has not yet been
-rebased onto this range, and no conclusion below claims post-rebase test
-success.
+The branch was subsequently rebased onto the reviewed head without semantic
+cleanup. Verification state is recorded explicitly below; review evidence is
+not presented as test evidence.
 
 ## Mechanical integration facts
 
@@ -26,8 +26,9 @@ success.
   common base.
 - No upstream commit directly changes a Kotlin/.NET-owned source path.
 - Only three paths are changed by both sides.
-- `git merge-tree --write-tree HEAD origin/master` completed without a
-  textual conflict and produced tree
+- Before the documentation normalization commit,
+  `git merge-tree --write-tree HEAD origin/master` completed without a textual
+  conflict and produced tree
   `1501546406e1652da4e20dca07e0e2370656af87`.
 
 | Shared path | Upstream change | Required treatment |
@@ -38,6 +39,57 @@ success.
 
 The virtual-merge content was inspected, not merely its exit code. It contains
 both sides of all three edits and preserves their independent semantics.
+
+The pure rebase then established `0e8c5f3f53` as the exact merge base and
+replayed all 409 target commits. Range-diff reported 408 patch-identical
+commits and one context-only change: the ordinary-inline commit now applies
+the same `includeLateinitLowering` addition around upstream's renamed
+`createIrValidationAfterInliningPrivateFunctionsKlibPhase` factory. The
+rebased tree differs from the virtual-merge tree only by the already reviewed
+nine-file documentation normalization patch; that patch is byte-for-byte
+identical before and after the rebase. The safety ref
+`refs/backup/dotnet-before-upstream-rebase-20260807` preserves the old tip.
+
+## Architecture and reverse-dependency second pass
+
+The initial commit/path review found the upstream `Klib.canonicalPath` change
+but did not trace it to the branch-added packed-KLIB implementation. The review
+was therefore repeated at the contract and owner level rather than treating a
+clean virtual merge as complete impact evidence. The second pass inspected the
+source owners behind every retained compiler/import/reflection/export/inliner
+theme and searched the 628 branch-changed Kotlin/Java production and test
+sources for the relevant changed shared contracts.
+
+The concrete outcomes are:
+
+- `PackedKlib` was the one target-owned `Klib` implementation missing the new
+  contract; it now keeps the physical DLL as both path and resolved canonical
+  identity. The changed `KlibLibraryProvider` callback has no target-owned
+  implementation.
+- The renamed/strengthened IR validation phases are target composition points;
+  `.NET` now uses the same second-stage phase identities and checker sets as JS,
+  Wasm, Native, and the shared inliner. No checker is suppressed.
+- Analysis API's diagnostics query and FIR's postponed-atom/type-variable
+  changes have no target-owned implementation. The target continues consuming
+  shared FIR inference, and a future IDE component must consume the shared
+  diagnostics query rather than invent a `.NET` endpoint.
+- JVM descriptor-less callable reconstruction remains in
+  `core:reflection.jvm`, outside the JVM backend. This confirms that future
+  runtime KLIB decoding, member enumeration, and reflective lookup need a
+  reflection/runtime owner outside `backend.dotnet`; current compile-time
+  callable-reference graph lowerings remain backend work.
+- Swift Export separates Analysis-API/SIR admission and model construction from
+  Native backend bridge binding. The current emitter-local C# export model is
+  therefore recorded as provisional debt: reusable selector/admission/model
+  work moves to an export/interop owner before generic, member, or inheritance
+  export expands; physical CIL emission remains in the backend.
+- Java Direct continues to place its source model in a dedicated importer
+  module and its Kotlin projection in FIR/JVM. It is dependency-role precedent
+  for the existing CLR-loader/FIR split, not proof that Java's model or its
+  FIR-session resolution mechanics should be copied.
+
+No accepted `.NET` deviation was added by this pass. The two placement guards
+above tighten future architecture; they do not alter current Kotlin ABI.
 
 ## Lasting directions
 
@@ -139,10 +191,12 @@ Owners:
 
 ### Importer, tooling, and parked coroutines
 
-Java Direct continues separating objective source facts from FIR policy,
-removing IDE/VFS dependence, eliminating duplicate supertype resolution, and
-using lazy annotation lists to break cycles. It is architectural precedent for
-the existing CLR loader/FIR boundary, not reusable Java importer code.
+Java Direct keeps its source model/finder in `compiler:java-direct` and its
+Kotlin conversion in FIR/JVM while removing IDE/VFS dependence, eliminating
+duplicate supertype resolution, and using lazy annotation lists to break
+cycles. Its finder still participates in FIR-session resolution, so the useful
+precedent is the ownership split—not a claim that Java Direct is a pure
+target-neutral evidence layer or reusable CLR importer code.
 
 Analysis API converges on one diagnostics query and PSI/decompiler stubs retain
 more initializer, body, and default-expression facts. A future .NET IDE
@@ -186,20 +240,43 @@ metadata changes. They were screened by subject and paths. None changes an
 accepted .NET exception, generic, array, enum, annotation, initialization,
 runtime/stdlib, self-describing-DLL, or target-profile decision.
 
-## Rebase checklist
+## Integration and verification outcome
 
-1. Create a safety ref and rebase only onto the exact reviewed head
-   `0e8c5f3f53`; do not silently chase a newer `origin/master`.
-2. Inspect the three shared paths against the verified virtual-merge content.
-3. Regenerate the BTA API baseline and FIR2IR test runners through their
-   owning tasks; never hand-edit generated output.
-4. Compile with the new bootstrap and inspect all generated churn.
-5. Run focused checks for receiver/`Nothing?` casts, exhaustive-when
-   expect/actual selection, all KLIB inliner modes, callable references with
-   multiple type parameters, second-stage scope/offset/field validation,
-   canonical embedded-KLIB loading, default/export separation, and both
-   frontends/profiles.
-6. Run and XML-audit the strict `dotNetTest --rerun -q` aggregate before any
-   semantic cleanup.
-7. Keep the pure rebase separate from optional shared-test adoption, task
-   partitioning, or other follow-up changes.
+Completed mechanical checks:
+
+1. The safety ref was created and the branch was rebased only onto the exact
+   reviewed head `0e8c5f3f53`.
+2. All three shared paths were inspected against the verified virtual-merge
+   content and retain both owners' semantics.
+3. The 409-commit range-diff and complete tree comparison found no dropped or
+   additional target patch.
+4. The pure rebase was force-pushed separately from this documentation update.
+
+The first owner build exposed three indirect source adaptations which the
+path-overlap audit could not reveal:
+
+- the shared packed-KLIB adapter now resolves and retains the physical DLL's
+  `Klib.canonicalPath`, as required by upstream's extended `Klib` contract;
+- three foreign-CLR FIR builders and one FIR2IR test helper state their
+  inferred result types explicitly under the stricter compiler bootstrap; and
+- the .NET inline pipeline uses upstream's renamed private/all-functions and
+  before-lowerings KLIB second-stage validators. It therefore admits the new
+  type-parameter-scope, field-visibility, offset, and unbound-symbol checks
+  instead of bypassing them.
+
+The missed packed-KLIB implementation establishes a review-process correction:
+an upstream interface, abstract-base, sealed-hierarchy, constructor, or factory
+contract change requires a repository-wide reverse-dependency audit of
+target-owned implementors and consumers. Commit/path accounting and a clean
+virtual merge cannot establish that property on their own.
+
+The BTA `apiDump` owner and FIR2IR `generateTests` owner then completed without
+tracked generated churn. Focused verification covered eight packed-KLIB loader
+unit tests, twelve callable-type-parameter/exhaustive-when FIR, IL, Framework,
+and CoreCLR tests, and six embedded-library/inliner integration tests; all
+reported zero failures, errors, or skips. The strict XML-audited
+`dotNetTest --rerun -q` aggregate then completed at 2026-08-07 12:42 local:
+50 FIR/IL/box XML suites reported 1,174 tests and two CLI/library-integration
+suites reported 113 tests, for 52 suites and 1,287 tests total with zero
+failures, errors, or skips. No optional shared-test adoption or task
+restructuring is part of the mechanical integration.

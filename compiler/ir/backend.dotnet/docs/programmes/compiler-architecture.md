@@ -21,6 +21,15 @@ dependency direction.
   production in distinct dependency roles.
 - Native keeps target configuration, KLIB ownership, IR lowering, and native code generation
   separate even when historical packages do not perfectly reflect module ownership.
+- JVM's descriptor-less reflection reconstructs logical Kotlin callables from metadata in
+  `core:reflection.jvm`; the backend does not become the owner of runtime member discovery. A
+  .NET lowering may construct a compile-time callable-reference graph, but later KLIB decoding,
+  member enumeration, and reflective lookup need a runtime/reflection owner outside
+  `backend.dotnet`.
+- Swift Export keeps declaration admission and its host-facing model in Analysis-API/SIR provider
+  layers, while the Native backend binds the resulting physical reverse bridges. The .NET backend
+  may emit and bind CIL for a validated export plan, but must not remain the permanent owner of
+  export selection, declaration-family admission, or the reusable host-facing model.
 - CLI modules compose pipelines and may call backend entry points. That does not make foreign
   metadata, serialization, product descriptions, or packaging code-generation responsibilities.
 
@@ -201,6 +210,12 @@ Separate the manifest model/codec from the backend IR collector into a shared in
 Roslyn tooling, compiler production, and validators must consume one versioned schema without a
 frontend or tool importing backend implementation packages.
 
+The same boundary applies to explicit C# export before generic, member, or inheritance export
+expands: selector resolution, complete-family admission, and the host-facing export plan move out
+of `DotNetIlEmitter` into a precisely named export/interop owner. The backend retains IR-to-CIL
+wrapper construction, physical collision validation, and bridge binding. The current emitter-local
+model is provisional POC debt, not mature-target precedent.
+
 ### 4. Runtime and stdlib product descriptions
 
 Move neutral artifact descriptions and product resource catalogs toward distribution/shared target
@@ -239,6 +254,7 @@ state transition or validation boundary.
 - generated compiler configuration and language-target identity;
 - general KLIB library loading/serialization;
 - reusable C# manifest decoding;
+- reusable C# export selection, admission, and host-facing model construction;
 - CLI content-root identity;
 - Gradle variant/product publication; and
 - Common stdlib source algorithms.

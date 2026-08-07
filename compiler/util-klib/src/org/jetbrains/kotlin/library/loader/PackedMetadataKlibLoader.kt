@@ -33,6 +33,7 @@ import org.jetbrains.kotlin.library.impl.IrMultiArrayReader
 import org.jetbrains.kotlin.library.readKonanLibraryVersioning
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStreamReader
 import java.nio.charset.CodingErrorAction
 import java.nio.file.Path
@@ -42,14 +43,16 @@ import java.util.zip.ZipInputStream
 /**
  * Loads a metadata-only packed KLIB whose physical container is owned by another library format.
  *
- * The returned [KotlinLibrary.path] is [libraryPath], not a synthetic archive path. This lets
- * container-aware targets retain their native artifact identity while reusing the ordinary KLIB
- * metadata component and FIR deserialization machinery.
+ * The returned [KotlinLibrary.path] is [libraryPath], not a synthetic archive path, and its
+ * [KotlinLibrary.canonicalPath] is resolved from that physical container once while loading. This
+ * lets container-aware targets retain their native artifact identity while reusing the ordinary
+ * KLIB metadata component and FIR deserialization machinery.
  *
  * Only the manifest and metadata component are retained. Other packed entries are validated and
  * ignored, so targets that need serialized IR or custom components must use the regular KLIB
  * loader or provide a component-complete container adapter.
  *
+ * @throws IOException if [libraryPath] cannot be resolved to its canonical physical container.
  * @throws IllegalArgumentException if [packedKlib] is not a canonical, bounded metadata KLIB.
  */
 fun loadPackedMetadataKlib(
@@ -65,9 +68,11 @@ fun loadPackedMetadataKlib(
  * must contain every mandatory table; malformed partial components are rejected while the container is
  * loaded instead of failing later during IR deserialization.
  *
- * The returned [KotlinLibrary.path] remains [libraryPath]. Unknown future components are validated as ZIP
- * entries but ignored.
+ * The returned [KotlinLibrary.path] remains [libraryPath], and
+ * [KotlinLibrary.canonicalPath] identifies the same physical container. Unknown future components
+ * are validated as ZIP entries but ignored.
  *
+ * @throws IOException if [libraryPath] cannot be resolved to its canonical physical container.
  * @throws IllegalArgumentException if [packedKlib] is not a canonical, bounded KLIB.
  */
 fun loadPackedKlib(
@@ -100,6 +105,7 @@ private class PackedKlib(
     override val path: Path,
     archive: PackedKlibArchive,
 ) : KotlinLibrary {
+    override val canonicalPath: Path = path.toRealPath()
     override val manifestProperties: Properties = Properties().apply {
         InputStreamReader(ByteArrayInputStream(archive.manifest), Charsets.UTF_8).use(::load)
     }
