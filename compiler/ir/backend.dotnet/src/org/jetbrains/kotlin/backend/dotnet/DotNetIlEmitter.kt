@@ -1864,6 +1864,7 @@ internal class DotNetIlEmitter(
                 if (superInterface !in moduleInterfaces &&
                     !DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(superInterface) &&
                     !superInterface.isDotNetCharSequenceClass() &&
+                    DotNetRuntimeTypes.classInfoFor(superInterface) == null &&
                     !externalDeclarations.hasClass(superInterface) &&
                     DotNetStdlibLibrary.publicImplementationClassInfoOrNull(superInterface) == null &&
                     importedClrDeclarations.classInfoOrNull(superInterface) == null &&
@@ -1876,7 +1877,7 @@ internal class DotNetIlEmitter(
                 ) {
                     dotNetUnsupported(
                         "class '$name' implements '${superInterface.diagnosticName()}', which is not an " +
-                                "interface of the compiled module or a supported Kotlin.Runtime execution interface"
+                                "interface of the compiled module or a supported Kotlin.Runtime interface"
                     )
                 }
             }

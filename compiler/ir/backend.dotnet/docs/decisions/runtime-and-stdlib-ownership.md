@@ -31,7 +31,10 @@ platform targets supply actuals and irreducible host operations.
 
 - `Kotlin.Runtime.dll` owns compiler/runtime identities and services required
   by generated code: callable and interface identities, exact runtime types,
-  classification/state services, and narrow semantic helpers.
+  classification/state services, and narrow semantic helpers. This includes
+  the minimal physical `KClass` and `KType` interfaces required by runtime-
+  owned callable signatures; their logical Common declarations and ordinary
+  behavior remain Kotlin source authority.
 - `Kotlin.Stdlib.dll` owns ordinary Kotlin library declarations,
   implementations, facades, and private implementation classes.
 - The user assembly owns only declarations from that compilation and calls the
@@ -41,6 +44,13 @@ An ordinary stdlib algorithm never belongs in the emitter or runtime. A
 private implementation class belongs to the stdlib assembly and does not
 become public compiler ABI merely because a compiler-generated bridge or
 factory reaches it.
+
+Runtime must not reference Stdlib: Stdlib already implements and depends on
+Runtime identities. When a runtime-owned public contract needs a Common type,
+put only the minimal cycle-free physical interface in Runtime and keep its
+ordinary implementation and behavior in Stdlib. Do not weaken the contract to
+`object`, duplicate the identity in both assemblies, or move the Common
+implementation into Runtime.
 
 ### Common and generated Kotlin sources are authoritative
 

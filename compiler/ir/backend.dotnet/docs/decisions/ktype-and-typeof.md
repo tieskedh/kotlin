@@ -118,6 +118,15 @@ inspect. Compiler construction helpers are compiler ABI, not a second public
 reflection model. A reified `typeOf` operation is completed at its Kotlin call
 site; the target does not publish a callable CLR-generic `typeOf<T>` remainder.
 
+`Kotlin.Runtime.dll` owns the minimal physical `KType` interface, following
+the existing `KClass` precedent. This is necessary because runtime-owned
+`KCallable` exposes a typed `returnType` slot and Runtime may not depend on
+Stdlib. `Kotlin.Stdlib.dll` still owns the unchanged Common `KTypeImpl`, type
+parameters, projections, equality, hashing, validation, rendering, and graph
+construction helpers. The assembly split introduces neither an `object`
+bridge nor a second `KType` identity: Stdlib implementations implement the
+single Runtime interface.
+
 ## Design attacks and rejected alternatives
 
 ### Use `System.Type`
@@ -158,6 +167,8 @@ Those remain separately reviewable language features.
 ## Invariants
 
 - Common owns `KType` equality, hashing, validation, and string rendering.
+- Runtime owns only the cycle-free physical `KType` interface; Stdlib owns its
+  Common behavior and implementations.
 - `System.Type` may contribute classifier evidence only through `KClass`.
 - Type arguments never participate in the runtime identity of a Kotlin-owned
   class.
