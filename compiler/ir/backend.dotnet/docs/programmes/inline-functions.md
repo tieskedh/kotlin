@@ -47,6 +47,21 @@ consumed without whole-world linking. Kotlin/.NET follows that ownership: every 
 dependency keeps the required body components, while a foreign CLR assembly never receives a
 synthetic Kotlin inline body.
 
+Upstream now builds the shared stdlib and `kotlin-test` with cross-module IR
+inlining as the production default and has removed JS runners whose only
+difference was forcing that mode on. Kotlin/.NET therefore exercises the
+production default in ordinary semantic coverage. Its explicit
+disabled/intra-module/full matrix remains only because the target currently
+publishes all three compiler modes and must prove embedded-KLIB and physical
+fallback behavior for each; it is not a reason to duplicate every Common
+semantic runner.
+
+The shared second-stage KLIB validator now checks offsets, field visibility,
+unbound symbols, and type-parameter scope more consistently before target
+lowerings. These checks are part of the inline/library contract. The .NET
+pipeline must fix invalid synthesized or deserialized IR rather than disable a
+checker to preserve an old target artifact.
+
 JVM uses its class-file inline-body representation and JVM backend sequence rather than KLIB IR,
 but establishes the same invariant: a consumer receives compiler-readable body information and
 Kotlin compiler ABI is distinct from ordinary source-public API.

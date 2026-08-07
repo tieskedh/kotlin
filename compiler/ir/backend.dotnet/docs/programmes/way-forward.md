@@ -99,6 +99,13 @@ explicitly selected library B through the existing non-linking deserializer and 
 symbol finder. Preserve that boundary without introducing a general IR linker or transitive
 dependency discovery.
 
+Cross-module IR inlining is now the upstream production default for stdlib and
+`kotlin-test`; mature-target suites are deleting runners whose only purpose was
+to force that mode. Keep the three .NET modes only as explicit compiler-ABI
+compatibility evidence. New Common semantic coverage uses the production
+default rather than multiplying the complete matrix for an already selected
+inliner setting.
+
 The completed reified programme composes its independently truthful non-generic reference,
 boxed-scalar, type-test/cast, array, declaration-erased generic-class/interface, `KClass`, enum,
 and physical-remainder foundations through shared call-site substitution. Preserve the three KLIB
@@ -139,6 +146,13 @@ types, exposed parameters, recursive bounds, and reachable enclosing parameters
 are allocated in one identity graph. The remaining reflection sequence must
 extend that graph with the exact `KParameter` owner/position model before
 parameter/type-use annotations or general members.
+
+That tranche must include member extension properties with multiple
+callable-owned type parameters and, once context parameters are admitted,
+nested/member properties with multiple context-owned types. The second-stage
+`IrTypeParameterScopeChecker` remains enabled: a failure is evidence of an
+invalid graph or deserialization boundary, not a target-specific checker to
+disable.
 
 ### 3. Expand Common collections by exact dependency closure
 
@@ -282,6 +296,16 @@ The target gate must retain:
 - direct visibility and compiler-ABI inspection; and
 - no skipped test hidden by an unavailable required toolchain in the strict lane.
 
+The strict aggregate remains one supported entry point even if its internals
+are partitioned. A partition is justified only by an independent local/CI
+consumer, measurable cache or scheduling value, and a disjoint exhaustive
+grouping whose union is checked by the repository test-lifecycle machinery.
+The current aggregate already separates FIR/IL/box from CLI/library
+integration; splitting the short-path `dn` task is on hold until it can avoid
+duplicated setup and has a cross-process strategy for Framework ILAsm/CLR4
+resources. Wasm's tagged task split is precedent for that proof, not evidence
+that more Gradle tasks alone make the full local gate faster.
+
 The current verified count and command belong only in [`../../STATUS.md`](../../STATUS.md).
 
 ## Explicitly parked feature families
@@ -293,7 +317,7 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
   class/callable runtime discovery are selected;
 - broad member/parameter reflection and reflective invocation; the nominal
   `KClass` floor, logical `KType`/`typeOf` graph, callable annotations, and
-  callable return types are complete;
+  callable return types/type parameters are complete;
 - foreign CLR generic-method import, including method-owned parameter bounds,
   overload resolution, invocation/binding, and subsequent callable reflection;
 - value/inline classes;
