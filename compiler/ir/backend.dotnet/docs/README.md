@@ -43,6 +43,9 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [`programmes/structured-cli-ir.md`](programmes/structured-cli-ir.md)
   governs the incremental migration from backend-owned text fragments to the
   policy-free physical CLI model and its serializers.
+- [`programmes/generic-class-owner-reopening.md`](programmes/generic-class-owner-reopening.md)
+  parks the true-CLR-generic-owner/early-unchecked-cast alternative and records
+  what it locks and what evidence would be required to reopen the accepted ABI.
 - [`programmes/inline-functions.md`](programmes/inline-functions.md)
   owns the selected ordinary inline/KLIB IR infrastructure programme while
   keeping reified and suspend inline support separate.
