@@ -579,6 +579,17 @@ direct-PE sinks; do not add a sidecar merely to exchange one external process
 for another. See
 [CIL/PE production ADR](docs/decisions/cil-and-pe-production.md).
 
+Migrated physical ECMA-335 forms live in `:dotnet:dotnet.ir`, which must not
+depend on Kotlin IR, FIR, KLIB, target profiles, export policy, or backend
+implementation types. `backend.dotnet` owns Kotlin representation choices,
+profile legalization, instruction selection, and lowering into concrete CLI
+forms; `dotnet.ir` owns their structural validation and deterministic text and
+future JVM-hosted PE serialization. Add no speculative CLI nodes. Migrate one
+closed production form at a time and remove its old string builder in the same
+slice. CLI generic support is a physical capability only and never reopens the
+accepted declaration-erased runtime owner of a Kotlin-owned generic class.
+See [the structured CLI programme](docs/programmes/structured-cli-ir.md).
+
 Any IL spelling not already golden-pinned must first be assembled and executed
 in a temporary probe outside the repository. Verify physical metadata through
 tables, reflection/interface maps, and real dispatch as appropriate; substring
@@ -739,6 +750,7 @@ tasks and shared external-tool locks.
 Do not trust quiet Gradle success alone. Audit every JUnit XML file under:
 
 ```text
+dotnet/dotnet.ir/build/test-results/test/
 compiler/fir/fir2ir/build/test-results/dotNetTest/
 compiler/tests-integration/build/test-results/dn/
 ```
