@@ -2,6 +2,8 @@
 
 - Status: **Accepted — pre-ABI**
 - Date: 2026-07-15
+- Amended: 2026-08-07 to assign the physical CLI model and serializers to
+  `:dotnet:dotnet.ir`
 - Scope: transforming lowered CIL and metadata into CLR assemblies
 
 ## Context
@@ -58,6 +60,28 @@ require a second managed-runtime process. Serialization ownership may change
 without changing Kotlin declaration identity, runtime ABI, generic lowering,
 or target-framework policy.
 
+The physical model and its serializers live in the low-level
+`:dotnet:dotnet.ir` module under `org.jetbrains.kotlin.dotnet.ir`, following
+the dependency direction between `:compiler:ir.backend.wasm` and
+`:wasm:wasm.ir`. The compiler backend lowers concrete representation choices
+into that model; the model must not depend on Kotlin IR, FIR, KLIB,
+target-framework configuration, export selection, or Kotlin ABI policy.
+
+The CLI model is capability-complete only as features require it. Supporting
+an ECMA-335 generic TypeDef, TypeSpec, MethodSpec, or GenericParam does not
+authorize the backend to use that shape as Kotlin runtime identity. In
+particular, the accepted declaration-erased owner of a Kotlin-owned generic
+class remains authoritative. Imported CLR generics, generic methods, truthful
+interface capabilities, explicit export artifacts, and removable private
+specialization may use physical CLI generic constructs under their owning
+decisions.
+
+Migration is incremental. No model node is introduced without a concrete
+producer and consumer. Each slice gains structural validation and a
+deterministic text rendering, switches the production path for that shape,
+and removes the superseded string construction for the same shape. The
+complete corpus must not permanently run through two emitters.
+
 Text remains an independent oracle after direct PE becomes primary.
 
 ## Why this boundary
@@ -106,6 +130,9 @@ A direct writer must:
   incidental backend refactor.
 - The writer transition cannot opportunistically revise language semantics or
   physical ABI.
+- Physical CLI vocabulary, structural invariants, and serialization are
+  reusable target-format infrastructure; Kotlin representation planning and
+  target-profile legalization remain backend responsibilities.
 
 ## References
 
