@@ -10,6 +10,7 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 import org.jetbrains.kotlin.backend.common.FileLoweringPass
 import org.jetbrains.kotlin.backend.common.compilationException
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
+import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.AnnotationImplementationMemberGenerator
 import org.jetbrains.kotlin.backend.common.lower.AnnotationImplementationTransformer
 import org.jetbrains.kotlin.backend.common.lower.ANNOTATION_IMPLEMENTATION
@@ -38,8 +39,11 @@ import org.jetbrains.kotlin.ir.declarations.IrAnnotationContainer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrFile
+import org.jetbrains.kotlin.ir.declarations.IrFunction
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrAnnotation
@@ -77,6 +81,7 @@ import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import java.util.Collections
 import java.util.IdentityHashMap
 
@@ -162,6 +167,7 @@ internal class DotNetAnnotationImplementationLowering(
      * the getter and setter references they contain.
      */
     private fun addCallableAnnotationFactories(irFile: IrFile, transformer: Transformer) {
+        val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable signature")
         val references = mutableListOf<IrRichFunctionReference>()
         val propertyCalls = mutableListOf<IrCall>()
         irFile.acceptVoid(object : IrVisitorVoid() {
@@ -192,15 +198,138 @@ internal class DotNetAnnotationImplementationLowering(
         references.forEach { reference ->
             val owner = reference.reflectionTargetSymbol?.owner as? IrAnnotationContainer ?: return@forEach
             reference.dotNetCallableAnnotationFactory = factoryFor(owner)
+            if (!context.hasCallableParameterSurface) return@forEach
+            val target = owner as? IrFunction ?: return@forEach
+            val builder = context.createIrBuilder(reference.invokeFunction.symbol).at(reference)
+            val declaredParameters = if (target is IrConstructor) {
+                (target.parent as? IrClass)?.typeParameters
+                    ?: error("Internal .NET backend error: reflected constructor has no class owner")
+            } else {
+                target.typeParameters
+            }
+            val descriptors = target.callableParameterDescriptors(
+                reference.boundValues.size,
+                builder,
+                ::factoryFor,
+            )
+            reference.dotNetCallableSignature = kTypeBuilder.run {
+                builder.buildCallableSignature(target.returnType, declaredParameters, descriptors)
+            }
         }
         propertyCalls.forEach { call ->
-            val owner = call.dotNetPropertyAnnotationOwner ?: return@forEach
-            val producer = factoryFor(owner)
+            val owner = call.dotNetPropertyAnnotationOwner
+            val producer = owner?.let(::factoryFor)
             call.arguments[call.arguments.lastIndex] = context.createIrBuilder(call.symbol).run {
                 irCall(producer ?: this@DotNetAnnotationImplementationLowering.context.callableAnnotationSymbols.empty)
             }
+            if (!context.hasCallableParameterSurface) return@forEach
+            val builder = context.createIrBuilder(call.symbol).at(call)
+            val property = call.dotNetPropertySignatureOwner
+            if (property != null) {
+                val getter = property.getter
+                    ?: error("Internal .NET backend error: reflected property '${property.name}' has no getter")
+                val descriptors = getter.callableParameterDescriptors(
+                    call.dotNetPropertyBoundReceiverCount ?: 0,
+                    builder,
+                    ::factoryFor,
+                )
+                call.arguments[call.arguments.lastIndex - 2] = kTypeBuilder.run {
+                    builder.buildCallableSignature(getter.returnType, getter.typeParameters, descriptors)
+                }
+            } else {
+                val localType = call.dotNetLocalPropertySignatureType ?: return@forEach
+                call.arguments[call.arguments.lastIndex - 2] = kTypeBuilder.run {
+                    builder.buildCallableSignature(localType, emptyList(), emptyList())
+                }
+            }
         }
         irFile.declarations += generated
+    }
+
+    private fun IrFunction.callableParameterDescriptors(
+        boundReceiverCount: Int,
+        builder: org.jetbrains.kotlin.ir.builders.IrBuilderWithScope,
+        factoryFor: (IrAnnotationContainer) -> IrSimpleFunction?,
+    ): List<DotNetCallableParameterDescriptor> {
+        val receivers = mutableListOf<DotNetCallableParameterDescriptor>()
+        val values = mutableListOf<DotNetCallableParameterDescriptor>()
+        parameters.forEach { parameter ->
+            val descriptor = DotNetCallableParameterDescriptor(
+                name = parameter.reflectionName(),
+                type = parameter.type,
+                kind = parameter.reflectionKind(),
+                isOptional = parameter.hasKotlinOptionalSemantics(),
+                isVararg = parameter.varargElementType != null,
+                annotations = builder.irCall(
+                    factoryFor(parameter) ?: context.callableAnnotationSymbols.empty
+                ),
+            )
+            if (parameter.kind == IrParameterKind.Regular) values += descriptor else receivers += descriptor
+        }
+        require(boundReceiverCount <= receivers.size) {
+            "Internal .NET backend error: callable '$name' captures $boundReceiverCount receivers " +
+                    "but declares only ${receivers.size}"
+        }
+        return receivers.drop(boundReceiverCount) + values
+    }
+
+    private fun IrValueParameter.reflectionName(): String? {
+        if (kind == IrParameterKind.DispatchReceiver || kind == IrParameterKind.ExtensionReceiver) return null
+        val foreign = foreignMethodAndIndexOrNull()
+        if (foreign != null) {
+            val sourceAndMethod = foreign.first
+            val index = foreign.second
+            val rows = sourceAndMethod.first.assembly.metadata.parameterDefinitions.filter { parameter ->
+                parameter.declaringMethod == sourceAndMethod.second.handle && parameter.parameterIndex == index
+            }
+            return rows.singleOrNull()?.name?.takeIf(Name::isValidIdentifier)
+        }
+        return name.asString().takeUnless { name.isSpecial }
+    }
+
+    private fun IrValueParameter.reflectionKind(): Int = when (kind) {
+        IrParameterKind.DispatchReceiver -> PARAMETER_INSTANCE
+        IrParameterKind.Context -> PARAMETER_CONTEXT
+        IrParameterKind.ExtensionReceiver -> PARAMETER_EXTENSION
+        IrParameterKind.Regular -> PARAMETER_VALUE
+    }
+
+    private fun IrValueParameter.hasKotlinOptionalSemantics(
+        visited: MutableSet<IrSimpleFunction> = Collections.newSetFromMap(IdentityHashMap()),
+    ): Boolean {
+        val function = parent as? IrSimpleFunction ?: return defaultValue != null
+        if (function.containerSource is DotNetClrImportedMethodSource ||
+            function.containerSource is DotNetClrImportedPropertySource
+        ) return false
+        if (defaultValue != null) return true
+        if (!visited.add(function) || kind != IrParameterKind.Regular) return false
+        val regularIndex = function.parameters.filter { it.kind == IrParameterKind.Regular }.indexOf(this)
+        if (regularIndex < 0) return false
+        return function.overriddenSymbols.any { overridden ->
+            overridden.owner.parameters.filter { it.kind == IrParameterKind.Regular }
+                .getOrNull(regularIndex)
+                ?.hasKotlinOptionalSemantics(visited) == true
+        }
+    }
+
+    private fun IrValueParameter.foreignMethodAndIndexOrNull():
+            Pair<Pair<org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource, DotNetClrMethodDefinition>, Int>? {
+        val function = parent as? IrSimpleFunction ?: return null
+        val method = when (val source = function.containerSource) {
+            is DotNetClrImportedMethodSource -> source to source.method
+            is DotNetClrImportedPropertySource -> {
+                val property = function.correspondingPropertySymbol?.owner ?: return null
+                source to when (function) {
+                    property.getter -> source.getter
+                    property.setter -> source.setter ?: return null
+                    else -> return null
+                }
+            }
+            else -> return null
+        }
+        val index = function.parameters.filter { it.kind == IrParameterKind.Regular }.indexOf(this)
+        if (index < 0) return null
+        return method to index
     }
 
     private fun IrAnnotationContainer.createCallableAnnotationFactoryOrNull(
@@ -228,6 +357,7 @@ internal class DotNetAnnotationImplementationLowering(
                         arguments[0] = kClassReference(foreign.owner.defaultType)
                         arguments[1] = irInt(foreign.metadataToken)
                         arguments[2] = irInt(foreign.kind)
+                        arguments[3] = irInt(foreign.parameterIndex)
                     }
                 } else {
                     val annotationType = context.irBuiltIns.annotationType
@@ -291,6 +421,17 @@ internal class DotNetAnnotationImplementationLowering(
             }
             else -> null
         }
+        is IrValueParameter -> {
+            val foreign = foreignMethodAndIndexOrNull() ?: return null
+            val method = foreign.first.second
+            val index = foreign.second
+            ForeignAnnotationMember(
+                owner = (parent as? IrFunction)?.parent as? IrClass ?: return null,
+                metadataToken = method.handle.token,
+                kind = FOREIGN_PARAMETER,
+                parameterIndex = index,
+            )
+        }
         else -> null
     }
 
@@ -347,6 +488,11 @@ internal class DotNetAnnotationImplementationLowering(
     private companion object {
         const val FOREIGN_METHOD = 0
         const val FOREIGN_PROPERTY = 1
+        const val FOREIGN_PARAMETER = 2
+        const val PARAMETER_INSTANCE = 0
+        const val PARAMETER_CONTEXT = 1
+        const val PARAMETER_EXTENSION = 2
+        const val PARAMETER_VALUE = 3
 
         /** Built-in meta declarations are frontend/KLIB facts until their own runtime objects exist. */
         val resolutionOnlyMetaAnnotations = setOf(
@@ -361,6 +507,7 @@ internal class DotNetAnnotationImplementationLowering(
         val owner: IrClass,
         val metadataToken: Int,
         val kind: Int,
+        val parameterIndex: Int = -1,
     )
 
     private class Transformer(
@@ -556,4 +703,8 @@ internal class DotNetAnnotationImplementationLowering(
 
 /** Private factory derived before callable lowering removes the declaration target. */
 internal var IrRichFunctionReference.dotNetCallableAnnotationFactory: IrSimpleFunction?
+    by irAttribute(copyByDefault = false)
+
+/** Complete pre-vararg callable signature built beside parameter annotation factories. */
+internal var IrRichFunctionReference.dotNetCallableSignature: IrExpression?
     by irAttribute(copyByDefault = false)

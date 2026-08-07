@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isInterface
@@ -75,6 +76,7 @@ internal object DotNetStdlibLibrary {
     const val PROGRESSION_UTIL_FACADE_IL_NAME = "Kotlin.Internal.ProgressionUtilKt"
     const val EXCEPTIONS_FACADE_IL_NAME = "Kotlin.DotNetExceptionsKt"
     const val KCLASSES_FACADE_IL_NAME = "Kotlin.Reflection.KClasses"
+    const val KPARAMETERS_FACADE_IL_NAME = "Kotlin.Reflection.KParameters"
     const val KTYPE_INTRINSICS_FACADE_IL_NAME = "Kotlin.Reflection.TypeOfIntrinsics"
     const val ARRAY_ITERATOR_FACTORY_NAME = "dotNetArrayIterator"
     const val ARRAY_ITERABLE_FACTORY_NAME = "dotNetArrayIterable"
@@ -88,6 +90,9 @@ internal object DotNetStdlibLibrary {
         "kotlin.reflect.KTypeImpl" to "Kotlin.Reflection.KTypeImpl",
         "kotlin.reflect.KTypeParameterBase" to "Kotlin.Reflection.KTypeParameterBase",
         "kotlin.reflect.DotNetKTypeParameter" to "Kotlin.Reflection.DotNetKTypeParameter",
+        "kotlin.reflect.KParameter" to "Kotlin.Reflection.KParameter",
+        "kotlin.reflect.KParameter.Kind" to "Kotlin.Reflection.KParameter/Kind",
+        "kotlin.reflect.DotNetKParameter" to "Kotlin.Reflection.DotNetKParameter",
         "kotlin.Enum" to "Kotlin.Enum",
         "kotlin.Pair" to "Kotlin.Pair",
         "kotlin.Triple" to "Kotlin.Triple",
@@ -435,7 +440,7 @@ internal object DotNetStdlibLibrary {
                 "class ${coreLibraryReference}System.Array)"
 
     fun implementationClassIlName(irClass: IrClass): String? {
-        if ((irClass.parent as? IrFile)?.isDotNetStdlibImplementationSource != true) return null
+        if (irClass.fileOrNull?.isDotNetStdlibImplementationSource != true) return null
         return irClass.fqNameWhenAvailable?.asString()?.let(implementationClassIlNames::get)
     }
 
@@ -994,11 +999,16 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.reflect",
             facadeIlName = KTYPE_INTRINSICS_FACADE_IL_NAME,
         ),
+        "DotNetKParameter.kt" to ImplementationSource(
+            packageFqName = "kotlin.reflect",
+            facadeIlName = KPARAMETERS_FACADE_IL_NAME,
+        ),
     )
     private val resolutionOnlySources = mapOf(
         "Annotations.kt" to "kotlin.internal",
         "AnnotationsBuiltin.kt" to "kotlin.internal",
         "WasExperimental.kt" to "kotlin",
+        "ExperimentalContextParameters.kt" to "kotlin",
         "JvmAnnotationsH.kt" to "kotlin.jvm",
         "Multiplatform.kt" to "kotlin",
         "KClass.kt" to "kotlin.reflect",

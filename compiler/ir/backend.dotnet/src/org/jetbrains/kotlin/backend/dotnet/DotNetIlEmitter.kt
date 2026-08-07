@@ -388,10 +388,10 @@ internal class DotNetIlEmitter(
             val logicalAritySuffix = irClass.typeParameters.size.takeIf { it > 0 }?.let { "`$it" }.orEmpty()
             val baseName = when {
                 irClass.dotNetInventedLocalClassName != null -> irClass.dotNetInventedLocalClassName!!
+                enclosingClassInfo != null -> irClass.name.asString()
                 irClass.isDotNetStdlibImplementation ->
                     DotNetStdlibLibrary.implementationClassIlName(irClass)!!.removeSuffix(logicalAritySuffix)
-                enclosingClassInfo == null -> irClass.fqNameWhenAvailable!!.asString()
-                else -> irClass.name.asString()
+                else -> irClass.fqNameWhenAvailable!!.asString()
             }
             val isErasedGenericInterface = irClass.isDotNetGenericInterfaceDeclaration
             val isErasedGenericClass = irClass.isDotNetGenericClassDeclaration

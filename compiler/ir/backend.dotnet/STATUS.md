@@ -16,42 +16,44 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: declaration-owned `KCallable.typeParameters`,
-  including JVM's function/property/constructor ownership rules, one identity
-  graph shared with `returnType` and recursive bounds, feature-detected
-  no-stdlib behavior, and a Runtime-owned read-only view over the single
-  compiler/runtime signature carrier
+- Last completed feature: declaration-owned `KCallable.parameters` and
+  `KParameter`, including JVM's receiver/value ordering, bound-reference
+  reindexing, default/vararg behavior, parameter annotations and identity, one
+  graph shared with `returnType`/`typeParameters`, exact foreign CLR Param-row
+  evidence, and Runtime/Stdlib construction without a reverse dependency
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
-stdlib. The target is not close to 98% feature-complete: member/property/
-parameter reflection, value classes,
+stdlib. The target is not close to 98% feature-complete: broad member/property
+reflection and invocation, value classes,
 coroutines, Sequence and Grouping families,
 sorting/random, and Gradle/KMP product integration remain
 substantial open programmes.
 
 ## Current green gate
 
-The rebased upstream-integration head passed:
+The declaration-owned callable-parameter semantic head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-That audit covered 52 XML files and 1287 tests. The final full
-`--rerun` invocation completed at 2026-08-07 12:42 local time:
+That audit covered 52 XML files and 1291 tests. The final full
+`--rerun` invocation completed at 2026-08-07 18:01 local time in 69m17s:
 
-- 1174 FIR, IL-text, and box tests
+- 1178 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 92 library-integration tests
 - zero failures, errors, or skips
 
 The same head also passed the packed-KLIB loader owner suite (8 tests), the
 BTA API-dump and FIR2IR test-generation owners without tracked generated
-churn, twelve focused callable-type-parameter/exhaustive-when FIR/IL/runtime
-tests, and six embedded-library/inliner integration tests.
+churn, focused callable-parameter execution across both parsers and profiles,
+twelve updated callable/property IL golden cases across both parsers and every
+available compatible assembler, the separate KLIB/Roslyn/C# boundary test,
+and five focused stdlib-source/product/portable-ABI tests.
 
 The target now compiles the authoritative Common `ClosedRange`,
 `OpenEndRange`, floating/comparable range, signed `Char`/`Int`/`Long`
@@ -582,8 +584,8 @@ bound/unbound callable references, invocation/mutation identity,
 property/accessor separation, read-only list behavior, separate KLIB
 consumption, exact foreign CLR method/property attributes, both runtime
 profiles, and `-no-stdlib` compilation. Member enumeration/invocation,
-callable parameters, accessor objects, and parameter/type-use annotation owners
-remain separate reflection decisions.
+accessor objects, and type-use annotation owners remain separate reflection
+decisions.
 
 `KCallable.returnType` now follows Native's declaration-target boundary rather
 than the generated invocation adapter. Functions and constructors use the rich
@@ -615,6 +617,21 @@ graph, so a classifier is the exact same object across every public view.
 Bound and unbound references retain the unbound declaration owner. Runtime
 surface level 20 transports that graph as one erased compiler/runtime value;
 physical CLR generic parameters and runtime reflection remain non-authoritative.
+
+`KCallable.parameters` and the JVM-shaped `KParameter` surface now extend the
+same declaration graph. Unbound references expose instance, future context,
+extension, and value positions in JVM order; bound receivers are omitted and
+the remainder is reindexed. Types share the callable's exact type-parameter
+objects, inherited Kotlin defaults remain optional, varargs retain their array
+type, and equality/hashing use the actual callable object plus exposed index.
+Kotlin parameter annotations come from their KLIB-derived declaration target;
+foreign names, `ParamArray`, and annotations come only from exact CLR Param
+rows, while CLR optional flags do not invent Kotlin default-call semantics.
+Runtime surface level 21 passes one erased Stdlib factory into the Runtime-owned
+callable and caches the resulting read-only list, preserving the one-way
+Runtime/Stdlib dependency. Direct member-extension references remain rejected
+by the Common frontend and wait for member enumeration rather than a .NET-only
+syntax exception.
 
 The general Common Comparable mapping is independently published and the enum
 product consumes the same KLIB identity, canonical classifier, typed C# view,
@@ -708,23 +725,26 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Extend the completed KLIB-first callable signature graph with `KParameter`
-   as the next deep reflection foundation. Compare Common, JVM, Native, JS,
-   and Wasm; define stable instance, extension, context, and value positions,
-   names, optional/vararg flags, bound-reference reindexing, and separate
-   property/accessor ownership on the existing reference object. Parameter
-   types must reuse the existing return/type-parameter graph; cover multiple
-   receiver/context-owned type parameters and second-stage scope validation;
-   do not reconstruct Kotlin signatures from CLR metadata.
-2. Keep broad member enumeration/invocation, accessor objects, and foreign CLR
-   enhancement outside that tranche. The owner model should unblock exact
-   parameter/type-use annotation work without pretending that a reference is
-   already a complete `kotlin-reflect` member implementation.
-3. After that foundation, recompute the remaining stdlib dependency graph
+1. Design and implement positional `KCallable.call` as the next deep reflection
+   foundation. Follow JVM's public contract while preserving Native/JS/Wasm's
+   smaller Common floor; invoke the existing compiler-produced reference
+   object through a generated erased thunk rather than discovering a CLR member
+   at runtime. Cover functions, constructors, properties, bound/unbound
+   receivers, arity/type failures, boxing, exceptions, separate KLIBs, foreign
+   references, and both profiles.
+2. Treat `callBy` as the following bounded tranche. It must consume the exact
+   completed `KParameter` identities, preserve Kotlin evaluation/default-mask
+   semantics, distinguish absent optional values from explicit null, and define
+   vararg omission before any surface is published. Do not approximate it with
+   CLR optional parameters or reflection by name.
+3. Keep broad member enumeration, accessor objects, and type-use annotation
+   reflection outside those invocation tranches. Direct member-extension
+   references remain coupled to later member enumeration.
+4. After those foundations, recompute the remaining stdlib dependency graph
    around Sequence, Grouping, sorting/comparators/random, dependency-blocked
    reified variants, and open nullable projected arrays; do not admit leaves
    merely to increase declaration count.
-4. Extend CLR contract projection only when a new standard attribute has an
+5. Extend CLR contract projection only when a new standard attribute has an
    exact Common effect, stable target rule, verified profile identity, and the
    same strip-without-Kotlin-semantic-change evidence as the closed first set.
 
