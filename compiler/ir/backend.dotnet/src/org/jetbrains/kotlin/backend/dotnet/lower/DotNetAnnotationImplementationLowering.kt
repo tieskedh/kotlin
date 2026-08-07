@@ -31,21 +31,27 @@ import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irBlockBody
+import org.jetbrains.kotlin.ir.builders.irInt
 import org.jetbrains.kotlin.ir.builders.irReturn
+import org.jetbrains.kotlin.ir.builders.kClassReference
 import org.jetbrains.kotlin.ir.declarations.IrAnnotationContainer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrFile
+import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrAnnotation
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetEnumValue
+import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrVararg
 import org.jetbrains.kotlin.ir.expressions.impl.IrConstructorCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrVarargImpl
 import org.jetbrains.kotlin.ir.expressions.impl.fromSymbolOwner
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
+import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.isArray
@@ -69,6 +75,8 @@ import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
 import java.util.Collections
 import java.util.IdentityHashMap
 
@@ -113,22 +121,12 @@ internal class DotNetAnnotationImplementationLowering(
         // attached KLIB application itself remains untouched and continues to own declaration
         // identity, retention, use-site, and round-trip information.
         classes.forEach { irClass -> irClass.addRuntimeAnnotationFactory(transformer) }
+        addCallableAnnotationFactories(irFile, transformer)
     }
 
     private fun IrClass.addRuntimeAnnotationFactory(transformer: Transformer) {
         if (isDotNetResolutionOnlyStdlibDeclaration) return
-        val values = annotations.mapNotNull { annotation ->
-            val annotationClass = annotation.classSymbol.owner
-            if (!annotationClass.isSupportedDotNetAnnotationClass() ||
-                !annotationClass.isDotNetRuntimeRetainedAnnotation() ||
-                annotationClass.isDotNetResolutionOnlyStdlibDeclaration ||
-                annotationClass.fqNameWhenAvailable in resolutionOnlyMetaAnnotations ||
-                annotation.arguments.filterNotNull().any { value -> !value.hasExecutableAnnotationValue() }
-            ) {
-                return@mapNotNull null
-            }
-            annotation.deepCopyWithoutPatchingParents().transform(transformer, null)
-        }
+        val values = runtimeAnnotationValues(transformer)
         if (values.isEmpty()) return
 
         val holder = annotationFactoryHolder()
@@ -156,6 +154,144 @@ internal class DotNetAnnotationImplementationLowering(
             }
         }
         holder.declarations += factory
+    }
+
+    /**
+     * Binds each rich reference to one declaration-owned producer before callable lowering erases
+     * the reflection target. Property wrapper calls receive their own producer, independently of
+     * the getter and setter references they contain.
+     */
+    private fun addCallableAnnotationFactories(irFile: IrFile, transformer: Transformer) {
+        val references = mutableListOf<IrRichFunctionReference>()
+        val propertyCalls = mutableListOf<IrCall>()
+        irFile.acceptVoid(object : IrVisitorVoid() {
+            override fun visitElement(element: IrElement) {
+                when (element) {
+                    is IrRichFunctionReference -> references += element
+                    is IrCall -> if (element.dotNetPropertyAnnotationOwner != null) propertyCalls += element
+                }
+                element.acceptChildrenVoid(this)
+            }
+        })
+
+        val factories = IdentityHashMap<IrAnnotationContainer, IrSimpleFunction>()
+        val emptyOwners = Collections.newSetFromMap(IdentityHashMap<IrAnnotationContainer, Boolean>())
+        val generated = mutableListOf<IrSimpleFunction>()
+
+        fun factoryFor(owner: IrAnnotationContainer): IrSimpleFunction? {
+            factories[owner]?.let { return it }
+            if (owner in emptyOwners) return null
+            val factory = owner.createCallableAnnotationFactoryOrNull(irFile, transformer, generated.size)
+            if (factory == null) emptyOwners += owner else {
+                factories[owner] = factory
+                generated += factory
+            }
+            return factory
+        }
+
+        references.forEach { reference ->
+            val owner = reference.reflectionTargetSymbol?.owner as? IrAnnotationContainer ?: return@forEach
+            reference.dotNetCallableAnnotationFactory = factoryFor(owner)
+        }
+        propertyCalls.forEach { call ->
+            val owner = call.dotNetPropertyAnnotationOwner ?: return@forEach
+            val producer = factoryFor(owner)
+            call.arguments[call.arguments.lastIndex] = context.createIrBuilder(call.symbol).run {
+                irCall(producer ?: this@DotNetAnnotationImplementationLowering.context.callableAnnotationSymbols.empty)
+            }
+        }
+        irFile.declarations += generated
+    }
+
+    private fun IrAnnotationContainer.createCallableAnnotationFactoryOrNull(
+        irFile: IrFile,
+        transformer: Transformer,
+        index: Int,
+    ): IrSimpleFunction? {
+        val foreign = foreignAnnotationMemberOrNull()
+        val values = if (foreign == null) runtimeAnnotationValues(transformer) else emptyList()
+        if (foreign == null && values.isEmpty()) return null
+
+        val returnType = context.irBuiltIns.listClass.typeWith(context.irBuiltIns.annotationType)
+        return context.irFactory.buildFun {
+            startOffset = (this@createCallableAnnotationFactoryOrNull as? IrElement)?.startOffset ?: UNDEFINED_OFFSET
+            endOffset = (this@createCallableAnnotationFactoryOrNull as? IrElement)?.endOffset ?: UNDEFINED_OFFSET
+            origin = ANNOTATION_IMPLEMENTATION
+            name = Name.special("<GetCallableAnnotations-$index>")
+            this.returnType = returnType
+            visibility = DescriptorVisibilities.PRIVATE
+        }.apply factory@{
+            parent = irFile
+            body = context.createIrBuilder(symbol).irBlockBody {
+                val result = if (foreign != null) {
+                    irCall(this@DotNetAnnotationImplementationLowering.context.callableAnnotationSymbols.foreign).apply {
+                        arguments[0] = kClassReference(foreign.owner.defaultType)
+                        arguments[1] = irInt(foreign.metadataToken)
+                        arguments[2] = irInt(foreign.kind)
+                    }
+                } else {
+                    val annotationType = context.irBuiltIns.annotationType
+                    val arrayType = context.irBuiltIns.arrayClass.typeWith(annotationType)
+                    irCall(this@DotNetAnnotationImplementationLowering.context.callableAnnotationSymbols.create).apply {
+                        arguments[0] = IrVarargImpl(
+                            UNDEFINED_OFFSET,
+                            UNDEFINED_OFFSET,
+                            arrayType,
+                            annotationType,
+                            values,
+                        )
+                    }
+                }
+                +irReturn(result)
+            }
+        }
+    }
+
+    private fun IrAnnotationContainer.runtimeAnnotationValues(transformer: Transformer): List<IrExpression> =
+        annotations.mapNotNull { annotation ->
+            val annotationClass = annotation.classSymbol.owner
+            if (!annotationClass.isSupportedDotNetAnnotationClass() ||
+                !annotationClass.isDotNetRuntimeRetainedAnnotation() ||
+                annotationClass.isDotNetResolutionOnlyStdlibDeclaration ||
+                annotationClass.fqNameWhenAvailable in resolutionOnlyMetaAnnotations ||
+                annotation.arguments.filterNotNull().any { value -> !value.hasExecutableAnnotationValue() }
+            ) {
+                return@mapNotNull null
+            }
+            annotation.deepCopyWithoutPatchingParents().transform(transformer, null)
+        }
+
+    private fun IrAnnotationContainer.foreignAnnotationMemberOrNull(): ForeignAnnotationMember? = when (this) {
+        is IrProperty -> {
+            val source = containerSource as? DotNetClrImportedPropertySource ?: return null
+            ForeignAnnotationMember(
+                owner = parent as? IrClass ?: return null,
+                metadataToken = source.property.handle.token,
+                kind = FOREIGN_PROPERTY,
+            )
+        }
+        is IrSimpleFunction -> when (val source = containerSource) {
+            is DotNetClrImportedMethodSource -> ForeignAnnotationMember(
+                owner = parent as? IrClass ?: return null,
+                metadataToken = source.method.handle.token,
+                kind = FOREIGN_METHOD,
+            )
+            is DotNetClrImportedPropertySource -> {
+                val property = correspondingPropertySymbol?.owner ?: return null
+                val method = when (this) {
+                    property.getter -> source.getter
+                    property.setter -> source.setter ?: return null
+                    else -> return null
+                }
+                ForeignAnnotationMember(
+                    owner = parent as? IrClass ?: return null,
+                    metadataToken = method.handle.token,
+                    kind = FOREIGN_METHOD,
+                )
+            }
+            else -> null
+        }
+        else -> null
     }
 
     private fun IrClass.annotationFactoryHolder(): IrClass {
@@ -209,6 +345,9 @@ internal class DotNetAnnotationImplementationLowering(
     }
 
     private companion object {
+        const val FOREIGN_METHOD = 0
+        const val FOREIGN_PROPERTY = 1
+
         /** Built-in meta declarations are frontend/KLIB facts until their own runtime objects exist. */
         val resolutionOnlyMetaAnnotations = setOf(
             StandardNames.FqNames.target,
@@ -217,6 +356,12 @@ internal class DotNetAnnotationImplementationLowering(
             StandardNames.FqNames.mustBeDocumented,
         )
     }
+
+    private data class ForeignAnnotationMember(
+        val owner: IrClass,
+        val metadataToken: Int,
+        val kind: Int,
+    )
 
     private class Transformer(
         private val dotNetContext: DotNetBackendContext,
@@ -408,3 +553,7 @@ internal class DotNetAnnotationImplementationLowering(
         }
     }
 }
+
+/** Private factory derived before callable lowering removes the declaration target. */
+internal var IrRichFunctionReference.dotNetCallableAnnotationFactory: IrSimpleFunction?
+    by irAttribute(copyByDefault = false)

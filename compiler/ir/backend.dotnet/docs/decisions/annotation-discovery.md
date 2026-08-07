@@ -6,9 +6,11 @@
 - Depends on:
   [`valued-annotation-classes.md`](valued-annotation-classes.md) and
   [`kclass-and-class-literals.md`](kclass-and-class-literals.md)
-- Does not enable: callable/property/parameter reflection, built-in Kotlin
+- Does not enable: parameter/type-use reflection, built-in Kotlin
   meta-annotation objects, arbitrary CLR attribute classes in FIR, annotation
-  constructor reflection, or a complete `kotlin-reflect` product
+  constructor reflection, or a complete `kotlin-reflect` product. Callable and
+  property-reference annotations are governed separately by
+  [`callable-annotation-discovery.md`](callable-annotation-discovery.md).
 
 ## Context
 
@@ -145,7 +147,8 @@ contract invented by the .NET target.
   and named arguments.
 - `kotlin.reflect.full` convenience operations and repeated-annotation queries.
 - Class-annotation inheritance involving a future imported CLR superclass.
-- Callable, property, field, accessor, parameter, and type-use annotations.
+- Field, accessor-object, parameter, and type-use annotations. Callable and
+  property-reference annotations follow the separate accepted decision.
 
 Each extension can add factories or lookup owners without changing the class
 annotation list ABI or making CLR projection authoritative.

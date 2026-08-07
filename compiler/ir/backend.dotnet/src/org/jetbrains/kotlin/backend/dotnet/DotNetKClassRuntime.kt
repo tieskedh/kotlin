@@ -387,6 +387,10 @@ internal object DotNetKClassRuntime {
         val nothing = DotNetKClassClassifierKind.NOTHING.abiValue
         val logical = DotNetKClassClassifierKind.LOGICAL.abiValue
         val annotationListSupportIl = annotationListSupportIl(coreLibraryReference)
+        val callableAnnotationFactoryIl = callableAnnotationFactoryIl(
+            coreLibraryReference,
+            compilerAbiTypeAttributesIl,
+        )
         return """
   .class public sealed auto ansi beforefieldinit KotlinLocalClassNameAttribute
          extends ${coreLibraryReference}System.Attribute
@@ -407,6 +411,8 @@ internal object DotNetKClassRuntime {
   }
 
 $annotationListSupportIl
+
+$callableAnnotationFactoryIl
 
   // Public only as compiler/runtime ABI. Logical KClass identity remains in KLIB; System.Type is
   // retained as exact or partial physical evidence and never becomes the metadata authority.
@@ -452,7 +458,7 @@ $annotationListSupportIl
     .method public hidebysig static class ${coreLibraryReference}System.Type 'GetClrType'(
         class Kotlin.KClass 'kClass') cil managed
     {
-      .maxstack 1
+      .maxstack 2
       ldarg.0
       isinst Kotlin.KClassImpl
       dup
@@ -1485,6 +1491,101 @@ $createExceptionBody
       ldfld int32 Kotlin.Runtime.Internal.ReflectionAnnotationIterator::'_index'
       ldc.i4.1
       sub
+      ret
+    }
+  }
+    """.trimIndent()
+
+    private fun callableAnnotationFactoryIl(
+        coreLibraryReference: String,
+        compilerAbiTypeAttributesIl: String,
+    ): String = """
+  .class public abstract sealed auto ansi beforefieldinit CallableAnnotationFactory
+         extends ${coreLibraryReference}System.Object
+  {
+    $compilerAbiTypeAttributesIl
+
+    .method public hidebysig static class Kotlin.Collections.List 'Empty'() cil managed
+    {
+      .maxstack 1
+      call class Kotlin.Collections.List Kotlin.Runtime.Internal.ReflectionAnnotationList::'Empty'()
+      ret
+    }
+
+    .method public hidebysig static class Kotlin.Collections.List 'Create'(
+        class ${coreLibraryReference}System.Attribute[] 'values') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[])
+      ret
+    }
+
+    .method public hidebysig static class Kotlin.Collections.List 'Foreign'(
+        class Kotlin.KClass 'owner', int32 'metadataToken', int32 'memberKind') cil managed
+    {
+      .maxstack 2
+      .locals init (
+        [0] class ${coreLibraryReference}System.Type 'clrType',
+        [1] class ${coreLibraryReference}System.Reflection.MemberInfo[] 'members',
+        [2] int32 'index',
+        [3] class ${coreLibraryReference}System.Reflection.MemberInfo 'member'
+      )
+      ldarg.0
+      call class ${coreLibraryReference}System.Type Kotlin.Runtime.Internal.KClassFactory::'GetClrType'(
+          class Kotlin.KClass)
+      stloc.0
+      ldloc.0
+      brfalse CAF_ForeignEmpty
+      ldarg.2
+      brfalse.s CAF_ForeignMethods
+      ldarg.2
+      ldc.i4.1
+      beq.s CAF_ForeignProperties
+      br CAF_ForeignEmpty
+    CAF_ForeignMethods:
+      ldloc.0
+      ldc.i4.s 62
+      callvirt instance class ${coreLibraryReference}System.Reflection.MethodInfo[] ${coreLibraryReference}System.Type::GetMethods(
+          valuetype ${coreLibraryReference}System.Reflection.BindingFlags)
+      stloc.1
+      br.s CAF_ForeignSearchStart
+    CAF_ForeignProperties:
+      ldloc.0
+      ldc.i4.s 62
+      callvirt instance class ${coreLibraryReference}System.Reflection.PropertyInfo[] ${coreLibraryReference}System.Type::GetProperties(
+          valuetype ${coreLibraryReference}System.Reflection.BindingFlags)
+      stloc.1
+    CAF_ForeignSearchStart:
+      ldc.i4.0
+      stloc.2
+    CAF_ForeignSearch:
+      ldloc.2
+      ldloc.1
+      ldlen
+      conv.i4
+      bge.s CAF_ForeignEmpty
+      ldloc.1
+      ldloc.2
+      ldelem.ref
+      stloc.3
+      ldloc.3
+      callvirt instance int32 ${coreLibraryReference}System.Reflection.MemberInfo::get_MetadataToken()
+      ldarg.1
+      beq.s CAF_ForeignFound
+      ldloc.2
+      ldc.i4.1
+      add
+      stloc.2
+      br.s CAF_ForeignSearch
+    CAF_ForeignFound:
+      ldloc.3
+      ldc.i4.0
+      callvirt instance object[] ${coreLibraryReference}System.Reflection.MemberInfo::GetCustomAttributes(bool)
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[])
+      ret
+    CAF_ForeignEmpty:
+      call class Kotlin.Collections.List Kotlin.Runtime.Internal.ReflectionAnnotationList::'Empty'()
       ret
     }
   }

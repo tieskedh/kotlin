@@ -206,14 +206,15 @@
   .field private int32 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'p0') cil managed
   {
-    .maxstack 6
+    .maxstack 7
     ldarg.0
     ldstr "local:<unknown>:-1:-1:kotlin.Int#inc(){}"
     ldc.i4 0
     ldc.i4 0
     ldc.i4 1
     ldstr "inc"
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
     ldarg.0
     ldarg.1
     stfld int32 'callableCapturesKt$boundPrimitive$1'::'f$0'
@@ -268,14 +269,15 @@
   .field private class 'Offset' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Offset' 'p0') cil managed
   {
-    .maxstack 6
+    .maxstack 7
     ldarg.0
     ldstr "local:callableCaptures.kt:309:351:Offset#apply(kotlin.Int){}"
     ldc.i4 1
     ldc.i4 0
     ldc.i4 1
     ldstr "apply"
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
     ldarg.0
     ldarg.1
     stfld class 'Offset' 'callableCapturesKt$boundMember$1'::'f$0'
