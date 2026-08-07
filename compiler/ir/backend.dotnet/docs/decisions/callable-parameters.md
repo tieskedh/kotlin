@@ -7,7 +7,7 @@
   [`callable-type-parameters.md`](callable-type-parameters.md),
   [`callable-return-types.md`](callable-return-types.md), and
   [`callable-annotation-discovery.md`](callable-annotation-discovery.md)
-- Does not enable: `call`/`callBy`, property accessor objects, member
+- Does not enable: `callBy`, property accessor objects, member
   enumeration, context parameters as a language feature, or foreign CLR
   generic-method import
 
@@ -175,8 +175,9 @@ leak through reflection.
 6. Parameter annotations retain their exact declaration/Param-row owner.
 7. Runtime never depends on Stdlib or reconstructs Kotlin signatures.
 8. Absence of the platform surface remains a feature-detected diagnostic path.
-9. `callBy`, accessor objects, and member enumeration require later decisions;
-   this list alone does not imply them.
+9. `call` consumes this list through
+   [`callable-positional-invocation.md`](callable-positional-invocation.md);
+   `callBy`, accessor objects, and member enumeration require later decisions.
 10. The Common frontend prohibits direct references to a declaration that is
     both a member and an extension. Its two-receiver parameter view therefore
     remains coupled to future `KClass` member enumeration, not this direct-

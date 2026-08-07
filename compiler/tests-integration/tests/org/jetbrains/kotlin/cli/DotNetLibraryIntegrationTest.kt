@@ -15840,6 +15840,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 private fun annotationName(value: Annotation): String =
                     value::class.simpleName ?: "<anonymous>"
 
+                private class KotlinForeignCallable : ForeignCallable {
+                    override fun Transform(value: Int): Int = value + 1
+                    override fun Count(vararg values: String): Int = values.size
+                    override val Value: Int get() = 42
+                    override val MaybeText: String? get() = null
+                }
+
                 fun main() {
                     val functionAnnotations = ::libraryFunction.annotations
                     if (functionAnnotations.size != 1) throw Error("KLIB function annotation count")
@@ -15868,6 +15875,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (libraryParameterMarker.value != "parameter") {
                         throw Error("KLIB parameter annotation value")
                     }
+                    if (libraryFunctionReference.call(41) != 42) {
+                        throw Error("KLIB positional function call")
+                    }
 
                     val genericReference: KFunction1<String, String> = ::libraryIdentity
                     val genericParameters = genericReference.typeParameters
@@ -15893,6 +15903,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ) {
                         throw Error("KLIB generic return parameter")
                     }
+                    if (genericReference.call("OK") != "OK") throw Error("KLIB generic positional call")
 
                     val propertyAnnotations = ::libraryProperty.annotations
                     if (propertyAnnotations.size != 1) throw Error("KLIB property annotation count")
@@ -15900,6 +15911,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ?: throw Error("KLIB property annotation identity")
                     if (propertyMarker.value != "property") throw Error("KLIB property annotation value")
                     if (::libraryProperty.get() != 42) throw Error("library property invocation")
+                    if (::libraryProperty.call() != 42) throw Error("library property positional call")
                     if (::nullableLibraryProperty.returnType.classifier != String::class ||
                         !::nullableLibraryProperty.returnType.isMarkedNullable
                     ) {
@@ -15915,6 +15927,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (storedReference.parameters.single().name != "value") {
                         throw Error("stored KCallable parameters")
                     }
+                    if (storedReference.call(41) != 42) throw Error("stored KCallable positional call")
 
                     val methodAnnotations = ForeignCallable::Transform.annotations
                     if (methodAnnotations.size != 1) throw Error("foreign method annotation count")
@@ -15960,6 +15973,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         throw Error("foreign nullable return type: ${'$'}nullableForeign")
                     }
 
+                    val foreign = KotlinForeignCallable()
+                    if (ForeignCallable::Transform.call(foreign, 41) != 42) {
+                        throw Error("foreign method positional call")
+                    }
+                    if (ForeignCallable::Count.call(foreign, arrayOf("a", "b")) != 2) {
+                        throw Error("foreign ParamArray positional call")
+                    }
+                    if (ForeignCallable::Value.call(foreign) != 42) {
+                        throw Error("foreign property positional call")
+                    }
+
                 }
                 """.trimIndent()
             )
@@ -15985,6 +16009,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue("CallableAnnotationFactory'::'Foreign'" in consumerIl) { consumerIl }
         assertTrue("dotNetKParameterFactory" in consumerIl) { consumerIl }
+        assertTrue("Kotlin.KCallable'::'Call'(object[])" in consumerIl) { consumerIl }
         runDotNet(
             modernDotNetHostOrSkip(),
             consumerAssembly,
@@ -16006,6 +16031,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (classifier == null || classifier.qualifiedName != "kotlin.Int") return 1;
                         if (callable.typeParameters.Size != 0) return 2;
                         if (callable.parameters.Size != 1) return 3;
+                        object result = callable.Call(new object[] { 41 });
+                        if ((int)result != 42) return 4;
+                        try
+                        {
+                            callable.Call(new object[0]);
+                            return 5;
+                        }
+                        catch (System.ArgumentException exception)
+                        {
+                            if (exception.Message != "Callable expects 1 arguments, but 0 were provided.") return 6;
+                        }
                         return 0;
                     }
                 }
