@@ -124,8 +124,12 @@ internal fun dotNetUnsupported(reason: String): Nothing =
 
 internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): DotNetIlMethodSignature {
     val isErasedCallableInvoke = isDotNetErasedCallableInvoke()
+    val isErasedCallableCall = isDotNetKCallableCall()
     val isErasedPropertyAccess = isDotNetErasedPropertyAccess()
-    val ilReturnType = if (isErasedCallableInvoke || (isErasedPropertyAccess && name.asString() == "get")) {
+    val ilReturnType = if (
+        isErasedCallableInvoke || isErasedCallableCall ||
+        (isErasedPropertyAccess && name.asString() == "get")
+    ) {
         DotNetIlReturnType.Value(DotNetIlValueType.Object)
     } else {
         typeMapper.toDotNetIlReturnType(returnType)
@@ -164,6 +168,7 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
  */
 internal fun IrSimpleFunction.dotNetIlMethodName(): String {
     if (isDotNetErasedCallableInvoke()) return "Invoke"
+    if (isDotNetKCallableCall()) return "Call"
     if (isDotNetErasedPropertyAccess()) return if (name.asString() == "get") "Get" else "Set"
     dotNetAnyMethodOrNull()?.let { return it.clrName }
     val property = correspondingPropertySymbol?.owner ?: return name.asString()
@@ -370,6 +375,14 @@ internal fun IrSimpleFunction.isDotNetErasedCallableInvoke(): Boolean {
     }
 }
 
+/** Whether this is KCallable.call, whose covariant logical result uses one object CLR slot. */
+internal fun IrSimpleFunction.isDotNetKCallableCall(): Boolean {
+    if (name.asString() != "call") return false
+    fun IrSimpleFunction.hasKCallableOwner(): Boolean =
+        (parent as? IrClass)?.fqNameWhenAvailable?.asString() == "kotlin.reflect.KCallable"
+    return hasKCallableOwner() || allOverridden().any(IrSimpleFunction::hasKCallableOwner)
+}
+
 /** Whether this is a fixed-arity KProperty get/set member with an erased physical CLR slot. */
 internal fun IrSimpleFunction.isDotNetErasedPropertyAccess(): Boolean {
     if (name.asString() !in setOf("get", "set")) return false
@@ -382,6 +395,7 @@ internal fun IrSimpleFunction.isDotNetErasedPropertyAccess(): Boolean {
 /** Whether this function's physical CLR result is object while its Kotlin result stays logical. */
 internal fun IrSimpleFunction.isDotNetErasedObjectResult(): Boolean =
     isDotNetErasedCallableInvoke() ||
+            isDotNetKCallableCall() ||
             (isDotNetErasedPropertyAccess() && name.asString() == "get")
 
 /**

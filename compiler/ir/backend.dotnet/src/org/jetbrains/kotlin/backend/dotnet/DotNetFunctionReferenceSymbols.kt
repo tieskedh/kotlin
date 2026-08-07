@@ -58,6 +58,7 @@ internal class DotNetFunctionReferenceSymbols(
     val getReturnType: IrSimpleFunction
     val getParameters: IrSimpleFunction?
     val getTypeParameters: IrSimpleFunction?
+    val callErased: IrSimpleFunction
 
     init {
         val runtimeInternalPackage = createEmptyExternalPackageFragment(
@@ -147,6 +148,19 @@ internal class DotNetFunctionReferenceSymbols(
             returnType = irBuiltIns.kTypeClass.symbolDefaultType
         }.apply {
             parameters += createDispatchReceiverParameterWithClassParent()
+        }
+        callErased = baseClass.addFunction {
+            origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+            name = Name.identifier("CallErased")
+            visibility = DescriptorVisibilities.PROTECTED
+            modality = Modality.FINAL
+            returnType = irBuiltIns.anyNType
+        }.apply {
+            parameters += createDispatchReceiverParameterWithClassParent()
+            addValueParameter(
+                "args",
+                irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)),
+            )
         }
         getParameters = irBuiltIns.kCallableClass.owner.properties
             .singleOrNull { property -> property.name.asString() == "parameters" }

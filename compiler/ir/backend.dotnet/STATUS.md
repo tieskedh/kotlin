@@ -16,13 +16,12 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: the first structured-CLI production slice. The new
-  low-level `:dotnet:dotnet.ir` module owns policy-free physical `AssemblyRef`
-  identity, validation, and deterministic CIL serialization; `backend.dotnet`
-  still selects required Kotlin-library and foreign-CLR references but no
-  longer constructs their textual rows directly. The accepted erased runtime
-  identity of Kotlin-owned generic classes and the JVM-hosted direct-PE
-  endpoint remain unchanged
+- Last completed feature: JVM-shaped positional `KCallable.call`. Runtime
+  surface level 22 invokes the callable's existing erased `FunctionN`
+  capability with exact parameter-count validation and without CLR member
+  rediscovery. Defaults remain explicit, a vararg consumes one array, bound
+  receivers remain omitted, properties invoke their getter, and target
+  exceptions propagate unchanged
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -36,8 +35,8 @@ substantial open programmes.
 
 ## Current green gate
 
-The structured-CLI `AssemblyRef` head passed the ordinary aggregate. The
-normal aggregate command is:
+The positional-call head passed the ordinary aggregate. The normal aggregate
+command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -51,17 +50,18 @@ The audited full-aggregate evidence covers 54 XML files and 1305 tests:
 - 92 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed at 2026-08-07 21:20 local time in 37m56s. It rewrote
+The aggregate completed at 2026-08-07 23:17 local time in 35m23s. It rewrote
 all 51 FIR/IL/box XML suites and both `dn` suites on the candidate head; the
 new module's six green tests were already current and reused by that task
-graph. The cumulative JUnit suite time was 2313.98 seconds: 0.10 for the
-physical model, 491.81 for FIR/IL/box, and 1822.07 for `dn`. Gradle 9's
+graph. The cumulative JUnit suite time was 2199.04 seconds: 0.13 for the
+physical model, 430.85 for FIR/IL/box, and 1768.06 for `dn`. Gradle 9's
 selected-task `--rerun` option is not full-matrix evidence on the empty backend
 lifecycle task and is not part of the verification command.
 
-Final review then replaced the serializer input's ILAsm-shaped version string
+The preceding structured-CLI review replaced the serializer input's
+ILAsm-shaped version string
 with the equivalent dotted CLR assembly-identity value; emitted CIL is
-unchanged. The resulting current head repeated all 6 model tests, the backend
+unchanged. That head repeated all 6 model tests, the backend
 compile, and the two exact affected end-to-end consumers: portable
 Kotlin-library `AssemblyRef` production and foreign-CLR reference production
 across both runtime profiles. Those focused checks completed green in 18.5s
@@ -77,7 +77,11 @@ of any golden. Compiling `arrayIterators` through the normal DLL consumer path
 also exposed and now pins the required erased `Iterator.Next(): object` bridge
 for an `IntIterator` subclass, which the former same-run bootstrap path hid.
 
-The same head also passed the packed-KLIB loader owner suite (8 tests), the
+The positional-call candidate separately passed eight semantic function and
+property lanes across both parsers and runtime profiles, five affected IL
+goldens on both parsers, and the separate portable-KLIB/imported-CLR/Roslyn/C#
+boundary test before the full aggregate. The preceding structured-CLI head also
+passed the packed-KLIB loader owner suite (8 tests), the
 BTA API-dump and FIR2IR test-generation owners without tracked generated
 churn, focused callable-parameter execution across both parsers and profiles,
 twelve updated callable/property IL golden cases across both parsers and every
@@ -667,6 +671,19 @@ Runtime/Stdlib dependency. Direct member-extension references remain rejected
 by the Common frontend and wait for member enumeration rather than a .NET-only
 syntax exception.
 
+Positional `KCallable.call` now follows JVM's public invocation contract above
+that Common reflection floor. Runtime surface level 22 checks the exact exposed
+parameter count and invokes the callable's already generated erased `FunctionN`
+capability; it never rediscovers a CLR member by reflection, name, token, or
+signature. Defaults remain required positions, one vararg array is one
+argument, a property call invokes its getter, bound receivers stay omitted,
+and the original target exception propagates unchanged. The logical return
+type remains KLIB-authoritative while the physical runtime slot returns
+`object`. Functions, constructors, properties, virtual dispatch, generic and
+extension references, wrong arity/type, separate KLIB consumption, imported
+CLR declaration references, and direct C# invocation are covered independently
+of later named/default invocation.
+
 The general Common Comparable mapping is independently published and the enum
 product consumes the same KLIB identity, canonical classifier, typed C# view,
 and semantic operation boundary rather than an enum-private substitute.
@@ -769,26 +786,19 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Design and implement positional `KCallable.call` as the next deep reflection
-   foundation. Follow JVM's public contract while preserving Native/JS/Wasm's
-   smaller Common floor; invoke the existing compiler-produced reference
-   object through a generated erased thunk rather than discovering a CLR member
-   at runtime. Cover functions, constructors, properties, bound/unbound
-   receivers, arity/type failures, boxing, exceptions, separate KLIBs, foreign
-   references, and both profiles.
-2. Treat `callBy` as the following bounded tranche. It must consume the exact
+1. Treat `callBy` as the next bounded reflection tranche. It must consume the exact
    completed `KParameter` identities, preserve Kotlin evaluation/default-mask
    semantics, distinguish absent optional values from explicit null, and define
    vararg omission before any surface is published. Do not approximate it with
    CLR optional parameters or reflection by name.
-3. Keep broad member enumeration, accessor objects, and type-use annotation
+2. Keep broad member enumeration, accessor objects, and type-use annotation
    reflection outside those invocation tranches. Direct member-extension
    references remain coupled to later member enumeration.
-4. After those foundations, recompute the remaining stdlib dependency graph
+3. After those foundations, recompute the remaining stdlib dependency graph
    around Sequence, Grouping, sorting/comparators/random, dependency-blocked
    reified variants, and open nullable projected arrays; do not admit leaves
    merely to increase declaration count.
-5. Extend CLR contract projection only when a new standard attribute has an
+4. Extend CLR contract projection only when a new standard attribute has an
    exact Common effect, stable target rule, verified profile identity, and the
    same strip-without-Kotlin-semantic-change evidence as the closed first set.
 

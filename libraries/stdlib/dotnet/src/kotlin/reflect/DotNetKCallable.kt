@@ -18,4 +18,13 @@ public actual interface KCallable<out R> : KAnnotatedElement {
 
     /** Declaration-owned parameters; constructors expose their constructed class's own parameters. */
     public val typeParameters: List<KTypeParameter>
+
+    /**
+     * Calls this callable with positional arguments in [parameters] order.
+     *
+     * A vararg declaration parameter occupies one position and therefore expects its array as one
+     * argument. Default values are deliberately not applied; `callBy` is the reflective operation
+     * that may eventually omit optional parameters.
+     */
+    public fun call(vararg args: Any?): R
 }

@@ -465,8 +465,18 @@ See the
   extension: `-no-stdlib`, malformed-library, and older-surface diagnostic
   paths may initialize the backend without the property and must not crash
   before their intended diagnostic.
+  `KCallable.call` is positional JVM-shaped invocation through the callable's
+  already selected erased `FunctionN` execution capability. Runtime may check
+  the exposed arity and dispatch to `Invoke`, but it must never rediscover a
+  member through `System.Reflection`, name, token, or CLR signature. Defaults
+  remain required positions, a vararg consumes one array argument, properties
+  call their getter, and target exceptions propagate unchanged. The logical
+  `R` stays KLIB-authoritative while the physical `Call(object[])` result is
+  object-shaped. Only true reflective reference classes implement the slot;
+  internal getter/adaptation callable helpers that share
+  `FunctionReferenceBase` must not become KCallable accidentally.
   Typed foreign attribute import, foreign CLR generic methods, accessor
-  objects, reflective invocation, and broader member reflection remain
+  objects, `callBy`, and broader member reflection remain
   separate. A foreign generic
   method must continue to fail the current interface importer closed until its
   own complete FIR/import/binding feature lands; never decode it privately in
@@ -476,7 +486,8 @@ See the
   [the callable-discovery decision](docs/decisions/callable-annotation-discovery.md), and
   [the callable-return decision](docs/decisions/callable-return-types.md), and
   [the callable-type-parameter decision](docs/decisions/callable-type-parameters.md), and
-  [the callable-parameter decision](docs/decisions/callable-parameters.md).
+  [the callable-parameter decision](docs/decisions/callable-parameters.md), and
+  [the positional-call decision](docs/decisions/callable-positional-invocation.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
   Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve

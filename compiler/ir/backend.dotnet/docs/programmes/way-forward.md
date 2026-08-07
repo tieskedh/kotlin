@@ -148,8 +148,13 @@ same graph with JVM's owner, ordering, captured-receiver omission, reindexing,
 default, vararg, and equality rules. Kotlin parameter applications retain their
 exact declaration owners; admitted foreign callables use exact CLR Param rows
 without turning CLR optional flags into Kotlin default-call semantics. General
-members, accessor objects, reflective invocation, and type-use annotations
-remain separate tranches.
+members, accessor objects, named/default invocation, and type-use annotations
+remain separate tranches. Positional `KCallable.call` now consumes that exact
+parameter order through the existing erased `FunctionN` capability. Runtime
+surface level 22 validates count and dispatches without CLR member discovery;
+defaults remain explicit, a vararg is one array argument, property call means
+getter, and target exceptions keep identity. `callBy` remains the separate
+default-mask/omission tranche.
 
 Future member enumeration must include member extension properties with
 multiple callable-owned type parameters and, once context parameters are
@@ -359,9 +364,9 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - wider annotation use-site targets, type-use owners, and unsupported CLR-value
   projections; valued construction, defaults, KLIB applications, and exact
   class/callable runtime discovery are selected;
-- broad member reflection, accessor objects, and reflective invocation; the nominal
+- broad member reflection, accessor objects, and named/default invocation; the nominal
   `KClass` floor, logical `KType`/`typeOf` graph, callable annotations, and
-  callable return types/type parameters/parameters are complete;
+  callable return types/type parameters/parameters plus positional call are complete;
 - foreign CLR generic-method import, including method-owned parameter bounds,
   overload resolution, invocation/binding, and subsequent callable reflection;
 - value/inline classes;

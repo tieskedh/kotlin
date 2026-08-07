@@ -13,6 +13,12 @@ fun fail(message: String): String = "Fail: $message"
 
 fun <T> choose(@ParameterMark("value") value: T, suffix: String = "!"): T = value
 
+private fun failWith(error: Throwable): Nothing = throw error
+
+private fun consume(value: Int) {
+    if (value == Int.MIN_VALUE) throw Error("unreachable")
+}
+
 fun @receiver:ParameterMark("receiver") String.decorate(
     @ParameterMark("count") count: Int = 1,
     vararg tails: String,
@@ -57,6 +63,36 @@ fun box(): String {
     if (secondChooseReference.parameters != chooseParameters) return fail("equal callable parameter equality")
     if (secondChooseReference.parameters[0].hashCode() != chooseParameters[0].hashCode()) return fail("parameter hash")
     if (chooseParameters[0] == chooseParameters[1]) return fail("parameter index identity")
+    if (chooseReference.call("OK", "ignored") != "OK") return fail("top-level positional call")
+
+    val tooFew = try {
+        chooseReference.call("value")
+        null
+    } catch (exception: IllegalArgumentException) {
+        exception.message
+    }
+    if (tooFew != "Callable expects 2 arguments, but 1 were provided.") {
+        return fail("wrong-count message $tooFew")
+    }
+    val wrongType = try {
+        chooseReference.call(42, "ignored")
+        false
+    } catch (_: ClassCastException) {
+        true
+    }
+    if (!wrongType) return fail("wrong argument type")
+
+    val targetFailure = Error("target")
+    val observedFailure = try {
+        ::failWith.call(targetFailure)
+        null
+    } catch (exception: Throwable) {
+        exception
+    }
+    if (observedFailure !== targetFailure) return fail("target exception identity")
+
+    val unitResult = ::consume.call(42)
+    if (unitResult !== Unit) return fail("Unit positional result")
 
     val unboundExtension = String::decorate
     if (unboundExtension.parameters.map { it.summary() } != listOf(
@@ -76,6 +112,9 @@ fun box(): String {
     if (unboundExtension.parameters[0].toString() != "extension receiver parameter of function decorate") {
         return fail("extension rendering ${unboundExtension.parameters[0]}")
     }
+    if (unboundExtension.call("x", 2, arrayOf("a", "b")) != "x22") {
+        return fail("unbound extension positional call")
+    }
 
     val boundExtension = "x"::decorate
     if (boundExtension.parameters.map { it.summary() } != listOf(
@@ -83,6 +122,9 @@ fun box(): String {
             "1:tails:VALUE:false:true",
         )
     ) return fail("bound extension ${boundExtension.parameters.map { it.summary() }}")
+    if (boundExtension.call(3, arrayOf("tail")) != "x31") {
+        return fail("bound extension positional call")
+    }
 
     val unboundMember = Holder<String>::member
     if (unboundMember.parameters.map { it.summary() } != listOf(
@@ -100,14 +142,18 @@ fun box(): String {
         return fail("bound member ${boundMember.parameters.map { it.summary() }}")
     }
     if (boundMember("OK") != "OK") return fail("bound invocation")
+    if (unboundMember.call(holder, "unbound") != "unbound") return fail("unbound member positional call")
+    if (boundMember.call("bound") != "bound") return fail("bound member positional call")
 
     val holderConstructor: KFunction1<String, Holder<String>> = ::Holder
     if (holderConstructor.parameters.map { it.summary() } != listOf("0:value:VALUE:false:false")) {
         return fail("ordinary constructor ${holderConstructor.parameters.map { it.summary() }}")
     }
+    if (holderConstructor.call("constructed").value != "constructed") return fail("constructor positional call")
 
     val inherited = Derived::inherited.parameters
     if (!inherited[1].isOptional) return fail("inherited default")
+    if (Derived::inherited.call(Derived(), 9) != 9) return fail("virtual positional dispatch")
 
     val property = Holder<String>::value
     if (property.parameters.map { it.summary() } != listOf("0:null:INSTANCE:false:false")) {
@@ -117,6 +163,8 @@ fun box(): String {
     if (Holder<String>::value.parameters.single() != property.parameters.single()) {
         return fail("property parameter equality")
     }
+    if (property.call(holder) != "stored") return fail("unbound property positional call")
+    if (holder::value.call() != "stored") return fail("bound property positional call")
 
     val unboundInner = Outer::Inner
     if (unboundInner.parameters.map { it.summary() } != listOf(
@@ -129,6 +177,8 @@ fun box(): String {
     if (boundInner.parameters.map { it.summary() } != listOf("0:text:VALUE:true:false")) {
         return fail("bound inner constructor ${boundInner.parameters.map { it.summary() }}")
     }
+    if (unboundInner.call(Outer(), "unbound").text != "unbound") return fail("unbound inner positional call")
+    if (boundInner.call("bound").text != "bound") return fail("bound inner positional call")
 
     if (KParameter.Kind.VALUE.toString() != "VALUE") return fail("kind enum")
     if (chooseParameters[0].toString() != "parameter #0 value of function choose") {
