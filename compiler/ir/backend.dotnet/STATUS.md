@@ -727,6 +727,16 @@ an implicit CLR `C<T>` surface.
 
 ## Open architectural blockers
 
+- A true CLR-generic Kotlin-owned class owner with a complete erased Kotlin
+  capability ABI and early failure of physically incompatible unchecked casts
+  is explicitly on hold. Early failure may remove the incompatible-mutation
+  storage contradiction, but the route still changes ABI, runtime identity,
+  cast timing, reflection, inheritance, and dispatch. The current erased owner
+  remains binding. This blocks only reintroducing or freezing CLR `C<T>` as the
+  Kotlin implementation owner; it does not block current stdlib, reflection,
+  CLI-IR, foreign-generics, generic-method, export-facade, or private
+  optimization work. See
+  [`docs/programmes/generic-class-owner-reopening.md`](docs/programmes/generic-class-owner-reopening.md).
 - Typed .NET export for Kotlin-owned generics remains a separate product
   programme. It may publish a facade, read-only interface, adapter, or
   same-object CLR subtype for export-created instances, but it must not

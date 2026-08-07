@@ -195,6 +195,18 @@ future optimization work rather than forbidden representations. Defer them until
 language/stdlib coverage, the concurrency/memory model, and representative benchmarks can justify
 their permanent complexity.
 
+A materially different true CLR-generic owner with a complete erased Kotlin
+capability ABI and early failure of physically incompatible unchecked casts is
+now explicitly on hold in
+[`generic-class-owner-reopening.md`](generic-class-owner-reopening.md). It is
+not the rejected primary-typed/rare-fallback design, but neither is it an
+optimization: it changes observable ABI and cast timing. Current work continues
+against the accepted erased owner. The parked question blocks only
+reintroduction or freeze of a Kotlin-owned generic class TypeDef as CLR
+`C<T>`; it does not block Common stdlib, callables/reflection, CLI IR, imported
+CLR generics, generic methods, separate explicit exports, or removable private
+specialization.
+
 The source-level builder/contracts bootstrap cycle is complete. Common `Appendable`, the complete
 `StringBuilder` file including both `buildString` declarations, generated
 `joinTo`/`joinToString`, the Common contracts DSL/effects, and Common abstract collection bases

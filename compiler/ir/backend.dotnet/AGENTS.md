@@ -382,6 +382,15 @@ See the
   identity. The public rule is: Kotlin classes remain Kotlin classes; C#
   consumes only explicitly exported, safe .NET APIs. See
   [the generic-class ADR](docs/decisions/generic-class-erased-identity.md).
+  A distinct true CLR-generic owner plus complete erased Kotlin capability and
+  early failure of physically incompatible unchecked casts is explicitly on
+  hold, not silently rejected or authorized. Until the generic-class ADR is
+  reopened, do not emit Kotlin-owned `C<T>` owners, change cast timing, weaken
+  delayed-use tests, or build ABI on that alternative. The parked question
+  locks only that owner/ABI choice; continue Common stdlib, CLI IR,
+  callable/reflection, imported CLR generics, generic methods, explicit export,
+  and removable private optimization work. See
+  [the reopening programme](docs/programmes/generic-class-owner-reopening.md).
 - `KClass` is a nominal Kotlin runtime value over exact or classified CLR type
   evidence. KLIB owns logical `KClass<T>` and declaration identity;
   `System.Type` is a retained physical bridge and never becomes `KClass` or
