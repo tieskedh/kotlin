@@ -24,6 +24,8 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
 import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.types.typeWith
+import org.jetbrains.kotlin.ir.types.makeNullable
+import org.jetbrains.kotlin.ir.types.defaultType as symbolDefaultType
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.types.classOrNull
@@ -52,6 +54,7 @@ internal class DotNetFunctionReferenceSymbols(
     val baseClass: IrClass
     val constructor: IrConstructor
     val boundValueAt: IrSimpleFunction
+    val getReturnType: IrSimpleFunction
 
     init {
         val runtimeInternalPackage = createEmptyExternalPackageFragment(
@@ -87,6 +90,9 @@ internal class DotNetFunctionReferenceSymbols(
                 "annotations",
                 irBuiltIns.listClass.typeWith(irBuiltIns.annotationType),
             )
+            // Adapted references that intentionally expose only FunctionN pass null. Every
+            // KFunction reference supplies the declaration-owned logical graph.
+            addValueParameter("returnType", irBuiltIns.kTypeClass.symbolDefaultType.makeNullable())
         }
         if (kAnnotatedElement != null) {
             val superProperty = kAnnotatedElement.properties
@@ -119,6 +125,15 @@ internal class DotNetFunctionReferenceSymbols(
         }.apply {
             parameters += createDispatchReceiverParameterWithClassParent()
             addValueParameter("index", irBuiltIns.intType)
+        }
+        getReturnType = baseClass.addFunction {
+            origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+            name = Name.identifier("GetReturnType")
+            visibility = DescriptorVisibilities.PROTECTED
+            modality = Modality.FINAL
+            returnType = irBuiltIns.kTypeClass.symbolDefaultType
+        }.apply {
+            parameters += createDispatchReceiverParameterWithClassParent()
         }
     }
 }

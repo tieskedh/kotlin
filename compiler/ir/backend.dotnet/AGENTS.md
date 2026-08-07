@@ -393,7 +393,11 @@ See the
   recursive bounds, and stable container identity. Allocate all reachable
   parameter identities before initializing any bound. A classifier with no
   physical CLR Type uses a separate KLIB-mangled logical key; never use its
-  display name as identity. Compiler helpers are runtime/stdlib ABI, and a
+  display name as identity. The minimal physical `KType` interface lives in
+  `Kotlin.Runtime.dll`, beside `KClass` and runtime-owned `KCallable`; Common
+  behavior and `KTypeImpl` remain in `Kotlin.Stdlib.dll`. Do not create a
+  Runtime-to-Stdlib assembly dependency, weaken the callable slot to `object`,
+  or emit a second Stdlib `KType` identity. Compiler helpers are runtime/stdlib ABI, and a
   separate-module test must use the CLI's metadata-serialization and
   finalization phases rather than a same-invocation source dependency. See
   [the KType decision](docs/decisions/ktype-and-typeof.md).
@@ -417,11 +421,19 @@ See the
   KLIB-derived reflection target; imported CLR methods/properties use their
   retained declaring type and exact metadata token. Never merge a property's
   annotations with getter/setter annotations or match foreign members by name.
-  Typed foreign attribute import and broader member reflection remain
-  separate. See
+  `KCallable.returnType` uses the exact reflection target and the shared
+  logical `KType` graph: Kotlin declarations are KLIB-derived, imported CLR
+  declarations are importer-enhanced IR, and generated `invoke` adapters or
+  runtime CLR reflection are never signature authority. Typed foreign
+  attribute import, foreign CLR generic methods, parameters/type-parameter
+  ownership, and broader member reflection remain separate. A foreign generic
+  method must continue to fail the current interface importer closed until its
+  own complete FIR/import/binding feature lands; never decode it privately in
+  callable reflection. See
   [the annotation-value decision](docs/decisions/valued-annotation-classes.md),
   [the class-discovery decision](docs/decisions/annotation-discovery.md), and
-  [the callable-discovery decision](docs/decisions/callable-annotation-discovery.md).
+  [the callable-discovery decision](docs/decisions/callable-annotation-discovery.md), and
+  [the callable-return decision](docs/decisions/callable-return-types.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
   Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve

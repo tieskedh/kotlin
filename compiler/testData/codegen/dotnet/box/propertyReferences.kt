@@ -7,6 +7,7 @@ import kotlin.reflect.KMutableProperty2
 import kotlin.reflect.KProperty
 import kotlin.reflect.KProperty0
 import kotlin.reflect.KProperty1
+import kotlin.reflect.typeOf
 
 private var topValue: Int = 40
 private val topRead: Int
@@ -19,6 +20,8 @@ private class ManualProperty : kotlin.reflect.KMutableProperty1<Cell, Int> {
         get() = "manual"
 
     override val annotations: List<Annotation> = emptyList()
+
+    override val returnType = typeOf<Int>()
 
     override fun get(receiver: Cell): Int = receiver.value
 
@@ -34,6 +37,8 @@ private class ManualProperty2 : KMutableProperty2<ExtensionHost, Cell, Int> {
         get() = "manual2"
 
     override val annotations: List<Annotation> = emptyList()
+
+    override val returnType = typeOf<Int>()
 
     override fun get(receiver1: ExtensionHost, receiver2: Cell): Int = receiver2.value
 

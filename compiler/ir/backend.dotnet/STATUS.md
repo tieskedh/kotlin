@@ -11,10 +11,10 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: KLIB-first callable annotation discovery, including
-  the JVM-shaped `KCallable : KAnnotatedElement` platform surface, private
-  declaration-owned producers for Kotlin function/property references, and an
-  exact metadata-token path for imported CLR methods and properties
+- Last completed feature: KLIB-first `KCallable.returnType`, including Native's
+  exact reflection-target rule, one shared logical `KType` graph producer,
+  separate KLIB and importer-IR authority, and a cycle-free physical `KType`
+  interface in Runtime with its Common implementation retained in Stdlib
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -28,16 +28,16 @@ substantial open programmes.
 
 ## Current green gate
 
-The current KLIB-first callable annotation-discovery head passed:
+The current KLIB-first callable-return-type head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The completion audit covered 44 XML files and 1271 tests. The final full
-`--rerun` invocation completed at 2026-08-07 03:14 local time:
+The completion audit covered 52 XML files and 1283 tests. The final full
+`--rerun` invocation completed at 2026-08-07 07:02 local time:
 
-- 1158 FIR, IL-text, and box tests
+- 1170 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 92 library-integration tests
 - zero failures, errors, or skips
@@ -574,6 +574,26 @@ profiles, and `-no-stdlib` compilation. Member enumeration/invocation,
 callable signatures, accessor objects, and parameter/type-use annotation
 owners remain separate reflection decisions.
 
+`KCallable.returnType` now follows Native's declaration-target boundary rather
+than the generated invocation adapter. Functions and constructors use the rich
+reference's reflection target; properties use the original getter return type;
+local delegated properties retain their declared value type. All paths reuse
+the `typeOf` graph producer, including nested arguments, projections, stars,
+nullability, method-owned parameters, and recursive bounds. Kotlin libraries
+derive that target from embedded KLIB, while supported foreign declarations use
+the importer-enhanced IR type; the runtime never reopens CLR reflection or
+nullable attributes to reconstruct a signature.
+
+The typed `KCallable` slot exposed an assembly cycle: callable interfaces live
+in Runtime while `KType` previously lived physically in Stdlib. Runtime surface
+level 19 therefore owns only the minimal physical `KType` interface beside
+`KClass` and `KCallable`; Common behavior, `KTypeImpl`, projections, parameter
+objects, equality, hashing, and rendering remain in Stdlib. Separate Kotlin
+and C# consumers prove one type identity without an object bridge, wrapper, or
+Runtime-to-Stdlib dependency. Target-owned adversarial coverage and two
+unchanged upstream override tests execute across both FIR parsers and CLR
+profiles; exact IL pins the additional graph and getter shape.
+
 The general Common Comparable mapping is independently published and the enum
 product consumes the same KLIB identity, canonical classifier, typed C# view,
 and semantic operation boundary rather than an enum-private substitute.
@@ -654,6 +674,10 @@ an implicit CLR `C<T>` surface.
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
   collection-shaped params each require separate Kotlin-stability decisions.
+- Foreign CLR generic-method import remains fail-closed. Its method-owned type
+  parameters, bounds, overload resolution, invocation, backend binding, and
+  subsequent callable reflection must land as one importer feature rather than
+  a private signature decoder inside `KCallable.returnType`.
 - Foreign C# `Nullable<T>` signatures are nominal generic instantiations and
   remain outside the closed primitive importer until constructed-type identity
   is retained from the selected assembly graph through backend binding.
@@ -662,11 +686,12 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Select a KLIB-first callable-signature and parameter-owner model as the next
-   deep reflection foundation. Compare Common, JVM, Native, JS, and Wasm;
-   preserve declaration parameters, return `KType`, type parameters, receiver
-   positions, and separate property/accessor ownership on the existing
-   reference object. Do not reconstruct Kotlin signatures from CLR metadata.
+1. Select a KLIB-first callable-parameter and type-parameter owner model as the
+   next deep reflection foundation. Compare Common, JVM, Native, JS, and Wasm;
+   compose the completed declaration-owned return `KType` with instance,
+   extension, context, and value positions plus separate property/accessor
+   ownership on the existing reference object. Do not reconstruct Kotlin
+   signatures from CLR metadata.
 2. Keep broad member enumeration/invocation, accessor objects, and foreign CLR
    enhancement outside that tranche. The owner model should unblock exact
    parameter/type-use annotation work without pretending that a reference is

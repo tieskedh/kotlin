@@ -203,10 +203,11 @@ $kClassSupportTypesIl
             |    .field private initonly int32 'boundValueCount'
             |    .field private initonly string 'name'
             |    .field private initonly class Kotlin.Collections.List 'annotations'
+            |    .field private initonly class Kotlin.KType 'returnType'
             |
             |    .method family hidebysig specialname rtspecialname instance void .ctor(
             |        string 'id', int32 'arity', int32 'flags', int32 'boundValueCount', string 'name',
-            |        class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.Collections.List 'annotations', class Kotlin.KType 'returnType') cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
@@ -229,6 +230,9 @@ $kClassSupportTypesIl
             |      ldarg.0
             |      ldarg.s 6
             |      stfld class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::'annotations'
+            |      ldarg.0
+            |      ldarg.s 7
+            |      stfld class Kotlin.KType Kotlin.Runtime.Internal.FunctionReferenceBase::'returnType'
             |      ret
             |    }
             |
@@ -238,6 +242,14 @@ $kClassSupportTypesIl
             |      .maxstack 1
             |      ldarg.0
             |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::'annotations'
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig instance class Kotlin.KType GetReturnType() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KType Kotlin.Runtime.Internal.FunctionReferenceBase::'returnType'
             |      ret
             |    }
             |
@@ -384,10 +396,12 @@ $kClassSupportTypesIl
             |         implements Kotlin.KProperty
             |  {
             |    .field private initonly string 'name'
+            |    .field private initonly class Kotlin.KType 'returnType'
             |    .field private initonly class Kotlin.Collections.List 'annotations'
             |
             |    .method family hidebysig specialname rtspecialname instance void .ctor(
-            |        string 'name', class Kotlin.Collections.List 'annotations') cil managed
+            |        string 'name', class Kotlin.KType 'returnType',
+            |        class Kotlin.Collections.List 'annotations') cil managed
             |    {
             |      .maxstack 3
             |      ldarg.0
@@ -397,6 +411,9 @@ $kClassSupportTypesIl
             |      stfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
             |      ldarg.0
             |      ldarg.2
+            |      stfld class Kotlin.KType Kotlin.Runtime.Internal.PropertyReferenceBase::'returnType'
+            |      ldarg.0
+            |      ldarg.3
             |      stfld class Kotlin.Collections.List Kotlin.Runtime.Internal.PropertyReferenceBase::'annotations'
             |      ret
             |    }
@@ -407,6 +424,15 @@ $kClassSupportTypesIl
             |      .maxstack 1
             |      ldarg.0
             |      ldfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance class Kotlin.KType get_returnType() cil managed
+            |    {
+            |      .override method instance class Kotlin.KType Kotlin.KCallable::get_returnType()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KType Kotlin.Runtime.Internal.PropertyReferenceBase::'returnType'
             |      ret
             |    }
             |
@@ -522,13 +548,16 @@ $kClassSupportTypesIl
             |    .field private initonly class Kotlin.Function0 'getter'
             |
             |    .method public hidebysig specialname rtspecialname instance void .ctor(
-            |        string 'name', class Kotlin.Function0 'getter', class Kotlin.Collections.List 'annotations') cil managed
+            |        string 'name', class Kotlin.Function0 'getter', class Kotlin.KType 'returnType',
+            |        class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 3
+            |      .maxstack 4
             |      ldarg.0
             |      ldarg.1
             |      ldarg.3
-            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string, class Kotlin.Collections.List)
+            |      ldarg.s 4
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(
+            |          string, class Kotlin.KType, class Kotlin.Collections.List)
             |      ldarg.0
             |      ldarg.2
             |      stfld class Kotlin.Function0 Kotlin.Runtime.Internal.Property0Impl::'getter'
@@ -572,13 +601,15 @@ $kClassSupportTypesIl
             |
             |    .method public hidebysig specialname rtspecialname instance void .ctor(
             |        string 'name', class Kotlin.Function0 'getter', class Kotlin.Function1 'setter',
-            |        class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.KType 'returnType', class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 3
+            |      .maxstack 4
             |      ldarg.0
             |      ldarg.1
             |      ldarg.s 4
-            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string, class Kotlin.Collections.List)
+            |      ldarg.s 5
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(
+            |          string, class Kotlin.KType, class Kotlin.Collections.List)
             |      ldarg.0
             |      ldarg.2
             |      stfld class Kotlin.Function0 Kotlin.Runtime.Internal.MutableProperty0Impl::'getter'
@@ -643,13 +674,16 @@ $kClassSupportTypesIl
             |    .field private initonly class Kotlin.Function1 'getter'
             |
             |    .method public hidebysig specialname rtspecialname instance void .ctor(
-            |        string 'name', class Kotlin.Function1 'getter', class Kotlin.Collections.List 'annotations') cil managed
+            |        string 'name', class Kotlin.Function1 'getter', class Kotlin.KType 'returnType',
+            |        class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 3
+            |      .maxstack 4
             |      ldarg.0
             |      ldarg.1
             |      ldarg.3
-            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string, class Kotlin.Collections.List)
+            |      ldarg.s 4
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(
+            |          string, class Kotlin.KType, class Kotlin.Collections.List)
             |      ldarg.0
             |      ldarg.2
             |      stfld class Kotlin.Function1 Kotlin.Runtime.Internal.Property1Impl::'getter'
@@ -695,13 +729,15 @@ $kClassSupportTypesIl
             |
             |    .method public hidebysig specialname rtspecialname instance void .ctor(
             |        string 'name', class Kotlin.Function1 'getter', class Kotlin.Function2 'setter',
-            |        class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.KType 'returnType', class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 3
+            |      .maxstack 4
             |      ldarg.0
             |      ldarg.1
             |      ldarg.s 4
-            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string, class Kotlin.Collections.List)
+            |      ldarg.s 5
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(
+            |          string, class Kotlin.KType, class Kotlin.Collections.List)
             |      ldarg.0
             |      ldarg.2
             |      stfld class Kotlin.Function1 Kotlin.Runtime.Internal.MutableProperty1Impl::'getter'
@@ -769,13 +805,16 @@ $kClassSupportTypesIl
             |    .field private initonly class Kotlin.Function2 'getter'
             |
             |    .method public hidebysig specialname rtspecialname instance void .ctor(
-            |        string 'name', class Kotlin.Function2 'getter', class Kotlin.Collections.List 'annotations') cil managed
+            |        string 'name', class Kotlin.Function2 'getter', class Kotlin.KType 'returnType',
+            |        class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 3
+            |      .maxstack 4
             |      ldarg.0
             |      ldarg.1
             |      ldarg.3
-            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string, class Kotlin.Collections.List)
+            |      ldarg.s 4
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(
+            |          string, class Kotlin.KType, class Kotlin.Collections.List)
             |      ldarg.0
             |      ldarg.2
             |      stfld class Kotlin.Function2 Kotlin.Runtime.Internal.Property2Impl::'getter'
@@ -823,13 +862,15 @@ $kClassSupportTypesIl
             |
             |    .method public hidebysig specialname rtspecialname instance void .ctor(
             |        string 'name', class Kotlin.Function2 'getter', class Kotlin.Function3 'setter',
-            |        class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.KType 'returnType', class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 3
+            |      .maxstack 4
             |      ldarg.0
             |      ldarg.1
             |      ldarg.s 4
-            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string, class Kotlin.Collections.List)
+            |      ldarg.s 5
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(
+            |          string, class Kotlin.KType, class Kotlin.Collections.List)
             |      ldarg.0
             |      ldarg.2
             |      stfld class Kotlin.Function2 Kotlin.Runtime.Internal.MutableProperty2Impl::'getter'
@@ -898,10 +939,12 @@ $kClassSupportTypesIl
             |         implements Kotlin.KProperty0
             |  {
             |    .field private initonly string 'name'
+            |    .field private initonly class Kotlin.KType 'returnType'
             |    .field private initonly class Kotlin.Collections.List 'annotations'
             |
             |    .method family hidebysig specialname rtspecialname instance void .ctor(
-            |        string 'name', class Kotlin.Collections.List 'annotations') cil managed
+            |        string 'name', class Kotlin.KType 'returnType',
+            |        class Kotlin.Collections.List 'annotations') cil managed
             |    {
             |      .maxstack 3
             |      ldarg.0
@@ -911,6 +954,9 @@ $kClassSupportTypesIl
             |      stfld string Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'name'
             |      ldarg.0
             |      ldarg.2
+            |      stfld class Kotlin.KType Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'returnType'
+            |      ldarg.0
+            |      ldarg.3
             |      stfld class Kotlin.Collections.List Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'annotations'
             |      ret
             |    }
@@ -921,6 +967,15 @@ $kClassSupportTypesIl
             |      .maxstack 1
             |      ldarg.0
             |      ldfld string Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'name'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance class Kotlin.KType get_returnType() cil managed
+            |    {
+            |      .override method instance class Kotlin.KType Kotlin.KCallable::get_returnType()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KType Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'returnType'
             |      ret
             |    }
             |
@@ -936,6 +991,10 @@ $kClassSupportTypesIl
             |    .property instance string 'name'()
             |    {
             |      .get instance string Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::get_name()
+            |    }
+            |    .property instance class Kotlin.KType 'returnType'()
+            |    {
+            |      .get instance class Kotlin.KType Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::get_returnType()
             |    }
             |
             |    .method public hidebysig newslot virtual final instance object Get() cil managed
@@ -972,13 +1031,16 @@ $kClassSupportTypesIl
             |         extends Kotlin.Runtime.Internal.LocalDelegatedProperty0Base
             |  {
             |    .method public hidebysig specialname rtspecialname instance void .ctor(
-            |        string 'name', class Kotlin.Collections.List 'annotations') cil managed
+            |        string 'name', class Kotlin.KType 'returnType',
+            |        class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 3
+            |      .maxstack 4
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
-            |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::.ctor(string, class Kotlin.Collections.List)
+            |      ldarg.3
+            |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::.ctor(
+            |          string, class Kotlin.KType, class Kotlin.Collections.List)
             |      ret
             |    }
             |  }
@@ -988,13 +1050,16 @@ $kClassSupportTypesIl
             |         implements Kotlin.KMutableProperty0
             |  {
             |    .method public hidebysig specialname rtspecialname instance void .ctor(
-            |        string 'name', class Kotlin.Collections.List 'annotations') cil managed
+            |        string 'name', class Kotlin.KType 'returnType',
+            |        class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 3
+            |      .maxstack 4
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
-            |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::.ctor(string, class Kotlin.Collections.List)
+            |      ldarg.3
+            |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::.ctor(
+            |          string, class Kotlin.KType, class Kotlin.Collections.List)
             |      ret
             |    }
             |
@@ -1013,19 +1078,37 @@ $kClassSupportTypesIl
             |  {
             |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig static class Kotlin.KProperty0 CreateProperty0<V>(
-            |        string 'name', class Kotlin.Function0 'getter', class Kotlin.Collections.List 'annotations') cil managed
+            |        string 'name', class Kotlin.Function0 'getter', class Kotlin.KType 'returnType',
+            |        class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 3
+            |      .maxstack 4
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
+            |      ldarg.3
             |      newobj instance void Kotlin.Runtime.Internal.Property0Impl::.ctor(
-            |          string, class Kotlin.Function0, class Kotlin.Collections.List)
+            |          string, class Kotlin.Function0, class Kotlin.KType, class Kotlin.Collections.List)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty0 CreateMutableProperty0<V>(
             |        string 'name', class Kotlin.Function0 'getter', class Kotlin.Function1 'setter',
+            |        class Kotlin.KType 'returnType', class Kotlin.Collections.List 'annotations') cil managed
+            |    {
+            |      .maxstack 5
+            |      ldarg.0
+            |      ldarg.1
+            |      ldarg.2
+            |      ldarg.3
+            |      ldarg.s 4
+            |      newobj instance void Kotlin.Runtime.Internal.MutableProperty0Impl::.ctor(
+            |          string, class Kotlin.Function0, class Kotlin.Function1, class Kotlin.KType,
+            |          class Kotlin.Collections.List)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.KProperty1 CreateProperty1<R0, V>(
+            |        string 'name', class Kotlin.Function1 'getter', class Kotlin.KType 'returnType',
             |        class Kotlin.Collections.List 'annotations') cil managed
             |    {
             |      .maxstack 4
@@ -1033,25 +1116,29 @@ $kClassSupportTypesIl
             |      ldarg.1
             |      ldarg.2
             |      ldarg.3
-            |      newobj instance void Kotlin.Runtime.Internal.MutableProperty0Impl::.ctor(
-            |          string, class Kotlin.Function0, class Kotlin.Function1, class Kotlin.Collections.List)
-            |      ret
-            |    }
-            |
-            |    .method public hidebysig static class Kotlin.KProperty1 CreateProperty1<R0, V>(
-            |        string 'name', class Kotlin.Function1 'getter', class Kotlin.Collections.List 'annotations') cil managed
-            |    {
-            |      .maxstack 3
-            |      ldarg.0
-            |      ldarg.1
-            |      ldarg.2
             |      newobj instance void Kotlin.Runtime.Internal.Property1Impl::.ctor(
-            |          string, class Kotlin.Function1, class Kotlin.Collections.List)
+            |          string, class Kotlin.Function1, class Kotlin.KType, class Kotlin.Collections.List)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty1 CreateMutableProperty1<R0, V>(
             |        string 'name', class Kotlin.Function1 'getter', class Kotlin.Function2 'setter',
+            |        class Kotlin.KType 'returnType', class Kotlin.Collections.List 'annotations') cil managed
+            |    {
+            |      .maxstack 5
+            |      ldarg.0
+            |      ldarg.1
+            |      ldarg.2
+            |      ldarg.3
+            |      ldarg.s 4
+            |      newobj instance void Kotlin.Runtime.Internal.MutableProperty1Impl::.ctor(
+            |          string, class Kotlin.Function1, class Kotlin.Function2, class Kotlin.KType,
+            |          class Kotlin.Collections.List)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.KProperty2 CreateProperty2<R0, R1, V>(
+            |        string 'name', class Kotlin.Function2 'getter', class Kotlin.KType 'returnType',
             |        class Kotlin.Collections.List 'annotations') cil managed
             |    {
             |      .maxstack 4
@@ -1059,56 +1146,48 @@ $kClassSupportTypesIl
             |      ldarg.1
             |      ldarg.2
             |      ldarg.3
-            |      newobj instance void Kotlin.Runtime.Internal.MutableProperty1Impl::.ctor(
-            |          string, class Kotlin.Function1, class Kotlin.Function2, class Kotlin.Collections.List)
-            |      ret
-            |    }
-            |
-            |    .method public hidebysig static class Kotlin.KProperty2 CreateProperty2<R0, R1, V>(
-            |        string 'name', class Kotlin.Function2 'getter', class Kotlin.Collections.List 'annotations') cil managed
-            |    {
-            |      .maxstack 3
-            |      ldarg.0
-            |      ldarg.1
-            |      ldarg.2
             |      newobj instance void Kotlin.Runtime.Internal.Property2Impl::.ctor(
-            |          string, class Kotlin.Function2, class Kotlin.Collections.List)
+            |          string, class Kotlin.Function2, class Kotlin.KType, class Kotlin.Collections.List)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty2 CreateMutableProperty2<R0, R1, V>(
             |        string 'name', class Kotlin.Function2 'getter', class Kotlin.Function3 'setter',
-            |        class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.KType 'returnType', class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 4
+            |      .maxstack 5
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
             |      ldarg.3
+            |      ldarg.s 4
             |      newobj instance void Kotlin.Runtime.Internal.MutableProperty2Impl::.ctor(
-            |          string, class Kotlin.Function2, class Kotlin.Function3, class Kotlin.Collections.List)
+            |          string, class Kotlin.Function2, class Kotlin.Function3, class Kotlin.KType,
+            |          class Kotlin.Collections.List)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KProperty0 CreateLocalDelegatedProperty0<V>(
-            |        string 'name', class Kotlin.Collections.List 'annotations') cil managed
+            |        string 'name', class Kotlin.KType 'returnType', class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 2
+            |      .maxstack 3
             |      ldarg.0
             |      ldarg.1
+            |      ldarg.2
             |      newobj instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Impl::.ctor(
-            |          string, class Kotlin.Collections.List)
+            |          string, class Kotlin.KType, class Kotlin.Collections.List)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty0 CreateLocalDelegatedMutableProperty0<V>(
-            |        string 'name', class Kotlin.Collections.List 'annotations') cil managed
+            |        string 'name', class Kotlin.KType 'returnType', class Kotlin.Collections.List 'annotations') cil managed
             |    {
-            |      .maxstack 2
+            |      .maxstack 3
             |      ldarg.0
             |      ldarg.1
+            |      ldarg.2
             |      newobj instance void Kotlin.Runtime.Internal.LocalDelegatedMutableProperty0Impl::.ctor(
-            |          string, class Kotlin.Collections.List)
+            |          string, class Kotlin.KType, class Kotlin.Collections.List)
             |      ret
             |    }
             |  }

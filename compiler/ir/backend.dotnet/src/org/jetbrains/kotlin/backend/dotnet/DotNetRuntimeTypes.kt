@@ -389,6 +389,7 @@ internal object DotNetRuntimeTypes {
     private val kClassifierBase = DotNetKClassRuntime.kClassifierClassInfo
     private val kAnnotatedElementBase = DotNetKClassRuntime.kAnnotatedElementClassInfo
     private val kClassBase = DotNetKClassRuntime.kClassClassInfo
+    private val kTypeBase = DotNetKClassRuntime.kTypeClassInfo
 
     private val kFunctionBase = DotNetIlClassInfo(
         ilClassName = "Kotlin.KFunction",
@@ -518,6 +519,7 @@ internal object DotNetRuntimeTypes {
             irClass.isDotNetKClassifierBase -> kClassifierBase
             irClass.isDotNetKAnnotatedElementBase -> kAnnotatedElementBase
             irClass.isDotNetKClassBase -> kClassBase
+            irClass.isDotNetKTypeBase -> kTypeBase
             irClass.isDotNetKCallableBase -> kCallableBase
             irClass.isDotNetKFunctionBase || irClass.dotNetFixedKFunctionArityOrNull() != null -> kFunctionBase
             irClass.isDotNetKPropertyBase -> kPropertyBase
@@ -601,11 +603,19 @@ internal object DotNetRuntimeTypes {
     ): DotNetIlFunctionInfo? {
         val owner = function.parent as? IrClass ?: return null
         return when {
-            owner.isDotNetKCallableBase && function.dotNetIlMethodName() == "get_name" ->
+            owner.isDotNetFunctionReferenceBase == true &&
+                    function.name.asString() == "GetReturnType" ->
+                DotNetIlFunctionInfo(
+                    owner = functionReferenceBase,
+                    signature = function.dotNetSignature(typeMapper),
+                    physicalMethodName = function.name.asString(),
+                )
+            owner.isDotNetKCallableBase &&
+                    function.dotNetIlMethodName() in setOf("get_name", "get_returnType") ->
                 DotNetIlFunctionInfo(
                     owner = kCallableBase,
                     signature = function.dotNetSignature(typeMapper),
-                    physicalMethodName = "get_name",
+                    physicalMethodName = function.dotNetIlMethodName(),
                 )
             else -> null
         }
@@ -692,6 +702,9 @@ internal object DotNetRuntimeTypes {
             // instance checks use the declaration-erased Kotlin classifier carried by KClassImpl.
             return DotNetIlValueType.UserClass(kClassBase)
         }
+        if (irClass.isDotNetKTypeBase && simpleType.arguments.isEmpty()) {
+            return DotNetIlValueType.UserClass(kTypeBase)
+        }
         if (irClass.fqNameWhenAvailable == DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(defaultConstructorMarkerClass)
         }
@@ -716,14 +729,17 @@ internal object DotNetRuntimeTypes {
                 invoke.dotNetSignature(typeMapper),
             )
         }
-        val nameGetter = irBuiltIns.kCallableClass.owner.properties
-            .single { it.name.asString() == "name" }
-            .getter
-            ?: error("Internal .NET backend error: kotlin.reflect.KCallable.name has no getter")
-        availableFunctions[nameGetter] = DotNetIlFunctionInfo(
-            kCallableBase,
-            nameGetter.dotNetSignature(typeMapper),
-        )
+        for (propertyName in listOf("name", "returnType")) {
+            val property = irBuiltIns.kCallableClass.owner.properties
+                .singleOrNull { it.name.asString() == propertyName }
+                ?: continue
+            val getter = property.getter
+                ?: error("Internal .NET backend error: kotlin.reflect.KCallable.$propertyName has no getter")
+            availableFunctions[getter] = DotNetIlFunctionInfo(
+                kCallableBase,
+                getter.dotNetSignature(typeMapper),
+            )
+        }
         val kClass = irBuiltIns.kClassClass.owner
         for (propertyName in listOf("simpleName", "qualifiedName")) {
             val getter = kClass.properties.single { it.name.asString() == propertyName }.getter
@@ -754,6 +770,15 @@ internal object DotNetRuntimeTypes {
             kClassBase,
             isInstance.dotNetSignature(typeMapper),
         )
+        val kType = irBuiltIns.kTypeClass.owner
+        for (propertyName in listOf("classifier", "arguments", "isMarkedNullable")) {
+            val getter = kType.properties.single { property -> property.name.asString() == propertyName }.getter
+                ?: error("Internal .NET backend error: kotlin.reflect.KType.$propertyName has no getter")
+            availableFunctions[getter] = DotNetIlFunctionInfo(
+                kTypeBase,
+                getter.dotNetSignature(typeMapper),
+            )
+        }
         for (arity in fixedPropertyClasses.indices) {
             val get = irBuiltIns.getKPropertyClass(mutable = false, arity).owner.functions
                 .single { it.name.asString() == "get" }
@@ -902,6 +927,9 @@ private val IrClass.isDotNetKAnnotatedElementBase: Boolean
 
 private val IrClass.isDotNetKClassBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KClass" && typeParameters.size == 1
+
+private val IrClass.isDotNetKTypeBase: Boolean
+    get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KType" && typeParameters.isEmpty()
 
 private val IrClass.isDotNetKFunctionBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KFunction" && typeParameters.size == 1

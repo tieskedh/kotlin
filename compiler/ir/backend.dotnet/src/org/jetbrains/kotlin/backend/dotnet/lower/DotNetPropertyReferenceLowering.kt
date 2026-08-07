@@ -10,7 +10,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnsupported
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.irCall
+import org.jetbrains.kotlin.ir.builders.irNull
 import org.jetbrains.kotlin.ir.builders.irString
+import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
@@ -21,6 +23,7 @@ import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.typeOrNull
+import org.jetbrains.kotlin.ir.util.properties
 
 /**
  * Follows the Native/Wasm wrapper model: a KProperty object stores ordinary lowered getter and
@@ -31,6 +34,11 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
     AbstractPropertyReferenceLowering<DotNetBackendContext>(context) {
 
     private val backendContext = context
+    private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable return type")
+
+    private val hasReturnTypeSurface: Boolean
+        get() = backendContext.irBuiltIns.kCallableClass.owner.properties
+            .any { property -> property.name.asString() == "returnType" }
 
     override fun functionReferenceClass(arity: Int): IrClassSymbol =
         context.irBuiltIns.functionN(arity).symbol
@@ -48,6 +56,15 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
             arguments[0] = propertyReferenceNameExpression(reference)
             arguments[1] = getterReference
             setterReference?.let { arguments[2] = it }
+            arguments[arguments.lastIndex - 1] = if (hasReturnTypeSurface) {
+                val property = reference.reflectionTargetSymbol?.owner as? IrProperty
+                    ?: error("Internal .NET backend error: KProperty return type has no property target")
+                val getter = property.getter
+                    ?: error("Internal .NET backend error: reflected property '${property.name}' has no getter")
+                kTypeBuilder.run { buildGraph(getter.returnType) }
+            } else {
+                irNull()
+            }
             arguments[arguments.lastIndex] = irCall(backendContext.callableAnnotationSymbols.empty)
             dotNetPropertyAnnotationOwner = reference.reflectionTargetSymbol?.owner as? IrAnnotationContainer
         }
@@ -70,7 +87,12 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
         val call = irCall(factory.symbol, reference.type, listOf(valueType)) as IrCall
         return call.apply {
             arguments[0] = irString(propertyName)
-            arguments[1] = irCall(backendContext.callableAnnotationSymbols.empty)
+            arguments[1] = if (hasReturnTypeSurface) {
+                kTypeBuilder.run { buildGraph(valueType) }
+            } else {
+                irNull()
+            }
+            arguments[2] = irCall(backendContext.callableAnnotationSymbols.empty)
             dotNetPropertyAnnotationOwner = reference.reflectionTargetSymbol?.owner as? IrAnnotationContainer
         }
     }

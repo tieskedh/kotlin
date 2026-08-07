@@ -82,6 +82,8 @@ fun main(args: Array<String>) {
                     "box/reflection/typeOf/noReflect",
                     pattern = "^(typeReferenceEqualsHashCode)\\.kt$",
                 )
+                model("box/reflection/functions", pattern = "^(genericOverriddenFunction)\\.kt$", recursive = false)
+                model("box/reflection/properties", pattern = "^(genericOverriddenProperty)\\.kt$", recursive = false)
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
@@ -115,6 +117,8 @@ fun main(args: Array<String>) {
                     "box/reflection/typeOf/noReflect",
                     pattern = "^(typeReferenceEqualsHashCode)\\.kt$",
                 )
+                model("box/reflection/functions", pattern = "^(genericOverriddenFunction)\\.kt$", recursive = false)
+                model("box/reflection/properties", pattern = "^(genericOverriddenProperty)\\.kt$", recursive = false)
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
@@ -148,6 +152,8 @@ fun main(args: Array<String>) {
                     "box/reflection/typeOf/noReflect",
                     pattern = "^(typeReferenceEqualsHashCode)\\.kt$",
                 )
+                model("box/reflection/functions", pattern = "^(genericOverriddenFunction)\\.kt$", recursive = false)
+                model("box/reflection/properties", pattern = "^(genericOverriddenProperty)\\.kt$", recursive = false)
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
@@ -181,6 +187,8 @@ fun main(args: Array<String>) {
                     "box/reflection/typeOf/noReflect",
                     pattern = "^(typeReferenceEqualsHashCode)\\.kt$",
                 )
+                model("box/reflection/functions", pattern = "^(genericOverriddenFunction)\\.kt$", recursive = false)
+                model("box/reflection/properties", pattern = "^(genericOverriddenProperty)\\.kt$", recursive = false)
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("dotnet/box")
