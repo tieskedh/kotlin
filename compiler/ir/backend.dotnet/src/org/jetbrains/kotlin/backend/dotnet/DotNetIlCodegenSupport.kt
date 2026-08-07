@@ -724,7 +724,8 @@ internal class DotNetIlTypeMapper private constructor(
         } else {
             externalDeclarations.functionInfoOrNull(function, this) ?: localStdlibFunction()
         }
-        return (comparableFunctionInfoOrNull(function)
+        return (DotNetRuntimeTypes.reflectionFunctionInfoOrNull(function, this)
+            ?: comparableFunctionInfoOrNull(function)
             ?: DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
             ?: libraryFunction
             ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->

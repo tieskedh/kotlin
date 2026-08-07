@@ -91,8 +91,11 @@ Invocation or widening changes only the interface view of the existing object.
 Lambdas and adapted references without a KFunction source type may remain
 FunctionN-only.
 
-The currently durable reflection fact is the callable name. Owner, parameters,
-return type, annotations, lookup, and general reflective call require a
+The currently durable reflection facts are the callable name and
+declaration-owned runtime annotations. Annotation discovery is governed by
+[`callable-annotation-discovery.md`](callable-annotation-discovery.md); it uses
+the reference's existing exact target without defining member lookup. Owner,
+parameters, return type, lookup, and general reflective call still require a
 separate reflection model and Kotlin metadata contract.
 
 ### Function-reference `Any` behavior is structural
@@ -196,9 +199,11 @@ may not replace or leak into canonical Kotlin signatures.
 ## Reflection boundary
 
 This draft does not define full `KCallable` metadata, reflective lookup/call,
-accessor objects, annotations, suspend callable identity, or getter/setter
-back-links. In particular, exposing private stored FunctionN values as JVM-like
-property accessors would not satisfy the required KFunction/property contract.
+accessor objects, suspend callable identity, or getter/setter back-links.
+The separately accepted annotation slice retains declaration annotations on
+the same reference object but intentionally adds none of those capabilities.
+In particular, exposing private stored FunctionN values as JVM-like property
+accessors would not satisfy the required KFunction/property contract.
 
 Any later reflection layer must consume KLIB logical signatures, preserve one
 canonical callable object, and keep erased invocation as the universal
