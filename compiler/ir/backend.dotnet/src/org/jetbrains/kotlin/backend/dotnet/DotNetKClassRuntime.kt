@@ -985,8 +985,8 @@ $createExceptionBody
     }
 
     private fun annotationListSupportIl(coreLibraryReference: String): String = """
-  // Private transport for KClass.annotations. The object-array storage is never exposed as
-  // Kotlin Array identity; this class supplies the complete read-only Kotlin List surface.
+  // Private read-only list transport for reflection values. The object-array storage is never
+  // exposed as Kotlin Array identity; this class supplies the complete Kotlin List surface.
   .class private sealed auto ansi beforefieldinit ReflectionAnnotationList
          extends ${coreLibraryReference}System.Object
          implements Kotlin.Collections.List
@@ -1008,7 +1008,7 @@ $createExceptionBody
       ret
     }
 
-    .method private hidebysig specialname rtspecialname instance void .ctor(
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(
         object[] 'items', int32 'from', int32 'size') cil managed
     {
       .maxstack 2

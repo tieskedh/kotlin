@@ -34,11 +34,12 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
     AbstractPropertyReferenceLowering<DotNetBackendContext>(context) {
 
     private val backendContext = context
-    private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable return type")
+    private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable signature")
 
-    private val hasReturnTypeSurface: Boolean
+    private val hasSignatureSurface: Boolean
         get() = backendContext.irBuiltIns.kCallableClass.owner.properties
-            .any { property -> property.name.asString() == "returnType" }
+            .mapTo(linkedSetOf()) { property -> property.name.asString() }
+            .containsAll(listOf("returnType", "typeParameters"))
 
     override fun functionReferenceClass(arity: Int): IrClassSymbol =
         context.irBuiltIns.functionN(arity).symbol
@@ -56,12 +57,12 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
             arguments[0] = propertyReferenceNameExpression(reference)
             arguments[1] = getterReference
             setterReference?.let { arguments[2] = it }
-            arguments[arguments.lastIndex - 1] = if (hasReturnTypeSurface) {
+            arguments[arguments.lastIndex - 1] = if (hasSignatureSurface) {
                 val property = reference.reflectionTargetSymbol?.owner as? IrProperty
                     ?: error("Internal .NET backend error: KProperty return type has no property target")
                 val getter = property.getter
                     ?: error("Internal .NET backend error: reflected property '${property.name}' has no getter")
-                kTypeBuilder.run { buildGraph(getter.returnType) }
+                kTypeBuilder.run { buildCallableSignature(getter.returnType, getter.typeParameters) }
             } else {
                 irNull()
             }
@@ -87,8 +88,8 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
         val call = irCall(factory.symbol, reference.type, listOf(valueType)) as IrCall
         return call.apply {
             arguments[0] = irString(propertyName)
-            arguments[1] = if (hasReturnTypeSurface) {
-                kTypeBuilder.run { buildGraph(valueType) }
+            arguments[1] = if (hasSignatureSurface) {
+                kTypeBuilder.run { buildCallableSignature(valueType, emptyList()) }
             } else {
                 irNull()
             }

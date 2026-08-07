@@ -125,8 +125,10 @@ KLIB application graph.
   no global runtime metadata interpreter is required.
 - Foreign lookup is token-exact but currently linear over one declared member
   family. Caching is a future non-observable optimization.
-- `KCallable.returnType`, parameters, type parameters, visibility, owner,
-  accessor objects, reflective call, and `KClass.members` remain unavailable.
+- `KCallable.returnType` and declaration-owned `typeParameters` subsequently
+  landed through their own KLIB-first signature decisions. Parameters,
+  visibility, owner, accessor objects, reflective call, and `KClass.members`
+  remain unavailable.
 - Parameter, receiver, field, accessor, and type-use annotation surfaces need
   their own exact owners before admission.
 

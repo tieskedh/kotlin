@@ -116,7 +116,10 @@ internal class DotNetPropertyReferenceSymbols(
                 irBuiltIns.functionN(arity + 1).symbol.typeWithArguments(typeArguments + irBuiltIns.unitType),
             )
         }
-        function.addValueParameter("returnType", irBuiltIns.kTypeClass.defaultType.makeNullable())
+        function.addValueParameter(
+            "signature",
+            irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
+        )
         function.addValueParameter(
             "annotations",
             irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),
@@ -139,7 +142,10 @@ internal class DotNetPropertyReferenceSymbols(
         function.returnType = irBuiltIns.getKPropertyClass(mutable, 0)
             .typeWithArguments(listOf(function.typeParameters.single().defaultType))
         function.addValueParameter("name", irBuiltIns.stringType)
-        function.addValueParameter("returnType", irBuiltIns.kTypeClass.defaultType.makeNullable())
+        function.addValueParameter(
+            "signature",
+            irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
+        )
         function.addValueParameter(
             "annotations",
             irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),

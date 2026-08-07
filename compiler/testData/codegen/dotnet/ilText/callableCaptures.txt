@@ -208,7 +208,9 @@
   {
     .maxstack 12
     .locals init (
-      [0] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>'
+      [0] object[] '<arrayOfStorage>',
+      [1] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@1',
+      [2] object '<arrayElement>'
     )
     ldarg.0
     ldstr "local:<unknown>:-1:-1:kotlin.Int#inc(){}"
@@ -217,6 +219,9 @@
     ldc.i4 1
     ldstr "inc"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 1
+    newarr object
+    stloc.0
     ldtoken [mscorlib]System.Int32
     call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
     ldstr "Int"
@@ -226,11 +231,17 @@
     call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
     ldc.i4 0
     newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
-    stloc.0
-    ldloc.0
+    stloc.1
+    ldloc.1
     ldc.i4.0
     call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.KType')
+    stloc.2
+    ldloc.0
+    ldc.i4 0
+    ldloc.2
+    stelem object
+    ldloc.0
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', object[])
     ldarg.0
     ldarg.1
     stfld int32 'callableCapturesKt$boundPrimitive$1'::'f$0'
@@ -279,6 +290,13 @@
     call instance class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetReturnType'()
     ret
   }
+  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_typeParameters'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetTypeParameters'()
+    ret
+  }
   .property instance string 'name'()
   {
     .get instance string 'callableCapturesKt$boundPrimitive$1'::'get_name'()
@@ -286,6 +304,10 @@
   .property instance class [Kotlin.Runtime]'Kotlin.KType' 'returnType'()
   {
     .get instance class [Kotlin.Runtime]'Kotlin.KType' 'callableCapturesKt$boundPrimitive$1'::'get_returnType'()
+  }
+  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'typeParameters'()
+  {
+    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableCapturesKt$boundPrimitive$1'::'get_typeParameters'()
   }
 }
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$boundMember$1'
@@ -298,7 +320,9 @@
   {
     .maxstack 12
     .locals init (
-      [0] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>'
+      [0] object[] '<arrayOfStorage>',
+      [1] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@1',
+      [2] object '<arrayElement>'
     )
     ldarg.0
     ldstr "local:callableCaptures.kt:309:351:Offset#apply(kotlin.Int){}"
@@ -307,6 +331,9 @@
     ldc.i4 1
     ldstr "apply"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 1
+    newarr object
+    stloc.0
     ldtoken [mscorlib]System.Int32
     call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
     ldstr "Int"
@@ -316,11 +343,17 @@
     call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
     ldc.i4 0
     newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
-    stloc.0
-    ldloc.0
+    stloc.1
+    ldloc.1
     ldc.i4.0
     call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.KType')
+    stloc.2
+    ldloc.0
+    ldc.i4 0
+    ldloc.2
+    stelem object
+    ldloc.0
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List', object[])
     ldarg.0
     ldarg.1
     stfld class 'Offset' 'callableCapturesKt$boundMember$1'::'f$0'
@@ -379,6 +412,13 @@
     call instance class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetReturnType'()
     ret
   }
+  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_typeParameters'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetTypeParameters'()
+    ret
+  }
   .property instance string 'name'()
   {
     .get instance string 'callableCapturesKt$boundMember$1'::'get_name'()
@@ -386,6 +426,10 @@
   .property instance class [Kotlin.Runtime]'Kotlin.KType' 'returnType'()
   {
     .get instance class [Kotlin.Runtime]'Kotlin.KType' 'callableCapturesKt$boundMember$1'::'get_returnType'()
+  }
+  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'typeParameters'()
+  {
+    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableCapturesKt$boundMember$1'::'get_typeParameters'()
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'callableCapturesKt'

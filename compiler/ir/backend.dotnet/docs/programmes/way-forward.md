@@ -132,9 +132,13 @@ reflection-target rule and reuses the same logical graph producer as `typeOf`;
 Kotlin declarations come from KLIB-derived IR and imported CLR declarations
 from importer-enhanced semantic IR. Runtime owns the minimal physical `KType`
 interface needed by its typed callable slot, while Stdlib retains Common graph
-behavior. The remaining reflection sequence must add an exact parameter/type-
-parameter owner model before parameter/type-use annotations or general
-members.
+behavior. `KCallable.typeParameters` now takes JVM's declaration-owned rule:
+functions and generic extension properties exclude enclosing class parameters,
+while constructors expose the constructed class's own parameters. Return
+types, exposed parameters, recursive bounds, and reachable enclosing parameters
+are allocated in one identity graph. The remaining reflection sequence must
+extend that graph with the exact `KParameter` owner/position model before
+parameter/type-use annotations or general members.
 
 ### 3. Expand Common collections by exact dependency closure
 

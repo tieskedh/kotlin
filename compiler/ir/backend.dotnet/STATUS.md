@@ -11,10 +11,11 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: KLIB-first `KCallable.returnType`, including Native's
-  exact reflection-target rule, one shared logical `KType` graph producer,
-  separate KLIB and importer-IR authority, and a cycle-free physical `KType`
-  interface in Runtime with its Common implementation retained in Stdlib
+- Last completed feature: declaration-owned `KCallable.typeParameters`,
+  including JVM's function/property/constructor ownership rules, one identity
+  graph shared with `returnType` and recursive bounds, feature-detected
+  no-stdlib behavior, and a Runtime-owned read-only view over the single
+  compiler/runtime signature carrier
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -28,19 +29,26 @@ substantial open programmes.
 
 ## Current green gate
 
-The current KLIB-first callable-return-type head passed:
+The current callable-type-parameter head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The completion audit covered 52 XML files and 1283 tests. The final full
-`--rerun` invocation completed at 2026-08-07 07:02 local time:
+The completion audit covered 52 XML files and 1287 tests. The final full
+`--rerun` invocation completed at 2026-08-07 10:24 local time:
 
-- 1170 FIR, IL-text, and box tests
+- 1174 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 92 library-integration tests
 - zero failures, errors, or skips
+
+After that audit, a source-only correction replaced an accidental
+`THROWABLE.abiValue` spelling in an unrelated array-length comparison with
+the literal `1`; both spellings emit the same `ldc.i4.1`. The final source
+head was recompiled and executed by the four callable-type-parameter
+PSI/LightTree and Framework/CoreCLR box lanes (4 tests, 0 failures, errors, or
+skips).
 
 The target now compiles the authoritative Common `ClosedRange`,
 `OpenEndRange`, floating/comparable range, signed `Char`/`Int`/`Long`
@@ -571,8 +579,8 @@ bound/unbound callable references, invocation/mutation identity,
 property/accessor separation, read-only list behavior, separate KLIB
 consumption, exact foreign CLR method/property attributes, both runtime
 profiles, and `-no-stdlib` compilation. Member enumeration/invocation,
-callable signatures, accessor objects, and parameter/type-use annotation
-owners remain separate reflection decisions.
+callable parameters, accessor objects, and parameter/type-use annotation owners
+remain separate reflection decisions.
 
 `KCallable.returnType` now follows Native's declaration-target boundary rather
 than the generated invocation adapter. Functions and constructors use the rich
@@ -593,6 +601,17 @@ and C# consumers prove one type identity without an object bridge, wrapper, or
 Runtime-to-Stdlib dependency. Target-owned adversarial coverage and two
 unchanged upstream override tests execute across both FIR parsers and CLR
 profiles; exact IL pins the additional graph and getter shape.
+
+`KCallable.typeParameters` now deliberately extends that Native-shaped floor
+with JVM's declaration-owned rule. Function and generic-extension-property
+references expose only their own parameters in declaration order; constructors
+expose the constructed class's own parameters. Enclosing parameters remain
+reachable through return types and recursive bounds without leaking into the
+own list. Return types, exposed parameters, and bounds are allocated in one
+graph, so a classifier is the exact same object across every public view.
+Bound and unbound references retain the unbound declaration owner. Runtime
+surface level 20 transports that graph as one erased compiler/runtime value;
+physical CLR generic parameters and runtime reflection remain non-authoritative.
 
 The general Common Comparable mapping is independently published and the enum
 product consumes the same KLIB identity, canonical classifier, typed C# view,
@@ -686,12 +705,13 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Select a KLIB-first callable-parameter and type-parameter owner model as the
-   next deep reflection foundation. Compare Common, JVM, Native, JS, and Wasm;
-   compose the completed declaration-owned return `KType` with instance,
-   extension, context, and value positions plus separate property/accessor
-   ownership on the existing reference object. Do not reconstruct Kotlin
-   signatures from CLR metadata.
+1. Extend the completed KLIB-first callable signature graph with `KParameter`
+   as the next deep reflection foundation. Compare Common, JVM, Native, JS,
+   and Wasm; define stable instance, extension, context, and value positions,
+   names, optional/vararg flags, bound-reference reindexing, and separate
+   property/accessor ownership on the existing reference object. Parameter
+   types must reuse the existing return/type-parameter graph; do not
+   reconstruct Kotlin signatures from CLR metadata.
 2. Keep broad member enumeration/invocation, accessor objects, and foreign CLR
    enhancement outside that tranche. The owner model should unblock exact
    parameter/type-use annotation work without pretending that a reference is

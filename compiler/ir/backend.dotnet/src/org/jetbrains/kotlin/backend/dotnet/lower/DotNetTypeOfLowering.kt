@@ -33,6 +33,7 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
+import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.util.isTypeOfIntrinsic
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.toIrConst
@@ -77,9 +78,50 @@ internal class DotNetKTypeIrBuilder(
     fun IrBuilderWithScope.buildGraph(
         representedType: IrType,
         resultType: IrType = backendContext.irBuiltIns.kTypeClass.defaultType,
+    ): IrExpression = buildParameterGraph(
+        representedTypes = listOf(representedType),
+        declaredParameters = emptyList(),
+        resultType = resultType,
+    ) { parameterVariables ->
+        buildKType(representedType, parameterVariables)
+    }
+
+    /**
+     * Encodes one declaration-owned callable signature as `[returnType, own type parameters...]`.
+     * The private runtime transport is deliberately a single value: all exposed classifiers are
+     * allocated in this block and therefore retain JVM-style object identity across the graph.
+     */
+    fun IrBuilderWithScope.buildCallableSignature(
+        returnType: IrType,
+        declaredParameters: List<IrTypeParameter>,
+    ): IrExpression {
+        val signatureType = backendContext.irBuiltIns.arrayClass.typeWithArguments(
+            listOf(backendContext.irBuiltIns.anyNType),
+        )
+        return buildParameterGraph(
+            representedTypes = listOf(returnType),
+            declaredParameters = declaredParameters,
+            resultType = signatureType,
+        ) { parameterVariables ->
+            backendContext.createArrayOfExpression(
+                startOffset,
+                endOffset,
+                backendContext.irBuiltIns.anyNType,
+                listOf(buildKType(returnType, parameterVariables)) +
+                        declaredParameters.map { parameter -> irGet(parameterVariables.getValue(parameter)) },
+            )
+        }
+    }
+
+    private fun IrBuilderWithScope.buildParameterGraph(
+        representedTypes: List<IrType>,
+        declaredParameters: List<IrTypeParameter>,
+        resultType: IrType,
+        buildResult: IrBuilderWithScope.(Map<IrTypeParameter, IrVariable>) -> IrExpression,
     ): IrExpression {
         val parameters = linkedSetOf<IrTypeParameter>()
-        collectTypeParameters(representedType, parameters)
+        representedTypes.forEach { type -> collectTypeParameters(type, parameters) }
+        declaredParameters.forEach { parameter -> collectTypeParameter(parameter, parameters) }
 
         return irBlock(resultType = resultType) {
             val parameterVariables = linkedMapOf<IrTypeParameter, IrVariable>()
@@ -108,7 +150,13 @@ internal class DotNetKTypeIrBuilder(
                 }
             }
 
-            +buildKType(representedType, parameterVariables)
+            +buildResult(parameterVariables)
+        }
+    }
+
+    private fun collectTypeParameter(parameter: IrTypeParameter, result: MutableSet<IrTypeParameter>) {
+        if (result.add(parameter)) {
+            parameter.superTypes.forEach { upperBound -> collectTypeParameters(upperBound, result) }
         }
     }
 
@@ -116,9 +164,7 @@ internal class DotNetKTypeIrBuilder(
         val simpleType = type as? IrSimpleType
             ?: dotNetUnsupported("$operation cannot represent non-denotable type '${type.render()}' yet")
         val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
-        if (parameter != null && result.add(parameter)) {
-            parameter.superTypes.forEach { upperBound -> collectTypeParameters(upperBound, result) }
-        }
+        if (parameter != null) collectTypeParameter(parameter, result)
         for (argument in simpleType.arguments) {
             if (argument is IrTypeProjection) collectTypeParameters(argument.type, result)
         }

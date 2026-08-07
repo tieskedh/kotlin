@@ -94,7 +94,7 @@ internal class DotNetUpgradeCallableReferences(context: DotNetBackendContext) :
  */
 internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     AbstractFunctionReferenceLowering<DotNetBackendContext>(context) {
-    private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable return type")
+    private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable signature")
 
     override fun getReferenceClassName(reference: IrRichFunctionReference): Name =
         Name.identifier(if (reference.origin.isLambda) "lambda" else "functionReference")
@@ -125,14 +125,21 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
                 functionReference.dotNetCallableAnnotationFactory
                     ?: this@DotNetCallableReferenceLowering.context.callableAnnotationSymbols.empty
             )
-            val hasReturnTypeSurface = functionReference.type.isKFunction() &&
+            val hasSignatureSurface = functionReference.type.isKFunction() &&
                     !functionReference.type.isKSuspendFunction() &&
                     this@DotNetCallableReferenceLowering.context.irBuiltIns.kCallableClass.owner.properties
-                        .any { property -> property.name.asString() == "returnType" }
-            arguments[6] = if (hasReturnTypeSurface) {
+                        .mapTo(linkedSetOf()) { property -> property.name.asString() }
+                        .containsAll(listOf("returnType", "typeParameters"))
+            arguments[6] = if (hasSignatureSurface) {
                 val target = functionReference.reflectionTargetSymbol?.owner
                     ?: error("Internal .NET backend error: KFunction return type has no reflection target")
-                kTypeBuilder.run { buildGraph(target.returnType) }
+                val declaredParameters = if (target is IrConstructor) {
+                    (target.parent as? IrClass)?.typeParameters
+                        ?: error("Internal .NET backend error: reflected constructor has no class owner")
+                } else {
+                    target.typeParameters
+                }
+                kTypeBuilder.run { buildCallableSignature(target.returnType, declaredParameters) }
             } else {
                 irNull()
             }
@@ -325,6 +332,38 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
                 })
             }
         }
+
+        val typeParametersProperty = context.irBuiltIns.kCallableClass.owner.properties
+            .singleOrNull { property -> property.name.asString() == "typeParameters" }
+            ?: return
+        val typeParametersSuperGetter = typeParametersProperty.getter
+            ?: error("Internal .NET backend error: kotlin.reflect.KCallable.typeParameters has no getter")
+        val generatedTypeParametersProperty = functionReferenceClass.addProperty {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = typeParametersProperty.name
+            visibility = typeParametersProperty.visibility
+        }.apply {
+            overriddenSymbols = listOf(typeParametersProperty.symbol)
+        }
+        generatedTypeParametersProperty.addGetter {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            returnType = typeParametersSuperGetter.returnType
+            visibility = typeParametersSuperGetter.visibility
+        }.apply getter@{
+            overriddenSymbols = listOf(typeParametersSuperGetter.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            body = context.createIrBuilder(symbol).irBlockBody {
+                val getTypeParameters = this@DotNetCallableReferenceLowering.context.functionReferenceSymbols.getTypeParameters
+                    ?: error("Internal .NET backend error: KCallable.typeParameters has no runtime helper")
+                +irReturn(irCall(getTypeParameters).apply {
+                    arguments[0] = irGet(this@getter.dispatchReceiverParameter!!)
+                })
+            }
+        }
     }
 
     /** Exposes exactly the rich reference's bound values to the runtime identity base. */
@@ -370,7 +409,9 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             // The concrete getters remain the single CLR implementations.
             val concretePropertyNames = context.irBuiltIns.kCallableClass.owner.properties
                 .mapNotNullTo(linkedSetOf()) { property ->
-                    property.name.takeIf { name -> name.asString() == "name" || name.asString() == "returnType" }
+                    property.name.takeIf { name ->
+                        name.asString() in setOf("name", "returnType", "typeParameters")
+                    }
                 }
             functionReferenceClass.declarations.removeAll { declaration ->
                 declaration.origin == IrDeclarationOrigin.FAKE_OVERRIDE && when (declaration) {

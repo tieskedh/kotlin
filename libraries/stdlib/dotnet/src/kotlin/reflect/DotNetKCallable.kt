@@ -5,11 +5,14 @@
 
 package kotlin.reflect
 
-/** The Common callable floor plus Native-shaped logical return type and annotation discovery. */
+/** The Common callable floor plus declaration-owned logical signature and annotation discovery. */
 public actual interface KCallable<out R> : KAnnotatedElement {
     @kotlin.internal.IntrinsicConstEvaluation
     public actual val name: String
 
     /** The KLIB/importer-IR return type of the reflected declaration, never its CLR erasure. */
     public val returnType: KType
+
+    /** Declaration-owned parameters; constructors expose their constructed class's own parameters. */
+    public val typeParameters: List<KTypeParameter>
 }
