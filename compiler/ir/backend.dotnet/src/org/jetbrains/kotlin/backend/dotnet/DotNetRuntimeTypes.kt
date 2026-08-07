@@ -604,14 +604,14 @@ internal object DotNetRuntimeTypes {
         val owner = function.parent as? IrClass ?: return null
         return when {
             owner.isDotNetFunctionReferenceBase == true &&
-                    function.name.asString() == "GetReturnType" ->
+                    function.name.asString() in setOf("GetReturnType", "GetTypeParameters") ->
                 DotNetIlFunctionInfo(
                     owner = functionReferenceBase,
                     signature = function.dotNetSignature(typeMapper),
                     physicalMethodName = function.name.asString(),
                 )
             owner.isDotNetKCallableBase &&
-                    function.dotNetIlMethodName() in setOf("get_name", "get_returnType") ->
+                    function.dotNetIlMethodName() in setOf("get_name", "get_returnType", "get_typeParameters") ->
                 DotNetIlFunctionInfo(
                     owner = kCallableBase,
                     signature = function.dotNetSignature(typeMapper),
@@ -729,7 +729,7 @@ internal object DotNetRuntimeTypes {
                 invoke.dotNetSignature(typeMapper),
             )
         }
-        for (propertyName in listOf("name", "returnType")) {
+        for (propertyName in listOf("name", "returnType", "typeParameters")) {
             val property = irBuiltIns.kCallableClass.owner.properties
                 .singleOrNull { it.name.asString() == propertyName }
                 ?: continue

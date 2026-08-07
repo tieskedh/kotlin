@@ -234,3 +234,8 @@ The complete built-in mapping table, supplemental hierarchy encoding,
 classifier caching, boundary-failure type, colliding-constructor ABI, and the
 Common `CancellationException(cause)` factory remain open. None may weaken
 object preservation, truthful ancestry, or the single-classifier invariant.
+
+The append-only values in `DotNetKotlinExceptionTypeId` are the sole authority
+for the classifier's integer ABI. Compiler emission and Runtime switch IL must
+consume those values directly. Runtime-surface, schema, and other version
+counters are independent and must never stand in for a classifier id.
