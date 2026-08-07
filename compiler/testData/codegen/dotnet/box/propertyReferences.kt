@@ -23,6 +23,8 @@ private class ManualProperty : kotlin.reflect.KMutableProperty1<Cell, Int> {
 
     override val returnType = typeOf<Int>()
 
+    override val typeParameters = emptyList<kotlin.reflect.KTypeParameter>()
+
     override fun get(receiver: Cell): Int = receiver.value
 
     override fun invoke(receiver: Cell): Int = get(receiver)
@@ -39,6 +41,8 @@ private class ManualProperty2 : KMutableProperty2<ExtensionHost, Cell, Int> {
     override val annotations: List<Annotation> = emptyList()
 
     override val returnType = typeOf<Int>()
+
+    override val typeParameters = emptyList<kotlin.reflect.KTypeParameter>()
 
     override fun get(receiver1: ExtensionHost, receiver2: Cell): Int = receiver2.value
 

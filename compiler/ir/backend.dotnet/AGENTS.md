@@ -424,16 +424,31 @@ See the
   `KCallable.returnType` uses the exact reflection target and the shared
   logical `KType` graph: Kotlin declarations are KLIB-derived, imported CLR
   declarations are importer-enhanced IR, and generated `invoke` adapters or
-  runtime CLR reflection are never signature authority. Typed foreign
-  attribute import, foreign CLR generic methods, parameters/type-parameter
-  ownership, and broader member reflection remain separate. A foreign generic
+  runtime CLR reflection are never signature authority. `KCallable.typeParameters`
+  is the JVM-shaped declaration-owned extension above Native's smaller floor.
+  Return types, every callable-owned parameter, their recursive bounds, and
+  reachable enclosing parameters must be allocated in one graph. The exposed
+  list follows JVM ownership: functions and generic extension properties expose
+  their own parameters, while constructors expose their constructed class's
+  own parameters, always in declaration order. An exposed parameter must be
+  the exact classifier object reused by return and bound types. Bound and
+  unbound references retain the unbound declaration owner. Never build
+  independent per-property graphs, enumerate physical CLR generic parameters,
+  or leak enclosing parameters into the own list. Later `KParameter.type` must
+  extend this same graph rather than decode another one. Backend symbol wiring
+  must feature-detect this platform extension: `-no-stdlib`, malformed-library,
+  and older-surface diagnostic paths may initialize the backend without the
+  property and must not crash before their intended diagnostic.
+  Typed foreign attribute import, foreign CLR generic methods, `KParameter`,
+  and broader member reflection remain separate. A foreign generic
   method must continue to fail the current interface importer closed until its
   own complete FIR/import/binding feature lands; never decode it privately in
   callable reflection. See
   [the annotation-value decision](docs/decisions/valued-annotation-classes.md),
   [the class-discovery decision](docs/decisions/annotation-discovery.md), and
   [the callable-discovery decision](docs/decisions/callable-annotation-discovery.md), and
-  [the callable-return decision](docs/decisions/callable-return-types.md).
+  [the callable-return decision](docs/decisions/callable-return-types.md), and
+  [the callable-type-parameter decision](docs/decisions/callable-type-parameters.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
   Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve
@@ -491,6 +506,12 @@ physical CLR universe. Exact Kotlin or CLR identities are physical only when
 truthful. Broad or non-physical Kotlin subtype relationships are enforced by
 one versioned classifier used consistently by type tests, casts, catches, and
 metadata consumers.
+
+`DotNetKotlinExceptionTypeId` is the single authority for the classifier's
+stable integer ABI. Runtime switch IL must interpolate those assigned values;
+never duplicate a bare number or substitute an unrelated monotone counter such
+as the runtime-surface level. Advancing one version must not renumber exception
+identity.
 
 Kotlin `Throwable` state missing from `System.Exception`, especially
 suppressed exceptions, is identity-associated runtime state on the original
