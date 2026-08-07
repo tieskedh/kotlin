@@ -103,6 +103,10 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/reflect/DotNetKAnnotatedElement.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetKCallable.kt",
+        "dotnet/src/kotlin/reflect/DotNetKCallable.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetKType.kt",
         "dotnet/src/kotlin/reflect/DotNetKType.kt",
     ),
@@ -267,6 +271,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "KClass.kt",
         "src/kotlin/reflect/KClass.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "KCallable.kt",
+        "src/kotlin/reflect/KCallable.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

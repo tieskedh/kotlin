@@ -468,7 +468,7 @@ IL_whenNext_1:
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 6
+    .maxstack 7
     call void 'callableObjectsKt$main$reference$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:callableObjects.kt:580:622:#increment(kotlin.Int){}"
@@ -476,7 +476,8 @@ IL_whenNext_1:
     ldc.i4 0
     ldc.i4 0
     ldstr "increment"
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0') cil managed
@@ -564,7 +565,7 @@ IL_whenNext_1:
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 6
+    .maxstack 7
     call void 'callableObjectsKt$main$threeReference$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:callableObjects.kt:624:703:#sumThree(kotlin.Int;kotlin.Int;kotlin.Int){}"
@@ -572,7 +573,8 @@ IL_whenNext_1:
     ldc.i4 0
     ldc.i4 0
     ldstr "sumThree"
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0', int32 'p1', int32 'p2') cil managed
@@ -657,7 +659,7 @@ IL_whenNext_1:
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 6
+    .maxstack 7
     call void 'callableObjectsKt$main$unit$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:callableObjects.kt:705:745:#mark(){}"
@@ -665,7 +667,8 @@ IL_whenNext_1:
     ldc.i4 0
     ldc.i4 0
     ldstr "mark"
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
     ret
   }
   .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed

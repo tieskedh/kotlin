@@ -1,8 +1,8 @@
 # CLR annotation interoperability programme
 
 - Status: **Active — exact Common-contract export, foreign flow-contract
-  import, Kotlin valued-annotation production, and class discovery implemented;
-  member discovery and wider foreign grammar remain open**
+  import, Kotlin valued-annotation production, and class/callable discovery
+  implemented; wider member surfaces and foreign grammar remain open**
 - Owner: .NET importer and foreign FIR integration
 - Governing decision:
   [`../decisions/draft-adr-clr-importer-boundary.md`](../decisions/draft-adr-clr-importer-boundary.md)
@@ -92,7 +92,8 @@ type.
 | Kotlin annotation declarations and values | Implemented | Preserve Common/KLIB authority and one runtime class |
 | Kotlin-to-CLR annotation projection | Exact fixed-argument subset implemented | Extend only with exact physical carriers and parent mappings |
 | Class annotation discovery | Implemented | Reconstruct Kotlin applications from KLIB-derived factories; use CLR reflection only for unmarked foreign assemblies |
-| Member/parameter/type-use discovery | Parked | Select declaration ownership, use sites, overrides, and lookup identity before exposing a surface |
+| Callable/property-reference annotation discovery | Implemented | Use exact reference targets; keep property and accessor ownership distinct |
+| Member enumeration and parameter/type-use discovery | Parked | Select declaration ownership, use sites, overrides, and lookup identity before exposing a surface |
 | Kotlin-to-.NET export controls | Undecided public API | Make one language-facing proposal |
 
 ## Ordered work
@@ -214,11 +215,19 @@ The first bounded discovery slice is now complete under
 4. unmarked foreign CLR types use their native inherited attribute discovery;
 5. mapped BCL classifiers do not leak host implementation attributes.
 
+The second bounded slice is complete under
+[`../decisions/callable-annotation-discovery.md`](../decisions/callable-annotation-discovery.md).
+Function, constructor, and property references retain runtime annotations on
+the existing executable object. Kotlin dependencies use their embedded KLIB;
+foreign methods and properties use retained declaring types plus exact metadata
+tokens. Property applications remain distinct from getter/setter applications.
+
 The remaining chain covers built-in Kotlin meta-annotation runtime values,
-typed foreign attribute import, and callable/property/field/accessor/parameter/
-type-use ownership. Each needs an admitted declaration identity and use-site
-model before it can extend the class surface. The exact CLR value/parent grammar
-may grow independently only when its physical representation is exact.
+typed foreign attribute import, member enumeration, and field/accessor-object/
+parameter/type-use ownership. Each needs an admitted declaration identity and
+use-site model before it can extend the reflection surface. The exact CLR
+value/parent grammar may grow independently only when its physical
+representation is exact.
 
 This is a bounded annotation-reflection layer, not permission to build broad member enumeration or
 invocation first. The foreign decoder and Kotlin producer may share a neutral value algebra, but a

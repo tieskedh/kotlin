@@ -641,6 +641,7 @@ $throwableExceptionTypesIl
           }
 
           .class interface public abstract auto ansi KCallable
+                 implements Kotlin.KAnnotatedElement
           {
             .method public hidebysig specialname newslot abstract virtual instance string 'get_name'() cil managed
             {

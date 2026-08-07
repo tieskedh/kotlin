@@ -151,7 +151,7 @@ IL_whenNext_1:
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 6
+    .maxstack 7
     call void 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:localFunctionCallables.kt:573:593:#functionReferenceMixtureSupported(){}#local#static(){}"
@@ -159,7 +159,8 @@ IL_whenNext_1:
     ldc.i4 0
     ldc.i4 0
     ldstr "local"
-    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string, class [Kotlin.Runtime]'Kotlin.Collections.List')
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'() cil managed

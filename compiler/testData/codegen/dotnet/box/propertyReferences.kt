@@ -1,5 +1,6 @@
-// Erased KProperty0/1/2 wrappers: name/get/invoke/set, primitive result variance, bound receiver
-// evaluation, ordinary getter/setter callable delegation, and name-only local delegate tokens.
+// Erased KProperty0/1/2 wrappers: name/annotations/get/invoke/set, primitive result variance,
+// bound receiver evaluation, ordinary getter/setter callable delegation, and name-only local
+// delegate tokens.
 
 import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KMutableProperty2
@@ -17,6 +18,8 @@ private class ManualProperty : kotlin.reflect.KMutableProperty1<Cell, Int> {
     override val name: String
         get() = "manual"
 
+    override val annotations: List<Annotation> = emptyList()
+
     override fun get(receiver: Cell): Int = receiver.value
 
     override fun invoke(receiver: Cell): Int = get(receiver)
@@ -29,6 +32,8 @@ private class ManualProperty : kotlin.reflect.KMutableProperty1<Cell, Int> {
 private class ManualProperty2 : KMutableProperty2<ExtensionHost, Cell, Int> {
     override val name: String
         get() = "manual2"
+
+    override val annotations: List<Annotation> = emptyList()
 
     override fun get(receiver1: ExtensionHost, receiver2: Cell): Int = receiver2.value
 

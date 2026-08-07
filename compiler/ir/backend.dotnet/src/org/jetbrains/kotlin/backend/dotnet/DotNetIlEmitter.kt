@@ -81,6 +81,7 @@ internal class DotNetIlEmitter(
     private val producesExecutable: Boolean,
     private val irBuiltIns: IrBuiltIns,
     private val propertyReferenceFactoryFunctions: List<IrSimpleFunction>,
+    private val callableAnnotationFactoryFunctions: List<IrSimpleFunction>,
     private val exports: List<DotNetExport> = emptyList(),
     private val propertyExports: List<DotNetPropertyExport> = emptyList(),
     private val emissionScope: DotNetIlEmissionScope = DotNetIlEmissionScope.USER,
@@ -608,6 +609,7 @@ internal class DotNetIlEmitter(
         DotNetRuntimeTypes.registerCallableFunctions(
             irBuiltIns,
             propertyReferenceFactoryFunctions,
+            callableAnnotationFactoryFunctions,
             typeMapper,
             availableFunctions,
         )

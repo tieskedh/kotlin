@@ -11,6 +11,8 @@ import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.builders.declarations.addConstructor
 import org.jetbrains.kotlin.ir.builders.declarations.addFunction
+import org.jetbrains.kotlin.ir.builders.declarations.addGetter
+import org.jetbrains.kotlin.ir.builders.declarations.addProperty
 import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -21,8 +23,13 @@ import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
 import org.jetbrains.kotlin.ir.irAttribute
+import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
+import org.jetbrains.kotlin.ir.types.classOrNull
+import org.jetbrains.kotlin.ir.util.defaultType
+import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.properties
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 
@@ -51,6 +58,9 @@ internal class DotNetFunctionReferenceSymbols(
             irModuleFragment,
             FqName("kotlin.runtime.internal"),
         )
+        val kAnnotatedElement = irBuiltIns.kCallableClass.owner.superTypes
+            .mapNotNull { type -> type.classOrNull?.owner }
+            .singleOrNull { owner -> owner.fqNameWhenAvailable?.asString() == "kotlin.reflect.KAnnotatedElement" }
         baseClass = irFactory.buildClass {
             origin = IrDeclarationOrigin.IR_BUILTINS_STUB
             name = Name.identifier("FunctionReferenceBase")
@@ -60,7 +70,7 @@ internal class DotNetFunctionReferenceSymbols(
         }.apply {
             parent = runtimeInternalPackage
             isDotNetFunctionReferenceBase = true
-            superTypes = listOf(irBuiltIns.anyType)
+            superTypes = listOfNotNull(irBuiltIns.anyType, kAnnotatedElement?.defaultType)
             createThisReceiverParameter()
         }
         constructor = baseClass.addConstructor {
@@ -73,6 +83,32 @@ internal class DotNetFunctionReferenceSymbols(
             addValueParameter("flags", irBuiltIns.intType)
             addValueParameter("boundValueCount", irBuiltIns.intType)
             addValueParameter("name", irBuiltIns.stringType)
+            addValueParameter(
+                "annotations",
+                irBuiltIns.listClass.typeWith(irBuiltIns.annotationType),
+            )
+        }
+        if (kAnnotatedElement != null) {
+            val superProperty = kAnnotatedElement.properties
+                .single { property -> property.name.asString() == "annotations" }
+            val superGetter = superProperty.getter
+                ?: error("Internal .NET backend error: KAnnotatedElement.annotations has no getter")
+            val property = baseClass.addProperty {
+                origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+                name = superProperty.name
+                visibility = superProperty.visibility
+            }.apply {
+                overriddenSymbols = listOf(superProperty.symbol)
+            }
+            property.addGetter {
+                origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+                returnType = superGetter.returnType
+                visibility = superGetter.visibility
+                modality = Modality.FINAL
+            }.apply {
+                overriddenSymbols = listOf(superGetter.symbol)
+                parameters += createDispatchReceiverParameterWithClassParent()
+            }
         }
         boundValueAt = baseClass.addFunction {
             origin = IrDeclarationOrigin.IR_BUILTINS_STUB

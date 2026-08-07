@@ -15736,6 +15736,152 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testKCallableAnnotationsAcrossLibraryAndClrBoundary() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+
+        val producerDirectory = File(tmpdir, "kcallable-producer")
+        val producerSource = File(tmpdir, "KCallableLibrary.kt").apply {
+            writeText(
+                """
+                package kcallable.boundary
+
+                @Retention(AnnotationRetention.RUNTIME)
+                @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY)
+                public annotation class LibraryCallableMarker(public val value: String = "library")
+
+                @Retention(AnnotationRetention.BINARY)
+                @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY)
+                public annotation class BinaryCallableMarker
+
+                @LibraryCallableMarker
+                @BinaryCallableMarker
+                public fun libraryFunction(value: Int): Int = value + 1
+
+                @LibraryCallableMarker("property")
+                @BinaryCallableMarker
+                public val libraryProperty: Int = 42
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "KCallable.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val consumerDirectory = File(tmpdir, "kcallable-consumer").apply { mkdirs() }
+        val foreignSource = consumerDirectory.resolve("ForeignCallables.cs").apply {
+            writeText(
+                """
+                using System;
+
+                namespace ForeignCallables
+                {
+                    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Property)]
+                    public sealed class ForeignCallableMarkerAttribute : Attribute
+                    {
+                        public ForeignCallableMarkerAttribute(string value) { Value = value; }
+                        public string Value { get; }
+                    }
+
+                    public interface ForeignCallable
+                    {
+                        [ForeignCallableMarker("method")]
+                        int Transform(int value);
+
+                        [ForeignCallableMarker("property")]
+                        int Value { get; }
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val foreignAssembly = consumerDirectory.resolve("Foreign.Callables.dll")
+        val foreignCompile = runModernCSharpCompiler(
+            checkNotNull(csharpToolchain),
+            foreignSource,
+            foreignAssembly,
+        )
+        assertEquals(0, foreignCompile.exitCode, foreignCompile.output)
+
+        val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                import ForeignCallables.ForeignCallable
+                import kcallable.boundary.*
+
+                private fun annotationName(value: Annotation): String =
+                    value::class.simpleName ?: "<anonymous>"
+
+                fun main() {
+                    val functionAnnotations = ::libraryFunction.annotations
+                    if (functionAnnotations.size != 1) throw Error("KLIB function annotation count")
+                    val functionMarker = functionAnnotations[0] as? LibraryCallableMarker
+                        ?: throw Error("KLIB function annotation identity")
+                    if (functionMarker.value != "library") throw Error("KLIB function annotation default")
+                    if (libraryFunction(41) != 42) throw Error("library function invocation")
+
+                    val propertyAnnotations = ::libraryProperty.annotations
+                    if (propertyAnnotations.size != 1) throw Error("KLIB property annotation count")
+                    val propertyMarker = propertyAnnotations[0] as? LibraryCallableMarker
+                        ?: throw Error("KLIB property annotation identity")
+                    if (propertyMarker.value != "property") throw Error("KLIB property annotation value")
+                    if (::libraryProperty.get() != 42) throw Error("library property invocation")
+
+                    val methodAnnotations = ForeignCallable::Transform.annotations
+                    if (methodAnnotations.size != 1) throw Error("foreign method annotation count")
+                    if (annotationName(methodAnnotations[0]) != "ForeignCallableMarkerAttribute") {
+                        throw Error("foreign method annotation identity")
+                    }
+
+                    val foreignPropertyAnnotations = ForeignCallable::Value.annotations
+                    if (foreignPropertyAnnotations.size != 1) throw Error("foreign property annotation count")
+                    if (annotationName(foreignPropertyAnnotations[0]) != "ForeignCallableMarkerAttribute") {
+                        throw Error("foreign property annotation identity")
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("KCallableConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            listOf(
+                producerDirectory.resolve("KCallable.Library.dll"),
+                foreignAssembly,
+                checkNotNull(csharpToolchain).referenceDirectory.resolve("System.Runtime.dll"),
+            ).joinToString(File.pathSeparator) { it.path },
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "KCallableConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+
+        val consumerIl = consumerDirectory.resolve("KCallableConsumer.il").readText()
+        assertTrue("[KCallable.Library]'kcallable.boundary.KCallableLibraryKt'::'libraryFunction'" in consumerIl) {
+            consumerIl
+        }
+        assertTrue("CallableAnnotationFactory'::'Foreign'" in consumerIl) { consumerIl }
+        runDotNet(
+            modernDotNetHostOrSkip(),
+            consumerAssembly,
+            consumerDirectory,
+            "KCallable annotation boundary consumer failed",
+        )
+    }
+
+    @Test
     fun testKClassIdentityDistinguishesSameNamedClassesAcrossAssemblies() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val directory = File(tmpdir, "kclass-assembly-identity").apply { mkdirs() }
@@ -31106,6 +31252,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/annotations/WasExperimental.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClass.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KCallable.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClasses.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClassifier.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KType.kt").absoluteFile

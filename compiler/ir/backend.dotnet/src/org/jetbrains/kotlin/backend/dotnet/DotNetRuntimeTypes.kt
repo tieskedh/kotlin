@@ -424,6 +424,11 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
+    private val callableAnnotationFactory = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Runtime.Internal.CallableAnnotationFactory",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
     private val functionReferenceBase = DotNetIlClassInfo(
         ilClassName = "Kotlin.Runtime.Internal.FunctionReferenceBase",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
@@ -475,6 +480,7 @@ internal object DotNetRuntimeTypes {
             DotNetIlValueType.UserClass(kClassifierBase),
             DotNetIlValueType.UserClass(kAnnotatedElementBase),
         )
+        kCallableBase.interfaces = listOf(DotNetIlValueType.UserClass(kAnnotatedElementBase))
         kFunctionBase.interfaces = listOf(
             DotNetIlValueType.UserClass(kCallableBase),
             DotNetIlValueType.UserClass(functionBase),
@@ -508,6 +514,7 @@ internal object DotNetRuntimeTypes {
             irClass.dotNetTypedArgumentsFunctionArity != null ->
                 typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
             irClass.isDotNetPropertyReferenceFactory == true -> propertyReferenceFactory
+            irClass.isDotNetCallableAnnotationFactory == true -> callableAnnotationFactory
             irClass.isDotNetKClassifierBase -> kClassifierBase
             irClass.isDotNetKAnnotatedElementBase -> kAnnotatedElementBase
             irClass.isDotNetKClassBase -> kClassBase
@@ -581,6 +588,27 @@ internal object DotNetRuntimeTypes {
             function.dotNetSignature(typeMapper),
             physicalMethodName,
         )
+    }
+
+    /**
+     * Runtime-owned reflection declarations are resolution views of an already emitted physical
+     * contract. In particular, the platform actual KCallable source must not make its generic
+     * owner look like a newly declared Kotlin interface whose canonical slot needs ABI mangling.
+     */
+    fun reflectionFunctionInfoOrNull(
+        function: IrSimpleFunction,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo? {
+        val owner = function.parent as? IrClass ?: return null
+        return when {
+            owner.isDotNetKCallableBase && function.dotNetIlMethodName() == "get_name" ->
+                DotNetIlFunctionInfo(
+                    owner = kCallableBase,
+                    signature = function.dotNetSignature(typeMapper),
+                    physicalMethodName = "get_name",
+                )
+            else -> null
+        }
     }
 
     private fun genericInterfaceDescriptorFor(irClass: IrClass): RuntimeGenericInterfaceDescriptor? {
@@ -676,6 +704,7 @@ internal object DotNetRuntimeTypes {
     fun registerCallableFunctions(
         irBuiltIns: IrBuiltIns,
         propertyReferenceFactoryFunctions: List<IrSimpleFunction>,
+        callableAnnotationFactoryFunctions: List<IrSimpleFunction>,
         typeMapper: DotNetIlTypeMapper,
         availableFunctions: MutableMap<IrSimpleFunction, DotNetIlFunctionInfo>,
     ) {
@@ -742,6 +771,12 @@ internal object DotNetRuntimeTypes {
         propertyReferenceFactoryFunctions.forEach { factory ->
             availableFunctions[factory] = DotNetIlFunctionInfo(
                 propertyReferenceFactory,
+                factory.dotNetSignature(typeMapper),
+            )
+        }
+        callableAnnotationFactoryFunctions.forEach { factory ->
+            availableFunctions[factory] = DotNetIlFunctionInfo(
+                callableAnnotationFactory,
                 factory.dotNetSignature(typeMapper),
             )
         }

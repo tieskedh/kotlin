@@ -11,10 +11,10 @@ verification, and work state.
 - Last integration checkpoint: the complete reviewed 179-commit range was
   rebased without semantic cleanup; later `origin/master` commits remain
   outside this deliberately selected boundary until they are reviewed
-- Last completed feature: KLIB-first class annotation discovery, including the
-  JVM-shaped `KAnnotatedElement` platform surface, executable private factories
-  for Kotlin-produced classes, and a disjoint native CLR-attribute path for
-  foreign classes
+- Last completed feature: KLIB-first callable annotation discovery, including
+  the JVM-shaped `KCallable : KAnnotatedElement` platform surface, private
+  declaration-owned producers for Kotlin function/property references, and an
+  exact metadata-token path for imported CLR methods and properties
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -28,18 +28,18 @@ substantial open programmes.
 
 ## Current green gate
 
-The current KLIB-first class annotation-discovery head passed:
+The current KLIB-first callable annotation-discovery head passed:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest --rerun -q
 ```
 
-The completion audit covered 44 XML files and 1266 tests. The final full
-`--rerun` invocation completed at 2026-08-06 23:41 local time:
+The completion audit covered 44 XML files and 1271 tests. The final full
+`--rerun` invocation completed at 2026-08-07 03:14 local time:
 
-- 1154 FIR, IL-text, and box tests
+- 1158 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 91 library-integration tests
+- 92 library-integration tests
 - zero failures, errors, or skips
 
 The target now compiles the authoritative Common `ClosedRange`,
@@ -553,20 +553,26 @@ in all four .NET runners, adds exact IL blobs and nested metadata parents, and
 proves portable Kotlin defaults plus bidirectional typed C# application and
 reflection on Framework CLR and CoreCLR.
 
-Class-level runtime annotation discovery is now selected as a separate
-JVM-shaped platform extension above Common `KClass`. Kotlin-produced classes
-are reconstructed from private executable factories derived only after KLIB
-serialization, so exact and KLIB-only values share the existing annotation
-objects and projected CLR rows never become a duplicate authority. A private
-assembly marker makes absence of a factory an authoritative empty result.
-Unmarked foreign CLR types instead retain native inherited
-`GetCustomAttributes` behavior; mapped BCL-backed Kotlin classifiers expose no
-host implementation attributes. Adversarial coverage exercises defaults,
-nested values, arrays, enums, `KClass`, repetition, retention, local/generic/
-interface classes, read-only list behavior, separate KLIB consumption, real C#
-interfaces and unimported concrete classes, both runtime profiles, and
-`-no-stdlib` compilation. Member, property, accessor, parameter, and type-use
-annotation discovery remain separate reflection decisions.
+Class- and callable-level runtime annotation discovery are now selected as
+JVM-shaped platform extensions above Common `KClass` and `KCallable`.
+Kotlin-produced values are reconstructed from private executable factories
+derived from the KLIB-authoritative IR, so exact and KLIB-only values share the
+existing annotation objects and projected CLR rows never become a duplicate
+authority. Classifiers retain the producer-assembly marker and foreign-only
+class path. Function, constructor, and property references carry their
+declaration annotations on the existing executable object; imported CLR
+methods and properties use the retained declaring type plus exact metadata
+token and read only that direct row. Property applications are never merged
+with getter/setter applications. Runtime surface level 18 owns this callable
+transport; the physical declaration-index schema remains unchanged.
+Adversarial coverage exercises defaults, nested values, arrays, enums,
+`KClass`, repetition, retention, local/generic/interface classes, empty and
+bound/unbound callable references, invocation/mutation identity,
+property/accessor separation, read-only list behavior, separate KLIB
+consumption, exact foreign CLR method/property attributes, both runtime
+profiles, and `-no-stdlib` compilation. Member enumeration/invocation,
+callable signatures, accessor objects, and parameter/type-use annotation
+owners remain separate reflection decisions.
 
 The general Common Comparable mapping is independently published and the enum
 product consumes the same KLIB identity, canonical classifier, typed C# view,
@@ -656,14 +662,15 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Select annotation discovery as the next deep reflection foundation.
-   Enumerate Kotlin-produced applications from authoritative KLIB, reconstruct
-   the existing concrete runtime values, preserve use-site/retention facts,
-   and merge only recognized foreign CLR evidence without duplicating derived
-   rows from Kotlin-produced DLLs.
-2. Keep broad member enumeration/invocation outside that tranche. Annotation
-   lookup must not require a premature full `kotlin-reflect` product or make
-   CLR custom attributes the round-trip store for Kotlin applications.
+1. Select a KLIB-first callable-signature and parameter-owner model as the next
+   deep reflection foundation. Compare Common, JVM, Native, JS, and Wasm;
+   preserve declaration parameters, return `KType`, type parameters, receiver
+   positions, and separate property/accessor ownership on the existing
+   reference object. Do not reconstruct Kotlin signatures from CLR metadata.
+2. Keep broad member enumeration/invocation, accessor objects, and foreign CLR
+   enhancement outside that tranche. The owner model should unblock exact
+   parameter/type-use annotation work without pretending that a reference is
+   already a complete `kotlin-reflect` member implementation.
 3. After that foundation, recompute the remaining stdlib dependency graph
    around Sequence, Grouping, sorting/comparators/random, dependency-blocked
    reified variants, and open nullable projected arrays; do not admit leaves

@@ -119,6 +119,10 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             arguments[2] = irInt(functionReference.referenceFlags())
             arguments[3] = irInt(functionReference.boundValues.size)
             arguments[4] = irString(functionReference.reflectedName())
+            arguments[5] = irCall(
+                functionReference.dotNetCallableAnnotationFactory
+                    ?: this@DotNetCallableReferenceLowering.context.callableAnnotationSymbols.empty
+            )
         }
     }
 

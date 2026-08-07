@@ -1005,9 +1005,11 @@ internal object DotNetStdlibLibrary {
         "JvmAnnotationsH.kt" to "kotlin.jvm",
         "Multiplatform.kt" to "kotlin",
         "KClass.kt" to "kotlin.reflect",
+        "KCallable.kt" to "kotlin.reflect",
         "KClassifier.kt" to "kotlin.reflect",
         "DotNetKClass.kt" to "kotlin.reflect",
         "DotNetKAnnotatedElement.kt" to "kotlin.reflect",
+        "DotNetKCallable.kt" to "kotlin.reflect",
         "_DotNetBootstrapJsName.kt" to "kotlin.js",
         "DotNetVolatileMarker.kt" to "kotlin.concurrent",
     )

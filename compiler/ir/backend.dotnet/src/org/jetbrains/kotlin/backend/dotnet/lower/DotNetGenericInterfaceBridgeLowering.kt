@@ -27,6 +27,7 @@ import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetComparableClass
 import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
+import org.jetbrains.kotlin.backend.dotnet.isDotNetResolutionOnlyStdlibDeclaration
 import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
 import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.config.dotNetTarget
@@ -124,6 +125,10 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             }
 
             override fun visitClass(declaration: IrClass) {
+                if (declaration.isDotNetResolutionOnlyStdlibDeclaration) {
+                    declaration.acceptChildrenVoid(this)
+                    return
+                }
                 if (declaration.isInterface) {
                     if (declaration.isDotNetGenericInterfaceDeclaration) {
                         genericInterfaces += declaration

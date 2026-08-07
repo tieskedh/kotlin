@@ -122,11 +122,13 @@ generator and embedded KLIB as their complete semantic representation; exact run
 scalar/string/vector values receive an additive CLR custom-attribute row, while unsupported values
 fail closed to KLIB-only without weakening Kotlin construction.
 
-The next reflection tranche is annotation discovery. It should enumerate authoritative KLIB
-applications and reconstruct the existing annotation runtime values, then merge only recognized
-foreign CLR attributes under the importer rules. It must not infer Kotlin applications from a
-Kotlin-produced DLL's derived CLR rows, duplicate values when both stores exist, or require broad
-member invocation before annotation lookup itself can be made truthful.
+Class and callable-reference annotation discovery now enumerate authoritative
+KLIB applications and reconstruct the existing annotation runtime values.
+Foreign classes use the separately admitted unmarked-assembly path; imported
+foreign callable references use exact MethodDef/Property tokens. Neither path
+infers Kotlin applications from derived CLR rows or requires broad member
+enumeration/invocation. The remaining reflection sequence must add an exact
+owner model before parameter/type-use annotations or general members.
 
 ### 3. Expand Common collections by exact dependency closure
 
