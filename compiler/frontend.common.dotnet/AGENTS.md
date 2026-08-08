@@ -14,6 +14,11 @@ carrier resource name from its caller and reports only `WithCarrier` or `Without
 not infer a producer language or own `Kotlin.Metadata`.
 
 Mirror mature target module and package ownership unless a documented CLR constraint requires a
-different shape. The strict commit gate remains
-`./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`, including the 16-suite XML
-audit documented by the backend instructions.
+different shape. PE metadata input may buffer one bounded, already range-checked CLI metadata
+directory for the lifetime of one read, mirroring the byte-oriented readers used by mature
+targets. Keep the checked RandomAccessFile path for larger directories. Do not add a static or
+compiler-wide assembly cache here: selected graph identity, file freshness, target profile, and
+compilation lifetime belong to shared .NET platform/import orchestration.
+
+The current commit gate, daemon policy, rerun semantics, result roots, and XML audit are owned by
+`../ir/backend.dotnet/AGENTS.md`; do not duplicate their command or suite count here.

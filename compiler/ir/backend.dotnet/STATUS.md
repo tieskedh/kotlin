@@ -16,14 +16,13 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: one Runtime-owned, physically erased `Kotlin.Enum`
-  reference-class base for Stdlib and user enums, including exact nested CLR
-  ownership and JVM-shaped declaration-safe comparison through the broad CLR
-  `IComparable` boundary. The same tranche makes the emitter's selected live
-  declaration set authoritative, fails a no-progress emission fixpoint, replaces
-  per-class module-index copies with local overlays, and caches stable classifier
-  facts once per compilation. Library ABI version 24 and runtime surface level
-  25 reject producer references or runtimes that predate the physical contract
+- Last completed feature: bounded read-local buffering of the already
+  range-checked PE CLI metadata directory. Normal CLR assemblies now decode
+  tables, strings, and blobs from one in-memory byte range instead of seeking
+  for every scalar/string byte; metadata directories above 64 MiB retain the
+  exact checked RandomAccessFile path. The objective model and diagnostics are
+  unchanged, and no global assembly/file cache was introduced. Library ABI
+  version 24 and runtime surface level 25 remain current
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -37,7 +36,7 @@ substantial open programmes.
 
 ## Current green gate
 
-The Runtime-owned-Enum and emitter-throughput head passed the ordinary aggregate. The normal
+The buffered CLR-metadata-reader head passed the ordinary aggregate. The normal
 aggregate command is:
 
 ```text
@@ -52,13 +51,34 @@ The audited full-aggregate evidence covers 54 XML files and 1305 tests:
 - 92 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed its final confirmation at 2026-08-08 13:54 local time
-in 34m43s. Gradle reused the unchanged six physical model tests, rewrote all 51
+The aggregate completed its final confirmation at 2026-08-08 14:30 local time
+in 16m19s. Gradle reused the unchanged six physical model tests, rewrote all 51
 FIR/IL/box suites, and rewrote both `dn` suites. The resulting audited tree has
-a cumulative JUnit suite time of 2095.43 seconds: 0.13 for the physical model,
-373.59 for FIR/IL/box, and 1721.71 for `dn`. Gradle 9's selected-task `--rerun`
+a cumulative JUnit suite time of 1007.54 seconds: 0.13 for the physical model,
+380.27 for FIR/IL/box, and 627.14 for `dn`. Gradle 9's selected-task `--rerun`
 option is not full-matrix evidence on the empty backend lifecycle task and is
 not part of the verification command.
+
+The next profile after fixing the emitter showed a separate foreign-loading
+cost: every 1/2/4-byte metadata-table value and every byte scanned from
+`#Strings` performed a `RandomAccessFile.seek`. Buffering only the bounded CLI
+metadata directory reduced the exact physical-metadata/signature testcase from
+123.031 to 3.417 seconds. The two largest real importer cases changed from
+208.84 to 18.953 seconds for cross-profile foreign interface binding and from
+234.61 to 11.576 seconds for Common deprecation enhancement; a hostile
+`NotNullWhen` case changed from 31.98 to 5.814 seconds. The complete gate kept
+the same 1305-test matrix while wall time fell from 34m43s to 16m19s and `dn`
+JUnit time from 1721.71 to 627.14 seconds. A live heap inspection during the
+integration run showed 387 MB old generation and 868 MB young generation. That
+single snapshot is consistent with a large committed/transient young heap and
+provided no evidence that the full process working set was a retained assembly
+graph; it is not a complete allocation or leak profile.
+
+This is the CLR analogue of mature targets consuming bounded binary metadata
+from memory, not permission for a compiler-wide cache. Selected graph identity,
+file freshness, target profile, and compilation lifetime still require an
+explicit shared .NET platform/import owner before any cross-read cache is
+considered. Re-profile before adding string/blob memoization or test bundling.
 
 The performance investigation distinguished a hotspot from a correctness
 loop. In the baseline JFR, 521 of 1961 CPU samples (26.6%) ended in

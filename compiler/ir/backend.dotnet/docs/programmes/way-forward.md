@@ -395,6 +395,25 @@ determinism, failure eviction, resource embedding, and both ILAsm compatibility
 lanes preserved. Test partitioning must continue to avoid rebuilding complete
 Runtime/Stdlib products for ordinary small modules.
 
+The foreign CLR reader follows the corresponding input pattern. JVM class
+readers consume bounded class bytes and Native deserializers work over bounded
+in-memory metadata inputs; a CLR assembly instead has one PE-owned metadata
+directory shared by its tables and heaps. Repeated `RandomAccessFile.seek`
+calls for every table scalar and every string byte are therefore a CLR-reader
+implementation accident, not a semantic requirement. Buffer the already
+range-checked CLI metadata directory once per read when it is at most 64 MiB,
+and retain the exact random-access fallback for larger images. Do not turn
+this into a global assembly cache: selected graph identity, target profile,
+file freshness, and compilation lifetime need an explicit shared owner first.
+
+The accepted buffer changed the exact physical-metadata/signature testcase
+from 123.031 seconds to 3.417 seconds. Real importer cases also improved:
+foreign interface binding across both profiles changed from 208.84 to 18.953
+seconds, Obsolete/deprecation enhancement from 234.61 to 11.576 seconds, and
+the hostile `NotNullWhen` case from 31.98 to 5.814 seconds. Profile again after
+the aggregate; do not add string/blob memoization until a new profile proves
+that it is the next material cost.
+
 The current verified count and command belong only in [`../../STATUS.md`](../../STATUS.md).
 
 ## Explicitly parked feature families
