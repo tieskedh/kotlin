@@ -15764,6 +15764,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 @BinaryCallableMarker
                 public fun libraryFunction(@LibraryCallableMarker("parameter") value: Int): Int = value + 1
 
+                public fun libraryDefaults(
+                    first: String = "library",
+                    count: Int = 2,
+                    vararg suffixes: String,
+                ): String = first + count + suffixes.size
+
+                public fun libraryDefaultsReference(): KCallable<String> = ::libraryDefaults
+
+                public open class LibraryBase {
+                    public open fun inheritedDefault(value: Int = 7): Int = value
+                }
+
+                public class LibraryDerived : LibraryBase() {
+                    override fun inheritedDefault(value: Int): Int = value + 100
+                }
+
+                public open class GenericLibraryBase<T>(private val fallback: T) {
+                    public open fun inheritedGenericDefault(value: T = fallback): T = value
+                }
+
+                public class GenericLibraryDerived : GenericLibraryBase<String>("generic") {
+                    override fun inheritedGenericDefault(value: String): String = value + "!"
+                }
+
                 @LibraryCallableMarker("property")
                 @BinaryCallableMarker
                 public val libraryProperty: Int = 42
@@ -15929,6 +15953,57 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                     if (storedReference.call(41) != 42) throw Error("stored KCallable positional call")
 
+                    val storedDefaults = libraryDefaultsReference()
+                    if (storedDefaults.parameters.size != 3 ||
+                        !storedDefaults.parameters[0].isOptional ||
+                        !storedDefaults.parameters[1].isOptional ||
+                        !storedDefaults.parameters[2].isVararg
+                    ) {
+                        throw Error("stored default parameter shape")
+                    }
+                    if (storedDefaults.callBy(emptyMap()) != "library20") {
+                        throw Error("stored KCallable defaults and empty vararg")
+                    }
+                    if (storedDefaults.callBy(mapOf(
+                            storedDefaults.parameters[0] to "named",
+                            storedDefaults.parameters[2] to arrayOf("A", "B"),
+                        )) != "named22"
+                    ) {
+                        throw Error("stored KCallable supplied named arguments")
+                    }
+
+                    val directDefaults = ::libraryDefaults
+                    if (directDefaults.callBy(emptyMap()) != "library20") {
+                        throw Error("consumer-created KFunction defaults across KLIB boundary")
+                    }
+
+                    val inheritedReference = LibraryDerived::inheritedDefault
+                    if (!inheritedReference.parameters[1].isOptional) {
+                        throw Error("inherited KLIB default parameter shape")
+                    }
+                    if (inheritedReference.callBy(mapOf(
+                            inheritedReference.parameters[0] to LibraryDerived(),
+                        )) != 107
+                    ) {
+                        throw Error("inherited KLIB default with virtual dispatch")
+                    }
+                    if (LibraryDerived().inheritedDefault() != 107) {
+                        throw Error("ordinary inherited default call across KLIB boundary")
+                    }
+
+                    val genericDerived = GenericLibraryDerived()
+                    if (genericDerived.inheritedGenericDefault() != "generic!") {
+                        throw Error("generic inherited default call across KLIB boundary")
+                    }
+                    val genericInheritedReference = GenericLibraryDerived::inheritedGenericDefault
+                    if (!genericInheritedReference.parameters[1].isOptional ||
+                        genericInheritedReference.callBy(mapOf(
+                            genericInheritedReference.parameters[0] to genericDerived,
+                        )) != "generic!"
+                    ) {
+                        throw Error("generic inherited KLIB default with virtual dispatch")
+                    }
+
                     val methodAnnotations = ForeignCallable::Transform.annotations
                     if (methodAnnotations.size != 1) throw Error("foreign method annotation count")
                     if (annotationName(methodAnnotations[0]) != "ForeignCallableMarkerAttribute") {
@@ -15962,7 +16037,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         throw Error("foreign ParamArray annotation: ${'$'}foreignVarargAnnotationNames")
                     }
 
-                    val foreignPropertyAnnotations = ForeignCallable::Value.annotations
+                    val foreignValueReference = ForeignCallable::Value
+                    val foreignPropertyAnnotations = foreignValueReference.annotations
                     if (foreignPropertyAnnotations.size != 1) throw Error("foreign property annotation count")
                     if (annotationName(foreignPropertyAnnotations[0]) != "ForeignCallableMarkerAttribute") {
                         throw Error("foreign property annotation identity")
@@ -15977,11 +16053,40 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (ForeignCallable::Transform.call(foreign, 41) != 42) {
                         throw Error("foreign method positional call")
                     }
+                    val foreignTransform = ForeignCallable::Transform
+                    val missingForeignValue = try {
+                        foreignTransform.callBy(mapOf(foreignTransform.parameters[0] to foreign))
+                        null
+                    } catch (exception: IllegalArgumentException) {
+                        exception.message
+                    }
+                    if (missingForeignValue !=
+                        "No argument provided for a required parameter: ${'$'}{foreignTransform.parameters[1]}"
+                    ) {
+                        throw Error("foreign CLR optional must remain required: ${'$'}missingForeignValue")
+                    }
+                    if (foreignTransform.callBy(mapOf(
+                            foreignTransform.parameters[0] to foreign,
+                            foreignTransform.parameters[1] to 41,
+                        )) != 42
+                    ) {
+                        throw Error("foreign method named call")
+                    }
                     if (ForeignCallable::Count.call(foreign, arrayOf("a", "b")) != 2) {
                         throw Error("foreign ParamArray positional call")
                     }
-                    if (ForeignCallable::Value.call(foreign) != 42) {
+                    val foreignCount = ForeignCallable::Count
+                    if (foreignCount.callBy(mapOf(foreignCount.parameters[0] to foreign)) != 0) {
+                        throw Error("foreign ParamArray named call with exact empty array")
+                    }
+                    if (foreignValueReference.call(foreign) != 42) {
                         throw Error("foreign property positional call")
+                    }
+                    if (foreignValueReference.callBy(mapOf(
+                            foreignValueReference.parameters[0] to foreign,
+                        )) != 42
+                    ) {
+                        throw Error("foreign property named call")
                     }
 
                 }
@@ -16010,6 +16115,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("CallableAnnotationFactory'::'Foreign'" in consumerIl) { consumerIl }
         assertTrue("dotNetKParameterFactory" in consumerIl) { consumerIl }
         assertTrue("Kotlin.KCallable'::'Call'(object[])" in consumerIl) { consumerIl }
+        assertTrue("Kotlin.KCallable'::'CallBy'(class [Kotlin.Runtime]'Kotlin.Collections.Map')" in consumerIl) {
+            consumerIl
+        }
         runDotNet(
             modernDotNetHostOrSkip(),
             consumerAssembly,
@@ -16033,14 +16141,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (callable.parameters.Size != 1) return 3;
                         object result = callable.Call(new object[] { 41 });
                         if ((int)result != 42) return 4;
+                        System.Reflection.MethodInfo callBy =
+                            typeof(Kotlin.KCallable).GetMethod("CallBy", new[] { typeof(Kotlin.Collections.Map) });
+                        if (callBy == null || callBy.ReturnType != typeof(object)) return 5;
                         try
                         {
                             callable.Call(new object[0]);
-                            return 5;
+                            return 6;
                         }
                         catch (System.ArgumentException exception)
                         {
-                            if (exception.Message != "Callable expects 1 arguments, but 0 were provided.") return 6;
+                            if (exception.Message != "Callable expects 1 arguments, but 0 were provided.") return 7;
                         }
                         return 0;
                     }
@@ -24140,21 +24251,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         fun assertPublicationSucceeds(
             moduleName: String,
             sourceText: String,
+            targetProfiles: List<String?> = listOf(null),
         ) {
-            val fixtureIndex = successfulPublicationCount++
-            val source = File(tmpdir, "publication-ok-$fixtureIndex.kt").apply {
-                writeText(sourceText.trimIndent())
+            for (targetProfile in targetProfiles) {
+                val fixtureIndex = successfulPublicationCount++
+                val profileSuffix = targetProfile?.replace(Regex("[^A-Za-z0-9]"), "_")
+                val effectiveModuleName =
+                    if (profileSuffix == null) moduleName else "$moduleName.$profileSuffix"
+                val source = File(tmpdir, "publication-ok-$fixtureIndex.kt").apply {
+                    writeText(sourceText.trimIndent())
+                }
+                val outputDirectory = File(tmpdir, "publication-ok-$fixtureIndex")
+                val arguments = buildList {
+                    add(source.path)
+                    add(K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument)
+                    add(K2DotNetCompilerArguments::moduleName.cliArgument)
+                    add(effectiveModuleName)
+                    if (targetProfile != null) {
+                        add(K2DotNetCompilerArguments::dotNetTarget.cliArgument)
+                        add(targetProfile)
+                    }
+                    add(K2DotNetCompilerArguments::destination.cliArgument)
+                    add(outputDirectory.path)
+                }
+                compileInProcess(K2DotNetCompiler(), *arguments.toTypedArray())
+                assertFalse(outputDirectory.resolve("$effectiveModuleName.klib").exists())
+                assertTrue(outputDirectory.resolve("$effectiveModuleName.dll").isFile)
             }
-            val outputDirectory = File(tmpdir, "publication-ok-$fixtureIndex")
-            compileInProcess(
-                K2DotNetCompiler(),
-                source.path,
-                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
-                K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
-                K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
-            )
-            assertFalse(outputDirectory.resolve("$moduleName.klib").exists())
-            assertTrue(outputDirectory.resolve("$moduleName.dll").isFile)
         }
 
         assertPublicationFails(
@@ -24165,7 +24288,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public fun <T> unsupported(value: Array<T?>): Array<T?> = value
             """,
         )
-        assertPublicationFails(
+        assertPublicationSucceeds(
             "Default.Dispatcher.Member.Clash",
             """
             package sample
@@ -24177,7 +24300,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             """,
             listOf("net48", "netstandard2.0", "net10.0"),
-            "both map to the same IL method 'select${'$'}default(int32, int32)'",
         )
         assertPublicationFails(
             "Default.Dispatcher.Facade.Clash",
@@ -24191,7 +24313,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             listOf("net48", "netstandard2.0", "net10.0"),
             "both map to the same IL method 'select${'$'}default(int32, int32)'",
         )
-        assertPublicationFails(
+        assertPublicationSucceeds(
             "Default.Dispatcher.Data.Copy.Clash",
             """
             package sample
@@ -24205,7 +24327,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             """,
             listOf("net48", "netstandard2.0", "net10.0"),
-            "both map to the same IL method 'copy${'$'}default(int32, int32)'",
         )
         assertPublicationSucceeds(
             "Generic.Interface.Clashes",
@@ -35697,10 +35818,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val library = produceLibraryWithRewrittenMetadata(
             assemblyName = "Stale.Embedded.Schema",
-            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "20"),
+            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "21"),
         )
         val diagnostics = compileAgainstRejectedDll(library)
-        assertTrue("uses unsupported CLR ABI index version '20'" in diagnostics) { diagnostics }
+        assertTrue("uses unsupported CLR ABI index version '21'" in diagnostics) { diagnostics }
     }
 
     @Test

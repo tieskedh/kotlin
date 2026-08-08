@@ -72,45 +72,6 @@
     newobj instance void 'ArrayRecord'::.ctor(class [Kotlin.Runtime]'Kotlin.IntArray', string[])
     ret
   }
-  .method public hidebysig instance class 'ArrayRecord' 'copy$default'(class [Kotlin.Runtime]'Kotlin.IntArray' 'numbers', string[] 'labels', int32 '$mask0') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 3
-    ldarg.3
-    ldc.i4 1
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_1
-    ldarg.0
-    ldfld class [Kotlin.Runtime]'Kotlin.IntArray' 'ArrayRecord'::'numbers'
-    starg 1
-    br IL_whenEnd_0
-IL_whenNext_1:
-IL_whenEnd_0:
-    ldarg.3
-    ldc.i4 2
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_3
-    ldarg.0
-    ldfld string[] 'ArrayRecord'::'labels'
-    starg 2
-    br IL_whenEnd_2
-IL_whenNext_3:
-IL_whenEnd_2:
-    ldarg.0
-    ldarg.1
-    ldarg.2
-    call instance class 'ArrayRecord' 'ArrayRecord'::'copy'(class [Kotlin.Runtime]'Kotlin.IntArray', string[])
-    ret
-  }
   .method public hidebysig virtual instance string 'ToString'() cil managed
   {
     .maxstack 2
@@ -199,6 +160,45 @@ IL_whenNext_5:
     ret
 IL_whenNext_7:
     ldc.i4.1
+    ret
+  }
+  .method public hidebysig static class 'ArrayRecord' 'copy$default'(class 'ArrayRecord' '$this', class [Kotlin.Runtime]'Kotlin.IntArray' 'numbers', string[] 'labels', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 3
+    ldarg.3
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.IntArray' 'ArrayRecord'::'numbers'
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.3
+    ldc.i4 2
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldarg.0
+    ldfld string[] 'ArrayRecord'::'labels'
+    starg 2
+    br IL_whenEnd_2
+IL_whenNext_3:
+IL_whenEnd_2:
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call instance class 'ArrayRecord' 'ArrayRecord'::'copy'(class [Kotlin.Runtime]'Kotlin.IntArray', string[])
     ret
   }
   .property instance class [Kotlin.Runtime]'Kotlin.IntArray' 'numbers'()

@@ -604,7 +604,15 @@ internal object DotNetRuntimeTypes {
         val owner = function.parent as? IrClass ?: return null
         return when {
             owner.isDotNetFunctionReferenceBase == true &&
-                    function.dotNetIlMethodName() in setOf("GetReturnType", "GetParameters", "GetTypeParameters", "CallErased") ->
+                    function.dotNetIlMethodName() in setOf(
+                        "GetReturnType",
+                        "GetParameters",
+                        "GetTypeParameters",
+                        "CallErased",
+                        "CallByErased",
+                        "CallDefaultErased",
+                        "EmptyVarargAt",
+                    ) ->
                 DotNetIlFunctionInfo(
                     owner = functionReferenceBase,
                     signature = function.dotNetSignature(typeMapper),
@@ -612,7 +620,7 @@ internal object DotNetRuntimeTypes {
                 )
             owner.isDotNetKCallableBase &&
                     function.dotNetIlMethodName() in
-                    setOf("get_name", "get_returnType", "get_parameters", "get_typeParameters", "Call") ->
+                    setOf("get_name", "get_returnType", "get_parameters", "get_typeParameters", "Call", "CallBy") ->
                 DotNetIlFunctionInfo(
                     owner = kCallableBase,
                     signature = function.dotNetSignature(typeMapper),
@@ -742,8 +750,8 @@ internal object DotNetRuntimeTypes {
             )
         }
         irBuiltIns.kCallableClass.owner.functions
-            .singleOrNull { function -> function.name.asString() == "call" }
-            ?.let { call ->
+            .filter { function -> function.name.asString() in setOf("call", "callBy") }
+            .forEach { call ->
                 availableFunctions[call] = DotNetIlFunctionInfo(
                     kCallableBase,
                     call.dotNetSignature(typeMapper),

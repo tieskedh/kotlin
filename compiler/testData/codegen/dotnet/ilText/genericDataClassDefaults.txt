@@ -96,45 +96,6 @@ IL_whenEnd_0:
     newobj instance void 'GenericDefaultData'::.ctor(object, string)
     ret
   }
-  .method public hidebysig instance class 'GenericDefaultData' 'copy$default'(object 'value', string 'label', int32 '$mask0') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 3
-    ldarg.3
-    ldc.i4 1
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_1
-    ldarg.0
-    ldfld object 'GenericDefaultData'::'value'
-    starg 1
-    br IL_whenEnd_0
-IL_whenNext_1:
-IL_whenEnd_0:
-    ldarg.3
-    ldc.i4 2
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_3
-    ldarg.0
-    ldfld string 'GenericDefaultData'::'label'
-    starg 2
-    br IL_whenEnd_2
-IL_whenNext_3:
-IL_whenEnd_2:
-    ldarg.0
-    ldarg.1
-    ldarg.2
-    call instance class 'GenericDefaultData' 'GenericDefaultData'::'copy'(object, string)
-    ret
-  }
   .method public hidebysig virtual instance string 'ToString'() cil managed
   {
     .maxstack 2
@@ -231,6 +192,45 @@ IL_whenNext_7:
     ldc.i4.1
     ret
   }
+  .method public hidebysig static class 'GenericDefaultData' 'copy$default__KotlinErased__a75513cd1c779ba92e24377d4e92f03b'(class 'GenericDefaultData' '$this', object 'value', string 'label', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 3
+    ldarg.3
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    ldfld object 'GenericDefaultData'::'value'
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.3
+    ldc.i4 2
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldarg.0
+    ldfld string 'GenericDefaultData'::'label'
+    starg 2
+    br IL_whenEnd_2
+IL_whenNext_3:
+IL_whenEnd_2:
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call instance class 'GenericDefaultData' 'GenericDefaultData'::'copy'(object, string)
+    ret
+  }
   .property instance object 'value'()
   {
     .get instance object 'GenericDefaultData'::'get_value'()
@@ -267,7 +267,7 @@ IL_whenNext_7:
     box [mscorlib]System.Int32
     ldnull
     ldc.i4 2
-    call instance class 'GenericDefaultData' 'GenericDefaultData'::'copy$default'(object, string, int32)
+    call class 'GenericDefaultData' 'GenericDefaultData'::'copy$default__KotlinErased__a75513cd1c779ba92e24377d4e92f03b'(class 'GenericDefaultData', object, string, int32)
     ret
   }
   .method public hidebysig static void 'main'() cil managed
