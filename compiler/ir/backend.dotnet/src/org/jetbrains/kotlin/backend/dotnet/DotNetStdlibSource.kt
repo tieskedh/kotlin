@@ -107,6 +107,10 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/reflect/DotNetKCallable.kt",
     ),
     DotNetStdlibSourceResource(
+        "KVisibility.kt",
+        "jvm/src/kotlin/reflect/KVisibility.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetKFunction.kt",
         "dotnet/src/kotlin/reflect/DotNetKFunction.kt",
     ),

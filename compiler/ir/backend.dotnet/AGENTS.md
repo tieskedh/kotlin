@@ -43,8 +43,12 @@ publish an enum-only comparison substitute. See
 
 Kotlin-owned enums are reference classes. Their one erased `Kotlin.Enum` base
 is physically owned by `Kotlin.Runtime`; concrete enum classes and Common
-`EnumEntries` behavior remain in their declaring Stdlib/user assembly. Runtime
-must never reference Stdlib to obtain the base, and no CLR value enum or
+`EnumEntries` behavior remain in their declaring Stdlib/user assembly. The
+physical, member-free `Kotlin.Enums.EnumEntries` capability is owned by Runtime
+so Runtime enums can expose `entries` without a Runtime-to-Stdlib dependency;
+the Common generic declaration, `EnumEntriesList`, factories, and algorithms
+remain Stdlib-owned, and Stdlib must not emit a duplicate interface TypeDef.
+Runtime must never reference Stdlib to obtain the base, and no CLR value enum or
 Runtime-only token may become a second Kotlin enum identity. The stdlib
 expect/actual Enum sources are resolution-only for CIL emission. See
 [`docs/decisions/ordinary-enum-reference-classes.md`](docs/decisions/ordinary-enum-reference-classes.md).
@@ -52,6 +56,13 @@ Enum comparison accepts different private entry-body subclasses of the same
 enum declaration, but a broad CLR/unchecked call with an entry of another enum
 must fail at that use with the classified CLR `InvalidCastException`; ordinal
 alone is never a cross-enum ordering relation.
+
+`KCallable` visibility and modality are declaration-owned Kotlin facts. Derive
+them from FIR/IR/KLIB or the foreign CLR importer, never from the selected CLR
+MethodDef, bridge, or emitted accessibility. The physical `KVisibility` is an
+ordinary Kotlin reference enum owned by Runtime because Runtime callable bases
+return it directly. See
+[`docs/decisions/callable-visibility-and-modality.md`](docs/decisions/callable-visibility-and-modality.md).
 
 Kotlin metadata is authoritative for the logical Kotlin declaration. CLR
 metadata is authoritative for the physical CLR declaration. For a

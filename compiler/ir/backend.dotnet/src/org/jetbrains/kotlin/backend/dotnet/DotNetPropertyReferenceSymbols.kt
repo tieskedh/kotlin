@@ -130,6 +130,7 @@ internal class DotNetPropertyReferenceSymbols(
             "annotations",
             irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),
         )
+        function.addValueParameter("declarationFlags", irBuiltIns.intType)
         return function
     }
 
@@ -162,6 +163,7 @@ internal class DotNetPropertyReferenceSymbols(
             "annotations",
             irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),
         )
+        function.addValueParameter("declarationFlags", irBuiltIns.intType)
         return function
     }
 }

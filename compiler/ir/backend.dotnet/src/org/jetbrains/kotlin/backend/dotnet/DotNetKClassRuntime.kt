@@ -987,7 +987,7 @@ $createExceptionBody
     private fun annotationListSupportIl(coreLibraryReference: String): String = """
   // Private read-only list transport for reflection values. The object-array storage is never
   // exposed as Kotlin Array identity; this class supplies the complete Kotlin List surface.
-  .class private sealed auto ansi beforefieldinit ReflectionAnnotationList
+  .class private auto ansi beforefieldinit ReflectionAnnotationList
          extends ${coreLibraryReference}System.Object
          implements Kotlin.Collections.List
   {

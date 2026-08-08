@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetFunctionReferenceFlags
+import org.jetbrains.kotlin.backend.dotnet.dotNetCallableDeclarationFlags
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericArray
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.backend.dotnet.dotNetFixedFunctionArityOrNull
@@ -846,7 +847,8 @@ private fun IrRichFunctionReference.referenceArity(): Int =
     invokeFunction.parameters.size - boundValues.size + if (invokeFunction.isSuspend) 1 else 0
 
 private fun IrRichFunctionReference.referenceFlags(): Int {
-    val target = reflectionTargetSymbol?.owner as? IrSimpleFunction
+    val reflectionTarget = reflectionTargetSymbol?.owner
+    val target = reflectionTarget as? IrSimpleFunction
     return listOfNotNull(
         (1 shl 0).takeIf { invokeFunction.isSuspend },
         (1 shl 1).takeIf { hasVarargConversion },
@@ -858,6 +860,7 @@ private fun IrRichFunctionReference.referenceFlags(): Int {
         DotNetFunctionReferenceFlags.IS_OPERATOR.takeIf { target?.isOperator == true },
         DotNetFunctionReferenceFlags.IS_INFIX.takeIf { target?.isInfix == true },
         DotNetFunctionReferenceFlags.IS_SUSPEND.takeIf { target?.isSuspend == true },
+        reflectionTarget?.dotNetCallableDeclarationFlags(),
     ).sum()
 }
 

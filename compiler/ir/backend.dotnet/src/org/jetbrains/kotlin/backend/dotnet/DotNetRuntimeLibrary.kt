@@ -948,6 +948,38 @@ $throwableExceptionTypesIl
               .get instance class Kotlin.Collections.List Kotlin.KCallable::'get_parameters'()
             }
 
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KVisibility 'get_visibility'() cil managed
+            {
+            }
+            .property instance class Kotlin.KVisibility visibility()
+            {
+              .get instance class Kotlin.KVisibility Kotlin.KCallable::'get_visibility'()
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance bool 'get_isFinal'() cil managed
+            {
+            }
+            .property instance bool isFinal()
+            {
+              .get instance bool Kotlin.KCallable::'get_isFinal'()
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance bool 'get_isOpen'() cil managed
+            {
+            }
+            .property instance bool isOpen()
+            {
+              .get instance bool Kotlin.KCallable::'get_isOpen'()
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance bool 'get_isAbstract'() cil managed
+            {
+            }
+            .property instance bool isAbstract()
+            {
+              .get instance bool Kotlin.KCallable::'get_isAbstract'()
+            }
+
             .method public hidebysig newslot abstract virtual instance object Call(object[] 'args') cil managed
             {
             }
@@ -1592,7 +1624,10 @@ $throwableExceptionTypesIl
           }
 
         }
-    """.trimIndent() + "\n" + DotNetRuntimeLibraryHelpers.ilText(
+    """.trimIndent() + "\n" + DotNetKVisibilityRuntime.ilText(
+        coreLibraryReference,
+        compilerAbiUseAttributesIl,
+    ) + "\n" + DotNetRuntimeLibraryHelpers.ilText(
         coreLibraryReference,
         coreLibrary.editorBrowsableReference,
     )

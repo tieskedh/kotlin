@@ -10,6 +10,8 @@ import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.DotNetClassifierInfo
+import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeClassifierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibLibrary
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
@@ -70,6 +72,7 @@ import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.functions
+import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.isEnumClass
 import org.jetbrains.kotlin.ir.util.isEnumEntry
 import org.jetbrains.kotlin.ir.util.isFakeOverride
@@ -118,7 +121,11 @@ internal class DotNetEnumClassLowering(private val context: DotNetBackendContext
             }
         })
 
-        enumClasses.forEach { enumClass -> EnumClassTransformer(enumClass).run() }
+        enumClasses
+            .filterNot { enumClass ->
+                enumClass.fileOrNull?.let(DotNetStdlibLibrary::isResolutionOnlySource) == true
+            }
+            .forEach { enumClass -> EnumClassTransformer(enumClass).run() }
         context.enumEntryFields.putAll(localEntryFields)
 
         irModule.transformChildrenVoid(object : IrElementTransformerVoid() {
@@ -150,13 +157,25 @@ internal class DotNetEnumClassLowering(private val context: DotNetBackendContext
     }
 
     private fun buildExternalEntryField(entry: IrEnumEntry): IrField {
+        val enumClass = entry.parent as? IrClass
+            ?: error("Internal .NET backend error: enum entry '${entry.name.asString()}' has no enum class")
+        if (DotNetClassifierInfo.derive(enumClass).runtimeKind == DotNetRuntimeClassifierKind.K_VISIBILITY) {
+            return context.irFactory.buildField {
+                name = entry.name
+                type = enumClass.defaultType
+                origin = IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRY
+                visibility = DescriptorVisibilities.PUBLIC
+                isFinal = true
+                isStatic = true
+            }.apply {
+                parent = enumClass
+            }
+        }
         val binding = externalDeclarations.enumEntryOrNull(entry)
             ?: dotNetUnsupported(
                 "enum entry '${(entry.parent as? IrClass)?.kotlinFqName}.${entry.name.asString()}' " +
                         "has no producer-recorded CLR field"
             )
-        val enumClass = entry.parent as? IrClass
-            ?: error("Internal .NET backend error: enum entry '${entry.name.asString()}' has no enum class")
         return context.irFactory.buildField {
             name = Name.identifier(binding.enumEntry.fieldName)
             type = enumClass.defaultType
