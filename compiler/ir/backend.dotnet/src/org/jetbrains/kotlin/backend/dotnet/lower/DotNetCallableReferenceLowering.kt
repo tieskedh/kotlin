@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.backend.common.lower.UpgradeCallableReferences
 import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.DotNetFunctionReferenceFlags
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericArray
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.backend.dotnet.dotNetFixedFunctionArityOrNull
@@ -844,13 +845,21 @@ private fun IrRichFunctionReference.stableReferenceId(): String {
 private fun IrRichFunctionReference.referenceArity(): Int =
     invokeFunction.parameters.size - boundValues.size + if (invokeFunction.isSuspend) 1 else 0
 
-private fun IrRichFunctionReference.referenceFlags(): Int = listOfNotNull(
-    (1 shl 0).takeIf { invokeFunction.isSuspend },
-    (1 shl 1).takeIf { hasVarargConversion },
-    (1 shl 2).takeIf { hasSuspendConversion },
-    (1 shl 3).takeIf { hasUnitConversion },
-    (1 shl 4).takeIf { isFunInterfaceConstructorAdapter() },
-).sum()
+private fun IrRichFunctionReference.referenceFlags(): Int {
+    val target = reflectionTargetSymbol?.owner as? IrSimpleFunction
+    return listOfNotNull(
+        (1 shl 0).takeIf { invokeFunction.isSuspend },
+        (1 shl 1).takeIf { hasVarargConversion },
+        (1 shl 2).takeIf { hasSuspendConversion },
+        (1 shl 3).takeIf { hasUnitConversion },
+        (1 shl 4).takeIf { isFunInterfaceConstructorAdapter() },
+        DotNetFunctionReferenceFlags.IS_INLINE.takeIf { target?.isInline == true },
+        DotNetFunctionReferenceFlags.IS_EXTERNAL.takeIf { target?.isExternal == true },
+        DotNetFunctionReferenceFlags.IS_OPERATOR.takeIf { target?.isOperator == true },
+        DotNetFunctionReferenceFlags.IS_INFIX.takeIf { target?.isInfix == true },
+        DotNetFunctionReferenceFlags.IS_SUSPEND.takeIf { target?.isSuspend == true },
+    ).sum()
+}
 
 private fun IrRichFunctionReference.isFunInterfaceConstructorAdapter(): Boolean =
     invokeFunction.origin == IrDeclarationOrigin.ADAPTER_FOR_FUN_INTERFACE_CONSTRUCTOR
