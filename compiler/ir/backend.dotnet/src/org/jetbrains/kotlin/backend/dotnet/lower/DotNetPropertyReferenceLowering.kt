@@ -7,9 +7,12 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.lower.AbstractPropertyReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.dotNetCallableDeclarationFlags
+import org.jetbrains.kotlin.backend.dotnet.dotNetLocalCallableDeclarationFlags
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnsupported
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.irCall
+import org.jetbrains.kotlin.ir.builders.irInt
 import org.jetbrains.kotlin.ir.builders.irNull
 import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.declarations.IrProperty
@@ -54,24 +57,27 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
         val factory = backendContext.propertyReferenceSymbols.factory(arity, setterReference != null)
         val call = irCall(factory.symbol, reference.type, typeArguments) as IrCall
         return call.apply {
-            arguments[0] = propertyReferenceNameExpression(reference)
-            arguments[1] = getterReference
-            setterReference?.let { arguments[2] = it }
-            arguments[arguments.lastIndex - 2] = if (hasSignatureSurface) {
-                val property = reference.reflectionTargetSymbol?.owner as? IrProperty
-                    ?: error("Internal .NET backend error: KProperty return type has no property target")
+            putDotNetPropertyFactoryArgument("name", propertyReferenceNameExpression(reference))
+            putDotNetPropertyFactoryArgument("getter", getterReference)
+            setterReference?.let { putDotNetPropertyFactoryArgument("setter", it) }
+            val property = reference.reflectionTargetSymbol?.owner as? IrProperty
+                ?: error("Internal .NET backend error: KProperty has no property target")
+            putDotNetPropertyFactoryArgument("signature", if (hasSignatureSurface) {
                 val getter = property.getter
                     ?: error("Internal .NET backend error: reflected property '${property.name}' has no getter")
                 kTypeBuilder.run { buildCallableSignature(getter.returnType, getter.typeParameters) }
             } else {
                 irNull()
-            }
-            arguments[arguments.lastIndex - 1] = backendContext.symbols.dotNetKParameterFactory
+            })
+            putDotNetPropertyFactoryArgument("parameterFactory", backendContext.symbols.dotNetKParameterFactory
                 ?.takeIf { backendContext.hasCallableParameterSurface }
                 ?.let { factory -> irCall(factory) }
-                ?: irNull()
-            arguments[arguments.lastIndex] = irCall(backendContext.callableAnnotationSymbols.empty)
-            val property = reference.reflectionTargetSymbol?.owner as? IrProperty
+                ?: irNull())
+            putDotNetPropertyFactoryArgument(
+                "annotations",
+                irCall(backendContext.callableAnnotationSymbols.empty),
+            )
+            putDotNetPropertyFactoryArgument("declarationFlags", irInt(property.dotNetCallableDeclarationFlags()))
             dotNetPropertyAnnotationOwner = property
             dotNetPropertySignatureOwner = property
             dotNetPropertyBoundReceiverCount = reference.boundValues.size
@@ -94,21 +100,36 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
         val factory = backendContext.propertyReferenceSymbols.localFactory(isMutable)
         val call = irCall(factory.symbol, reference.type, listOf(valueType)) as IrCall
         return call.apply {
-            arguments[0] = irString(propertyName)
-            arguments[1] = if (hasSignatureSurface) {
+            putDotNetPropertyFactoryArgument("name", irString(propertyName))
+            putDotNetPropertyFactoryArgument("signature", if (hasSignatureSurface) {
                 kTypeBuilder.run { buildCallableSignature(valueType, emptyList()) }
             } else {
                 irNull()
-            }
-            arguments[2] = backendContext.symbols.dotNetKParameterFactory
+            })
+            putDotNetPropertyFactoryArgument("parameterFactory", backendContext.symbols.dotNetKParameterFactory
                 ?.takeIf { backendContext.hasCallableParameterSurface }
                 ?.let { factory -> irCall(factory) }
-                ?: irNull()
-            arguments[3] = irCall(backendContext.callableAnnotationSymbols.empty)
+                ?: irNull())
+            putDotNetPropertyFactoryArgument(
+                "annotations",
+                irCall(backendContext.callableAnnotationSymbols.empty),
+            )
+            putDotNetPropertyFactoryArgument("declarationFlags", irInt(dotNetLocalCallableDeclarationFlags()))
             dotNetPropertyAnnotationOwner = reference.reflectionTargetSymbol?.owner as? IrAnnotationContainer
             dotNetLocalPropertySignatureType = valueType
         }
     }
+}
+
+/**
+ * Binds the synthetic Runtime factory contract by IR parameter identity rather than by its
+ * physical position. Several lowerings enrich the same call at different phases; adding one
+ * orthogonal payload must not silently retarget every later argument.
+ */
+internal fun IrCall.putDotNetPropertyFactoryArgument(name: String, argument: IrExpression) {
+    val parameter = symbol.owner.parameters.singleOrNull { it.name.asString() == name }
+        ?: error("Internal .NET backend error: property-reference factory has no '$name' parameter")
+    arguments[parameter.indexInParameters] = argument
 }
 
 /** Original property declaration retained until annotation lowering assigns its own payload. */

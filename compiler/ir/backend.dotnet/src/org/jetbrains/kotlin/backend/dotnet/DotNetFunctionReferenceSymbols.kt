@@ -167,6 +167,27 @@ internal class DotNetFunctionReferenceSymbols(
                     parameters += createDispatchReceiverParameterWithClassParent()
                 }
             }
+        irBuiltIns.kCallableClass.owner.properties
+            .filter { property ->
+                property.name.asString() in setOf("visibility", "isFinal", "isOpen", "isAbstract")
+            }
+            .forEach { property ->
+                val sourceGetter = property.getter
+                    ?: error("Internal .NET backend error: KCallable.${property.name} has no getter")
+                val baseProperty = baseClass.addProperty {
+                    origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+                    name = property.name
+                    visibility = sourceGetter.visibility
+                }
+                baseProperty.addGetter {
+                    origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+                    returnType = sourceGetter.returnType
+                    visibility = sourceGetter.visibility
+                    modality = Modality.OPEN
+                }.apply {
+                    parameters += createDispatchReceiverParameterWithClassParent()
+                }
+            }
         boundValueAt = baseClass.addFunction {
             origin = IrDeclarationOrigin.IR_BUILTINS_STUB
             name = Name.identifier("BoundValueAt")

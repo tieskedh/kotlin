@@ -219,9 +219,12 @@ internal class DotNetAnnotationImplementationLowering(
         propertyCalls.forEach { call ->
             val owner = call.dotNetPropertyAnnotationOwner
             val producer = owner?.let(::factoryFor)
-            call.arguments[call.arguments.lastIndex] = context.createIrBuilder(call.symbol).run {
-                irCall(producer ?: this@DotNetAnnotationImplementationLowering.context.callableAnnotationSymbols.empty)
-            }
+            call.putDotNetPropertyFactoryArgument(
+                "annotations",
+                context.createIrBuilder(call.symbol).run {
+                    irCall(producer ?: this@DotNetAnnotationImplementationLowering.context.callableAnnotationSymbols.empty)
+                },
+            )
             if (!context.hasCallableParameterSurface) return@forEach
             val builder = context.createIrBuilder(call.symbol).at(call)
             val property = call.dotNetPropertySignatureOwner
@@ -233,14 +236,20 @@ internal class DotNetAnnotationImplementationLowering(
                     builder,
                     ::factoryFor,
                 )
-                call.arguments[call.arguments.lastIndex - 2] = kTypeBuilder.run {
-                    builder.buildCallableSignature(getter.returnType, getter.typeParameters, descriptors)
-                }
+                call.putDotNetPropertyFactoryArgument(
+                    "signature",
+                    kTypeBuilder.run {
+                        builder.buildCallableSignature(getter.returnType, getter.typeParameters, descriptors)
+                    },
+                )
             } else {
                 val localType = call.dotNetLocalPropertySignatureType ?: return@forEach
-                call.arguments[call.arguments.lastIndex - 2] = kTypeBuilder.run {
-                    builder.buildCallableSignature(localType, emptyList(), emptyList())
-                }
+                call.putDotNetPropertyFactoryArgument(
+                    "signature",
+                    kTypeBuilder.run {
+                        builder.buildCallableSignature(localType, emptyList(), emptyList())
+                    },
+                )
             }
         }
         irFile.declarations += generated
