@@ -1010,6 +1010,7 @@ internal object DotNetStdlibLibrary {
         "Multiplatform.kt" to "kotlin",
         "KClass.kt" to "kotlin.reflect",
         "KCallable.kt" to "kotlin.reflect",
+        "KVisibility.kt" to "kotlin.reflect",
         "KFunction.kt" to "kotlin.reflect",
         "KClassifier.kt" to "kotlin.reflect",
         "DotNetKClass.kt" to "kotlin.reflect",
@@ -1021,6 +1022,12 @@ internal object DotNetStdlibLibrary {
         "_DotNetBootstrapJsName.kt" to "kotlin.js",
         "DotNetVolatileMarker.kt" to "kotlin.concurrent",
     )
+    private val resolutionOnlyDeclarations = setOf(
+        // Common owns the logical generic declaration and EnumEntriesList implementation. Runtime
+        // owns the one physical erased interface because Runtime-owned enum classes expose entries
+        // and the artifact dependency must remain Runtime <- Stdlib.
+        "kotlin.enums.EnumEntries",
+    )
 
     internal fun isImplementationSource(file: IrFile): Boolean =
         implementationSources[file.implementationSourceFileName]
@@ -1028,6 +1035,9 @@ internal object DotNetStdlibLibrary {
 
     internal fun isResolutionOnlySource(file: IrFile): Boolean =
         resolutionOnlySources[file.implementationSourceFileName] == file.packageFqName.asString()
+
+    internal fun isResolutionOnlyDeclaration(irClass: IrClass): Boolean =
+        irClass.fqNameWhenAvailable?.asString() in resolutionOnlyDeclarations
 }
 
 private val IrFile.implementationSourceFileName: String
@@ -1040,6 +1050,7 @@ internal val IrFile.isDotNetStdlibImplementationSource: Boolean
 /** Target-bootstrap declarations needed for frontend/KLIB resolution but never physical IL. */
 internal val IrClass.isDotNetResolutionOnlyStdlibDeclaration: Boolean
     get() = DotNetMappedExceptions.isExceptionStdlibDeclaration(this) ||
+            DotNetStdlibLibrary.isResolutionOnlyDeclaration(this) ||
             (parent as? IrFile)?.let(DotNetStdlibLibrary::isResolutionOnlySource) == true
 
 /** Marker for a product or fallback stdlib implementation declaration, never a user class. */

@@ -114,7 +114,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:callableReferences.kt:405:456:#incrementReference(kotlin.Int){}"
     ldc.i4 1
-    ldc.i4 32
+    ldc.i4 17440
     ldc.i4 0
     ldstr "incrementReference"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -385,7 +385,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:callableReferences.kt:458:508:#labelReference(kotlin.Any){}"
     ldc.i4 1
-    ldc.i4 0
+    ldc.i4 17408
     ldc.i4 0
     ldstr "labelReference"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -589,7 +589,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:callableReferences.kt:371:394:BoundValue#read(){}"
     ldc.i4 0
-    ldc.i4 0
+    ldc.i4 17408
     ldc.i4 1
     ldstr "read"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -751,7 +751,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:callableReferences.kt:371:394:BoundValue#read(){}"
     ldc.i4 0
-    ldc.i4 0
+    ldc.i4 17408
     ldc.i4 1
     ldstr "read"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()

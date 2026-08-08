@@ -144,6 +144,82 @@ $kClassSupportTypesIl
             |    }
             |  }
             |
+            |  .class private abstract sealed auto ansi beforefieldinit CallableDeclarationFacts
+            |         extends ${coreLibraryReference}System.Object
+            |  {
+            |    .method assembly hidebysig static class Kotlin.KVisibility Visibility(int32 'flags') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldc.i4 ${DotNetCallableDeclarationFlags.VISIBILITY_PUBLIC}
+            |      and
+            |      brfalse.s CDF_VisibilityProtected
+            |      call void Kotlin.KVisibility::'<EnsureInitialized>'()
+            |      ldsfld class Kotlin.KVisibility Kotlin.KVisibility::PUBLIC
+            |      ret
+            |    CDF_VisibilityProtected:
+            |      ldarg.0
+            |      ldc.i4 ${DotNetCallableDeclarationFlags.VISIBILITY_PROTECTED}
+            |      and
+            |      brfalse.s CDF_VisibilityInternal
+            |      call void Kotlin.KVisibility::'<EnsureInitialized>'()
+            |      ldsfld class Kotlin.KVisibility Kotlin.KVisibility::PROTECTED
+            |      ret
+            |    CDF_VisibilityInternal:
+            |      ldarg.0
+            |      ldc.i4 ${DotNetCallableDeclarationFlags.VISIBILITY_INTERNAL}
+            |      and
+            |      brfalse.s CDF_VisibilityPrivate
+            |      call void Kotlin.KVisibility::'<EnsureInitialized>'()
+            |      ldsfld class Kotlin.KVisibility Kotlin.KVisibility::INTERNAL
+            |      ret
+            |    CDF_VisibilityPrivate:
+            |      ldarg.0
+            |      ldc.i4 ${DotNetCallableDeclarationFlags.VISIBILITY_PRIVATE}
+            |      and
+            |      brfalse.s CDF_VisibilityUnknown
+            |      call void Kotlin.KVisibility::'<EnsureInitialized>'()
+            |      ldsfld class Kotlin.KVisibility Kotlin.KVisibility::PRIVATE
+            |      ret
+            |    CDF_VisibilityUnknown:
+            |      ldnull
+            |      ret
+            |    }
+            |
+            |    .method assembly hidebysig static bool IsFinal(int32 'flags') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldc.i4 ${DotNetCallableDeclarationFlags.MODALITY_FINAL}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .method assembly hidebysig static bool IsOpen(int32 'flags') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldc.i4 ${DotNetCallableDeclarationFlags.MODALITY_OPEN}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .method assembly hidebysig static bool IsAbstract(int32 'flags') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldc.i4 ${DotNetCallableDeclarationFlags.MODALITY_ABSTRACT}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |  }
+            |
             |  .class interface public abstract auto ansi 'ExactFunction0`1'<+ R>
             |  {
             |    $compilerAbiTypeAttributesIl
@@ -422,6 +498,59 @@ $kClassSupportTypesIl
             |      ldarg.0
             |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::'annotations'
             |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance class Kotlin.KVisibility get_visibility() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      call class Kotlin.KVisibility Kotlin.Runtime.Internal.CallableDeclarationFacts::Visibility(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isFinal() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      call bool Kotlin.Runtime.Internal.CallableDeclarationFacts::IsFinal(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isOpen() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      call bool Kotlin.Runtime.Internal.CallableDeclarationFacts::IsOpen(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isAbstract() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      call bool Kotlin.Runtime.Internal.CallableDeclarationFacts::IsAbstract(int32)
+            |      ret
+            |    }
+            |
+            |    .property instance class Kotlin.KVisibility visibility()
+            |    {
+            |      .get instance class Kotlin.KVisibility Kotlin.Runtime.Internal.FunctionReferenceBase::get_visibility()
+            |    }
+            |    .property instance bool isFinal()
+            |    {
+            |      .get instance bool Kotlin.Runtime.Internal.FunctionReferenceBase::get_isFinal()
+            |    }
+            |    .property instance bool isOpen()
+            |    {
+            |      .get instance bool Kotlin.Runtime.Internal.FunctionReferenceBase::get_isOpen()
+            |    }
+            |    .property instance bool isAbstract()
+            |    {
+            |      .get instance bool Kotlin.Runtime.Internal.FunctionReferenceBase::get_isAbstract()
             |    }
             |
             |    .method public hidebysig specialname newslot virtual final instance bool get_isInline() cil managed
@@ -803,6 +932,7 @@ $kClassSupportTypesIl
             |    .field private initonly class Kotlin.Collections.List 'parameters'
             |    .field private initonly class Kotlin.Collections.List 'typeParameters'
             |    .field private initonly class Kotlin.Collections.List 'annotations'
+            |    .field private int32 'declarationFlags'
             |
             |    .method family hidebysig specialname rtspecialname instance void .ctor(
             |        string 'name', object[] 'signature',
@@ -849,6 +979,15 @@ $kClassSupportTypesIl
             |      ret
             |    }
             |
+            |    .method assembly hidebysig instance void SetDeclarationFlags(int32 'flags') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld int32 Kotlin.Runtime.Internal.PropertyReferenceBase::'declarationFlags'
+            |      ret
+            |    }
+            |
             |    .method public hidebysig specialname newslot virtual final instance class Kotlin.Collections.List get_typeParameters() cil managed
             |    {
             |      .override method instance class Kotlin.Collections.List Kotlin.KCallable::get_typeParameters()
@@ -891,6 +1030,46 @@ $kClassSupportTypesIl
             |      .maxstack 1
             |      ldarg.0
             |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.PropertyReferenceBase::'annotations'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance class Kotlin.KVisibility get_visibility() cil managed
+            |    {
+            |      .override method instance class Kotlin.KVisibility Kotlin.KCallable::get_visibility()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.PropertyReferenceBase::'declarationFlags'
+            |      call class Kotlin.KVisibility Kotlin.Runtime.Internal.CallableDeclarationFacts::Visibility(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isFinal() cil managed
+            |    {
+            |      .override method instance bool Kotlin.KCallable::get_isFinal()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.PropertyReferenceBase::'declarationFlags'
+            |      call bool Kotlin.Runtime.Internal.CallableDeclarationFacts::IsFinal(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isOpen() cil managed
+            |    {
+            |      .override method instance bool Kotlin.KCallable::get_isOpen()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.PropertyReferenceBase::'declarationFlags'
+            |      call bool Kotlin.Runtime.Internal.CallableDeclarationFacts::IsOpen(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isAbstract() cil managed
+            |    {
+            |      .override method instance bool Kotlin.KCallable::get_isAbstract()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.PropertyReferenceBase::'declarationFlags'
+            |      call bool Kotlin.Runtime.Internal.CallableDeclarationFacts::IsAbstract(int32)
             |      ret
             |    }
             |
@@ -1431,6 +1610,7 @@ $kClassSupportTypesIl
             |    .field private initonly class Kotlin.Collections.List 'parameters'
             |    .field private initonly class Kotlin.Collections.List 'typeParameters'
             |    .field private initonly class Kotlin.Collections.List 'annotations'
+            |    .field private int32 'declarationFlags'
             |
             |    .method family hidebysig specialname rtspecialname instance void .ctor(
             |        string 'name', object[] 'signature',
@@ -1477,6 +1657,15 @@ $kClassSupportTypesIl
             |      ret
             |    }
             |
+            |    .method assembly hidebysig instance void SetDeclarationFlags(int32 'flags') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld int32 Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'declarationFlags'
+            |      ret
+            |    }
+            |
             |    .method public hidebysig specialname newslot virtual final instance class Kotlin.Collections.List get_typeParameters() cil managed
             |    {
             |      .override method instance class Kotlin.Collections.List Kotlin.KCallable::get_typeParameters()
@@ -1519,6 +1708,46 @@ $kClassSupportTypesIl
             |      .maxstack 1
             |      ldarg.0
             |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'annotations'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance class Kotlin.KVisibility get_visibility() cil managed
+            |    {
+            |      .override method instance class Kotlin.KVisibility Kotlin.KCallable::get_visibility()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'declarationFlags'
+            |      call class Kotlin.KVisibility Kotlin.Runtime.Internal.CallableDeclarationFacts::Visibility(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isFinal() cil managed
+            |    {
+            |      .override method instance bool Kotlin.KCallable::get_isFinal()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'declarationFlags'
+            |      call bool Kotlin.Runtime.Internal.CallableDeclarationFacts::IsFinal(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isOpen() cil managed
+            |    {
+            |      .override method instance bool Kotlin.KCallable::get_isOpen()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'declarationFlags'
+            |      call bool Kotlin.Runtime.Internal.CallableDeclarationFacts::IsOpen(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isAbstract() cil managed
+            |    {
+            |      .override method instance bool Kotlin.KCallable::get_isAbstract()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'declarationFlags'
+            |      call bool Kotlin.Runtime.Internal.CallableDeclarationFacts::IsAbstract(int32)
             |      ret
             |    }
             |
@@ -1641,9 +1870,10 @@ $kClassSupportTypesIl
             |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig static class Kotlin.KProperty0 CreateProperty0<V>(
             |        string 'name', class Kotlin.Function0 'getter', object[] 'signature',
-            |        class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
+            |        int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 5
+            |      .maxstack 6
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
@@ -1651,15 +1881,18 @@ $kClassSupportTypesIl
             |      ldarg.s 4
             |      newobj instance void Kotlin.Runtime.Internal.Property0Impl::.ctor(
             |          string, class Kotlin.Function0, object[], class Kotlin.Function2, class Kotlin.Collections.List)
+            |      dup
+            |      ldarg.s 5
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty0 CreateMutableProperty0<V>(
             |        string 'name', class Kotlin.Function0 'getter', class Kotlin.Function1 'setter',
             |        object[] 'signature', class Kotlin.Function2 'parameterFactory',
-            |        class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 6
+            |      .maxstack 7
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
@@ -1669,14 +1902,18 @@ $kClassSupportTypesIl
             |      newobj instance void Kotlin.Runtime.Internal.MutableProperty0Impl::.ctor(
             |          string, class Kotlin.Function0, class Kotlin.Function1, object[],
             |          class Kotlin.Function2, class Kotlin.Collections.List)
+            |      dup
+            |      ldarg.s 6
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KProperty1 CreateProperty1<R0, V>(
             |        string 'name', class Kotlin.Function1 'getter', object[] 'signature',
-            |        class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
+            |        int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 5
+            |      .maxstack 6
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
@@ -1684,15 +1921,18 @@ $kClassSupportTypesIl
             |      ldarg.s 4
             |      newobj instance void Kotlin.Runtime.Internal.Property1Impl::.ctor(
             |          string, class Kotlin.Function1, object[], class Kotlin.Function2, class Kotlin.Collections.List)
+            |      dup
+            |      ldarg.s 5
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty1 CreateMutableProperty1<R0, V>(
             |        string 'name', class Kotlin.Function1 'getter', class Kotlin.Function2 'setter',
             |        object[] 'signature', class Kotlin.Function2 'parameterFactory',
-            |        class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 6
+            |      .maxstack 7
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
@@ -1702,14 +1942,18 @@ $kClassSupportTypesIl
             |      newobj instance void Kotlin.Runtime.Internal.MutableProperty1Impl::.ctor(
             |          string, class Kotlin.Function1, class Kotlin.Function2, object[],
             |          class Kotlin.Function2, class Kotlin.Collections.List)
+            |      dup
+            |      ldarg.s 6
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KProperty2 CreateProperty2<R0, R1, V>(
             |        string 'name', class Kotlin.Function2 'getter', object[] 'signature',
-            |        class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
+            |        int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 5
+            |      .maxstack 6
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
@@ -1717,15 +1961,18 @@ $kClassSupportTypesIl
             |      ldarg.s 4
             |      newobj instance void Kotlin.Runtime.Internal.Property2Impl::.ctor(
             |          string, class Kotlin.Function2, object[], class Kotlin.Function2, class Kotlin.Collections.List)
+            |      dup
+            |      ldarg.s 5
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty2 CreateMutableProperty2<R0, R1, V>(
             |        string 'name', class Kotlin.Function2 'getter', class Kotlin.Function3 'setter',
             |        object[] 'signature', class Kotlin.Function2 'parameterFactory',
-            |        class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 6
+            |      .maxstack 7
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
@@ -1735,34 +1982,43 @@ $kClassSupportTypesIl
             |      newobj instance void Kotlin.Runtime.Internal.MutableProperty2Impl::.ctor(
             |          string, class Kotlin.Function2, class Kotlin.Function3, object[],
             |          class Kotlin.Function2, class Kotlin.Collections.List)
+            |      dup
+            |      ldarg.s 6
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KProperty0 CreateLocalDelegatedProperty0<V>(
             |        string 'name', object[] 'signature', class Kotlin.Function2 'parameterFactory',
-            |        class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 4
+            |      .maxstack 5
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
             |      ldarg.3
             |      newobj instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Impl::.ctor(
             |          string, object[], class Kotlin.Function2, class Kotlin.Collections.List)
+            |      dup
+            |      ldarg.s 4
+            |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty0 CreateLocalDelegatedMutableProperty0<V>(
             |        string 'name', object[] 'signature', class Kotlin.Function2 'parameterFactory',
-            |        class Kotlin.Collections.List 'annotations') cil managed
+            |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 4
+            |      .maxstack 5
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
             |      ldarg.3
             |      newobj instance void Kotlin.Runtime.Internal.LocalDelegatedMutableProperty0Impl::.ctor(
             |          string, object[], class Kotlin.Function2, class Kotlin.Collections.List)
+            |      dup
+            |      ldarg.s 4
+            |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::SetDeclarationFlags(int32)
             |      ret
             |    }
             |  }

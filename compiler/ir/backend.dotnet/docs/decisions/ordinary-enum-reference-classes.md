@@ -91,11 +91,16 @@ non-`Enum` representation. Runtime ownership lets a later physical
 `KVisibility` type remain one truthful Kotlin enum without changing the
 direction of dependency.
 
-Moving the base does not move `EnumEntries`, concrete entries, `values`,
-`valueOf`, or enum class initialization into Runtime. The base owns only name,
-ordinal, comparison, identity equality/hash, `toString`, and its empty
-companion. Disabling any future enum optimization must leave this one base and
-the concrete entry identities unchanged.
+Moving the base did not initially move `EnumEntries`, concrete entries,
+`values`, `valueOf`, or enum class initialization into Runtime. The later
+[`KCallable` visibility/modality decision](callable-visibility-and-modality.md)
+narrowly moves the no-member physical erased `EnumEntries` interface so the
+Runtime-owned `KVisibility` enum can expose its complete modern enum surface
+without a Runtime-to-Stdlib edge. The authoritative Common declaration and
+ordinary `EnumEntriesList` implementation remain in Stdlib. The enum base still
+owns only name, ordinal, comparison, identity equality/hash, `toString`, and
+its empty companion. Disabling any future enum optimization must leave this one
+base and the concrete entry identities unchanged.
 
 The erased CLR comparison entry point is wider than Common's static
 `Comparable<E>` contract. It therefore follows the JVM host boundary: entries

@@ -807,7 +807,7 @@ IL_whenNext_4:
 {
   .field public static initonly class 'test.KotlinEnum' 'FIRST'
   .field public static initonly class 'test.KotlinEnum' 'SECOND'
-  .field private static class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' '$ENTRIES'
+  .field private static class [Kotlin.Runtime]'Kotlin.Enums.EnumEntries' '$ENTRIES'
   .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
@@ -865,8 +865,8 @@ IL_arraySizeNonNegative_1:
       ldloc 6
       stelem class 'test.KotlinEnum'
       ldloc.0
-      call class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' [Kotlin.Stdlib]'Kotlin.Enums.EnumEntriesKt'::'enumEntries'<class 'test.KotlinEnum'>(!!0[])
-      stsfld class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'test.KotlinEnum'::'$ENTRIES'
+      call class [Kotlin.Runtime]'Kotlin.Enums.EnumEntries' [Kotlin.Stdlib]'Kotlin.Enums.EnumEntriesKt'::'enumEntries'<class 'test.KotlinEnum'>(!!0[])
+      stsfld class [Kotlin.Runtime]'Kotlin.Enums.EnumEntries' 'test.KotlinEnum'::'$ENTRIES'
       leave IL_tryEnd_0
     }
     catch [mscorlib]System.Exception {
@@ -987,10 +987,10 @@ IL_whenNext_2:
 IL_whenEnd_0:
     ret
   }
-  .method public hidebysig specialname static class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'get_entries'() cil managed
+  .method public hidebysig specialname static class [Kotlin.Runtime]'Kotlin.Enums.EnumEntries' 'get_entries'() cil managed
   {
     .maxstack 1
-    ldsfld class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'test.KotlinEnum'::'$ENTRIES'
+    ldsfld class [Kotlin.Runtime]'Kotlin.Enums.EnumEntries' 'test.KotlinEnum'::'$ENTRIES'
     ret
   }
   .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.Comparable-compareTo-0f838f77390826ba738a927e521071fe>'(object 'other') cil managed
@@ -1012,9 +1012,9 @@ IL_whenEnd_0:
     callvirt instance int32 [Kotlin.Runtime]'Kotlin.Enum'::'compareTo'(object)
     ret
   }
-  .property class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'entries'()
+  .property class [Kotlin.Runtime]'Kotlin.Enums.EnumEntries' 'entries'()
   {
-    .get class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'test.KotlinEnum'::'get_entries'()
+    .get class [Kotlin.Runtime]'Kotlin.Enums.EnumEntries' 'test.KotlinEnum'::'get_entries'()
   }
 }
 .class public auto ansi sealed beforefieldinit 'test.KotlinOnlyValues'

@@ -19,6 +19,18 @@ public actual interface KCallable<out R> : KAnnotatedElement {
     /** Declaration-owned parameters; constructors expose their constructed class's own parameters. */
     public val typeParameters: List<KTypeParameter>
 
+    /** JVM-shaped Kotlin declaration visibility; `null` means that Kotlin cannot represent it. */
+    public val visibility: KVisibility?
+
+    /** `true` when the reflected Kotlin declaration has final modality. */
+    public val isFinal: Boolean
+
+    /** `true` when the reflected Kotlin declaration has open modality. */
+    public val isOpen: Boolean
+
+    /** `true` when the reflected Kotlin declaration has abstract modality. */
+    public val isAbstract: Boolean
+
     /**
      * Calls this callable with positional arguments in [parameters] order.
      *

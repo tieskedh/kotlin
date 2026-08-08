@@ -15810,6 +15810,52 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun <T : Comparable<T>> libraryIdentity(value: T): T = value
 
                 public fun libraryFunctionReference(): KCallable<Int> = ::libraryFunction
+
+                internal fun libraryInternalFunction(): Int = 1
+                private fun libraryPrivateFunction(): Int = 2
+                internal val libraryInternalProperty: Int = 3
+                private val libraryPrivateProperty: Int = 4
+
+                public fun libraryInternalFunctionReference(): KCallable<Int> = ::libraryInternalFunction
+                public fun libraryPrivateFunctionReference(): KCallable<Int> = ::libraryPrivateFunction
+                public fun libraryInternalPropertyReference(): KCallable<Int> = ::libraryInternalProperty
+                public fun libraryPrivatePropertyReference(): KCallable<Int> = ::libraryPrivateProperty
+
+                public open class LibraryVisibilityBase {
+                    public open fun openFunction(): Int = 5
+                    public open val openProperty: Int get() = 6
+                    protected open fun protectedFunction(): Int = 7
+                    protected open val protectedProperty: Int get() = 8
+                    private fun privateFunction(): Int = 9
+                    private val privateProperty: Int get() = 10
+
+                    public fun protectedFunctionReference(): KCallable<Int> = this::protectedFunction
+                    public fun protectedPropertyReference(): KCallable<Int> = this::protectedProperty
+                    public fun privateFunctionReference(): KCallable<Int> = this::privateFunction
+                    public fun privatePropertyReference(): KCallable<Int> = this::privateProperty
+                }
+
+                public class LibraryVisibilityDerived : LibraryVisibilityBase()
+
+                public abstract class LibraryAbstractCallables {
+                    public abstract fun abstractFunction(): Int
+                    public abstract val abstractProperty: Int
+                }
+
+                public fun inheritedOpenFunctionReference(): KCallable<Int> =
+                    LibraryVisibilityDerived::openFunction
+                public fun inheritedOpenPropertyReference(): KCallable<Int> =
+                    LibraryVisibilityDerived::openProperty
+                public fun abstractFunctionReference(): KCallable<Int> =
+                    LibraryAbstractCallables::abstractFunction
+                public fun abstractPropertyReference(): KCallable<Int> =
+                    LibraryAbstractCallables::abstractProperty
+
+                public class LibraryPrivateConstructor private constructor() {
+                    public companion object {
+                        public fun reference(): KFunction0<LibraryPrivateConstructor> = ::LibraryPrivateConstructor
+                    }
+                }
                 """.trimIndent()
             )
         }
@@ -15871,12 +15917,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 import ForeignCallables.ForeignCallable
                 import kcallable.boundary.*
+                import kotlin.reflect.KCallable
                 import kotlin.reflect.KFunction0
                 import kotlin.reflect.KFunction1
                 import kotlin.reflect.KTypeParameter
+                import kotlin.reflect.KVisibility
 
                 private fun annotationName(value: Annotation): String =
                     value::class.simpleName ?: "<anonymous>"
+
+                private fun assertDeclarationFacts(
+                    callable: KCallable<*>,
+                    visibility: KVisibility?,
+                    isFinal: Boolean,
+                    isOpen: Boolean,
+                    isAbstract: Boolean,
+                    label: String,
+                ) {
+                    if (callable.visibility != visibility || callable.isFinal != isFinal ||
+                        callable.isOpen != isOpen || callable.isAbstract != isAbstract
+                    ) {
+                        throw Error("declaration facts: ${'$'}label")
+                    }
+                }
 
                 private class KotlinForeignCallable : ForeignCallable {
                     override fun Transform(value: Int): Int = value + 1
@@ -15886,6 +15949,41 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
 
                 fun main() {
+                    val visibilityValues = KVisibility.values()
+                    if (visibilityValues.size != 4 || visibilityValues[0] !== KVisibility.PUBLIC ||
+                        visibilityValues[1] !== KVisibility.PROTECTED ||
+                        visibilityValues[2] !== KVisibility.INTERNAL ||
+                        visibilityValues[3] !== KVisibility.PRIVATE
+                    ) {
+                        throw Error("KVisibility values")
+                    }
+                    visibilityValues[0] = KVisibility.PRIVATE
+                    if (KVisibility.values()[0] !== KVisibility.PUBLIC) {
+                        throw Error("KVisibility values must be defensive")
+                    }
+                    val visibilityEntries = KVisibility.entries
+                    if (visibilityEntries !== KVisibility.entries || visibilityEntries.size != 4 ||
+                        visibilityEntries[0] !== KVisibility.PUBLIC ||
+                        (visibilityEntries as Any) is MutableList<*>
+                    ) {
+                        throw Error("KVisibility entries")
+                    }
+                    if (KVisibility.valueOf("PUBLIC") !== KVisibility.PUBLIC ||
+                        KVisibility.PUBLIC.name != "PUBLIC" || KVisibility.PUBLIC.ordinal != 0 ||
+                        KVisibility.PUBLIC.compareTo(KVisibility.PROTECTED) >= 0
+                    ) {
+                        throw Error("KVisibility enum behavior")
+                    }
+                    val missingVisibility = try {
+                        KVisibility.valueOf("MISSING")
+                        null
+                    } catch (exception: IllegalArgumentException) {
+                        exception.message
+                    }
+                    if (missingVisibility != "No enum constant kotlin.reflect.KVisibility.MISSING") {
+                        throw Error("KVisibility valueOf failure: ${'$'}missingVisibility")
+                    }
+
                     val functionAnnotations = ::libraryFunction.annotations
                     if (functionAnnotations.size != 1) throw Error("KLIB function annotation count")
                     val functionMarker = functionAnnotations[0] as? LibraryCallableMarker
@@ -15945,6 +16043,82 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ) {
                         throw Error("constructor declaration flags")
                     }
+                    assertDeclarationFacts(
+                        ::libraryFunction, KVisibility.PUBLIC, true, false, false, "public function"
+                    )
+                    assertDeclarationFacts(
+                        ::libraryProperty, KVisibility.PUBLIC, true, false, false, "public property"
+                    )
+                    assertDeclarationFacts(
+                        libraryInternalFunctionReference(), KVisibility.INTERNAL, true, false, false,
+                        "internal function across KLIB",
+                    )
+                    assertDeclarationFacts(
+                        libraryPrivateFunctionReference(), KVisibility.PRIVATE, true, false, false,
+                        "private function across KLIB",
+                    )
+                    assertDeclarationFacts(
+                        libraryInternalPropertyReference(), KVisibility.INTERNAL, true, false, false,
+                        "internal property across KLIB",
+                    )
+                    assertDeclarationFacts(
+                        libraryPrivatePropertyReference(), KVisibility.PRIVATE, true, false, false,
+                        "private property across KLIB",
+                    )
+                    val visibilityBase = LibraryVisibilityBase()
+                    assertDeclarationFacts(
+                        LibraryVisibilityBase::openFunction, KVisibility.PUBLIC, false, true, false,
+                        "open function",
+                    )
+                    assertDeclarationFacts(
+                        LibraryVisibilityBase::openProperty, KVisibility.PUBLIC, false, true, false,
+                        "open property",
+                    )
+                    assertDeclarationFacts(
+                        visibilityBase.protectedFunctionReference(), KVisibility.PROTECTED, false, true, false,
+                        "protected function",
+                    )
+                    assertDeclarationFacts(
+                        visibilityBase.protectedPropertyReference(), KVisibility.PROTECTED, false, true, false,
+                        "protected property",
+                    )
+                    assertDeclarationFacts(
+                        visibilityBase.privateFunctionReference(), KVisibility.PRIVATE, true, false, false,
+                        "private member function",
+                    )
+                    assertDeclarationFacts(
+                        visibilityBase.privatePropertyReference(), KVisibility.PRIVATE, true, false, false,
+                        "private member property",
+                    )
+                    assertDeclarationFacts(
+                        inheritedOpenFunctionReference(), KVisibility.PUBLIC, false, true, false,
+                        "inherited open function",
+                    )
+                    assertDeclarationFacts(
+                        inheritedOpenPropertyReference(), KVisibility.PUBLIC, false, true, false,
+                        "inherited open property",
+                    )
+                    assertDeclarationFacts(
+                        abstractFunctionReference(), KVisibility.PUBLIC, false, false, true,
+                        "abstract function",
+                    )
+                    assertDeclarationFacts(
+                        abstractPropertyReference(), KVisibility.PUBLIC, false, false, true,
+                        "abstract property",
+                    )
+                    assertDeclarationFacts(
+                        constructorReference, KVisibility.PUBLIC, true, false, false, "public constructor"
+                    )
+                    assertDeclarationFacts(
+                        LibraryPrivateConstructor.reference(), KVisibility.PRIVATE, true, false, false,
+                        "private constructor",
+                    )
+                    fun localFunction(): Int = 11
+                    val localFunctionReference = ::localFunction
+                    assertDeclarationFacts(
+                        localFunctionReference, null, true, false, false, "local function",
+                    )
+                    if (localFunctionReference() != 11) throw Error("local function invocation")
 
                     val genericReference: KFunction1<String, String> = ::libraryIdentity
                     val genericParameters = genericReference.typeParameters
@@ -16102,6 +16276,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ) {
                         throw Error("ordinary foreign CLR method declaration flags")
                     }
+                    assertDeclarationFacts(
+                        foreignTransform, KVisibility.PUBLIC, false, false, true,
+                        "foreign CLR interface function",
+                    )
                     val missingForeignValue = try {
                         foreignTransform.callBy(mapOf(foreignTransform.parameters[0] to foreign))
                         null
@@ -16136,6 +16314,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ) {
                         throw Error("foreign property named call")
                     }
+                    assertDeclarationFacts(
+                        foreignValueReference, KVisibility.PUBLIC, false, false, true,
+                        "foreign CLR interface property",
+                    )
 
                 }
                 """.trimIndent()
@@ -16155,6 +16337,48 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::moduleName.cliArgument, "KCallableConsumer",
             K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
         )
+
+        val runtimeAssembly = consumerDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+        val runtimeMetadata = DotNetClrMetadataReader.read(runtimeAssembly)
+        val runtimeEnum = runtimeMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "Kotlin" && type.metadataName == "Enum"
+        }
+        val runtimeVisibility = runtimeMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "Kotlin" && type.metadataName == "KVisibility"
+        }
+        val runtimeEnumEntries = runtimeMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "Kotlin.Enums" && type.metadataName == "EnumEntries"
+        }
+        assertEquals(runtimeEnum.handle, runtimeVisibility.baseType)
+        assertTrue(runtimeVisibility.isSealed && !runtimeVisibility.isInterface)
+        assertTrue(runtimeEnumEntries.isInterface)
+        assertTrue(runtimeMetadata.genericParameterDefinitions.none { parameter ->
+            parameter.owner == runtimeVisibility.handle || parameter.owner == runtimeEnumEntries.handle
+        })
+        assertTrue(runtimeMetadata.assemblyReferences.none { reference ->
+            reference.name == "Kotlin.Stdlib"
+        }) {
+            "KVisibility must not create a Runtime-to-Stdlib assembly edge"
+        }
+
+        val stdlibAssembly = consumerDirectory.resolve("Kotlin.Stdlib.dll")
+        val stdlibMetadata = DotNetClrMetadataReader.read(stdlibAssembly)
+        val stdlibRuntimeReference = stdlibMetadata.assemblyReferences.single { reference ->
+            reference.name == DotNetRuntimeArtifact.ASSEMBLY_NAME
+        }
+        val stdlibEnumEntriesReference = stdlibMetadata.typeReferences.single { type ->
+            type.namespaceName == "Kotlin.Enums" && type.metadataName == "EnumEntries"
+        }
+        val stdlibEnumEntriesList = stdlibMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "Kotlin.Enums" && type.metadataName == "EnumEntriesList"
+        }
+        assertEquals(stdlibRuntimeReference.handle, stdlibEnumEntriesReference.resolutionScope)
+        assertTrue(stdlibMetadata.interfaceImplementations.any { implementation ->
+            implementation.implementingType == stdlibEnumEntriesList.handle &&
+                    implementation.interfaceType == stdlibEnumEntriesReference.handle
+        }) {
+            "Common EnumEntriesList must implement Runtime's one physical EnumEntries interface"
+        }
 
         val consumerIl = consumerDirectory.resolve("KCallableConsumer.il").readText()
         assertTrue("[KCallable.Library]'kcallable.boundary.KCallableLibraryKt'::'libraryFunction'" in consumerIl) {
@@ -16188,6 +16412,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             kcallable.boundary.KCallableLibraryKt.libraryInlineFunctionReference();
                         if (!function.isInline || function.isExternal || function.isOperator ||
                             function.isInfix || function.isSuspend) return 1;
+                        if (callable.visibility != Kotlin.KVisibility.PUBLIC || !callable.isFinal ||
+                            callable.isOpen || callable.isAbstract) return 9;
+                        if (typeof(Kotlin.KVisibility).IsEnum ||
+                            !typeof(Kotlin.Enum).IsAssignableFrom(typeof(Kotlin.KVisibility))) return 10;
+                        if (!object.ReferenceEquals(
+                                Kotlin.KVisibility.PUBLIC,
+                                Kotlin.KVisibility.valueOf("PUBLIC"))) return 11;
                         Kotlin.KType returnType = callable.returnType;
                         Kotlin.KClass classifier = returnType.classifier as Kotlin.KClass;
                         if (classifier == null || classifier.qualifiedName != "kotlin.Int") return 2;
@@ -31706,6 +31937,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KTypeParameter.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KTypeProjection.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KVariance.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/jvm/src/kotlin/reflect/KVisibility.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/typeOf.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SharedVariableBox.kt").absoluteFile
@@ -35939,12 +36171,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     @Test
     fun testRejectsStaleEmbeddedDotNetLibraryAbiSchema() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val staleVersion = (DotNetLibraryAbiCodec.ABI_VERSION.toInt() - 1).toString()
         val library = produceLibraryWithRewrittenMetadata(
             assemblyName = "Stale.Embedded.Schema",
-            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "23"),
+            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to staleVersion),
         )
         val diagnostics = compileAgainstRejectedDll(library)
-        assertTrue("uses unsupported CLR ABI index version '23'" in diagnostics) { diagnostics }
+        assertTrue("uses unsupported CLR ABI index version '$staleVersion'" in diagnostics) { diagnostics }
     }
 
     @Test
