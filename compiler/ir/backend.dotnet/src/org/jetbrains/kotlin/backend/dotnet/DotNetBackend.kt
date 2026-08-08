@@ -172,304 +172,306 @@ object DotNetBackend {
             return result(ilTarget)
         }
 
-        val stdlibEmission = if (hasBootstrapStdlib) {
-            DotNetIlEmitter(
-                messageCollector = messageCollector,
-                assemblyName = DotNetStdlibLibrary.ASSEMBLY_NAME,
-                moduleFileName = DotNetStdlibLibrary.ASSEMBLY_FILE_NAME,
-                producesExecutable = false,
-                irBuiltIns = irBuiltIns,
-                propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
-                callableAnnotationFactoryFunctions = context.callableAnnotationSymbols.implementedFunctions(),
-                emissionScope = DotNetIlEmissionScope.STDLIB,
-                coreLibrary = target.coreLibrary,
-                failOnDeclarationEviction = true,
-                preLoweringDeclarationKeys = preLoweringStdlibDeclarationKeys,
-                interfaceDefaultImplementations = context.interfaceDefaultImplementations,
-                defaultArgumentDispatchers = context.defaultArgumentDispatchers,
-                covariantReturnBridges = context.covariantReturnBridges,
-                staticInitializations = context.staticInitializations,
-                staticInitializationFailures = context.staticInitializationFailures,
-                objectInstanceFields = context.objectInstanceFields,
-                enumEntryFields = context.enumEntryFields,
-                cSharpImplementationManifestTarget = target,
-                hasKotlinMetadataResource = producesStdlib && kotlinMetadataResourceFactory != null,
-            ).emit(irModuleFragment) ?: return result(ilTarget)
-        } else {
-            null
-        }
-        val stdlibIlText = stdlibEmission?.ilText
+        return configuration.perfManager.tryMeasurePhaseTime(PhaseType.Backend) {
+            val stdlibEmission = if (hasBootstrapStdlib) {
+                DotNetIlEmitter(
+                    messageCollector = messageCollector,
+                    assemblyName = DotNetStdlibLibrary.ASSEMBLY_NAME,
+                    moduleFileName = DotNetStdlibLibrary.ASSEMBLY_FILE_NAME,
+                    producesExecutable = false,
+                    irBuiltIns = irBuiltIns,
+                    propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
+                    callableAnnotationFactoryFunctions = context.callableAnnotationSymbols.implementedFunctions(),
+                    emissionScope = DotNetIlEmissionScope.STDLIB,
+                    coreLibrary = target.coreLibrary,
+                    failOnDeclarationEviction = true,
+                    preLoweringDeclarationKeys = preLoweringStdlibDeclarationKeys,
+                    interfaceDefaultImplementations = context.interfaceDefaultImplementations,
+                    defaultArgumentDispatchers = context.defaultArgumentDispatchers,
+                    covariantReturnBridges = context.covariantReturnBridges,
+                    staticInitializations = context.staticInitializations,
+                    staticInitializationFailures = context.staticInitializationFailures,
+                    objectInstanceFields = context.objectInstanceFields,
+                    enumEntryFields = context.enumEntryFields,
+                    cSharpImplementationManifestTarget = target,
+                    hasKotlinMetadataResource = producesStdlib && kotlinMetadataResourceFactory != null,
+                ).emit(irModuleFragment) ?: return result(ilTarget)
+            } else {
+                null
+            }
+            val stdlibIlText = stdlibEmission?.ilText
 
-        if (producesStdlib) {
-            if (stdlibIlText == null) {
-                messageCollector.report(
-                    CompilerMessageSeverity.ERROR,
-                    "The explicit stdlib build did not contain compiler-owned stdlib implementations."
-                )
-                return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
-            }
-            if (!validateMetadataLinkage(stdlibEmission.declarations)) {
-                return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
-            }
-            val stdlibOutput = output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
-            val runtimeOutput = output.resolve(DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME)
-            runtimeOutput.delete()
-            val assembledStdlib = DotNetStdlibLibrary.assembleIn(
-                output,
-                stdlibIlText,
-                target,
-                messageCollector,
-                stdlibEmission.managedResources.withKotlinMetadata(
-                    stdlibEmission.declarations,
-                    kotlinMetadataResourceFactory,
-                ),
-            )
-            if (assembledStdlib == null) return result(stdlibOutput)
-            if (
-                DotNetRuntimeLibrary.assembleNextTo(
-                    assembledStdlib,
-                    target,
-                    runtimeCSharpImplementationManifest,
-                    messageCollector,
-                ) == null
-            ) {
-                assembledStdlib.delete()
-                return result(stdlibOutput)
-            }
-            return result(assembledStdlib, stdlibEmission.declarations)
-        }
-
-        // Treat a stdlib emitted from injected bootstrap sources exactly like a separately
-        // loaded producer for the following user-assembly emission. Its completed declaration
-        // index is authoritative for erased member names, owner paths, and initialization ABI;
-        // recomputing those facts from the already-lowered IR can diverge from the physical DLL.
-        val userExternalLibraries = if (stdlibEmission != null) {
-            externalLibraries.filterNot { library ->
-                DotNetPlatformAssemblyIdentity.isStdlib(library.artifact.assemblyName)
-            } + DotNetExternalLibrary(
-                artifact = DotNetLibraryArtifact(
-                    DotNetStdlibLibrary.ASSEMBLY_NAME,
-                    target.description,
-                    DotNetStdlibLibrary.ASSEMBLY_VERSION,
-                ),
-                assemblyFile = output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME),
-                declarations = stdlibEmission.declarations,
-                friendAssemblies = emptySet(),
-            )
-        } else {
-            externalLibraries
-        }
-
-        val emitter = DotNetIlEmitter(
-            messageCollector = messageCollector,
-            assemblyName = assemblyName,
-            moduleFileName = when {
-                emitsExecutable -> binaryOutput.name
-                producesLibrary -> checkNotNull(producedLibraryArtifact).assemblyFileName
-                else -> ilTarget.name
-            },
-            producesExecutable = emitsExecutable,
-            irBuiltIns = irBuiltIns,
-            propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
-            callableAnnotationFactoryFunctions = context.callableAnnotationSymbols.implementedFunctions(),
-            exports = configuration.dotNetExports,
-            propertyExports = configuration.dotNetPropertyExports,
-            coreLibrary = target.coreLibrary,
-            assemblyVersionIl = if (producesLibrary) checkNotNull(producedLibraryArtifact).assemblyVersionIl else null,
-            externalLibraries = userExternalLibraries,
-            failOnDeclarationEviction = producesLibrary,
-            compilesAgainstStdlib = (producesLibrary || emitsExecutable) &&
-                    (stdlibEmission != null || configuration.dotNetExternalStdlib != null),
-            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
-            friendAssemblies = configuration.dotNetFriendAssemblies,
-            interfaceDefaultImplementations = context.interfaceDefaultImplementations,
-            defaultArgumentDispatchers = context.defaultArgumentDispatchers,
-            externalInterfaceDefaultHelpers = context.externalInterfaceDefaultHelpers,
-            externalDefaultArgumentDispatchers = context.externalDefaultArgumentDispatchers,
-            staticInitializations = context.staticInitializations,
-            staticInitializationFailures = context.staticInitializationFailures,
-            objectInstanceFields = context.objectInstanceFields,
-            enumEntryFields = context.enumEntryFields,
-            externalStaticInitializations = context.externalStaticInitializations,
-            interfaceDefaultPromotions = context.interfaceDefaultPromotions,
-            genericInterfaceViewBridges = context.genericInterfaceViewBridges,
-            covariantReturnBridges = context.covariantReturnBridges,
-            interfaceDefaultClassForwarders = context.interfaceDefaultClassForwarders,
-            cSharpImplementationManifestTarget = target.takeIf { producesLibrary },
-            hasKotlinMetadataResource = producesLibrary && kotlinMetadataResourceFactory != null,
-        )
-        val emission = emitter.emit(irModuleFragment)
-        if (emission == null) {
-            // Emission failed (the error is in the message collector). Remove any stale output of
-            // a previous successful compilation so callers never see outdated content.
-            ilTarget.delete()
-            return result(ilTarget)
-        }
-        if (producesLibrary && !validateMetadataLinkage(emission.declarations)) {
-            ilTarget.delete()
-            return result(ilTarget)
-        }
-        val ilText = emission.ilText
-        fun referencesAssembly(name: String): Boolean =
-            emission.referencedAssemblies.any { referenced -> referenced.equals(name, ignoreCase = true) }
-
-        if (referencesAssembly(DotNetStdlibLibrary.ASSEMBLY_NAME) && stdlibIlText == null) {
-            val externalStdlib = configuration.dotNetExternalStdlib
-            if (externalStdlib == null) {
-                messageCollector.report(
-                    CompilerMessageSeverity.ERROR,
-                    "The generated module requires '${DotNetStdlibLibrary.ASSEMBLY_NAME}', but neither " +
-                            "injected implementation source nor a self-describing CLR DLL was supplied. " +
-                            "Compile without -no-stdlib or add the target stdlib DLL to the classpath."
-                )
-                ilTarget.delete()
-                return result(ilTarget)
-            }
-            if (!externalStdlib.assemblyFile.isFile) {
-                messageCollector.report(
-                    CompilerMessageSeverity.ERROR,
-                    "The Kotlin/.NET standard-library assembly '${externalStdlib.assemblyFile.path}' is missing."
-                )
-                ilTarget.delete()
-                return result(ilTarget)
-            }
-            if (emitsExecutable) {
-                val packagedStdlib = (binaryOutput.parentFile ?: File("."))
-                    .resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
-                if (externalStdlib.assemblyFile.canonicalFile != packagedStdlib.canonicalFile) {
-                    externalStdlib.assemblyFile.copyTo(packagedStdlib, overwrite = true)
-                }
-            }
-        }
-        for (library in userExternalLibraries) {
-            // Kotlin.Stdlib has a dedicated installation/packaging path above. It still belongs
-            // to externalLibraries for ordinary declaration binding, but must not be copied or
-            // validated a second time as an arbitrary user library here.
-            if (DotNetPlatformAssemblyIdentity.isStdlib(library.artifact.assemblyName)) continue
-            if (!referencesAssembly(library.artifact.assemblyName)) continue
-            if (!library.assemblyFile.isFile) {
-                messageCollector.report(
-                    CompilerMessageSeverity.ERROR,
-                    "The Kotlin/.NET library assembly '${library.assemblyFile.path}' is missing."
-                )
-                ilTarget.delete()
-                return result(ilTarget)
-            }
-            if (emitsExecutable) {
-                val packagedLibrary = (binaryOutput.parentFile ?: File("."))
-                    .resolve(library.artifact.assemblyFileName)
-                if (library.assemblyFile.canonicalFile != packagedLibrary.canonicalFile) {
-                    library.assemblyFile.copyTo(packagedLibrary, overwrite = true)
-                }
-            }
-        }
-        for (foreignAssembly in emission.referencedForeignAssemblies) {
-            val identity = foreignAssembly.metadata.identity
-            if (identity.name.equals(assemblyName, ignoreCase = true)) {
-                messageCollector.report(
-                    CompilerMessageSeverity.ERROR,
-                    "Output assembly '$assemblyName' collides with referenced foreign CLR assembly " +
-                            "'${foreignAssembly.assemblyFile.path}'."
-                )
-                ilTarget.delete()
-                return result(if (emitsExecutable) binaryOutput else ilTarget)
-            }
-            if (!foreignAssembly.assemblyFile.isFile) {
-                messageCollector.report(
-                    CompilerMessageSeverity.ERROR,
-                    "The referenced foreign CLR assembly '${foreignAssembly.assemblyFile.path}' is missing."
-                )
-                ilTarget.delete()
-                return result(if (emitsExecutable) binaryOutput else ilTarget)
-            }
-            if (emitsExecutable) {
-                val dependencyFileName = "${identity.name}.dll"
-                if (
-                    identity.name.isEmpty() ||
-                    File(dependencyFileName).name != dependencyFileName ||
-                    dependencyFileName.any { character -> character in "<>:\"/\\|?*" }
-                ) {
+            if (producesStdlib) {
+                if (stdlibIlText == null) {
                     messageCollector.report(
                         CompilerMessageSeverity.ERROR,
-                        "Foreign CLR assembly name '${identity.name}' cannot be packaged as a safe dependency file."
+                        "The explicit stdlib build did not contain compiler-owned stdlib implementations."
                     )
-                    ilTarget.delete()
-                    return result(binaryOutput)
+                    return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
                 }
-                val packagedAssembly = (binaryOutput.parentFile ?: File(".")).resolve(dependencyFileName)
-                if (foreignAssembly.assemblyFile.canonicalFile != packagedAssembly.canonicalFile) {
-                    foreignAssembly.assemblyFile.copyTo(packagedAssembly, overwrite = true)
+                if (!validateMetadataLinkage(stdlibEmission.declarations)) {
+                    return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
                 }
-            }
-        }
-        // ilasm decodes a BOM-less file as ANSI, mangling every multi-byte UTF-8 sequence (e.g. in
-        // string literals), so the .il file must be written as UTF-8 *with* a BOM.
-        ilTarget.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
-
-        if (producesLibrary) {
-            val assemblyOutput = output.resolve(checkNotNull(producedLibraryArtifact).assemblyFileName)
-            DotNetIlAssembler.assembleLibrary(
-                ilTarget,
-                assemblyOutput,
-                target,
-                messageCollector,
-                emission.managedResources.withKotlinMetadata(
-                    emission.declarations,
-                    kotlinMetadataResourceFactory,
-                ),
-            )
-            return result(assemblyOutput, emission.declarations)
-        }
-
-        if (emitsExecutable) {
-            val externalRuntime = configuration.dotNetExternalStdlib?.runtimeAssemblyFile
-            if (externalRuntime == null) {
+                val stdlibOutput = output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
+                val runtimeOutput = output.resolve(DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME)
+                runtimeOutput.delete()
+                val assembledStdlib = DotNetStdlibLibrary.assembleIn(
+                    output,
+                    stdlibIlText,
+                    target,
+                    messageCollector,
+                    stdlibEmission.managedResources.withKotlinMetadata(
+                        stdlibEmission.declarations,
+                        kotlinMetadataResourceFactory,
+                    ),
+                )
+                if (assembledStdlib == null) return result(stdlibOutput)
                 if (
                     DotNetRuntimeLibrary.assembleNextTo(
-                        binaryOutput,
+                        assembledStdlib,
                         target,
                         runtimeCSharpImplementationManifest,
                         messageCollector,
                     ) == null
                 ) {
-                    return result(binaryOutput)
+                    assembledStdlib.delete()
+                    return result(stdlibOutput)
                 }
+                return result(assembledStdlib, stdlibEmission.declarations)
+            }
+
+            // Treat a stdlib emitted from injected bootstrap sources exactly like a separately
+            // loaded producer for the following user-assembly emission. Its completed declaration
+            // index is authoritative for erased member names, owner paths, and initialization ABI;
+            // recomputing those facts from the already-lowered IR can diverge from the physical DLL.
+            val userExternalLibraries = if (stdlibEmission != null) {
+                externalLibraries.filterNot { library ->
+                    DotNetPlatformAssemblyIdentity.isStdlib(library.artifact.assemblyName)
+                } + DotNetExternalLibrary(
+                    artifact = DotNetLibraryArtifact(
+                        DotNetStdlibLibrary.ASSEMBLY_NAME,
+                        target.description,
+                        DotNetStdlibLibrary.ASSEMBLY_VERSION,
+                    ),
+                    assemblyFile = output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME),
+                    declarations = stdlibEmission.declarations,
+                    friendAssemblies = emptySet(),
+                )
             } else {
-                if (!externalRuntime.isFile) {
+                externalLibraries
+            }
+
+            val emitter = DotNetIlEmitter(
+                messageCollector = messageCollector,
+                assemblyName = assemblyName,
+                moduleFileName = when {
+                    emitsExecutable -> binaryOutput.name
+                    producesLibrary -> checkNotNull(producedLibraryArtifact).assemblyFileName
+                    else -> ilTarget.name
+                },
+                producesExecutable = emitsExecutable,
+                irBuiltIns = irBuiltIns,
+                propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
+                callableAnnotationFactoryFunctions = context.callableAnnotationSymbols.implementedFunctions(),
+                exports = configuration.dotNetExports,
+                propertyExports = configuration.dotNetPropertyExports,
+                coreLibrary = target.coreLibrary,
+                assemblyVersionIl = if (producesLibrary) checkNotNull(producedLibraryArtifact).assemblyVersionIl else null,
+                externalLibraries = userExternalLibraries,
+                failOnDeclarationEviction = producesLibrary,
+                compilesAgainstStdlib = (producesLibrary || emitsExecutable) &&
+                        (stdlibEmission != null || configuration.dotNetExternalStdlib != null),
+                preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+                friendAssemblies = configuration.dotNetFriendAssemblies,
+                interfaceDefaultImplementations = context.interfaceDefaultImplementations,
+                defaultArgumentDispatchers = context.defaultArgumentDispatchers,
+                externalInterfaceDefaultHelpers = context.externalInterfaceDefaultHelpers,
+                externalDefaultArgumentDispatchers = context.externalDefaultArgumentDispatchers,
+                staticInitializations = context.staticInitializations,
+                staticInitializationFailures = context.staticInitializationFailures,
+                objectInstanceFields = context.objectInstanceFields,
+                enumEntryFields = context.enumEntryFields,
+                externalStaticInitializations = context.externalStaticInitializations,
+                interfaceDefaultPromotions = context.interfaceDefaultPromotions,
+                genericInterfaceViewBridges = context.genericInterfaceViewBridges,
+                covariantReturnBridges = context.covariantReturnBridges,
+                interfaceDefaultClassForwarders = context.interfaceDefaultClassForwarders,
+                cSharpImplementationManifestTarget = target.takeIf { producesLibrary },
+                hasKotlinMetadataResource = producesLibrary && kotlinMetadataResourceFactory != null,
+            )
+            val emission = emitter.emit(irModuleFragment)
+            if (emission == null) {
+                // Emission failed (the error is in the message collector). Remove any stale output of
+                // a previous successful compilation so callers never see outdated content.
+                ilTarget.delete()
+                return result(ilTarget)
+            }
+            if (producesLibrary && !validateMetadataLinkage(emission.declarations)) {
+                ilTarget.delete()
+                return result(ilTarget)
+            }
+            val ilText = emission.ilText
+            fun referencesAssembly(name: String): Boolean =
+                emission.referencedAssemblies.any { referenced -> referenced.equals(name, ignoreCase = true) }
+
+            if (referencesAssembly(DotNetStdlibLibrary.ASSEMBLY_NAME) && stdlibIlText == null) {
+                val externalStdlib = configuration.dotNetExternalStdlib
+                if (externalStdlib == null) {
                     messageCollector.report(
                         CompilerMessageSeverity.ERROR,
-                        "The Kotlin/.NET runtime assembly '${externalRuntime.path}' is missing.",
+                        "The generated module requires '${DotNetStdlibLibrary.ASSEMBLY_NAME}', but neither " +
+                                "injected implementation source nor a self-describing CLR DLL was supplied. " +
+                                "Compile without -no-stdlib or add the target stdlib DLL to the classpath."
                     )
-                    return result(binaryOutput)
+                    ilTarget.delete()
+                    return result(ilTarget)
                 }
-                val packagedRuntime = (binaryOutput.parentFile ?: File("."))
-                    .resolve(DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME)
-                if (externalRuntime.canonicalFile != packagedRuntime.canonicalFile) {
-                    externalRuntime.copyTo(packagedRuntime, overwrite = true)
+                if (!externalStdlib.assemblyFile.isFile) {
+                    messageCollector.report(
+                        CompilerMessageSeverity.ERROR,
+                        "The Kotlin/.NET standard-library assembly '${externalStdlib.assemblyFile.path}' is missing."
+                    )
+                    ilTarget.delete()
+                    return result(ilTarget)
+                }
+                if (emitsExecutable) {
+                    val packagedStdlib = (binaryOutput.parentFile ?: File("."))
+                        .resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
+                    if (externalStdlib.assemblyFile.canonicalFile != packagedStdlib.canonicalFile) {
+                        externalStdlib.assemblyFile.copyTo(packagedStdlib, overwrite = true)
+                    }
                 }
             }
-            if (stdlibIlText != null &&
-                DotNetStdlibLibrary.assembleNextTo(
-                    binaryOutput,
-                    stdlibIlText,
+            for (library in userExternalLibraries) {
+                // Kotlin.Stdlib has a dedicated installation/packaging path above. It still belongs
+                // to externalLibraries for ordinary declaration binding, but must not be copied or
+                // validated a second time as an arbitrary user library here.
+                if (DotNetPlatformAssemblyIdentity.isStdlib(library.artifact.assemblyName)) continue
+                if (!referencesAssembly(library.artifact.assemblyName)) continue
+                if (!library.assemblyFile.isFile) {
+                    messageCollector.report(
+                        CompilerMessageSeverity.ERROR,
+                        "The Kotlin/.NET library assembly '${library.assemblyFile.path}' is missing."
+                    )
+                    ilTarget.delete()
+                    return result(ilTarget)
+                }
+                if (emitsExecutable) {
+                    val packagedLibrary = (binaryOutput.parentFile ?: File("."))
+                        .resolve(library.artifact.assemblyFileName)
+                    if (library.assemblyFile.canonicalFile != packagedLibrary.canonicalFile) {
+                        library.assemblyFile.copyTo(packagedLibrary, overwrite = true)
+                    }
+                }
+            }
+            for (foreignAssembly in emission.referencedForeignAssemblies) {
+                val identity = foreignAssembly.metadata.identity
+                if (identity.name.equals(assemblyName, ignoreCase = true)) {
+                    messageCollector.report(
+                        CompilerMessageSeverity.ERROR,
+                        "Output assembly '$assemblyName' collides with referenced foreign CLR assembly " +
+                                "'${foreignAssembly.assemblyFile.path}'."
+                    )
+                    ilTarget.delete()
+                    return result(if (emitsExecutable) binaryOutput else ilTarget)
+                }
+                if (!foreignAssembly.assemblyFile.isFile) {
+                    messageCollector.report(
+                        CompilerMessageSeverity.ERROR,
+                        "The referenced foreign CLR assembly '${foreignAssembly.assemblyFile.path}' is missing."
+                    )
+                    ilTarget.delete()
+                    return result(if (emitsExecutable) binaryOutput else ilTarget)
+                }
+                if (emitsExecutable) {
+                    val dependencyFileName = "${identity.name}.dll"
+                    if (
+                        identity.name.isEmpty() ||
+                        File(dependencyFileName).name != dependencyFileName ||
+                        dependencyFileName.any { character -> character in "<>:\"/\\|?*" }
+                    ) {
+                        messageCollector.report(
+                            CompilerMessageSeverity.ERROR,
+                            "Foreign CLR assembly name '${identity.name}' cannot be packaged as a safe dependency file."
+                        )
+                        ilTarget.delete()
+                        return result(binaryOutput)
+                    }
+                    val packagedAssembly = (binaryOutput.parentFile ?: File(".")).resolve(dependencyFileName)
+                    if (foreignAssembly.assemblyFile.canonicalFile != packagedAssembly.canonicalFile) {
+                        foreignAssembly.assemblyFile.copyTo(packagedAssembly, overwrite = true)
+                    }
+                }
+            }
+            // ilasm decodes a BOM-less file as ANSI, mangling every multi-byte UTF-8 sequence (e.g. in
+            // string literals), so the .il file must be written as UTF-8 *with* a BOM.
+            ilTarget.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
+
+            if (producesLibrary) {
+                val assemblyOutput = output.resolve(checkNotNull(producedLibraryArtifact).assemblyFileName)
+                DotNetIlAssembler.assembleLibrary(
+                    ilTarget,
+                    assemblyOutput,
                     target,
                     messageCollector,
-                    checkNotNull(stdlibEmission).managedResources,
-                ) == null
-            ) {
+                    emission.managedResources.withKotlinMetadata(
+                        emission.declarations,
+                        kotlinMetadataResourceFactory,
+                    ),
+                )
+                return result(assemblyOutput, emission.declarations)
+            }
+
+            if (emitsExecutable) {
+                val externalRuntime = configuration.dotNetExternalStdlib?.runtimeAssemblyFile
+                if (externalRuntime == null) {
+                    if (
+                        DotNetRuntimeLibrary.assembleNextTo(
+                            binaryOutput,
+                            target,
+                            runtimeCSharpImplementationManifest,
+                            messageCollector,
+                        ) == null
+                    ) {
+                        return result(binaryOutput)
+                    }
+                } else {
+                    if (!externalRuntime.isFile) {
+                        messageCollector.report(
+                            CompilerMessageSeverity.ERROR,
+                            "The Kotlin/.NET runtime assembly '${externalRuntime.path}' is missing.",
+                        )
+                        return result(binaryOutput)
+                    }
+                    val packagedRuntime = (binaryOutput.parentFile ?: File("."))
+                        .resolve(DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME)
+                    if (externalRuntime.canonicalFile != packagedRuntime.canonicalFile) {
+                        externalRuntime.copyTo(packagedRuntime, overwrite = true)
+                    }
+                }
+                if (stdlibIlText != null &&
+                    DotNetStdlibLibrary.assembleNextTo(
+                        binaryOutput,
+                        stdlibIlText,
+                        target,
+                        messageCollector,
+                        checkNotNull(stdlibEmission).managedResources,
+                    ) == null
+                ) {
+                    return result(binaryOutput)
+                }
+                DotNetIlAssembler.assembleExecutable(
+                    ilTarget,
+                    binaryOutput,
+                    target,
+                    messageCollector,
+                    emission.managedResources,
+                )
                 return result(binaryOutput)
             }
-            DotNetIlAssembler.assembleExecutable(
-                ilTarget,
-                binaryOutput,
-                target,
-                messageCollector,
-                emission.managedResources,
-            )
-            return result(binaryOutput)
-        }
 
-        return result(ilTarget)
+            result(ilTarget)
+        }
     }
 
     private fun File.siblingWithExtension(extension: String): File {

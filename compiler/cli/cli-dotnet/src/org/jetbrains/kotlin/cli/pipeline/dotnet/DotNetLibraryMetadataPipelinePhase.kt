@@ -45,7 +45,9 @@ import org.jetbrains.kotlin.library.writer.KlibWriter
 import org.jetbrains.kotlin.library.writer.includeMetadata
 import org.jetbrains.kotlin.library.writer.includeIr
 import org.jetbrains.kotlin.ir.KtDiagnosticReporterWithImplicitIrBasedContext
+import org.jetbrains.kotlin.util.PhaseType
 import org.jetbrains.kotlin.util.metadataVersion
+import org.jetbrains.kotlin.util.tryMeasureDynamicPhaseTime
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -55,8 +57,8 @@ import kotlin.io.path.absolute
 object DotNetLibraryMetadataSerializationPipelinePhase :
     PipelinePhase<DotNetFir2IrPipelineArtifact, DotNetFir2IrPipelineArtifact>(
         name = "DotNetLibraryMetadataSerializationPipelinePhase",
-        preActions = setOf(PerformanceNotifications.KlibWritingStarted),
-        postActions = setOf(CheckCompilationErrors.CheckDiagnosticCollector),
+        preActions = setOf(PerformanceNotifications.IrSerializationStarted),
+        postActions = setOf(PerformanceNotifications.IrSerializationFinished, CheckCompilationErrors.CheckDiagnosticCollector),
     ) {
     override fun executePhase(input: DotNetFir2IrPipelineArtifact): DotNetFir2IrPipelineArtifact {
         val configuration = input.configuration
@@ -185,10 +187,10 @@ internal object DotNetLibraryMetadataPackager {
         metadata: SerializedMetadata,
         ir: SerializedIrModule,
         declarations: Map<String, DotNetPhysicalDeclaration>,
-    ): ByteArray {
+    ): ByteArray = configuration.perfManager.tryMeasureDynamicPhaseTime("KLIB packaging", PhaseType.Backend) {
         val temporaryFile = Files.createTempFile("kotlin-dotnet-metadata-", ".klib")
         Files.delete(temporaryFile)
-        return try {
+        try {
             writeKlib(
                 output = temporaryFile,
                 configuration = configuration,
@@ -282,7 +284,7 @@ internal object DotNetLibraryMetadataPackager {
 object DotNetLibraryMetadataFinalizationPipelinePhase :
     PipelinePhase<DotNetBackendPipelineArtifact, DotNetBackendPipelineArtifact>(
         name = "DotNetLibraryMetadataFinalizationPipelinePhase",
-        postActions = setOf(PerformanceNotifications.KlibWritingFinished, CheckCompilationErrors.CheckDiagnosticCollector),
+        postActions = setOf(CheckCompilationErrors.CheckDiagnosticCollector),
     ) {
     override fun executePhase(input: DotNetBackendPipelineArtifact): DotNetBackendPipelineArtifact {
         val configuration = input.configuration

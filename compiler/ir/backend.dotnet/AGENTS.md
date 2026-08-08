@@ -195,6 +195,17 @@ blindly across lowerings or emission: a query can still receive local mutable
 IR, and JVM's bridge-signature cache documents the same stale-signature risk
 when override/type shape changes.
 
+Shared compiler performance reporting must identify this target as
+`PlatformType.DotNet`; do not label it JVM or Common to reuse an existing
+bucket. Keep top-level measurements sequential like the other compiler
+pipelines: in-memory library metadata/IR production is `IrSerialization`, .NET
+IR lowerings are `IrLowering`, and CIL emission plus assembly is `Backend`.
+The self-describing KLIB resource depends on the emitter's completed physical
+declaration index, so measure its packing as a dynamic `Backend` subphase. Do
+not span `KlibWriting` across lowering/backend work or otherwise nest
+top-level `PerformanceManager` phases; the shared manager is intentionally not
+a nested timer.
+
 An external nested CLR type is represented by a simple nested class name plus
 its `DotNetIlClassInfo.enclosingClass`. Do not put `/` inside one
 `ilClassName`: `[A]'Outer/Nested'` is a flat TypeRef, while

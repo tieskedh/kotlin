@@ -411,14 +411,20 @@ IR impossible; JVM's phase-local bridge-signature cache is the relevant
 counterexample to an over-broad lifetime. Producer-index and canonical-slot
 identity rendering remain separate profile candidates.
 
-Continue performance work profile-first. Re-measure the exact cold product
-producer and the aggregate after each accepted change, including allocation
-and asymptotic scaling, before touching the next hotspot. A direct PE writer,
+Performance work remains profile-first, but the current tranche is closed. The
+shared report now has an honest `DotNet` platform identity and sequential
+serialization/lowering/backend ownership. Installed-stdlib 25/50/100 and
+100/200/400 generic/interface publication probes showed approximately linear
+variable cost rather than an emitter/lowering complexity defect. Re-measure an
+exact cold producer and the aggregate after a future material compiler change;
+do not keep turning knobs in the absence of a new hotspot. A direct PE writer,
 streaming text sink, parallel emitter, or worklist replacement for the current
-partial-support fixpoint is a separate architectural slice: adopt it only with
-determinism, failure eviction, resource embedding, and both ILAsm compatibility
-lanes preserved. Test partitioning must continue to avoid rebuilding complete
-Runtime/Stdlib products for ordinary small modules.
+partial-support fixpoint remains a separate architectural slice: adopt it only
+with measured material value plus determinism, failure eviction, resource
+embedding, and both ILAsm compatibility lanes preserved. Test partitioning
+must continue to avoid rebuilding complete Runtime/Stdlib products for ordinary
+small modules, but may not share mutable/freshness-sensitive integration
+products merely to reduce wall time.
 
 The foreign CLR reader follows the corresponding input pattern. JVM class
 readers consume bounded class bytes and Native deserializers work over bounded

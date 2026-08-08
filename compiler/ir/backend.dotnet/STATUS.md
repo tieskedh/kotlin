@@ -16,15 +16,12 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: JVM-shaped direct-callable visibility and modality.
-  Function, property, constructor, inherited, local, separate-KLIB, and
-  admitted foreign CLR references now expose declaration-owned
-  `KCallable.visibility`, `isFinal`, `isOpen`, and `isAbstract`; emitted CLR
-  MethodDef/bridge flags are never semantic authority. Runtime owns the one
-  ordinary Kotlin `KVisibility` reference enum and the physical member-free
-  `EnumEntries` capability required by its complete enum surface, while Common
-  `EnumEntriesList` behavior remains in Stdlib. Library ABI version 25 and
-  runtime surface level 26 are current
+- Last completed feature: target-owned compiler performance reporting.
+  `DotNet` is a distinct shared `PlatformType`, Kotlin/.NET reports sequential
+  IR serialization, IR lowering, and backend phases, and self-describing KLIB
+  packaging is measured as a backend subphase instead of overlapping those
+  top-level owners. The preceding callable-visibility/modality surface remains
+  current at library ABI version 25 and runtime surface level 26
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -38,28 +35,29 @@ substantial open programmes.
 
 ## Current green gate
 
-The callable-visibility/modality head passed the ordinary aggregate. The normal
+The performance-reporting head passed the ordinary aggregate. The normal
 aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 54 XML files and 1305 tests:
+The audited full-aggregate evidence covers 54 XML files and 1306 tests:
 
 - 6 policy-free physical CLI model/serializer tests
 - 1186 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 92 library-integration tests
+- 93 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed its final confirmation at 2026-08-08 17:47 local time
-in 18m32s. Gradle reused the unchanged six physical model tests, then rewrote
-all 51 FIR/IL/box suites and both `dn` suites against the binding-index cache.
-The resulting audited tree has a cumulative JUnit suite time of 1106.00
-seconds: 0.13 for the physical model, 408.40 for FIR/IL/box, and 697.47 for
-`dn`. Gradle 9's selected-task `--rerun` option is not full-matrix evidence on
-the empty backend lifecycle task and is not part of the verification command.
+The aggregate completed its final XML confirmation at 2026-08-08 19:20 local
+time. Its launching shell was interrupted after the test processes had exited,
+so no wall-clock claim is attached to this run; all three result roots were
+audited directly. The resulting tree has a cumulative JUnit suite time of
+1028.63 seconds: 0.13 for the physical model, 375.39 for FIR/IL/box, and 653.11
+for `dn`. Gradle 9's selected-task `--rerun` option is not full-matrix evidence
+on the empty backend lifecycle task and is not part of the verification
+command.
 
 The next profile after fixing the emitter showed a separate foreign-loading
 cost: every 1/2/4-byte metadata-table value and every byte scanned from
@@ -112,6 +110,32 @@ covariant-return bridges. Overall wall time and sampled totals remain noisy and
 are not a promise of a fixed five-second gain. Remaining ABI-key samples belong
 to producer-index construction and canonical-interface slot naming and must be
 profiled as separate owners before either is changed.
+
+The shared compiler performance reporter now recognizes `DotNet` as its own
+`PlatformType`; `-Xreport-perf` and JSON performance dumps no longer fail with
+`Unexpected platform DotNet (dotnet)`. The correction also exposed and removed
+overlapping phase accounting. In-memory KLIB metadata/IR serialization is
+reported as `IR SERIALIZATION`, backend lowerings as `IR LOWERING`, and CIL
+emission plus assembly as `BACKEND`. Packing the self-describing KLIB resource
+is a dynamic backend subphase because its physical declaration index exists
+only during emission; it is not misreported as an overlapping top-level KLIB
+writer.
+
+Two isolated installed-stdlib scale series exercised generic interfaces,
+default bodies, inheritance, method generics, function types, properties, and
+publication at 25/50/100 and 100/200/400 declaration families. In the larger
+series, 1,404/2,804/5,604 user lines changed backend time from 809 to 983 to
+1,252 ms and IR lowering from 385 to 554 to 820 ms. The sum of the measured
+top-level compiler phases changed from about 5.50 to 7.11 to 9.67 seconds.
+Four-times the source therefore produced roughly linear variable cost and no
+quadratic emitter or lowering signal. A 20 ms process observation deliberately
+distorted wall time and is not a benchmark, but established that the heaviest
+publication test starts five ILAsm processes; inspection confirmed five
+different producer/profile products rather than repeated assembly of one
+fixture. Ordinary codegen tests already consume the reusable profile products
+selected by the test-product ADR. Direct PE writing, emitter parallelism,
+broader caches, and cross-test product sharing remain unjustified without a new
+profile showing a material cost and a preserved isolation/freshness proof.
 
 That cache did not explain the apparent multi-hour product emission. A nested
 Stdlib declaration removed from the live codegen set was repeatedly

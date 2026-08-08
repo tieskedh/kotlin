@@ -22939,6 +22939,39 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testPerformanceReportingRecognizesDotNetAsItsOwnPlatform() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val directory = File(tmpdir, "performance-report").apply { mkdirs() }
+        val source = directory.resolve("library.kt").apply {
+            writeText("package performance\n\npublic fun answer(): Int = 42")
+        }
+        val performanceReport = directory.resolve("performance.json")
+
+        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                source.path,
+                "-verbose",
+                "${K2DotNetCompilerArguments::reportPerf.cliArgument}=true",
+                "${K2DotNetCompilerArguments::detailedPerf.cliArgument}=true",
+                "${K2DotNetCompilerArguments::dumpPerf.cliArgument}=${performanceReport.path}",
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                "${K2DotNetCompilerArguments::dotNetTarget.cliArgument}=netstandard2.0",
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Performance.Report",
+                K2DotNetCompilerArguments::destination.cliArgument, directory.path,
+            )
+        )
+
+        assertEquals(ExitCode.OK, exitCode, diagnostics)
+        assertTrue("PERF:" in diagnostics) { diagnostics }
+        assertTrue("IR SERIALIZATION" in diagnostics) { diagnostics }
+        assertTrue("BACKEND" in diagnostics) { diagnostics }
+        assertTrue("KLIB packaging" in diagnostics) { diagnostics }
+        assertTrue(directory.resolve("Performance.Report.dll").isFile) { diagnostics }
+        assertTrue(Regex("\"platform\"\\s*:\\s*\"DotNet\"").containsMatchIn(performanceReport.readText()))
+    }
+
+    @Test
     fun testDotNetTargetVocabularyKeepsIndependentPoliciesExplicit() {
         assertSame(DotNetTarget.NET48, DotNetTarget.DEFAULT)
         for (target in DotNetTarget.entries) {

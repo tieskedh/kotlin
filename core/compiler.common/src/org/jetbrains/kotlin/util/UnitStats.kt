@@ -138,6 +138,7 @@ enum class PlatformType {
     Common,
     Native,
     Wasm,
+    DotNet,
 }
 
 /**

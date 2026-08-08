@@ -216,6 +216,7 @@ abstract class PerformanceManager(val targetPlatform: TargetPlatform, val presen
         val platform = when {
             firstPlatformName.contains("JVM") -> PlatformType.JVM
             firstPlatformName.contains("Native") -> PlatformType.Native
+            firstPlatformName.contains("DotNet") -> PlatformType.DotNet
             targetPlatform.isJs() -> PlatformType.JS
             targetPlatform.isWasm() -> PlatformType.Wasm
             targetPlatform.isCommon() -> PlatformType.Common
