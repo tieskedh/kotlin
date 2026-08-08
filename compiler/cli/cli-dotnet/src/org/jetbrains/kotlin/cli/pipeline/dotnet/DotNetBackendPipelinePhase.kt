@@ -4,13 +4,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetBackend
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.dotNetProducedLibraryArtifact
 import org.jetbrains.kotlin.cli.pipeline.CheckCompilationErrors
-import org.jetbrains.kotlin.cli.pipeline.PerformanceNotifications
 import org.jetbrains.kotlin.cli.pipeline.PipelinePhase
 
 object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, DotNetBackendPipelineArtifact>(
     name = "DotNetBackendPipelinePhase",
-    preActions = setOf(PerformanceNotifications.BackendStarted),
-    postActions = setOf(PerformanceNotifications.BackendFinished, CheckCompilationErrors.CheckDiagnosticCollector),
+    postActions = setOf(CheckCompilationErrors.CheckDiagnosticCollector),
 ) {
     override fun executePhase(input: DotNetFir2IrPipelineArtifact): DotNetBackendPipelineArtifact {
         val kotlinMetadataResourceFactory:
