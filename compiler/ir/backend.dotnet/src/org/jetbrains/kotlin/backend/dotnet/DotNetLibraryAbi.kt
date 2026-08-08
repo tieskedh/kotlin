@@ -39,6 +39,7 @@ import org.jetbrains.kotlin.types.Variance
 import java.io.File
 import java.security.MessageDigest
 import java.util.Base64
+import java.util.IdentityHashMap
 import java.util.Properties
 
 /** Physical placement of one Kotlin-owned interface member's default implementation. */
@@ -1020,6 +1021,38 @@ private fun IrDeclaration.computeDotNetLibraryAbiKeyOrNull(
     return "$kind:${signature.render(IdSignatureRenderer.LEGACY)}"
 }
 
+/**
+ * Binding-index-local rendered identity table for the DLL's Kotlin-to-CLR binding index.
+ *
+ * The shared KLIB serializer's declaration table likewise computes one public
+ * [org.jetbrains.kotlin.ir.util.IdSignature] per declaration. The .NET binder additionally needs its stable textual
+ * form and declaration-kind prefix, so retain that final lookup key by IR identity instead of rebuilding and rendering
+ * the same signature at every binding query. Keep the lifetime on one [DotNetExternalDeclarations] instance: unlike
+ * external symbol signatures, local IR can still be changed by a later lowering, just as JVM signature caches must not
+ * outlive the IR shape from which they were derived.
+ */
+private class DotNetLibraryAbiKeyCache {
+    private data class Entry(
+        val kind: String,
+        val key: String?,
+    )
+
+    private val entries = IdentityHashMap<IrDeclaration, Entry>()
+    private val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
+
+    fun keyOrNull(declaration: IrDeclaration, kind: String): String? {
+        entries[declaration]?.let { entry ->
+            check(entry.kind == kind) {
+                "declaration ABI identity was requested as both '${entry.kind}' and '$kind'"
+            }
+            return entry.key
+        }
+        return declaration.computeDotNetLibraryAbiKeyOrNull(kind, signatureComputer).also { key ->
+            entries[declaration] = Entry(kind, key)
+        }
+    }
+}
+
 /** Public logical identity for metadata-backed records outside the KLIB physical-index builder. */
 internal fun IrDeclaration.dotNetLibraryAbiKeyOrNull(kind: String): String? =
     computeDotNetLibraryAbiKeyOrNull(
@@ -1265,7 +1298,7 @@ internal class DotNetExternalDeclarations(
     private val exactClassInfoByLogicalKey = hashMapOf<String, DotNetIlClassInfo>()
     private val classLinksInProgress = hashSetOf<String>()
     private val facadeInfoByPhysicalIdentity = hashMapOf<Pair<String, List<String>>, DotNetIlClassInfo>()
-    private val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
+    private val logicalKeys = DotNetLibraryAbiKeyCache()
 
     /**
      * Whether [irClass] has a producer-recorded physical CLR class in a bound library.
@@ -1275,26 +1308,26 @@ internal class DotNetExternalDeclarations(
      * declaration: Kotlin-owned generic classes and interfaces both record one erased owner.
      */
     fun hasClass(irClass: IrClass): Boolean {
-        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return false
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return false
         return declarations[logicalKey]?.declaration is DotNetPhysicalDeclaration.Class
     }
 
     /** Whether KLIB kind plus the producer index select an erased Kotlin-owned generic class. */
     fun hasGenericClass(irClass: IrClass): Boolean {
         if (irClass.isInterface || irClass.typeParameters.isEmpty()) return false
-        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return false
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return false
         return declarations[logicalKey]?.declaration is DotNetPhysicalDeclaration.Class
     }
 
     /** Whether KLIB kind plus the producer index select an erased Kotlin-owned generic interface. */
     fun hasGenericInterface(irClass: IrClass): Boolean {
         if (!irClass.isInterface || irClass.typeParameters.isEmpty()) return false
-        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return false
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return false
         return declarations[logicalKey]?.declaration is DotNetPhysicalDeclaration.Class
     }
 
     fun classInfoOrNull(irClass: IrClass, typeMapper: DotNetIlTypeMapper): DotNetIlClassInfo? {
-        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
         canonicalClassInfoByLogicalKey[logicalKey]?.let { return it }
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
@@ -1344,7 +1377,7 @@ internal class DotNetExternalDeclarations(
     fun exactClassInfoOrNull(@Suppress("UNUSED_PARAMETER") irClass: IrClass): DotNetIlClassInfo? = null
 
     fun staticInitializationOrNull(irClass: IrClass): DotNetBoundStaticInitialization? {
-        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
         val initialization = declaration.staticInitialization ?: return null
@@ -1352,7 +1385,7 @@ internal class DotNetExternalDeclarations(
     }
 
     fun objectInstanceOrNull(irClass: IrClass): DotNetBoundObjectInstance? {
-        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
         val objectInstance = declaration.objectInstance ?: return null
@@ -1360,7 +1393,7 @@ internal class DotNetExternalDeclarations(
     }
 
     fun enumEntryOrNull(entry: IrEnumEntry): DotNetBoundEnumEntry? {
-        val logicalKey = entry.computeDotNetLibraryAbiKeyOrNull("E", signatureComputer) ?: return null
+        val logicalKey = logicalKeys.keyOrNull(entry, "E") ?: return null
         val bound = declarations[logicalKey] ?: return null
         val enumEntry = bound.declaration as? DotNetPhysicalDeclaration.EnumEntry ?: return null
         return DotNetBoundEnumEntry(bound.library, enumEntry)
@@ -1385,7 +1418,7 @@ internal class DotNetExternalDeclarations(
         function: IrSimpleFunction,
         typeMapper: DotNetIlTypeMapper,
     ): DotNetIlFunctionInfo? {
-        val logicalKey = function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
         val containingClass = (function.parent as? IrClass)?.let { classInfoOrNull(it, typeMapper) }
@@ -1411,7 +1444,7 @@ internal class DotNetExternalDeclarations(
     fun interfaceDefaultImplementationOrNull(
         function: IrSimpleFunction,
     ): DotNetBoundInterfaceDefaultImplementation? {
-        val logicalKey = function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
         val implementation = declaration.interfaceDefaultImplementation ?: return null
@@ -1421,7 +1454,7 @@ internal class DotNetExternalDeclarations(
     fun defaultArgumentDispatcherOrNull(
         function: IrSimpleFunction,
     ): DotNetBoundDefaultArgumentDispatcher? {
-        val logicalKey = function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
         val dispatcher = declaration.defaultArgumentDispatcher ?: return null
@@ -1433,8 +1466,8 @@ internal class DotNetExternalDeclarations(
         inheritedMember: IrSimpleFunction,
         physicalView: DotNetInterfaceDefaultPromotionView = DotNetInterfaceDefaultPromotionView.CANONICAL,
     ): DotNetBoundInterfaceDefaultPromotion? {
-        val ownerLogicalKey = owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
-        val memberLogicalKey = inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val ownerLogicalKey = logicalKeys.keyOrNull(owner, "C") ?: return null
+        val memberLogicalKey = logicalKeys.keyOrNull(inheritedMember, "F") ?: return null
         val indexKey = "P:$ownerLogicalKey:$memberLogicalKey:${physicalView.name}"
         val bound = declarations[indexKey] ?: return null
         val promotion = bound.declaration as? DotNetPhysicalDeclaration.InterfaceDefaultPromotion ?: return null
@@ -1451,8 +1484,8 @@ internal class DotNetExternalDeclarations(
         inheritedMember: IrSimpleFunction,
         physicalView: DotNetInterfaceDefaultPromotionView,
     ): DotNetBoundGenericInterfaceViewBridge? {
-        val ownerLogicalKey = owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
-        val memberLogicalKey = inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val ownerLogicalKey = logicalKeys.keyOrNull(owner, "C") ?: return null
+        val memberLogicalKey = logicalKeys.keyOrNull(inheritedMember, "F") ?: return null
         val indexKey = "B:$ownerLogicalKey:$memberLogicalKey:${physicalView.name}"
         val bound = declarations[indexKey] ?: return null
         val bridge = bound.declaration as? DotNetPhysicalDeclaration.GenericInterfaceViewBridge ?: return null
@@ -1470,8 +1503,8 @@ internal class DotNetExternalDeclarations(
         owner: IrClass,
         inheritedMember: IrSimpleFunction,
     ): DotNetBoundCovariantReturnBridge? {
-        val ownerLogicalKey = owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
-        val memberLogicalKey = inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val ownerLogicalKey = logicalKeys.keyOrNull(owner, "C") ?: return null
+        val memberLogicalKey = logicalKeys.keyOrNull(inheritedMember, "F") ?: return null
         val indexKey = "R:$ownerLogicalKey:$memberLogicalKey"
         val bound = declarations[indexKey] ?: return null
         val bridge = bound.declaration as? DotNetPhysicalDeclaration.CovariantReturnBridge ?: return null
@@ -1489,8 +1522,8 @@ internal class DotNetExternalDeclarations(
         inheritedMember: IrSimpleFunction,
         physicalView: DotNetInterfaceDefaultPromotionView = DotNetInterfaceDefaultPromotionView.CANONICAL,
     ): DotNetBoundInterfaceDefaultClassForwarder? {
-        val ownerLogicalKey = owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
-        val memberLogicalKey = inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val ownerLogicalKey = logicalKeys.keyOrNull(owner, "C") ?: return null
+        val memberLogicalKey = logicalKeys.keyOrNull(inheritedMember, "F") ?: return null
         val indexKey = "W:$ownerLogicalKey:$memberLogicalKey:${physicalView.name}"
         val bound = declarations[indexKey] ?: return null
         val forwarder = bound.declaration as? DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder ?: return null
