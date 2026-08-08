@@ -16,14 +16,12 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: JVM-shaped `KCallable.callBy` for the admitted
-  `KFunction0` through `KFunction3` closure. Runtime surface level 23 interprets
-  exact `KParameter` map keys, while generated reference capabilities feed
-  omitted Kotlin defaults into the shared compiler lowering and construct fresh
-  exact empty varargs. Ordinary class defaults now use one JVM-shaped static
-  cross-module compiler ABI with an explicit receiver, shared by source and
-  reflective calls without CLR member rediscovery. Library ABI version 22 and
-  runtime surface level 23 reject either stale physical contract
+- Last completed feature: JVM-shaped `KFunction.isInline`, `isExternal`,
+  `isOperator`, `isInfix`, and `isSuspend` for the admitted `KFunction0`
+  through `KFunction3` closure. Exact KLIB/importer IR supplies the declaration
+  facts; one shared private base reads their versioned bits without acquiring
+  `KFunction` identity itself. Library ABI version 23 and runtime surface level
+  24 reject producer references or runtimes that predate the physical contract
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -37,8 +35,8 @@ substantial open programmes.
 
 ## Current green gate
 
-The named-call head passed the ordinary aggregate. The normal aggregate
-command is:
+The function-declaration-flags head passed the ordinary aggregate. The normal
+aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -52,18 +50,15 @@ The audited full-aggregate evidence covers 54 XML files and 1305 tests:
 - 92 library-integration tests
 - zero failures, errors, or skips
 
-The candidate head first rewrote all 51 FIR/IL/box XML suites and both `dn`
-suites. After correcting the one stale publication expectation exposed by that
-run, the same aggregate command completed its final confirmation at
-2026-08-08 02:50 local time in 29m09s. Gradle reused the unchanged six physical
-model tests and 51 immediately preceding final-head FIR/IL/box suites, and
-rewrote both `dn` suites. The resulting audited tree has a cumulative JUnit
-suite time of 2091.71 seconds: 0.13 for the physical model, 352.74 for
-FIR/IL/box, and 1738.84 for `dn`. Gradle 9's selected-task `--rerun` option is
-not full-matrix evidence on the empty backend lifecycle task and is not part of
-the verification command.
+The aggregate completed its final confirmation at 2026-08-08 04:18 local time
+in 35m35s. Gradle reused the unchanged six physical model tests, rewrote all 51
+FIR/IL/box suites, and rewrote both `dn` suites. The resulting audited tree has
+a cumulative JUnit suite time of 2114.22 seconds: 0.13 for the physical model,
+367.77 for FIR/IL/box, and 1746.32 for `dn`. Gradle 9's selected-task `--rerun`
+option is not full-matrix evidence on the empty backend lifecycle task and is
+not part of the verification command.
 
-The preceding structured-CLI review replaced the serializer input's
+An earlier structured-CLI review replaced the serializer input's
 ILAsm-shaped version string
 with the equivalent dotted CLR assembly-identity value; emitted CIL is
 unchanged. That head repeated all 6 model tests, the backend
@@ -73,8 +68,9 @@ across both runtime profiles. Those focused checks completed green in 18.5s
 and 4m21s respectively.
 
 The FIR/IL/box cumulative JUnit suite time fell from 3713.33 seconds on the
-callable-parameter head to 490.85 seconds on this head. Ordinary test modules no
-longer rebuild `Kotlin.Stdlib`; two exact-profile fixture producers do so once.
+callable-parameter head to 490.85 seconds on that structured-CLI head. Ordinary
+test modules no longer rebuild `Kotlin.Stdlib`; two exact-profile fixture
+producers do so once.
 The retained explicit source-product case still validates the complete emitted
 stdlib IL. Moving modern ILAsm compatibility to its eight-shape class removes
 318 redundant external writer invocations without dropping canonical assembly
@@ -82,13 +78,17 @@ of any golden. Compiling `arrayIterators` through the normal DLL consumer path
 also exposed and now pins the required erased `Iterator.Next(): object` bridge
 for an `IntIterator` subclass, which the former same-run bootstrap path hid.
 
-The named-call candidate separately passed eight semantic function and
-property lanes across both parsers and runtime profiles, the complete IL suite
-on both parsers, and separate portable-KLIB/imported-CLR/Roslyn/C# boundaries
-for ordinary and generic-interface defaults before the full aggregate. It also
-passed stale-library-ABI rejection and the corrected publication matrix. The
-preceding structured-CLI head passed the packed-KLIB loader owner suite (8
-tests), the
+Before the aggregate, the function-declaration-flags candidate separately
+passed an explicitly typed `KFunction0`, inline, inherited operator, infix,
+constructor, and ordinary negative shapes across both parsers and runtime
+profiles; the complete IL suite on both parsers; and separate
+portable-KLIB/imported-CLR/Roslyn/C# boundaries. It also passed producer- and
+consumer-created references, stale-library-ABI and runtime-surface rejection,
+and complete source-product publication. The preceding named-call candidate
+passed eight semantic function and property lanes across both parsers and
+runtime profiles, ordinary and generic-interface default boundaries, and its
+corrected publication matrix. The earlier structured-CLI head passed the
+packed-KLIB loader owner suite (8 tests), the
 BTA API-dump and FIR2IR test-generation owners without tracked generated
 churn, focused callable-parameter execution across both parsers and profiles,
 twelve updated callable/property IL golden cases across both parsers and every
@@ -711,10 +711,26 @@ omission creates its truthful invariant vector carrier. No System.Reflection,
 name lookup, target-exception wrapping, or second reflection-default ABI is
 introduced.
 
-Library ABI version 22 gates the static ordinary-class default-dispatch shape;
-runtime surface level 23 independently gates the new `KCallable.CallBy` slot
-and helpers. A consumer therefore rejects both an old library dispatcher ABI
-and an old runtime instead of discovering a missing method at execution.
+The five JVM-shaped `KFunction` declaration properties now use the exact
+KLIB/importer-IR target for inline, external, operator, infix, and suspend
+status. They are declared once on `KFunction` and inherited by the admitted
+`KFunction0` through `KFunction3`; the physical view remains one non-generic
+`Kotlin.KFunction` interface. The existing private function-reference flag
+carrier supplies five inherited virtual-final getters; its base does not
+implement `KFunction`, so internal adapters gain no reflection identity.
+Constructors and ordinary imported CLR interface methods report false, while
+resolved inherited operator status survives KLIB boundaries. Generated invoke
+adapters and runtime CLR reflection never become flag authority. Publishing
+`isSuspend` and `isExternal` does not admit suspend callable references or
+external linkage. Library ABI 23 rejects old references without declaration
+bits, and runtime surface 24 gates the five new physical getters before
+execution.
+
+Library ABI version 23 also retains the version-22 static ordinary-class
+default-dispatch shape; runtime surface level 24 includes the version-23
+`KCallable.CallBy` slot and helpers. A consumer therefore rejects both an old
+library callable ABI and an old runtime instead of discovering a missing
+method at execution.
 
 The general Common Comparable mapping is independently published and the enum
 product consumes the same KLIB identity, canonical classifier, typed C# view,
@@ -818,12 +834,11 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Complete the declaration facts shared by every admitted `KFunction0`
-   through `KFunction3` reference. Add JVM-shaped `KCallable` visibility and
-   modality first, then the `KFunction` inline/external/operator/infix/suspend
-   flags as one shared reference capability rather than arity-specific copies.
-   KLIB/importer IR remains authority; CLR method flags are physical evidence
-   only for foreign declarations.
+1. Complete JVM-shaped `KCallable` visibility and modality for every admitted
+   function and property reference. KLIB/importer IR remains authority; CLR
+   method flags are physical evidence only for foreign declarations. Keep this
+   distinct from the completed `KFunction` inline/external/operator/infix/
+   suspend property capability.
 2. Keep broad member enumeration, accessor objects, and type-use annotation
    reflection outside those declaration-fact tranches. Direct member-extension
    references remain coupled to later member enumeration.

@@ -424,6 +424,87 @@ $kClassSupportTypesIl
             |      ret
             |    }
             |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isInline() cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      ldc.i4 ${DotNetFunctionReferenceFlags.IS_INLINE}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isExternal() cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      ldc.i4 ${DotNetFunctionReferenceFlags.IS_EXTERNAL}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isOperator() cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      ldc.i4 ${DotNetFunctionReferenceFlags.IS_OPERATOR}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isInfix() cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      ldc.i4 ${DotNetFunctionReferenceFlags.IS_INFIX}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isSuspend() cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      ldc.i4 ${DotNetFunctionReferenceFlags.IS_SUSPEND}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .property instance bool isInline()
+            |    {
+            |      .get instance bool Kotlin.Runtime.Internal.FunctionReferenceBase::get_isInline()
+            |    }
+            |    .property instance bool isExternal()
+            |    {
+            |      .get instance bool Kotlin.Runtime.Internal.FunctionReferenceBase::get_isExternal()
+            |    }
+            |    .property instance bool isOperator()
+            |    {
+            |      .get instance bool Kotlin.Runtime.Internal.FunctionReferenceBase::get_isOperator()
+            |    }
+            |    .property instance bool isInfix()
+            |    {
+            |      .get instance bool Kotlin.Runtime.Internal.FunctionReferenceBase::get_isInfix()
+            |    }
+            |    .property instance bool isSuspend()
+            |    {
+            |      .get instance bool Kotlin.Runtime.Internal.FunctionReferenceBase::get_isSuspend()
+            |    }
+            |
             |    .method family hidebysig instance class Kotlin.Collections.List GetTypeParameters() cil managed
             |    {
             |      .maxstack 1

@@ -15751,6 +15751,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 package kcallable.boundary
 
                 import kotlin.reflect.KCallable
+                import kotlin.reflect.KFunction0
 
                 @Retention(AnnotationRetention.RUNTIME)
                 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY, AnnotationTarget.VALUE_PARAMETER)
@@ -15763,6 +15764,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 @LibraryCallableMarker
                 @BinaryCallableMarker
                 public fun libraryFunction(@LibraryCallableMarker("parameter") value: Int): Int = value + 1
+
+                public inline fun libraryInlineFunction(): Int = 42
+
+                public fun libraryInlineFunctionReference(): KFunction0<Int> = ::libraryInlineFunction
+
+                public open class LibraryOperatorBase {
+                    public open operator fun plus(value: Int): Int = value
+                }
+
+                public class LibraryOperatorDerived : LibraryOperatorBase() {
+                    override fun plus(value: Int): Int = value + 1
+                }
 
                 public fun libraryDefaults(
                     first: String = "library",
@@ -15858,6 +15871,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 import ForeignCallables.ForeignCallable
                 import kcallable.boundary.*
+                import kotlin.reflect.KFunction0
                 import kotlin.reflect.KFunction1
                 import kotlin.reflect.KTypeParameter
 
@@ -15901,6 +15915,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                     if (libraryFunctionReference.call(41) != 42) {
                         throw Error("KLIB positional function call")
+                    }
+
+                    val directInlineReference: KFunction0<Int> = ::libraryInlineFunction
+                    if (!directInlineReference.isInline || directInlineReference.isExternal ||
+                        directInlineReference.isOperator || directInlineReference.isInfix ||
+                        directInlineReference.isSuspend
+                    ) {
+                        throw Error("consumer-created KLIB inline declaration flags")
+                    }
+                    val storedInlineReference = libraryInlineFunctionReference()
+                    if (!storedInlineReference.isInline || storedInlineReference.isExternal ||
+                        storedInlineReference.isOperator || storedInlineReference.isInfix ||
+                        storedInlineReference.isSuspend
+                    ) {
+                        throw Error("producer-created KFunction0 declaration flags")
+                    }
+                    val inheritedOperatorReference = LibraryOperatorDerived::plus
+                    if (!inheritedOperatorReference.isOperator || inheritedOperatorReference.isInline ||
+                        inheritedOperatorReference.isExternal || inheritedOperatorReference.isInfix ||
+                        inheritedOperatorReference.isSuspend
+                    ) {
+                        throw Error("inherited KLIB operator declaration flags")
+                    }
+                    val constructorReference: KFunction0<LibraryOperatorDerived> = ::LibraryOperatorDerived
+                    if (constructorReference.isInline || constructorReference.isExternal ||
+                        constructorReference.isOperator || constructorReference.isInfix ||
+                        constructorReference.isSuspend
+                    ) {
+                        throw Error("constructor declaration flags")
                     }
 
                     val genericReference: KFunction1<String, String> = ::libraryIdentity
@@ -16054,6 +16097,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         throw Error("foreign method positional call")
                     }
                     val foreignTransform = ForeignCallable::Transform
+                    if (foreignTransform.isInline || foreignTransform.isExternal ||
+                        foreignTransform.isOperator || foreignTransform.isInfix || foreignTransform.isSuspend
+                    ) {
+                        throw Error("ordinary foreign CLR method declaration flags")
+                    }
                     val missingForeignValue = try {
                         foreignTransform.callBy(mapOf(foreignTransform.parameters[0] to foreign))
                         null
@@ -16118,6 +16166,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("Kotlin.KCallable'::'CallBy'(class [Kotlin.Runtime]'Kotlin.Collections.Map')" in consumerIl) {
             consumerIl
         }
+        assertTrue("Kotlin.KFunction'::'get_isInline'()" in consumerIl) { consumerIl }
+        assertTrue("Kotlin.KFunction'::'get_isOperator'()" in consumerIl) { consumerIl }
         runDotNet(
             modernDotNetHostOrSkip(),
             consumerAssembly,
@@ -16134,24 +16184,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         Kotlin.KCallable callable =
                             kcallable.boundary.KCallableLibraryKt.libraryFunctionReference();
+                        Kotlin.KFunction function =
+                            kcallable.boundary.KCallableLibraryKt.libraryInlineFunctionReference();
+                        if (!function.isInline || function.isExternal || function.isOperator ||
+                            function.isInfix || function.isSuspend) return 1;
                         Kotlin.KType returnType = callable.returnType;
                         Kotlin.KClass classifier = returnType.classifier as Kotlin.KClass;
-                        if (classifier == null || classifier.qualifiedName != "kotlin.Int") return 1;
-                        if (callable.typeParameters.Size != 0) return 2;
-                        if (callable.parameters.Size != 1) return 3;
+                        if (classifier == null || classifier.qualifiedName != "kotlin.Int") return 2;
+                        if (callable.typeParameters.Size != 0) return 3;
+                        if (callable.parameters.Size != 1) return 4;
                         object result = callable.Call(new object[] { 41 });
-                        if ((int)result != 42) return 4;
+                        if ((int)result != 42) return 5;
                         System.Reflection.MethodInfo callBy =
                             typeof(Kotlin.KCallable).GetMethod("CallBy", new[] { typeof(Kotlin.Collections.Map) });
-                        if (callBy == null || callBy.ReturnType != typeof(object)) return 5;
+                        if (callBy == null || callBy.ReturnType != typeof(object)) return 6;
                         try
                         {
                             callable.Call(new object[0]);
-                            return 6;
+                            return 7;
                         }
                         catch (System.ArgumentException exception)
                         {
-                            if (exception.Message != "Callable expects 1 arguments, but 0 were provided.") return 7;
+                            if (exception.Message != "Callable expects 1 arguments, but 0 were provided.") return 8;
                         }
                         return 0;
                     }
@@ -31577,6 +31631,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             File("libraries/stdlib/src/kotlin/contextParameters/ExperimentalContextParameters.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClass.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KCallable.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KFunction.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClasses.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClassifier.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KType.kt").absoluteFile
@@ -35818,10 +35873,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val library = produceLibraryWithRewrittenMetadata(
             assemblyName = "Stale.Embedded.Schema",
-            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "21"),
+            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "22"),
         )
         val diagnostics = compileAgainstRejectedDll(library)
-        assertTrue("uses unsupported CLR ABI index version '21'" in diagnostics) { diagnostics }
+        assertTrue("uses unsupported CLR ABI index version '22'" in diagnostics) { diagnostics }
     }
 
     @Test
