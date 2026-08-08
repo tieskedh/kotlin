@@ -131,6 +131,7 @@ private object DotNetPeMetadataReader {
         private val displayPath: String,
     ) {
         private val fileSize = input.length()
+        private var bufferedMetadataDirectory: BufferedMetadataDirectory? = null
         private val metadataImage: MetadataImage by lazy(::readMetadataImage)
 
         fun readManagedResource(resourceName: String): DotNetManagedResource? {
@@ -318,6 +319,7 @@ private object DotNetPeMetadataReader {
             }
             val metadataOffset =
                 rvaToFileOffset(metadataRva, metadataSize, sections, "CLI metadata directory")
+            bufferMetadataDirectory(metadataOffset, metadataSize)
             val streams = readMetadataStreams(metadataOffset, metadataSize)
             val tables = streams["#~"] ?: streams["#-"]
                 ?: malformed("CLI metadata has no tables stream")
@@ -334,6 +336,20 @@ private object DotNetPeMetadataReader {
                 resourcesRva = resourcesRva,
                 resourcesSize = resourcesSize,
             )
+        }
+
+        /**
+         * Metadata-table rows repeatedly alternate between the tables, strings, and blob heaps.
+         * Reading those fields through RandomAccessFile would seek for nearly every scalar and
+         * every byte of every string. Keep one bounded, read-local copy of the CLI metadata
+         * directory; unusually large images retain the exact checked random-access path.
+         */
+        private fun bufferMetadataDirectory(offset: Long, size: Long) {
+            if (size > MAX_BUFFERED_METADATA_SIZE || size > Int.MAX_VALUE.toLong()) return
+            checkRange(offset, size, "CLI metadata directory")
+            input.seek(offset)
+            val content = ByteArray(size.toInt()).also(input::readFully)
+            bufferedMetadataDirectory = BufferedMetadataDirectory(offset, content)
         }
 
         private fun readMetadataStreams(
@@ -2432,18 +2448,34 @@ private object DotNetPeMetadataReader {
 
         private fun readU1(offset: Long): Int {
             checkRange(offset, 1, "byte")
+            bufferedOffset(offset, 1)?.let { bufferedOffset ->
+                return bufferedMetadataDirectory!!.content[bufferedOffset].toInt() and 0xff
+            }
             input.seek(offset)
             return input.readUnsignedByte()
         }
 
         private fun readU2(offset: Long): Int {
             checkRange(offset, UINT16_SIZE, "16-bit value")
+            bufferedOffset(offset, UINT16_SIZE.toInt())?.let { bufferedOffset ->
+                val content = bufferedMetadataDirectory!!.content
+                return (content[bufferedOffset].toInt() and 0xff) or
+                        ((content[bufferedOffset + 1].toInt() and 0xff) shl 8)
+            }
             input.seek(offset)
             return input.readUnsignedByte() or (input.readUnsignedByte() shl 8)
         }
 
         private fun readU4(offset: Long): Long {
             checkRange(offset, UINT32_SIZE, "32-bit value")
+            bufferedOffset(offset, UINT32_SIZE.toInt())?.let { bufferedOffset ->
+                val content = bufferedMetadataDirectory!!.content
+                var value = 0L
+                repeat(4) { index ->
+                    value = value or ((content[bufferedOffset + index].toInt() and 0xff).toLong() shl (index * 8))
+                }
+                return value
+            }
             input.seek(offset)
             var value = 0L
             repeat(4) { index ->
@@ -2454,6 +2486,14 @@ private object DotNetPeMetadataReader {
 
         private fun readU8(offset: Long): Long {
             checkRange(offset, UINT64_SIZE, "64-bit value")
+            bufferedOffset(offset, UINT64_SIZE.toInt())?.let { bufferedOffset ->
+                val content = bufferedMetadataDirectory!!.content
+                var value = 0L
+                repeat(8) { index ->
+                    value = value or ((content[bufferedOffset + index].toInt() and 0xff).toLong() shl (index * 8))
+                }
+                return value
+            }
             input.seek(offset)
             var value = 0L
             repeat(8) { index ->
@@ -2464,8 +2504,19 @@ private object DotNetPeMetadataReader {
 
         private fun readBytes(offset: Long, size: Int): ByteArray {
             checkRange(offset, size.toLong(), "byte sequence")
+            bufferedOffset(offset, size)?.let { bufferedOffset ->
+                return bufferedMetadataDirectory!!.content.copyOfRange(bufferedOffset, bufferedOffset + size)
+            }
             input.seek(offset)
             return ByteArray(size).also(input::readFully)
+        }
+
+        private fun bufferedOffset(offset: Long, size: Int): Int? {
+            val buffered = bufferedMetadataDirectory ?: return null
+            val relative = offset - buffered.offset
+            if (relative < 0 || relative > buffered.content.size.toLong()) return null
+            if (size < 0 || size.toLong() > buffered.content.size.toLong() - relative) return null
+            return relative.toInt()
         }
 
         private fun checkMetadataRange(
@@ -2640,6 +2691,11 @@ private object DotNetPeMetadataReader {
     )
 
     private data class MetadataStream(val offset: Long, val size: Long)
+
+    private data class BufferedMetadataDirectory(
+        val offset: Long,
+        val content: ByteArray,
+    )
 
     private data class BlobHeapEntry(val offset: Long, val size: Long)
 
@@ -2854,5 +2910,6 @@ private object DotNetPeMetadataReader {
     private const val MAX_SECTION_COUNT = 1024
     private const val MAX_STREAM_COUNT = 64
     private const val MAX_STREAM_NAME_BYTES = 32
+    private const val MAX_BUFFERED_METADATA_SIZE = 64L * 1024 * 1024
     private const val MAX_MANAGED_RESOURCE_SIZE = 512L * 1024 * 1024
 }
