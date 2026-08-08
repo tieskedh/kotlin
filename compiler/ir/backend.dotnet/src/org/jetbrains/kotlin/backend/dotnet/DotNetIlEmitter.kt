@@ -1018,6 +1018,14 @@ internal class DotNetIlEmitter(
         }
 
         do {
+            val progressStateAtRoundStart = listOf(
+                availableClasses.size,
+                availableFunctions.size,
+                classSkipReasons.size,
+                skipReasons.size,
+                propertySkipReasons.size,
+                failedInitializerFiles.size,
+            )
             // Type mapping and external callable resolution populate this set while rendering.
             // A failed declaration forces another fixpoint round, so clearing here guarantees
             // that the final set describes only IL which actually survived emission.
@@ -1147,6 +1155,20 @@ internal class DotNetIlEmitter(
                 if (failure.entry !in availableFunctions) continue
                 staticInitializationFailureFieldLines[file] =
                     renderField(failure.failureState, typeMapper, isStatic = true)
+            }
+            if (anyDeclarationRemoved) {
+                val progressStateAtRoundEnd = listOf(
+                    availableClasses.size,
+                    availableFunctions.size,
+                    classSkipReasons.size,
+                    skipReasons.size,
+                    propertySkipReasons.size,
+                    failedInitializerFiles.size,
+                )
+                check(progressStateAtRoundEnd != progressStateAtRoundStart) {
+                    "Internal .NET backend error: IL emission fixpoint requested another round " +
+                            "without changing the live declaration or diagnostic state"
+                }
             }
         } while (anyDeclarationRemoved)
 
@@ -1893,6 +1915,7 @@ internal class DotNetIlEmitter(
             if (
                 superClass != null &&
                 superClass !in moduleClasses &&
+                DotNetRuntimeTypes.classInfoFor(superClass) == null &&
                 !externalDeclarations.hasClass(superClass) &&
                 DotNetStdlibLibrary.publicImplementationClassInfoOrNull(superClass) == null &&
                 DotNetMappedExceptions.mappedEntry(superClass.fqNameWhenAvailable) == null &&
@@ -2573,7 +2596,13 @@ internal class DotNetIlEmitter(
         var hasClassInitializer = false
         val declaredSignatureTypeMapper = declaredGenericTypeMapper.declaredGenericInterfaceSignatureView()
         val exactSignatureTypeMapper = exactGenericTypeMapper.exactGenericInterfaceSignatureView()
-        val classFunctions = availableFunctions.toMutableMap()
+        // A class only refines the physical owner/signature of its own members while that
+        // class is being rendered. Copying the complete module-wide function table here made
+        // product builds quadratic in the number of classes (and repeated the copy for every
+        // fixpoint round). Keep the same read-through semantics with a small local overlay.
+        // Nested classes deliberately still receive [availableFunctions], as before: their
+        // physical member view is independent from the enclosing class's temporary view.
+        val classFunctions = DotNetClassFunctionInfoOverlay(availableFunctions)
 
         fun typeMapperForMember(member: IrSimpleFunction): DotNetIlTypeMapper {
             return when (member.origin.dotNetGenericInterfaceBridgeMemberViewOrNull) {
@@ -2590,7 +2619,7 @@ internal class DotNetIlEmitter(
                 member.dotNetSignature(memberTypeMapper),
                 classFunctions[member]?.physicalMethodName,
             )
-            classFunctions[member] = memberInfo
+            classFunctions.putLocal(member, memberInfo)
             val rendered = DotNetIlMethodCodegen(
                 function = member,
                 functionInfo = memberInfo,
@@ -2625,6 +2654,7 @@ internal class DotNetIlEmitter(
                     // nested `.class` block inside this class's body. A missing entry is expected
                     // after its own gate/render failure: omitting that child block does not make
                     // an otherwise independent metadata parent invalid.
+                    if (!typeMapper.isLocallyEmittableClass(declaration)) continue
                     val nestedClassInfo = typeMapper.classInfoOrNull(declaration) ?: continue
                     val rendered = try {
                         renderUserClass(
@@ -3823,6 +3853,31 @@ internal class DotNetIlEmitter(
             appendLine("}")
         }
         appendLine()
+    }
+}
+
+/**
+ * Read-through view used while one class refines its members' physical signatures.
+ *
+ * Normal method emission only performs keyed lookups. [entries] remains a complete, correct
+ * map view for diagnostics or future callers, but materializes the union only when a caller
+ * actually iterates it. This keeps the ordinary path proportional to the number of members in
+ * the current class rather than to the number of functions in the complete module.
+ */
+private class DotNetClassFunctionInfoOverlay(
+    private val parent: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
+) : AbstractMap<IrSimpleFunction, DotNetIlFunctionInfo>() {
+    private val local = LinkedHashMap<IrSimpleFunction, DotNetIlFunctionInfo>()
+
+    override fun get(key: IrSimpleFunction): DotNetIlFunctionInfo? = local[key] ?: parent[key]
+
+    override fun containsKey(key: IrSimpleFunction): Boolean = key in local || key in parent
+
+    override val entries: Set<Map.Entry<IrSimpleFunction, DotNetIlFunctionInfo>>
+        get() = (parent + local).entries
+
+    fun putLocal(key: IrSimpleFunction, value: DotNetIlFunctionInfo) {
+        local[key] = value
     }
 }
 

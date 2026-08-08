@@ -27,20 +27,12 @@ import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isBoolean
-import org.jetbrains.kotlin.ir.types.isByte
-import org.jetbrains.kotlin.ir.types.isChar
-import org.jetbrains.kotlin.ir.types.isDouble
-import org.jetbrains.kotlin.ir.types.isFloat
 import org.jetbrains.kotlin.ir.types.isInt
-import org.jetbrains.kotlin.ir.types.isLong
-import org.jetbrains.kotlin.ir.types.isShort
 import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
-import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.types.isNullableString
 import org.jetbrains.kotlin.ir.types.isString
-import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.erasedUpperBound
@@ -383,7 +375,8 @@ internal fun IrSimpleFunction.isDotNetErasedCallableInvoke(): Boolean {
 
 /** Whether this is a KCallable invocation whose covariant logical result uses one object CLR slot. */
 internal fun IrSimpleFunction.isDotNetKCallableInvocation(): Boolean {
-    if (name.asString() !in setOf("call", "callBy")) return false
+    val methodName = name.asString()
+    if (methodName != "call" && methodName != "callBy") return false
     fun IrSimpleFunction.hasKCallableOwner(): Boolean =
         (parent as? IrClass)?.fqNameWhenAvailable?.asString() == "kotlin.reflect.KCallable"
     return hasKCallableOwner() || allOverridden().any(IrSimpleFunction::hasKCallableOwner)
@@ -391,7 +384,8 @@ internal fun IrSimpleFunction.isDotNetKCallableInvocation(): Boolean {
 
 /** Whether this is a fixed-arity KProperty get/set member with an erased physical CLR slot. */
 internal fun IrSimpleFunction.isDotNetErasedPropertyAccess(): Boolean {
-    if (name.asString() !in setOf("get", "set")) return false
+    val methodName = name.asString()
+    if (methodName != "get" && methodName != "set") return false
     if ((parent as? IrClass)?.dotNetFixedPropertyArityOrNull() != null) return true
     return allOverridden().any { overridden ->
         (overridden.parent as? IrClass)?.dotNetFixedPropertyArityOrNull() != null
@@ -466,6 +460,7 @@ internal class DotNetIlTypeMapper private constructor(
     private val genericClasses: Map<IrClass, DotNetGenericClassInfo>,
     private val comparableInterfaceInfo: DotNetGenericInterfaceInfo,
     private val genericInterfaceMapping: DotNetGenericInterfaceMapping,
+    private val classifierInfoCache: DotNetClassifierInfoCache,
     private val stdlibClasses: MutableMap<IrClass, DotNetIlClassInfo>,
     private val stdlibGenericClasses: MutableMap<IrClass, DotNetGenericClassInfo>,
     private val stdlibClassLinksInProgress: MutableSet<IrClass>,
@@ -490,6 +485,7 @@ internal class DotNetIlTypeMapper private constructor(
         genericClasses,
         dotNetComparableInterfaceInfo(coreLibrary),
         DotNetGenericInterfaceMapping.CANONICAL,
+        DotNetClassifierInfoCache(),
         mutableMapOf(),
         mutableMapOf(),
         mutableSetOf(),
@@ -507,12 +503,49 @@ internal class DotNetIlTypeMapper private constructor(
             genericClasses,
             comparableInterfaceInfo,
             mapping,
+            classifierInfoCache,
             stdlibClasses,
             stdlibGenericClasses,
             stdlibClassLinksInProgress,
             stdlibAssemblyName,
             assemblyReferenceSink,
         )
+
+    internal fun classifierInfo(irClass: IrClass): DotNetClassifierInfo = classifierInfoCache[irClass]
+
+    private fun IrType.classifierInfoOrNull(): DotNetClassifierInfo? =
+        ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner?.let(classifierInfoCache::get)
+
+    private fun IrType.isDotNetGenericArray(): Boolean =
+        classifierInfoOrNull()?.builtinKind == DotNetBuiltinClassifierKind.ARRAY
+
+    private fun IrType.isSupportedDotNetPrimitiveArray(): Boolean = when (classifierInfoOrNull()?.builtinKind) {
+        DotNetBuiltinClassifierKind.BOOLEAN_ARRAY,
+        DotNetBuiltinClassifierKind.BYTE_ARRAY,
+        DotNetBuiltinClassifierKind.SHORT_ARRAY,
+        DotNetBuiltinClassifierKind.INT_ARRAY,
+        DotNetBuiltinClassifierKind.LONG_ARRAY,
+        DotNetBuiltinClassifierKind.FLOAT_ARRAY,
+        DotNetBuiltinClassifierKind.DOUBLE_ARRAY,
+        DotNetBuiltinClassifierKind.CHAR_ARRAY,
+            -> true
+        else -> false
+    }
+
+    private fun IrType.isDotNetCharSequenceType(): Boolean =
+        classifierInfoOrNull()?.isCharSequence == true
+
+    /**
+     * Direct String identity is a cached classifier fact. A type parameter keeps the existing
+     * Common-bound rule, but its direct bounds use the same cache instead of signature predicates.
+     */
+    private fun IrType.isDotNetStringType(classifierInfo: DotNetClassifierInfo?): Boolean {
+        if (classifierInfo?.builtinKind == DotNetBuiltinClassifierKind.STRING) return true
+        val typeParameter = ((this as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner ?: return false
+        return typeParameter.superTypes.any { bound ->
+            bound.classifierInfoOrNull()?.builtinKind == DotNetBuiltinClassifierKind.STRING
+        }
+    }
 
     private fun canonicalGenericInterfaceView(): DotNetIlTypeMapper =
         withGenericInterfaceMapping(DotNetGenericInterfaceMapping.CANONICAL)
@@ -546,12 +579,12 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun isErasedGenericInterface(irClass: IrClass): Boolean =
         irClass.isInterface && (genericInterfaces.containsKey(irClass) ||
-                DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass) ||
+                DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass, classifierInfo(irClass)) ||
                 externalDeclarations.hasGenericInterface(irClass))
 
     fun isErasedGenericClass(irClass: IrClass): Boolean =
         genericClasses.containsKey(irClass) ||
-                DotNetRuntimeTypes.erasedGenericClassInfoFor(irClass) != null ||
+                DotNetRuntimeTypes.erasedGenericClassInfoFor(irClass, classifierInfo(irClass)) != null ||
                 stdlibGenericClassInfoOrNull(irClass) != null ||
                 externalDeclarations.hasGenericClass(irClass)
 
@@ -560,6 +593,15 @@ internal class DotNetIlTypeMapper private constructor(
         val irClass = (simpleType.classifier as? IrClassSymbol)?.owner ?: return false
         return isErasedGenericClass(irClass)
     }
+
+    /**
+     * Whether a declaration from the module currently being emitted survived its codegen gate.
+     *
+     * This is intentionally distinct from [classInfoOrNull], which may reconstruct physical
+     * information for resolution-only stdlib declarations and external libraries. A local class
+     * omitted by the live emission set must never be resurrected through those fallback paths.
+     */
+    fun isLocallyEmittableClass(irClass: IrClass): Boolean = irClass in availableClasses
 
     /**
      * Whether a `System.Array` carrier still has a source-legal element-write contract.
@@ -575,7 +617,7 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun genericClassInfoOrNull(irClass: IrClass): DotNetGenericClassInfo? =
         (genericClasses[irClass]
-            ?: DotNetRuntimeTypes.erasedGenericClassInfoFor(irClass)
+            ?: DotNetRuntimeTypes.erasedGenericClassInfoFor(irClass, classifierInfo(irClass))
             // A loaded library's recorded physical ABI is authoritative for owner paths, method
             // names, and graph links. The stdlib reconstruction exists only for same-module
             // bootstrap sources, where no external physical record can exist yet.
@@ -643,8 +685,8 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun genericInterfaceInfoOrNull(irClass: IrClass): DotNetGenericInterfaceInfo? =
         if (!irClass.isInterface) null else (genericInterfaces[irClass]
-            ?: comparableInterfaceInfo.takeIf { irClass.isDotNetComparableClass() }
-            ?: DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)
+            ?: comparableInterfaceInfo.takeIf { classifierInfo(irClass).isComparable }
+            ?: DotNetRuntimeTypes.genericInterfaceInfoFor(irClass, classifierInfo(irClass))
             ?: run {
                 val canonical = externalDeclarations.classInfoOrNull(irClass, canonicalGenericInterfaceView())
                     ?: return null
@@ -660,7 +702,7 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun genericInterfaceTypedMethodName(member: IrSimpleFunction): String =
         member.dotNetAbiMethodName(
-            if ((member.parent as? IrClass)?.isDotNetComparableClass() == true) {
+            if ((member.parent as? IrClass)?.let(::classifierInfo)?.isComparable == true) {
                 "CompareTo"
             } else {
                 DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(member) ?: member.dotNetIlMethodName()
@@ -704,8 +746,9 @@ internal class DotNetIlTypeMapper private constructor(
      * through this lookup so a removed class fails its users instead of leaving stale IL text.
      */
     fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
-        val runtimeGenericInfo = DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)
-        val mappedComparableInfo = comparableInterfaceInfo.takeIf { irClass.isDotNetComparableClass() }
+        val classifierInfo = classifierInfo(irClass)
+        val runtimeGenericInfo = DotNetRuntimeTypes.genericInterfaceInfoFor(irClass, classifierInfo)
+        val mappedComparableInfo = comparableInterfaceInfo.takeIf { classifierInfo.isComparable }
         val genericClassInfo = genericClassInfoOrNull(irClass)
         return (genericClassInfo?.classInfo ?: when (genericInterfaceMapping.physicalView) {
             DotNetGenericInterfaceView.CANONICAL ->
@@ -727,7 +770,7 @@ internal class DotNetIlTypeMapper private constructor(
                     ?: externalDeclarations.declaredClassInfoOrNull(irClass)
                     ?: availableClasses[irClass]
         }
-            ?: DotNetRuntimeTypes.classInfoFor(irClass)
+            ?: DotNetRuntimeTypes.classInfoFor(irClass, classifierInfo)
             ?: externalDeclarations.classInfoOrNull(irClass, this)
             ?: stdlibClassInfoOrNull(irClass)
             ?: importedClrDeclarations.classInfoOrNull(irClass)).also { classInfo ->
@@ -744,7 +787,8 @@ internal class DotNetIlTypeMapper private constructor(
         } else {
             externalDeclarations.functionInfoOrNull(function, this) ?: localStdlibFunction()
         }
-        return (DotNetRuntimeTypes.reflectionFunctionInfoOrNull(function, this)
+        return (DotNetRuntimeTypes.enumFunctionInfoOrNull(function, this)
+            ?: DotNetRuntimeTypes.reflectionFunctionInfoOrNull(function, this)
             ?: comparableFunctionInfoOrNull(function)
             ?: DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
             ?: libraryFunction
@@ -755,7 +799,7 @@ internal class DotNetIlTypeMapper private constructor(
 
     private fun comparableFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
         val owner = function.parent as? IrClass ?: return null
-        if (!owner.isDotNetComparableClass() || function.name.asString() != "compareTo") return null
+        if (!classifierInfo(owner).isComparable || function.name.asString() != "compareTo") return null
         return DotNetIlFunctionInfo(
             owner = comparableInterfaceInfo.canonicalClassInfo,
             signature = function.dotNetSignature(canonicalGenericInterfaceSignatureView()),
@@ -765,7 +809,13 @@ internal class DotNetIlTypeMapper private constructor(
 
     /** Maps [type] in return position; CLR `void` is the return encoding of Kotlin `Unit`. */
     fun toDotNetIlReturnType(type: IrType): DotNetIlReturnType? {
-        if (type.isUnit()) return DotNetIlReturnType.Void
+        val simpleType = type as? IrSimpleType
+        if (
+            simpleType?.isMarkedNullable() == false &&
+            simpleType.classifierInfoOrNull()?.builtinKind == DotNetBuiltinClassifierKind.UNIT
+        ) {
+            return DotNetIlReturnType.Void
+        }
         return DotNetIlReturnType.Value(toDotNetIlValueType(type) ?: return null)
     }
 
@@ -826,7 +876,7 @@ internal class DotNetIlTypeMapper private constructor(
      */
     fun toDotNetIlImplementedInterfaceType(type: IrSimpleType): DotNetIlValueType? {
         val irClass = (type.classifier as? IrClassSymbol)?.owner ?: return null
-        return if (irClass.isDotNetCharSequenceClass()) {
+        return if (classifierInfo(irClass).isCharSequence) {
             DotNetRuntimeTypes.charSequenceImplementationType.also(::recordAssemblyReferences)
         } else {
             toDotNetIlValueType(type)
@@ -834,11 +884,20 @@ internal class DotNetIlTypeMapper private constructor(
     }
 
     private fun mapDotNetIlValueType(type: IrType): DotNetIlValueType? {
+        val simpleType = type as? IrSimpleType
+        val topClassifierInfo = simpleType
+            ?.classifier
+            ?.let { it as? IrClassSymbol }
+            ?.owner
+            ?.let(::classifierInfo)
+        val isMarkedNullable = simpleType?.isMarkedNullable() == true
         // `void` is legal only in a CLR method's return slot. Every other occurrence of
         // Kotlin `Unit` is the ordinary singleton reference value, matching the JVM's
         // `kotlin.Unit` parameter/field representation and the expression codegen contract.
-        if (type.isUnit()) return DotNetRuntimeTypes.unitType
-        DotNetRuntimeTypes.mapCompilerRuntimeType(type)?.let { return it }
+        if (!isMarkedNullable && topClassifierInfo?.builtinKind == DotNetBuiltinClassifierKind.UNIT) {
+            return DotNetRuntimeTypes.unitType
+        }
+        DotNetRuntimeTypes.mapCompilerRuntimeType(type, topClassifierInfo)?.let { return it }
         if (type.referencesErasedOwnerParameterForCurrentView()) {
             if (type.isDotNetGenericArray()) {
                 // An erased class owner cannot choose one CLR vector element type for Array<T>.
@@ -862,40 +921,45 @@ internal class DotNetIlTypeMapper private constructor(
                 return DotNetIlValueType.Object
             }
         }
+        if (!isMarkedNullable) {
+            when (topClassifierInfo?.builtinKind) {
+                DotNetBuiltinClassifierKind.BOOLEAN -> return DotNetIlValueType.Boolean
+                DotNetBuiltinClassifierKind.BYTE -> return DotNetIlValueType.Int8
+                DotNetBuiltinClassifierKind.SHORT -> return DotNetIlValueType.Int16
+                DotNetBuiltinClassifierKind.INT -> return DotNetIlValueType.Int32
+                DotNetBuiltinClassifierKind.LONG -> return DotNetIlValueType.Int64
+                DotNetBuiltinClassifierKind.FLOAT -> return DotNetIlValueType.Float32
+                DotNetBuiltinClassifierKind.DOUBLE -> return DotNetIlValueType.Float64
+                DotNetBuiltinClassifierKind.CHAR -> return DotNetIlValueType.Char
+                else -> {}
+            }
+        }
         return when {
-            type.isBoolean() -> DotNetIlValueType.Boolean
-            type.isByte() -> DotNetIlValueType.Int8
-            type.isShort() -> DotNetIlValueType.Int16
-            type.isInt() -> DotNetIlValueType.Int32
-            type.isLong() -> DotNetIlValueType.Int64
-            type.isFloat() -> DotNetIlValueType.Float32
-            type.isDouble() -> DotNetIlValueType.Float64
-            type.isChar() -> DotNetIlValueType.Char
             // An outer nullable occurrence of every open parameter uses one declaration-stable
             // boxed-or-null carrier. This must precede the String-bound shortcut: T : String
             // narrows non-null T to string, but T? still has the uniform open-nullable ABI.
             type.isOpenNullableTypeParameter() -> DotNetIlValueType.Object
-            type.isDotNetStringType() -> DotNetIlValueType.String
+            type.isDotNetStringType(topClassifierInfo) -> DotNetIlValueType.String
             // The CLR has no root that contains exactly Kotlin's six numeric primitive boxes.
             // Number therefore uses the same classified-object carrier already selected by
             // KClass/RTTI; exact scalar values remain unmodified and keep their own box identity.
-            type.classFqName == StandardNames.FqNames.number.toSafe() -> DotNetIlValueType.Object
+            topClassifierInfo?.builtinKind == DotNetBuiltinClassifierKind.NUMBER -> DotNetIlValueType.Object
             // System.String is sealed and cannot implement a Kotlin-owned interface. As on JS,
             // the logical interface therefore uses an object carrier plus runtime classification;
             // this arm is only the direct CharSequence classifier, never an arbitrary subtype or
             // a type parameter bounded by it (those retain their own physical token).
             type.isDotNetCharSequenceType() -> DotNetIlValueType.Object
-            type.isDotNetAnnotationBaseType() ->
+            topClassifierInfo?.builtinKind == DotNetBuiltinClassifierKind.ANNOTATION ->
                 DotNetIlValueType.MappedClass("${coreLibrary.reference}System.Attribute")
-            type.isAny() || type.isNullableAny() -> DotNetIlValueType.Object
+            topClassifierInfo?.builtinKind == DotNetBuiltinClassifierKind.ANY -> DotNetIlValueType.Object
             type.isSupportedDotNetPrimitiveArray() -> toPrimitiveArrayType(type)
             type.isDotNetGenericArray() -> toGenericArrayTypeOrNull(type)
             // Both nullable and non-null bottom types were already mapped above to the same
             // runtime-owned reference carrier, mirroring the JVM's java.lang.Void mapping.
             // Kotlin nullability metadata retains the distinction; codegen performs the legal
             // Nothing? -> arbitrary nullable-type coercion without claiming CLR assignability.
-            else -> toNullablePrimitiveTypeOrNull(type)
-                ?: toMappedExceptionTypeOrNull(type)
+            else -> toNullablePrimitiveTypeOrNull(type, topClassifierInfo)
+                ?: toMappedExceptionTypeOrNull(topClassifierInfo)
                 ?: toUserClassTypeOrNull(type)
                 ?: toTypeParameterTypeOrNull(type)
         }
@@ -903,7 +967,7 @@ internal class DotNetIlTypeMapper private constructor(
 
     /** Maps a specialized Kotlin array to its canonical Kotlin.Runtime wrapper reference. */
     private fun toPrimitiveArrayType(type: IrType): DotNetIlValueType.PrimitiveArray {
-        val entry = DotNetPrimitiveArrays.entry(type.classFqName)
+        val entry = DotNetPrimitiveArrays.entry(type.classifierInfoOrNull()?.fqName)
             ?: error("Internal .NET backend error: unsupported primitive-array classifier ${type.render()}")
         return DotNetIlValueType.PrimitiveArray(entry.elementType)
     }
@@ -954,17 +1018,20 @@ internal class DotNetIlTypeMapper private constructor(
      * nullability marker — the positive-space complement of the not-null `isInt()` family used
      * above (`Int?` fails `isInt()` because `isNotNullClassType` requires `!isMarkedNullable`).
      */
-    private fun toNullablePrimitiveTypeOrNull(type: IrType): DotNetIlValueType.NullableValue? {
+    private fun toNullablePrimitiveTypeOrNull(
+        type: IrType,
+        classifierInfo: DotNetClassifierInfo?,
+    ): DotNetIlValueType.NullableValue? {
         if (type !is IrSimpleType || !type.isMarkedNullable()) return null
-        val elementType = when (type.classFqName) {
-            StandardNames.FqNames._boolean.toSafe() -> DotNetIlValueType.Boolean
-            StandardNames.FqNames._byte.toSafe() -> DotNetIlValueType.Int8
-            StandardNames.FqNames._short.toSafe() -> DotNetIlValueType.Int16
-            StandardNames.FqNames._int.toSafe() -> DotNetIlValueType.Int32
-            StandardNames.FqNames._long.toSafe() -> DotNetIlValueType.Int64
-            StandardNames.FqNames._float.toSafe() -> DotNetIlValueType.Float32
-            StandardNames.FqNames._double.toSafe() -> DotNetIlValueType.Float64
-            StandardNames.FqNames._char.toSafe() -> DotNetIlValueType.Char
+        val elementType = when (classifierInfo?.builtinKind) {
+            DotNetBuiltinClassifierKind.BOOLEAN -> DotNetIlValueType.Boolean
+            DotNetBuiltinClassifierKind.BYTE -> DotNetIlValueType.Int8
+            DotNetBuiltinClassifierKind.SHORT -> DotNetIlValueType.Int16
+            DotNetBuiltinClassifierKind.INT -> DotNetIlValueType.Int32
+            DotNetBuiltinClassifierKind.LONG -> DotNetIlValueType.Int64
+            DotNetBuiltinClassifierKind.FLOAT -> DotNetIlValueType.Float32
+            DotNetBuiltinClassifierKind.DOUBLE -> DotNetIlValueType.Float64
+            DotNetBuiltinClassifierKind.CHAR -> DotNetIlValueType.Char
             else -> return null
         }
         return DotNetIlValueType.NullableValue(elementType, coreLibrary.reference)
@@ -977,8 +1044,10 @@ internal class DotNetIlTypeMapper private constructor(
      * and `string`). A [rejected][DotNetMappedExceptions.Entry.Rejected] entry fails loudly with
      * its per-type reason instead of falling through to a generic diagnostic.
      */
-    private fun toMappedExceptionTypeOrNull(type: IrType): DotNetIlValueType.MappedClass? =
-        when (val entry = type.classFqName?.let(DotNetMappedExceptions.entries::get)) {
+    private fun toMappedExceptionTypeOrNull(
+        classifierInfo: DotNetClassifierInfo?,
+    ): DotNetIlValueType.MappedClass? =
+        when (val entry = classifierInfo?.fqName?.let(DotNetMappedExceptions.entries::get)) {
             is DotNetMappedExceptions.Entry.Mapped ->
                 DotNetIlValueType.MappedClass(entry.carrierTypeRef(coreLibrary.reference))
             is DotNetMappedExceptions.Entry.Rejected -> dotNetUnsupported(entry.reason)

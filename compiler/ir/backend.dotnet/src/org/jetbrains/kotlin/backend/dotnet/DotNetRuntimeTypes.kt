@@ -12,8 +12,6 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.classOrNull
-import org.jetbrains.kotlin.ir.types.isNothing
-import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.isKFunction
@@ -63,6 +61,20 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
     val nothingType = DotNetIlValueType.UserClass(nothingClass)
+
+    private val enumClass = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Enum",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+    private val enumGenericClass = DotNetGenericClassInfo(enumClass)
+    private val enumCompanionClass = DotNetIlClassInfo(
+        ilClassName = "Companion",
+        enclosingClass = enumClass,
+    )
+    private val enumCompanionStaticsClass = DotNetIlClassInfo(
+        ilClassName = "<CompanionStatics>",
+        enclosingClass = enumClass,
+    )
 
     private val charSequenceClass = DotNetIlClassInfo(
         ilClassName = "Kotlin.CharSequence",
@@ -509,60 +521,78 @@ internal object DotNetRuntimeTypes {
         }
     }
 
-    fun classInfoFor(irClass: IrClass): DotNetIlClassInfo? {
-        genericInterfaceInfoFor(irClass)?.let { return it.canonicalClassInfo }
+    fun classInfoFor(
+        irClass: IrClass,
+        classifierInfo: DotNetClassifierInfo = DotNetClassifierInfo.derive(irClass),
+    ): DotNetIlClassInfo? {
+        genericInterfaceInfoFor(irClass, classifierInfo)?.let { return it.canonicalClassInfo }
         return when {
-            irClass.isDotNetCharSequenceClass() -> charSequenceClass
+            classifierInfo.isCharSequence -> charSequenceClass
             irClass.isDotNetMutableRefStub == true -> mutableRefClass
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.ENUM -> enumClass
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.ENUM_COMPANION -> enumCompanionClass
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.ENUM_COMPANION_STATICS -> enumCompanionStaticsClass
             irClass.isDotNetFunctionReferenceBase == true -> functionReferenceBase
             irClass.dotNetExactFunctionArity != null -> exactFunctionClasses[irClass.dotNetExactFunctionArity!!]
             irClass.dotNetTypedArgumentsFunctionArity != null ->
                 typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
             irClass.isDotNetPropertyReferenceFactory == true -> propertyReferenceFactory
             irClass.isDotNetCallableAnnotationFactory == true -> callableAnnotationFactory
-            irClass.isDotNetKClassifierBase -> kClassifierBase
-            irClass.isDotNetKAnnotatedElementBase -> kAnnotatedElementBase
-            irClass.isDotNetKClassBase -> kClassBase
-            irClass.isDotNetKTypeBase -> kTypeBase
-            irClass.isDotNetKCallableBase -> kCallableBase
-            irClass.isDotNetKFunctionBase || irClass.dotNetFixedKFunctionArityOrNull() != null -> kFunctionBase
-            irClass.isDotNetKPropertyBase -> kPropertyBase
-            irClass.isDotNetKMutablePropertyBase -> kMutablePropertyBase
-            irClass.dotNetFixedKPropertyArityOrNull() != null ->
-                fixedPropertyClasses[irClass.dotNetFixedKPropertyArityOrNull()!!]
-            irClass.dotNetFixedKMutablePropertyArityOrNull() != null ->
-                fixedMutablePropertyClasses[irClass.dotNetFixedKMutablePropertyArityOrNull()!!]
-            irClass.isDotNetFunctionBase -> functionBase
-            else -> irClass.dotNetFixedFunctionArityOrNull()?.let(fixedFunctionClasses::get)
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CLASSIFIER -> kClassifierBase
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_ANNOTATED_ELEMENT -> kAnnotatedElementBase
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CLASS -> kClassBase
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_TYPE -> kTypeBase
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CALLABLE -> kCallableBase
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_FUNCTION || classifierInfo.fixedKFunctionArity != null ->
+                kFunctionBase
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_PROPERTY -> kPropertyBase
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_MUTABLE_PROPERTY -> kMutablePropertyBase
+            classifierInfo.fixedKPropertyArity != null -> fixedPropertyClasses[classifierInfo.fixedKPropertyArity]
+            classifierInfo.fixedKMutablePropertyArity != null ->
+                fixedMutablePropertyClasses[classifierInfo.fixedKMutablePropertyArity]
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.FUNCTION -> functionBase
+            else -> classifierInfo.fixedFunctionArity?.let(fixedFunctionClasses::get)
         }
     }
 
     /** The compiler-owned mutable cell follows the same one-owner erasure rule as captures. */
-    fun erasedGenericClassInfoFor(irClass: IrClass): DotNetGenericClassInfo? =
-        mutableRefClass.takeIf { irClass.isDotNetMutableRefStub == true }?.let(::DotNetGenericClassInfo)
+    fun erasedGenericClassInfoFor(
+        irClass: IrClass,
+        classifierInfo: DotNetClassifierInfo = DotNetClassifierInfo.derive(irClass),
+    ): DotNetGenericClassInfo? = when {
+        irClass.isDotNetMutableRefStub == true -> DotNetGenericClassInfo(mutableRefClass)
+        classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.ENUM -> enumGenericClass
+        else -> null
+    }
 
-    fun genericInterfaceInfoFor(irClass: IrClass): DotNetGenericInterfaceInfo? =
-        genericInterfaceDescriptorFor(irClass)?.info
+    fun genericInterfaceInfoFor(
+        irClass: IrClass,
+        classifierInfo: DotNetClassifierInfo = DotNetClassifierInfo.derive(irClass),
+    ): DotNetGenericInterfaceInfo? = genericInterfaceDescriptorFor(irClass, classifierInfo)?.info
 
     /** Runtime-owned erased interfaces plus profile-mapped Common interfaces handled by codegen. */
-    fun hasBuiltInGenericInterfaceMapping(irClass: IrClass): Boolean =
-        genericInterfaceDescriptorFor(irClass) != null || irClass.isDotNetComparableClass()
+    fun hasBuiltInGenericInterfaceMapping(
+        irClass: IrClass,
+        classifierInfo: DotNetClassifierInfo = DotNetClassifierInfo.derive(irClass),
+    ): Boolean = genericInterfaceDescriptorFor(irClass, classifierInfo) != null || classifierInfo.isComparable
 
     /** Any interface whose physical owner is supplied by Kotlin.Runtime rather than this module. */
-    fun hasBuiltInInterfaceMapping(irClass: IrClass): Boolean =
-        hasBuiltInGenericInterfaceMapping(irClass) ||
-                irClass.isInterface && classInfoFor(irClass) != null
+    fun hasBuiltInInterfaceMapping(
+        irClass: IrClass,
+        classifierInfo: DotNetClassifierInfo = DotNetClassifierInfo.derive(irClass),
+    ): Boolean = hasBuiltInGenericInterfaceMapping(irClass, classifierInfo) ||
+            irClass.isInterface && classInfoFor(irClass, classifierInfo) != null
 
     /**
      * Runtime-owned Kotlin interfaces whose complete physical implementation contract is emitted
      * in Kotlin.Runtime's C# authoring manifest.
      */
     fun supportsCSharpSourceAuthoring(irClass: IrClass): Boolean =
-        irClass.isDotNetCharSequenceClass()
+        DotNetClassifierInfo.derive(irClass).isCharSequence
 
     /** The non-generic implementation capability for the classified CharSequence carrier. */
     fun charSequenceImplementationClassInfo(irClass: IrClass): DotNetIlClassInfo? =
-        charSequenceClass.takeIf { irClass.isDotNetCharSequenceClass() }
+        charSequenceClass.takeIf { DotNetClassifierInfo.derive(irClass).isCharSequence }
 
     /** Stable runtime spellings for one built-in canonical slot and its typed capability. */
     private fun genericInterfaceMethodNamesOrNull(
@@ -587,12 +617,38 @@ internal object DotNetRuntimeTypes {
         typeMapper: DotNetIlTypeMapper,
     ): DotNetIlFunctionInfo? {
         val interfaceClass = function.parent as? IrClass ?: return null
-        val descriptor = genericInterfaceDescriptorFor(interfaceClass) ?: return null
+        val descriptor = genericInterfaceDescriptorFor(interfaceClass, typeMapper.classifierInfo(interfaceClass)) ?: return null
         val physicalMethodName = descriptor.methods[function.dotNetIlMethodName()]?.canonical ?: return null
         return DotNetIlFunctionInfo(
             descriptor.info.canonicalClassInfo,
             function.dotNetSignature(typeMapper),
             physicalMethodName,
+        )
+    }
+
+    /**
+     * The source/KLIB Enum declaration remains logical authority, while Runtime owns its one
+     * physical erased class. Keep every ordinary member bound to that Runtime owner; otherwise
+     * callers would fall through to the old Stdlib implementation lookup and declaration
+     * eviction would spread through every enum-dependent product declaration.
+     */
+    fun enumFunctionInfoOrNull(
+        function: IrSimpleFunction,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo? {
+        val owner = function.parent as? IrClass ?: return null
+        val physicalOwner = when (typeMapper.classifierInfo(owner).runtimeKind) {
+            DotNetRuntimeClassifierKind.ENUM -> enumClass
+            DotNetRuntimeClassifierKind.ENUM_COMPANION_STATICS ->
+                enumCompanionStaticsClass.takeIf { function.name.asString() == "<EnsureInitialized>" }
+            else -> null
+        } ?: return null
+        return DotNetIlFunctionInfo(
+            owner = physicalOwner,
+            signature = function.dotNetSignature(typeMapper),
+            physicalMethodName = function.dotNetAbiMethodName(
+                isErasedGenericClass = typeMapper::isErasedGenericClass,
+            ),
         )
     }
 
@@ -606,6 +662,7 @@ internal object DotNetRuntimeTypes {
         typeMapper: DotNetIlTypeMapper,
     ): DotNetIlFunctionInfo? {
         val owner = function.parent as? IrClass ?: return null
+        val ownerInfo = typeMapper.classifierInfo(owner)
         return when {
             owner.isDotNetFunctionReferenceBase == true &&
                     function.dotNetIlMethodName() in
@@ -623,7 +680,7 @@ internal object DotNetRuntimeTypes {
                     signature = function.dotNetSignature(typeMapper),
                     physicalMethodName = function.name.asString(),
                 )
-            owner.isDotNetKCallableBase &&
+            ownerInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CALLABLE &&
                     function.dotNetIlMethodName() in
                     setOf("get_name", "get_returnType", "get_parameters", "get_typeParameters", "Call", "CallBy") ->
                 DotNetIlFunctionInfo(
@@ -631,7 +688,7 @@ internal object DotNetRuntimeTypes {
                     signature = function.dotNetSignature(typeMapper),
                     physicalMethodName = function.dotNetIlMethodName(),
                 )
-            owner.isDotNetKFunctionBase &&
+            ownerInfo.runtimeKind == DotNetRuntimeClassifierKind.K_FUNCTION &&
                     function.dotNetIlMethodName() in KFUNCTION_DECLARATION_GETTERS ->
                 DotNetIlFunctionInfo(
                     owner = kFunctionBase,
@@ -642,8 +699,11 @@ internal object DotNetRuntimeTypes {
         }
     }
 
-    private fun genericInterfaceDescriptorFor(irClass: IrClass): RuntimeGenericInterfaceDescriptor? {
-        val descriptor = irClass.fqNameWhenAvailable?.asString()
+    private fun genericInterfaceDescriptorFor(
+        irClass: IrClass,
+        classifierInfo: DotNetClassifierInfo = DotNetClassifierInfo.derive(irClass),
+    ): RuntimeGenericInterfaceDescriptor? {
+        val descriptor = classifierInfo.fqNameString
             ?.let(genericInterfaceDescriptorsByFqName::get)
             ?: return null
         return descriptor.takeIf {
@@ -652,50 +712,54 @@ internal object DotNetRuntimeTypes {
         }
     }
 
-    fun mapCallableType(type: IrType): DotNetIlValueType.UserClass? {
+    fun mapCallableType(
+        type: IrType,
+        classifierInfo: DotNetClassifierInfo? = null,
+    ): DotNetIlValueType.UserClass? {
         val simpleType = type as? IrSimpleType ?: return null
         val irClass = simpleType.classifier.owner as? IrClass ?: return null
+        val info = classifierInfo ?: DotNetClassifierInfo.derive(irClass)
         if (irClass.isDotNetMutableRefStub == true && simpleType.arguments.size == 1) {
             return DotNetIlValueType.UserClass(mutableRefClass)
         }
         val classInfo = when {
-            irClass.isDotNetFunctionBase -> {
+            info.runtimeKind == DotNetRuntimeClassifierKind.FUNCTION -> {
                 if (simpleType.arguments.size != 1) return null
                 functionBase
             }
-            irClass.isDotNetKCallableBase -> {
+            info.runtimeKind == DotNetRuntimeClassifierKind.K_CALLABLE -> {
                 if (simpleType.arguments.size != 1) return null
                 kCallableBase
             }
-            irClass.isDotNetKFunctionBase -> {
+            info.runtimeKind == DotNetRuntimeClassifierKind.K_FUNCTION -> {
                 if (simpleType.arguments.size != 1) return null
                 kFunctionBase
             }
-            irClass.isDotNetKPropertyBase -> {
+            info.runtimeKind == DotNetRuntimeClassifierKind.K_PROPERTY -> {
                 if (simpleType.arguments.size != 1) return null
                 kPropertyBase
             }
-            irClass.isDotNetKMutablePropertyBase -> {
+            info.runtimeKind == DotNetRuntimeClassifierKind.K_MUTABLE_PROPERTY -> {
                 if (simpleType.arguments.size != 1) return null
                 kMutablePropertyBase
             }
             else -> {
-                val functionArity = irClass.dotNetFixedFunctionArityOrNull()
+                val functionArity = info.fixedFunctionArity
                 if (functionArity != null) {
                     if (simpleType.arguments.size != functionArity + 1) return null
                     fixedFunctionClasses[functionArity]
                 } else {
-                    val kFunctionArity = irClass.dotNetFixedKFunctionArityOrNull()
+                    val kFunctionArity = info.fixedKFunctionArity
                     if (kFunctionArity != null) {
                         if (simpleType.arguments.size != kFunctionArity + 1) return null
                         kFunctionBase
                     } else {
-                        val propertyArity = irClass.dotNetFixedKPropertyArityOrNull()
+                        val propertyArity = info.fixedKPropertyArity
                         if (propertyArity != null) {
                             if (simpleType.arguments.size != propertyArity + 1) return null
                             fixedPropertyClasses[propertyArity]
                         } else {
-                            val mutablePropertyArity = irClass.dotNetFixedKMutablePropertyArityOrNull() ?: return null
+                            val mutablePropertyArity = info.fixedKMutablePropertyArity ?: return null
                             if (simpleType.arguments.size != mutablePropertyArity + 1) return null
                             fixedMutablePropertyClasses[mutablePropertyArity]
                         }
@@ -708,31 +772,35 @@ internal object DotNetRuntimeTypes {
         return DotNetIlValueType.UserClass(classInfo)
     }
 
-    fun mapCompilerRuntimeType(type: IrType): DotNetIlValueType.UserClass? {
-        if (type.isNothing() || type.isNullableNothing()) return nothingType
+    fun mapCompilerRuntimeType(
+        type: IrType,
+        classifierInfo: DotNetClassifierInfo? = null,
+    ): DotNetIlValueType.UserClass? {
         val simpleType = type as? IrSimpleType ?: return null
         val irClass = simpleType.classifier.owner as? IrClass ?: return null
-        if (irClass.isDotNetKClassifierBase && simpleType.arguments.isEmpty()) {
+        val info = classifierInfo ?: DotNetClassifierInfo.derive(irClass)
+        if (info.builtinKind == DotNetBuiltinClassifierKind.NOTHING) return nothingType
+        if (info.runtimeKind == DotNetRuntimeClassifierKind.K_CLASSIFIER && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(kClassifierBase)
         }
-        if (irClass.isDotNetKAnnotatedElementBase && simpleType.arguments.isEmpty()) {
+        if (info.runtimeKind == DotNetRuntimeClassifierKind.K_ANNOTATED_ELEMENT && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(kAnnotatedElementBase)
         }
-        if (irClass.isDotNetKClassBase && simpleType.arguments.size == 1) {
+        if (info.runtimeKind == DotNetRuntimeClassifierKind.K_CLASS && simpleType.arguments.size == 1) {
             // KClass's type argument remains authoritative in IR/KLIB. Runtime equality and
             // instance checks use the declaration-erased Kotlin classifier carried by KClassImpl.
             return DotNetIlValueType.UserClass(kClassBase)
         }
-        if (irClass.isDotNetKTypeBase && simpleType.arguments.isEmpty()) {
+        if (info.runtimeKind == DotNetRuntimeClassifierKind.K_TYPE && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(kTypeBase)
         }
-        if (irClass.fqNameWhenAvailable == DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
+        if (info.fqName == DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(defaultConstructorMarkerClass)
         }
-        if (irClass.fqNameWhenAvailable == SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
+        if (info.fqName == SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(syntheticConstructorMarkerClass)
         }
-        return mapCallableType(type)
+        return mapCallableType(type, info)
     }
 
     fun registerCallableFunctions(
@@ -742,6 +810,16 @@ internal object DotNetRuntimeTypes {
         typeMapper: DotNetIlTypeMapper,
         availableFunctions: MutableMap<IrSimpleFunction, DotNetIlFunctionInfo>,
     ) {
+        val enumBase = irBuiltIns.enumClass.owner
+        val enumMembers = buildList {
+            enumBase.properties.mapNotNullTo(this) { property -> property.getter }
+            addAll(enumBase.functions)
+        }
+        for (member in enumMembers) {
+            val functionInfo = enumFunctionInfoOrNull(member, typeMapper)
+                ?: error("Internal .NET backend error: kotlin.Enum member '${member.name}' has no Runtime binding")
+            availableFunctions[member] = functionInfo
+        }
         for (arity in fixedFunctionClasses.indices) {
             val invoke = irBuiltIns.functionN(arity).invokeFun
                 ?: error("Internal .NET backend error: kotlin.Function$arity has no invoke member")
@@ -762,7 +840,10 @@ internal object DotNetRuntimeTypes {
             )
         }
         irBuiltIns.kCallableClass.owner.functions
-            .filter { function -> function.name.asString() in setOf("call", "callBy") }
+            .filter { function ->
+                val methodName = function.name.asString()
+                methodName == "call" || methodName == "callBy"
+            }
             .forEach { call ->
                 availableFunctions[call] = DotNetIlFunctionInfo(
                     kCallableBase,
@@ -790,7 +871,9 @@ internal object DotNetRuntimeTypes {
         }
         val kAnnotatedElement = kClass.superTypes
             .mapNotNull { type -> type.classOrNull?.owner }
-            .singleOrNull { superClass -> superClass.isDotNetKAnnotatedElementBase }
+            .singleOrNull { superClass ->
+                typeMapper.classifierInfo(superClass).runtimeKind == DotNetRuntimeClassifierKind.K_ANNOTATED_ELEMENT
+            }
         // -no-stdlib compilation retains the compiler's minimal Common KClass floor and does not
         // load platform stdlib extensions. Register this physical member only when the .NET
         // KAnnotatedElement declaration is actually present; if present, its shape is mandatory.

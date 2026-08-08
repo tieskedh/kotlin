@@ -41,6 +41,18 @@ boundary. Do not replace that boundary with host `CompareTo` wholesale or
 publish an enum-only comparison substitute. See
 [`docs/decisions/comparable-clr-views.md`](docs/decisions/comparable-clr-views.md).
 
+Kotlin-owned enums are reference classes. Their one erased `Kotlin.Enum` base
+is physically owned by `Kotlin.Runtime`; concrete enum classes and Common
+`EnumEntries` behavior remain in their declaring Stdlib/user assembly. Runtime
+must never reference Stdlib to obtain the base, and no CLR value enum or
+Runtime-only token may become a second Kotlin enum identity. The stdlib
+expect/actual Enum sources are resolution-only for CIL emission. See
+[`docs/decisions/ordinary-enum-reference-classes.md`](docs/decisions/ordinary-enum-reference-classes.md).
+Enum comparison accepts different private entry-body subclasses of the same
+enum declaration, but a broad CLR/unchecked call with an entry of another enum
+must fail at that use with the classified CLR `InvalidCastException`; ordinal
+alone is never a cross-enum ordering relation.
+
 Kotlin metadata is authoritative for the logical Kotlin declaration. CLR
 metadata is authoritative for the physical CLR declaration. For a
 Kotlin-produced DLL, retain the complete KLIB contract and derive a truthful
@@ -145,6 +157,27 @@ Developer-mode declaration eviction may help incomplete frontend work reach a
 diagnostic fixpoint. A library or stdlib publication with any eviction is an
 error; no successful artifact may silently omit declarations or their
 dependents. The endpoint is a located frontend diagnostic.
+
+The emitter's module-wide declaration/function indexes are shared fixpoint
+state. A class may layer a bounded local physical-signature view over those
+indexes, but must not clone a complete module index per class or per fixpoint
+round. Preserve the existing scope rule: a nested class starts from the shared
+module view, not from its enclosing class's temporary member overlay.
+
+The live module declaration set is authoritative during emission. Resolution
+fallbacks may reconstruct external or resolution-only Stdlib type information,
+but must never make a local declaration that failed or left the codegen gate
+emittable again. Every requested fixpoint round must make monotonic progress;
+fail fast on a no-progress round instead of retrying. Stable classifier facts
+may be cached once per lowered compilation by `IrClass` identity, following
+Wasm's module-metadata lifetime. Do not cache mapped CLR types, mapper-view
+choices, target-profile facts, assembly-reference effects, or live
+emitability, and never retain IR in a static/compiler-wide cache.
+
+An external nested CLR type is represented by a simple nested class name plus
+its `DotNetIlClassInfo.enclosingClass`. Do not put `/` inside one
+`ilClassName`: `[A]'Outer/Nested'` is a flat TypeRef, while
+`[A]'Outer'/'Nested'` is the real ECMA-335 nested reference.
 
 Every Kotlin library is one self-describing CLR DLL containing its private
 KLIB payload and physical binding data. Do not emit, install, or publish a

@@ -372,6 +372,29 @@ canonical Framework validation, and cross-writer validation uses a bounded
 shape-based class. The remaining dedicated-test-module move is architectural
 ownership work, not a prerequisite for these cache and process-count gains.
 
+Emitter throughput follows the same context-local ownership used by mature
+targets. Wasm caches declaration-derived class/interface metadata for one
+module; JS keeps reusable class facts in its backend context; JVM maps physical
+names directly from the declaration-parent chain and writes through a binary
+visitor; Native attaches reusable enum-entry analysis to the lowered IR class
+and keeps later codegen caches generation-local. Kotlin/.NET now caches only
+declaration-stable classifier facts for one lowered compilation and keeps the
+live selected codegen set authoritative.
+Resolution-only or previously rejected local declarations may not be revived
+through Stdlib/external fallback, and a no-progress diagnostic fixpoint fails
+immediately. Physical type mapping remains uncached because nullability,
+generic view, target profile, assembly-reference collection, and live ABI
+state can change its answer.
+
+Continue performance work profile-first. Re-measure the exact cold product
+producer and the aggregate after each accepted change, including allocation
+and asymptotic scaling, before touching the next hotspot. A direct PE writer,
+streaming text sink, parallel emitter, or worklist replacement for the current
+partial-support fixpoint is a separate architectural slice: adopt it only with
+determinism, failure eviction, resource embedding, and both ILAsm compatibility
+lanes preserved. Test partitioning must continue to avoid rebuilding complete
+Runtime/Stdlib products for ordinary small modules.
+
 The current verified count and command belong only in [`../../STATUS.md`](../../STATUS.md).
 
 ## Explicitly parked feature families

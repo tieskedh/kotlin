@@ -93,7 +93,6 @@ internal object DotNetStdlibLibrary {
         "kotlin.reflect.KParameter" to "Kotlin.Reflection.KParameter",
         "kotlin.reflect.KParameter.Kind" to "Kotlin.Reflection.KParameter/Kind",
         "kotlin.reflect.DotNetKParameter" to "Kotlin.Reflection.DotNetKParameter",
-        "kotlin.Enum" to "Kotlin.Enum",
         "kotlin.Pair" to "Kotlin.Pair",
         "kotlin.Triple" to "Kotlin.Triple",
         "kotlin.enums.EnumEntries" to "Kotlin.Enums.EnumEntries",
@@ -795,12 +794,6 @@ internal object DotNetStdlibLibrary {
     )
 
     private val implementationSources = mapOf(
-        // FIR actualization may retain either source file as the physical Enum declaration
-        // owner, depending on which member is observed. Both names designate the same one
-        // Kotlin.Stdlib class; recognizing both keeps partitioning independent of that FIR
-        // implementation detail and never emits a second type.
-        "_DotNetBootstrapEnum.kt" to ImplementationSource(packageFqName = "kotlin"),
-        "DotNetEnum.kt" to ImplementationSource(packageFqName = "kotlin"),
         "_DotNetBootstrapEnumEntries.kt" to ImplementationSource(
             packageFqName = "kotlin.enums",
             facadeIlName = ENUM_ENTRIES_FACADE_IL_NAME,
@@ -1005,6 +998,10 @@ internal object DotNetStdlibLibrary {
         ),
     )
     private val resolutionOnlySources = mapOf(
+        // FIR actualization may retain either declaration as kotlin.Enum's IR owner. Both are
+        // logical/KLIB authority; Kotlin.Runtime supplies the one physical erased base.
+        "_DotNetBootstrapEnum.kt" to "kotlin",
+        "DotNetEnum.kt" to "kotlin",
         "Annotations.kt" to "kotlin.internal",
         "AnnotationsBuiltin.kt" to "kotlin.internal",
         "WasExperimental.kt" to "kotlin",

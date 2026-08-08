@@ -1,8 +1,9 @@
 # ADR: ordinary Kotlin enums as reference classes on CLR
 
 - Status: **Accepted for the ordinary enum and non-reified `EnumEntries` phase**
-- Scope: Kotlin-owned enum classes, enum entries, synthetic `values`,
-  `valueOf`, and `entries`, plus the non-reified Common `EnumEntries` core
+- Scope: Kotlin-owned enum classes, the Runtime-owned physical `Kotlin.Enum`
+  base, enum entries, synthetic `values`, `valueOf`, and `entries`, plus the
+  non-reified Common `EnumEntries` core
 - Does not enable: reified `enumValues`, `enumValueOf`, or `enumEntries`, CLR
   value-type enum identity, broad valued annotations, or enum reflection
 
@@ -60,6 +61,56 @@ supports the required reference-class shape directly.
 The .NET lowering follows this shared semantic model. Its target-specific work
 is limited to CLR field ownership, class initialization, exact vector types,
 and separate-assembly binding.
+
+## Physical base ownership
+
+`Kotlin.Enum` is one erased reference-class base physically owned by
+`Kotlin.Runtime`. Its authoritative expect/actual declarations remain in the
+stdlib source/KLIB graph, but those bootstrap sources are resolution-only for
+CIL emission. Concrete enum classes remain in their declaring Stdlib, user, or
+library assembly and extend `[Kotlin.Runtime]Kotlin.Enum`.
+
+This owner follows the downward artifact dependency already used by
+`KCallable`, `KType`, collection interfaces, and the primitive runtime types:
+
+```text
+Kotlin.Runtime: Kotlin.Enum base contract
+        ^
+        |
+Kotlin.Stdlib: Common enum behavior and standard enum declarations
+        ^
+        |
+user/library assemblies: concrete enum classes and entry singletons
+```
+
+The placement matters for reflection. JVM-shaped `KCallable.visibility` and
+`KClass.visibility` return `KVisibility`, which is itself a Kotlin enum. Since
+the physical reflection interfaces live in Runtime, keeping the enum base in
+Stdlib would force either a Runtime-to-Stdlib assembly cycle or a second,
+non-`Enum` representation. Runtime ownership lets a later physical
+`KVisibility` type remain one truthful Kotlin enum without changing the
+direction of dependency.
+
+Moving the base does not move `EnumEntries`, concrete entries, `values`,
+`valueOf`, or enum class initialization into Runtime. The base owns only name,
+ordinal, comparison, identity equality/hash, `toString`, and its empty
+companion. Disabling any future enum optimization must leave this one base and
+the concrete entry identities unchanged.
+
+The erased CLR comparison entry point is wider than Common's static
+`Comparable<E>` contract. It therefore follows the JVM host boundary: entries
+with the same runtime type take a fast path; private entry-body subclasses are
+reduced to their direct enum-declaration base; different enum declarations
+throw `System.InvalidCastException`. The classified exception is Kotlin
+`ClassCastException`, and an unchecked generic cast still succeeds until this
+invalid comparison is actually attempted. Comparing ordinals without this
+declaration check would expose a false ordering through C# `IComparable`.
+
+The empty companion's initialization holder is a real nested Runtime type.
+Cross-assembly calls therefore use the ECMA-335 path
+`[Kotlin.Runtime]'Kotlin.Enum'/'<CompanionStatics>'`, never the flat metadata
+name `[Kotlin.Runtime]'Kotlin.Enum/<CompanionStatics>'`. This distinction is
+loader-visible even though both strings are accepted as ILAsm input.
 
 ## Physical shape
 
@@ -187,6 +238,28 @@ Rejected. It creates two values and two identities for one Kotlin declaration,
 with unavoidable ambiguity in casts, equality, reflection, mutation, and
 foreign round-trips.
 
+### Keep the enum base in Stdlib and let Runtime reference it
+
+Rejected. `Kotlin.Runtime` is the lower artifact and currently references only
+the CLR core libraries; Stdlib references Runtime. Adding the reverse edge for
+reflection visibility would create a cyclic product graph and make bootstrap,
+loading, and version-skew behavior depend on assembly-order accidents.
+
+### Encode reflection visibility as `object` or `int`
+
+Rejected. It would keep the artifact graph acyclic by weakening the physical
+`KCallable`/`KClass` contract, but Kotlin calls would need hidden reconstruction
+and C# would not see the JVM-shaped typed property. Representation pressure
+does not justify publishing a less truthful API when the enum base can live in
+Runtime directly.
+
+### Add a Runtime-only visibility token unrelated to `Kotlin.Enum`
+
+Rejected. It would make one logical `KVisibility` value fail ordinary
+`Enum<*>` use, identity, comparison, and reflection rules or require two
+physical values. The runtime boundary may own the one Kotlin enum base; it may
+not create an alternative enum universe.
+
 ### Make `EnumEntries<E>` a special reified CLR interface
 
 Rejected. It would reopen the removed dual generic-interface ABI for one
@@ -223,5 +296,11 @@ separate producer/consumer assemblies:
 - entry annotations on the physical entry field without changing KLIB
   retention;
 - producer-recorded entry-field binding and version-skew rejection;
+- `Kotlin.Enum` ownership in Runtime, no Runtime reference to Stdlib, and
+  concrete Stdlib/user enum bases that reference that exact Runtime TypeDef;
+- exact nested TypeRef spelling for Runtime-owned companion initialization on
+  Framework CLR and CoreCLR;
+- same-enum ordering across distinct private entry-body subclasses and
+  cross-enum rejection at the broad CLR/unchecked comparison use site;
 - raw CIL and C# consumption of the truthful reference-class surface; and
 - continued rejection of reified enum helpers and CLR value-type identity.

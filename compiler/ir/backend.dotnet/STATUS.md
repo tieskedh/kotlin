@@ -16,12 +16,14 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: JVM-shaped `KFunction.isInline`, `isExternal`,
-  `isOperator`, `isInfix`, and `isSuspend` for the admitted `KFunction0`
-  through `KFunction3` closure. Exact KLIB/importer IR supplies the declaration
-  facts; one shared private base reads their versioned bits without acquiring
-  `KFunction` identity itself. Library ABI version 23 and runtime surface level
-  24 reject producer references or runtimes that predate the physical contract
+- Last completed feature: one Runtime-owned, physically erased `Kotlin.Enum`
+  reference-class base for Stdlib and user enums, including exact nested CLR
+  ownership and JVM-shaped declaration-safe comparison through the broad CLR
+  `IComparable` boundary. The same tranche makes the emitter's selected live
+  declaration set authoritative, fails a no-progress emission fixpoint, replaces
+  per-class module-index copies with local overlays, and caches stable classifier
+  facts once per compilation. Library ABI version 24 and runtime surface level
+  25 reject producer references or runtimes that predate the physical contract
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -35,7 +37,7 @@ substantial open programmes.
 
 ## Current green gate
 
-The function-declaration-flags head passed the ordinary aggregate. The normal
+The Runtime-owned-Enum and emitter-throughput head passed the ordinary aggregate. The normal
 aggregate command is:
 
 ```text
@@ -50,13 +52,34 @@ The audited full-aggregate evidence covers 54 XML files and 1305 tests:
 - 92 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed its final confirmation at 2026-08-08 04:18 local time
-in 35m35s. Gradle reused the unchanged six physical model tests, rewrote all 51
+The aggregate completed its final confirmation at 2026-08-08 13:54 local time
+in 34m43s. Gradle reused the unchanged six physical model tests, rewrote all 51
 FIR/IL/box suites, and rewrote both `dn` suites. The resulting audited tree has
-a cumulative JUnit suite time of 2114.22 seconds: 0.13 for the physical model,
-367.77 for FIR/IL/box, and 1746.32 for `dn`. Gradle 9's selected-task `--rerun`
+a cumulative JUnit suite time of 2095.43 seconds: 0.13 for the physical model,
+373.59 for FIR/IL/box, and 1721.71 for `dn`. Gradle 9's selected-task `--rerun`
 option is not full-matrix evidence on the empty backend lifecycle task and is
 not part of the verification command.
+
+The performance investigation distinguished a hotspot from a correctness
+loop. In the baseline JFR, 521 of 1961 CPU samples (26.6%) ended in
+`computeFqNameString`; a compilation-local `IrClass` identity cache reduced
+that leaf count to 100 and the 60-second sampled TLAB allocation weight from
+about 120 GB to 69.85 GB. The final instrumented producer observed 320,458
+cache hits among 320,718 classifier queries over only 260 unique declarations
+(99.92%). No mapped CLR type, target-profile decision, assembly-reference side
+effect, or live emitability result is cached.
+
+That cache did not explain the apparent multi-hour product emission. A nested
+Stdlib declaration removed from the live codegen set was repeatedly
+reconstructed by a resolution-only fallback, so the diagnostic fixpoint made
+thousands of rounds without changing state and never reached ILAsm. One
+diagnostic run was stopped after nearly four hours; it was not a completed
+timing baseline. Making the selected local declaration set authoritative and
+requiring monotonic fixpoint progress reduced an exact cold net48
+Runtime+Stdlib producer to 23.6 seconds including assembly; the corresponding
+net10 producer completed in 65.6 seconds. The next performance work remains
+profile-guided and should measure per-test product, ILAsm, and CLR process
+counts rather than infer another emitter hotspot from aggregate wall time.
 
 An earlier structured-CLI review replaced the serializer input's
 ILAsm-shaped version string
@@ -164,14 +187,20 @@ override remains ordinary Kotlin virtual dispatch. PSI, LightTree, Framework
 CLR, CoreCLR, and an installed cross-assembly consumer cover both sides.
 
 Ordinary Kotlin enums are one reference-class hierarchy, never CLR
-`System.Enum` value types. Entry fields retain singleton identity and source
-order; private entry subclasses implement bodies and abstract members;
-`values()` is fresh, `entries` is stable, and `valueOf` uses exact Kotlin names
-and failure semantics. Both frontend paths execute the complete adversarial
-corpus on Framework CLR and CoreCLR. A portable library is separately consumed
-by Kotlin and C# on both runtimes, including entry-field metadata, marker
-attributes, virtual dispatch, static initialization, arrays, and widened
-`Enum<*>`/`EnumEntries<*>` views. Reified enum helpers remain fail-closed.
+`System.Enum` value types. The one erased physical `Kotlin.Enum` base now lives
+in `Kotlin.Runtime`; Runtime has no upward Stdlib reference, while concrete
+Stdlib/user enums and `EnumEntries` retain their own owners. Entry fields retain
+singleton identity and source order; private entry subclasses implement bodies
+and abstract members; `values()` is fresh, `entries` is stable, and `valueOf`
+uses exact Kotlin names and failure semantics. Both frontend paths execute the
+complete adversarial corpus on Framework CLR and CoreCLR. A portable library
+is separately consumed by Kotlin and C# on both runtimes, including exact
+nested TypeRefs, entry-field metadata, marker attributes, virtual dispatch,
+static initialization, arrays, widened `Enum<*>`/`EnumEntries<*>` views, and
+same-declaration ordering across distinct entry subclasses. A different enum
+presented through an unchecked Kotlin generic view or C# `IComparable` fails at
+comparison with the classified `InvalidCastException`/`ClassCastException`.
+Reified enum helpers remain fail-closed.
 
 The final gate additionally covers generic-interface erasure on both runtime
 profiles. Both owner-dependent `C<T> : I<T>` and closed `C<T> : I<String>`

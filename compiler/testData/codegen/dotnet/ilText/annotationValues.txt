@@ -802,7 +802,7 @@ IL_whenNext_4:
   }
 }
 .class public auto ansi sealed 'test.KotlinEnum'
-       extends [Kotlin.Stdlib]'Kotlin.Enum'
+       extends [Kotlin.Runtime]'Kotlin.Enum'
        implements class [mscorlib]'System.IComparable`1'<class 'test.KotlinEnum'>
 {
   .field public static initonly class 'test.KotlinEnum' 'FIRST'
@@ -823,7 +823,6 @@ IL_whenNext_4:
       [7] class [mscorlib]System.Exception 'reason'
     )
     .try {
-      call void [Kotlin.Stdlib]'Kotlin.Enum'/'<CompanionStatics>'::'<EnsureInitialized>'()
       ldstr "FIRST"
       ldc.i4 0
       newobj instance void 'test.KotlinEnum'::.ctor(string, int32)
@@ -907,7 +906,7 @@ IL_whenNext_1:
     ldarg.0
     ldarg.1
     ldarg.2
-    call instance void [Kotlin.Stdlib]'Kotlin.Enum'::.ctor(string, int32)
+    call instance void [Kotlin.Runtime]'Kotlin.Enum'::.ctor(string, int32)
     ret
   }
   .method public hidebysig static class 'test.KotlinEnum'[] 'values'() cil managed
@@ -1001,7 +1000,7 @@ IL_whenEnd_0:
     ldarg.0
     ldarg.1
     castclass class 'test.KotlinEnum'
-    callvirt instance int32 [Kotlin.Stdlib]'Kotlin.Enum'::'compareTo'(object)
+    callvirt instance int32 [Kotlin.Runtime]'Kotlin.Enum'::'compareTo'(object)
     ret
   }
   .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.Comparable-compareTo-0f838f77390826ba738a927e521071fe>'(class 'test.KotlinEnum' 'other') cil managed
@@ -1010,7 +1009,7 @@ IL_whenEnd_0:
     .maxstack 2
     ldarg.0
     ldarg.1
-    callvirt instance int32 [Kotlin.Stdlib]'Kotlin.Enum'::'compareTo'(object)
+    callvirt instance int32 [Kotlin.Runtime]'Kotlin.Enum'::'compareTo'(object)
     ret
   }
   .property class [Kotlin.Stdlib]'Kotlin.Enums.EnumEntries' 'entries'()
