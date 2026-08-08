@@ -636,6 +636,279 @@ $throwableExceptionTypesIl
             }
           }
 
+          // Kotlin enums are reference objects on every Kotlin target. Runtime owns the one
+          // erased base so Stdlib and user enum classes depend downward without making this
+          // assembly reference Kotlin.Stdlib.
+          .class public abstract auto ansi beforefieldinit Enum
+                 extends ${coreLibraryReference}System.Object
+                 implements ${coreLibraryReference}System.IComparable
+          {
+            .field private string 'name'
+            .field private int32 'ordinal'
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(
+                string 'name', int32 'ordinal') cil managed
+            {
+              .maxstack 2
+              call void Kotlin.Enum/'<CompanionStatics>'::'<EnsureInitialized>'()
+              ldarg.0
+              call instance void ${coreLibraryReference}System.Object::.ctor()
+              ldarg.0
+              ldarg.1
+              stfld string Kotlin.Enum::'name'
+              ldarg.0
+              ldarg.2
+              stfld int32 Kotlin.Enum::'ordinal'
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(
+                string 'name', int32 'ordinal', int32 '${'$'}mask0',
+                class Kotlin.Runtime.Internal.DefaultConstructorMarker '${'$'}marker') cil managed
+            {
+              $compilerAbiUseAttributesIl
+              .maxstack 3
+              call void Kotlin.Enum/'<CompanionStatics>'::'<EnsureInitialized>'()
+              ldarg.3
+              ldc.i4.1
+              and
+              brfalse ENUM_NAME_READY
+              ldstr ""
+              starg 1
+        ENUM_NAME_READY:
+              ldarg.3
+              ldc.i4.2
+              and
+              brfalse ENUM_ORDINAL_READY
+              ldc.i4.m1
+              starg 2
+        ENUM_ORDINAL_READY:
+              ldarg.0
+              ldarg.1
+              ldarg.2
+              call instance void Kotlin.Enum::.ctor(string, int32)
+              ret
+            }
+
+            .method public hidebysig specialname instance string get_name() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              ldfld string Kotlin.Enum::'name'
+              ret
+            }
+
+            .method public hidebysig specialname instance int32 get_ordinal() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              ldfld int32 Kotlin.Enum::'ordinal'
+              ret
+            }
+
+            .property instance string name()
+            {
+              .get instance string Kotlin.Enum::get_name()
+            }
+
+            .property instance int32 ordinal()
+            {
+              .get instance int32 Kotlin.Enum::get_ordinal()
+            }
+
+            .method public hidebysig newslot virtual final instance int32 compareTo(object 'other') cil managed
+            {
+              .maxstack 2
+              .locals init (
+                [0] class Kotlin.Enum 'otherEnum',
+                [1] int32 'right',
+                [2] int32 'left'
+              )
+              ldarg.1
+              castclass Kotlin.Enum
+              stloc.0
+              ldarg.0
+              call instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Object::GetType()
+              ldloc.0
+              callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Object::GetType()
+              ceq
+              brtrue ENUM_COMPARE_TYPE_READY
+              ldarg.0
+              call class ${coreLibraryReference}System.Type Kotlin.Enum::'<GetDeclaringClass>'(class Kotlin.Enum)
+              ldloc.0
+              call class ${coreLibraryReference}System.Type Kotlin.Enum::'<GetDeclaringClass>'(class Kotlin.Enum)
+              ceq
+              brtrue ENUM_COMPARE_TYPE_READY
+              newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor()
+              throw
+        ENUM_COMPARE_TYPE_READY:
+              ldarg.0
+              ldfld int32 Kotlin.Enum::'ordinal'
+              ldloc.0
+              ldfld int32 Kotlin.Enum::'ordinal'
+              stloc.1
+              stloc.2
+              ldloc.2
+              ldloc.1
+              clt
+              brtrue ENUM_COMPARE_LESS
+              ldloc.2
+              ldloc.1
+              cgt
+              brtrue ENUM_COMPARE_GREATER
+              ldc.i4.0
+              br ENUM_COMPARE_END
+        ENUM_COMPARE_LESS:
+              ldc.i4.m1
+              br ENUM_COMPARE_END
+        ENUM_COMPARE_GREATER:
+              ldc.i4.1
+        ENUM_COMPARE_END:
+              ret
+            }
+
+            // Mirrors java.lang.Enum.getDeclaringClass for the only two legal physical
+            // shapes: the enum class itself and one private entry-body subclass beneath it.
+            .method private hidebysig static class ${coreLibraryReference}System.Type
+                '<GetDeclaringClass>'(class Kotlin.Enum 'value') cil managed
+            {
+              .maxstack 2
+              .locals init (
+                [0] class ${coreLibraryReference}System.Type 'runtimeType',
+                [1] class ${coreLibraryReference}System.Type 'baseType'
+              )
+              ldarg.0
+              callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Object::GetType()
+              stloc.0
+              ldloc.0
+              callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::get_BaseType()
+              stloc.1
+              ldloc.1
+              ldtoken Kotlin.Enum
+              call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+                  valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+              ceq
+              brfalse ENUM_DECLARING_CLASS_IS_BASE
+              ldloc.0
+              ret
+        ENUM_DECLARING_CLASS_IS_BASE:
+              ldloc.1
+              ret
+            }
+
+            .method private hidebysig newslot virtual final instance int32
+                '<GenericInterfaceCanonicalBridge-kotlin.Comparable-compareTo-0f838f77390826ba738a927e521071fe>'(
+                    object 'other') cil managed
+            {
+              .override method instance int32 ${coreLibraryReference}System.IComparable::CompareTo(object)
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              callvirt instance int32 Kotlin.Enum::compareTo(object)
+              ret
+            }
+
+            .method public hidebysig virtual final instance bool Equals(object 'other') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              ceq
+              ret
+            }
+
+            .method public hidebysig virtual final instance int32 GetHashCode() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              call instance int32 ${coreLibraryReference}System.Object::GetHashCode()
+              ret
+            }
+
+            .method public hidebysig virtual instance string ToString() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              ldfld string Kotlin.Enum::'name'
+              ret
+            }
+
+            .class nested public auto ansi sealed beforefieldinit Companion
+                   extends ${coreLibraryReference}System.Object
+            {
+              .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+              {
+                .maxstack 1
+                ldarg.0
+                call instance void ${coreLibraryReference}System.Object::.ctor()
+                ret
+              }
+
+              .method assembly hidebysig specialname rtspecialname instance void .ctor(
+                  class Kotlin.Runtime.Internal.SyntheticConstructorMarker 'marker') cil managed
+              {
+                .maxstack 1
+                ldarg.0
+                call instance void Kotlin.Enum/Companion::.ctor()
+                ret
+              }
+            }
+
+            .class nested public abstract sealed auto ansi '<CompanionStatics>'
+                   extends ${coreLibraryReference}System.Object
+            {
+              $compilerAbiUseAttributesIl
+              .field public static initonly class Kotlin.Enum/Companion Companion
+              .field private static object '<static-initialization-failure>'
+
+              .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+              {
+                .maxstack 1
+                .locals init (
+                  [0] class ${coreLibraryReference}System.Exception 'reason'
+                )
+                .try {
+                  ldnull
+                  newobj instance void Kotlin.Enum/Companion::.ctor(
+                      class Kotlin.Runtime.Internal.SyntheticConstructorMarker)
+                  stsfld class Kotlin.Enum/Companion Kotlin.Enum/'<CompanionStatics>'::Companion
+                  leave ENUM_CCTOR_END
+                }
+                catch ${coreLibraryReference}System.Exception {
+                  stloc.0
+                  ldloc.0
+                  call object Kotlin.Runtime.Internal.StaticInitialization::'Capture'(
+                      class ${coreLibraryReference}System.Exception)
+                  stsfld object Kotlin.Enum/'<CompanionStatics>'::'<static-initialization-failure>'
+                  leave ENUM_CCTOR_END
+                }
+        ENUM_CCTOR_END:
+                ret
+              }
+
+              .method public hidebysig static void '<EnsureInitialized>'() cil managed
+              {
+                $compilerAbiUseAttributesIl
+                .maxstack 2
+                ldsfld object Kotlin.Enum/'<CompanionStatics>'::'<static-initialization-failure>'
+                ldnull
+                ceq
+                ldc.i4.0
+                ceq
+                brfalse ENUM_INITIALIZED
+                ldsfld object Kotlin.Enum/'<CompanionStatics>'::'<static-initialization-failure>'
+                call class ${coreLibraryReference}System.Exception Kotlin.Runtime.Internal.StaticInitialization::'Observe'(object)
+                ldstr "kotlin.Enum"
+                call void Kotlin.Runtime.Internal.StaticInitialization::'Throw'(
+                    class ${coreLibraryReference}System.Exception, string)
+                newobj instance void Kotlin.KotlinNothingValueException::.ctor()
+                throw
+        ENUM_INITIALIZED:
+                ret
+              }
+            }
+          }
+
           .class interface public abstract auto ansi Function
           {
           }
