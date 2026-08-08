@@ -27,6 +27,18 @@ private fun nullableDefault(value: String? = "fallback"): String? = value
 
 private fun allDefaults(a: Int = 1, b: Int = a + 1, c: Int = b + 1): Int = a * 100 + b * 10 + c
 
+private inline fun inlineZero(): String = "inline"
+
+private open class OperatorBase {
+    open operator fun plus(value: Int): Int = value
+}
+
+private class OperatorDerived : OperatorBase() {
+    override fun plus(value: Int): Int = value + 1
+
+    infix fun combine(value: String): String = value
+}
+
 private var defaultTrace: String = ""
 
 private fun tracedDefaults(
@@ -120,7 +132,23 @@ fun box(): String {
     val noArgumentsReference: KFunction0<String> = ::noArguments
     if (noArgumentsReference.callBy(emptyMap()) != "zero") return fail("KFunction0 callBy")
 
+    val inlineReference: KFunction0<String> = ::inlineZero
+    if (!inlineReference.isInline || inlineReference.isExternal || inlineReference.isOperator ||
+        inlineReference.isInfix || inlineReference.isSuspend
+    ) return fail("KFunction0 inline declaration flags")
+    val inheritedOperator: KFunction2<OperatorDerived, Int, Int> = OperatorDerived::plus
+    if (!inheritedOperator.isOperator || inheritedOperator.isInline || inheritedOperator.isExternal ||
+        inheritedOperator.isInfix || inheritedOperator.isSuspend
+    ) return fail("inherited operator declaration flags")
+    val infixReference: KFunction2<OperatorDerived, String, String> = OperatorDerived::combine
+    if (!infixReference.isInfix || infixReference.isInline || infixReference.isExternal ||
+        infixReference.isOperator || infixReference.isSuspend
+    ) return fail("infix declaration flags")
+
     val defaults: KFunction3<Int, Int, Int, Int> = ::allDefaults
+    if (defaults.isInline || defaults.isExternal || defaults.isOperator || defaults.isInfix || defaults.isSuspend) {
+        return fail("ordinary KFunction3 declaration flags")
+    }
     val defaultsParameters = defaults.parameters
     val defaultCases = listOf(
         emptyMap<KParameter, Any?>() to 123,

@@ -112,9 +112,9 @@ IL_whenNext_1:
     )
     call void 'callableReferencesKt$reflectedReference$1'::'<EnsureInitialized>'()
     ldarg.0
-    ldstr "local:callableReferences.kt:398:449:#incrementReference(kotlin.Int){}"
+    ldstr "local:callableReferences.kt:405:456:#incrementReference(kotlin.Int){}"
     ldc.i4 1
-    ldc.i4 0
+    ldc.i4 32
     ldc.i4 0
     ldstr "incrementReference"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -224,9 +224,18 @@ IL_whenNext_1:
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0') cil managed
   {
-    .maxstack 1
+    .maxstack 2
+    .locals init (
+      [0] int32 'tmp0',
+      [1] int32 'value'
+    )
     ldarg.1
-    call int32 'callableReferencesKt'::'incrementReference'(int32)
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloc.1
+    ldc.i4 1
+    add
     ret
   }
   .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
@@ -374,7 +383,7 @@ IL_whenNext_1:
     )
     call void 'callableReferencesKt$main$narrow$1'::'<EnsureInitialized>'()
     ldarg.0
-    ldstr "local:callableReferences.kt:451:501:#labelReference(kotlin.Any){}"
+    ldstr "local:callableReferences.kt:458:508:#labelReference(kotlin.Any){}"
     ldc.i4 1
     ldc.i4 0
     ldc.i4 0
@@ -916,6 +925,49 @@ IL_whenNext_1:
     callvirt instance string [Kotlin.Runtime]'Kotlin.KCallable'::'get_name'()
     ret
   }
+  .method public hidebysig static bool 'hasInlineOnlyFlags'(class [Kotlin.Runtime]'Kotlin.KFunction' 'reference') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.KFunction'::'get_isInline'()
+    brfalse IL_whenNext_7
+    ldarg.0
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.KFunction'::'get_isExternal'()
+    ldc.i4.0
+    ceq
+    br IL_whenEnd_6
+IL_whenNext_7:
+    ldc.i4.0
+IL_whenEnd_6:
+    brfalse IL_whenNext_5
+    ldarg.0
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.KFunction'::'get_isOperator'()
+    ldc.i4.0
+    ceq
+    br IL_whenEnd_4
+IL_whenNext_5:
+    ldc.i4.0
+IL_whenEnd_4:
+    brfalse IL_whenNext_3
+    ldarg.0
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.KFunction'::'get_isInfix'()
+    ldc.i4.0
+    ceq
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldc.i4.0
+IL_whenEnd_2:
+    brfalse IL_whenNext_1
+    ldarg.0
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.KFunction'::'get_isSuspend'()
+    ldc.i4.0
+    ceq
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.i4.0
+IL_whenEnd_0:
+    ret
+  }
   .method public hidebysig static int32 'callReference'(class [Kotlin.Runtime]'Kotlin.KFunction' 'reference', int32 'value') cil managed
   {
     .maxstack 2
@@ -971,6 +1023,15 @@ IL_callableExactEnd_1:
     call string 'callableReferencesKt'::'referenceName'(class [Kotlin.Runtime]'Kotlin.KFunction')
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
+    call bool 'callableReferencesKt'::'hasInlineOnlyFlags'(class [Kotlin.Runtime]'Kotlin.KFunction')
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
     ldc.i4 41
     call int32 'callableReferencesKt'::'callReference'(class [Kotlin.Runtime]'Kotlin.KFunction', int32)
     box [mscorlib]System.Int32
@@ -984,22 +1045,22 @@ IL_callableExactEnd_1:
     ldloc.0
     ldloc.1
     ceq
-    brtrue IL_boolStrTrue_0
-    ldstr "false"
-    br IL_boolStrEnd_1
-IL_boolStrTrue_0:
-    ldstr "true"
-IL_boolStrEnd_1:
-    call void [mscorlib]System.Console::WriteLine(string)
-    call class [Kotlin.Runtime]'Kotlin.KFunction' 'callableReferencesKt'::'reflectedReference'()
-    call class [Kotlin.Runtime]'Kotlin.KFunction' 'callableReferencesKt'::'reflectedReference'()
-    ceq
     brtrue IL_boolStrTrue_2
     ldstr "false"
     br IL_boolStrEnd_3
 IL_boolStrTrue_2:
     ldstr "true"
 IL_boolStrEnd_3:
+    call void [mscorlib]System.Console::WriteLine(string)
+    call class [Kotlin.Runtime]'Kotlin.KFunction' 'callableReferencesKt'::'reflectedReference'()
+    call class [Kotlin.Runtime]'Kotlin.KFunction' 'callableReferencesKt'::'reflectedReference'()
+    ceq
+    brtrue IL_boolStrTrue_4
+    ldstr "false"
+    br IL_boolStrEnd_5
+IL_boolStrTrue_4:
+    ldstr "true"
+IL_boolStrEnd_5:
     call void [mscorlib]System.Console::WriteLine(string)
     call void 'callableReferencesKt$main$narrow$1'::'<EnsureInitialized>'()
     ldsfld class 'callableReferencesKt$main$narrow$1' 'callableReferencesKt$main$narrow$1'::'INSTANCE'
@@ -1009,12 +1070,12 @@ IL_boolStrEnd_3:
     ldloc.2
     ldloc.3
     ceq
-    brtrue IL_boolStrTrue_4
+    brtrue IL_boolStrTrue_6
     ldstr "false"
-    br IL_boolStrEnd_5
-IL_boolStrTrue_4:
+    br IL_boolStrEnd_7
+IL_boolStrTrue_6:
     ldstr "true"
-IL_boolStrEnd_5:
+IL_boolStrEnd_7:
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 42
     newobj instance void 'BoundValue'::.ctor(int32)
@@ -1030,17 +1091,17 @@ IL_boolStrEnd_5:
     isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
     stloc 6
     ldloc 6
-    brfalse IL_callableErasedFallback_6
+    brfalse IL_callableErasedFallback_8
     ldloc 6
     callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
     stloc 7
-    br IL_callableExactEnd_7
-IL_callableErasedFallback_6:
+    br IL_callableExactEnd_9
+IL_callableErasedFallback_8:
     ldloc 5
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
     stloc 7
-IL_callableExactEnd_7:
+IL_callableExactEnd_9:
     ldloc 7
     box [mscorlib]System.Int32
     ldnull
@@ -1054,12 +1115,12 @@ IL_callableExactEnd_7:
     ceq
     ldc.i4.0
     ceq
-    brtrue IL_boolStrTrue_8
+    brtrue IL_boolStrTrue_10
     ldstr "false"
-    br IL_boolStrEnd_9
-IL_boolStrTrue_8:
+    br IL_boolStrEnd_11
+IL_boolStrTrue_10:
     ldstr "true"
-IL_boolStrEnd_9:
+IL_boolStrEnd_11:
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

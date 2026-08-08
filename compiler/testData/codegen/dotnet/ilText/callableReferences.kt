@@ -8,7 +8,7 @@ private class BoundValue(private val value: Int) {
     fun read(): Int = value
 }
 
-fun incrementReference(value: Int): Int = value + 1
+inline fun incrementReference(value: Int): Int = value + 1
 
 fun labelReference(ignored: Any): String = "label"
 
@@ -16,11 +16,16 @@ fun reflectedReference() = ::incrementReference
 
 fun referenceName(reference: KFunction1<Int, Int>): String = reference.name
 
+fun hasInlineOnlyFlags(reference: KFunction1<Int, Int>): Boolean =
+    reference.isInline && !reference.isExternal && !reference.isOperator &&
+            !reference.isInfix && !reference.isSuspend
+
 fun callReference(reference: KFunction1<Int, Int>, value: Int): Int = reference(value)
 
 fun main() {
     val reference = reflectedReference()
     println(referenceName(reference))
+    println(hasInlineOnlyFlags(reference))
     println(callReference(reference, 41))
 
     val callable: (Int) -> Int = reference

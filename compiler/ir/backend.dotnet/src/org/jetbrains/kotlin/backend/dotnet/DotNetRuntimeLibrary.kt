@@ -687,6 +687,45 @@ $throwableExceptionTypesIl
           .class interface public abstract auto ansi KFunction
                  implements Kotlin.KCallable, Kotlin.Function
           {
+            .method public hidebysig specialname newslot abstract virtual instance bool 'get_isInline'() cil managed
+            {
+            }
+            .property instance bool isInline()
+            {
+              .get instance bool Kotlin.KFunction::'get_isInline'()
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance bool 'get_isExternal'() cil managed
+            {
+            }
+            .property instance bool isExternal()
+            {
+              .get instance bool Kotlin.KFunction::'get_isExternal'()
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance bool 'get_isOperator'() cil managed
+            {
+            }
+            .property instance bool isOperator()
+            {
+              .get instance bool Kotlin.KFunction::'get_isOperator'()
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance bool 'get_isInfix'() cil managed
+            {
+            }
+            .property instance bool isInfix()
+            {
+              .get instance bool Kotlin.KFunction::'get_isInfix'()
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance bool 'get_isSuspend'() cil managed
+            {
+            }
+            .property instance bool isSuspend()
+            {
+              .get instance bool Kotlin.KFunction::'get_isSuspend'()
+            }
           }
 
           .class interface public abstract auto ansi KProperty

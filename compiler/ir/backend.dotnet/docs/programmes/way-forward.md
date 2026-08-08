@@ -148,8 +148,7 @@ same graph with JVM's owner, ordering, captured-receiver omission, reindexing,
 default, vararg, and equality rules. Kotlin parameter applications retain their
 exact declaration owners; admitted foreign callables use exact CLR Param rows
 without turning CLR optional flags into Kotlin default-call semantics. General
-members, accessor objects, function-declaration flags beyond the Common floor,
-and type-use annotations
+members, accessor objects, `KCallable` visibility/modality, and type-use annotations
 remain separate tranches. Positional `KCallable.call` now consumes that exact
 parameter order through the existing erased `FunctionN` capability. Runtime
 surface level 22 validates count and dispatches without CLR member discovery;
@@ -162,6 +161,17 @@ class/default-dispatch ABI across separate libraries. Library ABI 22 keeps
 Kotlin-owned class parameters erased on that helper while retaining genuine
 method generics. The tranche introduces neither CLR member lookup nor a
 reflection-owned mask ABI.
+
+The five JVM-shaped `KFunction` declaration flags now form one property
+capability inherited by every admitted `KFunction0` through `KFunction3`.
+KLIB/importer IR owns inline, external, operator, infix, and suspend status;
+generated invoke adapters and runtime CLR reflection do not reconstruct it.
+Constructors and ordinary admitted CLR interface methods report false. Runtime
+surface 24 publishes the erased `Kotlin.KFunction` and shared-base getters,
+while library ABI 23 rejects already-materialized old references that lack the
+declaration bits. Suspend
+callable references and external linkage remain independent execution
+features, not consequences of publishing their declaration facts.
 
 Future member enumeration must include member extension properties with
 multiple callable-owned type parameters and, once context parameters are

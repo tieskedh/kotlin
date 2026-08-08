@@ -77,6 +77,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Declaration-owned callable parameters](decisions/callable-parameters.md)
 - [Positional callable invocation](decisions/callable-positional-invocation.md)
 - [Named callable invocation](decisions/callable-named-invocation.md)
+- [Function declaration flags](decisions/function-declaration-flags.md)
 - [Semantic erasure and canonical ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)

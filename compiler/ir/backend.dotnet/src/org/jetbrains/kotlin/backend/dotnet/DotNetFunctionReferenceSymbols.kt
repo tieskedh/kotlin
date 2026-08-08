@@ -40,6 +40,15 @@ import org.jetbrains.kotlin.name.Name
 /** Marks the IR-only class mapped to Kotlin.Runtime.Internal.FunctionReferenceBase. */
 internal var IrClass.isDotNetFunctionReferenceBase: Boolean? by irAttribute(copyByDefault = false)
 
+/** Private compiler/runtime bit assignments carried by FunctionReferenceBase.flags. */
+internal object DotNetFunctionReferenceFlags {
+    const val IS_INLINE: Int = 1 shl 5
+    const val IS_EXTERNAL: Int = 1 shl 6
+    const val IS_OPERATOR: Int = 1 shl 7
+    const val IS_INFIX: Int = 1 shl 8
+    const val IS_SUSPEND: Int = 1 shl 9
+}
+
 /**
  * IR-only declarations for the Native-shaped function-reference implementation base.
  *
@@ -134,6 +143,30 @@ internal class DotNetFunctionReferenceSymbols(
                 parameters += createDispatchReceiverParameterWithClassParent()
             }
         }
+        irBuiltIns.kFunctionClass.owner.properties
+            .filter { property ->
+                property.name.asString() in
+                        setOf("isInline", "isExternal", "isOperator", "isInfix", "isSuspend")
+            }
+            .forEach { property ->
+                val sourceGetter = property.getter
+                    ?: error("Internal .NET backend error: KFunction.${property.name} has no getter")
+                val baseProperty = baseClass.addProperty {
+                    origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+                    name = property.name
+                    visibility = sourceGetter.visibility
+                }
+                baseProperty.addGetter {
+                    origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+                    returnType = sourceGetter.returnType
+                    visibility = sourceGetter.visibility
+                    // The physical base getter is virtual final. OPEN keeps the IR-side
+                    // inherited-interface analysis truthful without allowing a generated body.
+                    modality = Modality.OPEN
+                }.apply {
+                    parameters += createDispatchReceiverParameterWithClassParent()
+                }
+            }
         boundValueAt = baseClass.addFunction {
             origin = IrDeclarationOrigin.IR_BUILTINS_STUB
             name = Name.identifier("BoundValueAt")

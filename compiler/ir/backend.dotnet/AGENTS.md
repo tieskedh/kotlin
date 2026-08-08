@@ -483,10 +483,20 @@ See the
   default dispatchers use one JVM-shaped static compiler ABI with an explicit
   receiver so source and reflective calls share virtual, separate-library
   behavior. Runtime must not rediscover CLR members or own Kotlin default-mask
-  layout. Typed foreign attribute import, foreign CLR generic methods,
-  accessor objects, function-declaration flags beyond the current Common
-  floor, and broader member reflection remain separate. A foreign generic
-  method must continue to fail the current interface importer closed until its
+  layout. The JVM-shaped `KFunction` declaration flags (`isInline`,
+  `isExternal`, `isOperator`, `isInfix`, and `isSuspend`) are one shared
+  property capability inherited by every admitted `KFunction0` through
+  `KFunction3`. Read them only from the exact KLIB/importer-IR reflection
+  target; generated invoke adapters and runtime CLR reflection are never flag
+  authority. Store the facts in the existing private reference-flag carrier
+  and inherit its virtual-final getters; do not emit five getter/property pairs
+  per reference or make the base itself implement `KFunction`. Constructors
+  report false, and publishing the suspend/external facts does not admit those
+  execution features. Typed foreign attribute
+  import, foreign CLR generic methods, accessor objects, `KCallable`
+  visibility/modality, and broader member reflection remain separate. A
+  foreign generic method must continue to fail the current interface importer
+  closed until its
   own complete FIR/import/binding feature lands; never decode it privately in
   callable reflection. See
   [the annotation-value decision](docs/decisions/valued-annotation-classes.md),
@@ -496,7 +506,8 @@ See the
   [the callable-type-parameter decision](docs/decisions/callable-type-parameters.md), and
   [the callable-parameter decision](docs/decisions/callable-parameters.md), and
   [the positional-call decision](docs/decisions/callable-positional-invocation.md), and
-  [the named-call decision](docs/decisions/callable-named-invocation.md).
+  [the named-call decision](docs/decisions/callable-named-invocation.md), and
+  [the function-flag decision](docs/decisions/function-declaration-flags.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
   Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve

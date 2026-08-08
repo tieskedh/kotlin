@@ -47,6 +47,10 @@ import org.jetbrains.kotlin.types.Variance
 internal object DotNetRuntimeTypes {
     val DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME = FqName("kotlin.runtime.internal.DefaultConstructorMarker")
     val SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME = FqName("kotlin.runtime.internal.SyntheticConstructorMarker")
+    private val KFUNCTION_DECLARATION_PROPERTIES =
+        setOf("isInline", "isExternal", "isOperator", "isInfix", "isSuspend")
+    private val KFUNCTION_DECLARATION_GETTERS =
+        KFUNCTION_DECLARATION_PROPERTIES.mapTo(linkedSetOf()) { property -> "get_$property" }
 
     private val unitClass = DotNetIlClassInfo(
         ilClassName = "Kotlin.Unit",
@@ -604,7 +608,8 @@ internal object DotNetRuntimeTypes {
         val owner = function.parent as? IrClass ?: return null
         return when {
             owner.isDotNetFunctionReferenceBase == true &&
-                    function.dotNetIlMethodName() in setOf(
+                    function.dotNetIlMethodName() in
+                    setOf(
                         "GetReturnType",
                         "GetParameters",
                         "GetTypeParameters",
@@ -612,7 +617,7 @@ internal object DotNetRuntimeTypes {
                         "CallByErased",
                         "CallDefaultErased",
                         "EmptyVarargAt",
-                    ) ->
+                    ) + KFUNCTION_DECLARATION_GETTERS ->
                 DotNetIlFunctionInfo(
                     owner = functionReferenceBase,
                     signature = function.dotNetSignature(typeMapper),
@@ -623,6 +628,13 @@ internal object DotNetRuntimeTypes {
                     setOf("get_name", "get_returnType", "get_parameters", "get_typeParameters", "Call", "CallBy") ->
                 DotNetIlFunctionInfo(
                     owner = kCallableBase,
+                    signature = function.dotNetSignature(typeMapper),
+                    physicalMethodName = function.dotNetIlMethodName(),
+                )
+            owner.isDotNetKFunctionBase &&
+                    function.dotNetIlMethodName() in KFUNCTION_DECLARATION_GETTERS ->
+                DotNetIlFunctionInfo(
+                    owner = kFunctionBase,
                     signature = function.dotNetSignature(typeMapper),
                     physicalMethodName = function.dotNetIlMethodName(),
                 )
@@ -755,6 +767,16 @@ internal object DotNetRuntimeTypes {
                 availableFunctions[call] = DotNetIlFunctionInfo(
                     kCallableBase,
                     call.dotNetSignature(typeMapper),
+                )
+            }
+        irBuiltIns.kFunctionClass.owner.properties
+            .filter { property -> property.name.asString() in KFUNCTION_DECLARATION_PROPERTIES }
+            .forEach { property ->
+                val getter = property.getter
+                    ?: error("Internal .NET backend error: kotlin.reflect.KFunction.${property.name} has no getter")
+                availableFunctions[getter] = DotNetIlFunctionInfo(
+                    kFunctionBase,
+                    getter.dotNetSignature(typeMapper),
                 )
             }
         val kClass = irBuiltIns.kClassClass.owner
