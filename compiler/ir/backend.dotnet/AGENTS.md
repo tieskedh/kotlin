@@ -185,6 +185,16 @@ Wasm's module-metadata lifetime. Do not cache mapped CLR types, mapper-view
 choices, target-profile facts, assembly-reference effects, or live
 emitability, and never retain IR in a static/compiler-wide cache.
 
+An external Kotlin-library binding index may cache its final kind-prefixed
+public ABI key by `IrDeclaration` identity, including a missing key, for that
+one `DotNetExternalDeclarations` lifetime. This mirrors the shared KLIB
+declaration table without making the rendered CLR-binding key authoritative
+over KLIB. Keep the declaration kind in the cache entry and reject a request
+for the same declaration under a different kind. Do not share this cache
+blindly across lowerings or emission: a query can still receive local mutable
+IR, and JVM's bridge-signature cache documents the same stale-signature risk
+when override/type shape changes.
+
 An external nested CLR type is represented by a simple nested class name plus
 its `DotNetIlClassInfo.enclosingClass`. Do not put `/` inside one
 `ilClassName`: `[A]'Outer/Nested'` is a flat TypeRef, while
