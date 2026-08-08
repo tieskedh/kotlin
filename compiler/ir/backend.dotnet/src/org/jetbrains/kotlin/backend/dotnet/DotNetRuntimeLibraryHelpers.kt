@@ -264,6 +264,59 @@ $kClassSupportTypesIl
             |      callvirt instance object Kotlin.Function3::Invoke(object, object, object)
             |      ret
             |    }
+            |
+            |    .method public hidebysig static object InvokeRequiredBy(
+            |        object 'callable', int32 'arity', class Kotlin.Collections.List 'parameters',
+            |        class Kotlin.Collections.Map 'args') cil managed
+            |    {
+            |      .maxstack 4
+            |      .locals init (
+            |        [0] object[] positional,
+            |        [1] int32 index,
+            |        [2] object parameter
+            |      )
+            |      ldarg.1
+            |      newarr ${coreLibraryReference}System.Object
+            |      stloc.0
+            |      ldc.i4.0
+            |      stloc.1
+            |    CI_By_Loop:
+            |      ldloc.1
+            |      ldarg.1
+            |      bge.s CI_By_Invoke
+            |      ldarg.2
+            |      ldloc.1
+            |      callvirt instance object Kotlin.Collections.List::Get(int32)
+            |      stloc.2
+            |      ldarg.3
+            |      ldloc.2
+            |      callvirt instance bool Kotlin.Collections.Map::ContainsKeyErased(object)
+            |      brtrue.s CI_By_Present
+            |      ldstr "No argument provided for a required parameter: "
+            |      ldloc.2
+            |      callvirt instance string ${coreLibraryReference}System.Object::ToString()
+            |      call string ${coreLibraryReference}System.String::Concat(string, string)
+            |      newobj instance void ${coreLibraryReference}System.ArgumentException::.ctor(string)
+            |      throw
+            |    CI_By_Present:
+            |      ldloc.0
+            |      ldloc.1
+            |      ldarg.3
+            |      ldloc.2
+            |      callvirt instance object Kotlin.Collections.Map::GetErased(object)
+            |      stelem.ref
+            |      ldloc.1
+            |      ldc.i4.1
+            |      add
+            |      stloc.1
+            |      br.s CI_By_Loop
+            |    CI_By_Invoke:
+            |      ldarg.0
+            |      ldarg.1
+            |      ldloc.0
+            |      call object Kotlin.Runtime.Internal.CallableInvoker::Invoke(object, int32, object[])
+            |      ret
+            |    }
             |  }
             |
             |  .class public abstract auto ansi beforefieldinit FunctionReferenceBase
@@ -280,6 +333,7 @@ $kClassSupportTypesIl
             |    .field private initonly class Kotlin.KType 'returnType'
             |    .field private initonly class Kotlin.Collections.List 'parameters'
             |    .field private initonly class Kotlin.Collections.List 'typeParameters'
+            |    .field private initonly object[] 'parameterDescriptors'
             |
             |    .method family hidebysig specialname rtspecialname instance void .ctor(
             |        string 'id', int32 'arity', int32 'flags', int32 'boundValueCount', string 'name',
@@ -322,6 +376,12 @@ $kClassSupportTypesIl
             |      castclass object[]
             |      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[])
             |      stfld class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::'typeParameters'
+            |      ldarg.0
+            |      ldarg.s 7
+            |      ldc.i4.2
+            |      ldelem.ref
+            |      castclass object[]
+            |      stfld object[] Kotlin.Runtime.Internal.FunctionReferenceBase::'parameterDescriptors'
             |      br.s FR_SignatureDone
             |    FR_SignatureMissing:
             |      ldarg.0
@@ -330,6 +390,10 @@ $kClassSupportTypesIl
             |      ldarg.0
             |      call class Kotlin.Collections.List Kotlin.Runtime.Internal.ReflectionAnnotationList::'Empty'()
             |      stfld class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::'typeParameters'
+            |      ldarg.0
+            |      ldc.i4.0
+            |      newarr ${coreLibraryReference}System.Object
+            |      stfld object[] Kotlin.Runtime.Internal.FunctionReferenceBase::'parameterDescriptors'
             |    FR_SignatureDone:
             |      ldarg.s 8
             |      brfalse.s FR_ParametersEmpty
@@ -393,6 +457,122 @@ $kClassSupportTypesIl
             |      ldarg.1
             |      call object Kotlin.Runtime.Internal.CallableInvoker::Invoke(object, int32, object[])
             |      ret
+            |    }
+            |
+            |    .method family hidebysig instance object CallByErased(class Kotlin.Collections.Map 'args') cil managed
+            |    {
+            |      .maxstack 4
+            |      .locals init (
+            |        [0] object[] positional,
+            |        [1] int32 index,
+            |        [2] int32 mask,
+            |        [3] object parameter,
+            |        [4] object[] descriptor
+            |      )
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'arity'
+            |      newarr ${coreLibraryReference}System.Object
+            |      stloc.0
+            |      ldc.i4.0
+            |      stloc.1
+            |      ldc.i4.0
+            |      stloc.2
+            |    FR_By_Loop:
+            |      ldloc.1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'arity'
+            |      bge FR_By_Invoke
+            |      ldarg.0
+            |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::'parameters'
+            |      ldloc.1
+            |      callvirt instance object Kotlin.Collections.List::Get(int32)
+            |      stloc.3
+            |      ldarg.1
+            |      ldloc.3
+            |      callvirt instance bool Kotlin.Collections.Map::ContainsKeyErased(object)
+            |      brfalse.s FR_By_Missing
+            |      ldloc.0
+            |      ldloc.1
+            |      ldarg.1
+            |      ldloc.3
+            |      callvirt instance object Kotlin.Collections.Map::GetErased(object)
+            |      stelem.ref
+            |      br FR_By_Next
+            |    FR_By_Missing:
+            |      ldarg.0
+            |      ldfld object[] Kotlin.Runtime.Internal.FunctionReferenceBase::'parameterDescriptors'
+            |      ldloc.1
+            |      ldelem.ref
+            |      castclass object[]
+            |      stloc.s 4
+            |      ldloc.s 4
+            |      ldc.i4.3
+            |      ldelem.ref
+            |      unbox.any ${coreLibraryReference}System.Boolean
+            |      brfalse.s FR_By_NotOptional
+            |      ldloc.2
+            |      ldc.i4.1
+            |      ldloc.1
+            |      shl
+            |      or
+            |      stloc.2
+            |      br.s FR_By_Next
+            |    FR_By_NotOptional:
+            |      ldloc.s 4
+            |      ldc.i4.4
+            |      ldelem.ref
+            |      unbox.any ${coreLibraryReference}System.Boolean
+            |      brfalse.s FR_By_Required
+            |      ldloc.0
+            |      ldloc.1
+            |      ldarg.0
+            |      ldloc.1
+            |      callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::EmptyVarargAt(int32)
+            |      stelem.ref
+            |      br.s FR_By_Next
+            |    FR_By_Required:
+            |      ldstr "No argument provided for a required parameter: "
+            |      ldloc.3
+            |      callvirt instance string ${coreLibraryReference}System.Object::ToString()
+            |      call string ${coreLibraryReference}System.String::Concat(string, string)
+            |      newobj instance void ${coreLibraryReference}System.ArgumentException::.ctor(string)
+            |      throw
+            |    FR_By_Next:
+            |      ldloc.1
+            |      ldc.i4.1
+            |      add
+            |      stloc.1
+            |      br FR_By_Loop
+            |    FR_By_Invoke:
+            |      ldloc.2
+            |      brtrue.s FR_By_Default
+            |      ldarg.0
+            |      ldloc.0
+            |      call instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallErased(object[])
+            |      ret
+            |    FR_By_Default:
+            |      ldarg.0
+            |      ldloc.0
+            |      ldloc.2
+            |      callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallDefaultErased(object[], int32)
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig newslot virtual instance object CallDefaultErased(
+            |        object[] 'args', int32 'mask') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldstr "Callable has no optional arguments."
+            |      newobj instance void ${coreLibraryReference}System.NotSupportedException::.ctor(string)
+            |      throw
+            |    }
+            |
+            |    .method family hidebysig newslot virtual instance object EmptyVarargAt(int32 'index') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldstr "Callable has no vararg at this position."
+            |      newobj instance void ${coreLibraryReference}System.NotSupportedException::.ctor(string)
+            |      throw
             |    }
             |
             |    .method family hidebysig newslot virtual instance object BoundValueAt(int32 'index') cil managed
@@ -643,6 +823,23 @@ $kClassSupportTypesIl
             |      callvirt instance int32 Kotlin.Collections.List::get_Size()
             |      ldarg.1
             |      call object Kotlin.Runtime.Internal.CallableInvoker::Invoke(object, int32, object[])
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object CallBy(
+            |        class Kotlin.Collections.Map 'args') cil managed
+            |    {
+            |      .override method instance object Kotlin.KCallable::CallBy(class Kotlin.Collections.Map)
+            |      .maxstack 4
+            |      ldarg.0
+            |      ldarg.0
+            |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.PropertyReferenceBase::'parameters'
+            |      callvirt instance int32 Kotlin.Collections.List::get_Size()
+            |      ldarg.0
+            |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.PropertyReferenceBase::'parameters'
+            |      ldarg.1
+            |      call object Kotlin.Runtime.Internal.CallableInvoker::InvokeRequiredBy(
+            |          object, int32, class Kotlin.Collections.List, class Kotlin.Collections.Map)
             |      ret
             |    }
             |
@@ -1252,6 +1449,21 @@ $kClassSupportTypesIl
             |      ldc.i4.0
             |      ldarg.1
             |      call object Kotlin.Runtime.Internal.CallableInvoker::Invoke(object, int32, object[])
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object CallBy(
+            |        class Kotlin.Collections.Map 'args') cil managed
+            |    {
+            |      .override method instance object Kotlin.KCallable::CallBy(class Kotlin.Collections.Map)
+            |      .maxstack 4
+            |      ldarg.0
+            |      ldc.i4.0
+            |      ldarg.0
+            |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'parameters'
+            |      ldarg.1
+            |      call object Kotlin.Runtime.Internal.CallableInvoker::InvokeRequiredBy(
+            |          object, int32, class Kotlin.Collections.List, class Kotlin.Collections.Map)
             |      ret
             |    }
             |

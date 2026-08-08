@@ -67,30 +67,6 @@
     newobj instance void 'localDataClassesKt$localData$Local'::.ctor(int32, int32)
     ret
   }
-  .method public hidebysig instance class 'localDataClassesKt$localData$Local' 'copy$default'(int32 'value', int32 '$mask0') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 2
-    ldarg.2
-    ldc.i4 1
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_1
-    ldarg.0
-    ldfld int32 'localDataClassesKt$localData$Local'::'value'
-    starg 1
-    br IL_whenEnd_0
-IL_whenNext_1:
-IL_whenEnd_0:
-    ldarg.0
-    ldarg.1
-    call instance class 'localDataClassesKt$localData$Local' 'localDataClassesKt$localData$Local'::'copy'(int32)
-    ret
-  }
   .method public hidebysig virtual instance string 'ToString'() cil managed
   {
     .maxstack 4
@@ -153,6 +129,30 @@ IL_whenNext_5:
     ldc.i4.1
     ret
   }
+  .method public hidebysig static class 'localDataClassesKt$localData$Local' 'copy$default'(class 'localDataClassesKt$localData$Local' '$this', int32 'value', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    ldfld int32 'localDataClassesKt$localData$Local'::'value'
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    call instance class 'localDataClassesKt$localData$Local' 'localDataClassesKt$localData$Local'::'copy'(int32)
+    ret
+  }
   .property instance int32 'value'()
   {
     .get instance int32 'localDataClassesKt$localData$Local'::'get_value'()
@@ -205,30 +205,6 @@ IL_whenNext_5:
     ldfld int32 'localDataClassesKt$genericLocalData$Local'::'$seed'
     ldarg.1
     newobj instance void 'localDataClassesKt$genericLocalData$Local'::.ctor(int32, object)
-    ret
-  }
-  .method public hidebysig instance class 'localDataClassesKt$genericLocalData$Local' 'copy$default'(object 'value', int32 '$mask0') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 2
-    ldarg.2
-    ldc.i4 1
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_1
-    ldarg.0
-    ldfld object 'localDataClassesKt$genericLocalData$Local'::'value'
-    starg 1
-    br IL_whenEnd_0
-IL_whenNext_1:
-IL_whenEnd_0:
-    ldarg.0
-    ldarg.1
-    call instance class 'localDataClassesKt$genericLocalData$Local' 'localDataClassesKt$genericLocalData$Local'::'copy'(object)
     ret
   }
   .method public hidebysig virtual instance string 'ToString'() cil managed
@@ -298,6 +274,30 @@ IL_whenNext_5:
     ldc.i4.1
     ret
   }
+  .method public hidebysig static class 'localDataClassesKt$genericLocalData$Local' 'copy$default__KotlinErased__af05816a7f621ccb4c4ba3dd9a5c16c4'(class 'localDataClassesKt$genericLocalData$Local' '$this', object 'value', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    ldfld object 'localDataClassesKt$genericLocalData$Local'::'value'
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    call instance class 'localDataClassesKt$genericLocalData$Local' 'localDataClassesKt$genericLocalData$Local'::'copy'(object)
+    ret
+  }
   .property instance object 'value'()
   {
     .get instance object 'localDataClassesKt$genericLocalData$Local'::'get_value'()
@@ -314,7 +314,7 @@ IL_whenNext_5:
     newobj instance void 'localDataClassesKt$localData$Local'::.ctor(int32, int32)
     ldc.i4 0
     ldc.i4 1
-    call instance class 'localDataClassesKt$localData$Local' 'localDataClassesKt$localData$Local'::'copy$default'(int32, int32)
+    call class 'localDataClassesKt$localData$Local' 'localDataClassesKt$localData$Local'::'copy$default'(class 'localDataClassesKt$localData$Local', int32, int32)
     ret
   }
   .method public hidebysig static object 'genericLocalData'<'T'>(int32 'seed', !!0 'value') cil managed
@@ -326,7 +326,7 @@ IL_whenNext_5:
     newobj instance void 'localDataClassesKt$genericLocalData$Local'::.ctor(int32, object)
     ldnull
     ldc.i4 1
-    call instance class 'localDataClassesKt$genericLocalData$Local' 'localDataClassesKt$genericLocalData$Local'::'copy$default'(object, int32)
+    call class 'localDataClassesKt$genericLocalData$Local' 'localDataClassesKt$genericLocalData$Local'::'copy$default__KotlinErased__af05816a7f621ccb4c4ba3dd9a5c16c4'(class 'localDataClassesKt$genericLocalData$Local', object, int32)
     ret
   }
   .method public hidebysig static void 'main'() cil managed

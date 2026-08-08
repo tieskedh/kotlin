@@ -164,8 +164,15 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             val selected = original.resolveFakeOverride()
                 ?: original.resolveFakeOverrideMaybeAbstract()
                 ?: original
-            val bound = externalDeclarations.defaultArgumentDispatcherOrNull(selected) ?: return null
-            return createExternalDefaultArgumentDispatcherBinding(selected.parent, stub, bound).also { replacement ->
+            val dispatcherSource = (listOf(selected, original) + original.allOverridden())
+                .distinct()
+                .sortedByDescending { candidate -> candidate.parent === stub.parent }
+                .firstOrNull { candidate ->
+                    externalDeclarations.defaultArgumentDispatcherOrNull(candidate) != null
+                } ?: return null
+            val bound = externalDeclarations.defaultArgumentDispatcherOrNull(dispatcherSource)
+                ?: error("Internal .NET backend error: selected external default dispatcher disappeared")
+            return createExternalDefaultArgumentDispatcherBinding(dispatcherSource.parent, stub, bound).also { replacement ->
                 externalDefaultDispatcherReplacements[stub] = replacement
             }
         }
@@ -434,12 +441,17 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         stub: IrSimpleFunction,
         bound: DotNetBoundDefaultArgumentDispatcher,
     ): Replacement {
-        val typeContextOwner = if (bound.function.isInstance) {
+        val receiverOwner = if (bound.function.isInstance) {
             semanticParent as? IrClass
                 ?: error("Internal .NET backend error: external instance default dispatcher has no class owner")
         } else {
             null
         }
+        // Kotlin-owned generic classes have one erased runtime owner, so their static default
+        // helper copies only genuine method parameters. Generic interface helpers retain their
+        // separately admitted typed capability and therefore still copy interface parameters as
+        // invariant method slots.
+        val typeContextOwner = receiverOwner?.takeIf(IrClass::isInterface)
         check((stub.dispatchReceiverParameter != null) == bound.function.isInstance) {
             "Internal .NET backend error: external default dispatcher receiver shape disagrees with its physical record"
         }
@@ -460,7 +472,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             irParent = helperOwner,
             name = stub.name,
             oldFunction = stub,
-            dispatchReceiverType = typeContextOwner?.symbol?.defaultType,
+            dispatchReceiverType = receiverOwner?.symbol?.defaultType,
             origin = stub.origin,
             modality = Modality.FINAL,
             visibility = DescriptorVisibilities.PUBLIC,

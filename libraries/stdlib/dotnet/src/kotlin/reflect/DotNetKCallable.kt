@@ -23,8 +23,15 @@ public actual interface KCallable<out R> : KAnnotatedElement {
      * Calls this callable with positional arguments in [parameters] order.
      *
      * A vararg declaration parameter occupies one position and therefore expects its array as one
-     * argument. Default values are deliberately not applied; `callBy` is the reflective operation
-     * that may eventually omit optional parameters.
+     * argument. Default values are deliberately not applied; [callBy] is the reflective operation
+     * that may omit optional parameters.
      */
     public fun call(vararg args: Any?): R
+
+    /**
+     * Calls this callable with arguments keyed by [parameters] using [KParameter] equality.
+     * Optional value parameters and varargs may be absent; explicit `null` remains a supplied
+     * value.
+     */
+    public fun callBy(args: Map<KParameter, Any?>): R
 }
