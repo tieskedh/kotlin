@@ -27274,6 +27274,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public abstract fun label(): String
                 }
 
+                public enum class OtherState { ONLY }
+
                 public fun selected(): State = State.READY
                 public fun selectedName(): String = State.READY.name
                 public fun byName(name: String): State = State.valueOf(name)
@@ -27294,11 +27296,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val libraryIl = libraryDirectory.resolve("Ordinary.Enum.Library.il").readText()
         assertTrue(
             Regex(
-                """\.class public[^\n]*'enumabi\.State'\s+extends \[Kotlin\.Stdlib]'Kotlin\.Enum'"""
+                """\.class public[^\n]*'enumabi\.State'\s+extends \[Kotlin\.Runtime]'Kotlin\.Enum'"""
             ).containsMatchIn(libraryIl)
         ) { libraryIl }
         assertTrue(Regex("""\.class public abstract[^\n]*'enumabi\.State'""").containsMatchIn(libraryIl)) {
             libraryIl
+        }
+        assertTrue(
+            "call void [Kotlin.Runtime]'Kotlin.Enum'/'<CompanionStatics>'::'<EnsureInitialized>'()" in libraryIl
+        ) {
+            "A Runtime-owned nested initialization helper must use an ECMA-335 nested TypeRef:\n$libraryIl"
+        }
+        assertFalse("[Kotlin.Runtime]'Kotlin.Enum/<CompanionStatics>'" in libraryIl) {
+            "A slash inside one quoted TypeRef names a flat type that does not exist:\n$libraryIl"
         }
         for (entryName in listOf("READY", "BUSY", "DONE")) {
             assertTrue(".field public static initonly class 'enumabi.State' '$entryName'" in libraryIl) { libraryIl }
@@ -27310,10 +27320,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         val physicalDeclarations = DotNetLibraryAbiCodec.decode(library.readKlibManifest()).values
         val entryDeclarations = physicalDeclarations.filterIsInstance<DotNetPhysicalDeclaration.EnumEntry>()
-        assertEquals(setOf("READY", "BUSY", "DONE"), entryDeclarations.map { it.fieldName }.toSet())
-        assertTrue(entryDeclarations.all { it.ownerPath.last() == "enumabi.State" }) {
-            entryDeclarations.toString()
-        }
+        val stateEntries = entryDeclarations.filter { it.ownerPath.last() == "enumabi.State" }
+        assertEquals(setOf("READY", "BUSY", "DONE"), stateEntries.map { it.fieldName }.toSet())
+        assertEquals(
+            setOf("ONLY"),
+            entryDeclarations.filter { it.ownerPath.last() == "enumabi.OtherState" }.map { it.fieldName }.toSet(),
+        )
 
         val csharpSource = libraryDirectory.resolve("OrdinaryEnumConsumer.cs").apply {
             writeText(
@@ -27337,6 +27349,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         FieldInfo readyField = typeof(enumabi.State).GetField("READY");
                         if (readyField == null || !readyField.IsInitOnly || readyField.IsLiteral) return 7;
                         if (readyField.GetCustomAttributes(typeof(enumabi.EntryMarker), false).Length != 1) return 8;
+                        if (typeof(enumabi.State).BaseType.FullName != "Kotlin.Enum") return 9;
+                        if (typeof(enumabi.State).BaseType.Assembly.GetName().Name != "Kotlin.Runtime") return 10;
+                        if (((IComparable)ready).CompareTo(enumabi.State.BUSY) >= 0) return 11;
+                        try
+                        {
+                            ((IComparable)ready).CompareTo(enumabi.OtherState.ONLY);
+                            return 12;
+                        }
+                        catch (InvalidCastException)
+                        {
+                        }
                         return 0;
                     }
                 }
@@ -27383,6 +27406,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         val widened: Enum<*> = State.BUSY
                         if (widened.name != "BUSY" || widened.ordinal != 1) {
                             throw Error("external widened enum")
+                        }
+                        if (State.READY.compareTo(State.BUSY) >= 0 || State.DONE.compareTo(State.BUSY) <= 0) {
+                            throw Error("external enum ordering")
+                        }
+                        @Suppress("UNCHECKED_CAST")
+                        val wrongComparable = State.READY as Comparable<OtherState>
+                        try {
+                            wrongComparable.compareTo(OtherState.ONLY)
+                            throw Error("cross-enum comparison succeeded")
+                        } catch (_: ClassCastException) {
                         }
                     }
                     """.trimIndent()
@@ -30408,6 +30441,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val intProgressionType = implementationType("Kotlin.Ranges", "IntProgression")
         val intRangeType = implementationType("Kotlin.Ranges", "IntRange")
         val intIteratorType = implementationType("Kotlin.Collections", "IntIterator")
+        assertTrue(implementationMetadata.typeDefinitions.none { type ->
+            type.namespaceName == "Kotlin" && type.metadataName == "Enum"
+        }) {
+            "Kotlin.Stdlib must consume Kotlin.Enum from Runtime instead of defining a second physical base"
+        }
         val physicalRangeTypes = setOf(
             closedRangeType.handle,
             openEndRangeType.handle,
@@ -30460,6 +30498,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val kClassType = runtimeType("Kotlin", "KClass")
         val kClassImplType = runtimeType("Kotlin", "KClassImpl")
         val kClassFactoryType = runtimeType("Kotlin.Runtime.Internal", "KClassFactory")
+        val enumType = runtimeType("Kotlin", "Enum")
         val erasedCollectionTypes = listOf(
             "Iterator",
             "MutableIterator",
@@ -30483,6 +30522,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         val mutableMapEntryType = runtimeMetadata.typeDefinitions.single { type ->
             type.declaringType == mutableMapType.handle && type.metadataName == "MutableEntry"
+        }
+        assertEquals(DotNetClrTypeVisibility.PUBLIC, enumType.visibility)
+        assertTrue(enumType.isAbstract && !enumType.isInterface && !enumType.isSealed)
+        assertTrue(runtimeMetadata.genericParameterDefinitions.none { parameter ->
+            parameter.owner == enumType.handle
+        }) {
+            "Kotlin.Runtime must own one physically erased Kotlin.Enum base"
+        }
+        assertTrue(runtimeMetadata.assemblyReferences.none { reference ->
+            reference.name == "Kotlin.Stdlib"
+        }) {
+            "Kotlin.Runtime must not acquire an upward dependency on Kotlin.Stdlib"
+        }
+        val runtimeReference = implementationMetadata.assemblyReferences.single { reference ->
+            reference.name == DotNetRuntimeArtifact.ASSEMBLY_NAME
+        }
+        val enumReference = implementationMetadata.typeReferences.single { type ->
+            type.namespaceName == "Kotlin" && type.metadataName == "Enum"
+        }
+        assertEquals(runtimeReference.handle, enumReference.resolutionScope)
+        val kParameterType = implementationType("Kotlin.Reflection", "KParameter")
+        val kParameterKindType = implementationMetadata.typeDefinitions.single { type ->
+            type.declaringType == kParameterType.handle && type.metadataName == "Kind"
+        }
+        assertEquals(enumReference.handle, kParameterKindType.baseType)
+        assertTrue(implementationMetadata.genericParameterDefinitions.none { parameter ->
+            parameter.owner == kParameterKindType.handle
+        }) {
+            "A concrete Kotlin enum must remain a non-generic reference class"
         }
         assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassifierType.visibility)
         assertTrue(kClassifierType.isInterface)
@@ -35873,10 +35941,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val library = produceLibraryWithRewrittenMetadata(
             assemblyName = "Stale.Embedded.Schema",
-            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "22"),
+            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "23"),
         )
         val diagnostics = compileAgainstRejectedDll(library)
-        assertTrue("uses unsupported CLR ABI index version '22'" in diagnostics) { diagnostics }
+        assertTrue("uses unsupported CLR ABI index version '23'" in diagnostics) { diagnostics }
     }
 
     @Test
