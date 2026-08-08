@@ -73,6 +73,11 @@ tasks.named<ProcessResources>("processResources") {
     )) {
         into("kotlin-dotnet-stdlib/common-non-jvm/src/kotlin/reflect")
     }
+    // KVisibility is a JVM platform extension rather than a Common expect declaration. Reuse
+    // that authoritative Kotlin source; Kotlin.Runtime supplies its physical CLR enum.
+    from(rootProject.file("libraries/stdlib/jvm/src/kotlin/reflect/KVisibility.kt")) {
+        into("kotlin-dotnet-stdlib/jvm/src/kotlin/reflect")
+    }
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/collections/AbstractList.kt"),

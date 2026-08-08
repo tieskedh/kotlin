@@ -49,6 +49,10 @@ internal object DotNetRuntimeTypes {
         setOf("isInline", "isExternal", "isOperator", "isInfix", "isSuspend")
     private val KFUNCTION_DECLARATION_GETTERS =
         KFUNCTION_DECLARATION_PROPERTIES.mapTo(linkedSetOf()) { property -> "get_$property" }
+    private val KCALLABLE_DECLARATION_PROPERTIES =
+        setOf("visibility", "isFinal", "isOpen", "isAbstract")
+    private val KCALLABLE_DECLARATION_GETTERS =
+        KCALLABLE_DECLARATION_PROPERTIES.mapTo(linkedSetOf()) { property -> "get_$property" }
 
     private val unitClass = DotNetIlClassInfo(
         ilClassName = "Kotlin.Unit",
@@ -140,6 +144,10 @@ internal object DotNetRuntimeTypes {
     private val listBase = listGenericInterfaceInfo.canonicalClassInfo
     val listType = DotNetIlValueType.UserClass(listBase)
 
+    private val enumEntriesGenericInterfaceInfo =
+        runtimeInterface("Kotlin.Enums.EnumEntries")
+    private val enumEntriesBase = enumEntriesGenericInterfaceInfo.canonicalClassInfo
+
     private val mutableListGenericInterfaceInfo =
         runtimeInterface("Kotlin.Collections.MutableList")
     private val mutableListBase = mutableListGenericInterfaceInfo.canonicalClassInfo
@@ -191,6 +199,7 @@ internal object DotNetRuntimeTypes {
         collectionBase.interfaces = listOf(iterableType)
         mutableCollectionBase.interfaces = listOf(collectionType, mutableIterableType)
         listBase.interfaces = listOf(collectionType)
+        enumEntriesBase.interfaces = listOf(listType)
         mutableListBase.interfaces = listOf(listType, mutableCollectionType)
         setBase.interfaces = listOf(collectionType)
         mutableSetBase.interfaces = listOf(setType, mutableCollectionType)
@@ -367,6 +376,10 @@ internal object DotNetRuntimeTypes {
             info = listGenericInterfaceInfo,
             methods = listMethods,
         ),
+        "kotlin.enums.EnumEntries" to RuntimeGenericInterfaceDescriptor(
+            info = enumEntriesGenericInterfaceInfo,
+            methods = listMethods,
+        ),
         "kotlin.collections.MutableList" to RuntimeGenericInterfaceDescriptor(
             info = mutableListGenericInterfaceInfo,
             methods = mutableListMethods,
@@ -401,6 +414,15 @@ internal object DotNetRuntimeTypes {
         ilClassName = "Kotlin.KCallable",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
+
+    private val kVisibilityClass = DotNetIlClassInfo(
+        ilClassName = "Kotlin.KVisibility",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    ).apply {
+        // The physical Runtime enum is handwritten rather than emitted from this module, so its
+        // ordinary Kotlin.Enum upcast must be present in the codegen type graph explicitly.
+        baseType = DotNetIlValueType.UserClass(enumClass)
+    }
 
     private val kClassifierBase = DotNetKClassRuntime.kClassifierClassInfo
     private val kAnnotatedElementBase = DotNetKClassRuntime.kAnnotatedElementClassInfo
@@ -543,6 +565,7 @@ internal object DotNetRuntimeTypes {
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CLASS -> kClassBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_TYPE -> kTypeBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CALLABLE -> kCallableBase
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_VISIBILITY -> kVisibilityClass
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_FUNCTION || classifierInfo.fixedKFunctionArity != null ->
                 kFunctionBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_PROPERTY -> kPropertyBase
@@ -674,7 +697,7 @@ internal object DotNetRuntimeTypes {
                         "CallByErased",
                         "CallDefaultErased",
                         "EmptyVarargAt",
-                    ) + KFUNCTION_DECLARATION_GETTERS ->
+                    ) + KFUNCTION_DECLARATION_GETTERS + KCALLABLE_DECLARATION_GETTERS ->
                 DotNetIlFunctionInfo(
                     owner = functionReferenceBase,
                     signature = function.dotNetSignature(typeMapper),
@@ -682,9 +705,28 @@ internal object DotNetRuntimeTypes {
                 )
             ownerInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CALLABLE &&
                     function.dotNetIlMethodName() in
-                    setOf("get_name", "get_returnType", "get_parameters", "get_typeParameters", "Call", "CallBy") ->
+                    setOf(
+                        "get_name",
+                        "get_returnType",
+                        "get_parameters",
+                        "get_typeParameters",
+                        "get_visibility",
+                        "get_isFinal",
+                        "get_isOpen",
+                        "get_isAbstract",
+                        "Call",
+                        "CallBy",
+                    ) ->
                 DotNetIlFunctionInfo(
                     owner = kCallableBase,
+                    signature = function.dotNetSignature(typeMapper),
+                    physicalMethodName = function.dotNetIlMethodName(),
+                )
+            ownerInfo.runtimeKind == DotNetRuntimeClassifierKind.K_VISIBILITY &&
+                    function.dotNetIlMethodName() in
+                    setOf("values", "valueOf", "get_entries", "<EnsureInitialized>") ->
+                DotNetIlFunctionInfo(
+                    owner = kVisibilityClass,
                     signature = function.dotNetSignature(typeMapper),
                     physicalMethodName = function.dotNetIlMethodName(),
                 )
@@ -828,7 +870,16 @@ internal object DotNetRuntimeTypes {
                 invoke.dotNetSignature(typeMapper),
             )
         }
-        for (propertyName in listOf("name", "returnType", "parameters", "typeParameters")) {
+        for (propertyName in listOf(
+            "name",
+            "returnType",
+            "parameters",
+            "typeParameters",
+            "visibility",
+            "isFinal",
+            "isOpen",
+            "isAbstract",
+        )) {
             val property = irBuiltIns.kCallableClass.owner.properties
                 .singleOrNull { it.name.asString() == propertyName }
                 ?: continue

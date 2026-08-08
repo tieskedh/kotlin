@@ -90,6 +90,7 @@ internal data class DotNetClassifierInfo(
                     DotNetRuntimeClassifierKind.ENUM_COMPANION_STATICS
                 fqNameString == "kotlin.Function" && typeParameterCount == 1 -> DotNetRuntimeClassifierKind.FUNCTION
                 fqNameString == "kotlin.reflect.KCallable" && typeParameterCount == 1 -> DotNetRuntimeClassifierKind.K_CALLABLE
+                fqNameString == "kotlin.reflect.KVisibility" && typeParameterCount == 0 -> DotNetRuntimeClassifierKind.K_VISIBILITY
                 fqNameString == "kotlin.reflect.KClassifier" && typeParameterCount == 0 -> DotNetRuntimeClassifierKind.K_CLASSIFIER
                 fqNameString == "kotlin.reflect.KAnnotatedElement" && typeParameterCount == 0 -> DotNetRuntimeClassifierKind.K_ANNOTATED_ELEMENT
                 fqNameString == "kotlin.reflect.KClass" && typeParameterCount == 1 -> DotNetRuntimeClassifierKind.K_CLASS
@@ -154,6 +155,7 @@ internal enum class DotNetRuntimeClassifierKind {
     ENUM_COMPANION_STATICS,
     FUNCTION,
     K_CALLABLE,
+    K_VISIBILITY,
     K_CLASSIFIER,
     K_ANNOTATED_ELEMENT,
     K_CLASS,

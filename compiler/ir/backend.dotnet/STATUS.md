@@ -16,13 +16,15 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: bounded read-local buffering of the already
-  range-checked PE CLI metadata directory. Normal CLR assemblies now decode
-  tables, strings, and blobs from one in-memory byte range instead of seeking
-  for every scalar/string byte; metadata directories above 64 MiB retain the
-  exact checked RandomAccessFile path. The objective model and diagnostics are
-  unchanged, and no global assembly/file cache was introduced. Library ABI
-  version 24 and runtime surface level 25 remain current
+- Last completed feature: JVM-shaped direct-callable visibility and modality.
+  Function, property, constructor, inherited, local, separate-KLIB, and
+  admitted foreign CLR references now expose declaration-owned
+  `KCallable.visibility`, `isFinal`, `isOpen`, and `isAbstract`; emitted CLR
+  MethodDef/bridge flags are never semantic authority. Runtime owns the one
+  ordinary Kotlin `KVisibility` reference enum and the physical member-free
+  `EnumEntries` capability required by its complete enum surface, while Common
+  `EnumEntriesList` behavior remains in Stdlib. Library ABI version 25 and
+  runtime surface level 26 are current
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
@@ -36,7 +38,7 @@ substantial open programmes.
 
 ## Current green gate
 
-The buffered CLR-metadata-reader head passed the ordinary aggregate. The normal
+The callable-visibility/modality head passed the ordinary aggregate. The normal
 aggregate command is:
 
 ```text
@@ -51,13 +53,17 @@ The audited full-aggregate evidence covers 54 XML files and 1305 tests:
 - 92 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed its final confirmation at 2026-08-08 14:30 local time
-in 16m19s. Gradle reused the unchanged six physical model tests, rewrote all 51
-FIR/IL/box suites, and rewrote both `dn` suites. The resulting audited tree has
-a cumulative JUnit suite time of 1007.54 seconds: 0.13 for the physical model,
-380.27 for FIR/IL/box, and 627.14 for `dn`. Gradle 9's selected-task `--rerun`
-option is not full-matrix evidence on the empty backend lifecycle task and is
-not part of the verification command.
+The aggregate completed its final confirmation at 2026-08-08 16:48 local time
+in 10m29s. Gradle reused the unchanged six physical model tests and the full 51
+green FIR/IL/box suites from the immediately preceding candidate run, then
+rewrote both `dn` suites after the product-source audit was corrected. The
+resulting audited tree has a cumulative JUnit suite time of 991.99 seconds:
+0.13 for the physical model, 372.49 for FIR/IL/box, and 619.37 for `dn`. All
+production changes had therefore passed the complete FIR matrix before the
+final aggregate; the intervening change only added the authoritative JVM
+`KVisibility.kt` path to the integration audit. Gradle 9's selected-task
+`--rerun` option is not full-matrix evidence on the empty backend lifecycle
+task and is not part of the verification command.
 
 The next profile after fixing the emitter showed a separate foreign-loading
 cost: every 1/2/4-byte metadata-table value and every byte scanned from
@@ -209,7 +215,11 @@ CLR, CoreCLR, and an installed cross-assembly consumer cover both sides.
 Ordinary Kotlin enums are one reference-class hierarchy, never CLR
 `System.Enum` value types. The one erased physical `Kotlin.Enum` base now lives
 in `Kotlin.Runtime`; Runtime has no upward Stdlib reference, while concrete
-Stdlib/user enums and `EnumEntries` retain their own owners. Entry fields retain
+Stdlib/user enums retain their own owners. Runtime now also owns the physical
+member-free erased `EnumEntries` interface needed by its `KVisibility` enum;
+the authoritative Common declaration, `EnumEntriesList` implementation,
+factories, and algorithms remain Stdlib-owned, and Stdlib emits no duplicate
+interface TypeDef. Entry fields retain
 singleton identity and source order; private entry subclasses implement bodies
 and abstract members; `values()` is fresh, `entries` is stable, and `valueOf`
 uses exact Kotlin names and failure semantics. Both frontend paths execute the
@@ -774,6 +784,21 @@ adapters and runtime CLR reflection never become flag authority. Publishing
 external linkage. Library ABI 23 rejects old references without declaration
 bits, and runtime surface 24 gates the five new physical getters before
 execution.
+
+Direct callable visibility and modality now follow the same JVM-shaped
+declaration-fact rule. Public, protected, internal, private, final, open, and
+abstract functions, properties, and constructors retain their exact logical
+FIR/IR/KLIB facts across producer- and consumer-created references; local
+function and delegated-property tokens return null visibility and final
+modality. Admitted foreign CLR interface functions and properties obtain
+public/abstract from importer IR rather than from backend-selected MethodDefs.
+One shared reference payload serves functions and properties, and property
+factory arguments are now bound by parameter name so later payload extensions
+cannot silently corrupt the annotation-factory slot. Runtime surface 26 owns
+the typed getters and ordinary `KVisibility` enum; library ABI 25 rejects old
+materialized references. Separate Kotlin/C#/Roslyn and physical metadata tests
+also pin Runtime's lack of a Stdlib reference and Stdlib's implementation of
+the one Runtime-owned `EnumEntries` interface.
 
 Library ABI version 23 also retains the version-22 static ordinary-class
 default-dispatch shape; runtime surface level 24 includes the version-23

@@ -10,6 +10,8 @@ import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.common.lower.irCatch
 import org.jetbrains.kotlin.backend.common.lower.irIfThen
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.DotNetClassifierInfo
+import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeClassifierKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredStaticInitializationFailure
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
@@ -298,6 +300,11 @@ internal class DotNetStaticInitializationFailureLowering(
 
     private fun externalStaticInitializationEntry(logicalOwner: IrClass): IrSimpleFunction? {
         context.externalStaticInitializationEntries[logicalOwner]?.let { return it }
+        if (DotNetClassifierInfo.derive(logicalOwner).runtimeKind == DotNetRuntimeClassifierKind.K_VISIBILITY) {
+            return createExternalEntry(logicalOwner).also { entry ->
+                context.externalStaticInitializationEntries[logicalOwner] = entry
+            }
+        }
         val binding = externalDeclarations.staticInitializationOrNull(logicalOwner) ?: return null
         return createExternalEntry(logicalOwner).also { entry ->
             context.externalStaticInitializationEntries[logicalOwner] = entry

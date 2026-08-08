@@ -7,6 +7,7 @@ import kotlin.reflect.KMutableProperty2
 import kotlin.reflect.KProperty
 import kotlin.reflect.KProperty0
 import kotlin.reflect.KProperty1
+import kotlin.reflect.KVisibility
 import kotlin.reflect.typeOf
 
 private var topValue: Int = 40
@@ -26,6 +27,14 @@ private class ManualProperty : kotlin.reflect.KMutableProperty1<Cell, Int> {
     override val parameters = emptyList<kotlin.reflect.KParameter>()
 
     override val typeParameters = emptyList<kotlin.reflect.KTypeParameter>()
+
+    override val visibility: KVisibility? = KVisibility.PRIVATE
+
+    override val isFinal: Boolean = true
+
+    override val isOpen: Boolean = false
+
+    override val isAbstract: Boolean = false
 
     override fun call(vararg args: Any?): Int = get(args[0] as Cell)
 
@@ -52,6 +61,14 @@ private class ManualProperty2 : KMutableProperty2<ExtensionHost, Cell, Int> {
     override val parameters = emptyList<kotlin.reflect.KParameter>()
 
     override val typeParameters = emptyList<kotlin.reflect.KTypeParameter>()
+
+    override val visibility: KVisibility? = KVisibility.PRIVATE
+
+    override val isFinal: Boolean = true
+
+    override val isOpen: Boolean = false
+
+    override val isAbstract: Boolean = false
 
     override fun call(vararg args: Any?): Int = get(args[0] as ExtensionHost, args[1] as Cell)
 
@@ -98,11 +115,19 @@ private var observedLocalInvokeFailure: Boolean = false
 private var observedLocalCallFailure: Boolean = false
 private var observedLocalCallByFailure: Boolean = false
 private var observedLocalRendering: String = ""
+private var observedLocalVisibility: KVisibility? = KVisibility.PUBLIC
+private var observedLocalIsFinal: Boolean = false
+private var observedLocalIsOpen: Boolean = true
+private var observedLocalIsAbstract: Boolean = true
 
 private fun observeLocalProperty(property: KProperty<*>) {
     observedLocalName = property.name
     observedLocalMutable = property is KMutableProperty<*>
     observedLocalRendering = property.toString()
+    observedLocalVisibility = property.visibility
+    observedLocalIsFinal = property.isFinal
+    observedLocalIsOpen = property.isOpen
+    observedLocalIsAbstract = property.isAbstract
     if (property is KProperty0<*>) {
         observedLocalGetFailure = try {
             property.get()
@@ -283,6 +308,11 @@ fun box(): String {
     if (observedLocalRendering != "property localRead (Kotlin reflection is not available)") {
         return "fail 28: local val rendering"
     }
+    if (observedLocalVisibility != null || !observedLocalIsFinal || observedLocalIsOpen ||
+        observedLocalIsAbstract
+    ) {
+        return "fail 28a: local val declaration facts"
+    }
 
     if (writeLocalDelegate() != 42) return "fail 29: local delegated var"
     if (observedLocalName != "localWrite" || !observedLocalMutable) return "fail 30: local var token"
@@ -293,6 +323,11 @@ fun box(): String {
     }
     if (observedLocalRendering != "property localWrite (Kotlin reflection is not available)") {
         return "fail 32: local var rendering"
+    }
+    if (observedLocalVisibility != null || !observedLocalIsFinal || observedLocalIsOpen ||
+        observedLocalIsAbstract
+    ) {
+        return "fail 32a: local var declaration facts"
     }
 
     localProvideCalls = 0

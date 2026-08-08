@@ -148,8 +148,8 @@ same graph with JVM's owner, ordering, captured-receiver omission, reindexing,
 default, vararg, and equality rules. Kotlin parameter applications retain their
 exact declaration owners; admitted foreign callables use exact CLR Param rows
 without turning CLR optional flags into Kotlin default-call semantics. General
-members, accessor objects, `KCallable` visibility/modality, and type-use annotations
-remain separate tranches. Positional `KCallable.call` now consumes that exact
+members, accessor objects, and type-use annotations remain separate tranches.
+Positional `KCallable.call` now consumes that exact
 parameter order through the existing erased `FunctionN` capability. Runtime
 surface level 22 validates count and dispatches without CLR member discovery;
 defaults remain explicit, a vararg is one array argument, property call means
@@ -172,6 +172,18 @@ while library ABI 23 rejects already-materialized old references that lack the
 declaration bits. Suspend
 callable references and external linkage remain independent execution
 features, not consequences of publishing their declaration facts.
+
+JVM-shaped direct-callable visibility and modality are now complete. Logical
+FIR/IR/KLIB or importer facts populate function, property, constructor, and
+local-reference tokens; emitted CLR MethodDef and bridge flags are never used
+as semantic evidence. Runtime surface 26 publishes the ordinary Kotlin
+`KVisibility` reference enum and shared callable getters, while library ABI 25
+rejects already-materialized references without the declaration bits. To keep
+Runtime independent of Stdlib, Runtime also owns the physical member-free
+`EnumEntries` interface; the Common generic declaration and all list behavior
+remain Stdlib-owned. Member enumeration, accessor objects, type-use
+annotations, and reflective invocation beyond the admitted callable closure
+remain independent tranches.
 
 Future member enumeration must include member extension properties with
 multiple callable-owned type parameters and, once context parameters are

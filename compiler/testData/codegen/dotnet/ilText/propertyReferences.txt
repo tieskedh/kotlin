@@ -134,7 +134,7 @@
       ldarg.0
       ldstr "local:propertyReferences.kt:619:670:ExtensionHost#<get-delegatedValue>@Cell(){}"
       ldc.i4 2
-      ldc.i4 0
+      ldc.i4 17408
       ldc.i4 0
       ldstr "<get-delegatedValue>"
       call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -225,7 +225,7 @@
       ldarg.0
       ldstr "local:propertyReferences.kt:619:670:ExtensionHost#<set-delegatedValue>@Cell(kotlin.Int){}"
       ldc.i4 3
-      ldc.i4 0
+      ldc.i4 17408
       ldc.i4 0
       ldstr "<set-delegatedValue>"
       call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -309,7 +309,7 @@
       ldarg.0
       ldstr "local:propertyReferences.kt:619:670:ExtensionHost#<get-delegatedValue>@Cell(){}"
       ldc.i4 2
-      ldc.i4 0
+      ldc.i4 17408
       ldc.i4 0
       ldstr "<get-delegatedValue>"
       call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -400,7 +400,7 @@
       ldarg.0
       ldstr "local:propertyReferences.kt:619:670:ExtensionHost#<set-delegatedValue>@Cell(kotlin.Int){}"
       ldc.i4 3
-      ldc.i4 0
+      ldc.i4 17408
       ldc.i4 0
       ldstr "<set-delegatedValue>"
       call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -627,7 +627,8 @@
     ldloc.0
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldc.i4 17408
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     call instance int32 'ExtensionDelegate'::'getValue'(class 'Cell', class [Kotlin.Runtime]'Kotlin.KProperty')
     ret
   }
@@ -816,7 +817,8 @@
     ldloc.0
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldc.i4 17408
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     ldarg.2
     call instance void 'ExtensionDelegate'::'setValue'(class 'Cell', class [Kotlin.Runtime]'Kotlin.KProperty', int32)
     ret
@@ -949,7 +951,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:propertyReferences.kt:284:304:#<get-topRead>(){}"
     ldc.i4 0
-    ldc.i4 0
+    ldc.i4 24576
     ldc.i4 0
     ldstr "<get-topRead>"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -1026,7 +1028,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:propertyReferences.kt:232:249:#<get-topValue>(){}"
     ldc.i4 0
-    ldc.i4 0
+    ldc.i4 24576
     ldc.i4 0
     ldstr "<get-topValue>"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -1103,7 +1105,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:propertyReferences.kt:232:249:#<set-topValue>(kotlin.Int){}"
     ldc.i4 1
-    ldc.i4 0
+    ldc.i4 24576
     ldc.i4 0
     ldstr "<set-topValue>"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -1175,7 +1177,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:propertyReferences.kt:325:339:Cell#<get-value>(){}"
     ldc.i4 1
-    ldc.i4 0
+    ldc.i4 17408
     ldc.i4 0
     ldstr "<get-value>"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -1255,7 +1257,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:propertyReferences.kt:325:339:Cell#<set-value>(kotlin.Int){}"
     ldc.i4 2
-    ldc.i4 0
+    ldc.i4 17408
     ldc.i4 0
     ldstr "<set-value>"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -1288,7 +1290,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:propertyReferences.kt:325:339:Cell#<get-value>(){}"
     ldc.i4 0
-    ldc.i4 0
+    ldc.i4 17408
     ldc.i4 1
     ldstr "<get-value>"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -1341,7 +1343,7 @@ IL_whenNext_1:
     ldarg.0
     ldstr "local:propertyReferences.kt:325:339:Cell#<set-value>(kotlin.Int){}"
     ldc.i4 1
-    ldc.i4 0
+    ldc.i4 17408
     ldc.i4 1
     ldstr "<set-value>"
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
@@ -1556,7 +1558,8 @@ IL_tryEnd_0:
     ldloc.1
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    call class [Kotlin.Runtime]'Kotlin.KProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldc.i4 24576
+    call class [Kotlin.Runtime]'Kotlin.KProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     stloc.0
     ldloc.0
     callvirt instance string [Kotlin.Runtime]'Kotlin.KCallable'::'get_name'()
@@ -1639,7 +1642,8 @@ IL_callableExactEnd_1:
     ldloc 10
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Function1', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldc.i4 24576
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Function1', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     stloc 9
     ldloc 9
     ldc.i4 41
@@ -1778,7 +1782,8 @@ IL_callableExactEnd_3:
     ldloc 20
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty1'<class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Function2', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldc.i4 17408
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty1'<class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Function2', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     stloc 19
     ldloc 19
     callvirt instance string [Kotlin.Runtime]'Kotlin.KCallable'::'get_name'()
@@ -1871,7 +1876,8 @@ IL_callableExactEnd_5:
     ldloc 34
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Function1', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldc.i4 17408
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Function1', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     stloc 33
     ldloc 33
     callvirt instance string [Kotlin.Runtime]'Kotlin.KCallable'::'get_name'()
@@ -1982,7 +1988,8 @@ IL_callableExactEnd_7:
     ldloc.0
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    call class [Kotlin.Runtime]'Kotlin.KProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedProperty0'<int32>(string, object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldc.i4 16384
+    call class [Kotlin.Runtime]'Kotlin.KProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedProperty0'<int32>(string, object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     call instance int32 'LocalDelegate'::'getValue'(object, class [Kotlin.Runtime]'Kotlin.KProperty')
     ret
   }
@@ -2042,7 +2049,8 @@ IL_callableExactEnd_7:
     ldloc.0
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedMutableProperty0'<int32>(string, object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldc.i4 16384
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedMutableProperty0'<int32>(string, object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     call instance int32 'LocalDelegate'::'getValue'(object, class [Kotlin.Runtime]'Kotlin.KProperty')
     ret
   }
@@ -2102,7 +2110,8 @@ IL_callableExactEnd_7:
     ldloc.0
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedMutableProperty0'<int32>(string, object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldc.i4 16384
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedMutableProperty0'<int32>(string, object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     ldarg.1
     call instance void 'LocalDelegate'::'setValue'(object, class [Kotlin.Runtime]'Kotlin.KProperty', int32)
     ret
