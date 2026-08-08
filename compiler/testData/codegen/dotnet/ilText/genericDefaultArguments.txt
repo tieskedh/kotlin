@@ -80,7 +80,22 @@ IL_whenEnd_0:
     ldarg.1
     ret
   }
-  .method public hidebysig instance object 'member$default'(object 'selected', int32 '$mask0') cil managed
+  .method public hidebysig instance object 'throughMember'() cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldnull
+    ldc.i4 1
+    call object 'GenericDefaults'::'member$default__KotlinErased__3377c61608da48807089b9a36a766b55'(class 'GenericDefaults', object, int32)
+    ret
+  }
+  .method public hidebysig instance !!0 'method'<'R'>(!!0 'value', !!0 'selected') cil managed
+  {
+    .maxstack 1
+    ldarg.2
+    ret
+  }
+  .method public hidebysig static object 'member$default__KotlinErased__3377c61608da48807089b9a36a766b55'(class 'GenericDefaults' '$this', object 'selected', int32 '$mask0') cil managed
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
@@ -104,22 +119,7 @@ IL_whenEnd_0:
     call instance object 'GenericDefaults'::'member'(object)
     ret
   }
-  .method public hidebysig instance object 'throughMember'() cil managed
-  {
-    .maxstack 3
-    ldarg.0
-    ldnull
-    ldc.i4 1
-    call instance object 'GenericDefaults'::'member$default'(object, int32)
-    ret
-  }
-  .method public hidebysig instance !!0 'method'<'R'>(!!0 'value', !!0 'selected') cil managed
-  {
-    .maxstack 1
-    ldarg.2
-    ret
-  }
-  .method public hidebysig instance !!0 'method$default'<'R'>(!!0 'value', !!0 'selected', int32 '$mask0') cil managed
+  .method public hidebysig static !!0 'method$default__KotlinErased__55a5de8a4305bb01e5ed4622eacc5d79'<'R'>(class 'GenericDefaults' '$this', !!0 'value', !!0 'selected', int32 '$mask0') cil managed
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
@@ -185,30 +185,6 @@ IL_whenEnd_0:
     .maxstack 1
     ldarg.1
     newobj instance void 'GenericDefaultData'::.ctor(object)
-    ret
-  }
-  .method public hidebysig instance class 'GenericDefaultData' 'copy$default'(object 'value', int32 '$mask0') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 2
-    ldarg.2
-    ldc.i4 1
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_1
-    ldarg.0
-    ldfld object 'GenericDefaultData'::'value'
-    starg 1
-    br IL_whenEnd_0
-IL_whenNext_1:
-IL_whenEnd_0:
-    ldarg.0
-    ldarg.1
-    call instance class 'GenericDefaultData' 'GenericDefaultData'::'copy'(object)
     ret
   }
   .method public hidebysig virtual instance string 'ToString'() cil managed
@@ -278,6 +254,30 @@ IL_whenNext_5:
     ldc.i4.1
     ret
   }
+  .method public hidebysig static class 'GenericDefaultData' 'copy$default__KotlinErased__537307c77a8d1d49b0e921261bb9ba26'(class 'GenericDefaultData' '$this', object 'value', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    ldfld object 'GenericDefaultData'::'value'
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    call instance class 'GenericDefaultData' 'GenericDefaultData'::'copy'(object)
+    ret
+  }
   .property instance object 'value'()
   {
     .get instance object 'GenericDefaultData'::'get_value'()
@@ -333,7 +333,7 @@ IL_whenEnd_0:
     ldloc.0
     ldnull
     ldc.i4 1
-    call instance object 'GenericDefaults'::'member$default'(object, int32)
+    call object 'GenericDefaults'::'member$default__KotlinErased__3377c61608da48807089b9a36a766b55'(class 'GenericDefaults', object, int32)
     unbox.any !!0
     pop
     ldloc.0
@@ -345,14 +345,14 @@ IL_whenEnd_0:
     initobj !!0
     ldloc.1
     ldc.i4 2
-    call instance !!0 'GenericDefaults'::'method$default'<!!0>(!!0, !!0, int32)
+    call !!0 'GenericDefaults'::'method$default__KotlinErased__55a5de8a4305bb01e5ed4622eacc5d79'<!!0>(class 'GenericDefaults', !!0, !!0, int32)
     pop
     ldarg.0
     box !!0
     newobj instance void 'GenericDefaultData'::.ctor(object)
     ldnull
     ldc.i4 1
-    call instance class 'GenericDefaultData' 'GenericDefaultData'::'copy$default'(object, int32)
+    call class 'GenericDefaultData' 'GenericDefaultData'::'copy$default__KotlinErased__537307c77a8d1d49b0e921261bb9ba26'(class 'GenericDefaultData', object, int32)
     pop
     ldarg.0
     ldloca 2

@@ -678,6 +678,10 @@ $throwableExceptionTypesIl
             .method public hidebysig newslot abstract virtual instance object Call(object[] 'args') cil managed
             {
             }
+
+            .method public hidebysig newslot abstract virtual instance object CallBy(class Kotlin.Collections.Map 'args') cil managed
+            {
+            }
           }
 
           .class interface public abstract auto ansi KFunction

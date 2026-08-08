@@ -148,13 +148,20 @@ same graph with JVM's owner, ordering, captured-receiver omission, reindexing,
 default, vararg, and equality rules. Kotlin parameter applications retain their
 exact declaration owners; admitted foreign callables use exact CLR Param rows
 without turning CLR optional flags into Kotlin default-call semantics. General
-members, accessor objects, named/default invocation, and type-use annotations
+members, accessor objects, function-declaration flags beyond the Common floor,
+and type-use annotations
 remain separate tranches. Positional `KCallable.call` now consumes that exact
 parameter order through the existing erased `FunctionN` capability. Runtime
 surface level 22 validates count and dispatches without CLR member discovery;
 defaults remain explicit, a vararg is one array argument, property call means
-getter, and target exceptions keep identity. `callBy` remains the separate
-default-mask/omission tranche.
+getter, and target exceptions keep identity. The `callBy` default-mask/omission
+tranche is now complete at runtime surface 23 for the admitted `KFunction0`
+through `KFunction3` closure: it uses exact parameter identity, JVM
+omission/error behavior, fresh exact empty varargs, and the shared static
+class/default-dispatch ABI across separate libraries. Library ABI 22 keeps
+Kotlin-owned class parameters erased on that helper while retaining genuine
+method generics. The tranche introduces neither CLR member lookup nor a
+reflection-owned mask ABI.
 
 Future member enumeration must include member extension properties with
 multiple callable-owned type parameters and, once context parameters are
@@ -364,9 +371,10 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - wider annotation use-site targets, type-use owners, and unsupported CLR-value
   projections; valued construction, defaults, KLIB applications, and exact
   class/callable runtime discovery are selected;
-- broad member reflection, accessor objects, and named/default invocation; the nominal
-  `KClass` floor, logical `KType`/`typeOf` graph, callable annotations, and
-  callable return types/type parameters/parameters plus positional call are complete;
+- broad member reflection and accessor objects; the nominal `KClass` floor,
+  logical `KType`/`typeOf` graph, callable annotations, callable return
+  types/type parameters/parameters, and positional plus named/default
+  invocation are complete for the admitted callable arities;
 - foreign CLR generic-method import, including method-owned parameter bounds,
   overload resolution, invocation/binding, and subsequent callable reflection;
 - value/inline classes;
