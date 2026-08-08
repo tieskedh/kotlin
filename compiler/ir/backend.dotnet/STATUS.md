@@ -53,17 +53,13 @@ The audited full-aggregate evidence covers 54 XML files and 1305 tests:
 - 92 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed its final confirmation at 2026-08-08 16:48 local time
-in 10m29s. Gradle reused the unchanged six physical model tests and the full 51
-green FIR/IL/box suites from the immediately preceding candidate run, then
-rewrote both `dn` suites after the product-source audit was corrected. The
-resulting audited tree has a cumulative JUnit suite time of 991.99 seconds:
-0.13 for the physical model, 372.49 for FIR/IL/box, and 619.37 for `dn`. All
-production changes had therefore passed the complete FIR matrix before the
-final aggregate; the intervening change only added the authoritative JVM
-`KVisibility.kt` path to the integration audit. Gradle 9's selected-task
-`--rerun` option is not full-matrix evidence on the empty backend lifecycle
-task and is not part of the verification command.
+The aggregate completed its final confirmation at 2026-08-08 17:47 local time
+in 18m32s. Gradle reused the unchanged six physical model tests, then rewrote
+all 51 FIR/IL/box suites and both `dn` suites against the binding-index cache.
+The resulting audited tree has a cumulative JUnit suite time of 1106.00
+seconds: 0.13 for the physical model, 408.40 for FIR/IL/box, and 697.47 for
+`dn`. Gradle 9's selected-task `--rerun` option is not full-matrix evidence on
+the empty backend lifecycle task and is not part of the verification command.
 
 The next profile after fixing the emitter showed a separate foreign-loading
 cost: every 1/2/4-byte metadata-table value and every byte scanned from
@@ -94,6 +90,28 @@ about 120 GB to 69.85 GB. The final instrumented producer observed 320,458
 cache hits among 320,718 classifier queries over only 260 unique declarations
 (99.92%). No mapped CLR type, target-profile decision, assembly-reference side
 effect, or live emitability result is cached.
+
+A later profile of the heaviest library-publication testcase found a separate
+repeated-identity cost in the consumer's Kotlin-to-CLR binding index. Shared
+KLIB serialization computes one public `IdSignature` per IR declaration in a
+declaration table; the .NET consumer instead rebuilt and rendered that same
+signature for repeated class, function, enum-entry, interface-default, generic
+bridge, and covariant-bridge queries. `DotNetExternalDeclarations` now retains
+the final kind-prefixed binding key by IR identity for the lifetime of that one
+binding index, including negative results, and rejects inconsistent kind reuse.
+It is deliberately not shared across lowering phases because local IR can still
+change, matching the JVM bridge-cache warning against retaining a physical
+signature beyond the IR shape from which it was derived.
+
+On the same JFR-instrumented publication case, recording duration changed from
+67 to 62 seconds and total sampled allocation weight from about 15.30 to 14.42
+GB. More importantly, the directly attributable external-binder ABI-key stacks
+changed from three samples/53.9 MB to zero: the previous samples came from
+interface-default class forwarders, generic-interface view bridges, and
+covariant-return bridges. Overall wall time and sampled totals remain noisy and
+are not a promise of a fixed five-second gain. Remaining ABI-key samples belong
+to producer-index construction and canonical-interface slot naming and must be
+profiled as separate owners before either is changed.
 
 That cache did not explain the apparent multi-hour product emission. A nested
 Stdlib declaration removed from the live codegen set was repeatedly
