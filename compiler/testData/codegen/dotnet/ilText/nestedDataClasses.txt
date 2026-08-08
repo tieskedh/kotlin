@@ -75,45 +75,6 @@
       newobj instance void 'GenericDataOwner'/'Entry'::.ctor(int32, string)
       ret
     }
-    .method public hidebysig instance class 'GenericDataOwner'/'Entry' 'copy$default'(int32 'number', string 'label', int32 '$mask0') cil managed
-    {
-      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 3
-      ldarg.3
-      ldc.i4 1
-      and
-      ldc.i4 0
-      ceq
-      ldc.i4.0
-      ceq
-      brfalse IL_whenNext_1
-      ldarg.0
-      ldfld int32 'GenericDataOwner'/'Entry'::'number'
-      starg 1
-      br IL_whenEnd_0
-  IL_whenNext_1:
-  IL_whenEnd_0:
-      ldarg.3
-      ldc.i4 2
-      and
-      ldc.i4 0
-      ceq
-      ldc.i4.0
-      ceq
-      brfalse IL_whenNext_3
-      ldarg.0
-      ldfld string 'GenericDataOwner'/'Entry'::'label'
-      starg 2
-      br IL_whenEnd_2
-  IL_whenNext_3:
-  IL_whenEnd_2:
-      ldarg.0
-      ldarg.1
-      ldarg.2
-      call instance class 'GenericDataOwner'/'Entry' 'GenericDataOwner'/'Entry'::'copy'(int32, string)
-      ret
-    }
     .method public hidebysig virtual instance string 'ToString'() cil managed
     {
       .maxstack 4
@@ -219,6 +180,45 @@
       ldc.i4.1
       ret
     }
+    .method public hidebysig static class 'GenericDataOwner'/'Entry' 'copy$default'(class 'GenericDataOwner'/'Entry' '$this', int32 'number', string 'label', int32 '$mask0') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 3
+      ldarg.3
+      ldc.i4 1
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldarg.0
+      ldfld int32 'GenericDataOwner'/'Entry'::'number'
+      starg 1
+      br IL_whenEnd_0
+  IL_whenNext_1:
+  IL_whenEnd_0:
+      ldarg.3
+      ldc.i4 2
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_3
+      ldarg.0
+      ldfld string 'GenericDataOwner'/'Entry'::'label'
+      starg 2
+      br IL_whenEnd_2
+  IL_whenNext_3:
+  IL_whenEnd_2:
+      ldarg.0
+      ldarg.1
+      ldarg.2
+      call instance class 'GenericDataOwner'/'Entry' 'GenericDataOwner'/'Entry'::'copy'(int32, string)
+      ret
+    }
     .property instance int32 'number'()
     {
       .get instance int32 'GenericDataOwner'/'Entry'::'get_number'()
@@ -254,7 +254,7 @@
     ldc.i4 9
     ldnull
     ldc.i4 2
-    call instance class 'GenericDataOwner'/'Entry' 'GenericDataOwner'/'Entry'::'copy$default'(int32, string, int32)
+    call class 'GenericDataOwner'/'Entry' 'GenericDataOwner'/'Entry'::'copy$default'(class 'GenericDataOwner'/'Entry', int32, string, int32)
     ret
   }
   .method public hidebysig static void 'main'() cil managed

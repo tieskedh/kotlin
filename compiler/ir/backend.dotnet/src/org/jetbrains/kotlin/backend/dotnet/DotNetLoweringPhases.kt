@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnnotationImplementationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCallableReferenceLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetClassDefaultArgumentsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCompanionStaticsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializationFailureLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializationGraphLowering
@@ -193,6 +194,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // identity; physical entry fields and ordinary synthetic bodies must exist before interface
     // bridges and static-initializer ownership inspect the final class graph.
     ::DotNetEnumClassLowering,
+    // JVM-shaped ordinary-class default dispatch: one static compiler helper with the receiver
+    // explicit. Kotlin-owned class parameters stay erased while genuine method parameters retain
+    // their CLR generic slots, preserving one class identity across separate compilation.
+    ::DotNetClassDefaultArgumentsLowering,
     // JVM DefaultImpls ownership without CLR DIM: keep interface slots abstract, move their
     // masked dispatchers into a compiler-reserved nested helper, and redirect calls to its static
     // methods with the interface receiver explicit. This preserves the Framework 4.8 floor.

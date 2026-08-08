@@ -5,18 +5,40 @@
 
 package org.jetbrains.kotlin.backend.dotnet.lower
 
+import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
+import org.jetbrains.kotlin.backend.common.defaultArgumentsOriginalFunction
+import org.jetbrains.kotlin.backend.common.ir.moveBodyTo
 import org.jetbrains.kotlin.backend.common.lower.DefaultArgumentStubGenerator
 import org.jetbrains.kotlin.backend.common.lower.DefaultParameterCleaner
 import org.jetbrains.kotlin.backend.common.lower.DefaultParameterInjector
 import org.jetbrains.kotlin.backend.common.lower.MaskedDefaultArgumentFunctionFactory
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
+import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
 import org.jetbrains.kotlin.ir.irAttribute
+import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.util.createStaticFunctionWithReceivers
+import org.jetbrains.kotlin.ir.util.isFakeOverride
+import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
+import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
+import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
+import org.jetbrains.kotlin.ir.visitors.acceptVoid
+import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
+import org.jetbrains.kotlin.utils.addToStdlib.assignFrom
 
 /** Source parameters whose default expressions are removed before IL emission. */
 internal var IrSimpleFunction.dotNetDefaultParameterIndices: List<Int>? by irAttribute(copyByDefault = false)
@@ -91,4 +113,111 @@ internal class DotNetDefaultParameterCleaner(
         }
         return super.transformFlat(declaration)
     }
+}
+
+/**
+ * Gives ordinary Kotlin class members the JVM-shaped static `$default` ABI.
+ *
+ * The common factory initially produces an instance dispatcher whose dispatch receiver remains
+ * an IR receiver. CLR can execute that shape locally, but it cannot be described by the target's
+ * existing cross-module dispatcher record. Move the receiver into the static helper's ordinary
+ * parameter list, exactly as JVM does. Kotlin-owned class parameters deliberately remain erased;
+ * only method-owned type parameters are copied into the CLR method signature. KLIB remains
+ * authoritative for the logical owner construction, and the helper still calls the original
+ * member virtually.
+ */
+internal class DotNetClassDefaultArgumentsLowering(
+    private val context: DotNetBackendContext,
+) : ModuleLoweringPass {
+    override fun lower(irModule: IrModuleFragment) {
+        val classes = mutableListOf<IrClass>()
+        irModule.acceptVoid(object : IrVisitorVoid() {
+            override fun visitElement(element: IrElement) {
+                element.acceptChildrenVoid(this)
+            }
+
+            override fun visitClass(declaration: IrClass) {
+                if (!declaration.isInterface) classes += declaration
+                declaration.acceptChildrenVoid(this)
+            }
+        })
+
+        val replacements = mutableMapOf<IrSimpleFunctionSymbol, Replacement>()
+        val helpers = linkedMapOf<IrClass, MutableList<Pair<IrSimpleFunction, IrSimpleFunction>>>()
+        for (irClass in classes) {
+            val defaultStubs = irClass.memberFunctions().filter { function ->
+                !function.isFakeOverride &&
+                        function.origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER &&
+                        function.dispatchReceiverParameter != null &&
+                        function.body != null
+            }
+            for (stub in defaultStubs) {
+                val original = stub.defaultArgumentsOriginalFunction as? IrSimpleFunction
+                    ?: error("Internal .NET backend error: class default dispatcher has no original function")
+                val helper = context.irFactory.createStaticFunctionWithReceivers(
+                    irParent = irClass,
+                    name = stub.name,
+                    oldFunction = stub,
+                    dispatchReceiverType = irClass.symbol.defaultType,
+                    origin = stub.origin,
+                    modality = Modality.FINAL,
+                    visibility = DescriptorVisibilities.PUBLIC,
+                    isFakeOverride = false,
+                )
+                helper.body = stub.moveBodyTo(helper)
+                val previousDispatcher = context.defaultArgumentDispatchers.put(original, helper)
+                check(previousDispatcher == null || previousDispatcher === stub) {
+                    "Internal .NET backend error: class member has multiple default-argument dispatchers"
+                }
+                replacements[stub.symbol] = Replacement(helper)
+                helpers.getOrPut(irClass, ::mutableListOf) += stub to helper
+            }
+        }
+
+        irModule.transformChildrenVoid(object : IrElementTransformerVoid() {
+            override fun visitCall(expression: IrCall): IrExpression {
+                expression.transformChildrenVoid(this)
+                val replacement = replacements[expression.symbol] ?: return expression
+                return redirectCall(expression, replacement)
+            }
+        })
+
+        for (mapEntry in helpers) {
+            val irClass = mapEntry.key
+            val entries = mapEntry.value
+            irClass.declarations.removeAll(entries.mapTo(hashSetOf()) { it.first })
+            irClass.declarations += entries.map { it.second }
+        }
+    }
+
+    private fun redirectCall(expression: IrCall, replacement: Replacement): IrCall {
+        check(replacement.helper.typeParameters.size == expression.typeArguments.size) {
+            "Internal .NET backend error: class default helper type-argument mismatch"
+        }
+        return IrCallImpl(
+            expression.startOffset,
+            expression.endOffset,
+            expression.type,
+            replacement.helper.symbol,
+            typeArgumentsCount = replacement.helper.typeParameters.size,
+            origin = expression.origin,
+        ).apply {
+            arguments.assignFrom(expression.arguments)
+            expression.typeArguments.forEachIndexed { index, argument ->
+                typeArguments[index] = argument
+            }
+        }
+    }
+
+    private fun IrClass.memberFunctions(): List<IrSimpleFunction> = declarations.flatMap { declaration ->
+        when (declaration) {
+            is IrSimpleFunction -> listOf(declaration)
+            is IrProperty -> listOfNotNull(declaration.getter, declaration.setter)
+            else -> emptyList()
+        }
+    }
+
+    private data class Replacement(
+        val helper: IrSimpleFunction,
+    )
 }

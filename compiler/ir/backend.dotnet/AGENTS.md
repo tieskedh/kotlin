@@ -475,9 +475,17 @@ See the
   object-shaped. Only true reflective reference classes implement the slot;
   internal getter/adaptation callable helpers that share
   `FunctionReferenceBase` must not become KCallable accidentally.
-  Typed foreign attribute import, foreign CLR generic methods, accessor
-  objects, `callBy`, and broader member reflection remain
-  separate. A foreign generic
+  `KCallable.callBy` extends the same parameter-identity graph for the admitted
+  `KFunction0` through `KFunction3` closure. Map presence distinguishes an
+  explicit null from omission; absent optional values reuse the shared
+  default-argument lowering; absent varargs receive a fresh exact array; and
+  missing required parameters follow the JVM failure contract. Ordinary class
+  default dispatchers use one JVM-shaped static compiler ABI with an explicit
+  receiver so source and reflective calls share virtual, separate-library
+  behavior. Runtime must not rediscover CLR members or own Kotlin default-mask
+  layout. Typed foreign attribute import, foreign CLR generic methods,
+  accessor objects, function-declaration flags beyond the current Common
+  floor, and broader member reflection remain separate. A foreign generic
   method must continue to fail the current interface importer closed until its
   own complete FIR/import/binding feature lands; never decode it privately in
   callable reflection. See
@@ -487,7 +495,8 @@ See the
   [the callable-return decision](docs/decisions/callable-return-types.md), and
   [the callable-type-parameter decision](docs/decisions/callable-type-parameters.md), and
   [the callable-parameter decision](docs/decisions/callable-parameters.md), and
-  [the positional-call decision](docs/decisions/callable-positional-invocation.md).
+  [the positional-call decision](docs/decisions/callable-positional-invocation.md), and
+  [the named-call decision](docs/decisions/callable-named-invocation.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
   Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve

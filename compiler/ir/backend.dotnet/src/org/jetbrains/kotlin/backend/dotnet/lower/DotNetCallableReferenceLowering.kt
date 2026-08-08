@@ -9,8 +9,10 @@ import org.jetbrains.kotlin.backend.common.FileLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.AbstractFunctionReferenceLowering
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.common.lower.UpgradeCallableReferences
+import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericArray
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.backend.dotnet.dotNetFixedFunctionArityOrNull
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -41,28 +43,37 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
+import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.declarations.createExpressionBody
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.IrFunctionAccessExpression
+import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
+import org.jetbrains.kotlin.ir.expressions.IrReturn
 import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.expressions.impl.IrConstructorCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetFieldImpl
 import org.jetbrains.kotlin.ir.expressions.impl.fromSymbolOwner
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classOrFail
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
 import org.jetbrains.kotlin.ir.util.copyTo
+import org.jetbrains.kotlin.ir.util.constructors
 import org.jetbrains.kotlin.ir.util.defaultType
+import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.functions
+import org.jetbrains.kotlin.ir.util.hasShape
 import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.isLambda
@@ -73,6 +84,7 @@ import org.jetbrains.kotlin.ir.util.removeProjectionsToMakeValidSuperType
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.name.Name
+import java.util.IdentityHashMap
 
 internal val DOTNET_LAMBDA_IMPL: IrDeclarationOrigin = IrDeclarationOriginImpl("DOTNET_LAMBDA_IMPL")
 internal val DOTNET_FUNCTION_REFERENCE_IMPL: IrDeclarationOrigin =
@@ -97,6 +109,7 @@ internal class DotNetUpgradeCallableReferences(context: DotNetBackendContext) :
 internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     AbstractFunctionReferenceLowering<DotNetBackendContext>(context) {
     private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable signature")
+    private val executionInvokeByReference = IdentityHashMap<IrRichFunctionReference, IrSimpleFunction>()
 
     override fun getReferenceClassName(reference: IrRichFunctionReference): Name =
         Name.identifier(if (reference.origin.isLambda) "lambda" else "functionReference")
@@ -193,9 +206,14 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         }
 
         val executionType = functionReference.type.removeProjectionsToMakeValidSuperType()
-        if (context.exactCallableSymbols.typeFor(executionType) == null) return
+        val exactType = context.exactCallableSymbols.typeFor(executionType)
+        if (exactType == null) {
+            executionInvokeByReference[functionReference] = invokeFunction
+            return
+        }
         val arity = (executionType as IrSimpleType).arguments.size - 1
         val exactInvoke = splitExactInvokeFromErasedBridge(invokeFunction, arity)
+        executionInvokeByReference[functionReference] = exactInvoke
         if (context.typedArgumentsCallableSymbols.typeFor(executionType) != null) {
             addTypedArgumentsBridge(invokeFunction.parent as IrClass, exactInvoke, arity)
         }
@@ -284,6 +302,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         if (!reference.type.isKFunction() || reference.type.isKSuspendFunction()) return
         if (reference.reflectionTargetSymbol == null) return
         addPositionalCall(functionReferenceClass, reference)
+        addNamedCall(functionReferenceClass, reference)
         val superProperty = context.irBuiltIns.kCallableClass.owner.properties
             .single { it.name.asString() == "name" }
         val superGetter = superProperty.getter
@@ -440,6 +459,271 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         }
     }
 
+    /** Implements KCallable.callBy while leaving producer-mask construction to the shared lowering. */
+    private fun addNamedCall(functionReferenceClass: IrClass, reference: IrRichFunctionReference) {
+        val superCallBy = context.irBuiltIns.kCallableClass.owner.functions
+            .singleOrNull { function -> function.name.asString() == "callBy" }
+            ?: return
+        val erasedCallBy = context.functionReferenceSymbols.callByErased ?: return
+        val argumentParameter = superCallBy.parameters.single { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        }
+        functionReferenceClass.addFunction {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = superCallBy.name
+            visibility = superCallBy.visibility
+            modality = Modality.FINAL
+            returnType = reference.invokeFunction.returnType
+        }.apply callBy@{
+            overriddenSymbols = listOf(superCallBy.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            parameters += argumentParameter.copyTo(this)
+            body = context.createIrBuilder(symbol).irBlockBody {
+                val erasedCall = irCall(erasedCallBy).apply {
+                    arguments[0] = irGet(this@callBy.dispatchReceiverParameter!!)
+                    arguments[1] = irGet(this@callBy.parameters.single { it.kind == IrParameterKind.Regular })
+                }
+                +irReturn(irImplicitCast(erasedCall, this@callBy.returnType))
+            }
+        }
+
+        val target = reference.reflectionTargetSymbol?.owner
+            ?: error("Internal .NET backend error: KFunction callBy target is absent")
+        val exposedParameters = target.exposedCallableParameters(reference.boundValues.size)
+        val executionInvoke = executionInvokeByReference[reference]
+            ?: error("Internal .NET backend error: KFunction callBy has no execution method")
+        val executionParameters = executionInvoke.parameters.filter { it.kind == IrParameterKind.Regular }
+        check(executionParameters.size == exposedParameters.size) {
+            "Internal .NET backend error: reflected callable exposes ${exposedParameters.size} parameters " +
+                    "but executes with ${executionParameters.size}"
+        }
+
+        val optionalIndices = exposedParameters.indices.filter { index ->
+            exposedParameters[index].hasDotNetKotlinOptionalSemantics()
+        }
+        if (optionalIndices.isNotEmpty()) {
+            addDefaultCallCapability(
+                functionReferenceClass,
+                reference,
+                target,
+                exposedParameters,
+                executionInvoke,
+                optionalIndices,
+            )
+        }
+        val varargIndices = exposedParameters.indices.filter { index ->
+            exposedParameters[index].varargElementType != null
+        }
+        if (varargIndices.isNotEmpty()) {
+            addEmptyVarargCapability(
+                functionReferenceClass,
+                reference,
+                exposedParameters,
+                varargIndices,
+            )
+        }
+    }
+
+    private fun addDefaultCallCapability(
+        functionReferenceClass: IrClass,
+        reference: IrRichFunctionReference,
+        target: IrFunction,
+        exposedParameters: List<IrValueParameter>,
+        executionInvoke: IrSimpleFunction,
+        optionalIndices: List<Int>,
+    ) {
+        val base = context.functionReferenceSymbols.callDefaultErased
+        val baseParameters = base.parameters.filter { it.kind == IrParameterKind.Regular }
+        val helpers = buildList {
+            val optionalMask = optionalIndices.fold(0) { mask, index -> mask or (1 shl index) }
+            for (mask in 1 until (1 shl exposedParameters.size)) {
+                if (mask and optionalMask != mask) continue
+                add(mask to addDefaultInvocationHelper(
+                    functionReferenceClass,
+                    reference,
+                    target,
+                    exposedParameters,
+                    executionInvoke,
+                    mask,
+                    baseParameters[0],
+                ))
+            }
+        }
+        functionReferenceClass.addFunction {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = base.name
+            visibility = base.visibility
+            modality = Modality.FINAL
+            returnType = base.returnType
+        }.apply capability@{
+            overriddenSymbols = listOf(base.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            parameters += baseParameters.map { parameter -> parameter.copyTo(this) }
+            val args = parameters.filter { it.kind == IrParameterKind.Regular }[0]
+            val mask = parameters.filter { it.kind == IrParameterKind.Regular }[1]
+            body = context.createIrBuilder(symbol).irBlockBody {
+                val branches = helpers.map { entry ->
+                    val value = entry.first
+                    val helper = entry.second
+                    irBranch(
+                        irEquals(irGet(mask), irInt(value)),
+                        irCall(helper).apply {
+                            arguments[0] = irGet(this@capability.dispatchReceiverParameter!!)
+                            arguments[1] = irGet(args)
+                        },
+                    )
+                } + irElseBranch(
+                    irCall(context.irBuiltIns.illegalArgumentExceptionSymbol).apply {
+                        arguments[0] = irString("Invalid reflective default-argument mask.")
+                    }
+                )
+                +irReturn(irWhen(context.irBuiltIns.anyNType, branches))
+            }
+        }
+    }
+
+    private fun addDefaultInvocationHelper(
+        functionReferenceClass: IrClass,
+        reference: IrRichFunctionReference,
+        target: IrFunction,
+        exposedParameters: List<IrValueParameter>,
+        executionInvoke: IrSimpleFunction,
+        mask: Int,
+        baseArgumentsParameter: IrValueParameter,
+    ): IrSimpleFunction {
+        val helper = functionReferenceClass.addFunction {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = Name.identifier("CallDefaultMask$mask")
+            visibility = DescriptorVisibilities.PRIVATE
+            modality = Modality.FINAL
+            returnType = context.irBuiltIns.anyNType
+        }.apply {
+            parameters += createDispatchReceiverParameterWithClassParent()
+            parameters += baseArgumentsParameter.copyTo(this)
+        }
+        val arguments = helper.parameters.single { it.kind == IrParameterKind.Regular }
+        val executionParameters = executionInvoke.parameters.filter { it.kind == IrParameterKind.Regular }
+        val executionParameterIndex = executionParameters.withIndex().associate { it.value.symbol to it.index }
+        val omittedTargetParameters = exposedParameters.indices
+            .filter { index -> mask and (1 shl index) != 0 }
+            .mapTo(linkedSetOf()) { index -> exposedParameters[index].symbol }
+        val body = executionInvoke.body?.deepCopyWithSymbols(helper)
+            ?: error("Internal .NET backend error: KFunction callBy execution method has no body")
+        var matchingCalls = 0
+        val transformer = object : IrElementTransformerVoid() {
+            override fun visitGetValue(expression: IrGetValue): IrExpression {
+                executionInvoke.dispatchReceiverParameter?.let { receiver ->
+                    if (expression.symbol == receiver.symbol) {
+                        return context.createIrBuilder(helper.symbol).at(expression)
+                            .irGet(helper.dispatchReceiverParameter!!)
+                    }
+                }
+                val index = executionParameterIndex[expression.symbol] ?: return expression
+                val builder = context.createIrBuilder(helper.symbol).at(expression)
+                val arrayGet = context.irBuiltIns.arrayClass.owner.functions.single { function ->
+                    function.name.asString() == "get"
+                }
+                return builder.irCall(arrayGet.symbol, expression.type).apply {
+                    this.arguments[0] = builder.irGet(arguments)
+                    this.arguments[1] = builder.irInt(index)
+                }
+            }
+
+            override fun visitFunctionAccess(expression: IrFunctionAccessExpression): IrExpression {
+                val transformed = super.visitFunctionAccess(expression) as IrFunctionAccessExpression
+                if (transformed.symbol != target.symbol) return transformed
+                matchingCalls++
+                transformed.symbol.owner.parameters.forEachIndexed { index, parameter ->
+                    if (parameter.symbol in omittedTargetParameters) transformed.arguments[index] = null
+                }
+                return transformed
+            }
+
+            override fun visitReturn(expression: IrReturn): IrExpression {
+                val transformed = super.visitReturn(expression) as IrReturn
+                if (transformed.returnTargetSymbol != executionInvoke.symbol) return transformed
+                transformed.returnTargetSymbol = helper.symbol
+                val builder = context.createIrBuilder(helper.symbol).at(transformed)
+                transformed.value = builder.irImplicitCast(transformed.value, context.irBuiltIns.anyNType)
+                return transformed
+            }
+        }
+        body.transformChildrenVoid(transformer)
+        check(matchingCalls == 1) {
+            "Internal .NET backend error: reflective default call for '${target.name}' found " +
+                    "$matchingCalls target calls instead of one"
+        }
+        helper.body = body
+        return helper
+    }
+
+    private fun addEmptyVarargCapability(
+        functionReferenceClass: IrClass,
+        reference: IrRichFunctionReference,
+        exposedParameters: List<IrValueParameter>,
+        varargIndices: List<Int>,
+    ) {
+        val base = context.functionReferenceSymbols.emptyVarargAt
+        val baseIndex = base.parameters.single { it.kind == IrParameterKind.Regular }
+        functionReferenceClass.addFunction {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = base.name
+            visibility = base.visibility
+            modality = Modality.FINAL
+            returnType = base.returnType
+        }.apply capability@{
+            overriddenSymbols = listOf(base.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            parameters += baseIndex.copyTo(this)
+            val indexParameter = parameters.single { it.kind == IrParameterKind.Regular }
+            body = context.createIrBuilder(symbol).irBlockBody {
+                val branches = varargIndices.map { index ->
+                    val emptyArray = buildEmptyArray(exposedParameters[index].type)
+                    irBranch(
+                        irEquals(irGet(indexParameter), irInt(index)),
+                        irImplicitCast(emptyArray, context.irBuiltIns.anyNType),
+                    )
+                } + irElseBranch(
+                    irCall(context.irBuiltIns.illegalArgumentExceptionSymbol).apply {
+                        arguments[0] = irString("Invalid reflective vararg position.")
+                    }
+                )
+                +irReturn(irWhen(context.irBuiltIns.anyNType, branches))
+            }
+        }
+    }
+
+    private fun IrBuilderWithScope.buildEmptyArray(arrayType: IrType): IrExpression {
+        if (arrayType.isDotNetGenericArray()) {
+            val elementType = ((arrayType as IrSimpleType).arguments.single() as IrTypeProjection).type
+            val invariantArrayType = context.irBuiltIns.arrayClass.owner
+                .symbol.typeWithArguments(listOf(elementType))
+            return irCall(context.irBuiltIns.arrayOfNulls, invariantArrayType).apply {
+                typeArguments[0] = elementType
+                arguments[0] = irInt(0)
+                type = invariantArrayType
+            }
+        }
+        val constructor = arrayType.classOrFail.owner.constructors.single { candidate ->
+            candidate.hasShape(
+                regularParameters = 1,
+                parameterTypes = listOf(context.irBuiltIns.intType),
+            )
+        }
+        return irCall(constructor.symbol).apply {
+            arguments[0] = irInt(0)
+            type = arrayType
+        }
+    }
+
     /** Exposes exactly the rich reference's bound values to the runtime identity base. */
     private fun addBoundValueAccess(functionReferenceClass: IrClass) {
         val fields = functionReferenceClass.declarations.filterIsInstance<IrField>()
@@ -491,7 +775,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
                 declaration.origin == IrDeclarationOrigin.FAKE_OVERRIDE && when (declaration) {
                     is IrProperty -> declaration.name in concretePropertyNames
                     is IrSimpleFunction ->
-                        declaration.name.asString() == "call" ||
+                        declaration.name.asString() in setOf("call", "callBy") ||
                                 declaration.correspondingPropertySymbol?.owner?.name
                                     ?.let { name -> name in concretePropertyNames } == true
                     else -> false
@@ -517,6 +801,17 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
                 "does not use a supported fixed Function0, Function1, Function2, or Function3 interface"
             else -> null
         }
+    }
+}
+
+private fun IrFunction.exposedCallableParameters(boundReceiverCount: Int): List<IrValueParameter> {
+    val receivers = parameters.filter { parameter -> parameter.kind != IrParameterKind.Regular }
+    require(boundReceiverCount <= receivers.size) {
+        "Internal .NET backend error: callable '$name' captures $boundReceiverCount receivers " +
+                "but declares only ${receivers.size}"
+    }
+    return receivers.drop(boundReceiverCount) + parameters.filter { parameter ->
+        parameter.kind == IrParameterKind.Regular
     }
 }
 

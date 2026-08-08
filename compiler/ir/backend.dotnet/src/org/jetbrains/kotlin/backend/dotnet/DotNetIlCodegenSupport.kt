@@ -124,7 +124,7 @@ internal fun dotNetUnsupported(reason: String): Nothing =
 
 internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): DotNetIlMethodSignature {
     val isErasedCallableInvoke = isDotNetErasedCallableInvoke()
-    val isErasedCallableCall = isDotNetKCallableCall()
+    val isErasedCallableCall = isDotNetKCallableInvocation()
     val isErasedPropertyAccess = isDotNetErasedPropertyAccess()
     val ilReturnType = if (
         isErasedCallableInvoke || isErasedCallableCall ||
@@ -168,7 +168,13 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
  */
 internal fun IrSimpleFunction.dotNetIlMethodName(): String {
     if (isDotNetErasedCallableInvoke()) return "Invoke"
-    if (isDotNetKCallableCall()) return "Call"
+    if (isDotNetKCallableInvocation()) {
+        return when (name.asString()) {
+            "call" -> "Call"
+            "callBy" -> "CallBy"
+            else -> error("Internal .NET backend error: unknown KCallable invocation '$name'")
+        }
+    }
     if (isDotNetErasedPropertyAccess()) return if (name.asString() == "get") "Get" else "Set"
     dotNetAnyMethodOrNull()?.let { return it.clrName }
     val property = correspondingPropertySymbol?.owner ?: return name.asString()
@@ -375,9 +381,9 @@ internal fun IrSimpleFunction.isDotNetErasedCallableInvoke(): Boolean {
     }
 }
 
-/** Whether this is KCallable.call, whose covariant logical result uses one object CLR slot. */
-internal fun IrSimpleFunction.isDotNetKCallableCall(): Boolean {
-    if (name.asString() != "call") return false
+/** Whether this is a KCallable invocation whose covariant logical result uses one object CLR slot. */
+internal fun IrSimpleFunction.isDotNetKCallableInvocation(): Boolean {
+    if (name.asString() !in setOf("call", "callBy")) return false
     fun IrSimpleFunction.hasKCallableOwner(): Boolean =
         (parent as? IrClass)?.fqNameWhenAvailable?.asString() == "kotlin.reflect.KCallable"
     return hasKCallableOwner() || allOverridden().any(IrSimpleFunction::hasKCallableOwner)
@@ -395,7 +401,7 @@ internal fun IrSimpleFunction.isDotNetErasedPropertyAccess(): Boolean {
 /** Whether this function's physical CLR result is object while its Kotlin result stays logical. */
 internal fun IrSimpleFunction.isDotNetErasedObjectResult(): Boolean =
     isDotNetErasedCallableInvoke() ||
-            isDotNetKCallableCall() ||
+            isDotNetKCallableInvocation() ||
             (isDotNetErasedPropertyAccess() && name.asString() == "get")
 
 /**

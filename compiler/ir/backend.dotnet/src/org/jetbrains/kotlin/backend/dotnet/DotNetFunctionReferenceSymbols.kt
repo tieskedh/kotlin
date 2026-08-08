@@ -32,6 +32,7 @@ import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.functions
 import org.jetbrains.kotlin.ir.util.properties
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
@@ -59,6 +60,9 @@ internal class DotNetFunctionReferenceSymbols(
     val getParameters: IrSimpleFunction?
     val getTypeParameters: IrSimpleFunction?
     val callErased: IrSimpleFunction
+    val callByErased: IrSimpleFunction?
+    val callDefaultErased: IrSimpleFunction
+    val emptyVarargAt: IrSimpleFunction
 
     init {
         val runtimeInternalPackage = createEmptyExternalPackageFragment(
@@ -161,6 +165,45 @@ internal class DotNetFunctionReferenceSymbols(
                 "args",
                 irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)),
             )
+        }
+        callByErased = irBuiltIns.kCallableClass.owner.functions
+            .singleOrNull { function -> function.name.asString() == "callBy" }
+            ?.let { callBy ->
+                val args = callBy.parameters.single { parameter -> parameter.kind == org.jetbrains.kotlin.ir.declarations.IrParameterKind.Regular }
+                baseClass.addFunction {
+                    origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+                    name = Name.identifier("CallByErased")
+                    visibility = DescriptorVisibilities.PROTECTED
+                    modality = Modality.FINAL
+                    returnType = irBuiltIns.anyNType
+                }.apply {
+                    parameters += createDispatchReceiverParameterWithClassParent()
+                    addValueParameter("args", args.type)
+                }
+            }
+        callDefaultErased = baseClass.addFunction {
+            origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+            name = Name.identifier("CallDefaultErased")
+            visibility = DescriptorVisibilities.PROTECTED
+            modality = Modality.OPEN
+            returnType = irBuiltIns.anyNType
+        }.apply {
+            parameters += createDispatchReceiverParameterWithClassParent()
+            addValueParameter(
+                "args",
+                irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)),
+            )
+            addValueParameter("mask", irBuiltIns.intType)
+        }
+        emptyVarargAt = baseClass.addFunction {
+            origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+            name = Name.identifier("EmptyVarargAt")
+            visibility = DescriptorVisibilities.PROTECTED
+            modality = Modality.OPEN
+            returnType = irBuiltIns.anyNType
+        }.apply {
+            parameters += createDispatchReceiverParameterWithClassParent()
+            addValueParameter("index", irBuiltIns.intType)
         }
         getParameters = irBuiltIns.kCallableClass.owner.properties
             .singleOrNull { property -> property.name.asString() == "parameters" }

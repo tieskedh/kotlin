@@ -91,60 +91,6 @@
     newobj instance void 'Point'::.ctor(int32, string, valuetype [mscorlib]System.Nullable`1<int32>)
     ret
   }
-  .method public hidebysig instance class 'Point' 'copy$default'(int32 'x', string 'label', valuetype [mscorlib]System.Nullable`1<int32> 'rank', int32 '$mask0') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 4
-    ldarg 4
-    ldc.i4 1
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_1
-    ldarg.0
-    ldfld int32 'Point'::'x'
-    starg 1
-    br IL_whenEnd_0
-IL_whenNext_1:
-IL_whenEnd_0:
-    ldarg 4
-    ldc.i4 2
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_3
-    ldarg.0
-    ldfld string 'Point'::'label'
-    starg 2
-    br IL_whenEnd_2
-IL_whenNext_3:
-IL_whenEnd_2:
-    ldarg 4
-    ldc.i4 4
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_5
-    ldarg.0
-    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
-    starg 3
-    br IL_whenEnd_4
-IL_whenNext_5:
-IL_whenEnd_4:
-    ldarg.0
-    ldarg.1
-    ldarg.2
-    ldarg.3
-    call instance class 'Point' 'Point'::'copy'(int32, string, valuetype [mscorlib]System.Nullable`1<int32>)
-    ret
-  }
   .method public hidebysig virtual instance string 'ToString'() cil managed
   {
     .maxstack 4
@@ -319,6 +265,60 @@ IL_whenNext_9:
     ldc.i4.1
     ret
   }
+  .method public hidebysig static class 'Point' 'copy$default'(class 'Point' '$this', int32 'x', string 'label', valuetype [mscorlib]System.Nullable`1<int32> 'rank', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 4
+    ldarg 4
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    ldfld int32 'Point'::'x'
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg 4
+    ldc.i4 2
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldarg.0
+    ldfld string 'Point'::'label'
+    starg 2
+    br IL_whenEnd_2
+IL_whenNext_3:
+IL_whenEnd_2:
+    ldarg 4
+    ldc.i4 4
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_5
+    ldarg.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
+    starg 3
+    br IL_whenEnd_4
+IL_whenNext_5:
+IL_whenEnd_4:
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    ldarg.3
+    call instance class 'Point' 'Point'::'copy'(int32, string, valuetype [mscorlib]System.Nullable`1<int32>)
+    ret
+  }
   .property instance int32 'x'()
   {
     .get instance int32 'Point'::'get_x'()
@@ -356,7 +356,7 @@ IL_whenNext_9:
     initobj valuetype [mscorlib]System.Nullable`1<int32>
     ldloc.0
     ldc.i4 2
-    call instance class 'Point' 'Point'::'copy$default'(int32, string, valuetype [mscorlib]System.Nullable`1<int32>, int32)
+    call class 'Point' 'Point'::'copy$default'(class 'Point', int32, string, valuetype [mscorlib]System.Nullable`1<int32>, int32)
     ret
   }
   .method public hidebysig static void 'main'() cil managed

@@ -258,7 +258,7 @@ internal class DotNetAnnotationImplementationLowering(
                 name = parameter.reflectionName(),
                 type = parameter.type,
                 kind = parameter.reflectionKind(),
-                isOptional = parameter.hasKotlinOptionalSemantics(),
+                isOptional = parameter.hasDotNetKotlinOptionalSemantics(),
                 isVararg = parameter.varargElementType != null,
                 annotations = builder.irCall(
                     factoryFor(parameter) ?: context.callableAnnotationSymbols.empty
@@ -292,24 +292,6 @@ internal class DotNetAnnotationImplementationLowering(
         IrParameterKind.Context -> PARAMETER_CONTEXT
         IrParameterKind.ExtensionReceiver -> PARAMETER_EXTENSION
         IrParameterKind.Regular -> PARAMETER_VALUE
-    }
-
-    private fun IrValueParameter.hasKotlinOptionalSemantics(
-        visited: MutableSet<IrSimpleFunction> = Collections.newSetFromMap(IdentityHashMap()),
-    ): Boolean {
-        val function = parent as? IrSimpleFunction ?: return defaultValue != null
-        if (function.containerSource is DotNetClrImportedMethodSource ||
-            function.containerSource is DotNetClrImportedPropertySource
-        ) return false
-        if (defaultValue != null) return true
-        if (!visited.add(function) || kind != IrParameterKind.Regular) return false
-        val regularIndex = function.parameters.filter { it.kind == IrParameterKind.Regular }.indexOf(this)
-        if (regularIndex < 0) return false
-        return function.overriddenSymbols.any { overridden ->
-            overridden.owner.parameters.filter { it.kind == IrParameterKind.Regular }
-                .getOrNull(regularIndex)
-                ?.hasKotlinOptionalSemantics(visited) == true
-        }
     }
 
     private fun IrValueParameter.foreignMethodAndIndexOrNull():

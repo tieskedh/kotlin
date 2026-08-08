@@ -53,30 +53,6 @@
     newobj instance void 'WithPrimitiveGenericArray'::.ctor(int32[])
     ret
   }
-  .method public hidebysig instance class 'WithPrimitiveGenericArray' 'copy$default'(int32[] 'values', int32 '$mask0') cil managed
-  {
-    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
-    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 2
-    ldarg.2
-    ldc.i4 1
-    and
-    ldc.i4 0
-    ceq
-    ldc.i4.0
-    ceq
-    brfalse IL_whenNext_1
-    ldarg.0
-    ldfld int32[] 'WithPrimitiveGenericArray'::'values'
-    starg 1
-    br IL_whenEnd_0
-IL_whenNext_1:
-IL_whenEnd_0:
-    ldarg.0
-    ldarg.1
-    call instance class 'WithPrimitiveGenericArray' 'WithPrimitiveGenericArray'::'copy'(int32[])
-    ret
-  }
   .method public hidebysig virtual instance string 'ToString'() cil managed
   {
     .maxstack 2
@@ -133,6 +109,30 @@ IL_whenNext_3:
     ret
 IL_whenNext_5:
     ldc.i4.1
+    ret
+  }
+  .method public hidebysig static class 'WithPrimitiveGenericArray' 'copy$default'(class 'WithPrimitiveGenericArray' '$this', int32[] 'values', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    ldfld int32[] 'WithPrimitiveGenericArray'::'values'
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    call instance class 'WithPrimitiveGenericArray' 'WithPrimitiveGenericArray'::'copy'(int32[])
     ret
   }
   .property instance int32[] 'values'()
