@@ -398,6 +398,19 @@ immediately. Physical type mapping remains uncached because nullability,
 generic view, target profile, assembly-reference collection, and live ABI
 state can change its answer.
 
+Logical library binding follows the shared KLIB declaration-table pattern at a
+narrower lifetime. One `DotNetExternalDeclarations` index caches the final
+kind-prefixed rendered public signature by IR identity, including misses. An
+exact publication profile removed all sampled ABI-key recomputation beneath
+the external interface-default, generic-interface, and covariant-bridge lookup
+paths (three samples/53.9 MB to zero); recording duration changed from 67 to 62
+seconds and total sampled allocation from about 15.30 to 14.42 GB. Treat the
+global figures as indicative rather than guaranteed. Do not widen the cache
+across lowerings until external-only declaration provenance makes stale local
+IR impossible; JVM's phase-local bridge-signature cache is the relevant
+counterexample to an over-broad lifetime. Producer-index and canonical-slot
+identity rendering remain separate profile candidates.
+
 Continue performance work profile-first. Re-measure the exact cold product
 producer and the aggregate after each accepted change, including allocation
 and asymptotic scaling, before touching the next hotspot. A direct PE writer,
