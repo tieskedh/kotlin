@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.backend.common.lower.RangeContainsLowering
 import org.jetbrains.kotlin.backend.common.lower.loops.ForLoopsLowering
 import org.jetbrains.kotlin.backend.common.lower.inline.InlineCallCycleCheckerLowering
 import org.jetbrains.kotlin.backend.common.lower.inline.LocalClassesInInlineLambdasLowering
+import org.jetbrains.kotlin.backend.common.lower.coroutines.AddContinuationToNonLocalSuspendFunctionsLowering
 import org.jetbrains.kotlin.backend.common.phaser.IrValidationAfterInliningAllFunctionsKlibSecondStagePhase
 import org.jetbrains.kotlin.backend.common.phaser.IrValidationAfterInliningPrivateFunctionsKlibPhase
 import org.jetbrains.kotlin.backend.common.phaser.IrValidationBeforeLoweringsKlibSecondStagePhase
@@ -63,6 +64,10 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassBoxingHelpersLo
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetAllFunctionInlining
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetPrivateFunctionInlining
+import org.jetbrains.kotlin.backend.dotnet.lower.coroutines.DotNetAddContinuationToFunctionCallsLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.coroutines.DotNetAddFunctionSupertypeToSuspendFunctionLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.coroutines.DotNetSuspendFunctionInvokeLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.coroutines.DotNetSuspendFunctionsLowering
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.phaseConfig
 import org.jetbrains.kotlin.config.languageVersionSettings
@@ -189,6 +194,14 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInventNamesForLocalFunctions,
     ::DotNetLocalDeclarationsLowering,
     ::DotNetLocalDeclarationPopupLowering,
+    // JS/Wasm architecture without a Web dependency: construct an explicit ordinary-IR state
+    // machine while suspend bodies still retain their semantic calls, then apply the Common
+    // continuation declaration/call ABI. The one-way FunctionN capability is the established
+    // startCoroutine compatibility view; it never reclassifies an arbitrary FunctionN as suspend.
+    ::DotNetSuspendFunctionsLowering,
+    ::AddContinuationToNonLocalSuspendFunctionsLowering,
+    ::DotNetAddContinuationToFunctionCallsLowering,
+    ::DotNetAddFunctionSupertypeToSuspendFunctionLowering,
     // JVM/common masked-default dispatch after local declarations are lifted: generated
     // `$default` functions see final metadata owners, and every call with omitted ordinary
     // function or constructor arguments is redirected before later lowerings inspect its body.
@@ -300,6 +313,11 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // may produce inline-class values. Running the .NET pass here makes every nominal-box <->
     // exact-carrier edge explicit before CIL emission, including bodies synthesized above.
     ::DotNetValueClassAutoboxingLowering,
+    // Normalize continuation-shaped SuspendFunction/KSuspendFunction invoke tokens only after
+    // every body-producing and body-rewriting phase has run. The class capability is established
+    // with the coroutine declarations above; this last body pass guarantees that no logical
+    // suspend interface member survives into CIL emission.
+    ::DotNetSuspendFunctionInvokeLowering,
     // JVM/JS/Wasm/Native invariant: if a call statically returning Nothing somehow returns
     // (for example from foreign CLR code), throw the dedicated Kotlin exception immediately.
     // Run after every body-producing lowering so calls introduced by bridges/helpers receive it.

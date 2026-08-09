@@ -15,6 +15,22 @@ import org.jetbrains.kotlin.test.runners.ir.AbstractFirLightTreeJvmIrTextTest
 import org.jetbrains.kotlin.test.runners.ir.AbstractFirPsiJvmIrSourceRangesTest
 import org.jetbrains.kotlin.test.runners.ir.AbstractFirPsiJvmIrTextTest
 
+private const val DOT_NET_COROUTINE_ROOT_PATTERN =
+    "^(beginWithException|coercionToUnit|createCoroutineSafe|emptyClosure|falseUnitCoercion|handleException|" +
+            "handleResultSuspended|localCallableRef|multipleInvokeCalls|simple|simpleSuspendCallableReference|" +
+            "simpleWithHandleResult|suspendCoroutineFromStateMachine|suspendLambdaInInterface)\\.kt$"
+private const val DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN =
+    "^(returnWithFinally|throwFromCatch|throwFromFinally)\\.kt$"
+private const val DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN =
+    "^(breakWithNonEmptyStack)\\.kt$"
+private const val DOT_NET_GENERIC_OBJECT_BRIDGE_PATTERN = "^(simpleObject)\\.kt$"
+private const val DOT_NET_COROUTINE_INTRINSIC_PATTERN = "^(intercepted|releaseIntercepted)\\.kt$"
+private const val DOT_NET_COROUTINE_VALUE_CLASS_DIRECT_PATTERN = "^(boxUnboxInsideCoroutine_InlineInt)\\.kt$"
+private const val DOT_NET_COROUTINE_VALUE_CLASS_RESUME_PATTERN =
+    "^(boxUnboxInsideCoroutine_InlineInt|boxUnboxInsideCoroutine_NAny|genericOverrideSuspendFun)\\.kt$"
+private const val DOT_NET_COROUTINE_VALUE_CLASS_EXCEPTION_PATTERN = "^(boxUnboxInsideCoroutine_InlineInt)\\.kt$"
+private const val DOT_NET_COROUTINE_MULTI_MODULE_PATTERN = "^(inlineCrossModule)\\.kt$"
+
 fun main(args: Array<String>) {
     val mainClassName = TestGeneratorUtil.getMainClassName()
     val testRoot = args[0]
@@ -62,6 +78,7 @@ fun main(args: Array<String>) {
                             "arrayContentEqAny|multifileEqHc|naNAndZero|withDefaults)\\.kt$",
                 )
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model("box/bridges", pattern = DOT_NET_GENERIC_OBJECT_BRIDGE_PATTERN, recursive = false)
                 model(
                     "box/inlineClasses",
                     pattern = "^(boxImplDoesNotExecuteInSecondaryConstructor|boxImplDoesNotExecuteInitBlock|" +
@@ -131,6 +148,38 @@ fun main(args: Array<String>) {
                 model("box/reflection/properties", pattern = "^(genericOverriddenProperty)\\.kt$", recursive = false)
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
+                model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
+                model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model(
+                    "box/coroutines/featureIntersection",
+                    pattern = DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/intrinsicSemantics",
+                    pattern = DOT_NET_COROUTINE_INTRINSIC_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/direct",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_DIRECT_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/resume",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_RESUME_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/resumeWithException",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_EXCEPTION_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/multiModule",
+                    pattern = DOT_NET_COROUTINE_MULTI_MODULE_PATTERN,
+                    recursive = false,
+                )
                 model("dotnet/box")
             }
 
@@ -142,6 +191,7 @@ fun main(args: Array<String>) {
                             "arrayContentEqAny|multifileEqHc|naNAndZero|withDefaults)\\.kt$",
                 )
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model("box/bridges", pattern = DOT_NET_GENERIC_OBJECT_BRIDGE_PATTERN, recursive = false)
                 model(
                     "box/inlineClasses",
                     pattern = "^(boxImplDoesNotExecuteInSecondaryConstructor|boxImplDoesNotExecuteInitBlock|" +
@@ -211,6 +261,38 @@ fun main(args: Array<String>) {
                 model("box/reflection/properties", pattern = "^(genericOverriddenProperty)\\.kt$", recursive = false)
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
+                model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
+                model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model(
+                    "box/coroutines/featureIntersection",
+                    pattern = DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/intrinsicSemantics",
+                    pattern = DOT_NET_COROUTINE_INTRINSIC_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/direct",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_DIRECT_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/resume",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_RESUME_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/resumeWithException",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_EXCEPTION_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/multiModule",
+                    pattern = DOT_NET_COROUTINE_MULTI_MODULE_PATTERN,
+                    recursive = false,
+                )
                 model("dotnet/box")
             }
 
@@ -222,6 +304,7 @@ fun main(args: Array<String>) {
                             "arrayContentEqAny|multifileEqHc|naNAndZero|withDefaults)\\.kt$",
                 )
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model("box/bridges", pattern = DOT_NET_GENERIC_OBJECT_BRIDGE_PATTERN, recursive = false)
                 model(
                     "box/inlineClasses",
                     pattern = "^(boxImplDoesNotExecuteInSecondaryConstructor|boxImplDoesNotExecuteInitBlock|" +
@@ -291,6 +374,38 @@ fun main(args: Array<String>) {
                 model("box/reflection/properties", pattern = "^(genericOverriddenProperty)\\.kt$", recursive = false)
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
+                model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
+                model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model(
+                    "box/coroutines/featureIntersection",
+                    pattern = DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/intrinsicSemantics",
+                    pattern = DOT_NET_COROUTINE_INTRINSIC_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/direct",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_DIRECT_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/resume",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_RESUME_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/resumeWithException",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_EXCEPTION_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/multiModule",
+                    pattern = DOT_NET_COROUTINE_MULTI_MODULE_PATTERN,
+                    recursive = false,
+                )
                 model("dotnet/box")
             }
 
@@ -302,6 +417,7 @@ fun main(args: Array<String>) {
                             "arrayContentEqAny|multifileEqHc|naNAndZero|withDefaults)\\.kt$",
                 )
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model("box/bridges", pattern = DOT_NET_GENERIC_OBJECT_BRIDGE_PATTERN, recursive = false)
                 model(
                     "box/inlineClasses",
                     pattern = "^(boxImplDoesNotExecuteInSecondaryConstructor|boxImplDoesNotExecuteInitBlock|" +
@@ -371,6 +487,38 @@ fun main(args: Array<String>) {
                 model("box/reflection/properties", pattern = "^(genericOverriddenProperty)\\.kt$", recursive = false)
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
+                model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
+                model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model(
+                    "box/coroutines/featureIntersection",
+                    pattern = DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/intrinsicSemantics",
+                    pattern = DOT_NET_COROUTINE_INTRINSIC_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/direct",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_DIRECT_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/resume",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_RESUME_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/inlineClasses/resumeWithException",
+                    pattern = DOT_NET_COROUTINE_VALUE_CLASS_EXCEPTION_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/coroutines/multiModule",
+                    pattern = DOT_NET_COROUTINE_MULTI_MODULE_PATTERN,
+                    recursive = false,
+                )
                 model("dotnet/box")
             }
 

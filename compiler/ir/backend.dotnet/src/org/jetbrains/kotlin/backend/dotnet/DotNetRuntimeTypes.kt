@@ -15,7 +15,9 @@ import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.isKFunction
+import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.util.isSuspendFunction
 import org.jetbrains.kotlin.ir.util.functions
 import org.jetbrains.kotlin.ir.util.properties
 import org.jetbrains.kotlin.name.FqName
@@ -841,6 +843,20 @@ internal object DotNetRuntimeTypes {
         }
         if (info.fqName == SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(syntheticConstructorMarkerClass)
+        }
+        if (type.isSuspendFunction()) {
+            // Match AbstractTypeMapper's JVM ABI: SuspendFunctionN<P..., R> is physically the
+            // executable FunctionN+1<P..., Continuation<R>, Any?> view. Function interfaces are
+            // declaration-erased on .NET, so only that extra continuation arity affects the CLR
+            // carrier; the complete suspend signature remains authoritative in IR and KLIB.
+            val suspendArity = simpleType.arguments.size - 1
+            return fixedFunctionClasses.getOrNull(suspendArity + 1)?.let { DotNetIlValueType.UserClass(it) }
+        }
+        if (type.isKSuspendFunction()) {
+            // KSuspendFunctionN retains the orthogonal KFunction reflection identity. Its
+            // executable FunctionN+1 capability is added by continuation lowering and appears
+            // as a separate InterfaceImpl edge on the same generated object.
+            return DotNetIlValueType.UserClass(kFunctionBase)
         }
         return mapCallableType(type, info)
     }

@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.ir.expressions.IrGetObjectValue
 import org.jetbrains.kotlin.ir.expressions.impl.IrConstructorCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetFieldImpl
 import org.jetbrains.kotlin.ir.expressions.impl.fromSymbolOwner
+import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.primaryConstructor
@@ -33,6 +34,9 @@ import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.name.Name
+
+/** Marks the reference-only field stub whose physical owner comes from an external DLL ABI. */
+internal var IrField.isDotNetExternalObjectInstanceField: Boolean? by irAttribute(copyByDefault = false)
 
 /**
  * Materializes `object` declarations (including companion objects) as CLR singletons — the JVM
@@ -128,6 +132,7 @@ internal class DotNetObjectClassLowering(private val context: DotNetBackendConte
             isStatic = true
         }.apply {
             parent = singleton
+            isDotNetExternalObjectInstanceField = true
         }
 
     /**

@@ -21,12 +21,15 @@ import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.IrDiagnosticReporter
 import org.jetbrains.kotlin.ir.InternalSymbolFinderAPI
 import org.jetbrains.kotlin.ir.classSymbolOrNull
+import org.jetbrains.kotlin.ir.functionSymbol
+import org.jetbrains.kotlin.ir.getterSymbol
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.inline.loweringsOfTheFirstPhase
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
-import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
 import org.jetbrains.kotlin.ir.util.KotlinMangler
 import org.jetbrains.kotlin.name.ClassId
+import org.jetbrains.kotlin.name.CallableId
+import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 
 @OptIn(InternalSymbolFinderAPI::class)
@@ -70,9 +73,16 @@ private fun createUpgradeCallableReferences(context: DotNetPreSerializationLower
     UpgradeCallableReferences(context, upgradeSamConversions = false)
 
 private class DotNetPreSerializationSymbols(irBuiltIns: IrBuiltIns) : PreSerializationKlibSymbols.Impl(irBuiltIns) {
-    // Ordinary inlining compares every callee with these symbols. Keep non-matching sentinels;
-    // the target's separate suspend-shape gate still rejects actual coroutine declarations.
-    override val coroutineContextGetter: IrSimpleFunctionSymbol = IrSimpleFunctionSymbolImpl()
-    override val suspendCoroutineUninterceptedOrReturn: IrSimpleFunctionSymbol = IrSimpleFunctionSymbolImpl()
-    override val coroutineGetContext: IrSimpleFunctionSymbol = IrSimpleFunctionSymbolImpl()
+    private val dotNetCoroutineInternalPackage = FqName("kotlin.dotnet.internal")
+
+    override val coroutineContextGetter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(StandardNames.COROUTINES_PACKAGE_FQ_NAME, Name.identifier("coroutineContext")).getterSymbol()
+    }
+    override val suspendCoroutineUninterceptedOrReturn: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(dotNetCoroutineInternalPackage, Name.identifier("suspendCoroutineUninterceptedOrReturnDotNet"))
+            .functionSymbol()
+    }
+    override val coroutineGetContext: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(dotNetCoroutineInternalPackage, Name.identifier("getCoroutineContext")).functionSymbol()
+    }
 }

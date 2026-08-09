@@ -61,6 +61,7 @@ import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrVararg
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrStarProjection
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
@@ -77,6 +78,7 @@ import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
 import org.jetbrains.kotlin.ir.util.defaultType
+import org.jetbrains.kotlin.ir.util.erasedUpperBound
 import org.jetbrains.kotlin.ir.util.getInlineClassBackingField
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.IrTypeParameterRemapper
@@ -85,6 +87,7 @@ import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.types.Variance
 
 internal val DOTNET_VALUE_CLASS_BOX_HELPER: IrDeclarationOrigin =
     IrDeclarationOriginImpl("DOTNET_VALUE_CLASS_BOX_HELPER")
@@ -114,6 +117,10 @@ internal class DotNetValueClassImplementationSignatureLowering(
         if (copiedOwnerParameters.size != valueClass.typeParameters.size) {
             error("Internal .NET backend error: value-class implementation lost copied owner parameters")
         }
+        // Common copies the value-class owner's parameters onto its static implementation methods.
+        // Their declaration-site variance remains authoritative on the class and in KLIB, but
+        // ECMA-335 permits variance only on interface and delegate type parameters, never methods.
+        copiedOwnerParameters.forEach { it.variance = Variance.INVARIANT }
         implementation.remapTypes(
             IrTypeParameterRemapper(
                 valueClass.typeParameters.zip(copiedOwnerParameters).toMap()
@@ -235,6 +242,7 @@ internal fun DotNetBackendContext.getOrCreateDotNetValueClassBoxingHelpers(
 
     val box = buildHelper(DOTNET_VALUE_CLASS_BOX_HELPER, "dotnet-box-impl")
     val boxTypeParameters = box.copyTypeParametersFrom(valueClass, DOTNET_VALUE_CLASS_BOX_HELPER)
+    boxTypeParameters.forEach { it.variance = Variance.INVARIANT }
     val boxSubstitutor = IrTypeSubstitutor(
         valueClass.typeParameters.zip(boxTypeParameters).associate { pair ->
             pair.first.symbol to pair.second.typeParameterDefaultType
@@ -258,6 +266,7 @@ internal fun DotNetBackendContext.getOrCreateDotNetValueClassBoxingHelpers(
 
     val unbox = buildHelper(DOTNET_VALUE_CLASS_UNBOX_HELPER, "dotnet-unbox-impl")
     val unboxTypeParameters = unbox.copyTypeParametersFrom(valueClass, DOTNET_VALUE_CLASS_UNBOX_HELPER)
+    unboxTypeParameters.forEach { it.variance = Variance.INVARIANT }
     val unboxSubstitutor = IrTypeSubstitutor(
         valueClass.typeParameters.zip(unboxTypeParameters).associate { pair ->
             pair.first.symbol to pair.second.typeParameterDefaultType
@@ -423,9 +432,11 @@ internal class DotNetValueClassAutoboxingLowering(
                 ).filterNotNull().mapNotNull { it as? IrSimpleType }.firstOrNull { type ->
                     (type.classifier as? org.jetbrains.kotlin.ir.symbols.IrClassSymbol)?.owner == valueClass
                 } ?: return
-                val ownerArguments = valueClassType.arguments.map { argument ->
-                    (argument as? IrTypeProjection)?.type
-                        ?: error("Internal .NET backend error: value-class implementation call has a projected owner argument")
+                val ownerArguments = valueClassType.arguments.mapIndexed { index, argument ->
+                    when (argument) {
+                        is IrTypeProjection -> argument.type
+                        is IrStarProjection -> valueClass.typeParameters[index].erasedUpperBound.defaultType
+                    }
                 }
                 val ownerParameterCount = valueClass.typeParameters.size
                 val methodParameterCount = function.typeParameters.size - ownerParameterCount

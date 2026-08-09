@@ -1142,6 +1142,20 @@ public inline fun <T, R> Iterable<T>.fold(initial: R, operation: (acc: R, T) -> 
 
 /**
  * Accumulates value starting with [initial] value and applying [operation] from left to right
+ * to current accumulator value and each element.
+ *
+ * Returns the specified [initial] value if the array is empty.
+ *
+ * @param [operation] function that takes current accumulator value and an element, and calculates the next accumulator value.
+ */
+public inline fun <T, R> Array<out T>.fold(initial: R, operation: (acc: R, T) -> R): R {
+    var accumulator = initial
+    for (element in this) accumulator = operation(accumulator, element)
+    return accumulator
+}
+
+/**
+ * Accumulates value starting with [initial] value and applying [operation] from left to right
  * to current accumulator value and each element with its index in the original collection.
  *
  * Returns the specified [initial] value if the collection is empty.
