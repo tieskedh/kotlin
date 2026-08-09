@@ -28,6 +28,8 @@ private const val DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN =
 private const val DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN = "^(extension)\\.kt$"
 private const val DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN =
     "^(dispatchResume|inlineTwoReceivers|member|noinlineTwoReceivers|privateFunctions|privateInFile|superCall)\\.kt$"
+private const val DOT_NET_COROUTINE_FIXED_ARITY_CALL_PATTERN = "^(manyParameters)\\.kt$"
+private const val DOT_NET_COROUTINE_FIXED_ARITY_BRIDGE_PATTERN = "^(lambdaWithMultipleParameters)\\.kt$"
 private const val DOT_NET_GENERIC_OBJECT_BRIDGE_PATTERN = "^(simpleObject)\\.kt$"
 private const val DOT_NET_COROUTINE_INTRINSIC_PATTERN =
     "^(coroutineContext|coroutineContextReceiver|coroutineContextReceiverNotIntrinsic|intercepted|releaseIntercepted)\\.kt$"
@@ -165,6 +167,13 @@ fun main(args: Array<String>) {
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
                 model("box/coroutines/localFunctions/named", pattern = DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN, recursive = false)
                 model("box/coroutines/suspendFunctionAsCoroutine", pattern = DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN, recursive = false)
+                model("box/coroutines/suspendFunctionTypeCall", pattern = DOT_NET_COROUTINE_FIXED_ARITY_CALL_PATTERN, recursive = false)
+                model(
+                    "box/coroutines/bridges",
+                    pattern = DOT_NET_COROUTINE_FIXED_ARITY_BRIDGE_PATTERN,
+                    recursive = false,
+                    testClassName = "CoroutineBridges",
+                )
                 model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/intLikeVarSpilling",
@@ -286,6 +295,13 @@ fun main(args: Array<String>) {
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
                 model("box/coroutines/localFunctions/named", pattern = DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN, recursive = false)
                 model("box/coroutines/suspendFunctionAsCoroutine", pattern = DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN, recursive = false)
+                model("box/coroutines/suspendFunctionTypeCall", pattern = DOT_NET_COROUTINE_FIXED_ARITY_CALL_PATTERN, recursive = false)
+                model(
+                    "box/coroutines/bridges",
+                    pattern = DOT_NET_COROUTINE_FIXED_ARITY_BRIDGE_PATTERN,
+                    recursive = false,
+                    testClassName = "CoroutineBridges",
+                )
                 model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/intLikeVarSpilling",
@@ -407,6 +423,13 @@ fun main(args: Array<String>) {
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
                 model("box/coroutines/localFunctions/named", pattern = DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN, recursive = false)
                 model("box/coroutines/suspendFunctionAsCoroutine", pattern = DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN, recursive = false)
+                model("box/coroutines/suspendFunctionTypeCall", pattern = DOT_NET_COROUTINE_FIXED_ARITY_CALL_PATTERN, recursive = false)
+                model(
+                    "box/coroutines/bridges",
+                    pattern = DOT_NET_COROUTINE_FIXED_ARITY_BRIDGE_PATTERN,
+                    recursive = false,
+                    testClassName = "CoroutineBridges",
+                )
                 model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/intLikeVarSpilling",
@@ -528,6 +551,13 @@ fun main(args: Array<String>) {
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
                 model("box/coroutines/localFunctions/named", pattern = DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN, recursive = false)
                 model("box/coroutines/suspendFunctionAsCoroutine", pattern = DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN, recursive = false)
+                model("box/coroutines/suspendFunctionTypeCall", pattern = DOT_NET_COROUTINE_FIXED_ARITY_CALL_PATTERN, recursive = false)
+                model(
+                    "box/coroutines/bridges",
+                    pattern = DOT_NET_COROUTINE_FIXED_ARITY_BRIDGE_PATTERN,
+                    recursive = false,
+                    testClassName = "CoroutineBridges",
+                )
                 model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/intLikeVarSpilling",

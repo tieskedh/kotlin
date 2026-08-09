@@ -59,8 +59,9 @@ Every lowered Kotlin suspend function has one physical Kotlin ABI entry point:
    occurs through ordinary branches, loops, and exception regions.
 
 Library ABI version 27 owns that continuation-shaped physical MethodDef contract.
-The runtime surface level remains 26 because this tranche does not change the
-physical surface of `Kotlin.Runtime.dll`.
+That coroutine tranche left runtime surface level 26 unchanged because it did
+not alter `Kotlin.Runtime.dll`; the later fixed-callable closure advances the
+current runtime surface to 27 for `Function4` through `Function22`.
 
 `Continuation<R>` is a Kotlin-owned generic interface. Its canonical erased
 interface remains the authoritative Kotlin dispatch identity under the accepted
@@ -196,10 +197,17 @@ closure proves a named singleton inheriting its coroutine base; the shared
 generic-object bridge test separately pins the general erased generic
 superclass case.
 
+The Common fixed-callable closure is now complete through physical `Function22`.
+That admits logical suspend arity 21 after the appended continuation and is
+verified by unchanged Common physical-`Function5` and `Function7` probes plus a
+target-owned suspend/resume `Function22` edge. Arity 23 and above remains the
+separate Common/JVM-style vararg big-arity `FunctionN` feature; fixed CLR
+interfaces must not be extended beyond the Common boundary.
+
 This is an implemented foundation, not a claim that the complete coroutine
-programme or every evidence lane below is closed. In particular, broader
-callable arities, default/interface-bridge and reflective suspend-member
-shapes, stale-ABI behavior, and
+programme or every evidence lane below is closed. In particular, big-arity
+callables, default/interface-bridge and reflective suspend-member shapes,
+stale-ABI behavior, and
 exhaustive residual-IR assertions still require explicit evidence before this
 ADR's full scope is called complete.
 

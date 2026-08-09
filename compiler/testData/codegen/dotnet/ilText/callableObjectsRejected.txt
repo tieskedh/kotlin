@@ -17,6 +17,78 @@
   {
   }
 }
+.class private auto ansi sealed 'callableObjectsRejectedKt$arityFour$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function4'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
+  .field assembly static initonly class 'callableObjectsRejectedKt$arityFour$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsRejectedKt$arityFour$1'::.ctor()
+      stsfld class 'callableObjectsRejectedKt$arityFour$1' 'callableObjectsRejectedKt$arityFour$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsRejectedKt$arityFour$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsRejectedKt$arityFour$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsRejectedKt$arityFour$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    call void 'callableObjectsRejectedKt$arityFour$1'::'<EnsureInitialized>'()
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'first', object 'second', object 'third', object 'fourth') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    ldarg.2
+    unbox.any [mscorlib]System.Int32
+    add
+    ldarg.3
+    unbox.any [mscorlib]System.Int32
+    add
+    ldarg 4
+    unbox.any [mscorlib]System.Int32
+    add
+    box [mscorlib]System.Int32
+    ret
+  }
+}
 .class private auto ansi sealed beforefieldinit 'callableObjectsRejectedKt$suspendCallable$1'
        extends [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'
        implements [Kotlin.Runtime]'Kotlin.Function1'
@@ -138,6 +210,13 @@ IL_returnJoin_6:
   {
     .maxstack 1
     ldarg.0
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function4' 'arityFour'() cil managed
+  {
+    .maxstack 1
+    call void 'callableObjectsRejectedKt$arityFour$1'::'<EnsureInitialized>'()
+    ldsfld class 'callableObjectsRejectedKt$arityFour$1' 'callableObjectsRejectedKt$arityFour$1'::'INSTANCE'
     ret
   }
   .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function1' 'suspendCallable'() cil managed

@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isKFunction
@@ -69,11 +70,15 @@ internal data class DotNetClassifierInfo(
             val fixedFunctionArity = fqNameString
                 ?.removePrefix("kotlin.Function")
                 ?.toIntOrNull()
-                ?.takeIf { it in 0..3 && typeParameterCount == it + 1 }
+                ?.takeIf {
+                    it in 0 until BuiltInFunctionArity.BIG_ARITY && typeParameterCount == it + 1
+                }
             val fixedKFunctionArity = irClass.name.asString()
                 .removePrefix("KFunction")
                 .toIntOrNull()
-                ?.takeIf { irClass.symbol.isKFunction() && it in 0..3 }
+                ?.takeIf {
+                    irClass.symbol.isKFunction() && it in 0 until BuiltInFunctionArity.BIG_ARITY
+                }
             val fixedKPropertyArity = fqNameString
                 ?.removePrefix("kotlin.reflect.KProperty")
                 ?.toIntOrNull()
