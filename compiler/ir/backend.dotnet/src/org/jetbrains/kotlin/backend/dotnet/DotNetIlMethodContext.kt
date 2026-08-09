@@ -34,11 +34,12 @@ internal class DotNetIlMethodContext(
     private val ehRegions = ArrayDeque<EhRegion>()
     private var labelCounter = 0
     private var maxStackDepth = 0
+    private var lastEmissionWasLabel = false
 
     /**
-     * Current operand stack depth at the emission point. Exposed read-only so try-expression
-     * emission can reject a `try` with operands already on the evaluation stack: the CLR
-     * requires an empty stack at `.try` entry (ECMA-335 I.12.4.2).
+     * Current operand stack depth at the emission point. Exposed read-only so parent-expression
+     * emission can isolate protected subexpressions and try emission can enforce the CLR's empty
+     * stack requirement at `.try` entry (ECMA-335 I.12.4.2).
      */
     var stackDepth = 0
         private set
@@ -102,6 +103,7 @@ internal class DotNetIlMethodContext(
 
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
         appendIndentedLine(instruction)
+        lastEmissionWasLabel = false
         adjustStackDepth(pops, pushes)
         isTerminated = false
     }
@@ -207,6 +209,7 @@ internal class DotNetIlMethodContext(
             }
             stackDepth = branchDepth
         }
+        lastEmissionWasLabel = true
         isTerminated = false
     }
 
@@ -218,6 +221,13 @@ internal class DotNetIlMethodContext(
      */
     fun beginTry() {
         check(stackDepth == 0) { "Internal .NET backend error: non-empty evaluation stack at '.try' entry" }
+        // A branch target belongs to the exception region of its target instruction. If a label
+        // is rendered immediately before `.try`, ILAsm binds it to the first protected
+        // instruction, so a loop back-edge from outside the region becomes illegal CIL. Give
+        // such labels a concrete landing instruction in their current (outer) region and enter
+        // the protected region only by fall-through. This is the CLR equivalent of the EH
+        // boundary blocks emitted by established CIL producers.
+        if (lastEmissionWasLabel) emit("nop")
         appendIndentedLine(".try {")
         ehRegions.addLast(EhRegion.TRY_BODY)
         isTerminated = false

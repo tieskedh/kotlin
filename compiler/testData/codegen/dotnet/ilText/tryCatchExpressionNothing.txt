@@ -53,6 +53,7 @@
       throw
     }
 IL_whenNext_1:
+    nop
     .try {
       ldstr "later"
       call void [mscorlib]System.Console::WriteLine(string)

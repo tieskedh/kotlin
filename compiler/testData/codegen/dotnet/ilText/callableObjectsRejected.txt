@@ -3,6 +3,10 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'callableObjectsRejected' {}
 .module 'main-callableObjectsRejected.il'
 
@@ -13,6 +17,120 @@
   {
   }
 }
+.class private auto ansi sealed beforefieldinit 'callableObjectsRejectedKt$suspendCallable$1'
+       extends [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation' 'resultContinuation') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'::.ctor(class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation')
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object '$completion') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    castclass [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation'
+    callvirt instance class 'callableObjectsRejectedKt$suspendCallable$1' 'callableObjectsRejectedKt$suspendCallable$1'::'create'(class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation')
+    callvirt instance object 'callableObjectsRejectedKt$suspendCallable$1'::'doResume'()
+    ret
+  }
+  .method famorassem hidebysig virtual final instance object 'doResume'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] object 'suspendResult',
+      [1] int32 'tmp',
+      [2] object '<return>',
+      [3] class [mscorlib]System.Exception 'e'
+    )
+    ldarg.0
+    call instance object [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'::'get_result'()
+    stloc.0
+IL_doWhileBody_0:
+    nop
+    .try {
+      ldarg.0
+      call instance int32 [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'::'get_state'()
+      stloc.1
+      ldloc.1
+      ldc.i4 0
+      ceq
+      brfalse IL_whenNext_5
+      ldarg.0
+      ldc.i4 1
+      call instance void [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'::'set_exceptionState'(int32)
+      ldc.i4 42
+      box [mscorlib]System.Int32
+      stloc.2
+      leave IL_returnJoin_6
+IL_whenNext_5:
+      ldloc.1
+      ldc.i4 1
+      ceq
+      brfalse IL_whenNext_7
+      ldarg.0
+      call instance class [mscorlib]System.Exception [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'::'get_exception'()
+      throw
+IL_whenNext_7:
+      leave IL_tryEnd_3
+    }
+    catch [mscorlib]System.Exception {
+      stloc.3
+      ldloc.3
+      throw
+    }
+IL_tryEnd_3:
+    br IL_doWhileBody_0
+IL_returnJoin_6:
+    ldloc.2
+    ret
+  }
+  .method family hidebysig newslot virtual final instance class 'callableObjectsRejectedKt$suspendCallable$1' 'create'(class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation' 'completion') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'callableObjectsRejectedKt$suspendCallable$1' 'i'
+    )
+    ldarg.1
+    newobj instance void 'callableObjectsRejectedKt$suspendCallable$1'::.ctor(class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation')
+    stloc.0
+    ldloc.0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceCanonicalBridge-kotlin.coroutines.Continuation-resumeWith-f8a8c3ca86fdb80a5f90c6acf714b2d0>__KotlinErased__0b4afec5a8861fe1c4e6cc0576a53eeb'(object 'result') cil managed
+  {
+    .override method instance void [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation'::'resumeWith__KotlinErased__f8a8c3ca86fdb80a5f90c6acf714b2d0'(object)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance void [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'::'resumeWith__KotlinErased__0b4afec5a8861fe1c4e6cc0576a53eeb'(object)
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Stdlib]'Kotlin.Coroutines.CoroutineContext' '<GenericInterfaceCanonicalBridge-kotlin.coroutines.Continuation-<get-context>-e27bf2f46c4848ba1de31cf8447baa3e>'() cil managed
+  {
+    .override method instance class [Kotlin.Stdlib]'Kotlin.Coroutines.CoroutineContext' [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation'::'get_context__KotlinErased__e27bf2f46c4848ba1de31cf8447baa3e'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Stdlib]'Kotlin.Coroutines.CoroutineContext' [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'::'get_context'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation' '<CovariantReturnBridge-kotlin.coroutines.DotNetCoroutineImpl-create-d4ffbdb5f4d9c9fa0ab8864f84a889f1>'(class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation' 'completion') cil managed
+  {
+    .override method instance class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation' [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'::'create'(class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation')
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance class 'callableObjectsRejectedKt$suspendCallable$1' 'callableObjectsRejectedKt$suspendCallable$1'::'create'(class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation')
+    ret
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'callableObjectsRejectedKt'
        extends [mscorlib]System.Object
 {
@@ -20,6 +138,13 @@
   {
     .maxstack 1
     ldarg.0
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function1' 'suspendCallable'() cil managed
+  {
+    .maxstack 1
+    ldnull
+    newobj instance void 'callableObjectsRejectedKt$suspendCallable$1'::.ctor(class [Kotlin.Stdlib]'Kotlin.Coroutines.Continuation')
     ret
   }
   .method public hidebysig static string 'survivor'() cil managed

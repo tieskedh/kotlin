@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrPackageFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
+import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
@@ -44,6 +45,7 @@ internal class DotNetIlIntrinsicMethods(
     private val kotlinIoFqn = FqName("kotlin.io")
     private val kotlinCollectionsFqn = FqName("kotlin.collections")
     private val kotlinTextFqn = FqName("kotlin.text")
+    private val safeContinuationFqn = FqName("kotlin.coroutines.SafeContinuation")
 
     private val anyFqn = StandardNames.FqNames.any.toSafe()
     private val arrayFqn = StandardNames.FqNames.array.toSafe()
@@ -176,6 +178,8 @@ internal class DotNetIlIntrinsicMethods(
                 to DotNetIlThrowableAddSuppressedIntrinsic,
         Key(kotlinFqn, null, "dotNetSuppressedExceptions", listOf(throwableFqn))
                 to DotNetIlThrowableSuppressedExceptionsIntrinsic,
+        Key(safeContinuationFqn, null, "compareAndSetResult", listOf(anyFqn, anyFqn))
+                to DotNetIlSafeContinuationCompareAndSetIntrinsic,
         Key(kotlinIoFqn, null, "dotNetReadLine", emptyList()) to DotNetIlReadLineIntrinsic,
         Key(kotlinIoFqn, null, "print", listOf(anyFqn)) to DotNetIlPrintIntrinsic,
         Key(kotlinIoFqn, null, "println", emptyList()) to DotNetIlPrintlnIntrinsic,
@@ -937,6 +941,39 @@ internal abstract class DotNetIlIntrinsicMethod {
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
     ): Boolean = false
+}
+
+/**
+ * The only mutable transition primitive of Common `SafeContinuation`. The Kotlin declaration is
+ * deliberately a non-executable placeholder: .NET lowers it directly to the CLR's atomic
+ * object-reference compare/exchange, while the actual state protocol remains readable Common-
+ * shaped Kotlin code in the stdlib source shard.
+ */
+private object DotNetIlSafeContinuationCompareAndSetIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Boolean || call.arguments.size != 3) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing SafeContinuation receiver for compareAndSetResult")
+        val expected = call.arguments[1]
+            ?: dotNetUnsupported("missing expected SafeContinuation state")
+        val update = call.arguments[2]
+            ?: dotNetUnsupported("missing replacement SafeContinuation state")
+        val owner = call.symbol.owner.parent as? IrClass
+            ?: dotNetUnsupported("SafeContinuation compareAndSetResult has no class owner")
+        val resultField = owner.declarations
+            .filterIsInstance<IrProperty>()
+            .singleOrNull { property -> property.name.asString() == "result" }
+            ?.backingField
+            ?: dotNetUnsupported("SafeContinuation compareAndSetResult cannot find its result field")
+        codegen.emitObjectFieldCompareExchange(receiver, resultField, expected, update)
+        return true
+    }
 }
 
 private fun IrCall.dataClassArrayArgument(

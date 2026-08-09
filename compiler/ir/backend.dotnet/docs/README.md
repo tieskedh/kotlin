@@ -81,6 +81,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Declaration-owned callable visibility and modality](decisions/callable-visibility-and-modality.md)
 - [Semantic erasure and canonical ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
 - [Single-field value classes use one box owner and contextual carriers](decisions/value-classes.md)
+- [Kotlin coroutines use the Common continuation ABI and an explicit CIL state machine](decisions/kotlin-coroutines.md)
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
 - [Erased ABI for Kotlin-owned generic interfaces](decisions/generic-interface-erased-identity.md)

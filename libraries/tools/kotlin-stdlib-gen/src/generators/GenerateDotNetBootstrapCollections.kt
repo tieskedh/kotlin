@@ -54,6 +54,9 @@ fun main(args: Array<String>) {
     val stringBuilderOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapStringBuilder.kt"
     )
+    val stringsOutputFile = baseDir.resolve(
+        "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapStrings.kt"
+    )
     val kotlinOutputFile = baseDir.resolve(
         "libraries/stdlib/dotnet/common/src/generated/_DotNetBootstrapKotlin.kt"
     )
@@ -128,6 +131,8 @@ fun main(args: Array<String>) {
         baseDir.resolve("libraries/stdlib/src/kotlin/text/Appendable.kt")
     val commonStringBuilderFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/text/StringBuilder.kt")
+    val commonStringsFile =
+        baseDir.resolve("libraries/stdlib/src/kotlin/text/Strings.kt")
     val commonStandardFile =
         baseDir.resolve("libraries/stdlib/src/kotlin/util/Standard.kt")
     val commonCharCodeFile =
@@ -486,7 +491,7 @@ fun main(args: Array<String>) {
         Aggregates.f_any_predicate selectedFor setOf(Family.Iterables),
         Aggregates.f_count selectedFor setOf(Family.Iterables, Family.Collections),
         Aggregates.f_count_predicate selectedFor setOf(Family.Iterables),
-        Aggregates.f_fold selectedFor setOf(Family.Iterables),
+        Aggregates.f_fold selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         Aggregates.f_foldIndexed selectedFor setOf(Family.Iterables),
         Aggregates.f_foldRight selectedFor setOf(Family.Lists),
         Aggregates.f_foldRightIndexed selectedFor setOf(Family.Lists),
@@ -775,6 +780,22 @@ fun main(args: Array<String>) {
     )
     stringBuilderOutputFile.writeText(
         projectWholeCommonFile(commonStringBuilderFile),
+        Charsets.UTF_8,
+    )
+    stringsOutputFile.writeText(
+        buildProjectedSource(
+            packageName = "kotlin.text",
+            fileAnnotations = listOf(
+                "kotlin.jvm.JvmMultifileClass",
+                "kotlin.jvm.JvmName(\"StringsKt\")",
+            ),
+            declarations = listOf(
+                extractCommonDeclaration(
+                    commonStringsFile,
+                    "public inline fun CharSequence.isEmpty(): Boolean",
+                ),
+            ),
+        ),
         Charsets.UTF_8,
     )
     kotlinOutputFile.writeText(
