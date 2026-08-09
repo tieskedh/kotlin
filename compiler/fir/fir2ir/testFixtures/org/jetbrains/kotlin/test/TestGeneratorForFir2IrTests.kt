@@ -17,19 +17,24 @@ import org.jetbrains.kotlin.test.runners.ir.AbstractFirPsiJvmIrTextTest
 
 private const val DOT_NET_COROUTINE_ROOT_PATTERN =
     "^(beginWithException|coercionToUnit|createCoroutineSafe|emptyClosure|falseUnitCoercion|handleException|" +
-            "handleResultSuspended|localCallableRef|multipleInvokeCalls|simple|simpleSuspendCallableReference|" +
+            "handleResultSuspended|iterateOverArray|kt52311_nullOnLeft|kt52311_nullOnRight|localCallableRef|" +
+            "multipleInvokeCalls|simple|simpleSuspendCallableReference|" +
             "simpleWithHandleResult|suspendCoroutineFromStateMachine|suspendLambdaInInterface)\\.kt$"
 private const val DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN =
-    "^(returnWithFinally|throwFromCatch|throwFromFinally)\\.kt$"
+    "^(doWhileStatement|forContinue|forStatement|ifStatement|returnWithFinally|throwFromCatch|throwFromFinally|" +
+            "whileStatement)\\.kt$"
 private const val DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN =
     "^(breakWithNonEmptyStack)\\.kt$"
 private const val DOT_NET_GENERIC_OBJECT_BRIDGE_PATTERN = "^(simpleObject)\\.kt$"
 private const val DOT_NET_COROUTINE_INTRINSIC_PATTERN = "^(intercepted|releaseIntercepted)\\.kt$"
-private const val DOT_NET_COROUTINE_VALUE_CLASS_DIRECT_PATTERN = "^(boxUnboxInsideCoroutine_InlineInt)\\.kt$"
+private const val DOT_NET_COROUTINE_VALUE_CLASS_DIRECT_PATTERN =
+    "^(boxUnboxInsideCoroutine_InlineInt|genericOverrideSuspendFun_NullableInt)\\.kt$"
 private const val DOT_NET_COROUTINE_VALUE_CLASS_RESUME_PATTERN =
-    "^(boxUnboxInsideCoroutine_InlineInt|boxUnboxInsideCoroutine_NAny|genericOverrideSuspendFun)\\.kt$"
+    "^(boxUnboxInsideCoroutine_InlineInt|boxUnboxInsideCoroutine_NAny|genericOverrideSuspendFun|" +
+            "genericOverrideSuspendFun_NullableInt)\\.kt$"
 private const val DOT_NET_COROUTINE_VALUE_CLASS_EXCEPTION_PATTERN = "^(boxUnboxInsideCoroutine_InlineInt)\\.kt$"
 private const val DOT_NET_COROUTINE_MULTI_MODULE_PATTERN = "^(inlineCrossModule)\\.kt$"
+private const val DOT_NET_COROUTINE_VAR_SPILLING_PATTERN = "^(kt64139|nullSpilling)\\.kt$"
 
 fun main(args: Array<String>) {
     val mainClassName = TestGeneratorUtil.getMainClassName()
@@ -150,6 +155,7 @@ fun main(args: Array<String>) {
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/featureIntersection",
                     pattern = DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN,
@@ -263,6 +269,7 @@ fun main(args: Array<String>) {
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/featureIntersection",
                     pattern = DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN,
@@ -376,6 +383,7 @@ fun main(args: Array<String>) {
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/featureIntersection",
                     pattern = DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN,
@@ -489,6 +497,7 @@ fun main(args: Array<String>) {
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/featureIntersection",
                     pattern = DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN,
