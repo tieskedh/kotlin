@@ -169,7 +169,10 @@ references, continuation interception/release, value-class result carriers,
 repeated suspension in `while`, `do while`, and `for` state machines, nullable
 reference and mutable-reference spills, null operands across two suspensions,
 array-element spills, and a nullable-`Int` value class through a generic suspend
-override with direct and delayed resume. The same matrix covers a suspend-inline
+override with direct and delayed resume. Member/extension coverage executes a
+local suspend extension, inline and non-inline extensions with a second dispatch
+receiver, repeated suspension in an ordinary member, virtual override and
+`super` dispatch, and a suspend operator. The same matrix covers a suspend-inline
 producer/consumer boundary across both FIR parsers and both CLR profiles. A
 target-owned integration lane additionally executes
 suspend-inline code and races two CLR threads against one `SafeContinuation`,
@@ -182,9 +185,10 @@ superclass case.
 
 This is an implemented foundation, not a claim that the complete coroutine
 programme or every evidence lane below is closed. In particular, broader
-primitive live-value/result carriers, member and extension shapes, broader
-context composition, stale-ABI behavior, and exhaustive residual-IR assertions
-still require explicit evidence before this ADR's full scope is called complete.
+primitive live-value/result carriers, default/interface-bridge and reflective
+suspend-member shapes, broader context composition, stale-ABI behavior, and
+exhaustive residual-IR assertions still require explicit evidence before this
+ADR's full scope is called complete.
 
 The shared root `controlFlow_while1` and `controlFlow_while2` assertions also
 exercise repeated suspension, but depend on Common `String.trimIndent`. Keep
