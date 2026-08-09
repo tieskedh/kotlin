@@ -122,10 +122,12 @@ internal object DotNetRuntimeLibrary {
         target: DotNetTarget,
         cSharpImplementationManifest: DotNetCSharpImplementationManifest,
         messageCollector: MessageCollector,
+        runtimeSurfaceMetadataValues: List<String>,
     ): File? = assembleRuntime(
         outputDirectory.resolve("runtime-manifest-conformance-placeholder"),
         target,
         cSharpImplementationManifest,
+        runtimeSurfaceMetadataValues,
     ) { ilFile, output, managedResources ->
         DotNetIlAssembler.assembleLibrary(
             ilFile,
@@ -161,6 +163,9 @@ internal object DotNetRuntimeLibrary {
         outputAnchor: File,
         target: DotNetTarget,
         cSharpImplementationManifest: DotNetCSharpImplementationManifest?,
+        runtimeSurfaceMetadataValues: List<String> = listOf(
+            DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString()
+        ),
         assemble: (ilFile: File, output: File, managedResources: Map<String, ByteArray>) -> Boolean,
     ): File? {
         val outputDirectory = outputAnchor.parentFile ?: File(".")
@@ -189,6 +194,7 @@ internal object DotNetRuntimeLibrary {
                 UTF8_BOM + ilText(
                     target,
                     hasCSharpImplementationManifest = managedResources.isNotEmpty(),
+                    runtimeSurfaceMetadataValues,
                 ).toByteArray(Charsets.UTF_8)
             )
             output.takeIf { assemble(ilFile, output, managedResources) }
@@ -200,6 +206,7 @@ internal object DotNetRuntimeLibrary {
     private fun ilText(
         target: DotNetTarget,
         hasCSharpImplementationManifest: Boolean,
+        runtimeSurfaceMetadataValues: List<String>,
     ): String {
         val coreLibrary = target.coreLibrary
         val coreLibraryReference = coreLibrary.reference
@@ -211,11 +218,13 @@ internal object DotNetRuntimeLibrary {
             coreLibrary.appendTargetFrameworkAttributeTo(this)
         }.trimEnd().prependIndent("        ")
         val runtimeSurfaceAttributeIl = buildString {
-            coreLibrary.appendAssemblyMetadataAttributeTo(
-                this,
-                DotNetLibraryAbiCodec.RUNTIME_SURFACE_METADATA_KEY,
-                DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
-            )
+            runtimeSurfaceMetadataValues.forEach { value ->
+                coreLibrary.appendAssemblyMetadataAttributeTo(
+                    this,
+                    DotNetLibraryAbiCodec.RUNTIME_SURFACE_METADATA_KEY,
+                    value,
+                )
+            }
         }.trimEnd().prependIndent("        ")
         val compilerAbiAttributeTypeIl =
             DotNetCompilerAbi.attributeTypeIl(
