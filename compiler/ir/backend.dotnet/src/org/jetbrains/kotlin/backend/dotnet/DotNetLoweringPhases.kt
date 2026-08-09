@@ -39,6 +39,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassPhysicalization
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassTypeParametersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesMemberBodyLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetIrValidationAfterLoweringPhase
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInventNamesForLocalClasses
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInventNamesForLocalFunctions
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetKFunctionInvokeLowering
@@ -338,6 +339,11 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // cannot author or consume that shape naturally, so type-distinct private fields are renamed
     // too. The emitter retains its field-identity gate for unrenamable public ABI collisions.
     ::DotNetRenameFieldsLowering,
+    // JVM architecture plus JS/Native coroutine invariants: validate the final physical tree
+    // after every declaration/body producer. Valid Continuation and COROUTINE_SUSPENDED runtime
+    // operations remain ordinary IR; only unlowered suspend declarations/calls/references,
+    // compiler-only intrinsics, and suspension pseudo-expressions are forbidden here.
+    ::DotNetIrValidationAfterLoweringPhase,
 )
 
 internal object DotNetLoweringPhases {

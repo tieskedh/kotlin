@@ -212,9 +212,22 @@ are not extended beyond the Common boundary. See
 [`big-arity-callables.md`](big-arity-callables.md).
 
 This is an implemented foundation, not a claim that the complete coroutine
-programme or every evidence lane below is closed. In particular,
-stale-ABI behavior and exhaustive residual-IR assertions still require
-explicit evidence before this ADR's full scope is called complete.
+programme or every evidence lane below is closed. Stale-ABI behavior still
+requires explicit evidence before this ADR's full scope is called complete.
+
+The final target lowering is a .NET-specific extension of Common's
+`IrValidationAfterLoweringsSecondStagePhase`, following the JVM architecture.
+With `-Xverify-ir`, it rejects residual suspend declarations, calls, and all
+three function-reference forms; `IrSuspensionPoint` and
+`IrSuspendableExpression`; and calls to compiler-only coroutine/context
+intrinsics, including their continuation-lowered stubs. It deliberately does
+not reject ordinary `Continuation` operations or the runtime
+`COROUTINE_SUSPENDED` getter. JS and Native retain late codegen assertions for
+the same no-residual-suspend boundary; .NET likewise keeps its unconditional
+emitter guard so production compilation still fails closed when optional IR
+verification is disabled. The selected coroutine, bridge, and suspend
+callable-reference matrix exercises this final validator in both FIR parsers
+and both target profiles.
 
 The Common state-machine builder copies source visibility to its generated
 constructor. That is harmless for JS/Wasm, but a CLR file facade cannot call a
