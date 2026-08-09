@@ -16,12 +16,15 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: the executable Kotlin coroutine foundation. Common
+- Last completed feature: the executable Kotlin coroutine foundation and its
+  repeated-suspension/live-carrier closure. Common
   owns `Result`, continuation/context, and the suspended sentinel; the target
   adds an explicit ordinary-IR state machine, atomic `SafeContinuation`,
-  suspend callable-reference execution/interception, and separate-compilation
-  binding. Library ABI version 27 owns the continuation-shaped physical suspend
-  MethodDef contract; runtime surface level 26 is unchanged. Target-owned
+  suspend callable-reference execution/interception, repeated loop state
+  machines, nullable/reference/null/array spills, generic nullable value-class
+  resume, and separate-compilation binding. Library ABI version 27 owns the
+  continuation-shaped physical suspend MethodDef contract; runtime surface
+  level 26 is unchanged. Target-owned
   compiler performance reporting remains active
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
@@ -43,19 +46,19 @@ aggregate command is:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 130 XML files and 1671 tests:
+The audited full-aggregate evidence covers 134 XML files and 1719 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1550 FIR, IL-text, and box tests
+- 1598 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 94 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed its final XML confirmation at 2026-08-09 12:48:54
-local time, 18m01s after launch, and its wrapper exited successfully. All three
+The aggregate completed its final XML confirmation at 2026-08-09 13:26:42
+local time, 17m56s after launch, and its wrapper exited successfully. All three
 result roots were audited directly. The resulting tree has a cumulative JUnit
-suite time of 1193.42 seconds: 0.13 for the physical model, 549.47 for
-FIR/IL/box, and 643.82 for `dn`. Gradle 9's selected-task `--rerun` option is
+suite time of 1147.86 seconds: 0.13 for the physical model, 502.76 for
+FIR/IL/box, and 644.97 for `dn`. Gradle 9's selected-task `--rerun` option is
 not full-matrix evidence on the empty backend lifecycle task and is not part of
 the verification command.
 
@@ -976,13 +979,14 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the selected coroutine foundation through repeated suspension,
-   generic/nullable live spills, member and extension suspend shapes, broader
-   context composition, stale producer rejection, and exhaustive residual-IR
-   assertions. Immediate and delayed resumption, exceptions/finally, value-
-   class results, lambdas, callable references, interception/release, suspend
-   inline, separate compilation, and a real cross-thread duplicate-resume race
-   already execute through the one Common-compatible state-machine pipeline.
+1. Continue the selected coroutine foundation through the remaining primitive
+   live/result carriers, member and extension suspend shapes, broader context
+   composition, stale producer rejection, and exhaustive residual-IR
+   assertions. Repeated loop suspension, generic/nullable spills, immediate and
+   delayed resumption, exceptions/finally, value-class results, lambdas,
+   callable references, interception/release, suspend inline, separate
+   compilation, and a real cross-thread duplicate-resume race already execute
+   through the one Common-compatible state-machine pipeline.
 2. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
    they may adapt the Kotlin continuation boundary but never replace its
    internal ABI or create a second state-machine representation.

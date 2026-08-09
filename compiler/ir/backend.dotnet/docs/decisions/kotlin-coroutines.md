@@ -166,8 +166,12 @@ Current unchanged shared coverage executes immediate/suspended completion,
 tail delegation, exception delivery, `try`/`catch`/`finally`, Unit coercion,
 non-empty evaluation-stack control flow, direct and local suspend callable
 references, continuation interception/release, value-class result carriers,
-and a suspend-inline producer/consumer boundary across both FIR parsers and
-both CLR profiles. A target-owned integration lane additionally executes
+repeated suspension in `while`, `do while`, and `for` state machines, nullable
+reference and mutable-reference spills, null operands across two suspensions,
+array-element spills, and a nullable-`Int` value class through a generic suspend
+override with direct and delayed resume. The same matrix covers a suspend-inline
+producer/consumer boundary across both FIR parsers and both CLR profiles. A
+target-owned integration lane additionally executes
 suspend-inline code and races two CLR threads against one `SafeContinuation`,
 proving one completion and one classified duplicate-resume failure. That lane
 also pins external-inline access to a producer companion without allowing a
@@ -178,10 +182,14 @@ superclass case.
 
 This is an implemented foundation, not a claim that the complete coroutine
 programme or every evidence lane below is closed. In particular, broader
-live-value/result carriers, repeated suspension, member and extension shapes,
-broader context composition, stale-ABI behavior, and exhaustive residual-IR
-assertions still require explicit evidence before this ADR's full scope is
-called complete.
+primitive live-value/result carriers, member and extension shapes, broader
+context composition, stale-ABI behavior, and exhaustive residual-IR assertions
+still require explicit evidence before this ADR's full scope is called complete.
+
+The shared root `controlFlow_while1` and `controlFlow_while2` assertions also
+exercise repeated suspension, but depend on Common `String.trimIndent`. Keep
+them unselected until the authoritative Strings/Indent dependency closure is
+admitted; do not copy or simplify those tests for this target.
 
 ## Required adversarial evidence
 
