@@ -213,11 +213,13 @@ across a producer/consumer DLL boundary, value-class result carriers,
 repeated loop suspension, nullable-reference, null, array-element, and mutable
 reference spills, nullable-`Int` value classes through generic suspend overrides,
 local/two-receiver extensions, ordinary and virtual/`super` members, suspend
-operators, cross-thread duplicate-resume rejection, both FIR parsers, and
+operators, private top-level/member state machines, receiver dispatch, Common
+context composition and identity across suspension, balanced interceptor
+release, cross-thread duplicate-resume rejection, both FIR parsers, and
 Framework/CoreCLR execution. Continue from that one architecture, not from
 stdlib allowlists: close the remaining primitive live-value/result carriers,
-default/interface-bridge and reflective suspend-member shapes, broader context
-composition, stale ABI, and residual-IR/physical-ABI assertions. Prefer
+default/interface-bridge and reflective suspend-member shapes, stale ABI, and
+residual-IR/physical-ABI assertions. Prefer
 unchanged shared coroutine tests and add target-owned tests only for CLR
 threading, metadata, assembly, or physical CIL facts. Shared tests whose
 assertions use `String.trimIndent` remain behind the authoritative Common

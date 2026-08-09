@@ -17,7 +17,7 @@ import org.jetbrains.kotlin.test.runners.ir.AbstractFirPsiJvmIrTextTest
 
 private const val DOT_NET_COROUTINE_ROOT_PATTERN =
     "^(beginWithException|coercionToUnit|createCoroutineSafe|emptyClosure|falseUnitCoercion|handleException|" +
-            "handleResultSuspended|iterateOverArray|kt52311_nullOnLeft|kt52311_nullOnRight|localCallableRef|" +
+            "coroutineContextInInlinedLambda|handleResultSuspended|iterateOverArray|kt52311_nullOnLeft|kt52311_nullOnRight|localCallableRef|" +
             "multipleInvokeCalls|simple|simpleSuspendCallableReference|" +
             "simpleWithHandleResult|suspendCoroutineFromStateMachine|suspendLambdaInInterface)\\.kt$"
 private const val DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN =
@@ -27,9 +27,10 @@ private const val DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN =
     "^(breakWithNonEmptyStack|suspendOperatorPlus)\\.kt$"
 private const val DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN = "^(extension)\\.kt$"
 private const val DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN =
-    "^(inlineTwoReceivers|member|noinlineTwoReceivers|superCall)\\.kt$"
+    "^(dispatchResume|inlineTwoReceivers|member|noinlineTwoReceivers|privateFunctions|privateInFile|superCall)\\.kt$"
 private const val DOT_NET_GENERIC_OBJECT_BRIDGE_PATTERN = "^(simpleObject)\\.kt$"
-private const val DOT_NET_COROUTINE_INTRINSIC_PATTERN = "^(intercepted|releaseIntercepted)\\.kt$"
+private const val DOT_NET_COROUTINE_INTRINSIC_PATTERN =
+    "^(coroutineContext|coroutineContextReceiver|coroutineContextReceiverNotIntrinsic|intercepted|releaseIntercepted)\\.kt$"
 private const val DOT_NET_COROUTINE_VALUE_CLASS_DIRECT_PATTERN =
     "^(boxUnboxInsideCoroutine_InlineInt|genericOverrideSuspendFun_NullableInt)\\.kt$"
 private const val DOT_NET_COROUTINE_VALUE_CLASS_RESUME_PATTERN =

@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_LAMBDA_IMPL
 import org.jetbrains.kotlin.backend.common.lower.ReturnableBlockTransformer
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.common.lower.optimizations.LivenessAnalysis
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.UNDEFINED_OFFSET
 import org.jetbrains.kotlin.ir.builders.*
@@ -33,6 +34,7 @@ import org.jetbrains.kotlin.ir.util.isSuspend
 import org.jetbrains.kotlin.ir.util.nonDispatchParameters
 import org.jetbrains.kotlin.ir.util.parentClassOrNull
 import org.jetbrains.kotlin.ir.util.patchDeclarationParents
+import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.visitors.*
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.util.OperatorNameConventions
@@ -99,6 +101,16 @@ private class DotNetSuspendFunctionsLoweringImpl(
                         function.name == OperatorNameConventions.INVOKE &&
                         function.parentClassOrNull?.let { it.origin === DOTNET_LAMBDA_IMPL } == true
                 val coroutine = buildCoroutine(function, isLoweredSuspendLambda)      // Coroutine implementation.
+                if (!isLoweredSuspendLambda) {
+                    // Common gives the generated constructor the source function's visibility.
+                    // That is sufficient for JS, but a CLR file facade and its top-level state-
+                    // machine class are distinct TypeDefs: a private constructor is inaccessible
+                    // even though both types are compiler-generated in one assembly. Keep the
+                    // state-machine type private and follow the existing .NET local-class policy:
+                    // its constructor is public in metadata, which exposes no callable surface
+                    // while the declaring type itself remains inaccessible.
+                    coroutine.primaryConstructor!!.visibility = DescriptorVisibilities.PUBLIC
+                }
                 if (isLoweredSuspendLambda)             // Suspend lambdas are called through factory method <create>,
                     null
                 else

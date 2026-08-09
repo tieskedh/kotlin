@@ -17,13 +17,15 @@ verification, and work state.
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
 - Last completed feature: the executable Kotlin coroutine foundation and its
-  liveness/member/extension closure. Common
+  liveness/member/extension/context closure. Common
   owns `Result`, continuation/context, and the suspended sentinel; the target
   adds an explicit ordinary-IR state machine, atomic `SafeContinuation`,
   suspend callable-reference execution/interception, repeated loop state
   machines, nullable/reference/null/array spills, generic nullable value-class
   resume, local and two-receiver extensions, virtual/`super` members, suspend
-  operators, and separate-compilation binding. Library ABI version 27 owns the
+  operators, private state machines, receiver dispatch, Common context
+  composition/propagation, balanced interceptor release, and
+  separate-compilation binding. Library ABI version 27 owns the
   continuation-shaped physical suspend MethodDef contract; runtime surface
   level 26 is unchanged. Target-owned
   compiler performance reporting remains active
@@ -40,31 +42,37 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The coroutine-foundation head passed the ordinary aggregate. The normal
-aggregate command is:
+The coroutine context/completion-chain head passed the ordinary aggregate. The
+normal aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 142 XML files and 1743 tests:
+The audited full-aggregate evidence covers 142 XML files and 1775 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1622 FIR, IL-text, and box tests
+- 1654 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 94 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed the changed FIR/box root at 2026-08-09 13:47:15 local
-time, 7m23s after launch, and its wrapper exited successfully. Because this head
-changes only test selection and documentation, Gradle correctly reused the
-unchanged physical-model and `dn` results from the immediately preceding green
-head; all three result roots were audited directly. The resulting tree has a
-cumulative JUnit suite time of 1192.80 seconds: 0.13 for the physical model,
-547.70 for FIR/IL/box, and 644.97 for `dn`. Gradle 9's selected-task `--rerun`
-option is
+The final aggregate completed the changed FIR/box root at 2026-08-09 14:43:37
+and `dn` at 14:54:50 local time; its wrapper exited successfully after 18m29s.
+The unchanged physical-model result was reused and all three result roots were
+audited directly. The resulting tree has a cumulative JUnit suite time of
+1208.94 seconds: 0.13 for the physical model, 537.37 for FIR/IL/box, and 671.44
+for `dn`. Gradle 9's selected-task `--rerun` option is
 not full-matrix evidence on the empty backend lifecycle task and is not part of
 the verification command.
+
+The final test-only strengthening also exposed an avoidable invalidation:
+`compiler:tests-integration:dn` declares all of `compiler/testData/codegen` as
+an input even though the selected .NET integration sources directly reference
+only `dotnet/portableSurfaceVerifier.cs` from that root. Changing one .NET box
+test therefore reran the complete 671-second `dn` suite. Narrow this only
+through an upstream-compatible test-data input boundary that keeps every real
+consumer tracked; do not hide the cost with an ad-hoc task exclusion.
 
 The next profile after fixing the emitter showed a separate foreign-loading
 cost: every 1/2/4-byte metadata-table value and every byte scanned from
@@ -985,9 +993,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 1. Continue the selected coroutine foundation through the remaining primitive
    live/result carriers, default/interface-bridge and reflective suspend-member
-   shapes, broader context composition, stale producer rejection, and exhaustive
+   shapes, stale producer rejection, and exhaustive
    residual-IR assertions. Repeated loop suspension, generic/nullable spills,
    local/two-receiver extensions, virtual/`super` members, suspend operators,
+   private state machines, receiver dispatch, context composition/propagation,
    immediate and delayed resumption, exceptions/finally, value-class results,
    lambdas, callable references, interception/release, suspend inline, separate
    compilation, and a real cross-thread duplicate-resume race already execute

@@ -66,9 +66,22 @@ internal fun <T> createSimpleCoroutineForSuspendFunction(
 public actual fun <T> (suspend () -> T).createCoroutineUnintercepted(
     completion: Continuation<T>,
 ): Continuation<Unit> = object : DotNetCoroutineImpl(completion as Continuation<Any?>) {
+    private var label = 0
+
     override fun doResume(): Any? {
-        exception?.let { throw it }
-        return this@createCoroutineUnintercepted.startCoroutineUninterceptedOrReturn(completion)
+        return when (label) {
+            0 -> {
+                label = 1
+                exception?.let { throw it }
+                this@createCoroutineUnintercepted.startCoroutineUninterceptedOrReturn(this as Continuation<T>)
+            }
+            1 -> {
+                label = 2
+                exception?.let { throw it }
+                result
+            }
+            else -> error("This coroutine had already completed")
+        }
     }
 }
 
@@ -76,9 +89,22 @@ public actual fun <R, T> (suspend R.() -> T).createCoroutineUnintercepted(
     receiver: R,
     completion: Continuation<T>,
 ): Continuation<Unit> = object : DotNetCoroutineImpl(completion as Continuation<Any?>) {
+    private var label = 0
+
     override fun doResume(): Any? {
-        exception?.let { throw it }
-        return this@createCoroutineUnintercepted.startCoroutineUninterceptedOrReturn(receiver, completion)
+        return when (label) {
+            0 -> {
+                label = 1
+                exception?.let { throw it }
+                this@createCoroutineUnintercepted.startCoroutineUninterceptedOrReturn(receiver, this as Continuation<T>)
+            }
+            1 -> {
+                label = 2
+                exception?.let { throw it }
+                result
+            }
+            else -> error("This coroutine had already completed")
+        }
     }
 }
 
