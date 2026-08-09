@@ -219,12 +219,11 @@ context composition and identity across suspension, balanced interceptor
 release, cross-thread duplicate-resume rejection, both FIR parsers, and
 Framework/CoreCLR execution. Continue from that one architecture, not from
 stdlib allowlists. The complete Kotlin primitive family now executes through
-typed state-machine fields plus the erased continuation boundary. Fixed
-callable arities match Common/JVM through physical `Function22`, including
-logical suspend arity 21. Continue with the arity-23-and-above vararg
-`FunctionN` representation needed by big-arity ordinary and suspend callables,
-default/interface-bridge and reflective suspend-member shapes, stale ABI, and
-residual-IR/physical-ABI assertions. Prefer
+typed state-machine fields plus the erased continuation boundary. Callable
+arities match Common/JVM across the fixed `Function22`/vararg `FunctionN`
+boundary, including a real logical-suspend-arity-22 park/resume path. Continue
+with default/interface-bridge and reflective suspend-member shapes, stale ABI,
+and residual-IR/physical-ABI assertions. Prefer
 unchanged shared coroutine tests and add target-owned tests only for CLR
 threading, metadata, assembly, or physical CIL facts. Shared tests whose
 assertions use `String.trimIndent` remain behind the authoritative Common

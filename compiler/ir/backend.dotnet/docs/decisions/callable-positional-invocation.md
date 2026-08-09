@@ -6,8 +6,7 @@
 - Depends on: [`draft-adr-callable-and-reference-abi.md`](draft-adr-callable-and-reference-abi.md)
   and [`callable-parameters.md`](callable-parameters.md)
 - Does not enable: `callBy`, callable lookup, member enumeration, accessor
-  objects, suspend callable invocation, or the vararg big-arity representation
-  for arity 23 and above
+  objects, or coroutine-aware suspend reflection
 
 ## Cross-target contract
 
@@ -29,8 +28,10 @@ callable object; CLR execution is only the physical final step.
 ### Reuse the existing erased execution capability
 
 Every supported direct function or constructor reference already implements
-one non-generic `FunctionN.Invoke` slot. Every property wrapper already
-implements the corresponding `FunctionN` getter view. `KCallable.call` is one
+one non-generic execution slot. Fixed arities use `Function0` through
+`Function22`; big arities use the arity-classified vararg `FunctionN` defined
+by [`big-arity-callables.md`](big-arity-callables.md). Every property wrapper already
+implements the corresponding erased getter execution view. `KCallable.call` is one
 runtime adapter from an `object[]` and the known exposed arity to that existing
 slot:
 
@@ -142,7 +143,8 @@ by the positional adapter.
 
 ## Verification
 
-The gate covers fixed arities zero through twenty-two; functions, constructors,
+The gate covers fixed arities zero through twenty-two and the vararg big-arity
+boundary; functions, constructors,
 properties, inner constructors, bound and unbound member/extension receivers;
 virtual dispatch; generic, primitive, nullable, Unit, Nothing/throwing, default,
 and vararg shapes; exact wrong-count text; wrong argument types; unchanged
@@ -150,4 +152,4 @@ target exception identity; local delegated-property failure; separate KLIB
 production/consumption; imported CLR methods, properties, and ParamArray; the
 physical C# `Call(object[])` view; both FIR parsers; both CLR profiles; emitted
 IL; runtime-surface version skew; producer- and consumer-created `KFunction22`
-references; and the full audited aggregate.
+and `KFunction23+` references; and the full audited aggregate.

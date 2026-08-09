@@ -572,19 +572,20 @@ See the
   object-shaped. Only true reflective reference classes implement the slot;
   internal getter/adaptation callable helpers that share
   `FunctionReferenceBase` must not become KCallable accidentally.
-  `KCallable.callBy` extends the same parameter-identity graph for the Common
-  fixed-arity `KFunction0` through `KFunction22` closure. Map presence
+  `KCallable.callBy` extends the same parameter-identity graph for every
+  admitted `KFunction` arity. Map presence
   distinguishes an
   explicit null from omission; absent optional values reuse the shared
   default-argument lowering; absent varargs receive a fresh exact array; and
   missing required parameters follow the JVM failure contract. Ordinary class
   default dispatchers use one JVM-shaped static compiler ABI with an explicit
   receiver so source and reflective calls share virtual, separate-library
-  behavior. Runtime must not rediscover CLR members or own Kotlin default-mask
-  layout. The JVM-shaped `KFunction` declaration flags (`isInline`,
+  behavior. Runtime carries exposed omission bits in 32-bit `IntArray` words;
+  it must not rediscover CLR members or own Kotlin default-mask layout. The
+  JVM-shaped `KFunction` declaration flags (`isInline`,
   `isExternal`, `isOperator`, `isInfix`, and `isSuspend`) are one shared
-  property capability inherited by every admitted `KFunction0` through
-  `KFunction22`. Read them only from the exact KLIB/importer-IR reflection
+  property capability inherited by every admitted `KFunction` arity. Read
+  them only from the exact KLIB/importer-IR reflection
   target; generated invoke adapters and runtime CLR reflection are never flag
   authority. Store the facts in the existing private reference-flag carrier
   and inherit its virtual-final getters; do not emit five getter/property pairs
@@ -611,7 +612,8 @@ See the
   [the callable-type-parameter decision](docs/decisions/callable-type-parameters.md), and
   [the callable-parameter decision](docs/decisions/callable-parameters.md), and
   [the positional-call decision](docs/decisions/callable-positional-invocation.md), and
-  [the named-call decision](docs/decisions/callable-named-invocation.md), and
+  [the named-call decision](docs/decisions/callable-named-invocation.md),
+  [the big-arity decision](docs/decisions/big-arity-callables.md), and
   [the function-flag decision](docs/decisions/function-declaration-flags.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
@@ -924,7 +926,9 @@ boundary: `Function0` through `Function22` are distinct erased Kotlin runtime
 interfaces, while arity 23 and above belongs to the separate vararg `FunctionN`
 model. Extend ordinary functions, `KFunctionN`, `KSuspendFunctionN`, runtime
 interfaces, callable objects, references, invocation, reflection, and physical
-validation together. A logical suspend callable consumes one physical position
+validation together. See
+[`docs/decisions/big-arity-callables.md`](docs/decisions/big-arity-callables.md).
+A logical suspend callable consumes one physical position
 for its appended continuation, so logical suspend arity 21 is the largest fixed
 shape. Never introduce a coroutine-only callable interface to admit a test.
 
@@ -933,10 +937,12 @@ Generate one all-omitted IR template, let the shared Common default-argument
 lowerings choose the authoritative dispatcher and placeholder layout, and patch
 that dispatcher call with the runtime omission mask afterwards. Never recreate
 the former one-helper-per-omission-combination design: at 22 optional parameters
-it would synthesize more than four million helpers. Fixed erased execution is
-the Kotlin identity closure; `ExactFunction0..3`, typed-argument capabilities,
-and C# delegates remain separately justified optimizations/exports and do not
-grow merely because canonical fixed arity grows.
+it would synthesize more than four million helpers. Runtime omission bits use
+32-bit `IntArray` words and translate to every Common-owned physical mask.
+Erased execution is the Kotlin identity closure; `ExactFunction0..3`,
+typed-argument capabilities, and C# delegates remain separately justified
+optimizations/exports and do not grow merely because canonical fixed arity
+grows.
 
 A direct suspend callable reference has no generated lambda state-machine
 object to carry interception state. Following the JS handling of KT-55869, the
