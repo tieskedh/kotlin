@@ -16,8 +16,18 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: the shared Common/JVM suspend default, interface,
-  and callable-reference closure. The .NET runner now executes unchanged
+- Last completed feature: exhaustive final coroutine-IR validation. A
+  target-specific extension of Common's final validation phase, placed after
+  every .NET declaration/body producer, now rejects residual suspend
+  declarations, calls, ordinary/raw/rich function references, suspension
+  pseudo-expressions, and compiler-only coroutine/context intrinsic calls
+  before CIL emission. Ordinary `Continuation` and `COROUTINE_SUSPENDED`
+  runtime operations remain valid, and the emitter keeps its unconditional
+  production guard for compilations without `-Xverify-ir`. The focused
+  coroutine/bridge/callable-reference matrix covers 112 tests in 12 suites
+  across both FIR parsers and both target profiles with zero failures, errors,
+  or skips. The preceding shared Common/JVM suspend default, interface,
+  and callable-reference closure executes unchanged
   upstream tests for member defaults, suspending default lambdas, generic
   interface default bodies and specialization, adapted default references,
   structure/name identity, direct execution views, and the full
@@ -52,7 +62,7 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The shared suspend-ABI test head passed the ordinary aggregate. The
+The exhaustive final coroutine-IR validation head passed the ordinary aggregate. The
 normal aggregate command is:
 
 ```text
@@ -67,12 +77,12 @@ The audited full-aggregate evidence covers 158 XML files and 1899 tests:
 - 94 library-integration tests
 - zero failures, errors, or skips
 
-The final aggregate completed the changed FIR/box root at 2026-08-09 19:28:24
-local time; its wrapper exited successfully after 8m00s. The unchanged
-physical-model and `dn` results were reused and all three result roots were
-audited directly. The resulting tree has a cumulative JUnit suite time of
-1327.24 seconds: 0.13 for the physical model, 635.14 for FIR/IL/box, and 691.97
-for `dn`. Gradle 9's selected-task `--rerun` option is
+The final aggregate completed the changed FIR/box root at 2026-08-09 20:28:55
+local time; its wrapper exited successfully after 20m28s. The changed `dn`
+root also reran, the unchanged physical-model result was reused, and all three
+result roots were audited directly. The resulting tree has a cumulative JUnit
+suite time of 1555.86 seconds: 0.13 for the physical model, 860.86 for
+FIR/IL/box, and 694.87 for `dn`. Gradle 9's selected-task `--rerun` option is
 not full-matrix evidence on the empty backend lifecycle task and is not part of
 the verification command.
 
@@ -1008,8 +1018,9 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the selected coroutine foundation through stale producer
-   rejection and exhaustive residual-IR assertions. Repeated loop suspension,
+1. Continue the selected coroutine foundation through stale producer/runtime/
+   stdlib ABI rejection and physical-ABI assertions. Exhaustive final
+   residual-IR validation is now implemented. Repeated loop suspension,
    generic/nullable spills,
    local/two-receiver extensions, virtual/`super` members, suspend operators,
    private state machines, receiver dispatch, context composition/propagation,
