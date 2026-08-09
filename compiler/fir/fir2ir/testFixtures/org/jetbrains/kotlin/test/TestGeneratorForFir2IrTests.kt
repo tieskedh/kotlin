@@ -24,7 +24,10 @@ private const val DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN =
     "^(doWhileStatement|forContinue|forStatement|ifStatement|returnWithFinally|throwFromCatch|throwFromFinally|" +
             "whileStatement)\\.kt$"
 private const val DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN =
-    "^(breakWithNonEmptyStack)\\.kt$"
+    "^(breakWithNonEmptyStack|suspendOperatorPlus)\\.kt$"
+private const val DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN = "^(extension)\\.kt$"
+private const val DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN =
+    "^(inlineTwoReceivers|member|noinlineTwoReceivers|superCall)\\.kt$"
 private const val DOT_NET_GENERIC_OBJECT_BRIDGE_PATTERN = "^(simpleObject)\\.kt$"
 private const val DOT_NET_COROUTINE_INTRINSIC_PATTERN = "^(intercepted|releaseIntercepted)\\.kt$"
 private const val DOT_NET_COROUTINE_VALUE_CLASS_DIRECT_PATTERN =
@@ -155,6 +158,8 @@ fun main(args: Array<String>) {
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model("box/coroutines/localFunctions/named", pattern = DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN, recursive = false)
+                model("box/coroutines/suspendFunctionAsCoroutine", pattern = DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN, recursive = false)
                 model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/featureIntersection",
@@ -269,6 +274,8 @@ fun main(args: Array<String>) {
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model("box/coroutines/localFunctions/named", pattern = DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN, recursive = false)
+                model("box/coroutines/suspendFunctionAsCoroutine", pattern = DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN, recursive = false)
                 model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/featureIntersection",
@@ -383,6 +390,8 @@ fun main(args: Array<String>) {
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model("box/coroutines/localFunctions/named", pattern = DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN, recursive = false)
+                model("box/coroutines/suspendFunctionAsCoroutine", pattern = DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN, recursive = false)
                 model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/featureIntersection",
@@ -497,6 +506,8 @@ fun main(args: Array<String>) {
                 model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
                 model("box/coroutines", pattern = DOT_NET_COROUTINE_ROOT_PATTERN, recursive = false)
                 model("box/coroutines/controlFlow", pattern = DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN, recursive = false)
+                model("box/coroutines/localFunctions/named", pattern = DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN, recursive = false)
+                model("box/coroutines/suspendFunctionAsCoroutine", pattern = DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN, recursive = false)
                 model("box/coroutines/varSpilling", pattern = DOT_NET_COROUTINE_VAR_SPILLING_PATTERN, recursive = false)
                 model(
                     "box/coroutines/featureIntersection",
