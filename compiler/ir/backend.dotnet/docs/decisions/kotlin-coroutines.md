@@ -60,8 +60,9 @@ Every lowered Kotlin suspend function has one physical Kotlin ABI entry point:
 
 Library ABI version 27 owns that continuation-shaped physical MethodDef contract.
 That coroutine tranche left runtime surface level 26 unchanged because it did
-not alter `Kotlin.Runtime.dll`; the later fixed-callable closure advances the
-current runtime surface to 27 for `Function4` through `Function22`.
+not alter `Kotlin.Runtime.dll`; the later callable closures advance the current
+runtime surface to 28 for `Function4` through `Function22` and big-arity
+`FunctionN`.
 
 `Continuation<R>` is a Kotlin-owned generic interface. Its canonical erased
 interface remains the authoritative Kotlin dispatch identity under the accepted
@@ -197,19 +198,19 @@ closure proves a named singleton inheriting its coroutine base; the shared
 generic-object bridge test separately pins the general erased generic
 superclass case.
 
-The Common fixed-callable closure is now complete through physical `Function22`.
-That admits logical suspend arity 21 after the appended continuation and is
-verified by unchanged Common physical-`Function5` and `Function7` probes plus a
-target-owned suspend/resume `Function22` edge. Arity 23 and above remains the
-separate Common/JVM-style vararg big-arity `FunctionN` feature; fixed CLR
-interfaces must not be extended beyond the Common boundary.
+The Common callable closure is complete across the physical boundary. Fixed
+`Function0` through `Function22` admit logical suspend arity 21 after the
+appended continuation; logical suspend arity 22 and above use the accepted
+Common/JVM-style vararg `FunctionN` capability. A target-owned test performs a
+real park/resume through that first big execution arity. Fixed CLR interfaces
+are not extended beyond the Common boundary. See
+[`big-arity-callables.md`](big-arity-callables.md).
 
 This is an implemented foundation, not a claim that the complete coroutine
-programme or every evidence lane below is closed. In particular, big-arity
-callables, default/interface-bridge and reflective suspend-member shapes,
-stale-ABI behavior, and
-exhaustive residual-IR assertions still require explicit evidence before this
-ADR's full scope is called complete.
+programme or every evidence lane below is closed. In particular,
+default/interface-bridge and reflective suspend-member shapes, stale-ABI
+behavior, and exhaustive residual-IR assertions still require explicit
+evidence before this ADR's full scope is called complete.
 
 The Common state-machine builder copies source visibility to its generated
 constructor. That is harmless for JS/Wasm, but a CLR file facade cannot call a

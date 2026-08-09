@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.backend.common.lower.UpgradeCallableReferences
 import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.DotNetClassifierInfo
 import org.jetbrains.kotlin.backend.dotnet.DotNetFunctionReferenceFlags
 import org.jetbrains.kotlin.backend.dotnet.dotNetCallableDeclarationFlags
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericArray
@@ -851,9 +852,13 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             functionReference.isStateMachineSuspendLambda -> null
             functionReference.invokeFunction.isSuspend -> null
             functionReferenceClass.superTypes.none { superType ->
-                superType.classOrNull?.owner?.dotNetFixedFunctionArityOrNull() != null
+                superType.classOrNull?.owner?.let { owner ->
+                    val classifierInfo = DotNetClassifierInfo.derive(owner)
+                    owner.dotNetFixedFunctionArityOrNull() != null ||
+                            classifierInfo.bigFunctionArity != null || classifierInfo.bigKFunctionArity != null
+                } == true
             } ->
-                "does not use a supported fixed Function0, Function1, Function2, or Function3 interface"
+                "does not use a supported Function interface"
             else -> null
         }
     }

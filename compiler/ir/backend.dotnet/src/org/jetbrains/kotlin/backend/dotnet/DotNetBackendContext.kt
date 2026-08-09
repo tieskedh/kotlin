@@ -119,6 +119,8 @@ internal class DotNetBackendContext(
         DotNetExactCallableSymbols(irBuiltIns, irFactory, irModuleFragment)
     val typedArgumentsCallableSymbols: DotNetTypedArgumentsCallableSymbols =
         DotNetTypedArgumentsCallableSymbols(irBuiltIns, irFactory, irModuleFragment)
+    val bigArityCallableSymbols: DotNetBigArityCallableSymbols =
+        DotNetBigArityCallableSymbols(irBuiltIns, irFactory, irModuleFragment)
     val functionReferenceSymbols: DotNetFunctionReferenceSymbols =
         DotNetFunctionReferenceSymbols(irBuiltIns, irFactory, irModuleFragment)
     val propertyReferenceSymbols: DotNetPropertyReferenceSymbols =

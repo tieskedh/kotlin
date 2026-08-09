@@ -1,8 +1,8 @@
 # Named callable invocation
 
-Library ABI version: 22. Runtime surface level: 23.
-The current fixed-arity closure does not advance library ABI 27 and requires
-runtime surface level 27 for `Function4` through `Function22`.
+Initial library ABI version: 22. Initial runtime surface level: 23.
+The current big-arity closure advances library ABI and runtime surface to 28
+for the multiword omission mask and `FunctionN` execution capability.
 
 - Status: Accepted (pre-ABI)
 - Scope: `KCallable.callBy` on the callable-reference surface already admitted
@@ -10,8 +10,7 @@ runtime surface level 27 for `Function4` through `Function22`.
 - Depends on: [`callable-positional-invocation.md`](callable-positional-invocation.md)
   and [`callable-parameters.md`](callable-parameters.md)
 - Does not enable: runtime member lookup, suspend invocation, arbitrary
-  `KCallable` implementations, annotation-constructor callable references, or
-  the vararg big-arity representation for arity 23 and above
+  `KCallable` implementations, or annotation-constructor callable references
 
 ## Cross-target contract
 
@@ -60,7 +59,7 @@ runtime argument array and translates the exposed-position omission mask to
 the Common receiver-free physical mask layout.
 
 This produces one body plus work linear in the number of optional positions
-for the admitted `KFunction0` through `KFunction22` closure. It deliberately
+for every admitted `KFunction` arity. It deliberately
 does not generate one branch per omission combination: 22 optional parameters
 would otherwise require more than four million helpers. Constructors,
 inherited defaults, interface defaults, separate libraries, placeholder
@@ -81,9 +80,10 @@ default-dispatch route; the correction is not reflection policy. Library ABI
 version 22 rejects the former instance-shaped class-dispatch record instead of
 allowing a consumer to fail with `MissingMethodException` at execution.
 
-The runtime mask describes exposed callable positions only. It is private to
-the generated reference class; the shared lowering remains the sole owner of
-the producer's actual default-mask layout.
+The runtime mask is an `IntArray` describing exposed callable positions only,
+with one 32-bit word per position group. It is private to the generated
+reference class; the shared lowering remains the sole owner of the producer's
+actual one-or-more default-mask words and their layout.
 
 ### Create omitted varargs in the generated reference
 
@@ -147,8 +147,8 @@ avoids requiring a second map traversal.
 10. Ordinary class defaults have one static cross-module compiler ABI shared
     by source calls and reflective calls; its explicit receiver preserves
     virtual dispatch.
-11. Generated reflective-default code grows linearly, not combinatorially, in
-    the number of optional parameters.
+11. Generated reflective-default code and its mask storage grow linearly, not
+    combinatorially, in the number of optional parameters.
 
 ## Verification
 
@@ -161,6 +161,7 @@ constructors; properties and local delegated properties; exception identity;
 separate portable KLIB consumption; imported CLR callables without invented
 optional semantics; erased generic class owners beside genuine generic methods;
 both FIR parsers; both CLR profiles; emitted IL; runtime surface skew; and the
-full audited aggregate. Fixed-arity scale is pinned by a 22-parameter function
-whose dependent defaults can all be omitted or selectively supplied, plus
+full audited aggregate. Fixed-arity scale is pinned by a 22-parameter function;
+big-arity scale crosses the 31/32 bit boundary with a 33-parameter function.
+Dependent defaults can all be omitted or selectively supplied, including
 producer- and consumer-created references across separate DLLs.

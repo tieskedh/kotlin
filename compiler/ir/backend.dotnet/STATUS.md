@@ -16,16 +16,18 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: the Common fixed-callable closure through
-  `Function0`/`KFunction0` to `Function22`/`KFunction22`. One generated erased
-  runtime family now covers ordinary functions, explicit implementations,
-  callable references, positional and named reflection, separate libraries,
-  and physical suspend callables through `Function22`. Reflective defaults use
-  one Common-lowered dispatcher template plus a late linear exposed-to-physical
-  mask translation; they no longer generate one helper for every omission
-  combination. Runtime surface level 27 owns the additional fixed interfaces;
-  library ABI version 27 and the physical-name grammar are unchanged. The
-  executable Kotlin coroutine foundation remains complete through its current
+- Last completed feature: the Common/JVM callable-arity closure across fixed
+  `Function0`/`KFunction0` through `Function22`/`KFunction22` and the vararg
+  execution-arity-23-and-above `FunctionN` boundary. Big ordinary functions,
+  explicit and transitive-interface implementations, callable references,
+  arity-classified tests/casts, positional and named reflection, separate
+  libraries, and logical suspend arity 22 now use one same-object erased
+  capability. Reflective defaults use one Common-lowered dispatcher template,
+  32-bit `IntArray` omission words, and a late linear exposed-to-physical mask
+  translation; 33 dependent defaults cross the first word boundary without
+  combinatorial helpers. Runtime surface and library ABI version 28 own the
+  new `FunctionN`/multiword-mask contract; the physical-name grammar is
+  unchanged. The executable Kotlin coroutine foundation remains complete through its current
   liveness/member/extension/context/primitive-carrier closure. Target-owned
   compiler performance reporting remains active
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
@@ -41,27 +43,26 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The fixed-callable-arity head passed the ordinary aggregate. The
+The big-callable-arity head passed the ordinary aggregate. The
 normal aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 154 XML files and 1863 tests:
+The audited full-aggregate evidence covers 154 XML files and 1867 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1742 FIR, IL-text, and box tests
+- 1746 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 94 library-integration tests
 - zero failures, errors, or skips
 
-The final aggregate completed `dn` at 2026-08-09 16:57:02 and the changed
-FIR/box root at 17:05:45 local time; its wrapper exited successfully after
-20m46s.
+The final aggregate completed the changed FIR/box root at 2026-08-09 18:53:18
+and `dn` at 19:04:52 local time; its wrapper exited successfully after 19m47s.
 The unchanged physical-model result was reused and all three result roots were
 audited directly. The resulting tree has a cumulative JUnit suite time of
-1466.68 seconds: 0.13 for the physical model, 754.47 for FIR/IL/box, and 712.08
+1374.60 seconds: 0.13 for the physical model, 682.50 for FIR/IL/box, and 691.97
 for `dn`. Gradle 9's selected-task `--rerun` option is
 not full-matrix evidence on the empty backend lifecycle task and is not part of
 the verification command.
@@ -811,8 +812,9 @@ CLR declaration references, and direct C# invocation are covered independently
 of the named/default invocation layer described below.
 
 Named `KCallable.callBy` originally completed that invocation pair at runtime
-surface level 23; runtime surface 27 now extends the same contract through the
-complete fixed `KFunction0` to `KFunction22` range. Exact parameter-object
+surface level 23; surface 27 extended the fixed `KFunction0` to `KFunction22`
+range, and surface 28 adds the big-arity `FunctionN` path plus multiword
+omission masks. Exact parameter-object
 presence distinguishes
 explicit null from absence; omitted optional values select Kotlin defaults;
 omitted varargs receive fresh arrays of the exact substituted physical type;
@@ -821,8 +823,9 @@ remain inert. Runtime owns only exposed-position interpretation. Each generated
 reference makes one ordinary IR call with every optional absent; shared Common
 and class/interface default lowerings select the authoritative dispatcher and
 placeholder layout, after which one late .NET pass translates the runtime mask
-and selects supplied values. Generated size is therefore linear rather than
-one helper per omission combination; all 22 dependent defaults are covered.
+words and selects supplied values. Generated size is therefore linear rather
+than one helper per omission combination; 22 fixed and 33 big-arity dependent
+defaults are covered, including supplied values on both sides of bit 31/32.
 The separate-library proof also
 normalized ordinary Kotlin class `$default` dispatchers to one static compiler
 ABI with the receiver explicit. Kotlin-owned class parameters stay physically
@@ -837,15 +840,15 @@ introduced.
 
 The five JVM-shaped `KFunction` declaration properties now use the exact
 KLIB/importer-IR target for inline, external, operator, infix, and suspend
-status. They are declared once on `KFunction` and inherited by the admitted
-`KFunction0` through `KFunction22`; the physical view remains one non-generic
+status. They are declared once on `KFunction` and inherited by every admitted
+`KFunction` arity; the physical view remains one non-generic
 `Kotlin.KFunction` interface. The existing private function-reference flag
 carrier supplies five inherited virtual-final getters; its base does not
 implement `KFunction`, so internal adapters gain no reflection identity.
 Constructors and ordinary imported CLR interface methods report false, while
 resolved inherited operator status survives KLIB boundaries. Generated invoke
 adapters and runtime CLR reflection never become flag authority. Publishing
-`isSuspend` and `isExternal` does not admit suspend callable references or
+`isSuspend` and `isExternal` does not itself define suspend execution or
 external linkage. Library ABI 23 rejects old references without declaration
 bits, and runtime surface 24 gates the five new physical getters before
 execution.
@@ -996,9 +999,7 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the selected coroutine foundation through the Common/JVM-style
-   vararg big-arity `FunctionN` representation required from physical arity 23,
-   including higher-arity suspend function types, then default/interface-
+1. Continue the selected coroutine foundation through default/interface-
    bridge and reflective suspend-member shapes, stale producer rejection, and
    exhaustive
    residual-IR assertions. Repeated loop suspension, generic/nullable spills,

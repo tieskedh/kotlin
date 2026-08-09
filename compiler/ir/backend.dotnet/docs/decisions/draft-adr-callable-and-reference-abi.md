@@ -57,16 +57,17 @@ legal subtype conversions would allocate.
 
 ## Candidate decision
 
-### One erased Kotlin identity per arity
+### One erased Kotlin callable identity model
 
-Kotlin-owned non-generic `FunctionN` interfaces are the only canonical storage
+Kotlin-owned non-generic execution interfaces are the only canonical storage
 and invocation identity. The Common `Function<R>` view maps to a non-invokable
-marker; a fixed function type maps to `FunctionN` solely by arity. The fixed
+marker; a fixed function type maps to its execution interface solely by arity. The fixed
 range is derived from Common's `BuiltInFunctionArity.BIG_ARITY`: Kotlin/.NET
 publishes `Function0` through `Function22`, matching the JVM boundary. Arity 23
-and above belongs to the separate vararg big-arity `FunctionN` representation
-and is not approximated by adding target-specific fixed interfaces. Logical
-parameter/result types remain in IR and KLIB.
+and above uses the accepted arity-classified vararg `FunctionN`
+representation and is not approximated by adding target-specific fixed
+interfaces. Logical parameter/result types remain in IR and KLIB. See
+[`big-arity-callables.md`](big-arity-callables.md).
 
 An ordinary function-type subtype conversion is an instruction-free reference
 copy. It never creates an adapter, including for primitives, nullable values,
@@ -206,7 +207,7 @@ may not replace or leak into canonical Kotlin signatures.
 ## Reflection boundary
 
 This draft does not define full `KCallable` metadata, reflective lookup,
-`callBy`, accessor objects, suspend callable identity, or getter/setter back-links.
+accessor objects, coroutine-aware named suspend invocation, or getter/setter back-links.
 The separately accepted annotation slice retains declaration annotations on
 the same reference object but intentionally adds none of those capabilities.
 In particular, exposing private stored FunctionN values as JVM-like property

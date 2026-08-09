@@ -29,7 +29,9 @@ internal data class DotNetClassifierInfo(
     val isComparable: Boolean,
     val runtimeKind: DotNetRuntimeClassifierKind?,
     val fixedFunctionArity: Int?,
+    val bigFunctionArity: Int?,
     val fixedKFunctionArity: Int?,
+    val bigKFunctionArity: Int?,
     val fixedKPropertyArity: Int?,
     val fixedKMutablePropertyArity: Int?,
 ) {
@@ -73,11 +75,23 @@ internal data class DotNetClassifierInfo(
                 ?.takeIf {
                     it in 0 until BuiltInFunctionArity.BIG_ARITY && typeParameterCount == it + 1
                 }
+            val bigFunctionArity = fqNameString
+                ?.removePrefix("kotlin.Function")
+                ?.toIntOrNull()
+                ?.takeIf {
+                    it >= BuiltInFunctionArity.BIG_ARITY && typeParameterCount == it + 1
+                }
             val fixedKFunctionArity = irClass.name.asString()
                 .removePrefix("KFunction")
                 .toIntOrNull()
                 ?.takeIf {
                     irClass.symbol.isKFunction() && it in 0 until BuiltInFunctionArity.BIG_ARITY
+                }
+            val bigKFunctionArity = irClass.name.asString()
+                .removePrefix("KFunction")
+                .toIntOrNull()
+                ?.takeIf {
+                    irClass.symbol.isKFunction() && it >= BuiltInFunctionArity.BIG_ARITY
                 }
             val fixedKPropertyArity = fqNameString
                 ?.removePrefix("kotlin.reflect.KProperty")
@@ -113,7 +127,9 @@ internal data class DotNetClassifierInfo(
                 isComparable = fqNameString == "kotlin.Comparable",
                 runtimeKind = runtimeKind,
                 fixedFunctionArity = fixedFunctionArity,
+                bigFunctionArity = bigFunctionArity,
                 fixedKFunctionArity = fixedKFunctionArity,
+                bigKFunctionArity = bigKFunctionArity,
                 fixedKPropertyArity = fixedKPropertyArity,
                 fixedKMutablePropertyArity = fixedKMutablePropertyArity,
             )

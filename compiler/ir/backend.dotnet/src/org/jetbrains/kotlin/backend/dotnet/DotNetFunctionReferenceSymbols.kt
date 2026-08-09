@@ -247,7 +247,7 @@ internal class DotNetFunctionReferenceSymbols(
                 "args",
                 irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)),
             )
-            addValueParameter("mask", irBuiltIns.intType)
+            addValueParameter("masks", irBuiltIns.intArray.owner.defaultType)
         }
         emptyVarargAt = baseClass.addFunction {
             origin = IrDeclarationOrigin.IR_BUILTINS_STUB
