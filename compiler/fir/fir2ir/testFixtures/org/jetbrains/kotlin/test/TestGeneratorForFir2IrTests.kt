@@ -16,8 +16,11 @@ import org.jetbrains.kotlin.test.runners.ir.AbstractFirPsiJvmIrSourceRangesTest
 import org.jetbrains.kotlin.test.runners.ir.AbstractFirPsiJvmIrTextTest
 
 private const val DOT_NET_COROUTINE_ROOT_PATTERN =
-    "^(beginWithException|coercionToUnit|createCoroutineSafe|emptyClosure|falseUnitCoercion|handleException|" +
-            "coroutineContextInInlinedLambda|handleResultSuspended|iterateOverArray|kt52311_nullOnLeft|kt52311_nullOnRight|localCallableRef|" +
+    "^(beginWithException|coercionToUnit|createCoroutineSafe|defaultParameterLambdaInSuspend|" +
+            "defaultParametersInSuspend|emptyClosure|falseUnitCoercion|handleException|" +
+            "coroutineContextInInlinedLambda|functionReference_eqeq_name|" +
+            "functionReference_Function_SuspendFunction_casts|functionReference_invokeAsFunction|" +
+            "handleResultSuspended|iterateOverArray|kt52311_nullOnLeft|kt52311_nullOnRight|localCallableRef|" +
             "multipleInvokeCalls|simple|simpleSuspendCallableReference|" +
             "simpleWithHandleResult|suspendCoroutineFromStateMachine|suspendInTheMiddleOfObjectConstruction|suspendLambdaInInterface)\\.kt$"
 private const val DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN =
@@ -25,11 +28,13 @@ private const val DOT_NET_COROUTINE_CONTROL_FLOW_PATTERN =
             "whileStatement)\\.kt$"
 private const val DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN =
     "^(breakWithNonEmptyStack|safeCallOnTwoReceiversLong|suspendOperatorPlus)\\.kt$"
+private const val DOT_NET_COROUTINE_CALLABLE_REFERENCE_FUNCTION_PATTERN = "^(adapted)\\.kt$"
 private const val DOT_NET_COROUTINE_LOCAL_FUNCTION_PATTERN = "^(extension)\\.kt$"
 private const val DOT_NET_COROUTINE_TWO_RECEIVER_PATTERN =
     "^(dispatchResume|inlineTwoReceivers|member|noinlineTwoReceivers|privateFunctions|privateInFile|superCall)\\.kt$"
 private const val DOT_NET_COROUTINE_FIXED_ARITY_CALL_PATTERN = "^(manyParameters)\\.kt$"
-private const val DOT_NET_COROUTINE_FIXED_ARITY_BRIDGE_PATTERN = "^(lambdaWithMultipleParameters)\\.kt$"
+private const val DOT_NET_COROUTINE_FIXED_ARITY_BRIDGE_PATTERN =
+    "^(interfaceGenericDefault|interfaceSpecialization|lambdaWithMultipleParameters)\\.kt$"
 private const val DOT_NET_GENERIC_OBJECT_BRIDGE_PATTERN = "^(simpleObject)\\.kt$"
 private const val DOT_NET_COROUTINE_INTRINSIC_PATTERN =
     "^(coroutineContext|coroutineContextReceiver|coroutineContextReceiverNotIntrinsic|intercepted|releaseIntercepted)\\.kt$"
@@ -186,6 +191,12 @@ fun main(args: Array<String>) {
                     recursive = false,
                 )
                 model(
+                    "box/coroutines/featureIntersection/callableReference/function",
+                    pattern = DOT_NET_COROUTINE_CALLABLE_REFERENCE_FUNCTION_PATTERN,
+                    recursive = false,
+                    testClassName = "CoroutineCallableReferenceFunction",
+                )
+                model(
                     "box/coroutines/intrinsicSemantics",
                     pattern = DOT_NET_COROUTINE_INTRINSIC_PATTERN,
                     recursive = false,
@@ -312,6 +323,12 @@ fun main(args: Array<String>) {
                     "box/coroutines/featureIntersection",
                     pattern = DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN,
                     recursive = false,
+                )
+                model(
+                    "box/coroutines/featureIntersection/callableReference/function",
+                    pattern = DOT_NET_COROUTINE_CALLABLE_REFERENCE_FUNCTION_PATTERN,
+                    recursive = false,
+                    testClassName = "CoroutineCallableReferenceFunction",
                 )
                 model(
                     "box/coroutines/intrinsicSemantics",
@@ -442,6 +459,12 @@ fun main(args: Array<String>) {
                     recursive = false,
                 )
                 model(
+                    "box/coroutines/featureIntersection/callableReference/function",
+                    pattern = DOT_NET_COROUTINE_CALLABLE_REFERENCE_FUNCTION_PATTERN,
+                    recursive = false,
+                    testClassName = "CoroutineCallableReferenceFunction",
+                )
+                model(
                     "box/coroutines/intrinsicSemantics",
                     pattern = DOT_NET_COROUTINE_INTRINSIC_PATTERN,
                     recursive = false,
@@ -568,6 +591,12 @@ fun main(args: Array<String>) {
                     "box/coroutines/featureIntersection",
                     pattern = DOT_NET_COROUTINE_FEATURE_INTERSECTION_PATTERN,
                     recursive = false,
+                )
+                model(
+                    "box/coroutines/featureIntersection/callableReference/function",
+                    pattern = DOT_NET_COROUTINE_CALLABLE_REFERENCE_FUNCTION_PATTERN,
+                    recursive = false,
+                    testClassName = "CoroutineCallableReferenceFunction",
                 )
                 model(
                     "box/coroutines/intrinsicSemantics",

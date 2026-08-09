@@ -222,8 +222,9 @@ stdlib allowlists. The complete Kotlin primitive family now executes through
 typed state-machine fields plus the erased continuation boundary. Callable
 arities match Common/JVM across the fixed `Function22`/vararg `FunctionN`
 boundary, including a real logical-suspend-arity-22 park/resume path. Continue
-with default/interface-bridge and reflective suspend-member shapes, stale ABI,
-and residual-IR/physical-ABI assertions. Prefer
+with stale ABI and residual-IR/physical-ABI assertions. Shared member-default,
+suspending-default-lambda, generic-interface, adapted-reference, reference
+identity, and suspend/reference cast tests now run unchanged. Prefer
 unchanged shared coroutine tests and add target-owned tests only for CLR
 threading, metadata, assembly, or physical CIL facts. Shared tests whose
 assertions use `String.trimIndent` remain behind the authoritative Common

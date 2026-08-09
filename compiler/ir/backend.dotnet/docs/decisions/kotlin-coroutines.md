@@ -185,6 +185,11 @@ and receiver-start dispatch. Context coverage executes the Common
 `plus`/replacement/`minusKey`/`fold` behavior, pins the interceptor as the last
 element, reads `coroutineContext` through top-level, receiver, and inline forms,
 and preserves the exact completion context before and after real suspension.
+Shared default/interface/reference coverage additionally executes member
+defaults, a default lambda that suspends, generic interface default bodies and
+specialized overrides, a default-argument-adapted suspend reference,
+reference name/equality, invocation through `Function(N+1)`, and the distinct
+`KSuspendFunction`, `SuspendFunction`, and `KFunction(N+1)` runtime views.
 It also proves that both arities of the `createCoroutineUnintercepted` wrapper
 remain in the completion chain and release their cached interceptor instead of
 being stranded as launch-only objects. The same matrix covers a suspend-inline
@@ -208,9 +213,8 @@ are not extended beyond the Common boundary. See
 
 This is an implemented foundation, not a claim that the complete coroutine
 programme or every evidence lane below is closed. In particular,
-default/interface-bridge and reflective suspend-member shapes, stale-ABI
-behavior, and exhaustive residual-IR assertions still require explicit
-evidence before this ADR's full scope is called complete.
+stale-ABI behavior and exhaustive residual-IR assertions still require
+explicit evidence before this ADR's full scope is called complete.
 
 The Common state-machine builder copies source visibility to its generated
 constructor. That is harmless for JS/Wasm, but a CLR file facade cannot call a
