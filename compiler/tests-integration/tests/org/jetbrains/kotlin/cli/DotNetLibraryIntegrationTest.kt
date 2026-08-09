@@ -33981,6 +33981,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ) {
                 mismatchedDiagnostics
             }
+
+            assertRejectsRuntimeSurfaceMetadata(stdlibDirectory, consumerSource, target)
         }
 
         val forbiddenKotlinPackageSource = File(tmpdir, "installed-forbidden-kotlin-package-$target.kt").apply {
@@ -34004,6 +34006,90 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
         assertTrue("only the Kotlin standard library is allowed to use the 'kotlin' package" in diagnostics) { diagnostics }
+    }
+
+    private fun assertRejectsRuntimeSurfaceMetadata(
+        stdlibDirectory: File,
+        consumerSource: File,
+        target: String,
+    ) {
+        data class RuntimeSurfaceCase(
+            val name: String,
+            val values: List<String>,
+            val expectedDiagnostic: String,
+        )
+
+        val currentLevel = DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL
+        val cases = listOf(
+            RuntimeSurfaceCase(
+                name = "missing",
+                values = emptyList(),
+                expectedDiagnostic = "must declare exactly one standard CLR assembly metadata value " +
+                        "'${DotNetLibraryAbiCodec.RUNTIME_SURFACE_METADATA_KEY}', but declares 0",
+            ),
+            RuntimeSurfaceCase(
+                name = "duplicate",
+                values = listOf(currentLevel.toString(), currentLevel.toString()),
+                expectedDiagnostic = "must declare exactly one standard CLR assembly metadata value " +
+                        "'${DotNetLibraryAbiCodec.RUNTIME_SURFACE_METADATA_KEY}', but declares 2",
+            ),
+            RuntimeSurfaceCase(
+                name = "stale",
+                values = listOf((currentLevel - 1).toString()),
+                expectedDiagnostic =
+                    "declares Kotlin.Runtime surface level '${currentLevel - 1}', " +
+                            "but this compiler requires $currentLevel",
+            ),
+            RuntimeSurfaceCase(
+                name = "future",
+                values = listOf((currentLevel + 1).toString()),
+                expectedDiagnostic =
+                    "declares Kotlin.Runtime surface level '${currentLevel + 1}', " +
+                            "but this compiler requires $currentLevel",
+            ),
+            RuntimeSurfaceCase(
+                name = "malformed",
+                values = listOf("not-a-level"),
+                expectedDiagnostic =
+                    "declares Kotlin.Runtime surface level 'not-a-level', " +
+                            "but this compiler requires $currentLevel",
+            ),
+        )
+        val targetProfile = checkNotNull(DotNetTarget.fromString(target))
+        val runtimeManifest = readCSharpImplementationManifestEnvelope(
+            stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+        )
+        cases.forEach { case ->
+            val kotlinHome = File(tmpdir, "runtime-surface-${case.name}-home-$target")
+            val installedDirectory = kotlinHome.resolve("lib/dotnet/$target").apply { mkdirs() }
+            stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+                .copyTo(installedDirectory.resolve("Kotlin.Stdlib.dll"))
+            val runtime = DotNetIlAssembler.assembleRuntimeWithManifestForTests(
+                File(tmpdir, "runtime-surface-${case.name}-producer-$target"),
+                targetProfile,
+                runtimeManifest,
+                MessageCollector.NONE,
+                case.values,
+            )
+            assertTrue(runtime?.isFile == true) {
+                "Could not produce the ${case.name} runtime-surface fixture for $target"
+            }
+            checkNotNull(runtime).copyTo(
+                installedDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+            )
+            val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    consumerSource.path,
+                    K2DotNetCompilerArguments::kotlinHome.cliArgument, kotlinHome.path,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "runtime-surface-${case.name}-consumer-$target.il").path,
+                )
+            )
+            assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+            assertTrue(case.expectedDiagnostic in diagnostics) { diagnostics }
+        }
     }
 
     private fun executeSelfDescribingStdlib(stdlibDirectory: File, target: String, dotnetHost: File?) {

@@ -16,9 +16,20 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: exhaustive final coroutine-IR validation. A
-  target-specific extension of Common's final validation phase, placed after
-  every .NET declaration/body producer, now rejects residual suspend
+- Last completed feature: selected runtime-surface authentication. The
+  profile-paired `Kotlin.Runtime.dll` now proves its actual monotone surface
+  through exactly one standard CLR
+  `AssemblyMetadata("Kotlin.RuntimeSurfaceLevel", "<level>")` value. The
+  objective reader validates the assembly-level attribute parent, external
+  constructor/type/assembly edge, exact `(string, string)` signature, and
+  ECMA-335 blob without requiring a loaded BCL graph; the CLI then rejects
+  missing, duplicate, malformed, stale, and future values before FIR. The
+  target-profile core AssemblyRef name is configuration-owned and shared with
+  CIL emission. KLIB remains authoritative for a library's required floor,
+  while the C# implementation manifest deliberately does not duplicate the
+  runtime's actual value. The preceding exhaustive final coroutine-IR
+  validation extends Common's final validation with a target-specific phase
+  placed after every .NET declaration/body producer. It rejects residual suspend
   declarations, calls, ordinary/raw/rich function references, suspension
   pseudo-expressions, and compiler-only coroutine/context intrinsic calls
   before CIL emission. Ordinary `Continuation` and `COROUTINE_SUSPENDED`
@@ -62,8 +73,8 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The exhaustive final coroutine-IR validation head passed the ordinary aggregate. The
-normal aggregate command is:
+The selected runtime-surface authentication head passed the ordinary
+aggregate. The normal aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -77,12 +88,12 @@ The audited full-aggregate evidence covers 158 XML files and 1899 tests:
 - 94 library-integration tests
 - zero failures, errors, or skips
 
-The final aggregate completed the changed FIR/box root at 2026-08-09 20:28:55
-local time; its wrapper exited successfully after 20m28s. The changed `dn`
+The final aggregate completed the changed FIR/box root at 2026-08-09 21:17:10
+local time; its wrapper exited successfully after 20m17s. The changed `dn`
 root also reran, the unchanged physical-model result was reused, and all three
 result roots were audited directly. The resulting tree has a cumulative JUnit
-suite time of 1555.86 seconds: 0.13 for the physical model, 860.86 for
-FIR/IL/box, and 694.87 for `dn`. Gradle 9's selected-task `--rerun` option is
+suite time of 1416.79 seconds: 0.13 for the physical model, 755.04 for
+FIR/IL/box, and 661.62 for `dn`. Gradle 9's selected-task `--rerun` option is
 not full-matrix evidence on the empty backend lifecycle task and is not part of
 the verification command.
 
@@ -1018,9 +1029,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the selected coroutine foundation through stale producer/runtime/
-   stdlib ABI rejection and physical-ABI assertions. Exhaustive final
-   residual-IR validation is now implemented. Repeated loop suspension,
+1. Continue the selected coroutine foundation through coroutine-specific
+   physical-ABI assertions. Stale embedded-library schemas, the selected
+   runtime's actual surface level, and exhaustive final residual-IR validation
+   now fail closed before emission. Repeated loop suspension,
    generic/nullable spills,
    local/two-receiver extensions, virtual/`super` members, suspend operators,
    private state machines, receiver dispatch, context composition/propagation,

@@ -212,8 +212,10 @@ are not extended beyond the Common boundary. See
 [`big-arity-callables.md`](big-arity-callables.md).
 
 This is an implemented foundation, not a claim that the complete coroutine
-programme or every evidence lane below is closed. Stale-ABI behavior still
-requires explicit evidence before this ADR's full scope is called complete.
+programme or every evidence lane below is closed. Stale embedded-library ABI
+schemas and the selected runtime's actual surface level now fail before FIR;
+coroutine-specific physical-ABI evidence still remains before this ADR's full
+scope is called complete.
 
 The final target lowering is a .NET-specific extension of Common's
 `IrValidationAfterLoweringsSecondStagePhase`, following the JVM architecture.

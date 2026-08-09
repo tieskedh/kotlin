@@ -291,6 +291,16 @@ implementation or final distribution design. Installed selection treats each
 profile's runtime/stdlib as one pair and copies their bytes unchanged beside
 applications.
 
+The runtime's actual monotone surface level has one physical authority: the
+standard assembly-level
+`AssemblyMetadata("Kotlin.RuntimeSurfaceLevel", "<level>")` value. KLIB
+records what a library requires; the C# implementation manifest must not
+duplicate what the selected runtime provides. Platform-pair selection must
+reject a missing, duplicate, malformed, stale, or future runtime value before
+FIR. Keep the bounded compiler-owned carrier decoder usable without loaded BCL
+reference assemblies, but do not reuse its structural check as a weaker
+substitute for graph-resolved foreign-annotation import.
+
 A self-describing DLL's packed KLIB retains the DLL itself as
 `KotlinLibrary.path` and its resolved physical path as
 `KotlinLibrary.canonicalPath`. Never extract the resource to manufacture a

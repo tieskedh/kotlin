@@ -225,8 +225,10 @@ boundary, including a real logical-suspend-arity-22 park/resume path. A final
 Common-validator-derived .NET phase now rejects residual suspend declarations,
 calls, references, suspension pseudo-IR, and compiler-only coroutine
 intrinsics before emission, while the emitter retains its production guard.
-Continue with stale producer/runtime/stdlib ABI rejection and physical-ABI
-assertions. Shared member-default,
+Embedded producer schemas and the selected runtime's standard
+`Kotlin.RuntimeSurfaceLevel` metadata now reject missing, malformed, stale,
+future, and duplicate contracts before FIR. Continue with coroutine-specific
+physical-ABI assertions. Shared member-default,
 suspending-default-lambda, generic-interface, adapted-reference, reference
 identity, and suspend/reference cast tests now run unchanged. Prefer
 unchanged shared coroutine tests and add target-owned tests only for CLR

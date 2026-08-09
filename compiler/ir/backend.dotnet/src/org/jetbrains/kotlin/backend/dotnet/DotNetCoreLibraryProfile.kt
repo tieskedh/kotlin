@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.config.DotNetTarget
+import org.jetbrains.kotlin.config.coreLibraryAssemblyName
 
 /**
  * The CLR contract against which one emitted assembly's BCL references are compiled.
@@ -22,19 +23,19 @@ internal enum class DotNetCoreLibraryProfile(
     val targetFrameworkMoniker: String? = null,
 ) {
     NET48(
-        assemblyName = "mscorlib",
+        assemblyName = DotNetTarget.NET48.coreLibraryAssemblyName,
         targetFrameworkMoniker = ".NETFramework,Version=v4.8",
     ),
 
     NETSTANDARD_2_0(
-        assemblyName = "netstandard",
+        assemblyName = DotNetTarget.NETSTANDARD_2_0.coreLibraryAssemblyName,
         assemblyVersionIl = "2:0:0:0",
         publicKeyTokenIl = "CC 7B 13 FF CD 2D DD 51",
         targetFrameworkMoniker = ".NETStandard,Version=v2.0",
     ),
 
     NET10_0(
-        assemblyName = "mscorlib",
+        assemblyName = DotNetTarget.NET10_0.coreLibraryAssemblyName,
         targetFrameworkMoniker = ".NETCoreApp,Version=v10.0",
     );
 
