@@ -67,6 +67,14 @@ internal object DotNetStdlibLibrary {
     const val STANDARD_FACADE_IL_NAME = "Kotlin.StandardKt"
     const val LIBRARY_FACADE_IL_NAME = "Kotlin.LibraryKt"
     const val CONTRACTS_FACADE_IL_NAME = "Kotlin.Contracts.ContractBuilderKt"
+    const val RESULT_FACADE_IL_NAME = "Kotlin.ResultKt"
+    const val CONTINUATION_FACADE_IL_NAME = "Kotlin.Coroutines.ContinuationKt"
+    const val COROUTINE_CONTEXT_FACADE_IL_NAME = "Kotlin.Coroutines.CoroutineContextImplKt"
+    const val COROUTINE_INTRINSICS_FACADE_IL_NAME = "Kotlin.Coroutines.Intrinsics.IntrinsicsKt"
+    const val DOTNET_COROUTINE_INTRINSICS_FACADE_IL_NAME =
+        "Kotlin.Coroutines.Intrinsics.DotNetCoroutinesIntrinsicsKt"
+    const val DOTNET_COROUTINE_COMPILER_INTRINSICS_FACADE_IL_NAME =
+        "Kotlin.Dotnet.Internal.DotNetCoroutineCompilerIntrinsicsKt"
     const val IO_FACADE_IL_NAME = "Kotlin.Io.ConsoleKt"
     const val ENUM_ENTRIES_FACADE_IL_NAME = "Kotlin.Enums.EnumEntriesKt"
     const val THROW_HELPERS_FACADE_IL_NAME = "Kotlin.Internal.ThrowHelpersKt"
@@ -191,6 +199,18 @@ internal object DotNetStdlibLibrary {
         "kotlin.internal.SharedVariableBoxDouble" to "Kotlin.Internal.SharedVariableBoxDouble",
         "kotlin.internal.SharedVariableBoxChar" to "Kotlin.Internal.SharedVariableBoxChar",
         "kotlin.internal.SyntheticConstructorMarker" to "Kotlin.Internal.SyntheticConstructorMarker",
+        "kotlin.Result" to "Kotlin.Result",
+        "kotlin.coroutines.Continuation" to "Kotlin.Coroutines.Continuation",
+        "kotlin.coroutines.RestrictsSuspension" to "Kotlin.Coroutines.RestrictsSuspension",
+        "kotlin.coroutines.CoroutineContext" to "Kotlin.Coroutines.CoroutineContext",
+        "kotlin.coroutines.ContinuationInterceptor" to "Kotlin.Coroutines.ContinuationInterceptor",
+        "kotlin.coroutines.AbstractCoroutineContextElement" to "Kotlin.Coroutines.AbstractCoroutineContextElement",
+        "kotlin.coroutines.AbstractCoroutineContextKey" to "Kotlin.Coroutines.AbstractCoroutineContextKey",
+        "kotlin.coroutines.EmptyCoroutineContext" to "Kotlin.Coroutines.EmptyCoroutineContext",
+        "kotlin.coroutines.CombinedContext" to "Kotlin.Coroutines.CombinedContext",
+        "kotlin.coroutines.SafeContinuation" to "Kotlin.Coroutines.SafeContinuation",
+        "kotlin.coroutines.DotNetCoroutineImpl" to "Kotlin.Coroutines.DotNetCoroutineImpl",
+        "kotlin.coroutines.intrinsics.CoroutineSingletons" to "Kotlin.Coroutines.Intrinsics.CoroutineSingletons",
     )
     private val implementationFunctionFacadeIlNames = mapOf(
         "kotlin.enumValues" to LIBRARY_FACADE_IL_NAME,
@@ -322,6 +342,38 @@ internal object DotNetStdlibLibrary {
         "kotlin.addSuppressed" to EXCEPTIONS_FACADE_IL_NAME,
         "kotlin.reflect.cast" to KCLASSES_FACADE_IL_NAME,
         "kotlin.reflect.safeCast" to KCLASSES_FACADE_IL_NAME,
+        "kotlin.createFailure" to RESULT_FACADE_IL_NAME,
+        "kotlin.throwOnFailure" to RESULT_FACADE_IL_NAME,
+        "kotlin.runCatching" to RESULT_FACADE_IL_NAME,
+        "kotlin.getOrThrow" to RESULT_FACADE_IL_NAME,
+        "kotlin.getOrElse" to RESULT_FACADE_IL_NAME,
+        "kotlin.getOrDefault" to RESULT_FACADE_IL_NAME,
+        "kotlin.fold" to RESULT_FACADE_IL_NAME,
+        "kotlin.map" to RESULT_FACADE_IL_NAME,
+        "kotlin.mapCatching" to RESULT_FACADE_IL_NAME,
+        "kotlin.recover" to RESULT_FACADE_IL_NAME,
+        "kotlin.recoverCatching" to RESULT_FACADE_IL_NAME,
+        "kotlin.onFailure" to RESULT_FACADE_IL_NAME,
+        "kotlin.onSuccess" to RESULT_FACADE_IL_NAME,
+        "kotlin.coroutines.resume" to CONTINUATION_FACADE_IL_NAME,
+        "kotlin.coroutines.resumeWithException" to CONTINUATION_FACADE_IL_NAME,
+        "kotlin.coroutines.Continuation" to CONTINUATION_FACADE_IL_NAME,
+        "kotlin.coroutines.createCoroutine" to CONTINUATION_FACADE_IL_NAME,
+        "kotlin.coroutines.startCoroutine" to CONTINUATION_FACADE_IL_NAME,
+        "kotlin.coroutines.suspendCoroutine" to CONTINUATION_FACADE_IL_NAME,
+        "kotlin.coroutines.getPolymorphicElement" to COROUTINE_CONTEXT_FACADE_IL_NAME,
+        "kotlin.coroutines.minusPolymorphicKey" to COROUTINE_CONTEXT_FACADE_IL_NAME,
+        "kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn" to COROUTINE_INTRINSICS_FACADE_IL_NAME,
+        "kotlin.coroutines.intrinsics.startCoroutineUninterceptedOrReturn" to
+                DOTNET_COROUTINE_INTRINSICS_FACADE_IL_NAME,
+        "kotlin.coroutines.intrinsics.createCoroutineUnintercepted" to
+                DOTNET_COROUTINE_INTRINSICS_FACADE_IL_NAME,
+        "kotlin.coroutines.intrinsics.intercepted" to DOTNET_COROUTINE_INTRINSICS_FACADE_IL_NAME,
+        "kotlin.dotnet.internal.getContinuation" to DOTNET_COROUTINE_COMPILER_INTRINSICS_FACADE_IL_NAME,
+        "kotlin.dotnet.internal.returnIfSuspended" to DOTNET_COROUTINE_COMPILER_INTRINSICS_FACADE_IL_NAME,
+        "kotlin.dotnet.internal.getCoroutineContext" to DOTNET_COROUTINE_COMPILER_INTRINSICS_FACADE_IL_NAME,
+        "kotlin.dotnet.internal.suspendCoroutineUninterceptedOrReturnDotNet" to
+                DOTNET_COROUTINE_COMPILER_INTRINSICS_FACADE_IL_NAME,
     )
     private val implementationPropertyFacadeIlNames = mapOf(
         "kotlin.code" to STANDARD_FACADE_IL_NAME,
@@ -329,6 +381,8 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.lastIndex" to COLLECTIONS_FACADE_IL_NAME,
         "kotlin.suppressedExceptions" to EXCEPTIONS_FACADE_IL_NAME,
         "kotlin.reflect.qualifiedOrSimpleName" to KCLASSES_FACADE_IL_NAME,
+        "kotlin.coroutines.coroutineContext" to CONTINUATION_FACADE_IL_NAME,
+        "kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED" to COROUTINE_INTRINSICS_FACADE_IL_NAME,
     )
 
     fun hasImplementation(module: IrModuleFragment): Boolean =
@@ -885,6 +939,10 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.text",
             facadeIlName = TEXT_FACADE_IL_NAME,
         ),
+        "_DotNetBootstrapStrings.kt" to ImplementationSource(
+            packageFqName = "kotlin.text",
+            facadeIlName = TEXT_FACADE_IL_NAME,
+        ),
         "DotNetStringBuilder.kt" to ImplementationSource(
             packageFqName = "kotlin.text",
             facadeIlName = TEXT_FACADE_IL_NAME,
@@ -916,6 +974,34 @@ internal object DotNetStdlibLibrary {
         "HashCode.kt" to ImplementationSource(
             packageFqName = "kotlin",
             facadeIlName = STANDARD_FACADE_IL_NAME,
+        ),
+        "Result.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = RESULT_FACADE_IL_NAME,
+        ),
+        "Continuation.kt" to ImplementationSource(
+            packageFqName = "kotlin.coroutines",
+            facadeIlName = CONTINUATION_FACADE_IL_NAME,
+        ),
+        "ContinuationInterceptor.kt" to ImplementationSource(packageFqName = "kotlin.coroutines"),
+        "CoroutineContext.kt" to ImplementationSource(packageFqName = "kotlin.coroutines"),
+        "CoroutineContextImpl.kt" to ImplementationSource(
+            packageFqName = "kotlin.coroutines",
+            facadeIlName = COROUTINE_CONTEXT_FACADE_IL_NAME,
+        ),
+        "Intrinsics.kt" to ImplementationSource(
+            packageFqName = "kotlin.coroutines.intrinsics",
+            facadeIlName = COROUTINE_INTRINSICS_FACADE_IL_NAME,
+        ),
+        "DotNetCoroutineImpl.kt" to ImplementationSource(packageFqName = "kotlin.coroutines"),
+        "DotNetSafeContinuation.kt" to ImplementationSource(packageFqName = "kotlin.coroutines"),
+        "DotNetCoroutinesIntrinsics.kt" to ImplementationSource(
+            packageFqName = "kotlin.coroutines.intrinsics",
+            facadeIlName = DOTNET_COROUTINE_INTRINSICS_FACADE_IL_NAME,
+        ),
+        "DotNetCoroutineCompilerIntrinsics.kt" to ImplementationSource(
+            packageFqName = "kotlin.dotnet.internal",
+            facadeIlName = DOTNET_COROUTINE_COMPILER_INTRINSICS_FACADE_IL_NAME,
         ),
         "_DotNetBootstrapExperimentalTypeInference.kt" to ImplementationSource(
             packageFqName = "kotlin.experimental",
@@ -1021,6 +1107,8 @@ internal object DotNetStdlibLibrary {
         "DotNetKType.kt" to "kotlin.reflect",
         "_DotNetBootstrapJsName.kt" to "kotlin.js",
         "DotNetVolatileMarker.kt" to "kotlin.concurrent",
+        "CoroutinesH.kt" to "kotlin.coroutines",
+        "CoroutinesIntrinsicsH.kt" to "kotlin.coroutines.intrinsics",
     )
     private val resolutionOnlyDeclarations = setOf(
         // Common owns the logical generic declaration and EnumEntriesList implementation. Runtime
@@ -1055,9 +1143,7 @@ internal val IrClass.isDotNetResolutionOnlyStdlibDeclaration: Boolean
 
 /** Marker for a product or fallback stdlib implementation declaration, never a user class. */
 internal val IrClass.isDotNetStdlibImplementation: Boolean
-    get() = DotNetStdlibLibrary.implementationClassIlName(this) != null ||
-            isOriginallyLocalDeclaration &&
-            (parent as? IrFile)?.isDotNetStdlibImplementationSource == true
+    get() = fileOrNull?.isDotNetStdlibImplementationSource == true
 
 /** Marker for executable top-level stdlib source, distinct from resolution-only external stubs. */
 internal val IrSimpleFunction.isDotNetStdlibImplementation: Boolean

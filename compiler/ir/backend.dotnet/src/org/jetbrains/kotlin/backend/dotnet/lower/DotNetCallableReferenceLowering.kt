@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.declarations.addFunction
 import org.jetbrains.kotlin.ir.builders.declarations.addGetter
 import org.jetbrains.kotlin.ir.builders.declarations.addProperty
+import org.jetbrains.kotlin.ir.builders.declarations.buildValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildField
 import org.jetbrains.kotlin.ir.builders.irDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.builders.irBlockBody
@@ -113,11 +114,15 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable signature")
     private val executionInvokeByReference = IdentityHashMap<IrRichFunctionReference, IrSimpleFunction>()
 
+    private val IrRichFunctionReference.isStateMachineSuspendLambda: Boolean
+        get() = origin.isLambda && invokeFunction.isSuspend
+
     override fun getReferenceClassName(reference: IrRichFunctionReference): Name =
         Name.identifier(if (reference.origin.isLambda) "lambda" else "functionReference")
 
     override fun getSuperClassType(reference: IrRichFunctionReference): IrType =
-        if (reference.hasFunctionReferenceIdentity) context.functionReferenceSymbols.baseClass.defaultType
+        if (reference.isStateMachineSuspendLambda) context.symbols.coroutineImpl.owner.defaultType
+        else if (reference.hasFunctionReferenceIdentity) context.functionReferenceSymbols.baseClass.defaultType
         else context.irBuiltIns.anyType
 
     override fun IrBuilderWithScope.generateSuperClassConstructorCall(
@@ -125,6 +130,14 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         superClassType: IrType,
         functionReference: IrRichFunctionReference,
     ): IrDelegatingConstructorCall {
+        if (functionReference.isStateMachineSuspendLambda) {
+            val superConstructor = superClassType.classOrFail.owner.primaryConstructor
+                ?: error("Internal .NET backend error: coroutine base has no primary constructor")
+            val completion = constructor.parameters.single { it.origin == IrDeclarationOrigin.CONTINUATION }
+            return irDelegatingConstructorCall(superConstructor).apply {
+                arguments[0] = irGet(completion)
+            }
+        }
         if (!functionReference.hasFunctionReferenceIdentity) {
             return irDelegatingConstructorCall(
                 superClassType.classOrFail.owner.primaryConstructor
@@ -142,8 +155,8 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
                 functionReference.dotNetCallableAnnotationFactory
                     ?: this@DotNetCallableReferenceLowering.context.callableAnnotationSymbols.empty
             )
-            val hasSignatureSurface = functionReference.type.isKFunction() &&
-                    !functionReference.type.isKSuspendFunction() &&
+            val hasSignatureSurface =
+                (functionReference.type.isKFunction() || functionReference.type.isKSuspendFunction()) &&
                     this@DotNetCallableReferenceLowering.context.irBuiltIns.kCallableClass.owner.properties
                         .mapTo(linkedSetOf()) { property -> property.name.asString() }
                         .containsAll(listOf("returnType", "typeParameters"))
@@ -168,6 +181,27 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
                 ?: irNull()
         }
     }
+
+    override fun getExtraConstructorParameters(
+        constructor: IrConstructor,
+        reference: IrRichFunctionReference,
+    ): List<IrValueParameter> {
+        if (!reference.isStateMachineSuspendLambda) return emptyList()
+        val completion = context.symbols.coroutineImpl.owner.primaryConstructor!!.parameters.single()
+        return listOf(
+            buildValueParameter(constructor) {
+                name = completion.name
+                type = completion.type
+                origin = IrDeclarationOrigin.CONTINUATION
+                kind = IrParameterKind.Regular
+            }
+        )
+    }
+
+    override fun IrBuilderWithScope.getExtraConstructorArgument(
+        parameter: IrValueParameter,
+        reference: IrRichFunctionReference,
+    ): IrExpression? = if (reference.isStateMachineSuspendLambda) irNull(parameter.type) else null
 
     override fun getClassOrigin(reference: IrRichFunctionReference): IrDeclarationOrigin =
         if (reference.origin.isLambda) DOTNET_LAMBDA_IMPL else DOTNET_FUNCTION_REFERENCE_IMPL
@@ -301,10 +335,19 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         if (reference.hasFunctionReferenceIdentity) {
             addBoundValueAccess(functionReferenceClass)
         }
-        if (!reference.type.isKFunction() || reference.type.isKSuspendFunction()) return
+        if (!reference.type.isKFunction() && !reference.type.isKSuspendFunction()) return
         if (reference.reflectionTargetSymbol == null) return
+        // JVM's callSuspend appends the current continuation and then delegates to KCallable.call.
+        // Keep that positional contract: the runtime arity includes the continuation-shaped
+        // FunctionN slot. Named suspend invocation needs a distinct callSuspendBy operation to
+        // supply the continuation outside the KParameter map, so plain callBy fails closed until
+        // that separate reflection surface is selected.
         addPositionalCall(functionReferenceClass, reference)
-        addNamedCall(functionReferenceClass, reference)
+        if (reference.type.isKSuspendFunction()) {
+            addUnsupportedSuspendNamedCall(functionReferenceClass, reference)
+        } else {
+            addNamedCall(functionReferenceClass, reference)
+        }
         val superProperty = context.irBuiltIns.kCallableClass.owner.properties
             .single { it.name.asString() == "name" }
         val superGetter = superProperty.getter
@@ -525,6 +568,39 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
                 exposedParameters,
                 varargIndices,
             )
+        }
+    }
+
+    /** Implements the mandatory KCallable slot without pretending a map contains Continuation. */
+    private fun addUnsupportedSuspendNamedCall(
+        functionReferenceClass: IrClass,
+        reference: IrRichFunctionReference,
+    ) {
+        val superCallBy = context.irBuiltIns.kCallableClass.owner.functions
+            .singleOrNull { function -> function.name.asString() == "callBy" }
+            ?: return
+        val argumentParameter = superCallBy.parameters.single { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        }
+        functionReferenceClass.addFunction {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = superCallBy.name
+            visibility = superCallBy.visibility
+            modality = Modality.FINAL
+            returnType = reference.invokeFunction.returnType
+        }.apply {
+            overriddenSymbols = listOf(superCallBy.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            parameters += argumentParameter.copyTo(this)
+            body = context.createIrBuilder(symbol).irBlockBody {
+                +irCall(this@DotNetCallableReferenceLowering.context.symbols.throwUnsupportedOperationException).apply {
+                    arguments[0] = irString(
+                        "callBy cannot supply a suspend continuation; use a coroutine-aware reflective call."
+                    )
+                }
+            }
         }
     }
 
@@ -762,27 +838,14 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
 
     override fun postprocessClass(functionReferenceClass: IrClass, functionReference: IrRichFunctionReference) {
         functionReferenceClass.dotNetInventedLocalClassName = functionReference.dotNetInventedLocalClassName
-        if (functionReference.type.isKFunction() && !functionReference.type.isKSuspendFunction()) {
-            // AbstractFunctionReferenceLowering adds fake overrides after generateExtraMethods.
-            // Its KFunctionN view does not recognize the concrete KCallable properties above as
-            // satisfying the inherited members, so discard only those redundant fake pairs.
-            // The concrete getters remain the single CLR implementations.
-            val concretePropertyNames = context.irBuiltIns.kCallableClass.owner.properties
-                .mapNotNullTo(linkedSetOf()) { property ->
-                    property.name.takeIf { name ->
-                        name.asString() in setOf("name", "returnType", "parameters", "typeParameters")
-                    }
-                }
-            functionReferenceClass.declarations.removeAll { declaration ->
-                declaration.origin == IrDeclarationOrigin.FAKE_OVERRIDE && when (declaration) {
-                    is IrProperty -> declaration.name in concretePropertyNames
-                    is IrSimpleFunction ->
-                        declaration.name.asString() in setOf("call", "callBy") ||
-                                declaration.correspondingPropertySymbol?.owner?.name
-                                    ?.let { name -> name in concretePropertyNames } == true
-                    else -> false
-                }
-            }
+        // The Common builder adds inherited fake declarations after every concrete capability
+        // above has been generated. They are not executable members and are not needed by the
+        // CLR: explicit invoke/bridge methods own their interface slots, while the remaining
+        // members are inherited from the selected base class. Dropping the entire synthetic set
+        // also prevents a later physical lowering from traversing expect/actual placeholder
+        // symbols copied from KFunctionN's override graph.
+        functionReferenceClass.declarations.removeAll { declaration ->
+            declaration.origin == IrDeclarationOrigin.FAKE_OVERRIDE
         }
         // Common function-reference lowering creates bound-value fields without a specialized
         // origin. Mark them as ordinary captured-value fields so the strict CLR class renderer
@@ -793,10 +856,14 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             }
         }
         functionReferenceClass.dotNetLocalCaptureRejectionReason = when {
-            functionReference.invokeFunction.isSuspend ->
-                "is suspend; the suspend-callable ABI is deliberately reserved"
-            functionReference.type.isKSuspendFunction() ->
-                "requires suspend-callable reflection metadata, which is deliberately outside the callable ABI slice"
+            // This class is intentionally incomplete at callable-lowering time: the following
+            // coroutine phases replace its suspend invoke body with an ordinary-IR state machine
+            // and add the continuation-shaped FunctionN capability. Do not apply the old
+            // suspend-ABI reservation or pre-state-machine fixed-arity check to that selected
+            // lambda shape. Named coroutine-aware reflective invocation and export remain
+            // separate surfaces; direct references use the sibling KFunction/FunctionN+1 model.
+            functionReference.isStateMachineSuspendLambda -> null
+            functionReference.invokeFunction.isSuspend -> null
             functionReferenceClass.superTypes.none { superType ->
                 superType.classOrNull?.owner?.dotNetFixedFunctionArityOrNull() != null
             } ->

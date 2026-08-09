@@ -90,6 +90,7 @@ import org.jetbrains.kotlin.test.services.temporaryDirectoryManager
 import org.jetbrains.kotlin.test.services.transitiveDependsOnDependencies
 import org.jetbrains.kotlin.test.services.configuration.CommonEnvironmentConfigurator
 import org.jetbrains.kotlin.test.services.configuration.addSourcesForDependsOnClosure
+import org.jetbrains.kotlin.test.services.sourceProviders.CoroutineHelpersSourceFilesProvider
 import org.jetbrains.kotlin.test.services.sourceProviders.MainFunctionForBlackBoxTestsSourceProvider
 import org.jetbrains.kotlin.test.utils.MultiModuleInfoDumper
 import org.jetbrains.kotlin.test.utils.MessageCollectorForCompilerTests
@@ -222,6 +223,9 @@ private fun TestConfigurationBuilder.configureDotNetBase(
             dependencyKind = DependencyKind.Binary
         }
 
+        // Use the same directive-owned coroutine helpers as the JVM/JS/Wasm shared box corpus.
+        // The provider is inert unless a test declares WITH_COROUTINES.
+        useAdditionalSourceProviders(::CoroutineHelpersSourceFilesProvider)
         additionalSourceProvider?.let { useAdditionalSourceProviders(it) }
 
         useConfigurators(

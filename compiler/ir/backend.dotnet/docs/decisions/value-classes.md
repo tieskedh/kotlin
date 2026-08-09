@@ -100,6 +100,12 @@ parameters into genuine CLR method parameters. This preserves typed
 calculation where the construction is exact without publishing a CLR-generic
 class owner. Boxing into the owner erases its stored state; unboxing performs
 the checked recovery required by the statically substituted Kotlin type.
+Declaration-site variance remains authoritative on the logical class and in
+KLIB, but the copied physical method parameters are invariant because
+ECMA-335 permits variance only on interface and delegate type parameters. A
+star-projected owner argument in generated implementation IR substitutes its
+Kotlin erased upper bound for that method calculation; it does not make the
+underlying carrier the value class's erased or reified identity.
 
 A type parameter with a final primitive upper bound, such as the Common test
 shape `T : Int`, keeps its logical parameter and the CLR method's generic

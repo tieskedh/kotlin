@@ -18099,16 +18099,60 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testSuspendInlineFunctionsRemainExplicitlyUnsupported() {
+    fun testSuspendInlineFunctionsAndSafeContinuationRace() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
         val source = File(tmpdir, "inline-suspend.kt").apply {
             writeText(
                 """
                 package inline.suspendshape
 
+                import kotlin.coroutines.*
+
                 suspend inline fun suspended(block: () -> Int): Int = block()
 
+                private var pending: Continuation<Unit>? = null
+                private var completed: Int = 0
+
+                private object RaceCompletion : Continuation<Unit> {
+                    override val context: CoroutineContext
+                        get() = EmptyCoroutineContext
+
+                    override fun resumeWith(result: Result<Unit>) {
+                        result.getOrThrow()
+                    }
+                }
+
+                public fun prepareRace() {
+                    pending = null
+                    completed = 0
+                    val block: suspend () -> Unit = {
+                        suspendCoroutine<Unit> { continuation ->
+                            pending = continuation
+                        }
+                        completed += 1
+                    }
+                    block.startCoroutine(RaceCompletion)
+                    if (pending == null) throw IllegalStateException("Continuation was not captured")
+                }
+
+                public fun resumeRace() {
+                    pending!!.resume(Unit)
+                }
+
+                public fun completedCount(): Int = completed
+
                 fun main() {
+                    var result = 0
+                    val block: suspend () -> Unit = {
+                        result = suspended { 42 }
+                    }
+                    block.startCoroutine(RaceCompletion)
+                    if (result != 42) throw IllegalStateException("Suspend inline result: ${'$'}result")
                     println("OK")
                 }
                 """.trimIndent()
@@ -18127,10 +18171,94 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
 
         assertEquals(ExitCode.OK, exitCode, diagnostics)
-        assertTrue("suspend function 'suspended' requires coroutine lowering" in diagnostics) { diagnostics }
+        assertFalse("requires coroutine lowering" in diagnostics) { diagnostics }
         val il = outputDirectory.resolve("InlineSuspend.il").readText()
-        assertTrue("'suspended'" !in il) { il }
-        runDotNet(modernDotNetHostOrSkip(), output, outputDirectory, "Suspend-inline rejection executable failed")
+        assertTrue("extends [Kotlin.Stdlib]'Kotlin.Coroutines.DotNetCoroutineImpl'" in il) { il }
+        assertTrue("'resumeRace'" in il) {
+            "The public continuation-resume entry point was evicted:\n$diagnostics\n\n$il"
+        }
+        runDotNet(modernDotNetHostOrSkip(), output, outputDirectory, "Suspend-inline executable failed")
+
+        val raceSource = outputDirectory.resolve("race.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Linq;
+                using System.Reflection;
+                using System.Threading;
+
+                public static class SafeContinuationRace
+                {
+                    private static MethodInfo Find(Assembly assembly, string name)
+                    {
+                        return assembly.GetTypes()
+                            .SelectMany(type => type.GetMethods(
+                                BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly))
+                            .Single(method => method.Name == name && method.GetParameters().Length == 0);
+                    }
+
+                    public static int Main()
+                    {
+                        Assembly kotlin = Assembly.LoadFrom("InlineSuspend.dll");
+                        MethodInfo prepare = Find(kotlin, "prepareRace");
+                        MethodInfo resume = Find(kotlin, "resumeRace");
+                        MethodInfo count = Find(kotlin, "completedCount");
+                        prepare.Invoke(null, null);
+
+                        var gate = new ManualResetEventSlim(false);
+                        int successes = 0;
+                        int duplicateFailures = 0;
+                        Exception unexpected = null;
+                        ThreadStart action = () =>
+                        {
+                            gate.Wait();
+                            try
+                            {
+                                resume.Invoke(null, null);
+                                Interlocked.Increment(ref successes);
+                            }
+                            catch (TargetInvocationException failure)
+                                when (failure.InnerException is InvalidOperationException)
+                            {
+                                Interlocked.Increment(ref duplicateFailures);
+                            }
+                            catch (Exception failure)
+                            {
+                                Interlocked.CompareExchange(ref unexpected, failure, null);
+                            }
+                        };
+
+                        var first = new Thread(action);
+                        var second = new Thread(action);
+                        first.Start();
+                        second.Start();
+                        gate.Set();
+                        if (!first.Join(TimeSpan.FromSeconds(10)) ||
+                            !second.Join(TimeSpan.FromSeconds(10))) return 1;
+                        if (unexpected != null) throw unexpected;
+                        if (successes != 1 || duplicateFailures != 1) return 2;
+                        if ((int)count.Invoke(null, null) != 1) return 3;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val raceRunner = outputDirectory.resolve("SafeContinuationRace.dll")
+        val csharpResult = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            raceSource,
+            raceRunner,
+            target = "exe",
+        )
+        assertEquals(0, csharpResult.exitCode, csharpResult.output)
+        outputDirectory.resolve("SafeContinuationRace.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            modernCSharp.dotNetHost,
+            raceRunner,
+            outputDirectory,
+            "Concurrent SafeContinuation C# probe failed",
+        )
     }
 
     @Test
@@ -31063,7 +31191,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "firstNotNullOf" to 1,
                 "firstNotNullOfOrNull" to 1,
                 "firstOrNull" to 3,
-                "fold" to 1,
+                "fold" to 2,
                 "foldIndexed" to 1,
                 "foldRight" to 1,
                 "foldRightIndexed" to 1,
@@ -32001,6 +32129,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/util/Tuples.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/util/HashCode.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/util/Result.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/Continuation.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/ContinuationInterceptor.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/CoroutineContext.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/CoroutineContextImpl.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/CoroutinesH.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/CoroutinesIntrinsicsH.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/intrinsics/Intrinsics.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractCollection.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractList.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/collections/AbstractMap.kt").absoluteFile

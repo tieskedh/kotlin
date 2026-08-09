@@ -71,6 +71,7 @@ import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isSuspendFunction
+import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
@@ -397,7 +398,12 @@ internal class DotNetIlEmitter(
                 irClass.dotNetInventedLocalClassName != null -> irClass.dotNetInventedLocalClassName!!
                 enclosingClassInfo != null -> irClass.name.asString()
                 irClass.isDotNetStdlibImplementation ->
-                    DotNetStdlibLibrary.implementationClassIlName(irClass)!!.removeSuffix(logicalAritySuffix)
+                    (DotNetStdlibLibrary.implementationClassIlName(irClass)
+                        ?: irClass.fqNameWhenAvailable?.asString()
+                        ?: error(
+                            "Internal .NET backend error: stdlib implementation class '${irClass.name}' " +
+                                    "has neither a pinned nor a logical physical name"
+                        )).removeSuffix(logicalAritySuffix)
                 else -> irClass.fqNameWhenAvailable!!.asString()
             }
             val isErasedGenericInterface = irClass.isDotNetGenericInterfaceDeclaration
@@ -469,11 +475,12 @@ internal class DotNetIlEmitter(
                 java.util.IdentityHashMap<DotNetClrClasspathAssembly.WithoutCarrier, Boolean>()
             )
         val typeMapper = DotNetIlTypeMapper(
-            availableClasses,
-            coreLibrary,
-            externalDeclarations,
-            genericInterfaces,
-            genericClasses,
+            availableClasses = availableClasses,
+            localClasses = moduleClasses,
+            coreLibrary = coreLibrary,
+            externalDeclarations = externalDeclarations,
+            genericInterfaces = genericInterfaces,
+            genericClasses = genericClasses,
             stdlibAssemblyName = if (emissionScope == DotNetIlEmissionScope.STDLIB) {
                 null
             } else {
@@ -508,7 +515,6 @@ internal class DotNetIlEmitter(
         // base whose instantiation mentions an unmappable or unavailable type simply leaves the
         // link out (the render's live re-resolution owns the eviction and its carried reason).
         for ([irClass, classInfo] in availableClasses) {
-            if (irClass.isCompanion) continue
             classInfo.baseType = if (irClass.isAnnotationClass) {
                 // The logical KLIB edge is kotlin.Annotation, but the same declaration's
                 // physical class extends System.Attribute. Record that physical edge in the
@@ -828,6 +834,12 @@ internal class DotNetIlEmitter(
                 }
                 val membersByIlIdentity = hashMapOf<String, IrSimpleFunction>()
                 for (member in irClass.dotNetMemberFunctions().sortedBy { it.isOriginallyLocalDeclaration }) {
+                    // Member intrinsics have the same declaration-ownership contract as the
+                    // already handled top-level/property intrinsics. In particular,
+                    // SafeContinuation.compareAndSetResult is a resolution-only Kotlin body:
+                    // every call becomes Interlocked.CompareExchange and no throwing CLR method
+                    // may survive as a second, reflectively reachable implementation.
+                    if (intrinsicMethods.getIntrinsic(member.symbol)?.excludesDeclarationFromCodegen == true) continue
                     if (member.origin.isDotNetGenericInterfaceDefaultPhysicalMethod) {
                         val promotion = interfaceDefaultPromotions.singleOrNull { lowered ->
                             lowered.implementation == member
@@ -1874,16 +1886,11 @@ internal class DotNetIlEmitter(
                 ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
                     ?: dotNetUnsupported("class '$name' with a supertype other than kotlin.Any is not supported")
             }
-            // A singleton may implement ordinary interfaces; its INSTANCE construction and
-            // identity are unaffected. A concrete base still needs constructor chaining in the
-            // object lowering and therefore remains outside this slice.
-            if (
-                (isValidatedCompanion || irClass.kind == ClassKind.OBJECT) &&
-                superClasses.any { !it.isInterface }
-            ) {
-                val kindWord = if (isValidatedCompanion) "companion object" else "object"
-                dotNetUnsupported("$kindWord '$name' with a concrete base class is not supported")
-            }
+            // Named objects and companions use the same ordinary superclass edge and delegating
+            // constructor call as classes and anonymous objects. Singleton materialization only
+            // adds the one static INSTANCE field; it neither changes the object's base identity
+            // nor needs a second constructor-chaining model. This follows JVM ObjectClassLowering,
+            // which likewise creates the singleton field without restricting legal supertypes.
             // A class may implement any number of recursively declared module-local interfaces,
             // plus the supported Kotlin.Runtime callable/property interfaces, next to its (at most one)
             // base class; whether each module interface itself compiles is deliberately
@@ -1898,6 +1905,8 @@ internal class DotNetIlEmitter(
                     !externalDeclarations.hasClass(superInterface) &&
                     DotNetStdlibLibrary.publicImplementationClassInfoOrNull(superInterface) == null &&
                     importedClrDeclarations.classInfoOrNull(superInterface) == null &&
+                    !superInterface.defaultType.isSuspendFunction() &&
+                    !superInterface.defaultType.isKSuspendFunction() &&
                     superInterface.dotNetFixedFunctionArityOrNull() == null &&
                     superInterface.dotNetFixedKFunctionArityOrNull() == null &&
                     superInterface.dotNetFixedKPropertyArityOrNull() == null &&
@@ -2509,11 +2518,16 @@ internal class DotNetIlEmitter(
         // own reason (the interface arm of the inheritance cascade).
         val interfaceTypes = irClass.dotNetDirectInterfaceTypes().mapNotNull { superInterfaceType ->
             val superInterface = (superInterfaceType.classifier as IrClassSymbol).owner
-            physicalTypeMapper.classInfoOrNull(superInterface) ?: dotNetUnsupported(
-                "its ${if (irClass.isInterface) "extended" else "implemented"} interface " +
-                        "'${superInterface.diagnosticName()}' could not be compiled: " +
-                        (classSkipReasons[superInterface] ?: "the interface is not available in this module")
-            )
+            // SuspendFunctionN is a logical builtin, not a separately emitted CLR TypeDef. JVM
+            // likewise maps it to the continuation-shaped FunctionN+1 carrier while retaining
+            // the logical supertype. All ordinary interfaces still require a live declaration.
+            if (!superInterfaceType.isSuspendFunction() && !superInterfaceType.isKSuspendFunction()) {
+                physicalTypeMapper.classInfoOrNull(superInterface) ?: dotNetUnsupported(
+                    "its ${if (irClass.isInterface) "extended" else "implemented"} interface " +
+                            "'${superInterface.diagnosticName()}' could not be compiled: " +
+                            (classSkipReasons[superInterface] ?: "the interface is not available in this module")
+                )
+            }
             val interfaceType = physicalTypeMapper.toDotNetIlImplementedInterfaceType(superInterfaceType)
                 ?: dotNetUnsupported(
                     "its ${if (irClass.isInterface) "extended" else "implemented"} interface " +
@@ -2617,6 +2631,11 @@ internal class DotNetIlEmitter(
         }
 
         fun renderMemberFunction(member: IrSimpleFunction) {
+            // Keep the renderer on the same declaration-ownership boundary as the member
+            // pre-pass. A member intrinsic with no physical declaration (notably
+            // SafeContinuation.compareAndSetResult) must not reappear merely because class
+            // bodies are rendered by walking their IR declarations a second time.
+            if (intrinsicMethods.getIntrinsic(member.symbol)?.excludesDeclarationFromCodegen == true) return
             val memberTypeMapper = typeMapperForMember(member)
             val memberInfo = DotNetIlFunctionInfo(
                 classInfo,
@@ -2750,7 +2769,9 @@ internal class DotNetIlEmitter(
                         renderMemberFunction(declaration)
                     else -> {}
                 }
-                is IrProperty -> if (!declaration.isFakeOverride) {
+                is IrProperty -> if (
+                    !declaration.isFakeOverride && !declaration.isExcludedFromCodegen(intrinsicMethods)
+                ) {
                     if (declaration.isConst) {
                         // A member `const val` is the same CLR `literal` field as the facade
                         // shape: no accessors, no `.property` block, no `.cctor` entry
@@ -2804,7 +2825,11 @@ internal class DotNetIlEmitter(
                 isAbstract = irClass.modality == Modality.ABSTRACT || irClass.modality == Modality.SEALED,
                 baseClassRef = baseClassRef,
                 isInterface = irClass.isInterface,
-                interfaceRefs = (interfaceTypes + additionalTypedInterfaceTypes).map { interfaceType ->
+                // JVM's class-signature writer also uses a LinkedHashSet here. A logical
+                // SuspendFunctionN and the Common-added FunctionN+1 capability intentionally map
+                // to the same physical CLR interface; retain one metadata edge without erasing
+                // either logical Kotlin supertype from IR/KLIB.
+                interfaceRefs = (interfaceTypes + additionalTypedInterfaceTypes).distinct().map { interfaceType ->
                     when (interfaceType) {
                         is DotNetIlValueType.UserClass -> interfaceType.ilTypeRef
                         is DotNetIlValueType.GenericInstance -> interfaceType.nameInSignature

@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_EXACT_CALL
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
+import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
@@ -9,6 +10,7 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.IrBreakContinue
 import org.jetbrains.kotlin.ir.expressions.IrClassReference
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
@@ -18,6 +20,7 @@ import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetClass
 import org.jetbrains.kotlin.ir.expressions.IrGetObjectValue
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
+import org.jetbrains.kotlin.ir.expressions.IrReturn
 import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
 import org.jetbrains.kotlin.ir.expressions.IrSpreadElement
@@ -41,6 +44,7 @@ import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.allOverridden
+import org.jetbrains.kotlin.ir.util.erasedUpperBound
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.isFalseConst
@@ -49,10 +53,14 @@ import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isNullConst
 import org.jetbrains.kotlin.ir.util.isNullable
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
+import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.isTrueConst
+import org.jetbrains.kotlin.ir.util.isSuspendFunction
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
+import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
+import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.name.FqName
 
 private val DOTNET_VOLATILE_MARKER_FQ_NAME = FqName("kotlin.concurrent.Volatile")
@@ -348,6 +356,11 @@ internal class DotNetIlExpressionCodegen(
                 methodContext.notePhantomValueAfterThrow()
             }
             is IrTry -> statementScopeEmitter.emitTryExpression(expression, expectedType)
+            // Bottom-typed control transfers can occur under arbitrary shared-IR value shapes
+            // (for example an elvis arm in a call argument or a compiler temporary). Their
+            // physical branch/leave and dead-path stack bookkeeping belong to method scope.
+            is IrReturn, is IrBreakContinue ->
+                statementScopeEmitter.emitControlFlowValueExpression(expression, expectedType)
             is IrTypeOperatorCall -> emitTypeOperatorCall(expression, expectedType)
             is IrVararg -> emitVarargLiteral(expression, expectedType)
             is IrCall -> {
@@ -620,6 +633,56 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
+     * Atomically replaces an object-valued instance [field] when its current value is
+     * reference-identical to [expected], leaving the Boolean success result on the stack.
+     *
+     * The source-order receiver/expected/update evaluations are spilled before reloading them in
+     * `Interlocked.CompareExchange(ref location, value, comparand)` order. This is the physical
+     * CLR primitive behind Kotlin's lock-free `SafeContinuation`; ordinary observations of its
+     * field remain volatile reads, so no monitor, wrapper, or second state carrier is involved.
+     */
+    fun emitObjectFieldCompareExchange(
+        receiver: IrExpression,
+        field: IrField,
+        expected: IrExpression,
+        update: IrExpression,
+    ) {
+        val [classInfo, fieldType, isStatic] = resolveFieldAccess(field)
+        if (isStatic || classInfo.typeParameterCount != 0 || fieldType != DotNetIlValueType.Object) {
+            dotNetUnsupported(
+                "Interlocked.CompareExchange requires an object-valued field on an erased instance owner; " +
+                        "'${field.name.asString()}' is ${fieldType.nameInSignature} on " +
+                        "${classInfo.ilTypeRef} (static=$isStatic, arity=${classInfo.typeParameterCount})"
+            )
+        }
+
+        val receiverType = DotNetIlValueType.UserClass(classInfo)
+        emitExpression(receiver, receiverType)
+        val receiverSlot = spillToSyntheticLocal(receiverType, "<compareExchangeReceiver>")
+        emitExpression(expected, DotNetIlValueType.Object)
+        val expectedSlot = spillToSyntheticLocal(DotNetIlValueType.Object, "<compareExchangeExpected>")
+        emitExpression(update, DotNetIlValueType.Object)
+        val updateSlot = spillToSyntheticLocal(DotNetIlValueType.Object, "<compareExchangeUpdate>")
+
+        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        methodContext.emit(
+            "ldflda ${classInfo.renderFieldReference(fieldType, field.name.asString())}",
+            pops = 1,
+            pushes = 1,
+        )
+        methodContext.emit(loadLocalInstruction(updateSlot.index), pushes = 1)
+        methodContext.emit(loadLocalInstruction(expectedSlot.index), pushes = 1)
+        methodContext.emit(
+            "call object ${coreLibraryReference}System.Threading.Interlocked::" +
+                    "CompareExchange(object&, object, object)",
+            pops = 3,
+            pushes = 1,
+        )
+        methodContext.emit(loadLocalInstruction(expectedSlot.index), pushes = 1)
+        methodContext.emit("ceq", pops = 2, pushes = 1)
+    }
+
+    /**
      * `!!`/IMPLICIT_NOTNULL on a [nullable primitive][DotNetIlValueType.NullableValue] value on
      * top of the stack: spill (mandatory home address, see [spillToSyntheticLocal]), branch past
      * the throw on `get_HasValue`, throw the mapped Kotlin NPE (`System.NullReferenceException`,
@@ -735,6 +798,11 @@ internal class DotNetIlExpressionCodegen(
 
     /**
      * A type operator in value position. Supported operators:
+     * - [IrTypeOperator.IMPLICIT_COERCION_TO_UNIT]: evaluate the operand for its effects, discard
+     *   its value, and materialize the Kotlin Unit singleton. This is the same target-neutral
+     *   shape used by JS (`argument; Unit`) and Wasm (`generateAsStatement; getUnit`); on CIL the
+     *   statement-scope hook also handles control flow and void-returning calls without leaving
+     *   a stale evaluation-stack value behind.
      * - [IrTypeOperator.IMPLICIT_CAST] as a pure reference upcast — the operand's mapped type is
      *   [assignable][isDotNetAssignableTo] to the mapped cast type (`Derived` where a base-chain
      *   ancestor is expected, the trivial same-type cast — which covers every reference
@@ -785,7 +853,9 @@ internal class DotNetIlExpressionCodegen(
      * - CAST to an open type parameter: widen/box the operand to `object`, then use CLR
      *   `unbox.any !n`/`!!n`. This is the single instruction that recovers either a value or
      *   reference instantiation and is the direct CLR counterpart of a non-reified unchecked
-     *   generic cast. SAFE_CAST remains separate because `unbox.any` throws on a wrong value.
+     *   generic cast. SAFE_CAST tests the parameter's Kotlin erased upper bound instead: a
+     *   non-reified `as? T` cannot test the substituted T, and JVM likewise checks only that
+     *   erased classifier (or performs no check for an Any-bound parameter).
      * - Explicit casts and runtime tests against `CharSequence` use the runtime's classified
      *   string-or-capability boundary. The physical object carrier alone never admits a value;
      *   successful casts preserve the original reference.
@@ -793,6 +863,15 @@ internal class DotNetIlExpressionCodegen(
      * stays rejected loudly until its own audited model exists.
      */
     private fun emitTypeOperatorCall(expression: IrTypeOperatorCall, expectedType: DotNetIlValueType) {
+        if (expression.operator == IrTypeOperator.IMPLICIT_COERCION_TO_UNIT) {
+            if (!DotNetRuntimeTypes.unitType.isDotNetAssignableTo(expectedType)) {
+                dotNetUnsupported(
+                    "implicit coercion to Unit cannot produce ${expectedType.nameInSignature}"
+                )
+            }
+            statementScopeEmitter.emitUnitEffectExpression(expression.argument)
+            return
+        }
         val operandType = mappedNaturalType(expression.argument)
             ?: dotNetUnsupported("implicit cast of a value of unsupported type ${expression.argument.type.render()}")
         val boxedValueClassCastType = expression.typeOperand.dotNetValueClassOrNull()?.let {
@@ -865,6 +944,32 @@ internal class DotNetIlExpressionCodegen(
                 if (methodContext.isTerminated) return
                 methodContext.emit("unbox.any ${castType.nameInSignature}", pops = 1, pushes = 1)
                 emitCastResultCoercion(castType, expectedType, "generic cast")
+                return
+            }
+            if (expression.operator == IrTypeOperator.SAFE_CAST && castType is DotNetIlValueType.TypeParameter) {
+                val erasedBound = expression.typeOperand.erasedUpperBound.symbol.defaultType
+                val erasedBoundType = typeMapper.toDotNetIlValueType(erasedBound)
+                    ?: dotNetUnsupported(
+                        "safe generic cast has unsupported erased upper bound " +
+                                erasedBound.render()
+                    )
+                if (!erasedBoundType.isDotNetReferenceShaped()) {
+                    dotNetUnsupported(
+                        "safe generic cast has non-reference erased upper bound " +
+                                erasedBoundType.nameInSignature
+                    )
+                }
+                if (!erasedBoundType.isDotNetAssignableTo(expectedType)) {
+                    dotNetUnsupported(
+                        "safe generic cast produces ${erasedBoundType.nameInSignature} " +
+                                "where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                emitExpression(expression.argument, DotNetIlValueType.Object)
+                if (methodContext.isTerminated) return
+                if (erasedBoundType != DotNetIlValueType.Object) {
+                    methodContext.emit("isinst ${erasedBoundType.nameInSignature}", pops = 1, pushes = 1)
+                }
                 return
             }
             val scalarCastType =
@@ -1263,14 +1368,16 @@ internal class DotNetIlExpressionCodegen(
     }
 
     private fun IrType.dotNetKFunctionExecutionArityOrNull(): Int? =
-        (this as? IrSimpleType)?.classifier?.owner
-            ?.let { it as? IrClass }
-            ?.dotNetFixedKFunctionArityOrNull()
+        (this as? IrSimpleType)?.let { simpleType ->
+            (simpleType.classifier.owner as? IrClass)?.dotNetFixedKFunctionArityOrNull()
+                ?: simpleType.arguments.size.takeIf { isKSuspendFunction() && it in 1..3 }
+        }
 
     private fun IrType.dotNetFunctionExecutionArityOrNull(): Int? =
-        (this as? IrSimpleType)?.classifier?.owner
-            ?.let { it as? IrClass }
-            ?.dotNetFixedFunctionArityOrNull()
+        (this as? IrSimpleType)?.let { simpleType ->
+            (simpleType.classifier.owner as? IrClass)?.dotNetFixedFunctionArityOrNull()
+                ?: simpleType.arguments.size.takeIf { isSuspendFunction() && it in 1..3 }
+        }
 
     /**
      * Emits [expression] as a non-null string suitable for printing or concatenation: constants
@@ -1712,6 +1819,12 @@ internal class DotNetIlExpressionCodegen(
      * Emits the argument expressions of a call in order, each against its mapped parameter type.
      * [calleeDescription] names the callee inside the diagnostics, matching the historical
      * `call to 'f' ...` message shapes.
+     *
+     * A nested `try` introduces a CLR protected region, which must begin with an empty evaluation
+     * stack. In that case every receiver/argument is first evaluated and stored in a local, then
+     * reloaded in call order. This is the CIL equivalent of the JVM operand-stack freedom: source
+     * evaluation order and exception timing stay unchanged without carrying an older operand
+     * across an EH boundary.
      */
     fun emitArguments(
         arguments: List<IrExpression?>,
@@ -1721,12 +1834,43 @@ internal class DotNetIlExpressionCodegen(
         if (arguments.size != parameterTypes.size) {
             dotNetUnsupported("call to $calleeDescription has an unsupported argument shape")
         }
-        for ([argument, parameterType] in arguments.zip(parameterTypes)) {
-            if (argument == null) {
-                dotNetUnsupported("call to $calleeDescription relies on default argument values")
-            }
-            emitExpression(argument, parameterType)
+        val actualArguments = arguments.map { argument ->
+            argument ?: dotNetUnsupported("call to $calleeDescription relies on default argument values")
         }
+        if (actualArguments.none { it.containsTryExpression() }) {
+            for ([argument, parameterType] in actualArguments.zip(parameterTypes)) {
+                emitExpression(argument, parameterType)
+            }
+            return
+        }
+        if (methodContext.stackDepth != 0) {
+            dotNetUnsupported(
+                "call to $calleeDescription containing a protected expression has older evaluation-stack operands"
+            )
+        }
+        val slots = actualArguments.zip(parameterTypes).map { [argument, parameterType] ->
+            emitExpression(argument, parameterType)
+            spillToSyntheticLocal(parameterType, "<protectedArgument>")
+        }
+        for (slot in slots) {
+            methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+        }
+    }
+
+    /** True when evaluating this expression itself enters a CLR exception-handling region. */
+    private fun IrExpression.containsTryExpression(): Boolean {
+        if (this is IrTry) return true
+        var found = false
+        acceptChildrenVoid(object : IrVisitorVoid() {
+            override fun visitElement(element: IrElement) {
+                if (!found) element.acceptChildrenVoid(this)
+            }
+
+            override fun visitTry(aTry: IrTry) {
+                found = true
+            }
+        })
+        return found
     }
 
     /**
@@ -2129,6 +2273,16 @@ internal class DotNetIlExpressionCodegen(
                             "where ${expectedType.nameInSignature} is expected"
                 )
             emitWideningCoercion(coercion)
+        } else if (
+            producedType == null &&
+            call.type.isUnit() &&
+            DotNetRuntimeTypes.unitType.isDotNetAssignableTo(expectedType)
+        ) {
+            // A Kotlin Unit call is physically void in its direct CLR slot. When Common IR keeps
+            // it in value position (notably inside the explicit coroutine state machine), invoke
+            // that void method first and then materialize the one Unit object. JVM codegen makes
+            // the same value/void distinction at the use site; no callee ABI is widened.
+            emitRuntimeUnitInstance()
         } else if (producedType == null) {
             dotNetUnsupported(
                 "call to '${call.symbol.owner.name.asString()}' produces ${returnType.nameInSignature} " +

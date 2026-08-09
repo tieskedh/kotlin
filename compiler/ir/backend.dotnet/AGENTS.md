@@ -476,10 +476,16 @@ See the
   constraint. A nullable final primitive bound such as `T : Int?` has two
   legal carriers and therefore retains the genuine CLR method token in value
   slots, again without a physical CLR constraint; never collapse it to the
-  non-null carrier or erase the logical KLIB bound. Generic floating `eqeq`
-  (including generated value-class equality) follows JVM/Wasm total-order
-  semantics, while the separately typed `ieee754equals` builtin retains IEEE
-  semantics. Do not emit a CLR value-type owner, a CLR-generic owner, a
+  non-null carrier or erase the logical KLIB bound. ECMA-335 forbids
+  declaration-site variance on method generic parameters; when Common copies
+  a value-class owner's parameters onto static implementation/box/unbox
+  methods, normalize only those physical method parameters to invariant while
+  retaining class variance in KLIB. A star owner argument in such generated
+  IR selects its Kotlin erased upper bound for physical substitution and still
+  crosses erased/reified boundaries as the nominal box. Generic floating
+  `eqeq` (including generated value-class equality) follows JVM/Wasm
+  total-order semantics, while the separately typed `ieee754equals` builtin
+  retains IEEE semantics. Do not emit a CLR value-type owner, a CLR-generic owner, a
   second box/struct identity, or typed C# surface as part of Kotlin runtime
   ABI. See [the value-class ADR](docs/decisions/value-classes.md).
 - `KClass` is a nominal Kotlin runtime value over exact or classified CLR type
@@ -582,8 +588,15 @@ See the
   authority. Store the facts in the existing private reference-flag carrier
   and inherit its virtual-final getters; do not emit five getter/property pairs
   per reference or make the base itself implement `KFunction`. Constructors
-  report false, and publishing the suspend/external facts does not admit those
-  execution features. Typed foreign attribute
+  report false. A suspend callable reference is one object with sibling
+  capabilities: its `KSuspendFunctionN`/`KFunction` identity supplies the
+  Kotlin reflection contract, while ordinary `FunctionN+1` supplies physical
+  execution with the final continuation argument. Never create a second
+  wrapper or classifier for that execution view. JVM `callSuspend` appends its
+  continuation and then uses positional `KCallable.call`, so a suspend
+  reference must expose that same positional slot. Plain `callBy` cannot invent
+  a continuation from the user-visible `KParameter` map and must fail closed
+  until a coroutine-aware named-call helper owns the appended argument. Typed foreign attribute
   import, foreign CLR generic methods, accessor objects, `KCallable`
   visibility/modality, and broader member reflection remain separate. A
   foreign generic method must continue to fail the current interface importer
@@ -611,8 +624,9 @@ See the
   omitted. Neither form belongs to the producer physical declaration index or
   explicit C# export. No Kotlin call may reach either remainder. `KType` and
   `typeOf` compose this substitution path through their own completed logical
-  graph; suspend inline and future classifier families
-  remain separate closures. See [the reified-inline decision](docs/decisions/reified-inline-functions.md)
+  graph. Suspend inline composes the same shared inliner with the selected
+  continuation/state-machine pipeline; future classifier families remain
+  separate closures. See [the reified-inline decision](docs/decisions/reified-inline-functions.md)
   and its [array prerequisite](docs/decisions/reified-array-operations.md).
 - Ordinary runtime type tests evaluate their operand once at the erased object
   boundary, implement Kotlin nullable-target semantics before the non-null
@@ -637,7 +651,11 @@ See the
   [the erased generic-interface decision](docs/decisions/generic-interface-erased-identity.md).
 - Interface default bodies are profile-aware. Do not simulate modern DIM into
   the Framework ABI or reject a Kotlin body without applying the accepted
-  fallback policy. See
+  fallback policy. A default member's own method type parameters remain real
+  CLR method parameters on its ordinary slot bridge: copy their substituted
+  bounds, arguments, return, and parameter types, and render the `.override`
+  with the same method arity. Do not misclassify a generic method on an erased
+  non-generic interface as a generic-interface TypeDef. See
   [the interface-default ADR](docs/decisions/adr-profile-aware-interface-default-implementations.md).
 - Function values use the selected erased `FunctionN` identity plus exact
   execution capabilities; callable and property-reference identity is a
@@ -679,6 +697,15 @@ Objects and companions follow Kotlin/JVM first-active-use semantics on CLR
 `.cctor` ownership. A plain object owns `INSTANCE`. A companion singleton
 field lives on the selected enclosing static owner, using a non-generic holder
 when a generic owner would otherwise create one singleton per construction.
+
+Singleton field resolution is compilation-provenance-sensitive. A producer's
+already-lowered object field can survive inside an external inline body and
+must bind its recorded DLL owner. A declaration from the module currently
+being compiled remains local even when a dependency contains the same logical
+KLIB key, including after live-codegen eviction; it must never be resurrected
+or redirected through that dependency. Preserve the complete local class set
+separately from the mutable emittable-class map and use explicit synthetic-stub
+provenance only for consumer-created external object references.
 
 Companion backing state and init blocks remain on the companion instance; the
 selected owner's `.cctor` constructs it. This is the accepted CLR nested-type
@@ -851,10 +878,54 @@ complete through Common/KLIB authority, fail-closed CLR projection, and
 disjoint exact foreign CLR paths. Callable parameters and their declaration
 annotations extend the same signature graph; do not infer member enumeration,
 reflective call, accessor objects, fields, or type-use reflection from those
-surfaces. Suspend inline functions, value
-classes, member reflection, coroutines, concurrency primitives, and broad
-KMP/Gradle product integration remain separate programmes until `STATUS.md` or
-the way forward selects one.
+surfaces. Multi-field value classes, broad member reflection, coroutine-aware
+reflection and export, concurrency primitives beyond the continuation
+protocol, and broad KMP/Gradle product integration remain separate programmes
+until `STATUS.md` or the way forward selects one.
+
+Kotlin coroutines use the Common `Result`, `Continuation`,
+`CoroutineContext`, and suspended-sentinel contract. The target-owned lowering
+turns suspending bodies into explicit ordinary IR state machines following the
+JS/Wasm architecture; `backend.dotnet` must not depend on Web/JS code or teach
+the CIL emitter a residual coroutine language. Build state machines while
+suspend lambdas and captures are still semantic, then apply the Common
+continuation declaration/call transformations before ordinary target
+lowerings. No suspend declaration, compiler-only coroutine intrinsic, or
+coroutine pseudo-expression may reach CIL emission.
+
+Keep those phases in the ordinary target order, but do not make an unrelated
+module acquire a coroutine-stdlib dependency merely by constructing a pass.
+The symbol-heavy state-machine and continuation-call delegates are created only
+for suspend bodies/files; the established `-no-stdlib` foreign-metadata lanes
+must continue compiling ordinary code without `Continuation` or the target
+coroutine implementation on their classpath.
+
+The internal Kotlin ABI is the appended erased `Continuation<R>` parameter,
+an erased immediate result, and the identity-stable `COROUTINE_SUSPENDED`
+object. `Task<T>` and `ValueTask<T>` are foreign CLR types or future explicit
+export adapters; they never redefine that ABI. `SafeContinuation` owns the
+portable exactly-once race with compilation-local `Interlocked.CompareExchange`
+emission. Its compiler-intrinsic placeholder must have no emitted MethodDef,
+and every profile must preserve identity-based state checks and rejection of a
+duplicate resume. See
+[`docs/decisions/kotlin-coroutines.md`](docs/decisions/kotlin-coroutines.md).
+
+A direct suspend callable reference has no generated lambda state-machine
+object to carry interception state. Following the JS handling of KT-55869, the
+unintercepted create/start adapters wrap only a raw completion in the ordinary
+target continuation base before invocation. That same object exposes the
+completion's context, caches one intercepted continuation, and releases it on
+completion; an existing target continuation is never wrapped again.
+
+Explicit state machines stress general CIL control flow. A branch target
+immediately before a `.try` must remain outside the protected region and fall
+through through a real landing instruction; a literal-true loop uses an
+unconditional branch so the verifier sees no impossible fallthrough; and a
+`return`, `break`, or `continue` in value position drains only older evaluation
+stack operands before `ret`, `br`, or `leave`. A physical `void` call that is a
+logical Kotlin `Unit` expression materializes `Unit` only when the surrounding
+IR requires a value. Keep these as emitter invariants rather than coroutine-
+specific source rewrites.
 
 ## Verification contract
 

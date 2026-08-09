@@ -67,6 +67,7 @@ The following decisions constrain new work; their ADRs own the detail:
 - [primitive scalar carriers](../decisions/primitive-scalars.md);
 - [Kotlin-owned primitive arrays](../decisions/primitive-arrays.md);
 - [single-field value classes](../decisions/value-classes.md);
+- [Common continuation ABI and explicit CIL coroutine state machines](../decisions/kotlin-coroutines.md);
 - [runtime and stdlib ownership](../decisions/runtime-and-stdlib-ownership.md);
 - [generic nullability and covariant returns](../decisions/adr-hybrid-generic-nullability-and-covariant-returns.md);
 - [profile-aware interface defaults](../decisions/adr-profile-aware-interface-default-implementations.md);
@@ -92,8 +93,11 @@ loading, target IR serialization, shared first-/second-stage inliner phases, Com
 ABI, and all existing KLIB inliner modes. New work must keep its separate-DLL, friend/compiler-ABI,
 main/prepared IR, and cross-profile matrix green.
 
-Ordinary and reified inline are available for exact Common-source adoption. Suspend inline
-functions remain a separate programme and must continue to fail clearly.
+Ordinary and reified inline are available for exact Common-source adoption.
+The selected coroutine foundation now admits suspend-inline calls through the
+same shared inliner plus the continuation/state-machine pipeline. It does not
+make suspend callables a CLR delegate/export surface or imply that every
+coroutine-dependent library is available.
 
 The selected-graph breadth is now pinned explicitly: a body from library A binds declarations in an
 explicitly selected library B through the existing non-linking deserializer and frontend-owned IR
@@ -193,7 +197,33 @@ second-stage `IrTypeParameterScopeChecker` remains enabled: a failure is
 evidence of an invalid graph or deserialization boundary, not a target-specific
 checker to disable.
 
-### 3. Expand Common collections by exact dependency closure
+### 3. Close the selected Kotlin coroutine foundation
+
+Use [`../decisions/kotlin-coroutines.md`](../decisions/kotlin-coroutines.md).
+Common `Result`, `Continuation`, `CoroutineContext`, coroutine intrinsics, and
+inline helpers are authoritative. The .NET target supplies a target-owned
+ordinary-IR state machine shaped after JS/Wasm plus the CLR-atomic
+`SafeContinuation` mechanism; it does not use `Task<T>` or `ValueTask<T>` as
+Kotlin runtime identity.
+
+The initial executable closure covers immediate and suspended completion,
+tail delegation, exception and `finally` control flow, suspend lambdas,
+suspend callable references, interception/release, suspend-inline execution
+across a producer/consumer DLL boundary, value-class result carriers,
+cross-thread duplicate-resume rejection, both FIR parsers, and
+Framework/CoreCLR execution. Continue from that one architecture, not from
+stdlib allowlists: close repeated suspension, every remaining live-value/result
+carrier (especially generic and nullable spills), member/extension shapes,
+broader context composition, stale ABI, and residual-IR/physical-ABI
+assertions. Prefer unchanged shared coroutine tests and add target-owned tests
+only for CLR threading, metadata, assembly, or physical CIL facts.
+
+Coroutine scheduling, `kotlinx.coroutines`, sequence builders, debugger
+metadata, suspend callable reflection/export, and explicit C# async adapters
+remain consumers of this foundation. None may change its continuation/sentinel
+ABI or introduce a second state-machine representation.
+
+### 4. Expand Common collections by exact dependency closure
 
 Use [`common-collections.md`](common-collections.md). Its builder and Common abstract-base
 foundation now composes with the selected erased generic-class ABI without a target-authored
@@ -286,7 +316,7 @@ explicit exports on profiles that physically supply the standard attributes. It 
 rediscovers contracts from lowered IR nor makes CLR attributes authoritative. The importer may
 continue accepting those standard attributes as foreign evidence under Kotlin stability rules.
 
-### 4. Retain and enforce the completed declaration architecture seam
+### 5. Retain and enforce the completed declaration architecture seam
 
 Use [`compiler-architecture.md`](compiler-architecture.md). The versioned neutral carrier is now
 shared by the foreign FIR provider and backend binding, and Kotlin-facing provider policy lives in
@@ -317,7 +347,7 @@ only through complete production slices, remove each superseded string path,
 and do not use CLI generic capability to reopen Kotlin-owned erased runtime
 identity.
 
-### 5. Broaden foreign CLR interoperability only through exact mappings
+### 6. Broaden foreign CLR interoperability only through exact mappings
 
 Use [`clr-annotations.md`](clr-annotations.md) and the
 [importer ADR](../decisions/draft-adr-clr-importer-boundary.md). Admit complete declaration families
@@ -327,7 +357,7 @@ semantics are all specified.
 Do not flatten property/ref/out state, bypass Common smart-cast stability, or infer a declaration
 role from an attribute name.
 
-### 6. Close the remaining draft ABI decisions before wider breadth
+### 7. Close the remaining draft ABI decisions before wider breadth
 
 The accepted runtime decisions must be frozen and the remaining drafts accepted, revised, or
 explicitly excluded before third-party binary publication:
@@ -466,8 +496,8 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
   underlying fields;
 - reflection-dependent inline operations beyond the completed reified
   type/class/array/enum/`typeOf` closure;
-- suspend inline functions until coroutine state machines are supported;
-- coroutine state machines and `Task`/`ValueTask` exports;
+- coroutine scheduling, `kotlinx.coroutines`, sequence builders, debugger
+  metadata, broad suspend-callable reflection, and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;
 - `lateinit`;
 - collection/stdlib families outside admitted Common dependency closures; and

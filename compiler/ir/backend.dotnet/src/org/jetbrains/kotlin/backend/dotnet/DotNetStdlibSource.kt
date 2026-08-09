@@ -86,6 +86,22 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/coroutines/cancellation/DotNetStdlibCancellation.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetCoroutineImpl.kt",
+        "dotnet/src/kotlin/coroutines/DotNetCoroutineImpl.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetSafeContinuation.kt",
+        "dotnet/src/kotlin/coroutines/DotNetSafeContinuation.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetCoroutinesIntrinsics.kt",
+        "dotnet/src/kotlin/coroutines/DotNetCoroutinesIntrinsics.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "DotNetCoroutineCompilerIntrinsics.kt",
+        "dotnet/src/kotlin/coroutines/DotNetCoroutineCompilerIntrinsics.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetVolatileMarker.kt",
         "dotnet/src/kotlin/concurrent/DotNetVolatileMarker.kt",
         isCommon = true,
@@ -167,6 +183,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "_DotNetBootstrapStringBuilder.kt",
         "dotnet/common/src/generated/_DotNetBootstrapStringBuilder.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapStrings.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapStrings.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
@@ -356,6 +377,46 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "HashCode.kt",
         "src/kotlin/util/HashCode.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Result.kt",
+        "src/kotlin/util/Result.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Continuation.kt",
+        "src/kotlin/coroutines/Continuation.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "ContinuationInterceptor.kt",
+        "src/kotlin/coroutines/ContinuationInterceptor.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "CoroutineContext.kt",
+        "src/kotlin/coroutines/CoroutineContext.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "CoroutineContextImpl.kt",
+        "src/kotlin/coroutines/CoroutineContextImpl.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "CoroutinesH.kt",
+        "src/kotlin/coroutines/CoroutinesH.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "CoroutinesIntrinsicsH.kt",
+        "src/kotlin/coroutines/CoroutinesIntrinsicsH.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Intrinsics.kt",
+        "src/kotlin/coroutines/intrinsics/Intrinsics.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

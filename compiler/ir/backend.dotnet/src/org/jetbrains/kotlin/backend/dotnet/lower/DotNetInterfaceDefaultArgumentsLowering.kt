@@ -1004,8 +1004,8 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             (inherited.owner.parent as? IrClass)?.let(isMappedKotlinGenericInterface) == true
         }
         if (inheritedSlots.isEmpty()) return
-        check(binding.owner.typeParameters.isEmpty() && member.typeParameters.isEmpty()) {
-            "Internal .NET backend error: generic interface default reached the non-generic slot-bridge path"
+        check(binding.owner.typeParameters.isEmpty()) {
+            "Internal .NET backend error: generic interface default reached the ordinary slot-bridge path"
         }
         val interfaceIdentity = binding.owner.fqNameWhenAvailable?.asString()
             ?: binding.owner.name.asString()
@@ -1023,13 +1023,31 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         }.apply bridge@{
             overriddenSymbols = inheritedSlots
             parameters += createDispatchReceiverParameterWithClassParent()
+            val bridgeTypeParameters = copyTypeParametersFrom(member)
+            val methodSubstitutor = IrTypeSubstitutor(
+                member.typeParameters.zip(bridgeTypeParameters).associate { pair ->
+                    pair.first.symbol to pair.second.symbol.defaultType
+                },
+                allowEmptySubstitution = true,
+            )
+            bridgeTypeParameters.forEachIndexed { index, parameter ->
+                parameter.superTypes = member.typeParameters[index].superTypes.map(methodSubstitutor::substitute)
+            }
+            returnType = methodSubstitutor.substitute(member.returnType)
             member.parameters
                 .dropWhile { it.kind == IrParameterKind.DispatchReceiver }
                 .forEach { parameter ->
-                    parameters += parameter.copyTo(this, defaultValue = null)
+                    parameters += parameter.copyTo(
+                        this,
+                        type = methodSubstitutor.substitute(parameter.type),
+                        defaultValue = null,
+                    )
                 }
             body = context.createIrBuilder(symbol).irBlockBody {
                 val call = irCall(member).apply {
+                    bridgeTypeParameters.forEachIndexed { index, parameter ->
+                        typeArguments[index] = parameter.symbol.defaultType
+                    }
                     this@bridge.parameters.forEachIndexed { index, parameter ->
                         arguments[index] = irGet(parameter)
                     }

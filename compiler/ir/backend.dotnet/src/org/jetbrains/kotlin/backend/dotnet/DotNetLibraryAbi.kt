@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.common.suspendFunction
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.backend.common.serialization.signature.PublicIdSignatureComputer
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_HOLDER
@@ -375,7 +376,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "26"
+    const val ABI_VERSION = "27"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -1499,7 +1500,13 @@ internal class DotNetExternalDeclarations(
         function: IrSimpleFunction,
         typeMapper: DotNetIlTypeMapper,
     ): DotNetIlFunctionInfo? {
-        val logicalDeclaration = function.dotNetValueClassImplementationSourceOrNull() ?: function
+        // Common continuation lowering gives a deserialized suspend declaration a physical
+        // `(args, Continuation) -> Any?` stub. Producer indexing records that MethodDef under the
+        // original suspend KLIB identity; consumer lookup must select the same identity instead
+        // of asking the binding index for the lowering-only stub.
+        val logicalDeclaration = function.dotNetValueClassImplementationSourceOrNull()
+            ?: function.suspendFunction
+            ?: function
         val logicalKey = logicalKeys.keyOrNull(logicalDeclaration, "F") ?: return null
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
@@ -1862,7 +1869,7 @@ internal fun collectDotNetLibraryDeclarations(
         }
         if (function in valueClassImplementedSources) continue
         if (function.fileOrNull !in files || function.isOriginallyLocalDeclaration || function.isFakeOverride) continue
-        val logicalDeclaration = valueClassImplementationSources[function] ?: function
+        val logicalDeclaration = valueClassImplementationSources[function] ?: function.suspendFunction ?: function
         val logicalKey = preLoweringDeclarationKeys[logicalDeclaration] ?: continue
         val interfaceDefaultImplementation = interfaceDefaultImplementations[function]?.let { lowered ->
             val helperInfo = availableFunctions[lowered.helper]
