@@ -211,11 +211,19 @@ real park/resume through that first big execution arity. Fixed CLR interfaces
 are not extended beyond the Common boundary. See
 [`big-arity-callables.md`](big-arity-callables.md).
 
-This is an implemented foundation, not a claim that the complete coroutine
-programme or every evidence lane below is closed. Stale embedded-library ABI
-schemas and the selected runtime's actual surface level now fail before FIR;
-coroutine-specific physical-ABI evidence still remains before this ADR's full
-scope is called complete.
+This is an implemented foundation, not a claim that every coroutine-dependent
+library or export programme is complete. Stale embedded-library ABI schemas and
+the selected runtime's actual surface level fail before FIR. A portable
+producer-DLL evidence lane now reads objective CLR metadata and pins the public
+top-level and virtual suspend entries as ordinary parameters followed by the
+erased `Continuation`, with an `Object` immediate result. It also proves that
+non-tail bodies become private sealed subclasses of `DotNetCoroutineImpl`,
+without freezing their generated names, captured-constructor prefix, fields, or
+branch layout. Their constructors remain callable through the established
+public-in-private-type shape. Separate `net48` and `net10.0` consumers then park
+and resume both top-level and virtual calls through that one portable producer,
+proving that KLIB suspend semantics and the physical continuation ABI agree
+across compilation and profile boundaries.
 
 The final target lowering is a .NET-specific extension of Common's
 `IrValidationAfterLoweringsSecondStagePhase`, following the JVM architecture.
