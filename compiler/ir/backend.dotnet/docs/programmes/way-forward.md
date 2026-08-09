@@ -227,8 +227,10 @@ calls, references, suspension pseudo-IR, and compiler-only coroutine
 intrinsics before emission, while the emitter retains its production guard.
 Embedded producer schemas and the selected runtime's standard
 `Kotlin.RuntimeSurfaceLevel` metadata now reject missing, malformed, stale,
-future, and duplicate contracts before FIR. Continue with coroutine-specific
-physical-ABI assertions. Shared member-default,
+future, and duplicate contracts before FIR. Coroutine-specific physical-ABI
+evidence now pins the appended erased continuation, `Object` result, private
+sealed state-machine base, and public-in-private constructor boundary through
+one portable producer consumed and executed by both CLR profiles. Shared member-default,
 suspending-default-lambda, generic-interface, adapted-reference, reference
 identity, and suspend/reference cast tests now run unchanged. Prefer
 unchanged shared coroutine tests and add target-owned tests only for CLR
