@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.backend.common.ir.BackendSymbols
 import org.jetbrains.kotlin.backend.common.ir.SharedVariablesManager
 import org.jetbrains.kotlin.backend.common.lower.InnerClassesSupport
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesSupport
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassBoxingHelpers
 import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.cli.common.diagnosticsCollector
 import org.jetbrains.kotlin.config.CompilerConfiguration
@@ -13,6 +14,7 @@ import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.descriptors.ValueClassBackendAgnosticApi
 import org.jetbrains.kotlin.ir.InternalSymbolFinderAPI
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.IrDiagnosticReporter
@@ -33,6 +35,7 @@ import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
+import org.jetbrains.kotlin.ir.declarations.isInlineClass
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
@@ -149,6 +152,11 @@ internal class DotNetBackendContext(
     val objectInstanceFields: MutableMap<IrClass, IrField> = linkedMapOf()
     /** Logical enum entry to the synthesized public static field carrying its singleton. */
     val enumEntryFields: MutableMap<IrEnumEntry, IrField> = linkedMapOf()
+    /** Logical value class to its local definition or external physical box/unbox stubs. */
+    val valueClassBoxingHelpers: MutableMap<IrClass, DotNetValueClassBoxingHelpers> = linkedMapOf()
+    /** Kotlin-owned generic classifiers whose authoritative member ABI erases owner parameters. */
+    val erasedGenericInterfaces: MutableSet<IrClass> = hashSetOf()
+    val erasedGenericClasses: MutableSet<IrClass> = hashSetOf()
     /** Logical classifier to its stable, producer-recorded static-initialization entry. */
     val staticInitializations:
         MutableMap<IrClass, DotNetLoweredStaticInitialization> = linkedMapOf()
@@ -172,9 +180,9 @@ internal class DotNetBackendContext(
 }
 
 private object DotNetInlineClassesUtils : InlineClassesUtils {
-    // No inline/value class model exists in the .NET backend yet; unsupported shapes are rejected
-    // by the shape gates instead of being treated as inline-like.
-    override fun isClassInlineLike(klass: IrClass): Boolean = false
+    @OptIn(ValueClassBackendAgnosticApi::class)
+    override fun isClassInlineLike(klass: IrClass): Boolean =
+        klass.isInlineClass(treatCompatibleFullValueClassesAsInline = true)
 }
 
 @OptIn(InternalSymbolFinderAPI::class)
@@ -226,7 +234,6 @@ internal class DotNetSymbols(
         irBuiltIns.booleanType,
         listOf("left" to irBuiltIns.doubleType, "right" to irBuiltIns.doubleType),
     )
-
     override val getProgressionLastElementByReturnType: Map<IrClassifierSymbol, IrSimpleFunctionSymbol> by CallableId(
         StandardNames.KOTLIN_INTERNAL_FQ_NAME,
         Name.identifier("getProgressionLastElement"),

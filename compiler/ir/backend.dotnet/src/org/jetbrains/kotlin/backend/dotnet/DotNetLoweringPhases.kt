@@ -1,6 +1,8 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.common.lower.ArrayConstructorLowering
+import org.jetbrains.kotlin.backend.common.lower.InlineClassDeclarationLowering
+import org.jetbrains.kotlin.backend.common.lower.InlineClassUsageLowering
 import org.jetbrains.kotlin.backend.common.lower.KotlinNothingValueExceptionLowering
 import org.jetbrains.kotlin.backend.common.lower.LocalDelegatedPropertiesLowering
 import org.jetbrains.kotlin.backend.common.lower.RedundantCastsRemoverLowering
@@ -54,6 +56,10 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLoweri
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetTypeOfLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetUpgradeCallableReferences
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetVarargLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassReturnTargetLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassAutoboxingLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassImplementationSignatureLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassBoxingHelpersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetAllFunctionInlining
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetPrivateFunctionInlining
@@ -232,6 +238,16 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // block must already have been inlined into a constructor before the loop rewrite runs.
     ::DotNetInitializersLowering,
     ::DotNetInitializersCleanupLowering,
+    // JS/Wasm ordering: initializer merging must consume IrInstanceInitializerCall while it
+    // still lives in the primary constructor. Only then may the shared value-class lowering move
+    // the constructor body and members into static implementations. A following .NET value-usage
+    // phase will own every explicit box/unbox boundary; emission must never infer those
+    // transitions from a coincidentally matching underlying stack type.
+    ::InlineClassDeclarationLowering,
+    ::DotNetValueClassImplementationSignatureLowering,
+    ::DotNetValueClassReturnTargetLowering,
+    ::InlineClassUsageLowering,
+    ::DotNetValueClassBoxingHelpersLowering,
     // Object and callable singletons after initializer cleanup — each private `.ctor` must be
     // merged/complete before a `.cctor` calls it, and cleanup nulls pre-existing field
     // initializers indiscriminately. Create both singleton fields only now, immediately before
@@ -277,6 +293,13 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // DotNetFlattenStringConcatenationLowering for the CLR rendering reason.
     ::DotNetFlattenStringConcatenationLowering,
     ::DotNetStringConcatenationLowering,
+    // Representation transitions must be the last body-wide value-usage rewrite. Shared loop
+    // lowering can introduce a substituted `T -> V` IMPLICIT_CAST for `Array<V>.get`, and the
+    // string passes can expose additional value consumers. JVM states the same dependency
+    // directly: JvmInlineClassLowering lists ForLoopsLowering as a prerequisite because loops
+    // may produce inline-class values. Running the .NET pass here makes every nominal-box <->
+    // exact-carrier edge explicit before CIL emission, including bodies synthesized above.
+    ::DotNetValueClassAutoboxingLowering,
     // JVM/JS/Wasm/Native invariant: if a call statically returning Nothing somehow returns
     // (for example from foreign CLR code), throw the dedicated Kotlin exception immediately.
     // Run after every body-producing lowering so calls introduced by bridges/helpers receive it.

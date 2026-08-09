@@ -62,6 +62,51 @@ fun main(args: Array<String>) {
                             "arrayContentEqAny|multifileEqHc|naNAndZero|withDefaults)\\.kt$",
                 )
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model(
+                    "box/inlineClasses",
+                    pattern = "^(boxImplDoesNotExecuteInSecondaryConstructor|boxImplDoesNotExecuteInitBlock|" +
+                            "boxImplDoesNotExecuteInitBlockGeneric|boxNullableValueOfInlineClassWithNonNullUnderlyingType|" +
+                            "boxNullableValueOfInlineClassWithPrimitiveUnderlyingType|castInsideWhenExpression|" +
+                            "boxNullableValueOfInlineClassWithPrimitiveUnderlyingTypeGeneric|" +
+                            "boxUnboxOfInlineClassForCapturedVars|bridgeForFunctionReturningInlineClass|" +
+                            "bridgesWhenInlineClassImplementsGenericInterface|checkBoxingOnFunctionCalls|" +
+                            "checkBoxingOnLocalVariableAssignments|checkBoxingOnLocalVariableAssignmentsGeneric|" +
+                            "checkCallingMembersInsideInlineClass|checkCastToInlineClass|checkForInstanceOfInlineClass|" +
+                            "checkUnboxingResultFromTypeVariable|correctBoxingForBranchExpressions|" +
+                            "correctBoxingForBranchExpressionsGeneric|createInlineClassInArgumentPosition|" +
+                            "defaultFunctionsFromAnyForInlineClass|equalityChecksMixedNullability|" +
+                            "equalityForBoxesOfNullableValuesOfInlineClass|genericInlineClassSynthMembers|initBlock|" +
+                            "inlineClassEqualityShouldUseTotalOrderForFloatingPointData|" +
+                            "inlineClassEqualityShouldUseTotalOrderForFloatingPointDataGeneric|inlineClassPropertyReferenceGetAndSet|" +
+                            "iterateOverArrayOfInlineClassValues|iterateOverArrayOfInlineClassValuesGeneric|" +
+                            "iterateOverListOfInlineClassValues|kt27096_nullablePrimitive|kt27096_nullableReference|nestedInlineClass|" +
+                            "nullableWrapperEquality|passInlineClassAsVararg|passInlineClassAsVarargGeneric|" +
+                            "passInlineClassWithSpreadOperatorToVarargs|passInlineClassWithSpreadOperatorToVarargsGeneric|" +
+                            "referToUnderlyingPropertyOfInlineClass|secondaryConstructorsInsideInlineClassWithPrimitiveCarrierType|" +
+                            "secondaryConstructorsWithBody|typeChecksForInlineClasses|useInlineClassesInsideElvisOperator|" +
+                            "useInlineClassesInsideElvisOperatorGeneric)\\.kt$",
+                    recursive = false,
+                )
+                model("box/inlineClasses/boxReturnValueOnOverride", pattern = "^(uncastInlineClassToAnyAndBack)\\.kt$")
+                model("box/inlineClasses/boxReturnValueInLambda", pattern = "^(boxNullableAny|boxNullableAnyNull)\\.kt$")
+                model(
+                    "box/inlineClasses/callableReferences",
+                    pattern = "^(boundInlineClassMemberFun|constructorWithInlineClassParameters|equalsHashCodeToString)\\.kt$",
+                )
+                model("box/inlineClasses/contextsAndAccessors", pattern = "^(lambdaInInlineClassFun)\\.kt$")
+                model(
+                    "box/inlineClasses/defaultParameterValues",
+                    pattern = "^(defaultParameterValuesOfInlineClassType|defaultParameterValuesOfInlineClassTypeBoxing|" +
+                            "inlineClassSecondaryConstructor)\\.kt$",
+                )
+                model(
+                    "box/inlineClasses/functionNameMangling",
+                    pattern = "^(extensionFunctionsDoNotClash|functionsWithDifferentNullabilityDoNotClash|" +
+                            "genericFunctionsDoNotClash|mangledFunctionsCanBeOverridden|mangledFunctionsDoNotClash)\\.kt$",
+                )
+                model("box/inlineClasses/genericUnderlyingValue", pattern = "^(simple)\\.kt$")
+                model("box/inlineClasses/hiddenConstructor", pattern = "^(constructorWithDefaultParameters)\\.kt$")
+                model("box/inlineClasses/interfaceMethodCalls", pattern = "^(genericInterfaceMethodCall)\\.kt$")
                 model("box/ktype")
                 model(
                     "box/reflection/typeOf",
@@ -97,6 +142,51 @@ fun main(args: Array<String>) {
                             "arrayContentEqAny|multifileEqHc|naNAndZero|withDefaults)\\.kt$",
                 )
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model(
+                    "box/inlineClasses",
+                    pattern = "^(boxImplDoesNotExecuteInSecondaryConstructor|boxImplDoesNotExecuteInitBlock|" +
+                            "boxImplDoesNotExecuteInitBlockGeneric|boxNullableValueOfInlineClassWithNonNullUnderlyingType|" +
+                            "boxNullableValueOfInlineClassWithPrimitiveUnderlyingType|castInsideWhenExpression|" +
+                            "boxNullableValueOfInlineClassWithPrimitiveUnderlyingTypeGeneric|" +
+                            "boxUnboxOfInlineClassForCapturedVars|bridgeForFunctionReturningInlineClass|" +
+                            "bridgesWhenInlineClassImplementsGenericInterface|checkBoxingOnFunctionCalls|" +
+                            "checkBoxingOnLocalVariableAssignments|checkBoxingOnLocalVariableAssignmentsGeneric|" +
+                            "checkCallingMembersInsideInlineClass|checkCastToInlineClass|checkForInstanceOfInlineClass|" +
+                            "checkUnboxingResultFromTypeVariable|correctBoxingForBranchExpressions|" +
+                            "correctBoxingForBranchExpressionsGeneric|createInlineClassInArgumentPosition|" +
+                            "defaultFunctionsFromAnyForInlineClass|equalityChecksMixedNullability|" +
+                            "equalityForBoxesOfNullableValuesOfInlineClass|genericInlineClassSynthMembers|initBlock|" +
+                            "inlineClassEqualityShouldUseTotalOrderForFloatingPointData|" +
+                            "inlineClassEqualityShouldUseTotalOrderForFloatingPointDataGeneric|inlineClassPropertyReferenceGetAndSet|" +
+                            "iterateOverArrayOfInlineClassValues|iterateOverArrayOfInlineClassValuesGeneric|" +
+                            "iterateOverListOfInlineClassValues|kt27096_nullablePrimitive|kt27096_nullableReference|nestedInlineClass|" +
+                            "nullableWrapperEquality|passInlineClassAsVararg|passInlineClassAsVarargGeneric|" +
+                            "passInlineClassWithSpreadOperatorToVarargs|passInlineClassWithSpreadOperatorToVarargsGeneric|" +
+                            "referToUnderlyingPropertyOfInlineClass|secondaryConstructorsInsideInlineClassWithPrimitiveCarrierType|" +
+                            "secondaryConstructorsWithBody|typeChecksForInlineClasses|useInlineClassesInsideElvisOperator|" +
+                            "useInlineClassesInsideElvisOperatorGeneric)\\.kt$",
+                    recursive = false,
+                )
+                model("box/inlineClasses/boxReturnValueOnOverride", pattern = "^(uncastInlineClassToAnyAndBack)\\.kt$")
+                model("box/inlineClasses/boxReturnValueInLambda", pattern = "^(boxNullableAny|boxNullableAnyNull)\\.kt$")
+                model(
+                    "box/inlineClasses/callableReferences",
+                    pattern = "^(boundInlineClassMemberFun|constructorWithInlineClassParameters|equalsHashCodeToString)\\.kt$",
+                )
+                model("box/inlineClasses/contextsAndAccessors", pattern = "^(lambdaInInlineClassFun)\\.kt$")
+                model(
+                    "box/inlineClasses/defaultParameterValues",
+                    pattern = "^(defaultParameterValuesOfInlineClassType|defaultParameterValuesOfInlineClassTypeBoxing|" +
+                            "inlineClassSecondaryConstructor)\\.kt$",
+                )
+                model(
+                    "box/inlineClasses/functionNameMangling",
+                    pattern = "^(extensionFunctionsDoNotClash|functionsWithDifferentNullabilityDoNotClash|" +
+                            "genericFunctionsDoNotClash|mangledFunctionsCanBeOverridden|mangledFunctionsDoNotClash)\\.kt$",
+                )
+                model("box/inlineClasses/genericUnderlyingValue", pattern = "^(simple)\\.kt$")
+                model("box/inlineClasses/hiddenConstructor", pattern = "^(constructorWithDefaultParameters)\\.kt$")
+                model("box/inlineClasses/interfaceMethodCalls", pattern = "^(genericInterfaceMethodCall)\\.kt$")
                 model("box/ktype")
                 model(
                     "box/reflection/typeOf",
@@ -132,6 +222,51 @@ fun main(args: Array<String>) {
                             "arrayContentEqAny|multifileEqHc|naNAndZero|withDefaults)\\.kt$",
                 )
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model(
+                    "box/inlineClasses",
+                    pattern = "^(boxImplDoesNotExecuteInSecondaryConstructor|boxImplDoesNotExecuteInitBlock|" +
+                            "boxImplDoesNotExecuteInitBlockGeneric|boxNullableValueOfInlineClassWithNonNullUnderlyingType|" +
+                            "boxNullableValueOfInlineClassWithPrimitiveUnderlyingType|castInsideWhenExpression|" +
+                            "boxNullableValueOfInlineClassWithPrimitiveUnderlyingTypeGeneric|" +
+                            "boxUnboxOfInlineClassForCapturedVars|bridgeForFunctionReturningInlineClass|" +
+                            "bridgesWhenInlineClassImplementsGenericInterface|checkBoxingOnFunctionCalls|" +
+                            "checkBoxingOnLocalVariableAssignments|checkBoxingOnLocalVariableAssignmentsGeneric|" +
+                            "checkCallingMembersInsideInlineClass|checkCastToInlineClass|checkForInstanceOfInlineClass|" +
+                            "checkUnboxingResultFromTypeVariable|correctBoxingForBranchExpressions|" +
+                            "correctBoxingForBranchExpressionsGeneric|createInlineClassInArgumentPosition|" +
+                            "defaultFunctionsFromAnyForInlineClass|equalityChecksMixedNullability|" +
+                            "equalityForBoxesOfNullableValuesOfInlineClass|genericInlineClassSynthMembers|initBlock|" +
+                            "inlineClassEqualityShouldUseTotalOrderForFloatingPointData|" +
+                            "inlineClassEqualityShouldUseTotalOrderForFloatingPointDataGeneric|inlineClassPropertyReferenceGetAndSet|" +
+                            "iterateOverArrayOfInlineClassValues|iterateOverArrayOfInlineClassValuesGeneric|" +
+                            "iterateOverListOfInlineClassValues|kt27096_nullablePrimitive|kt27096_nullableReference|nestedInlineClass|" +
+                            "nullableWrapperEquality|passInlineClassAsVararg|passInlineClassAsVarargGeneric|" +
+                            "passInlineClassWithSpreadOperatorToVarargs|passInlineClassWithSpreadOperatorToVarargsGeneric|" +
+                            "referToUnderlyingPropertyOfInlineClass|secondaryConstructorsInsideInlineClassWithPrimitiveCarrierType|" +
+                            "secondaryConstructorsWithBody|typeChecksForInlineClasses|useInlineClassesInsideElvisOperator|" +
+                            "useInlineClassesInsideElvisOperatorGeneric)\\.kt$",
+                    recursive = false,
+                )
+                model("box/inlineClasses/boxReturnValueOnOverride", pattern = "^(uncastInlineClassToAnyAndBack)\\.kt$")
+                model("box/inlineClasses/boxReturnValueInLambda", pattern = "^(boxNullableAny|boxNullableAnyNull)\\.kt$")
+                model(
+                    "box/inlineClasses/callableReferences",
+                    pattern = "^(boundInlineClassMemberFun|constructorWithInlineClassParameters|equalsHashCodeToString)\\.kt$",
+                )
+                model("box/inlineClasses/contextsAndAccessors", pattern = "^(lambdaInInlineClassFun)\\.kt$")
+                model(
+                    "box/inlineClasses/defaultParameterValues",
+                    pattern = "^(defaultParameterValuesOfInlineClassType|defaultParameterValuesOfInlineClassTypeBoxing|" +
+                            "inlineClassSecondaryConstructor)\\.kt$",
+                )
+                model(
+                    "box/inlineClasses/functionNameMangling",
+                    pattern = "^(extensionFunctionsDoNotClash|functionsWithDifferentNullabilityDoNotClash|" +
+                            "genericFunctionsDoNotClash|mangledFunctionsCanBeOverridden|mangledFunctionsDoNotClash)\\.kt$",
+                )
+                model("box/inlineClasses/genericUnderlyingValue", pattern = "^(simple)\\.kt$")
+                model("box/inlineClasses/hiddenConstructor", pattern = "^(constructorWithDefaultParameters)\\.kt$")
+                model("box/inlineClasses/interfaceMethodCalls", pattern = "^(genericInterfaceMethodCall)\\.kt$")
                 model("box/ktype")
                 model(
                     "box/reflection/typeOf",
@@ -167,6 +302,51 @@ fun main(args: Array<String>) {
                             "arrayContentEqAny|multifileEqHc|naNAndZero|withDefaults)\\.kt$",
                 )
                 model("box/contracts", pattern = "^(constructorArgument|exactlyOnceNotInline|valInWhen)\\.kt$")
+                model(
+                    "box/inlineClasses",
+                    pattern = "^(boxImplDoesNotExecuteInSecondaryConstructor|boxImplDoesNotExecuteInitBlock|" +
+                            "boxImplDoesNotExecuteInitBlockGeneric|boxNullableValueOfInlineClassWithNonNullUnderlyingType|" +
+                            "boxNullableValueOfInlineClassWithPrimitiveUnderlyingType|castInsideWhenExpression|" +
+                            "boxNullableValueOfInlineClassWithPrimitiveUnderlyingTypeGeneric|" +
+                            "boxUnboxOfInlineClassForCapturedVars|bridgeForFunctionReturningInlineClass|" +
+                            "bridgesWhenInlineClassImplementsGenericInterface|checkBoxingOnFunctionCalls|" +
+                            "checkBoxingOnLocalVariableAssignments|checkBoxingOnLocalVariableAssignmentsGeneric|" +
+                            "checkCallingMembersInsideInlineClass|checkCastToInlineClass|checkForInstanceOfInlineClass|" +
+                            "checkUnboxingResultFromTypeVariable|correctBoxingForBranchExpressions|" +
+                            "correctBoxingForBranchExpressionsGeneric|createInlineClassInArgumentPosition|" +
+                            "defaultFunctionsFromAnyForInlineClass|equalityChecksMixedNullability|" +
+                            "equalityForBoxesOfNullableValuesOfInlineClass|genericInlineClassSynthMembers|initBlock|" +
+                            "inlineClassEqualityShouldUseTotalOrderForFloatingPointData|" +
+                            "inlineClassEqualityShouldUseTotalOrderForFloatingPointDataGeneric|inlineClassPropertyReferenceGetAndSet|" +
+                            "iterateOverArrayOfInlineClassValues|iterateOverArrayOfInlineClassValuesGeneric|" +
+                            "iterateOverListOfInlineClassValues|kt27096_nullablePrimitive|kt27096_nullableReference|nestedInlineClass|" +
+                            "nullableWrapperEquality|passInlineClassAsVararg|passInlineClassAsVarargGeneric|" +
+                            "passInlineClassWithSpreadOperatorToVarargs|passInlineClassWithSpreadOperatorToVarargsGeneric|" +
+                            "referToUnderlyingPropertyOfInlineClass|secondaryConstructorsInsideInlineClassWithPrimitiveCarrierType|" +
+                            "secondaryConstructorsWithBody|typeChecksForInlineClasses|useInlineClassesInsideElvisOperator|" +
+                            "useInlineClassesInsideElvisOperatorGeneric)\\.kt$",
+                    recursive = false,
+                )
+                model("box/inlineClasses/boxReturnValueOnOverride", pattern = "^(uncastInlineClassToAnyAndBack)\\.kt$")
+                model("box/inlineClasses/boxReturnValueInLambda", pattern = "^(boxNullableAny|boxNullableAnyNull)\\.kt$")
+                model(
+                    "box/inlineClasses/callableReferences",
+                    pattern = "^(boundInlineClassMemberFun|constructorWithInlineClassParameters|equalsHashCodeToString)\\.kt$",
+                )
+                model("box/inlineClasses/contextsAndAccessors", pattern = "^(lambdaInInlineClassFun)\\.kt$")
+                model(
+                    "box/inlineClasses/defaultParameterValues",
+                    pattern = "^(defaultParameterValuesOfInlineClassType|defaultParameterValuesOfInlineClassTypeBoxing|" +
+                            "inlineClassSecondaryConstructor)\\.kt$",
+                )
+                model(
+                    "box/inlineClasses/functionNameMangling",
+                    pattern = "^(extensionFunctionsDoNotClash|functionsWithDifferentNullabilityDoNotClash|" +
+                            "genericFunctionsDoNotClash|mangledFunctionsCanBeOverridden|mangledFunctionsDoNotClash)\\.kt$",
+                )
+                model("box/inlineClasses/genericUnderlyingValue", pattern = "^(simple)\\.kt$")
+                model("box/inlineClasses/hiddenConstructor", pattern = "^(constructorWithDefaultParameters)\\.kt$")
+                model("box/inlineClasses/interfaceMethodCalls", pattern = "^(genericInterfaceMethodCall)\\.kt$")
                 model("box/ktype")
                 model(
                     "box/reflection/typeOf",

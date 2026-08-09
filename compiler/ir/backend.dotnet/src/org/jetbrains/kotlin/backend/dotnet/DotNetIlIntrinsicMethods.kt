@@ -129,9 +129,9 @@ internal class DotNetIlIntrinsicMethods(
         // only so that Float equality fails explicitly inside the intrinsic (Float is deferred)
         // instead of falling through to generic call handling.
         irBuiltIns.ieee754equalsFunByOperandType.getValue(irBuiltIns.doubleClass).toKey()!!
-                to DotNetIlEqualityIntrinsic(referenceEquality = false),
+                to DotNetIlEqualityIntrinsic(referenceEquality = false, ieee754FloatingPoint = true),
         irBuiltIns.ieee754equalsFunByOperandType.getValue(irBuiltIns.floatClass).toKey()!!
-                to DotNetIlEqualityIntrinsic(referenceEquality = false),
+                to DotNetIlEqualityIntrinsic(referenceEquality = false, ieee754FloatingPoint = true),
         irBuiltIns.booleanNotSymbol.toKey()!! to DotNetIlBooleanNotIntrinsic,
         // Masked default-argument stubs test one bit at a time with the common IR builtin. JVM
         // intrinsifies the same Int.and operation; CLR has the direct stack `and` instruction.
@@ -2401,10 +2401,10 @@ private object DotNetIlStaticInitializationFailureIntrinsic : DotNetIlIntrinsicM
 }
 
 /**
- * `==`/`===`/`ieee754equals`. All value primitives use `ceq`: for `int32`-backed values
- * (Boolean/Int/Char) and `int64` it is bitwise equality, and for `float64` it is IEEE 754
- * equality (NaN != NaN, -0.0 == 0.0) — exactly the contract of `ieee754equals`, mirroring the
- * JVM backend's Ieee754Equals intrinsic. User-class instances support reference equality
+ * `==`/`===`/`ieee754equals`. Integral value primitives use `ceq`. Floating-point equality has
+ * the same two-symbol split as JVM and Wasm: the explicitly typed `ieee754equals` builtin uses
+ * CIL `ceq` (NaN != NaN, -0.0 == 0.0), while generic `eqeq` uses Kotlin's reflexive boxed/value
+ * equality (all NaNs equal, signed zero distinct). User-class instances support reference equality
  * (`===`, a `ceq` on the object references) and `==` against the `null` literal, which Kotlin
  * defines as a pure reference check that never calls `equals` (the JVM backend's `Equals`
  * intrinsic special-cases `isNullConst` operands into an `ifnull` check the same way). General
@@ -2419,10 +2419,8 @@ private object DotNetIlStaticInitializationFailureIntrinsic : DotNetIlIntrinsicM
  * - `T? == T?`: `GetValueOrDefault()` values `ceq` ANDed with `get_HasValue()` flags `ceq`;
  * - `T? == T` / `T == T?`: value `ceq` ANDed with the nullable side's `get_HasValue()`;
  * - `T? == null` / `null == T?`: negated `get_HasValue()`.
- * `Double?`/`Float?` arrive through the separately registered `ieee754equals` symbols and land
- * in the same shapes: `ceq` on the extracted `float64` values IS the IEEE semantics of the JVM's
- * nullable specialization (NaN? == NaN? is false — the boxed-`equals` total order applies only
- * to the eqeq path, which fir2ir never chooses for statically-Double operands). Cross-primitive
+ * `Double?`/`Float?` retain that same symbol-dependent distinction in the lifted shapes.
+ * Cross-primitive
  * pairs (`Int? == Long?`) stay rejected like `Int == Long`. Identity against a null-like operand
  * (`x === null` / `x !== null`, either order) is the same HasValue test as structural equality and
  * needs no boxing. Identity between two nullable-primitive values remains REJECTED loudly: the
@@ -2441,7 +2439,12 @@ private object DotNetIlStaticInitializationFailureIntrinsic : DotNetIlIntrinsicM
  */
 private class DotNetIlEqualityIntrinsic(
     private val referenceEquality: Boolean,
+    private val ieee754FloatingPoint: Boolean = false,
 ) : DotNetIlIntrinsicMethod() {
+    init {
+        check(!referenceEquality || !ieee754FloatingPoint)
+    }
+
     override fun tryEmitAsExpression(
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
@@ -2523,6 +2526,17 @@ private class DotNetIlEqualityIntrinsic(
             )
         }
 
+        if (!referenceEquality && !ieee754FloatingPoint &&
+            (operandType == DotNetIlValueType.Float32 || operandType == DotNetIlValueType.Float64)
+        ) {
+            codegen.emitExpression(left, operandType)
+            val leftSlot = codegen.spillToSyntheticLocal(operandType, "<eqFloatLeft>")
+            codegen.emitExpression(right, operandType)
+            val rightSlot = codegen.spillToSyntheticLocal(operandType, "<eqFloatRight>")
+            emitTotalOrderFloatingEquality(codegen, operandType, leftSlot, rightSlot, "eqFloat")
+            return true
+        }
+
         codegen.emitExpression(left, operandType)
         codegen.emitExpression(right, operandType)
         when (operandType) {
@@ -2597,6 +2611,10 @@ private class DotNetIlEqualityIntrinsic(
         leftType: DotNetIlValueType?,
         rightType: DotNetIlValueType?,
     ) {
+        fun usesTotalOrder(type: DotNetIlValueType): Boolean =
+            !ieee754FloatingPoint &&
+                    (type == DotNetIlValueType.Float32 || type == DotNetIlValueType.Float64)
+
         when {
             left.isDotNetNullLike() || right.isDotNetNullLike() -> {
                 // `T? == null` / `T? === null` (or against a Nothing?-typed definitely-null
@@ -2633,11 +2651,27 @@ private class DotNetIlEqualityIntrinsic(
                 val leftSlot = codegen.spillToSyntheticLocal(leftType, "<eqLeft>")
                 codegen.emitExpression(right, leftType)
                 val rightSlot = codegen.spillToSyntheticLocal(leftType, "<eqRight>")
-                codegen.emit(loadLocalAddressInstruction(leftSlot.index), pushes = 1)
-                codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
-                codegen.emit(loadLocalAddressInstruction(rightSlot.index), pushes = 1)
-                codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
-                codegen.emit("ceq", pops = 2, pushes = 1)
+                if (usesTotalOrder(leftType.elementType)) {
+                    codegen.emit(loadLocalAddressInstruction(leftSlot.index), pushes = 1)
+                    codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                    val leftValueSlot = codegen.spillToSyntheticLocal(leftType.elementType, "<eqFloatLeft>")
+                    codegen.emit(loadLocalAddressInstruction(rightSlot.index), pushes = 1)
+                    codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                    val rightValueSlot = codegen.spillToSyntheticLocal(leftType.elementType, "<eqFloatRight>")
+                    emitTotalOrderFloatingEquality(
+                        codegen,
+                        leftType.elementType,
+                        leftValueSlot,
+                        rightValueSlot,
+                        "eqNullableFloat",
+                    )
+                } else {
+                    codegen.emit(loadLocalAddressInstruction(leftSlot.index), pushes = 1)
+                    codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                    codegen.emit(loadLocalAddressInstruction(rightSlot.index), pushes = 1)
+                    codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                    codegen.emit("ceq", pops = 2, pushes = 1)
+                }
                 codegen.emit(loadLocalAddressInstruction(leftSlot.index), pushes = 1)
                 codegen.emit(leftType.hasValueInstruction, pops = 1, pushes = 1)
                 codegen.emit(loadLocalAddressInstruction(rightSlot.index), pushes = 1)
@@ -2648,10 +2682,25 @@ private class DotNetIlEqualityIntrinsic(
             leftType is DotNetIlValueType.NullableValue && rightType == leftType.elementType -> {
                 codegen.emitExpression(left, leftType)
                 val slot = codegen.spillToSyntheticLocal(leftType, "<eq>")
-                codegen.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
-                codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
-                codegen.emitExpression(right, rightType)
-                codegen.emit("ceq", pops = 2, pushes = 1)
+                if (usesTotalOrder(leftType.elementType)) {
+                    codegen.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+                    codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                    val leftValueSlot = codegen.spillToSyntheticLocal(leftType.elementType, "<eqFloatLeft>")
+                    codegen.emitExpression(right, rightType)
+                    val rightValueSlot = codegen.spillToSyntheticLocal(rightType, "<eqFloatRight>")
+                    emitTotalOrderFloatingEquality(
+                        codegen,
+                        leftType.elementType,
+                        leftValueSlot,
+                        rightValueSlot,
+                        "eqNullableFloat",
+                    )
+                } else {
+                    codegen.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+                    codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                    codegen.emitExpression(right, rightType)
+                    codegen.emit("ceq", pops = 2, pushes = 1)
+                }
                 codegen.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
                 codegen.emit(leftType.hasValueInstruction, pops = 1, pushes = 1)
                 codegen.emit("and", pops = 2, pushes = 1)
@@ -2663,10 +2712,23 @@ private class DotNetIlEqualityIntrinsic(
                 val valueSlot = codegen.spillToSyntheticLocal(leftType, "<eqLeft>")
                 codegen.emitExpression(right, rightType)
                 val nullableSlot = codegen.spillToSyntheticLocal(rightType, "<eqRight>")
-                codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
-                codegen.emit(loadLocalAddressInstruction(nullableSlot.index), pushes = 1)
-                codegen.emit(rightType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
-                codegen.emit("ceq", pops = 2, pushes = 1)
+                if (usesTotalOrder(rightType.elementType)) {
+                    codegen.emit(loadLocalAddressInstruction(nullableSlot.index), pushes = 1)
+                    codegen.emit(rightType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                    val rightValueSlot = codegen.spillToSyntheticLocal(rightType.elementType, "<eqFloatRight>")
+                    emitTotalOrderFloatingEquality(
+                        codegen,
+                        rightType.elementType,
+                        valueSlot,
+                        rightValueSlot,
+                        "eqNullableFloat",
+                    )
+                } else {
+                    codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
+                    codegen.emit(loadLocalAddressInstruction(nullableSlot.index), pushes = 1)
+                    codegen.emit(rightType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                    codegen.emit("ceq", pops = 2, pushes = 1)
+                }
                 codegen.emit(loadLocalAddressInstruction(nullableSlot.index), pushes = 1)
                 codegen.emit(rightType.hasValueInstruction, pops = 1, pushes = 1)
                 codegen.emit("and", pops = 2, pushes = 1)
@@ -2717,48 +2779,65 @@ private class DotNetIlAnnotationFloatingEqualsIntrinsic(
         val leftSlot = codegen.spillToSyntheticLocal(operandType, "<annotationFloatLeft>")
         codegen.emitExpression(right, operandType)
         val rightSlot = codegen.spillToSyntheticLocal(operandType, "<annotationFloatRight>")
-
-        val nanLabel = codegen.nextLabel("annotationFloatNaN")
-        val equalLabel = codegen.nextLabel("annotationFloatEqual")
-        val endLabel = codegen.nextLabel("annotationFloatEnd")
-        val zero = if (operandType == DotNetIlValueType.Float32) "ldc.r4 0.0" else "ldc.r8 0.0"
-        val one = if (operandType == DotNetIlValueType.Float32) "ldc.r4 1.0" else "ldc.r8 1.0"
-
-        // Ordinary equal nonzero values are done. Equal zero values need reciprocal signs to
-        // distinguish +0.0 from -0.0; unordered values take the canonical all-NaNs-equal path.
-        codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
-        codegen.emit(loadLocalInstruction(rightSlot.index), pushes = 1)
-        codegen.emit("ceq", pops = 2, pushes = 1)
-        codegen.emitBranch("brfalse", nanLabel, pops = 1)
-        codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
-        codegen.emit(zero, pushes = 1)
-        codegen.emit("ceq", pops = 2, pushes = 1)
-        codegen.emitBranch("brfalse", equalLabel, pops = 1)
-        codegen.emit(one, pushes = 1)
-        codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
-        codegen.emit("div", pops = 2, pushes = 1)
-        codegen.emit(one, pushes = 1)
-        codegen.emit(loadLocalInstruction(rightSlot.index), pushes = 1)
-        codegen.emit("div", pops = 2, pushes = 1)
-        codegen.emit("ceq", pops = 2, pushes = 1)
-        codegen.emitGoto(endLabel)
-
-        codegen.emitLabel(nanLabel)
-        for (slot in listOf(leftSlot, rightSlot)) {
-            codegen.emit(loadLocalInstruction(slot.index), pushes = 1)
-            codegen.emit(loadLocalInstruction(slot.index), pushes = 1)
-            codegen.emit("ceq", pops = 2, pushes = 1)
-            codegen.emit("ldc.i4.0", pushes = 1)
-            codegen.emit("ceq", pops = 2, pushes = 1)
-        }
-        codegen.emit("and", pops = 2, pushes = 1)
-        codegen.emitGoto(endLabel)
-
-        codegen.emitLabel(equalLabel)
-        codegen.emit("ldc.i4.1", pushes = 1)
-        codegen.emitLabel(endLabel)
+        emitTotalOrderFloatingEquality(codegen, operandType, leftSlot, rightSlot, "annotationFloat")
         return true
     }
+}
+
+/**
+ * Kotlin's generic floating equality, shared by generated value/data members and annotation
+ * values. This is deliberately distinct from the `ieee754equals` builtin: it is reflexive for
+ * every NaN payload and distinguishes signed zero, matching JVM `NonIEEE754FloatComparison` and
+ * Wasm's generic `eqeq` fallback. Both operands have already been evaluated and spilled, so the
+ * control-flow expansion cannot disturb source evaluation order.
+ */
+private fun emitTotalOrderFloatingEquality(
+    codegen: DotNetIlExpressionCodegen,
+    operandType: DotNetIlValueType,
+    leftSlot: DotNetIlSlot.Local,
+    rightSlot: DotNetIlSlot.Local,
+    labelStem: String,
+) {
+    check(operandType == DotNetIlValueType.Float32 || operandType == DotNetIlValueType.Float64)
+    val nanLabel = codegen.nextLabel("${labelStem}NaN")
+    val equalLabel = codegen.nextLabel("${labelStem}Equal")
+    val endLabel = codegen.nextLabel("${labelStem}End")
+    val zero = if (operandType == DotNetIlValueType.Float32) "ldc.r4 0.0" else "ldc.r8 0.0"
+    val one = if (operandType == DotNetIlValueType.Float32) "ldc.r4 1.0" else "ldc.r8 1.0"
+
+    // Ordinary equal nonzero values are done. Equal zero values need reciprocal signs to
+    // distinguish +0.0 from -0.0; unordered values take the canonical all-NaNs-equal path.
+    codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
+    codegen.emit(loadLocalInstruction(rightSlot.index), pushes = 1)
+    codegen.emit("ceq", pops = 2, pushes = 1)
+    codegen.emitBranch("brfalse", nanLabel, pops = 1)
+    codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
+    codegen.emit(zero, pushes = 1)
+    codegen.emit("ceq", pops = 2, pushes = 1)
+    codegen.emitBranch("brfalse", equalLabel, pops = 1)
+    codegen.emit(one, pushes = 1)
+    codegen.emit(loadLocalInstruction(leftSlot.index), pushes = 1)
+    codegen.emit("div", pops = 2, pushes = 1)
+    codegen.emit(one, pushes = 1)
+    codegen.emit(loadLocalInstruction(rightSlot.index), pushes = 1)
+    codegen.emit("div", pops = 2, pushes = 1)
+    codegen.emit("ceq", pops = 2, pushes = 1)
+    codegen.emitGoto(endLabel)
+
+    codegen.emitLabel(nanLabel)
+    for (slot in listOf(leftSlot, rightSlot)) {
+        codegen.emit(loadLocalInstruction(slot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(slot.index), pushes = 1)
+        codegen.emit("ceq", pops = 2, pushes = 1)
+        codegen.emit("ldc.i4.0", pushes = 1)
+        codegen.emit("ceq", pops = 2, pushes = 1)
+    }
+    codegen.emit("and", pops = 2, pushes = 1)
+    codegen.emitGoto(endLabel)
+
+    codegen.emitLabel(equalLabel)
+    codegen.emit("ldc.i4.1", pushes = 1)
+    codegen.emitLabel(endLabel)
 }
 
 /**

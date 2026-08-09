@@ -9,8 +9,13 @@ import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.backend.common.serialization.signature.PublicIdSignatureComputer
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_HOLDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_DEFAULT_IMPLS
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_BOX_HELPER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_UNBOX_HELPER
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassBoxingHelpers
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.ValueClassBackendAgnosticApi
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithVisibility
 import org.jetbrains.kotlin.ir.declarations.IrEnumEntry
@@ -19,6 +24,8 @@ import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.isInlineClass
+import org.jetbrains.kotlin.ir.declarations.isStaticMethodOfClass
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
@@ -83,6 +90,21 @@ data class DotNetObjectInstance(
     }
 }
 
+/** Producer-owned compiler ABI for constructing and crossing one value class's two representations. */
+data class DotNetValueClassAbi(
+    val primaryConstructorMethodName: String,
+    val boxMethodName: String,
+    val unboxMethodName: String,
+) {
+    init {
+        require(primaryConstructorMethodName.isNotEmpty()) {
+            "a value-class primary constructor implementation requires a CLR method name"
+        }
+        require(boxMethodName.isNotEmpty()) { "a value-class box helper requires a CLR method name" }
+        require(unboxMethodName.isNotEmpty()) { "a value-class unbox helper requires a CLR method name" }
+    }
+}
+
 enum class DotNetInterfaceDefaultPromotionView {
     CANONICAL,
     DECLARED,
@@ -110,6 +132,7 @@ sealed interface DotNetPhysicalDeclaration {
         override val ownerPath: List<String>,
         val staticInitialization: DotNetStaticInitialization? = null,
         val objectInstance: DotNetObjectInstance? = null,
+        val valueClassAbi: DotNetValueClassAbi? = null,
     ) : DotNetPhysicalDeclaration
 
     data class Function(
@@ -352,7 +375,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "25"
+    const val ABI_VERSION = "26"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -910,6 +933,9 @@ object DotNetLibraryAbiCodec {
             staticInitialization?.methodName.orEmpty(),
             objectInstancePath.size.toString(),
             objectInstance?.fieldName.orEmpty(),
+            valueClassAbi?.primaryConstructorMethodName.orEmpty(),
+            valueClassAbi?.boxMethodName.orEmpty(),
+            valueClassAbi?.unboxMethodName.orEmpty(),
         ) + ownerPath + initializationPath + objectInstancePath
     }
 
@@ -937,7 +963,7 @@ object DotNetLibraryAbiCodec {
         fields: List<String>,
         logicalKey: String,
     ): DotNetPhysicalDeclaration.Class {
-        require(fields.size >= 7) {
+        require(fields.size >= 10) {
             "class declaration '$logicalKey' has an incomplete CLR identity"
         }
         fun pathSize(fieldIndex: Int, view: String, allowAbsent: Boolean = false): Int {
@@ -951,7 +977,7 @@ object DotNetLibraryAbiCodec {
         val ownerSize = pathSize(1, "runtime")
         val initializationSize = pathSize(2, "static-initialization", allowAbsent = true)
         val objectInstanceSize = pathSize(4, "object-instance", allowAbsent = true)
-        val expectedSize = 6 + ownerSize + initializationSize + objectInstanceSize
+        val expectedSize = 9 + ownerSize + initializationSize + objectInstanceSize
         require(fields.size == expectedSize) {
             "class declaration '$logicalKey' has an inconsistent CLR owner-path payload"
         }
@@ -961,7 +987,10 @@ object DotNetLibraryAbiCodec {
         require((objectInstanceSize == 0) == fields[5].isEmpty()) {
             "class declaration '$logicalKey' has an inconsistent object-instance identity"
         }
-        var offset = 6
+        require(fields[6].isEmpty() == fields[7].isEmpty() && fields[7].isEmpty() == fields[8].isEmpty()) {
+            "class declaration '$logicalKey' has an incomplete value-class compiler ABI"
+        }
+        var offset = 9
         fun takePath(size: Int): List<String> = fields.subList(offset, offset + size).also { offset += size }
         val ownerPath = takePath(ownerSize).requireOwnerPath(logicalKey, "runtime")
         val initialization = if (initializationSize == 0) {
@@ -984,6 +1013,13 @@ object DotNetLibraryAbiCodec {
             ownerPath = ownerPath,
             staticInitialization = initialization,
             objectInstance = objectInstance,
+            valueClassAbi = fields[6].takeIf(String::isNotEmpty)?.let { primaryConstructorMethodName ->
+                DotNetValueClassAbi(
+                    primaryConstructorMethodName = primaryConstructorMethodName,
+                    boxMethodName = fields[7],
+                    unboxMethodName = fields[8],
+                )
+            },
         )
     }
 
@@ -1019,6 +1055,26 @@ private fun IrDeclaration.computeDotNetLibraryAbiKeyOrNull(
         }
     }
     return "$kind:${signature.render(IdSignatureRenderer.LEGACY)}"
+}
+
+/** The logical member from which Common created this value-class static implementation. */
+@OptIn(ValueClassBackendAgnosticApi::class)
+internal fun IrSimpleFunction.dotNetValueClassImplementationSourceOrNull(): IrSimpleFunction? {
+    if (!isStaticMethodOfClass || !name.asString().removeSuffix(">").endsWith("-impl")) return null
+    val owner = parent as? IrClass ?: return null
+    if (!owner.isInlineClass(treatCompatibleFullValueClassesAsInline = true)) return null
+    val source = attributeOwnerId as? IrSimpleFunction ?: return null
+    return source.takeUnless { it === this }
+}
+
+/** The primary constructor from which Common created this value-class static implementation. */
+@OptIn(ValueClassBackendAgnosticApi::class)
+internal fun IrSimpleFunction.dotNetValueClassConstructorImplementationSourceOrNull(): IrConstructor? {
+    if (!isStaticMethodOfClass || !name.asString().removeSuffix(">").endsWith("<init>-impl")) return null
+    val owner = parent as? IrClass ?: return null
+    if (!owner.isInlineClass(treatCompatibleFullValueClassesAsInline = true)) return null
+    val source = attributeOwnerId as? IrConstructor ?: return null
+    return source.takeIf { it.isPrimary && it.parent == owner }
 }
 
 /**
@@ -1392,6 +1448,31 @@ internal class DotNetExternalDeclarations(
         return DotNetBoundObjectInstance(bound.library, declaration, objectInstance)
     }
 
+    /** Binds a synthetic external value-class compiler-ABI stub to its producer MethodDef. */
+    fun valueClassCompilerAbiFunctionInfoOrNull(
+        function: IrSimpleFunction,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo? {
+        val methodSelector: (DotNetValueClassAbi) -> String = when {
+            function.origin == DOTNET_VALUE_CLASS_BOX_HELPER -> DotNetValueClassAbi::boxMethodName
+            function.origin == DOTNET_VALUE_CLASS_UNBOX_HELPER -> DotNetValueClassAbi::unboxMethodName
+            function.dotNetValueClassConstructorImplementationSourceOrNull() != null ->
+                DotNetValueClassAbi::primaryConstructorMethodName
+            else -> return null
+        }
+        val irClass = function.parent as? IrClass ?: return null
+        val logicalKey = logicalKeys.keyOrNull(irClass, "C") ?: return null
+        val bound = declarations[logicalKey] ?: return null
+        val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
+        val valueClassAbi = declaration.valueClassAbi ?: return null
+        val owner = classInfoOrNull(irClass, typeMapper) ?: return null
+        return DotNetIlFunctionInfo(
+            owner = owner,
+            signature = function.dotNetSignature(typeMapper),
+            physicalMethodName = methodSelector(valueClassAbi),
+        )
+    }
+
     fun enumEntryOrNull(entry: IrEnumEntry): DotNetBoundEnumEntry? {
         val logicalKey = logicalKeys.keyOrNull(entry, "E") ?: return null
         val bound = declarations[logicalKey] ?: return null
@@ -1418,7 +1499,8 @@ internal class DotNetExternalDeclarations(
         function: IrSimpleFunction,
         typeMapper: DotNetIlTypeMapper,
     ): DotNetIlFunctionInfo? {
-        val logicalKey = logicalKeys.keyOrNull(function, "F") ?: return null
+        val logicalDeclaration = function.dotNetValueClassImplementationSourceOrNull() ?: function
+        val logicalKey = logicalKeys.keyOrNull(logicalDeclaration, "F") ?: return null
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
         val containingClass = (function.parent as? IrClass)?.let { classInfoOrNull(it, typeMapper) }
@@ -1631,13 +1713,24 @@ internal fun collectDotNetLibraryDeclarations(
     staticInitializations: Map<IrClass, DotNetLoweredStaticInitialization> = emptyMap(),
     objectInstanceFields: Map<IrClass, IrField> = emptyMap(),
     enumEntryFields: Map<IrEnumEntry, IrField> = emptyMap(),
+    valueClassBoxingHelpers: Map<IrClass, DotNetValueClassBoxingHelpers> = emptyMap(),
     typeMapper: DotNetIlTypeMapper? = null,
 ): Map<String, DotNetPhysicalDeclaration> = buildMap {
     val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
+    val valueClassConstructorImplementations = availableFunctions.keys.mapNotNull { implementation ->
+        implementation.dotNetValueClassConstructorImplementationSourceOrNull()?.let { source ->
+            (source.parent as IrClass) to implementation
+        }
+    }.toMap()
     val compilerAbiFunctions = buildSet {
         interfaceDefaultImplementations.values.mapTo(this) { it.helper }
         defaultArgumentDispatchers.values.toCollection(this)
         staticInitializations.values.mapTo(this) { it.entry }
+        valueClassBoxingHelpers.values.forEach { helpers ->
+            add(helpers.box)
+            add(helpers.unbox)
+        }
+        valueClassConstructorImplementations.values.toCollection(this)
     }
     val genericInterfaceViewBridgeFunctions =
         genericInterfaceViewBridges.mapTo(hashSetOf()) { it.implementation }
@@ -1650,6 +1743,10 @@ internal fun collectDotNetLibraryDeclarations(
         .filterTo(hashSetOf()) { irClass ->
             irClass.origin == DOTNET_DEFAULT_IMPLS || irClass.origin == DOTNET_STATIC_HOLDER
         }
+    val valueClassImplementationSources = availableFunctions.keys.mapNotNull { implementation ->
+        implementation.dotNetValueClassImplementationSourceOrNull()?.let { source -> implementation to source }
+    }.toMap()
+    val valueClassImplementedSources = valueClassImplementationSources.values.toHashSet()
     for (entry in availableClasses) {
         val irClass = entry.key
         val classInfo = entry.value
@@ -1682,6 +1779,29 @@ internal fun collectDotNetLibraryDeclarations(
                 fieldName = field.name.asString(),
             )
         }
+        val valueClassAbi = valueClassBoxingHelpers[irClass]?.let { helpers ->
+            fun helperMethodName(helper: IrSimpleFunction, role: String): String {
+                val helperInfo = availableFunctions[helper]
+                    ?: error(
+                        "Internal .NET backend error: value-class $role helper for " +
+                                "'${irClass.render()}' did not survive physical emission"
+                    )
+                require(helperInfo.owner.physicalPathComponents() == classInfo.physicalPathComponents()) {
+                    "value-class $role helper for '${irClass.render()}' has a CLR owner inconsistent with its class index"
+                }
+                return helperInfo.physicalMethodName ?: helper.dotNetIlMethodName()
+            }
+            val constructorImplementation = valueClassConstructorImplementations[irClass]
+                ?: error(
+                    "Internal .NET backend error: value-class primary constructor implementation for " +
+                            "'${irClass.render()}' did not survive physical emission"
+                )
+            DotNetValueClassAbi(
+                primaryConstructorMethodName = helperMethodName(constructorImplementation, "primary constructor"),
+                boxMethodName = helperMethodName(helpers.box, "box"),
+                unboxMethodName = helperMethodName(helpers.unbox, "unbox"),
+            )
+        }
         if (genericInterface == null) {
             genericClass?.let { erasedClass ->
                 require(erasedClass.classInfo.physicalPathComponents() == classInfo.physicalPathComponents()) {
@@ -1694,6 +1814,7 @@ internal fun collectDotNetLibraryDeclarations(
                     ownerPath = classInfo.physicalPathComponents(),
                     staticInitialization = staticInitialization,
                     objectInstance = objectInstance,
+                    valueClassAbi = valueClassAbi,
                 )
             )
         } else {
@@ -1707,6 +1828,7 @@ internal fun collectDotNetLibraryDeclarations(
                     ownerPath = canonicalOwnerPath,
                     staticInitialization = staticInitialization,
                     objectInstance = objectInstance,
+                    valueClassAbi = valueClassAbi,
                 )
             )
         }
@@ -1738,8 +1860,10 @@ internal fun collectDotNetLibraryDeclarations(
         ) {
             continue
         }
+        if (function in valueClassImplementedSources) continue
         if (function.fileOrNull !in files || function.isOriginallyLocalDeclaration || function.isFakeOverride) continue
-        val logicalKey = preLoweringDeclarationKeys[function] ?: continue
+        val logicalDeclaration = valueClassImplementationSources[function] ?: function
+        val logicalKey = preLoweringDeclarationKeys[logicalDeclaration] ?: continue
         val interfaceDefaultImplementation = interfaceDefaultImplementations[function]?.let { lowered ->
             val helperInfo = availableFunctions[lowered.helper]
                 ?: error(

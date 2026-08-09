@@ -16,48 +16,46 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: target-owned compiler performance reporting.
-  `DotNet` is a distinct shared `PlatformType`, Kotlin/.NET reports sequential
-  IR serialization, IR lowering, and backend phases, and self-describing KLIB
-  packaging is measured as a backend subphase instead of overlapping those
-  top-level owners. The preceding callable-visibility/modality surface remains
-  current at library ABI version 25 and runtime surface level 26
+- Last completed feature: single-field Kotlin value classes. Common owns
+  declaration/member lowering; the target adds one nominal non-generic CLR box
+  owner, contextual underlying carriers, explicit box/unbox transitions, stable
+  logical name mangling, and producer-recorded helper identities. Library ABI
+  version 26 carries that separate-compilation contract; runtime surface level
+  26 is unchanged. Target-owned compiler performance reporting remains active
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
 stdlib. The target is not close to 98% feature-complete: broad member/property
-reflection and invocation, value classes,
-coroutines, Sequence and Grouping families,
-sorting/random, and Gradle/KMP product integration remain
+reflection and invocation, multi-field value classes, coroutines, Sequence and
+Grouping families, sorting/random, and Gradle/KMP product integration remain
 substantial open programmes.
 
 ## Current green gate
 
-The performance-reporting head passed the ordinary aggregate. The normal
+The single-field value-class head passed the ordinary aggregate. The normal
 aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 54 XML files and 1306 tests:
+The audited full-aggregate evidence covers 94 XML files and 1563 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1186 FIR, IL-text, and box tests
+- 1442 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 93 library-integration tests
+- 94 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed its final XML confirmation at 2026-08-08 19:20 local
-time. Its launching shell was interrupted after the test processes had exited,
-so no wall-clock claim is attached to this run; all three result roots were
-audited directly. The resulting tree has a cumulative JUnit suite time of
-1028.63 seconds: 0.13 for the physical model, 375.39 for FIR/IL/box, and 653.11
-for `dn`. Gradle 9's selected-task `--rerun` option is not full-matrix evidence
-on the empty backend lifecycle task and is not part of the verification
-command.
+The aggregate completed its final XML confirmation at 2026-08-09 07:25:16
+local time, 17m51s after launch, and its wrapper exited successfully. All three
+result roots were audited directly. The resulting tree has a cumulative JUnit
+suite time of 1156.93 seconds: 0.13 for the physical model, 481.48 for
+FIR/IL/box, and 675.32 for `dn`. Gradle 9's selected-task `--rerun` option is
+not full-matrix evidence on the empty backend lifecycle task and is not part of
+the verification command.
 
 The next profile after fixing the emitter showed a separate foreign-loading
 cost: every 1/2/4-byte metadata-table value and every byte scanned from
@@ -463,7 +461,9 @@ CLR custom attributes. Adversarial portable execution pins empty zero, `Int`
 and `Long` wrapping overflow, ordered IEEE `Double` addition and NaN,
 nullable/widened inputs, traversal and callback order, failure identity, and
 non-local return across Framework CLR and CoreCLR. UInt and ULong remain
-outside this closure because they require the parked unsigned value classes.
+outside this closure because their scalar/runtime and generated-stdlib product
+has not yet been admitted on top of the completed single-field value-class
+foundation.
 
 Common `Iterable.single(predicate)` and `singleOrNull(predicate)` now use their
 exact generated bodies; Common defines no distinct List predicate overload.
@@ -906,6 +906,29 @@ inputs, multi-level portable overrides, same-object mutation after an
 unchecked cast, delayed incompatible reads, one physical owner, and absence of
 an implicit CLR `C<T>` surface.
 
+Single-field Kotlin value classes now follow the same box-plus-contextual-
+carrier architecture as the mature targets rather than becoming CLR value
+types. Common's declaration and usage lowerings own constructor/member
+semantics. One late .NET representation pass, ordered after loop and string
+body rewrites, inserts every explicit box/unbox transition. Exact non-null
+uses calculate with the recursively substituted underlying carrier; erased,
+interface, nullable-collision, runtime-test, callable, generic-method, and
+array/vararg generic positions use the one nominal non-generic box owner.
+Generic value-class implementation helpers remain genuine CLR generic methods,
+without creating a generic class owner. `T : Int` uses its sole primitive
+carrier; `T : Int?` preserves a generic helper token while the erased owner
+stores the boxed-or-null universal carrier.
+
+Logical-signature mangling prevents underlying-carrier overload collisions,
+generated floating equality retains Kotlin's total-order rule, and producer
+ABI 26 records primary-constructor, box, and unbox MethodDef identities for
+separate consumers. The selected upstream Common/JVM root matrix currently
+executes 45 adversarial scenarios on both FIR parsers and both CLR profiles:
+180 executions with zero failures, errors, or skips. Multi-field value classes,
+unsigned stdlib/runtime publication, typed .NET export, and private
+specialization remain separate consumers rather than being inferred from this
+foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes.md).
+
 ## Open architectural blockers
 
 - A true CLR-generic Kotlin-owned class owner with a complete erased Kotlin
@@ -950,21 +973,24 @@ an implicit CLR `C<T>` surface.
 
 ## Next bounded work
 
-1. Complete JVM-shaped `KCallable` visibility and modality for every admitted
-   function and property reference. KLIB/importer IR remains authority; CLR
-   method flags are physical evidence only for foreign declarations. Keep this
-   distinct from the completed `KFunction` inline/external/operator/infix/
-   suspend property capability.
-2. Keep broad member enumeration, accessor objects, and type-use annotation
-   reflection outside those declaration-fact tranches. Direct member-extension
-   references remain coupled to later member enumeration.
-3. After those foundations, recompute the remaining stdlib dependency graph
-   around Sequence, Grouping, sorting/comparators/random, dependency-blocked
-   reified variants, and open nullable projected arrays; do not admit leaves
-   merely to increase declaration count.
-4. Extend CLR contract projection only when a new standard attribute has an
-   exact Common effect, stable target rule, verified profile identity, and the
-   same strip-without-Kotlin-semantic-change evidence as the closed first set.
+1. Build the internal Kotlin coroutine foundation now that single-field value
+   classes can represent Common `Result<T>`. Audit Common plus JVM, JS, Wasm,
+   and Native first; retain Kotlin's `Continuation`/suspended-sentinel ABI and
+   use target-ready IR state machines rather than making `Task` or `ValueTask`
+   the Kotlin runtime representation. Host async export remains a separate
+   fail-closed product.
+2. Close that foundation through executable suspension and resumption,
+   tail-delegation, exceptions/finally, generic and value-class results,
+   lambdas, interfaces, and separate compilation before adopting coroutine-
+   dependent stdlib families. Each prerequisite remains its own reviewable
+   implementation slice even though they share one programme.
+3. Keep broad member enumeration, accessor objects, and type-use annotation
+   reflection as the next independent reflection programme. Direct member-
+   extension references remain coupled to that member model rather than being
+   approximated through CLR reflection.
+4. Foreign CLR generic-method import remains the next deep interop closure:
+   method-owned parameters and bounds, overload resolution, invocation,
+   physical binding, and callable reflection must land together.
 
 The post-rebase callable-reference probe found that common IR's new
 `addBoundValueAtOverride` helper cannot directly replace the .NET lowering:
