@@ -932,6 +932,13 @@ and every profile must preserve identity-based state checks and rejection of a
 duplicate resume. See
 [`docs/decisions/kotlin-coroutines.md`](docs/decisions/kotlin-coroutines.md).
 
+Pin the public suspend entry through objective CLR metadata and a portable
+separate producer/consumer boundary. For private generated state machines,
+assert only semantic CLR constraints such as non-visibility, the selected base,
+sealed shape, and callable public-in-private-type construction. Do not freeze a
+generated class name, captured-constructor prefix, field layout, state labels,
+or branch spelling as public ABI.
+
 Keep every ordinary value live across suspension in a state-machine field with
 its original Kotlin type. Erasure belongs at the continuation/immediate-result
 boundary, not in state-machine storage: a primitive field remains the matching
