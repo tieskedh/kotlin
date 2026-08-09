@@ -6,8 +6,10 @@ import org.jetbrains.kotlin.KtSourceFile
 import org.jetbrains.kotlin.backend.common.loadMetadataKlibs
 import org.jetbrains.kotlin.load.dotnet.DotNetBadImageFormatException
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifestCodec
+import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadataResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssemblyReader
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMetadataReader
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalLibrary
@@ -18,6 +20,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetPlatformAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.load.dotnet.DotNetManagedResourceReader
+import org.jetbrains.kotlin.load.dotnet.decodeDotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalClrAssemblies
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
@@ -43,8 +46,10 @@ import org.jetbrains.kotlin.cli.pipeline.PipelinePhase
 import org.jetbrains.kotlin.cli.report
 import org.jetbrains.kotlin.compiler.plugin.getCompilerExtensions
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
+import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.canConsumeLibrary
+import org.jetbrains.kotlin.config.coreLibraryAssemblyName
 import org.jetbrains.kotlin.config.dotNetAssemblyName
 import org.jetbrains.kotlin.config.dotNetProducesStdlib
 import org.jetbrains.kotlin.config.dotNetTarget
@@ -413,6 +418,54 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.validateDotNetRunt
             COMPILER_ARGUMENTS_ERROR,
             "Kotlin/.NET runtime assembly '${runtimeFile.path}' does not declare the supported " +
                     "'${DotNetRuntimeArtifact.ASSEMBLY_NAME}' identity for profile '$targetFramework'.",
+        )
+        return null
+    }
+    val runtimeMetadata = try {
+        DotNetClrMetadataReader.read(runtimeFile)
+    } catch (exception: DotNetBadImageFormatException) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Kotlin/.NET runtime assembly '${runtimeFile.path}' is invalid: ${exception.message}",
+        )
+        return null
+    }
+    val assemblyMetadata = when (
+        val resolution = decodeDotNetClrAssemblyMetadata(
+            runtimeMetadata,
+            checkNotNull(DotNetTarget.fromString(targetFramework)).coreLibraryAssemblyName,
+        )
+    ) {
+        is DotNetClrAssemblyMetadataResolution.Decoded -> resolution.entries
+        is DotNetClrAssemblyMetadataResolution.Invalid -> {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET runtime assembly '${runtimeFile.path}' has invalid standard CLR " +
+                        "assembly metadata: ${resolution.failure}.",
+            )
+            return null
+        }
+    }
+    val runtimeSurfaceEntries = assemblyMetadata.filter { entry ->
+        entry.key == DotNetLibraryAbiCodec.RUNTIME_SURFACE_METADATA_KEY
+    }
+    if (runtimeSurfaceEntries.size != 1) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Kotlin/.NET runtime assembly '${runtimeFile.path}' must declare exactly one standard CLR " +
+                    "assembly metadata value '${DotNetLibraryAbiCodec.RUNTIME_SURFACE_METADATA_KEY}', " +
+                    "but declares ${runtimeSurfaceEntries.size}.",
+        )
+        return null
+    }
+    val runtimeSurfaceLevelText = runtimeSurfaceEntries.single().value
+    val runtimeSurfaceLevel = runtimeSurfaceLevelText?.toIntOrNull()
+    if (runtimeSurfaceLevel != DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Kotlin/.NET runtime assembly '${runtimeFile.path}' declares Kotlin.Runtime surface level " +
+                    "'$runtimeSurfaceLevelText', but this compiler requires " +
+                    "${DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL}.",
         )
         return null
     }

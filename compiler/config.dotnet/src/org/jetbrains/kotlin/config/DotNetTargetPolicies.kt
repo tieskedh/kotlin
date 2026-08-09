@@ -9,6 +9,13 @@ package org.jetbrains.kotlin.config
 val DotNetTarget.supportsExecutables: Boolean
     get() = this != DotNetTarget.NETSTANDARD_2_0
 
+/** Physical core-library AssemblyRef selected by this target-framework contract. */
+val DotNetTarget.coreLibraryAssemblyName: String
+    get() = when (this) {
+        DotNetTarget.NET48, DotNetTarget.NET10_0 -> "mscorlib"
+        DotNetTarget.NETSTANDARD_2_0 -> "netstandard"
+    }
+
 /** Library-linking compatibility for the current target-framework matrix. */
 fun DotNetTarget.canConsumeLibrary(targetFramework: String): Boolean = when (this) {
     DotNetTarget.NET48 ->

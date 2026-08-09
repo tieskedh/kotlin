@@ -122,6 +122,29 @@ happen to match.
 implementation manifest is the physical profile/contract view needed by the
 compiler and Roslyn tooling. It is not a second Kotlin declaration namespace.
 
+The monotone runtime-surface level has one physical runtime authority: the
+standard assembly-level
+`AssemblyMetadata("Kotlin.RuntimeSurfaceLevel", "<level>")` value. A stdlib or
+ordinary Kotlin library records the minimum level it requires in its
+authoritative KLIB manifest; it does not prove which sibling runtime was
+selected. Conversely, the C# implementation manifest does not duplicate the
+runtime's actual level. This retains the same producer/consumer direction as
+mature targets' pre-link library-version checks without inventing a second
+.NET metadata vocabulary.
+
+After authenticating the runtime's assembly identity, target profile, and
+public implementation manifest, the CLI requires exactly one standard
+runtime-surface value and requires the current pre-ABI level exactly. Missing,
+duplicate, malformed, stale, and future values fail before FIR or CIL
+generation. This check must also work for a Kotlin-only `-no-stdlib` consumer,
+which need not load physical BCL reference assemblies. The objective CLR
+reader therefore validates the runtime image's exact assembly-level
+`CustomAttribute` parent, constructor `MemberRef`, top-level
+`AssemblyMetadataAttribute` `TypeRef`, profile-selected core `AssemblyRef`,
+`(string, string)` signature, and ECMA-335 value blob directly. General
+foreign-annotation import remains stricter graph-resolved evidence; this
+bounded compiler-owned carrier check must not become its replacement.
+
 ### Production is explicit and distribution-owned
 
 Runtime/stdlib production is an explicit library-product lifecycle, not a side

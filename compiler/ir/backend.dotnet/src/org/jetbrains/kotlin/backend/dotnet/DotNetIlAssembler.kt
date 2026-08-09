@@ -79,11 +79,15 @@ object DotNetIlAssembler {
         target: DotNetTarget,
         cSharpImplementationManifest: DotNetCSharpImplementationManifest,
         messageCollector: MessageCollector,
+        runtimeSurfaceMetadataValues: List<String> = listOf(
+            DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString()
+        ),
     ): File? = DotNetRuntimeLibrary.assembleWithManifestForTests(
         outputDirectory,
         target,
         cSharpImplementationManifest,
         messageCollector,
+        runtimeSurfaceMetadataValues,
     )
 
     /** Reassembles one profile-selected runtime definition with a test-selected compatibility writer. */
