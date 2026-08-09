@@ -61,7 +61,11 @@ legal subtype conversions would allocate.
 
 Kotlin-owned non-generic `FunctionN` interfaces are the only canonical storage
 and invocation identity. The Common `Function<R>` view maps to a non-invokable
-marker; a fixed function type maps to `FunctionN` solely by arity. Logical
+marker; a fixed function type maps to `FunctionN` solely by arity. The fixed
+range is derived from Common's `BuiltInFunctionArity.BIG_ARITY`: Kotlin/.NET
+publishes `Function0` through `Function22`, matching the JVM boundary. Arity 23
+and above belongs to the separate vararg big-arity `FunctionN` representation
+and is not approximated by adding target-specific fixed interfaces. Logical
 parameter/result types remain in IR and KLIB.
 
 An ordinary function-type subtype conversion is an instruction-free reference

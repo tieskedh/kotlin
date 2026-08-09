@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.backend.common.FileLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.AddFunctionSupertypeToSuspendFunctionLowering
 import org.jetbrains.kotlin.backend.common.lower.coroutines.AbstractAddContinuationToFunctionCallsLowering
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
@@ -107,7 +108,7 @@ internal class DotNetAddFunctionSupertypeToSuspendFunctionLowering(
             if (projectedTypes.any { it == null }) continue
             val logicalTypes = projectedTypes.filterNotNull()
             val physicalArity = logicalTypes.size
-            if (physicalArity !in 1..3) continue
+            if (physicalArity !in 1 until BuiltInFunctionArity.BIG_ARITY) continue
             val functionClass = context.irBuiltIns.functionN(physicalArity)
             val executionType = functionClass.symbol.typeWithArguments(
                 logicalTypes.dropLast(1) +
@@ -165,7 +166,7 @@ internal class DotNetSuspendFunctionInvokeLowering(
             .toIntOrNull()
             ?: return expression
         val physicalArity = sourceArity + 1
-        if (physicalArity !in 1..3) return expression
+        if (physicalArity !in 1 until BuiltInFunctionArity.BIG_ARITY) return expression
 
         // A direct interface receiver carries P.../R itself. A freshly lowered suspend lambda or
         // callable reference instead has its concrete generated class type here; recover the
