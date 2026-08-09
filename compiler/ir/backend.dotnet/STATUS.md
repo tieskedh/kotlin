@@ -16,8 +16,17 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: selected runtime-surface authentication. The
-  profile-paired `Kotlin.Runtime.dll` now proves its actual monotone surface
+- Last completed feature: coroutine-specific physical-ABI evidence. One
+  portable producer DLL now proves through objective CLR metadata that public
+  top-level and virtual suspend entries append the erased `Continuation` and
+  return `Object`; non-tail bodies become private sealed
+  `DotNetCoroutineImpl` subclasses with callable public-in-private-type
+  constructors. Separate `net48` and `net10.0` consumers park and resume both
+  top-level and member calls through that producer, so KLIB suspend semantics,
+  physical binding, and execution agree across compilation and profile
+  boundaries without freezing generated names, capture layout, fields, or
+  state labels. The preceding selected runtime-surface authentication proves
+  the actual monotone surface of each profile-paired `Kotlin.Runtime.dll`
   through exactly one standard CLR
   `AssemblyMetadata("Kotlin.RuntimeSurfaceLevel", "<level>")` value. The
   objective reader validates the assembly-level attribute parent, external
@@ -73,29 +82,35 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The selected runtime-surface authentication head passed the ordinary
+The coroutine physical-ABI evidence head passed the ordinary
 aggregate. The normal aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 158 XML files and 1899 tests:
+The audited full-aggregate evidence covers 158 XML files and 1900 tests:
 
 - 6 policy-free physical CLI model/serializer tests
 - 1778 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 94 library-integration tests
+- 95 library-integration tests
 - zero failures, errors, or skips
 
-The final aggregate completed the changed FIR/box root at 2026-08-09 21:17:10
-local time; its wrapper exited successfully after 20m17s. The changed `dn`
-root also reran, the unchanged physical-model result was reused, and all three
-result roots were audited directly. The resulting tree has a cumulative JUnit
-suite time of 1416.79 seconds: 0.13 for the physical model, 755.04 for
-FIR/IL/box, and 661.62 for `dn`. Gradle 9's selected-task `--rerun` option is
+The final aggregate completed the changed `dn` root at 2026-08-09 21:42:47
+local time; its wrapper exited successfully after 12m42s. The unchanged
+physical-model and FIR/IL/box results were reused, and all three result roots
+were audited directly. The resulting tree has a cumulative JUnit suite time of
+1504.97 seconds: 0.13 for the physical model, 755.04 for FIR/IL/box, and 749.80
+for `dn`. Gradle 9's selected-task `--rerun` option is
 not full-matrix evidence on the empty backend lifecycle task and is not part of
 the verification command.
+
+After that aggregate, the test-only evidence was strengthened to require the
+imported member entries to retain their CLR virtual slots and to dispatch a
+base-typed consumer call to a distinct suspending override. The exact
+portable-coroutine test repeated green in 49.3 seconds; all production
+compiler/runtime code was unchanged from the aggregate head.
 
 The final test-only strengthening also exposed an avoidable invalidation:
 `compiler:tests-integration:dn` declares all of `compiler/testData/codegen` as
@@ -746,6 +761,14 @@ The nominal `KClass` floor and
 logical `KType`/`typeOf` graph are selected and published; they do not imply
 member reflection.
 
+The coroutine continuation ABI now has an objective portable-library proof in
+addition to semantic execution and final-IR validation. Public top-level and
+virtual suspend MethodDefs keep ordinary parameters followed by the one erased
+`Continuation` and return `Object`; private non-tail state machines extend the
+one Stdlib base without publishing their layout. Both runtime profiles consume
+the same portable producer and execute delayed top-level and member resumption.
+`Task`/`ValueTask` remain export adapters rather than an alternate lowering.
+
 Kotlin annotation classes use the shared Common annotation-member generator on
 one concrete sealed CLR `System.Attribute` subtype. Ordinary Kotlin
 construction, defaults, nested values, arrays, equality/hash/string behavior,
@@ -1029,17 +1052,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the selected coroutine foundation through coroutine-specific
-   physical-ABI assertions. Stale embedded-library schemas, the selected
-   runtime's actual surface level, and exhaustive final residual-IR validation
-   now fail closed before emission. Repeated loop suspension,
-   generic/nullable spills,
-   local/two-receiver extensions, virtual/`super` members, suspend operators,
-   private state machines, receiver dispatch, context composition/propagation,
-   immediate and delayed resumption, exceptions/finally, value-class results,
-   lambdas, callable references, interception/release, suspend inline, separate
-   compilation, and a real cross-thread duplicate-resume race already execute
-   through the one Common-compatible state-machine pipeline.
+1. Implement foreign CLR generic-method import as the next deep interop
+   closure. Method-owned parameters and bounds, overload resolution,
+   invocation, physical binding, nullability/attribute evidence, and callable
+   reflection must land together; do not add a reflection-private metadata
+   decoder or admit only signatures that happen to execute one test.
 2. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
    they may adapt the Kotlin continuation boundary but never replace its
    internal ABI or create a second state-machine representation.
@@ -1047,9 +1064,9 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    reflection as the next independent reflection programme. Direct member-
    extension references remain coupled to that member model rather than being
    approximated through CLR reflection.
-4. Foreign CLR generic-method import remains the next deep interop closure:
-   method-owned parameters and bounds, overload resolution, invocation,
-   physical binding, and callable reflection must land together.
+4. Keep coroutine scheduling, `kotlinx.coroutines`, sequence builders,
+   debugger metadata, and coroutine-aware reflection outside this completed
+   continuation/state-machine foundation until selected independently.
 
 The post-rebase callable-reference probe found that common IR's new
 `addBoundValueAtOverride` helper cannot directly replace the .NET lowering:

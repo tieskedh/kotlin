@@ -18262,6 +18262,220 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testSuspendPhysicalAbiAcrossPortableLibrary() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+
+        val producerSource = File(tmpdir, "coroutine-abi-producer.kt").apply {
+            writeText(
+                """
+                package coroutine.abi
+
+                import kotlin.coroutines.Continuation
+                import kotlin.coroutines.resume
+                import kotlin.coroutines.suspendCoroutine
+
+                private var pending: Continuation<Int>? = null
+
+                private suspend fun park(): Int = suspendCoroutine { continuation ->
+                    if (pending != null) throw IllegalStateException("A continuation is already pending")
+                    pending = continuation
+                }
+
+                public fun resume(value: Int) {
+                    val continuation = pending ?: throw IllegalStateException("No continuation is pending")
+                    pending = null
+                    continuation.resume(value)
+                }
+
+                public suspend fun top(seed: Int): String = (seed + park()).toString()
+
+                public open class Worker {
+                    public open suspend fun compute(seed: Int): String = (seed + park()).toString()
+                }
+
+                public class Derived : Worker() {
+                    override suspend fun compute(seed: Int): String = super.compute(seed) + "!"
+                }
+                """.trimIndent()
+            )
+        }
+        val producerDirectory = File(tmpdir, "coroutine-abi-producer").apply { mkdirs() }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Coroutine.Abi",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val producerAssembly = producerDirectory.resolve("Coroutine.Abi.dll")
+        val metadata = DotNetClrMetadataReader.read(producerAssembly)
+        val stdlibReference = metadata.assemblyReferences.single { reference ->
+            reference.name == "Kotlin.Stdlib"
+        }
+        val continuationReference = metadata.typeReferences.single { reference ->
+            reference.namespaceName == "Kotlin.Coroutines" &&
+                    reference.metadataName == "Continuation" &&
+                    reference.resolutionScope == stdlibReference.handle
+        }
+        val coroutineBaseReference = metadata.typeReferences.single { reference ->
+            reference.namespaceName == "Kotlin.Coroutines" &&
+                    reference.metadataName == "DotNetCoroutineImpl" &&
+                    reference.resolutionScope == stdlibReference.handle
+        }
+        val continuationType = DotNetClrTypeSignature.Named(
+            type = continuationReference.handle,
+            isValueType = false,
+        )
+        val erasedResultType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+        val intType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+
+        fun assertSuspendEntry(
+            owner: DotNetClrTypeDefinition,
+            name: String,
+            isStatic: Boolean,
+        ) {
+            val method = metadata.methodDefinitions.single { candidate ->
+                candidate.declaringType == owner.handle && candidate.name == name
+            }
+            assertEquals(DotNetClrMethodVisibility.PUBLIC, method.visibility)
+            assertEquals(isStatic, method.isStatic)
+            if (!isStatic) {
+                assertTrue(method.isVirtual) { "A suspend override must retain its CLR virtual slot: $method" }
+            }
+            assertEquals(erasedResultType, method.signature.returnType)
+            assertEquals(listOf(intType, continuationType), method.signature.parameterTypes)
+        }
+
+        val topEntry = metadata.methodDefinitions.single { method ->
+            method.name == "top" && method.isStatic
+        }
+        val facade = metadata.typeDefinitions.single { definition ->
+            definition.handle == topEntry.declaringType
+        }
+        val worker = metadata.typeDefinitions.single { definition ->
+            definition.namespaceName == "coroutine.abi" && definition.metadataName == "Worker"
+        }
+        val derived = metadata.typeDefinitions.single { definition ->
+            definition.namespaceName == "coroutine.abi" && definition.metadataName == "Derived"
+        }
+        assertSuspendEntry(facade, "top", isStatic = true)
+        assertSuspendEntry(worker, "compute", isStatic = false)
+        assertSuspendEntry(derived, "compute", isStatic = false)
+
+        val stateMachines = metadata.typeDefinitions.filter { definition ->
+            definition.baseType == coroutineBaseReference.handle
+        }
+        assertTrue(stateMachines.size >= 2) {
+            "Both non-tail suspend bodies must lower to private CLR state machines: ${metadata.typeDefinitions}"
+        }
+        for (stateMachine in stateMachines) {
+            assertTrue(
+                stateMachine.visibility == DotNetClrTypeVisibility.NOT_PUBLIC ||
+                        stateMachine.visibility == DotNetClrTypeVisibility.NESTED_PRIVATE
+            ) {
+                "A generated coroutine state machine became externally visible: $stateMachine"
+            }
+            assertTrue(stateMachine.isSealed) { "A generated coroutine state machine must be sealed: $stateMachine" }
+            val constructor = metadata.methodDefinitions.single { method ->
+                method.declaringType == stateMachine.handle && method.name == ".ctor"
+            }
+            assertEquals(DotNetClrMethodVisibility.PUBLIC, constructor.visibility) {
+                "A private state-machine TypeDef needs a callable public-in-private-type constructor"
+            }
+            assertEquals(DotNetClrTypeSignature.Void, constructor.signature.returnType)
+            assertEquals(continuationType, constructor.signature.parameterTypes.last()) {
+                "Private constructor layout may retain receivers and live parameters, but completion must remain last"
+            }
+        }
+
+        val consumerSource = File(tmpdir, "coroutine-abi-consumer.kt").apply {
+            writeText(
+                """
+                package coroutine.consumer
+
+                import coroutine.abi.Derived
+                import coroutine.abi.Worker
+                import coroutine.abi.resume
+                import coroutine.abi.top
+                import kotlin.coroutines.Continuation
+                import kotlin.coroutines.CoroutineContext
+                import kotlin.coroutines.EmptyCoroutineContext
+                import kotlin.coroutines.startCoroutine
+
+                private class Completion : Continuation<String> {
+                    override val context: CoroutineContext
+                        get() = EmptyCoroutineContext
+
+                    var completed: Boolean = false
+                    var value: String? = null
+
+                    override fun resumeWith(result: Result<String>) {
+                        value = result.getOrThrow()
+                        completed = true
+                    }
+                }
+
+                private fun launch(block: suspend () -> String): Completion {
+                    val completion = Completion()
+                    block.startCoroutine(completion)
+                    if (completion.completed) throw IllegalStateException("The producer did not suspend")
+                    return completion
+                }
+
+                fun main() {
+                    val topCompletion = launch { top(40) }
+                    resume(2)
+                    if (!topCompletion.completed || topCompletion.value != "42") {
+                        throw IllegalStateException("Top-level result: ${'$'}{topCompletion.value}")
+                    }
+
+                    val worker: Worker = Derived()
+                    val memberCompletion = launch { worker.compute(39) }
+                    resume(3)
+                    if (!memberCompletion.completed || memberCompletion.value != "42!") {
+                        throw IllegalStateException("Virtual result: ${'$'}{memberCompletion.value}")
+                    }
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+        for (target in listOf("net48", "net10.0")) {
+            val targetName = if (target == "net48") "Framework" else "Core"
+            val consumerDirectory = File(tmpdir, "coroutine-abi-consumer-$targetName").apply { mkdirs() }
+            val consumerAssembly = consumerDirectory.resolve(
+                if (target == "net48") "CoroutineAbiConsumer.exe" else "CoroutineAbiConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, producerAssembly.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "CoroutineAbi${targetName}Consumer",
+                K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+            )
+            if (target == "net48") {
+                runAssemblerPairing(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), consumerAssembly),
+                    consumerDirectory,
+                    "Framework portable-coroutine consumer failed",
+                )
+            } else {
+                runDotNet(
+                    modernDotNetHostOrSkip(),
+                    consumerAssembly,
+                    consumerDirectory,
+                    "CoreCLR portable-coroutine consumer failed",
+                )
+            }
+        }
+    }
+
+    @Test
     fun testProducesPortableSelfDescribingUserLibrary() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
