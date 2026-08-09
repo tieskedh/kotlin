@@ -910,6 +910,22 @@ and every profile must preserve identity-based state checks and rejection of a
 duplicate resume. See
 [`docs/decisions/kotlin-coroutines.md`](docs/decisions/kotlin-coroutines.md).
 
+Keep every ordinary value live across suspension in a state-machine field with
+its original Kotlin type. Erasure belongs at the continuation/immediate-result
+boundary, not in state-machine storage: a primitive field remains the matching
+CLR scalar, while a value crossing `Continuation<T>` is boxed and restored by
+the ordinary target representation lowerings. Do not add coroutine-specific
+boxing, numeric widening, or carrier classes. The selected matrix covers every
+Kotlin primitive, including the distinct CLR `float32` and `float64` carriers.
+
+The unchanged `suspendFunctionTypeCall/manyParameters.kt` probe remains locked
+by the general fixed-arity callable boundary: its logical suspend extension
+needs physical `Function5` after appending the continuation, while the current
+runtime/compiler closure ends at `Function3`. Extend ordinary functions,
+`KFunctionN`, `KSuspendFunctionN`, runtime interfaces, callable objects,
+references, invocation, and physical validation as one callable-arity feature.
+Never introduce a coroutine-only `Function5` or adapter to admit this test.
+
 A direct suspend callable reference has no generated lambda state-machine
 object to carry interception state. Following the JS handling of KT-55869, the
 unintercepted create/start adapters wrap only a raw completion in the ordinary

@@ -17,12 +17,13 @@ verification, and work state.
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
 - Last completed feature: the executable Kotlin coroutine foundation and its
-  liveness/member/extension/context closure. Common
+  liveness/member/extension/context/primitive-carrier closure. Common
   owns `Result`, continuation/context, and the suspended sentinel; the target
   adds an explicit ordinary-IR state machine, atomic `SafeContinuation`,
   suspend callable-reference execution/interception, repeated loop state
-  machines, nullable/reference/null/array spills, generic nullable value-class
-  resume, local and two-receiver extensions, virtual/`super` members, suspend
+  machines, nullable/reference/null/array spills, every Kotlin primitive
+  carrier, `Int`/`Long` and generic nullable value-class resume, local and
+  two-receiver extensions, virtual/`super` members, suspend
   operators, private state machines, receiver dispatch, Common context
   composition/propagation, balanced interceptor release, and
   separate-compilation binding. Library ABI version 27 owns the
@@ -42,26 +43,26 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The coroutine context/completion-chain head passed the ordinary aggregate. The
+The coroutine primitive-carrier head passed the ordinary aggregate. The
 normal aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 142 XML files and 1775 tests:
+The audited full-aggregate evidence covers 146 XML files and 1843 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1654 FIR, IL-text, and box tests
+- 1722 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 94 library-integration tests
 - zero failures, errors, or skips
 
-The final aggregate completed the changed FIR/box root at 2026-08-09 14:43:37
-and `dn` at 14:54:50 local time; its wrapper exited successfully after 18m29s.
+The final aggregate completed the changed FIR/box root at 2026-08-09 15:27:10
+and `dn` at 15:38:50 local time; its wrapper exited successfully after 20m06s.
 The unchanged physical-model result was reused and all three result roots were
 audited directly. The resulting tree has a cumulative JUnit suite time of
-1208.94 seconds: 0.13 for the physical model, 537.37 for FIR/IL/box, and 671.44
+1439.39 seconds: 0.13 for the physical model, 740.38 for FIR/IL/box, and 698.88
 for `dn`. Gradle 9's selected-task `--rerun` option is
 not full-matrix evidence on the empty backend lifecycle task and is not part of
 the verification command.
@@ -991,9 +992,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the selected coroutine foundation through the remaining primitive
-   live/result carriers, default/interface-bridge and reflective suspend-member
-   shapes, stale producer rejection, and exhaustive
+1. Continue the selected coroutine foundation through the general callable
+   arities required by higher-arity suspend function types, default/interface-
+   bridge and reflective suspend-member shapes, stale producer rejection, and
+   exhaustive
    residual-IR assertions. Repeated loop suspension, generic/nullable spills,
    local/two-receiver extensions, virtual/`super` members, suspend operators,
    private state machines, receiver dispatch, context composition/propagation,
