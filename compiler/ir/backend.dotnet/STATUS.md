@@ -17,12 +17,13 @@ verification, and work state.
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
 - Last completed feature: the executable Kotlin coroutine foundation and its
-  repeated-suspension/live-carrier closure. Common
+  liveness/member/extension closure. Common
   owns `Result`, continuation/context, and the suspended sentinel; the target
   adds an explicit ordinary-IR state machine, atomic `SafeContinuation`,
   suspend callable-reference execution/interception, repeated loop state
   machines, nullable/reference/null/array spills, generic nullable value-class
-  resume, and separate-compilation binding. Library ABI version 27 owns the
+  resume, local and two-receiver extensions, virtual/`super` members, suspend
+  operators, and separate-compilation binding. Library ABI version 27 owns the
   continuation-shaped physical suspend MethodDef contract; runtime surface
   level 26 is unchanged. Target-owned
   compiler performance reporting remains active
@@ -46,19 +47,22 @@ aggregate command is:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 134 XML files and 1719 tests:
+The audited full-aggregate evidence covers 142 XML files and 1743 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1598 FIR, IL-text, and box tests
+- 1622 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 94 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed its final XML confirmation at 2026-08-09 13:26:42
-local time, 17m56s after launch, and its wrapper exited successfully. All three
-result roots were audited directly. The resulting tree has a cumulative JUnit
-suite time of 1147.86 seconds: 0.13 for the physical model, 502.76 for
-FIR/IL/box, and 644.97 for `dn`. Gradle 9's selected-task `--rerun` option is
+The aggregate completed the changed FIR/box root at 2026-08-09 13:47:15 local
+time, 7m23s after launch, and its wrapper exited successfully. Because this head
+changes only test selection and documentation, Gradle correctly reused the
+unchanged physical-model and `dn` results from the immediately preceding green
+head; all three result roots were audited directly. The resulting tree has a
+cumulative JUnit suite time of 1192.80 seconds: 0.13 for the physical model,
+547.70 for FIR/IL/box, and 644.97 for `dn`. Gradle 9's selected-task `--rerun`
+option is
 not full-matrix evidence on the empty backend lifecycle task and is not part of
 the verification command.
 
@@ -980,11 +984,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 ## Next bounded work
 
 1. Continue the selected coroutine foundation through the remaining primitive
-   live/result carriers, member and extension suspend shapes, broader context
-   composition, stale producer rejection, and exhaustive residual-IR
-   assertions. Repeated loop suspension, generic/nullable spills, immediate and
-   delayed resumption, exceptions/finally, value-class results, lambdas,
-   callable references, interception/release, suspend inline, separate
+   live/result carriers, default/interface-bridge and reflective suspend-member
+   shapes, broader context composition, stale producer rejection, and exhaustive
+   residual-IR assertions. Repeated loop suspension, generic/nullable spills,
+   local/two-receiver extensions, virtual/`super` members, suspend operators,
+   immediate and delayed resumption, exceptions/finally, value-class results,
+   lambdas, callable references, interception/release, suspend inline, separate
    compilation, and a real cross-thread duplicate-resume race already execute
    through the one Common-compatible state-machine pipeline.
 2. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
