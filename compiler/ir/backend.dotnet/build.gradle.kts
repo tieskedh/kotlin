@@ -53,6 +53,22 @@ tasks.named<ProcessResources>("processResources") {
     from(rootProject.file("libraries/stdlib/src/kotlin/util/HashCode.kt")) {
         into("kotlin-dotnet-stdlib/src/kotlin/util")
     }
+    from(rootProject.file("libraries/stdlib/src/kotlin/util/Result.kt")) {
+        into("kotlin-dotnet-stdlib/src/kotlin/util")
+    }
+    from(files(
+        rootProject.file("libraries/stdlib/src/kotlin/coroutines/Continuation.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/coroutines/ContinuationInterceptor.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/coroutines/CoroutineContext.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/coroutines/CoroutineContextImpl.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/coroutines/CoroutinesH.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/coroutines/CoroutinesIntrinsicsH.kt"),
+    )) {
+        into("kotlin-dotnet-stdlib/src/kotlin/coroutines")
+    }
+    from(rootProject.file("libraries/stdlib/src/kotlin/coroutines/intrinsics/Intrinsics.kt")) {
+        into("kotlin-dotnet-stdlib/src/kotlin/coroutines/intrinsics")
+    }
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KClass.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KCallable.kt"),

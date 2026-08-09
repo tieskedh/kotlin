@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.common.lower.AbstractSuspendFunctionsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZATION_ENTRY
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COVARIANT_RETURN_BRIDGE
@@ -314,6 +315,15 @@ internal class DotNetIlMethodCodegen(
      */
     private fun IrFunction.dotNetMemberVisibility(): String {
         if (origin == DOTNET_VALUE_CLASS_BOX_HELPER || origin == DOTNET_VALUE_CLASS_UNBOX_HELPER) return "public"
+        // Common's explicit coroutine lowering starts a named suspend function from its
+        // file-facade method by invoking the generated state-machine override. JS has no
+        // enforced member visibility at that call site; CLR `family` does and therefore rejects
+        // the same sibling-type call. Give only the generated override CLR `family or assembly`
+        // visibility: the `family` half preserves (and cannot illegally narrow) the protected
+        // virtual slot, while the `assembly` half is the JVM package-private analogue needed by
+        // the generated file facade. The private state-machine class still exposes no callable
+        // surface outside its DLL.
+        if (origin == AbstractSuspendFunctionsLowering.DECLARATION_ORIGIN_COROUTINE_IMPL_INVOKE) return "famorassem"
         // CLR enclosing types cannot call private members of their nested types. The enum entry
         // implementation class itself remains nested-private; only its compiler-generated
         // constructor is assembly-visible so the enclosing enum's `.cctor` can instantiate it.
@@ -381,7 +391,10 @@ internal class DotNetIlMethodCodegen(
     private fun IrFunction.isDotNetPublishedCompilerAbi(): Boolean =
         visibility == DescriptorVisibilities.INTERNAL &&
                 (isPublishedApi() ||
-                        (this as? IrSimpleFunction)?.correspondingPropertySymbol?.owner?.isPublishedApi() == true)
+                        (this as? IrSimpleFunction)?.correspondingPropertySymbol?.owner?.isPublishedApi() == true ||
+                        (this as? IrSimpleFunction)
+                            ?.dotNetValueClassImplementationSourceOrNull()
+                            ?.isPublishedApi() == true)
 
     /** Mirrors JVM's package-private physical treatment through CLR assembly visibility. */
     private fun IrFunction.isDotNetInlineOnly(): Boolean =
@@ -407,8 +420,17 @@ internal class DotNetIlMethodCodegen(
                 // in addition to the correctly typed forwarding MethodImpl.
                 return@forEach
             }
+            check(overridden.typeParameters.size == bridge.typeParameters.size) {
+                "Internal .NET backend error: interface-default slot bridge changed method arity"
+            }
             val physicalMethodName = overrideInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
-            appendLine("    .override method ${overrideInfo.renderMethodReference(physicalMethodName)}")
+            appendLine(
+                "    .override method " +
+                        overrideInfo.renderOverrideMethodReference(
+                            physicalMethodName,
+                            genericArity = bridge.typeParameters.size,
+                        )
+            )
         }
     }
 
@@ -725,7 +747,11 @@ internal class DotNetIlMethodCodegen(
         val exactArrayStorage = if (initializer == null) null else variable.exactCompilerTemporaryArrayStorageOrNull()
         val slot = methodContext.declareLocal(variable, exactArrayStorage)
         if (initializer == null) return
-        expressionCodegen.emitExpression(initializer, slot.type)
+        // Shared lowerings may place statement-bearing expressions in compiler-temporary
+        // initializers (including a Nothing-typed break/continue on a dead value path). Route
+        // them through the same method-scope value emitter as try/when branch results; ordinary
+        // expressions still delegate directly to expression codegen.
+        emitValueExpression(initializer, slot.type)
         if (methodContext.isTerminated) return
         methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
     }
@@ -1107,6 +1133,7 @@ internal class DotNetIlMethodCodegen(
         val bodyLabel = methodContext.nextLabel("doWhileBody")
         val conditionLabel = methodContext.nextLabel("doWhileCond")
         val endLabel = methodContext.nextLabel("doWhileEnd")
+        val conditionIsAlwaysTrue = loop.condition.isTrueConst()
         methodContext.registerLoop(
             loop,
             DotNetIlLoopLabels(breakLabel = endLabel, continueLabel = conditionLabel, ehDepth = methodContext.ehDepth),
@@ -1119,8 +1146,15 @@ internal class DotNetIlMethodCodegen(
         if (methodContext.isLabelReferenced(conditionLabel)) {
             methodContext.emitLabel(conditionLabel)
         }
-        expressionCodegen.emitExpression(loop.condition, DotNetIlValueType.Boolean)
-        methodContext.emitBranch("brtrue", bodyLabel, pops = 1)
+        // Like `while (true)`, a conditional back-edge leaves a syntactic false path which falls
+        // off the end of a non-Unit CLR method even though Kotlin knows the condition is true.
+        // Emit the unconditional edge for the literal case so the method remains verifiable.
+        if (conditionIsAlwaysTrue) {
+            methodContext.emitGoto(bodyLabel)
+        } else {
+            expressionCodegen.emitExpression(loop.condition, DotNetIlValueType.Boolean)
+            methodContext.emitBranch("brtrue", bodyLabel, pops = 1)
+        }
         if (methodContext.isLabelReferenced(endLabel)) {
             methodContext.emitLabel(endLabel)
         }
@@ -1135,6 +1169,11 @@ internal class DotNetIlMethodCodegen(
                 "'$keyword${jump.label?.let { "@$it" }.orEmpty()}' targets a loop outside the function being compiled"
             )
         val targetLabel = if (jump is IrBreak) labels.breakLabel else labels.continueLabel
+        // A bottom-typed loop transfer can sit inside a larger expression after earlier call or
+        // arithmetic operands have already been evaluated. Kotlin abandons that entire
+        // expression; CIL branches and especially `leave` may not carry those values to the loop
+        // target. Normalize the physical stack before choosing the EH-aware transfer opcode.
+        methodContext.drainEvaluationStack()
         // A break/continue at a deeper exception-region depth than its loop crosses protected
         // regions and must exit via `leave` — legal toward any label of an enclosing scope,
         // forward or backward, crossing nested regions in one hop (probe-verified).
@@ -1224,9 +1263,9 @@ internal class DotNetIlMethodCodegen(
      * terminated (threw or left toward an outer target), exactly like [emitTryStatement]'s end
      * label: the construct is then `Nothing`-like and only a phantom result keeps the tracker
      * balanced for the consumer's dead instructions. The CLR additionally requires an empty
-     * evaluation stack at `.try` entry, so a `try` expression with operands already on the
-     * stack (e.g. as a non-first call argument) is rejected — a stated deviation from the JVM
-     * backend, whose platform has no such restriction (operand spilling is deferred).
+     * evaluation stack at `.try` entry. The expression emitter therefore evaluates and spills
+     * every receiver/argument of an enclosing call before entering a nested `try`; reaching this
+     * method with older operands still indicates a missing parent-expression isolation rule.
      */
     private fun emitTryExpression(expression: IrTry, expectedType: DotNetIlValueType) {
         if (methodContext.stackDepth != 0) {
@@ -1408,6 +1447,17 @@ internal class DotNetIlMethodCodegen(
             }
             return
         }
+        if (expression is IrBreakContinue) {
+            val entryStackDepth = methodContext.stackDepth
+            emitBreakContinue(expression)
+            if (methodContext.isTerminated) {
+                // Like Nothing-typed return/throw, a break or continue satisfies the enclosing
+                // value type only vacuously. Retain one phantom value for the dead branch/join
+                // bookkeeping; the real CIL path has already transferred with br/leave.
+                methodContext.notePhantomValueAtTerminatedExpression(entryStackDepth)
+            }
+            return
+        }
         if (expression !is IrContainerExpression) {
             expressionCodegen.emitExpression(expression, expectedType)
             return
@@ -1426,7 +1476,12 @@ internal class DotNetIlMethodCodegen(
                     methodContext.notePhantomValueAtTerminatedExpression(entryStackDepth)
                 }
             }
-            is IrBreakContinue -> emitBreakContinue(last)
+            is IrBreakContinue -> {
+                emitBreakContinue(last)
+                if (methodContext.isTerminated) {
+                    methodContext.notePhantomValueAtTerminatedExpression(entryStackDepth)
+                }
+            }
             is IrExpression -> if (last.type.isUnit() && expectedType == DotNetRuntimeTypes.unitType) {
                 // A Unit-valued block may end in an effect expression such as IrSetValue. The
                 // statement emitter owns those shapes; materialize Kotlin's Unit singleton only

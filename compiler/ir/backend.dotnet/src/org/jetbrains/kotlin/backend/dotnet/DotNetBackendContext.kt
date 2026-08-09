@@ -23,6 +23,8 @@ import org.jetbrains.kotlin.ir.classSymbol
 import org.jetbrains.kotlin.ir.functionSymbol
 import org.jetbrains.kotlin.ir.functionSymbolOrNull
 import org.jetbrains.kotlin.ir.functionSymbolAssociatedBy
+import org.jetbrains.kotlin.ir.getterSymbol
+import org.jetbrains.kotlin.ir.setterSymbol
 import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
@@ -55,6 +57,7 @@ import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.name.StandardClassIds
+import org.jetbrains.kotlin.name.withClassId
 
 internal data class DotNetLoweredInterfaceDefaultImplementation(
     val helper: IrSimpleFunction,
@@ -191,6 +194,12 @@ internal class DotNetSymbols(
     private val irFactory: IrFactory,
     irModuleFragment: IrModuleFragment,
 ) : BackendSymbols(irBuiltIns) {
+    private val coroutineImplClassId = ClassId(FqName("kotlin.coroutines"), Name.identifier("DotNetCoroutineImpl"))
+    private val dotNetCoroutineInternalPackage = FqName("kotlin.dotnet.internal")
+
+    private fun coroutineImplMember(name: String): CallableId =
+        CallableId(Name.identifier(name)).withClassId(coroutineImplClassId)
+
     private val kotlinInternalPackage = createEmptyExternalPackageFragment(
         irModuleFragment,
         FqName("kotlin.internal"),
@@ -334,12 +343,16 @@ internal class DotNetSymbols(
                     function.parameters.single().type == irBuiltIns.stringType
         }
     }
-    override val coroutineContextGetter: IrSimpleFunctionSymbol
-        get() = unsupportedSymbol("coroutineContextGetter")
-    override val suspendCoroutineUninterceptedOrReturn: IrSimpleFunctionSymbol
-        get() = unsupportedSymbol("suspendCoroutineUninterceptedOrReturn")
-    override val coroutineGetContext: IrSimpleFunctionSymbol
-        get() = unsupportedSymbol("coroutineGetContext")
+    override val coroutineContextGetter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(StandardNames.COROUTINES_PACKAGE_FQ_NAME, Name.identifier("coroutineContext")).getterSymbol()
+    }
+    override val suspendCoroutineUninterceptedOrReturn: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(dotNetCoroutineInternalPackage, Name.identifier("suspendCoroutineUninterceptedOrReturnDotNet"))
+            .functionSymbol()
+    }
+    override val coroutineGetContext: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(dotNetCoroutineInternalPackage, Name.identifier("getCoroutineContext")).functionSymbol()
+    }
     override val throwNullPointerException: IrSimpleFunctionSymbol
         get() = unsupportedSymbol("throwNullPointerException")
     override val throwTypeCastException: IrSimpleFunctionSymbol
@@ -369,14 +382,47 @@ internal class DotNetSymbols(
         )
     override val stringBuilder: IrClassSymbol
         get() = unsupportedSymbol("stringBuilder")
-    override val coroutineSuspendedGetter: IrSimpleFunctionSymbol
-        get() = unsupportedSymbol("coroutineSuspendedGetter")
-    override val getContinuation: IrSimpleFunctionSymbol
-        get() = unsupportedSymbol("getContinuation")
-    override val continuationClass: IrClassSymbol
-        get() = unsupportedSymbol("continuationClass")
-    override val returnIfSuspended: IrSimpleFunctionSymbol
-        get() = unsupportedSymbol("returnIfSuspended")
+    override val coroutineSuspendedGetter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(
+            StandardNames.COROUTINES_INTRINSICS_PACKAGE_FQ_NAME,
+            StandardNames.COROUTINE_SUSPENDED_NAME,
+        ).getterSymbol()
+    }
+    override val getContinuation: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(dotNetCoroutineInternalPackage, Name.identifier("getContinuation")).functionSymbol()
+    }
+    override val continuationClass: IrClassSymbol by lazy {
+        with(irBuiltIns) {
+            ClassId(StandardNames.COROUTINES_PACKAGE_FQ_NAME, Name.identifier("Continuation")).classSymbol()
+        }
+    }
+    override val returnIfSuspended: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(dotNetCoroutineInternalPackage, Name.identifier("returnIfSuspended")).functionSymbol()
+    }
+    val coroutineImpl: IrClassSymbol by lazy {
+        with(irBuiltIns) { coroutineImplClassId.classSymbol() }
+    }
+    val coroutineImplLabelPropertyGetter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        coroutineImplMember("state").getterSymbol()
+    }
+    val coroutineImplLabelPropertySetter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        coroutineImplMember("state").setterSymbol()
+    }
+    val coroutineImplExceptionStatePropertyGetter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        coroutineImplMember("exceptionState").getterSymbol()
+    }
+    val coroutineImplExceptionStatePropertySetter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        coroutineImplMember("exceptionState").setterSymbol()
+    }
+    val coroutineImplResultSymbolGetter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        coroutineImplMember("result").getterSymbol()
+    }
+    val coroutineImplExceptionPropertyGetter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        coroutineImplMember("exception").getterSymbol()
+    }
+    val coroutineImplExceptionPropertySetter: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        coroutineImplMember("exception").setterSymbol()
+    }
     override val functionAdapter: IrClassSymbol
         get() = unsupportedSymbol("functionAdapter")
     override val defaultConstructorMarker: IrClassSymbol = run {

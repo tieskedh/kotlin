@@ -374,7 +374,7 @@ internal class DotNetAnnotationImplementationLowering(
             if (!annotationClass.isSupportedDotNetAnnotationClass() ||
                 !annotationClass.isDotNetRuntimeRetainedAnnotation() ||
                 annotationClass.isDotNetResolutionOnlyStdlibDeclaration ||
-                annotationClass.fqNameWhenAvailable in resolutionOnlyMetaAnnotations ||
+                annotationClass.fqNameWhenAvailable in resolutionOnlyBuiltInAnnotations ||
                 annotation.arguments.filterNotNull().any { value -> !value.hasExecutableAnnotationValue() }
             ) {
                 return@mapNotNull null
@@ -467,7 +467,7 @@ internal class DotNetAnnotationImplementationLowering(
             val annotationClass = classSymbol.owner
             annotationClass.isSupportedDotNetAnnotationClass() &&
                     !annotationClass.isDotNetResolutionOnlyStdlibDeclaration &&
-                    annotationClass.fqNameWhenAvailable !in resolutionOnlyMetaAnnotations &&
+                    annotationClass.fqNameWhenAvailable !in resolutionOnlyBuiltInAnnotations &&
                     arguments.filterNotNull().all { value -> value.hasExecutableAnnotationValue() }
         }
         is IrGetEnumValue ->
@@ -485,8 +485,14 @@ internal class DotNetAnnotationImplementationLowering(
         const val PARAMETER_EXTENSION = 2
         const val PARAMETER_VALUE = 3
 
-        /** Built-in meta declarations are frontend/KLIB facts until their own runtime objects exist. */
-        val resolutionOnlyMetaAnnotations = setOf(
+        /** Built-in declarations remain frontend/KLIB facts until their own runtime objects exist. */
+        val resolutionOnlyBuiltInAnnotations = setOf(
+            // Unlike its BINARY-retained companions, Deprecated is runtime-retained. Its
+            // compiler-built-in declaration nevertheless has no physical .NET annotation class
+            // yet, so the KLIB application remains authoritative and the optional discovery
+            // factory omits it instead of making the annotated declaration uncompilable.
+            StandardNames.FqNames.deprecated,
+            StandardNames.FqNames.deprecatedSinceKotlin,
             StandardNames.FqNames.target,
             StandardNames.FqNames.retention,
             StandardNames.FqNames.repeatable,

@@ -16,44 +16,46 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: single-field Kotlin value classes. Common owns
-  declaration/member lowering; the target adds one nominal non-generic CLR box
-  owner, contextual underlying carriers, explicit box/unbox transitions, stable
-  logical name mangling, and producer-recorded helper identities. Library ABI
-  version 26 carries that separate-compilation contract; runtime surface level
-  26 is unchanged. Target-owned compiler performance reporting remains active
+- Last completed feature: the executable Kotlin coroutine foundation. Common
+  owns `Result`, continuation/context, and the suspended sentinel; the target
+  adds an explicit ordinary-IR state machine, atomic `SafeContinuation`,
+  suspend callable-reference execution/interception, and separate-compilation
+  binding. Library ABI version 27 owns the continuation-shaped physical suspend
+  MethodDef contract; runtime surface level 26 is unchanged. Target-owned
+  compiler performance reporting remains active
 - Maturity: high-quality pre-ABI prototype of an explicitly bounded Kotlin
   subset; no third-party binary compatibility is promised
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
 stdlib. The target is not close to 98% feature-complete: broad member/property
-reflection and invocation, multi-field value classes, coroutines, Sequence and
-Grouping families, sorting/random, and Gradle/KMP product integration remain
-substantial open programmes.
+reflection and invocation, the remaining coroutine programme beyond its
+executable continuation/state-machine foundation, multi-field value classes,
+Sequence and Grouping families, sorting/random, and Gradle/KMP product
+integration remain substantial open programmes.
 
 ## Current green gate
 
-The single-field value-class head passed the ordinary aggregate. The normal
+The coroutine-foundation head passed the ordinary aggregate. The normal
 aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 94 XML files and 1563 tests:
+The audited full-aggregate evidence covers 130 XML files and 1671 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1442 FIR, IL-text, and box tests
+- 1550 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 94 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate completed its final XML confirmation at 2026-08-09 07:25:16
-local time, 17m51s after launch, and its wrapper exited successfully. All three
+The aggregate completed its final XML confirmation at 2026-08-09 12:48:54
+local time, 18m01s after launch, and its wrapper exited successfully. All three
 result roots were audited directly. The resulting tree has a cumulative JUnit
-suite time of 1156.93 seconds: 0.13 for the physical model, 481.48 for
-FIR/IL/box, and 675.32 for `dn`. Gradle 9's selected-task `--rerun` option is
+suite time of 1193.42 seconds: 0.13 for the physical model, 549.47 for
+FIR/IL/box, and 643.82 for `dn`. Gradle 9's selected-task `--rerun` option is
 not full-matrix evidence on the empty backend lifecycle task and is not part of
 the verification command.
 
@@ -693,7 +695,8 @@ Valued annotation classes are admitted generally; ordinary enums, the
 non-reified `EnumEntries` core, and the reified Common enum helpers are now
 published. The classified `CharSequence` carrier, Common collection
 predicates, and complete ordinary/reified inline boundary remain intact;
-suspend inline remains an explicit error. The nominal `KClass` floor and
+suspend inline now composes with the continuation/state-machine foundation.
+The nominal `KClass` floor and
 logical `KType`/`typeOf` graph are selected and published; they do not imply
 member reflection.
 
@@ -863,7 +866,7 @@ shape are omitted. Neither form enters the physical Kotlin declaration index
 or explicit C# export, and cross-library calls disappear in all three KLIB
 inliner modes. The completed `KType`/`typeOf` graph composes this same
 substitution path; annotation discovery, future classifier families,
-and suspend inline remain separate programmes.
+and coroutine-aware reflection/export remain separate programmes.
 Physically exact non-generic reference casts are
 complete for Kotlin classes/interfaces, imported CLR interfaces, strings,
 `Any`, primitive-array wrappers, and exact CLR vectors without admitting closed
@@ -973,17 +976,16 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Build the internal Kotlin coroutine foundation now that single-field value
-   classes can represent Common `Result<T>`. Audit Common plus JVM, JS, Wasm,
-   and Native first; retain Kotlin's `Continuation`/suspended-sentinel ABI and
-   use target-ready IR state machines rather than making `Task` or `ValueTask`
-   the Kotlin runtime representation. Host async export remains a separate
-   fail-closed product.
-2. Close that foundation through executable suspension and resumption,
-   tail-delegation, exceptions/finally, generic and value-class results,
-   lambdas, interfaces, and separate compilation before adopting coroutine-
-   dependent stdlib families. Each prerequisite remains its own reviewable
-   implementation slice even though they share one programme.
+1. Continue the selected coroutine foundation through repeated suspension,
+   generic/nullable live spills, member and extension suspend shapes, broader
+   context composition, stale producer rejection, and exhaustive residual-IR
+   assertions. Immediate and delayed resumption, exceptions/finally, value-
+   class results, lambdas, callable references, interception/release, suspend
+   inline, separate compilation, and a real cross-thread duplicate-resume race
+   already execute through the one Common-compatible state-machine pipeline.
+2. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
+   they may adapt the Kotlin continuation boundary but never replace its
+   internal ABI or create a second state-machine representation.
 3. Keep broad member enumeration, accessor objects, and type-use annotation
    reflection as the next independent reflection programme. Direct member-
    extension references remain coupled to that member model rather than being

@@ -2,7 +2,9 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_BOX_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_UNBOX_HELPER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZATION_ENTRY
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceBridgeMemberViewOrNull
+import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetExternalObjectInstanceField
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.ValueClassBackendAgnosticApi
@@ -647,6 +649,7 @@ private fun dotNetComparableInterfaceInfo(
 
 internal class DotNetIlTypeMapper private constructor(
     private val availableClasses: Map<IrClass, DotNetIlClassInfo>,
+    private val localClasses: Set<IrClass>,
     val coreLibrary: DotNetCoreLibraryProfile,
     private val externalDeclarations: DotNetExternalDeclarations,
     private val importedClrDeclarations: DotNetClrImportedDeclarations,
@@ -663,6 +666,7 @@ internal class DotNetIlTypeMapper private constructor(
 ) {
     constructor(
         availableClasses: Map<IrClass, DotNetIlClassInfo>,
+        localClasses: Set<IrClass> = availableClasses.keys,
         coreLibrary: DotNetCoreLibraryProfile = DEFAULT_EXECUTABLE_CORE_LIBRARY,
         externalDeclarations: DotNetExternalDeclarations = DotNetExternalDeclarations(emptyList()),
         genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
@@ -672,6 +676,7 @@ internal class DotNetIlTypeMapper private constructor(
         foreignAssemblyReferenceSink: (DotNetClrClasspathAssembly.WithoutCarrier) -> Unit = {},
     ) : this(
         availableClasses,
+        localClasses,
         coreLibrary,
         externalDeclarations,
         DotNetClrImportedDeclarations(foreignAssemblyReferenceSink),
@@ -690,6 +695,7 @@ internal class DotNetIlTypeMapper private constructor(
     private fun withGenericInterfaceMapping(mapping: DotNetGenericInterfaceMapping): DotNetIlTypeMapper =
         DotNetIlTypeMapper(
             availableClasses,
+            localClasses,
             coreLibrary,
             externalDeclarations,
             importedClrDeclarations,
@@ -889,6 +895,13 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun externalObjectInstanceOwnerInfoOrNull(field: IrField): DotNetIlClassInfo? {
         if (field.origin != IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE) return null
+        // An external inline body can retain its producer's already-lowered singleton field,
+        // while DotNetObjectClassLowering creates an explicitly marked reference-only stub for
+        // an IrGetObjectValue in the consumer. Both must bind the producer ABI. Conversely, a
+        // same-logical-key declaration from this module remains local even after the live
+        // emission fixpoint evicts it; it must never be resurrected from a dependency.
+        val physicalOwner = field.parent as? IrClass
+        if (field.isDotNetExternalObjectInstanceField != true && physicalOwner in localClasses) return null
         val singleton = field.type.classOrNull?.owner ?: return null
         val binding = externalDeclarations.objectInstanceOrNull(singleton) ?: return null
         return externalDeclarations.objectInstanceOwnerInfo(binding).also(::recordAssemblyReference)
@@ -990,6 +1003,13 @@ internal class DotNetIlTypeMapper private constructor(
         toDotNetIlBoxedValueClassType(type) ?: toDotNetIlValueType(type)
 
     fun referencedFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
+        if (function.origin == DOTNET_STATIC_INITIALIZATION_ENTRY) {
+            val physicalOwner = function.parent as? IrClass
+            if (physicalOwner != null && isLocallyEmittableClass(physicalOwner)) {
+                val ownerInfo = classInfoOrNull(physicalOwner) ?: return null
+                return DotNetIlFunctionInfo(ownerInfo, function.dotNetSignature(this))
+            }
+        }
         val localStdlibFunction = {
             DotNetStdlibLibrary.implementationFunctionInfoOrNull(function, this, stdlibAssemblyName)
         }
