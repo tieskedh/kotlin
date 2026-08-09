@@ -896,6 +896,15 @@ continuation declaration/call transformations before ordinary target
 lowerings. No suspend declaration, compiler-only coroutine intrinsic, or
 coroutine pseudo-expression may reach CIL emission.
 
+Keep `DotNetIrValidationAfterLoweringPhase` last in the ordinary target
+lowering list, after every declaration and body producer. It extends Common's
+final IR validation in the JVM style and must reject residual suspend
+declarations/calls/references, suspension pseudo-IR, and compiler-only
+coroutine/context intrinsic calls without rejecting ordinary `Continuation`
+or `COROUTINE_SUSPENDED` runtime operations. Because `-Xverify-ir` is optional
+in product compilations, retain the emitter's unconditional residual-suspend
+guard as the final failsafe; validation diagnostics do not replace it.
+
 Keep those phases in the ordinary target order, but do not make an unrelated
 module acquire a coroutine-stdlib dependency merely by constructing a pass.
 The symbol-heavy state-machine and continuation-call delegates are created only
