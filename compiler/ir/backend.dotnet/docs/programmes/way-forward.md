@@ -217,7 +217,9 @@ operators, private top-level/member state machines, receiver dispatch, Common
 context composition and identity across suspension, balanced interceptor
 release, cross-thread duplicate-resume rejection, both FIR parsers, and
 Framework/CoreCLR execution. Continue from that one architecture, not from
-stdlib allowlists: close the remaining primitive live-value/result carriers,
+stdlib allowlists. The complete Kotlin primitive family now executes through
+typed state-machine fields plus the erased continuation boundary. Continue with
+the general callable arities needed by higher-arity suspend function types,
 default/interface-bridge and reflective suspend-member shapes, stale ABI, and
 residual-IR/physical-ABI assertions. Prefer
 unchanged shared coroutine tests and add target-owned tests only for CLR
