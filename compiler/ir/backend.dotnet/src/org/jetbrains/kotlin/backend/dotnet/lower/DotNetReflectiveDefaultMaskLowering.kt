@@ -83,7 +83,7 @@ internal class DotNetReflectiveDefaultMaskLowering(
     ) {
         val regularParameters = capability.parameters.filter { it.kind == IrParameterKind.Regular }
         val argumentsParameter = regularParameters[0]
-        val runtimeMaskParameter = regularParameters[1]
+        val runtimeMasksParameter = regularParameters[1]
         val arrayGet = context.irBuiltIns.arrayClass.owner.functions.single { function ->
             function.name.asString() == "get"
         }
@@ -99,10 +99,6 @@ internal class DotNetReflectiveDefaultMaskLowering(
                 val maskParameters = dispatcher.parameters.filter { parameter ->
                     parameter.origin == IrDeclarationOrigin.MASK_FOR_DEFAULT_FUNCTION
                 }
-                check(maskParameters.size == 1) {
-                    "Internal .NET backend error: fixed-arity reflective default call has " +
-                            "${maskParameters.size} physical masks instead of one"
-                }
                 val builder = context.createIrBuilder(capability.symbol).at(expression)
                 for (optional in plan.optionalParameters) {
                     val placeholder = expression.arguments[optional.targetParameterIndex]
@@ -113,24 +109,27 @@ internal class DotNetReflectiveDefaultMaskLowering(
                     }
                     expression.arguments[optional.targetParameterIndex] = builder.irIfThenElse(
                         placeholder.type,
-                        runtimeBitIsSet(builder, runtimeMaskParameter, optional.exposedIndex),
+                        runtimeBitIsSet(builder, runtimeMasksParameter, optional.exposedIndex),
                         placeholder,
                         supplied,
                     )
                 }
-                val physicalMaskContributions: List<IrExpression> = plan.optionalParameters
-                    .map { optional ->
-                        builder.irIfThenElse(
-                            context.irBuiltIns.intType,
-                            runtimeBitIsSet(builder, runtimeMaskParameter, optional.exposedIndex),
-                            builder.irInt(1 shl optional.physicalMaskIndex),
-                            builder.irInt(0),
-                        )
-                    }
-                val physicalMask = physicalMaskContributions.reduce { left, right ->
+                maskParameters.forEachIndexed { maskIndex, maskParameter ->
+                    val physicalMaskContributions: List<IrExpression> = plan.optionalParameters
+                        .filter { optional -> optional.physicalMaskIndex / DEFAULT_MASK_BITS == maskIndex }
+                        .map { optional ->
+                            builder.irIfThenElse(
+                                context.irBuiltIns.intType,
+                                runtimeBitIsSet(builder, runtimeMasksParameter, optional.exposedIndex),
+                                builder.irInt(1 shl (optional.physicalMaskIndex % DEFAULT_MASK_BITS)),
+                                builder.irInt(0),
+                            )
+                        }
+                    val physicalMask = physicalMaskContributions.reduceOrNull { left, right ->
                         builder.irCallOp(context.irBuiltIns.intPlusSymbol, context.irBuiltIns.intType, left, right)
-                    }
-                expression.arguments[maskParameters.single().indexInParameters] = physicalMask
+                    } ?: builder.irInt(0)
+                    expression.arguments[maskParameter.indexInParameters] = physicalMask
+                }
                 return expression
             }
         })
@@ -154,15 +153,28 @@ internal class DotNetReflectiveDefaultMaskLowering(
 
     private fun runtimeBitIsSet(
         builder: org.jetbrains.kotlin.ir.builders.IrBuilderWithScope,
-        runtimeMaskParameter: org.jetbrains.kotlin.ir.declarations.IrValueParameter,
+        runtimeMasksParameter: org.jetbrains.kotlin.ir.declarations.IrValueParameter,
         exposedIndex: Int,
     ): IrExpression = builder.irNotEquals(
         builder.irCallOp(
             context.irBuiltIns.intAndSymbol,
             context.irBuiltIns.intType,
-            builder.irGet(runtimeMaskParameter),
-            builder.irInt(1 shl exposedIndex),
+            builder.irCall(intArrayGet.symbol).apply {
+                arguments[0] = builder.irGet(runtimeMasksParameter)
+                arguments[1] = builder.irInt(exposedIndex / DEFAULT_MASK_BITS)
+            },
+            builder.irInt(1 shl (exposedIndex % DEFAULT_MASK_BITS)),
         ),
         builder.irInt(0),
     )
+
+    private val intArrayGet by lazy {
+        context.irBuiltIns.intArray.owner.functions.single { function ->
+            function.name.asString() == "get"
+        }
+    }
+
+    private companion object {
+        const val DEFAULT_MASK_BITS = 32
+    }
 }

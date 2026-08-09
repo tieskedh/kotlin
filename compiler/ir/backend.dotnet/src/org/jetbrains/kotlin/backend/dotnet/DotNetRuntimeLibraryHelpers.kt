@@ -304,9 +304,11 @@ $kClassSupportTypesIl
             |    CI_ArityCorrect:
             |      ldarg.1
             |      switch ($callableInvokerSwitchLabelsIl)
-            |      ldstr "Callable arity is not supported by this Kotlin/.NET runtime."
-            |      newobj instance void ${coreLibraryReference}System.NotSupportedException::.ctor(string)
-            |      throw
+            |      ldarg.0
+            |      castclass Kotlin.FunctionN
+            |      ldarg.2
+            |      callvirt instance object Kotlin.FunctionN::Invoke(object[])
+            |      ret
 $callableInvokerCasesIl
             |    }
             |
@@ -640,13 +642,15 @@ $callableInvokerCasesIl
             |
             |    .method family hidebysig instance object CallByErased(class Kotlin.Collections.Map 'args') cil managed
             |    {
-            |      .maxstack 4
+            |      .maxstack 6
             |      .locals init (
             |        [0] object[] positional,
             |        [1] int32 index,
-            |        [2] int32 mask,
+            |        [2] class Kotlin.IntArray masks,
             |        [3] object parameter,
-            |        [4] object[] descriptor
+            |        [4] object[] descriptor,
+            |        [5] int32 maskIndex,
+            |        [6] bool hasDefaults
             |      )
             |      ldarg.0
             |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'arity'
@@ -654,8 +658,17 @@ $callableInvokerCasesIl
             |      stloc.0
             |      ldc.i4.0
             |      stloc.1
-            |      ldc.i4.0
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'arity'
+            |      ldc.i4.s 31
+            |      add
+            |      ldc.i4.s 32
+            |      div.un
+            |      newarr ${coreLibraryReference}System.Int32
+            |      newobj instance void Kotlin.IntArray::.ctor(int32[])
             |      stloc.2
+            |      ldc.i4.0
+            |      stloc.s 6
             |    FR_By_Loop:
             |      ldloc.1
             |      ldarg.0
@@ -689,12 +702,24 @@ $callableInvokerCasesIl
             |      ldelem.ref
             |      unbox.any ${coreLibraryReference}System.Boolean
             |      brfalse.s FR_By_NotOptional
+            |      ldloc.1
+            |      ldc.i4.s 32
+            |      div.un
+            |      stloc.s 5
             |      ldloc.2
+            |      ldloc.s 5
+            |      ldloc.2
+            |      ldloc.s 5
+            |      callvirt instance int32 Kotlin.IntArray::Get(int32)
             |      ldc.i4.1
             |      ldloc.1
+            |      ldc.i4.s 32
+            |      rem.un
             |      shl
             |      or
-            |      stloc.2
+            |      callvirt instance void Kotlin.IntArray::Set(int32, int32)
+            |      ldc.i4.1
+            |      stloc.s 6
             |      br.s FR_By_Next
             |    FR_By_NotOptional:
             |      ldloc.s 4
@@ -723,7 +748,7 @@ $callableInvokerCasesIl
             |      stloc.1
             |      br FR_By_Loop
             |    FR_By_Invoke:
-            |      ldloc.2
+            |      ldloc.s 6
             |      brtrue.s FR_By_Default
             |      ldarg.0
             |      ldloc.0
@@ -733,12 +758,13 @@ $callableInvokerCasesIl
             |      ldarg.0
             |      ldloc.0
             |      ldloc.2
-            |      callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallDefaultErased(object[], int32)
+            |      callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallDefaultErased(
+            |          object[], class Kotlin.IntArray)
             |      ret
             |    }
             |
             |    .method family hidebysig newslot virtual instance object CallDefaultErased(
-            |        object[] 'args', int32 'mask') cil managed
+            |        object[] 'args', class Kotlin.IntArray 'masks') cil managed
             |    {
             |      .maxstack 1
             |      ldstr "Callable has no optional arguments."
@@ -3077,6 +3103,56 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |
+            |    .method public hidebysig static bool 'IsFunctionOfArity'(
+            |        object 'value', int32 'arity') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst Kotlin.FunctionN
+            |      dup
+            |      brfalse.s IL_functionArityFalse
+            |      callvirt instance int32 Kotlin.FunctionN::get_arity()
+            |      ldarg.1
+            |      ceq
+            |      ret
+            |IL_functionArityFalse:
+            |      pop
+            |      ldc.i4.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static object 'CheckFunctionCast'(
+            |        object 'value', int32 'arity') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      brfalse.s IL_functionCastValid
+            |      ldarg.0
+            |      ldarg.1
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'IsFunctionOfArity'(object, int32)
+            |      brtrue.s IL_functionCastValid
+            |      newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor()
+            |      throw
+            |IL_functionCastValid:
+            |      ldarg.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static object 'SafeFunctionCast'(
+            |        object 'value', int32 'arity') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'IsFunctionOfArity'(object, int32)
+            |      brfalse.s IL_functionSafeCastNull
+            |      ldarg.0
+            |      ret
+            |IL_functionSafeCastNull:
+            |      ldnull
+            |      ret
+            |    }
+            |
             |    .method public hidebysig static bool 'IsGenericArray'(object 'value') cil managed
             |    {
             |      .maxstack 2
@@ -4640,6 +4716,21 @@ $callableInvokerCasesIl
         "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"IsCharSequence".toIlIdentifier()}(object)"
+
+    val isFunctionOfArityCallInstruction: String =
+        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"IsFunctionOfArity".toIlIdentifier()}(object, int32)"
+
+    val checkFunctionCastCallInstruction: String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"CheckFunctionCast".toIlIdentifier()}(object, int32)"
+
+    val safeFunctionCastCallInstruction: String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"SafeFunctionCast".toIlIdentifier()}(object, int32)"
 
     val isGenericArrayCallInstruction: String =
         "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
