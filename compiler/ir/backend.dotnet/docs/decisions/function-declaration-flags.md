@@ -2,7 +2,7 @@
 
 - Status: Accepted (pre-ABI)
 - Scope: `KFunction.isInline`, `isExternal`, `isOperator`, `isInfix`, and
-  `isSuspend` on the admitted `KFunction0` through `KFunction3` closure
+  `isSuspend` on the admitted fixed `KFunction0` through `KFunction22` closure
 - Depends on:
   [`draft-adr-callable-and-reference-abi.md`](draft-adr-callable-and-reference-abi.md)
   and the declaration-owned callable signature decisions
@@ -22,7 +22,7 @@ than inferring Kotlin metadata from emitted bytecode.
 
 .NET has enough declaration IR to provide the same surface without making CLR
 reflection authoritative. The extension is useful on every supported
-`KFunction0` through `KFunction3`, including the zero-argument form; arity does
+`KFunction0` through `KFunction22`, including the zero-argument form; arity does
 not own or alter any flag.
 
 ## Decision
@@ -51,7 +51,7 @@ not be special-cased in callable-reference lowering.
 ### Publish one erased KFunction capability
 
 The platform actual `KFunction<R>` declares the five properties once.
-Synthetic `KFunction0` through `KFunction3` inherit them logically; the
+Synthetic `KFunction0` through `KFunction22` inherit them logically; the
 physical target maps every arity to the same non-generic `Kotlin.KFunction`
 interface. The existing private `FunctionReferenceBase.flags` carrier stores
 five additional declaration bits selected from the exact target. Its five
@@ -112,7 +112,7 @@ mapping must be reusable by normal calls and callable reflection alike.
 1. `reflectionTargetSymbol`, not a generated `invoke`, owns every flag.
 2. KLIB/importer semantic IR is authoritative; CLR metadata is at most exact
    importer evidence for a foreign declaration.
-3. `KFunction0` through `KFunction3` inherit one shared property and base-getter
+3. `KFunction0` through `KFunction22` inherit one shared property and base-getter
    contract.
 4. Constructors report all five flags false.
 5. Resolved inherited operator/infix semantics survive separate compilation.
@@ -123,8 +123,9 @@ mapping must be reusable by normal calls and callable reflection alike.
 
 ## Verification
 
-The gate covers an explicitly typed `KFunction0`, ordinary `KFunction3`,
-inline, inherited operator, infix, constructor, and negative flag shapes;
+The gate covers an explicitly typed `KFunction0`, ordinary `KFunction3`, and
+high-arity `KFunction22` references; inline, inherited operator, infix,
+constructor, and negative flag shapes;
 both FIR parsers and CLR profiles; emitted interface calls, base flag bits, and
 inherited final getters;
 consumer-created references from KLIB; producer-created references crossing a

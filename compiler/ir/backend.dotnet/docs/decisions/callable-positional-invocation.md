@@ -6,8 +6,8 @@
 - Depends on: [`draft-adr-callable-and-reference-abi.md`](draft-adr-callable-and-reference-abi.md)
   and [`callable-parameters.md`](callable-parameters.md)
 - Does not enable: `callBy`, callable lookup, member enumeration, accessor
-  objects, suspend callable invocation, or arities above the admitted
-  `Function0` through `Function3` closure
+  objects, suspend callable invocation, or the vararg big-arity representation
+  for arity 23 and above
 
 ## Cross-target contract
 
@@ -142,11 +142,12 @@ by the positional adapter.
 
 ## Verification
 
-The gate covers arities zero through three; functions, constructors,
+The gate covers fixed arities zero through twenty-two; functions, constructors,
 properties, inner constructors, bound and unbound member/extension receivers;
 virtual dispatch; generic, primitive, nullable, Unit, Nothing/throwing, default,
 and vararg shapes; exact wrong-count text; wrong argument types; unchanged
 target exception identity; local delegated-property failure; separate KLIB
 production/consumption; imported CLR methods, properties, and ParamArray; the
 physical C# `Call(object[])` view; both FIR parsers; both CLR profiles; emitted
-IL; runtime-surface version skew; and the full audited aggregate.
+IL; runtime-surface version skew; producer- and consumer-created `KFunction22`
+references; and the full audited aggregate.

@@ -159,16 +159,17 @@ parameter order through the existing erased `FunctionN` capability. Runtime
 surface level 22 validates count and dispatches without CLR member discovery;
 defaults remain explicit, a vararg is one array argument, property call means
 getter, and target exceptions keep identity. The `callBy` default-mask/omission
-tranche is now complete at runtime surface 23 for the admitted `KFunction0`
-through `KFunction3` closure: it uses exact parameter identity, JVM
-omission/error behavior, fresh exact empty varargs, and the shared static
-class/default-dispatch ABI across separate libraries. Library ABI 22 keeps
+tranche is now complete for the fixed `KFunction0` through `KFunction22`
+closure. Runtime surface 27 adds the remaining erased execution interfaces;
+named invocation uses exact parameter identity, JVM omission/error behavior,
+fresh exact empty varargs, and the shared static class/default-dispatch ABI
+across separate libraries. Library ABI 22 keeps
 Kotlin-owned class parameters erased on that helper while retaining genuine
 method generics. The tranche introduces neither CLR member lookup nor a
 reflection-owned mask ABI.
 
 The five JVM-shaped `KFunction` declaration flags now form one property
-capability inherited by every admitted `KFunction0` through `KFunction3`.
+capability inherited by every admitted `KFunction0` through `KFunction22`.
 KLIB/importer IR owns inline, external, operator, infix, and suspend status;
 generated invoke adapters and runtime CLR reflection do not reconstruct it.
 Constructors and ordinary admitted CLR interface methods report false. Runtime
@@ -218,8 +219,10 @@ context composition and identity across suspension, balanced interceptor
 release, cross-thread duplicate-resume rejection, both FIR parsers, and
 Framework/CoreCLR execution. Continue from that one architecture, not from
 stdlib allowlists. The complete Kotlin primitive family now executes through
-typed state-machine fields plus the erased continuation boundary. Continue with
-the general callable arities needed by higher-arity suspend function types,
+typed state-machine fields plus the erased continuation boundary. Fixed
+callable arities match Common/JVM through physical `Function22`, including
+logical suspend arity 21. Continue with the arity-23-and-above vararg
+`FunctionN` representation needed by big-arity ordinary and suspend callables,
 default/interface-bridge and reflective suspend-member shapes, stale ABI, and
 residual-IR/physical-ABI assertions. Prefer
 unchanged shared coroutine tests and add target-owned tests only for CLR

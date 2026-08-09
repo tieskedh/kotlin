@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_EXACT_CALL
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
+import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrField
@@ -1370,13 +1371,17 @@ internal class DotNetIlExpressionCodegen(
     private fun IrType.dotNetKFunctionExecutionArityOrNull(): Int? =
         (this as? IrSimpleType)?.let { simpleType ->
             (simpleType.classifier.owner as? IrClass)?.dotNetFixedKFunctionArityOrNull()
-                ?: simpleType.arguments.size.takeIf { isKSuspendFunction() && it in 1..3 }
+                ?: simpleType.arguments.size.takeIf {
+                    isKSuspendFunction() && it in 1 until BuiltInFunctionArity.BIG_ARITY
+                }
         }
 
     private fun IrType.dotNetFunctionExecutionArityOrNull(): Int? =
         (this as? IrSimpleType)?.let { simpleType ->
             (simpleType.classifier.owner as? IrClass)?.dotNetFixedFunctionArityOrNull()
-                ?: simpleType.arguments.size.takeIf { isSuspendFunction() && it in 1..3 }
+                ?: simpleType.arguments.size.takeIf {
+                    isSuspendFunction() && it in 1 until BuiltInFunctionArity.BIG_ARITY
+                }
         }
 
     /**

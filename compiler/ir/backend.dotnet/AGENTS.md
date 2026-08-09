@@ -572,8 +572,9 @@ See the
   object-shaped. Only true reflective reference classes implement the slot;
   internal getter/adaptation callable helpers that share
   `FunctionReferenceBase` must not become KCallable accidentally.
-  `KCallable.callBy` extends the same parameter-identity graph for the admitted
-  `KFunction0` through `KFunction3` closure. Map presence distinguishes an
+  `KCallable.callBy` extends the same parameter-identity graph for the Common
+  fixed-arity `KFunction0` through `KFunction22` closure. Map presence
+  distinguishes an
   explicit null from omission; absent optional values reuse the shared
   default-argument lowering; absent varargs receive a fresh exact array; and
   missing required parameters follow the JVM failure contract. Ordinary class
@@ -583,7 +584,7 @@ See the
   layout. The JVM-shaped `KFunction` declaration flags (`isInline`,
   `isExternal`, `isOperator`, `isInfix`, and `isSuspend`) are one shared
   property capability inherited by every admitted `KFunction0` through
-  `KFunction3`. Read them only from the exact KLIB/importer-IR reflection
+  `KFunction22`. Read them only from the exact KLIB/importer-IR reflection
   target; generated invoke adapters and runtime CLR reflection are never flag
   authority. Store the facts in the existing private reference-flag carrier
   and inherit its virtual-final getters; do not emit five getter/property pairs
@@ -918,13 +919,24 @@ the ordinary target representation lowerings. Do not add coroutine-specific
 boxing, numeric widening, or carrier classes. The selected matrix covers every
 Kotlin primitive, including the distinct CLR `float32` and `float64` carriers.
 
-The unchanged `suspendFunctionTypeCall/manyParameters.kt` probe remains locked
-by the general fixed-arity callable boundary: its logical suspend extension
-needs physical `Function5` after appending the continuation, while the current
-runtime/compiler closure ends at `Function3`. Extend ordinary functions,
-`KFunctionN`, `KSuspendFunctionN`, runtime interfaces, callable objects,
-references, invocation, and physical validation as one callable-arity feature.
-Never introduce a coroutine-only `Function5` or adapter to admit this test.
+The fixed callable closure follows Common's `BuiltInFunctionArity.BIG_ARITY`
+boundary: `Function0` through `Function22` are distinct erased Kotlin runtime
+interfaces, while arity 23 and above belongs to the separate vararg `FunctionN`
+model. Extend ordinary functions, `KFunctionN`, `KSuspendFunctionN`, runtime
+interfaces, callable objects, references, invocation, reflection, and physical
+validation together. A logical suspend callable consumes one physical position
+for its appended continuation, so logical suspend arity 21 is the largest fixed
+shape. Never introduce a coroutine-only callable interface to admit a test.
+
+Reflective default invocation must scale linearly with optional-parameter count.
+Generate one all-omitted IR template, let the shared Common default-argument
+lowerings choose the authoritative dispatcher and placeholder layout, and patch
+that dispatcher call with the runtime omission mask afterwards. Never recreate
+the former one-helper-per-omission-combination design: at 22 optional parameters
+it would synthesize more than four million helpers. Fixed erased execution is
+the Kotlin identity closure; `ExactFunction0..3`, typed-argument capabilities,
+and C# delegates remain separately justified optimizations/exports and do not
+grow merely because canonical fixed arity grows.
 
 A direct suspend callable reference has no generated lambda state-machine
 object to carry interception state. Following the JS handling of KT-55869, the
@@ -1019,6 +1031,13 @@ runners live under `build/tests-gen` and are not committed. To update an
 IL-text golden, change the `.kt`, run the scoped test with
 `-Pkotlin.test.update.test.data=true`, then read and assemble the resulting
 `.txt`; generated goldens can faithfully preserve broken IL.
+
+Every model root in one generated JUnit5 suite needs a unique `testClassName`.
+When two selected directories share the same leaf name (for example `box/bridges`
+and `box/coroutines/bridges`), assign an explicit stable class name rather than
+letting the generator unfold the second model into duplicate nested classes.
+Treat duplicate generated runner types as a model-identity error, not as a
+backend compiler failure.
 
 When invoking that property from PowerShell, pass it as one quoted native
 argument before the task, for example

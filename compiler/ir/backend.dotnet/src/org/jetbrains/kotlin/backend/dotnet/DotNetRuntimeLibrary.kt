@@ -1,6 +1,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.annotations.TestOnly
+import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.config.DotNetTarget
 import java.io.File
@@ -9,7 +10,7 @@ import java.io.File
  * The first physical Kotlin/.NET runtime boundary.
  *
  * The assembly boundary was established before its first public ABI candidate types. It now owns
- * the fixed, physically erased Function0/1/2/3 interfaces, the orthogonal KCallable/KFunction
+ * the fixed, physically erased Function0..22 interfaces, the orthogonal KCallable/KFunction
  * reflection view, erased KProperty0/1/2 identities, the split Iterator/ListIterator/Iterable/
  * Collection/List execution interfaces,
  * the singleton Unit value required when a callable result crosses the object-shaped invocation
@@ -230,6 +231,7 @@ internal object DotNetRuntimeLibrary {
         )
         val kClassTypesIl = DotNetKClassRuntime.kotlinTypesIl(coreLibraryReference)
         val throwableExceptionTypesIl = DotNetThrowableRuntime.exceptionTypesIl(coreLibraryReference)
+        val fixedFunctionTypesIl = fixedFunctionTypesIl()
         return """
 $assemblyReferenceIl
         .assembly Kotlin.Runtime
@@ -1091,37 +1093,7 @@ $throwableExceptionTypesIl
             }
           }
 
-          .class interface public abstract auto ansi Function0
-                 implements Kotlin.Function
-          {
-            .method public hidebysig newslot abstract virtual instance object Invoke() cil managed
-            {
-            }
-          }
-
-          .class interface public abstract auto ansi Function1
-                 implements Kotlin.Function
-          {
-            .method public hidebysig newslot abstract virtual instance object Invoke(object p1) cil managed
-            {
-            }
-          }
-
-          .class interface public abstract auto ansi Function2
-                 implements Kotlin.Function
-          {
-            .method public hidebysig newslot abstract virtual instance object Invoke(object p1, object p2) cil managed
-            {
-            }
-          }
-
-          .class interface public abstract auto ansi Function3
-                 implements Kotlin.Function
-          {
-            .method public hidebysig newslot abstract virtual instance object Invoke(object p1, object p2, object p3) cil managed
-            {
-            }
-          }
+$fixedFunctionTypesIl
 
           // Capability arm of the classified Kotlin CharSequence carrier. System.String is the
           // other arm and deliberately cannot implement this interface; logical CharSequence
@@ -1631,7 +1603,21 @@ $throwableExceptionTypesIl
         coreLibraryReference,
         coreLibrary.editorBrowsableReference,
     )
-}
+    }
+
+    private fun fixedFunctionTypesIl(): String =
+        (0 until BuiltInFunctionArity.BIG_ARITY).joinToString("\n\n") { arity ->
+            val parameters = (1..arity).joinToString(", ") { index -> "object p$index" }
+            """
+          .class interface public abstract auto ansi Function$arity
+                 implements Kotlin.Function
+          {
+            .method public hidebysig newslot abstract virtual instance object Invoke($parameters) cil managed
+            {
+            }
+          }
+            """.trimIndent()
+        }
 
     private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
 }

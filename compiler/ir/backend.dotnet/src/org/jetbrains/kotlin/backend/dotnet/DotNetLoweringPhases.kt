@@ -44,9 +44,10 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetKFunctionInvokeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationPopupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
-import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPropertyReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrivateNestedAccessLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrimitiveRangeUntilLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPropertyReferenceLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReflectiveDefaultMaskLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetRenameFieldsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReifiedFunctionLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReturnableBlockLowering
@@ -221,6 +222,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // masked dispatchers into a compiler-reserved nested helper, and redirect calls to its static
     // methods with the interface receiver explicit. This preserves the Framework 4.8 floor.
     ::DotNetInterfaceDefaultArgumentsLowering,
+    // Kotlin reflection uses an exposed-position mask, while the Common dispatcher uses its own
+    // receiver-free parameter mask. Translate between them only after class/interface lowering
+    // has selected the final helper, keeping generated size linear through Function22.
+    ::DotNetReflectiveDefaultMaskLowering,
     // Apply the erased-identity/typed-member split uniformly to module, library, and runtime-owned
     // generic interfaces, including Iterator/Iterable. Every implementation receives its
     // erased MethodImpl bridge from this one lowering. An independently truthful mapped host

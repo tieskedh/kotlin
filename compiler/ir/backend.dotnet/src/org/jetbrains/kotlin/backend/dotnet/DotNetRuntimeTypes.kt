@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
@@ -27,7 +28,7 @@ import org.jetbrains.kotlin.types.Variance
  * Kotlin-owned erased runtime identities evaluated by this POC.
  *
  * Common IR speaks in synthetic `kotlin.Function$arity` and `kotlin.reflect.KFunction$arity`
- * classifiers. This registry maps fixed execution arities 0..3 to erased Kotlin-owned CLR
+ * classifiers. This registry maps fixed execution arities 0..22 to erased Kotlin-owned CLR
  * interfaces and every supported KFunction arity to one orthogonal, non-generic reflection view.
  * FunctionN uses object-shaped Invoke slots, following the JVM executable descriptor rather than
  * CLR generic variance: Kotlin's logical type arguments remain in IR/metadata, while every legal
@@ -490,12 +491,7 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
-    private val fixedFunctionClasses = listOf(
-        functionClassInfo(arity = 0),
-        functionClassInfo(arity = 1),
-        functionClassInfo(arity = 2),
-        functionClassInfo(arity = 3),
-    )
+    private val fixedFunctionClasses = List(BuiltInFunctionArity.BIG_ARITY, ::functionClassInfo)
 
     private val exactFunctionClasses = List(4) { arity ->
         DotNetIlClassInfo(
@@ -1132,7 +1128,9 @@ private val IrClass.isDotNetKMutablePropertyBase: Boolean
 internal fun IrClass.dotNetFixedFunctionArityOrNull(): Int? {
     val fqName = fqNameWhenAvailable?.asString() ?: return null
     val arity = fqName.removePrefix("kotlin.Function").toIntOrNull() ?: return null
-    return arity.takeIf { it in 0..3 && typeParameters.size == it + 1 }
+    return arity.takeIf {
+        it in 0 until BuiltInFunctionArity.BIG_ARITY && typeParameters.size == it + 1
+    }
 }
 
 internal fun IrClass.dotNetFixedKFunctionArityOrNull(): Int? {
@@ -1142,7 +1140,7 @@ internal fun IrClass.dotNetFixedKFunctionArityOrNull(): Int? {
     // built-ins do not reliably carry their logical type parameters on the IrClass itself.
     // The instantiated IrSimpleType still carries, and mapCallableType validates, arity + 1
     // arguments. Class identity therefore comes from the canonical built-in FQ name here.
-    return arity.takeIf { it in 0..3 }
+    return arity.takeIf { it in 0 until BuiltInFunctionArity.BIG_ARITY }
 }
 
 internal fun IrClass.dotNetFixedKPropertyArityOrNull(): Int? {

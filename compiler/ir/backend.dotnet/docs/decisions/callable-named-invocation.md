@@ -1,6 +1,8 @@
 # Named callable invocation
 
 Library ABI version: 22. Runtime surface level: 23.
+The current fixed-arity closure does not advance library ABI 27 and requires
+runtime surface level 27 for `Function4` through `Function22`.
 
 - Status: Accepted (pre-ABI)
 - Scope: `KCallable.callBy` on the callable-reference surface already admitted
@@ -9,7 +11,7 @@ Library ABI version: 22. Runtime surface level: 23.
   and [`callable-parameters.md`](callable-parameters.md)
 - Does not enable: runtime member lookup, suspend invocation, arbitrary
   `KCallable` implementations, annotation-constructor callable references, or
-  callable arities above `Function0` through `Function3`
+  the vararg big-arity representation for arity 23 and above
 
 ## Cross-target contract
 
@@ -49,17 +51,22 @@ used unchanged.
 
 ### Reuse ordinary default-call lowering
 
-A generated direct reference supplies a protected implementation capability
-for each non-zero combination of exposed optional positions. Each branch is
-an ordinary IR call in which precisely those arguments are absent. The later
-shared `DefaultParameterInjector` rewrites it to the established masked
-default dispatcher, just as it does for source calls.
+A generated direct reference supplies one protected implementation capability
+containing an ordinary IR call with every optional argument absent. The later
+shared default-argument and class/interface-default lowerings rewrite that
+template to the same masked dispatcher used by source calls. A late .NET pass
+then replaces only the dispatcher placeholders with selections from the
+runtime argument array and translates the exposed-position omission mask to
+the Common receiver-free physical mask layout.
 
-The currently admitted `KFunction0` through `KFunction3` closure bounds this
-to at most seven branches. Constructors, inherited defaults, interface
-defaults, separate libraries, placeholder values, and virtual dispatch reuse
-the ordinary compiler path. No runtime reflection and no reflection-private
-constructor/default ABI are introduced.
+This produces one body plus work linear in the number of optional positions
+for the admitted `KFunction0` through `KFunction22` closure. It deliberately
+does not generate one branch per omission combination: 22 optional parameters
+would otherwise require more than four million helpers. Constructors,
+inherited defaults, interface defaults, separate libraries, placeholder
+values, and virtual dispatch still reuse the ordinary compiler path. No
+runtime reflection and no reflection-private constructor/default ABI are
+introduced.
 
 That separate-compilation proof exposed a more general class-default ABI
 defect: the Common factory's instance-shaped class dispatcher could execute
@@ -109,8 +116,9 @@ second authority and would not describe Kotlin default dispatch reliably.
 
 Rejected. The shared Kotlin default-argument lowering already owns functions,
 constructors, inherited defaults, masks, marker parameters, and library calls.
-The bounded branch expansion feeds it ordinary IR instead of reproducing that
-logic in Runtime or the CIL emitter.
+The one all-omitted template lets it select the dispatcher before the target
+patches runtime values into that selected call; Runtime and the CIL emitter do
+not reproduce default-dispatch policy.
 
 ### Put `callBy` policy in target-framework profiles
 
@@ -139,6 +147,8 @@ avoids requiring a second map traversal.
 10. Ordinary class defaults have one static cross-module compiler ABI shared
     by source calls and reflective calls; its explicit receiver preserves
     virtual dispatch.
+11. Generated reflective-default code grows linearly, not combinatorially, in
+    the number of optional parameters.
 
 ## Verification
 
@@ -151,4 +161,6 @@ constructors; properties and local delegated properties; exception identity;
 separate portable KLIB consumption; imported CLR callables without invented
 optional semantics; erased generic class owners beside genuine generic methods;
 both FIR parsers; both CLR profiles; emitted IL; runtime surface skew; and the
-full audited aggregate.
+full audited aggregate. Fixed-arity scale is pinned by a 22-parameter function
+whose dependent defaults can all be omitted or selectively supplied, plus
+producer- and consumer-created references across separate DLLs.

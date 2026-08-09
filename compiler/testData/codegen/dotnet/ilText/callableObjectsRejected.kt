@@ -1,7 +1,7 @@
 // Logical function type arguments erase from CLR signatures. As on the JVM, declarations that
 // differ only in those arguments collide after erasure and must be rejected before IL emission.
-// Arity above 3 remains outside this candidate slice. Suspend callables now compose with the
-// coroutine lowering and survive independently alongside the rejected erased overload pair.
+// Fixed arities through 22 survive independently alongside the rejected erased overload pair.
+// Suspend callables likewise compose with coroutine lowering rather than changing overload identity.
 
 fun consume(function: () -> Int): Int = function()
 

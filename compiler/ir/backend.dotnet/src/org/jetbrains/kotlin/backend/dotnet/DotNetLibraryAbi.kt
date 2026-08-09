@@ -382,7 +382,7 @@ object DotNetLibraryAbiCodec {
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
     const val PHYSICAL_NAME_GRAMMAR_VERSION = "3"
     const val PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY = "dotnet_physical_name_grammar_version"
-    const val CURRENT_RUNTIME_SURFACE_LEVEL = 26
+    const val CURRENT_RUNTIME_SURFACE_LEVEL = 27
     const val RUNTIME_SURFACE_LEVEL_PROPERTY = "dotnet_runtime_surface_level"
     const val RUNTIME_SURFACE_METADATA_KEY = "Kotlin.RuntimeSurfaceLevel"
     const val IMPLEMENTATION_SHA256_PROPERTY = "dotnet_implementation_sha256"
