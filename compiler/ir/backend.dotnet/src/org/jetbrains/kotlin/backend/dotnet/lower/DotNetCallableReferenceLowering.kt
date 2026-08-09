@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetCallableDeclarationFlags
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericArray
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.backend.dotnet.dotNetFixedFunctionArityOrNull
+import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrStatement
@@ -221,7 +222,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         val reflectiveType = reference.type.takeIf { it.isKFunction() && !it.isKSuspendFunction() } as? IrSimpleType
         val erasedExecutionType = reflectiveType?.let {
             val arity = it.arguments.size - 1
-            if (arity !in 0..3) null
+            if (arity !in 0 until BuiltInFunctionArity.BIG_ARITY) null
             else context.irBuiltIns.functionN(arity).symbol.typeWithArguments(it.arguments)
         }
         return listOfNotNull(erasedExecutionType, exactType, typedArgumentsType)
@@ -232,7 +233,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             .takeIf { it.isKFunction() && !it.isKSuspendFunction() } as? IrSimpleType
         if (reflectiveType != null) {
             val arity = reflectiveType.arguments.size - 1
-            if (arity in 0..3) {
+            if (arity in 0 until BuiltInFunctionArity.BIG_ARITY) {
                 val executionInvoke = context.irBuiltIns.functionN(arity).invokeFun
                     ?: error("Internal .NET backend error: kotlin.Function$arity has no invoke member")
                 if (executionInvoke.symbol !in invokeFunction.overriddenSymbols) {
@@ -614,22 +615,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     ) {
         val base = context.functionReferenceSymbols.callDefaultErased
         val baseParameters = base.parameters.filter { it.kind == IrParameterKind.Regular }
-        val helpers = buildList {
-            val optionalMask = optionalIndices.fold(0) { mask, index -> mask or (1 shl index) }
-            for (mask in 1 until (1 shl exposedParameters.size)) {
-                if (mask and optionalMask != mask) continue
-                add(mask to addDefaultInvocationHelper(
-                    functionReferenceClass,
-                    reference,
-                    target,
-                    exposedParameters,
-                    executionInvoke,
-                    mask,
-                    baseParameters[0],
-                ))
-            }
-        }
-        functionReferenceClass.addFunction {
+        val capability = functionReferenceClass.addFunction {
             startOffset = reference.startOffset
             endOffset = reference.endOffset
             origin = IrDeclarationOrigin.DEFINED
@@ -641,69 +627,64 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             overriddenSymbols = listOf(base.symbol)
             parameters += createDispatchReceiverParameterWithClassParent()
             parameters += baseParameters.map { parameter -> parameter.copyTo(this) }
-            val args = parameters.filter { it.kind == IrParameterKind.Regular }[0]
-            val mask = parameters.filter { it.kind == IrParameterKind.Regular }[1]
-            body = context.createIrBuilder(symbol).irBlockBody {
-                val branches = helpers.map { entry ->
-                    val value = entry.first
-                    val helper = entry.second
-                    irBranch(
-                        irEquals(irGet(mask), irInt(value)),
-                        irCall(helper).apply {
-                            arguments[0] = irGet(this@capability.dispatchReceiverParameter!!)
-                            arguments[1] = irGet(args)
-                        },
-                    )
-                } + irElseBranch(
-                    irCall(context.irBuiltIns.illegalArgumentExceptionSymbol).apply {
-                        arguments[0] = irString("Invalid reflective default-argument mask.")
-                    }
-                )
-                +irReturn(irWhen(context.irBuiltIns.anyNType, branches))
-            }
         }
+        val exposedIndexBySymbol = exposedParameters.withIndex().associate { indexed ->
+            indexed.value.symbol to indexed.index
+        }
+        var physicalMaskIndex = -1
+        val physicalMaskIndexBySymbol = target.parameters.mapNotNull { parameter ->
+            if (parameter.participatesInDefaultArgumentMask()) physicalMaskIndex++
+            exposedIndexBySymbol[parameter.symbol]?.let { exposedIndex ->
+                parameter.symbol to DotNetReflectiveDefaultParameter(
+                    exposedIndex = exposedIndex,
+                    targetParameterIndex = parameter.indexInParameters,
+                    physicalMaskIndex = physicalMaskIndex,
+                )
+            }
+        }.toMap()
+        val optionalParameters = optionalIndices.map { exposedIndex ->
+            val parameter = exposedParameters[exposedIndex]
+            physicalMaskIndexBySymbol[parameter.symbol]
+                ?: error("Internal .NET backend error: optional reflective parameter is not in its target")
+        }
+        capability.dotNetReflectiveDefaultCallPlan = DotNetReflectiveDefaultCallPlan(
+            target = target,
+            optionalParameters = optionalParameters,
+        )
+        populateDefaultCallCapability(
+            capability,
+            target,
+            exposedParameters,
+            executionInvoke,
+            optionalIndices,
+        )
     }
 
-    private fun addDefaultInvocationHelper(
-        functionReferenceClass: IrClass,
-        reference: IrRichFunctionReference,
+    private fun populateDefaultCallCapability(
+        capability: IrSimpleFunction,
         target: IrFunction,
         exposedParameters: List<IrValueParameter>,
         executionInvoke: IrSimpleFunction,
-        mask: Int,
-        baseArgumentsParameter: IrValueParameter,
-    ): IrSimpleFunction {
-        val helper = functionReferenceClass.addFunction {
-            startOffset = reference.startOffset
-            endOffset = reference.endOffset
-            origin = IrDeclarationOrigin.DEFINED
-            name = Name.identifier("CallDefaultMask$mask")
-            visibility = DescriptorVisibilities.PRIVATE
-            modality = Modality.FINAL
-            returnType = context.irBuiltIns.anyNType
-        }.apply {
-            parameters += createDispatchReceiverParameterWithClassParent()
-            parameters += baseArgumentsParameter.copyTo(this)
-        }
-        val arguments = helper.parameters.single { it.kind == IrParameterKind.Regular }
+        optionalIndices: List<Int>,
+    ) {
+        val arguments = capability.parameters.filter { it.kind == IrParameterKind.Regular }[0]
         val executionParameters = executionInvoke.parameters.filter { it.kind == IrParameterKind.Regular }
         val executionParameterIndex = executionParameters.withIndex().associate { it.value.symbol to it.index }
-        val omittedTargetParameters = exposedParameters.indices
-            .filter { index -> mask and (1 shl index) != 0 }
+        val omittedTargetParameters = optionalIndices
             .mapTo(linkedSetOf()) { index -> exposedParameters[index].symbol }
-        val body = executionInvoke.body?.deepCopyWithSymbols(helper)
+        val body = executionInvoke.body?.deepCopyWithSymbols(capability)
             ?: error("Internal .NET backend error: KFunction callBy execution method has no body")
         var matchingCalls = 0
         val transformer = object : IrElementTransformerVoid() {
             override fun visitGetValue(expression: IrGetValue): IrExpression {
                 executionInvoke.dispatchReceiverParameter?.let { receiver ->
                     if (expression.symbol == receiver.symbol) {
-                        return context.createIrBuilder(helper.symbol).at(expression)
-                            .irGet(helper.dispatchReceiverParameter!!)
+                        return context.createIrBuilder(capability.symbol).at(expression)
+                            .irGet(capability.dispatchReceiverParameter!!)
                     }
                 }
                 val index = executionParameterIndex[expression.symbol] ?: return expression
-                val builder = context.createIrBuilder(helper.symbol).at(expression)
+                val builder = context.createIrBuilder(capability.symbol).at(expression)
                 val arrayGet = context.irBuiltIns.arrayClass.owner.functions.single { function ->
                     function.name.asString() == "get"
                 }
@@ -726,8 +707,8 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             override fun visitReturn(expression: IrReturn): IrExpression {
                 val transformed = super.visitReturn(expression) as IrReturn
                 if (transformed.returnTargetSymbol != executionInvoke.symbol) return transformed
-                transformed.returnTargetSymbol = helper.symbol
-                val builder = context.createIrBuilder(helper.symbol).at(transformed)
+                transformed.returnTargetSymbol = capability.symbol
+                val builder = context.createIrBuilder(capability.symbol).at(transformed)
                 transformed.value = builder.irImplicitCast(transformed.value, context.irBuiltIns.anyNType)
                 return transformed
             }
@@ -737,9 +718,14 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             "Internal .NET backend error: reflective default call for '${target.name}' found " +
                     "$matchingCalls target calls instead of one"
         }
-        helper.body = body
-        return helper
+        capability.body = body
     }
+
+    private fun IrValueParameter.participatesInDefaultArgumentMask(): Boolean =
+        kind != IrParameterKind.DispatchReceiver &&
+                kind != IrParameterKind.ExtensionReceiver &&
+                origin != IrDeclarationOrigin.MOVED_DISPATCH_RECEIVER &&
+                origin != IrDeclarationOrigin.MOVED_EXTENSION_RECEIVER
 
     private fun addEmptyVarargCapability(
         functionReferenceClass: IrClass,

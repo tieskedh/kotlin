@@ -1,5 +1,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
+
 /**
  * The hand-written IL for compiler support that lives in the Kotlin.Runtime assembly.
  *
@@ -109,6 +111,10 @@ internal object DotNetRuntimeLibraryHelpers {
             coreLibraryReference,
             compilerAbiTypeAttributesIl.replace("            |", ""),
         ).prependIndent("            |")
+        val callableInvokerSwitchLabelsIl = (0 until BuiltInFunctionArity.BIG_ARITY)
+            .joinToString(", ") { arity -> "CI_Call$arity" }
+        val callableInvokerCasesIl = (0 until BuiltInFunctionArity.BIG_ARITY)
+            .joinToString("\n") { arity -> callableInvokerCaseIl(arity) }
         return """
             |.namespace Kotlin.Runtime.Internal
             |{
@@ -275,7 +281,7 @@ $kClassSupportTypesIl
             |    .method public hidebysig static object Invoke(
             |        object 'callable', int32 'arity', object[] 'args') cil managed
             |    {
-            |      .maxstack 5
+            |      .maxstack ${BuiltInFunctionArity.BIG_ARITY + 1}
             |      .locals init ([0] int32 actual)
             |      ldarg.2
             |      ldlen
@@ -297,48 +303,11 @@ $kClassSupportTypesIl
             |      throw
             |    CI_ArityCorrect:
             |      ldarg.1
-            |      switch (CI_Call0, CI_Call1, CI_Call2, CI_Call3)
+            |      switch ($callableInvokerSwitchLabelsIl)
             |      ldstr "Callable arity is not supported by this Kotlin/.NET runtime."
             |      newobj instance void ${coreLibraryReference}System.NotSupportedException::.ctor(string)
             |      throw
-            |    CI_Call0:
-            |      ldarg.0
-            |      castclass Kotlin.Function0
-            |      callvirt instance object Kotlin.Function0::Invoke()
-            |      ret
-            |    CI_Call1:
-            |      ldarg.0
-            |      castclass Kotlin.Function1
-            |      ldarg.2
-            |      ldc.i4.0
-            |      ldelem.ref
-            |      callvirt instance object Kotlin.Function1::Invoke(object)
-            |      ret
-            |    CI_Call2:
-            |      ldarg.0
-            |      castclass Kotlin.Function2
-            |      ldarg.2
-            |      ldc.i4.0
-            |      ldelem.ref
-            |      ldarg.2
-            |      ldc.i4.1
-            |      ldelem.ref
-            |      callvirt instance object Kotlin.Function2::Invoke(object, object)
-            |      ret
-            |    CI_Call3:
-            |      ldarg.0
-            |      castclass Kotlin.Function3
-            |      ldarg.2
-            |      ldc.i4.0
-            |      ldelem.ref
-            |      ldarg.2
-            |      ldc.i4.1
-            |      ldelem.ref
-            |      ldarg.2
-            |      ldc.i4.2
-            |      ldelem.ref
-            |      callvirt instance object Kotlin.Function3::Invoke(object, object, object)
-            |      ret
+$callableInvokerCasesIl
             |    }
             |
             |    .method public hidebysig static object InvokeRequiredBy(
@@ -4603,6 +4572,20 @@ $kClassSupportTypesIl
             |}
             |
         """.trimMargin()
+    }
+
+    private fun callableInvokerCaseIl(arity: Int): String = buildString {
+        appendLine("    CI_Call$arity:")
+        appendLine("      ldarg.0")
+        appendLine("      castclass Kotlin.Function$arity")
+        repeat(arity) { index ->
+            appendLine("      ldarg.2")
+            appendLine("      ldc.i4 $index")
+            appendLine("      ldelem.ref")
+        }
+        val parameterTypes = List(arity) { "object" }.joinToString(", ")
+        appendLine("      callvirt instance object Kotlin.Function$arity::Invoke($parameterTypes)")
+        append("      ret")
     }
 
     /** The cross-assembly call emitted by compiled Kotlin code; one float32 in, one string out. */
