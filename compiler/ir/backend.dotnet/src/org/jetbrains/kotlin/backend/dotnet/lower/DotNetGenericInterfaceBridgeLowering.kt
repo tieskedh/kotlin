@@ -144,6 +144,8 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 declaration.acceptChildrenVoid(this)
             }
         })
+        context.erasedGenericInterfaces += genericInterfaces
+        context.erasedGenericClasses += genericClasses
         fun isMappedKotlinGenericInterface(irClass: IrClass): Boolean =
             irClass in genericInterfaces ||
                     DotNetRuntimeTypes.hasBuiltInGenericInterfaceMapping(irClass) ||
