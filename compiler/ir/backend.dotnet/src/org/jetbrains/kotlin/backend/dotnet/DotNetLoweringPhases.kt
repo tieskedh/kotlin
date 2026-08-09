@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterInjector
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetEnumClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetEnumUsageLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenationLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFunctionNVarargBridgeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInterfaceDefaultArgumentsLowering
@@ -311,6 +312,15 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // DotNetFlattenStringConcatenationLowering for the CLR rendering reason.
     ::DotNetFlattenStringConcatenationLowering,
     ::DotNetStringConcatenationLowering,
+    // Normalize continuation-shaped SuspendFunction/KSuspendFunction invoke tokens after every
+    // ordinary body-producing pass, but before the FunctionN bridge consumes logical execution
+    // arity 23+. The following pass is itself the final callable body producer.
+    ::DotNetSuspendFunctionInvokeLowering,
+    // JVM FunctionNVarargBridgeLowering precedent: after every producer has created its callable
+    // classes and bodies, collapse logical Function23+ invocation to one object[] capability on
+    // the same object. Run before value-class autoboxing so array elements and bridge casts receive
+    // the target's final explicit box/unbox treatment.
+    ::DotNetFunctionNVarargBridgeLowering,
     // Representation transitions must be the last body-wide value-usage rewrite. Shared loop
     // lowering can introduce a substituted `T -> V` IMPLICIT_CAST for `Array<V>.get`, and the
     // string passes can expose additional value consumers. JVM states the same dependency
@@ -318,11 +328,6 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // may produce inline-class values. Running the .NET pass here makes every nominal-box <->
     // exact-carrier edge explicit before CIL emission, including bodies synthesized above.
     ::DotNetValueClassAutoboxingLowering,
-    // Normalize continuation-shaped SuspendFunction/KSuspendFunction invoke tokens only after
-    // every body-producing and body-rewriting phase has run. The class capability is established
-    // with the coroutine declarations above; this last body pass guarantees that no logical
-    // suspend interface member survives into CIL emission.
-    ::DotNetSuspendFunctionInvokeLowering,
     // JVM/JS/Wasm/Native invariant: if a call statically returning Nothing somehow returns
     // (for example from foreign CLR code), throw the dedicated Kotlin exception immediately.
     // Run after every body-producing lowering so calls introduced by bridges/helpers receive it.

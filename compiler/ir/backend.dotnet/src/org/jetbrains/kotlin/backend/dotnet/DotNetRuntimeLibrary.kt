@@ -10,7 +10,8 @@ import java.io.File
  * The first physical Kotlin/.NET runtime boundary.
  *
  * The assembly boundary was established before its first public ABI candidate types. It now owns
- * the fixed, physically erased Function0..22 interfaces, the orthogonal KCallable/KFunction
+ * the physically erased Function0..22 interfaces, the big-arity FunctionN capability, the
+ * orthogonal KCallable/KFunction
  * reflection view, erased KProperty0/1/2 identities, the split Iterator/ListIterator/Iterable/
  * Collection/List execution interfaces,
  * the singleton Unit value required when a callable result crosses the object-shaped invocation
@@ -1605,8 +1606,8 @@ $fixedFunctionTypesIl
     )
     }
 
-    private fun fixedFunctionTypesIl(): String =
-        (0 until BuiltInFunctionArity.BIG_ARITY).joinToString("\n\n") { arity ->
+    private fun fixedFunctionTypesIl(): String = buildString {
+        append((0 until BuiltInFunctionArity.BIG_ARITY).joinToString("\n\n") { arity ->
             val parameters = (1..arity).joinToString(", ") { index -> "object p$index" }
             """
           .class interface public abstract auto ansi Function$arity
@@ -1615,9 +1616,31 @@ $fixedFunctionTypesIl
             .method public hidebysig newslot abstract virtual instance object Invoke($parameters) cil managed
             {
             }
+            }
+            """.trimIndent()
+        })
+        append("\n\n")
+        append(
+            """
+          .class interface public abstract auto ansi FunctionN
+                 implements Kotlin.Function
+          {
+            .method public hidebysig newslot abstract virtual instance object Invoke(object[] 'args') cil managed
+            {
+            }
+
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_arity() cil managed
+            {
+            }
+
+            .property instance int32 arity()
+            {
+              .get instance int32 Kotlin.FunctionN::get_arity()
+            }
           }
             """.trimIndent()
-        }
+        )
+    }
 
     private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
 }

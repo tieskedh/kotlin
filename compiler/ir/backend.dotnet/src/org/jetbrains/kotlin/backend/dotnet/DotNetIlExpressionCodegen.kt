@@ -38,6 +38,7 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
+import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNothing
@@ -299,7 +300,9 @@ internal class DotNetIlExpressionCodegen(
                         expression.type.isDotNetOutProjectedGenericArray()
             if (naturalType != null && naturalType != expectedType && !eraseTransientArrayProjection) {
                 val kFunctionArity = expression.type.dotNetKFunctionExecutionArityOrNull()
-                if (kFunctionArity != null && DotNetRuntimeTypes.isFixedFunctionType(expectedType, kFunctionArity)) {
+                if (kFunctionArity != null &&
+                    expectedType == DotNetRuntimeTypes.functionExecutionType(kFunctionArity)
+                ) {
                     // KFunctionN is a logical subtype of FunctionN, while the erased CLR views
                     // are sibling interfaces on the same generated object. Materialize that
                     // source-level widening as a checked interface view change.
@@ -973,6 +976,40 @@ internal class DotNetIlExpressionCodegen(
                 }
                 return
             }
+            val bigFunctionArity = expression.typeOperand.dotNetBigCallableArityOrNull()
+            if (bigFunctionArity != null) {
+                if (!castType.isDotNetAssignableTo(expectedType)) {
+                    dotNetUnsupported(
+                        "big-arity function cast has inconsistent physical result " +
+                                "${castType.nameInSignature} where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                emitExpression(expression.argument, DotNetIlValueType.Object)
+                if (methodContext.isTerminated) return
+                methodContext.emit("ldc.i4 $bigFunctionArity", pushes = 1)
+                methodContext.emit(
+                    if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                        DotNetRuntimeLibraryHelpers.safeFunctionCastCallInstruction
+                    } else {
+                        DotNetRuntimeLibraryHelpers.checkFunctionCastCallInstruction
+                    },
+                    pops = 2,
+                    pushes = 1,
+                )
+                methodContext.emit(
+                    if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                        "isinst ${castType.nameInSignature}"
+                    } else {
+                        "castclass ${castType.nameInSignature}"
+                    },
+                    pops = 1,
+                    pushes = 1,
+                )
+                if (expression.operator == IrTypeOperator.CAST && !expression.typeOperand.isNullable()) {
+                    emitReferenceNotNullOrThrowNpe()
+                }
+                return
+            }
             val scalarCastType =
                 (castType as? DotNetIlValueType.NullableValue)?.elementType ?: castType
             val boxedScalarTypeRef =
@@ -1120,9 +1157,12 @@ internal class DotNetIlExpressionCodegen(
             }
         } else {
             val kFunctionArity = expression.argument.type.dotNetKFunctionExecutionArityOrNull()
+            val targetsBigArityStub = expression.typeOperand.classOrNull?.owner
+                ?.isDotNetBigArityFunctionN == true
             when {
                 kFunctionArity != null &&
-                        kFunctionArity == expression.typeOperand.dotNetFunctionExecutionArityOrNull() -> {
+                        (kFunctionArity == expression.typeOperand.dotNetFunctionExecutionArityOrNull() ||
+                                targetsBigArityStub && kFunctionArity >= BuiltInFunctionArity.BIG_ARITY) -> {
                     // KFunctionN is physically the non-generic KFunction reflection view, while
                     // execution remains exclusively on the erased FunctionN interface. The same
                     // generated object implements both interfaces. This checked cross-interface
@@ -1250,8 +1290,11 @@ internal class DotNetIlExpressionCodegen(
 
         val exceptionEntry = DotNetMappedExceptions.mappedEntry(expression.typeOperand.classFqName)
         val isClassifiedCharSequence = expression.typeOperand.isDotNetCharSequenceType()
+        val classifiedBigFunctionArity = expression.typeOperand.dotNetBigCallableArityOrNull()
         val runtimeTestType = if (castType is DotNetIlValueType.NullableValue) castType.elementType else castType
-        if (exceptionEntry == null && !isClassifiedCharSequence && !expression.typeOperand.isNullableNothing()) {
+        if (exceptionEntry == null && isClassifiedCharSequence.not() && classifiedBigFunctionArity == null &&
+            !expression.typeOperand.isNullableNothing()
+        ) {
             when (runtimeTestType) {
                 DotNetIlValueType.Boolean,
                 DotNetIlValueType.Int8,
@@ -1349,6 +1392,30 @@ internal class DotNetIlExpressionCodegen(
             nullableJoinLabel?.let(methodContext::emitLabel)
             return
         }
+        if (classifiedBigFunctionArity != null) {
+            if (runtimeTestType != DotNetRuntimeTypes.bigArityFunctionType()) {
+                // KFunction/KSuspendFunction adds an orthogonal reflection identity to the same
+                // FunctionN execution object. Filter that capability first so a plain lambda of
+                // the right arity cannot satisfy a reflective function test.
+                methodContext.emit(
+                    "isinst ${runtimeTestType.nameInSignature}",
+                    pops = 1,
+                    pushes = 1,
+                )
+            }
+            methodContext.emit("ldc.i4 $classifiedBigFunctionArity", pushes = 1)
+            methodContext.emit(
+                DotNetRuntimeLibraryHelpers.isFunctionOfArityCallInstruction,
+                pops = 2,
+                pushes = 1,
+            )
+            if (!positive) {
+                methodContext.emit("ldc.i4.0", pushes = 1)
+                methodContext.emit("ceq", pops = 2, pushes = 1)
+            }
+            nullableJoinLabel?.let(methodContext::emitLabel)
+            return
+        }
         if (runtimeTestType is DotNetIlValueType.ErasedGenericArray) {
             methodContext.emit(
                 DotNetRuntimeLibraryHelpers.isGenericArrayCallInstruction,
@@ -1370,18 +1437,33 @@ internal class DotNetIlExpressionCodegen(
 
     private fun IrType.dotNetKFunctionExecutionArityOrNull(): Int? =
         (this as? IrSimpleType)?.let { simpleType ->
-            (simpleType.classifier.owner as? IrClass)?.dotNetFixedKFunctionArityOrNull()
+            (simpleType.classifier.owner as? IrClass)?.let { owner ->
+                val classifierInfo = typeMapper.classifierInfo(owner)
+                classifierInfo.fixedKFunctionArity ?: classifierInfo.bigKFunctionArity
+            }
                 ?: simpleType.arguments.size.takeIf {
-                    isKSuspendFunction() && it in 1 until BuiltInFunctionArity.BIG_ARITY
+                    isKSuspendFunction() && it >= 1
                 }
         }
 
     private fun IrType.dotNetFunctionExecutionArityOrNull(): Int? =
         (this as? IrSimpleType)?.let { simpleType ->
-            (simpleType.classifier.owner as? IrClass)?.dotNetFixedFunctionArityOrNull()
+            (simpleType.classifier.owner as? IrClass)?.let { owner ->
+                val classifierInfo = typeMapper.classifierInfo(owner)
+                classifierInfo.fixedFunctionArity ?: classifierInfo.bigFunctionArity
+            }
                 ?: simpleType.arguments.size.takeIf {
-                    isSuspendFunction() && it in 1 until BuiltInFunctionArity.BIG_ARITY
+                    isSuspendFunction() && it >= 1
                 }
+        }
+
+    private fun IrType.dotNetBigCallableArityOrNull(): Int? =
+        (this as? IrSimpleType)?.let { simpleType ->
+            (simpleType.classifier.owner as? IrClass)?.let(typeMapper::classifierInfo)?.let { info ->
+                info.bigFunctionArity ?: info.bigKFunctionArity
+            } ?: simpleType.arguments.size.takeIf {
+                (isSuspendFunction() || isKSuspendFunction()) && it >= BuiltInFunctionArity.BIG_ARITY
+            }
         }
 
     /**

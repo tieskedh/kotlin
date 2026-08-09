@@ -29,12 +29,13 @@ import org.jetbrains.kotlin.types.Variance
  *
  * Common IR speaks in synthetic `kotlin.Function$arity` and `kotlin.reflect.KFunction$arity`
  * classifiers. This registry maps fixed execution arities 0..22 to erased Kotlin-owned CLR
- * interfaces and every supported KFunction arity to one orthogonal, non-generic reflection view.
+ * interfaces, big logical arities to one erased FunctionN execution capability, and every
+ * supported KFunction arity to one orthogonal, non-generic reflection view.
  * FunctionN uses object-shaped Invoke slots, following the JVM executable descriptor rather than
  * CLR generic variance: Kotlin's logical type arguments remain in IR/metadata, while every legal
- * function-type variance conversion is the same object reference at runtime. It deliberately
- * does not model the JVM's unrelated high-arity `FunctionN` fallback. CLR delegates remain an
- * interop concern and never appear in Kotlin-to-Kotlin signatures.
+ * function-type variance conversion is the same object reference at runtime. FunctionN follows
+ * the Common/JVM big-arity boundary but remains a capability on that same object. CLR delegates
+ * remain an interop concern and never appear in Kotlin-to-Kotlin signatures.
  * KProperty0/1/2 and their mutable variants use the same erased-identity rule and inherit the
  * matching FunctionN execution view; their Get/Set slots are Kotlin-owned runtime contracts.
  *
@@ -493,6 +494,11 @@ internal object DotNetRuntimeTypes {
 
     private val fixedFunctionClasses = List(BuiltInFunctionArity.BIG_ARITY, ::functionClassInfo)
 
+    private val bigArityFunctionClass = DotNetIlClassInfo(
+        ilClassName = "Kotlin.FunctionN",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
     private val exactFunctionClasses = List(4) { arity ->
         DotNetIlClassInfo(
             ilClassName = "Kotlin.Runtime.Internal.ExactFunction$arity`${arity + 1}",
@@ -525,6 +531,7 @@ internal object DotNetRuntimeTypes {
         fixedFunctionClasses.forEach { classInfo ->
             classInfo.interfaces = listOf(DotNetIlValueType.UserClass(functionBase))
         }
+        bigArityFunctionClass.interfaces = listOf(DotNetIlValueType.UserClass(functionBase))
         kPropertyBase.interfaces = listOf(DotNetIlValueType.UserClass(kCallableBase))
         kMutablePropertyBase.interfaces = listOf(DotNetIlValueType.UserClass(kPropertyBase))
         fixedPropertyClasses.forEachIndexed { arity, classInfo ->
@@ -556,6 +563,7 @@ internal object DotNetRuntimeTypes {
             irClass.dotNetExactFunctionArity != null -> exactFunctionClasses[irClass.dotNetExactFunctionArity!!]
             irClass.dotNetTypedArgumentsFunctionArity != null ->
                 typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
+            irClass.isDotNetBigArityFunctionN == true -> bigArityFunctionClass
             irClass.isDotNetPropertyReferenceFactory == true -> propertyReferenceFactory
             irClass.isDotNetCallableAnnotationFactory == true -> callableAnnotationFactory
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CLASSIFIER -> kClassifierBase
@@ -564,7 +572,8 @@ internal object DotNetRuntimeTypes {
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_TYPE -> kTypeBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CALLABLE -> kCallableBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_VISIBILITY -> kVisibilityClass
-            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_FUNCTION || classifierInfo.fixedKFunctionArity != null ->
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_FUNCTION ||
+                    classifierInfo.fixedKFunctionArity != null || classifierInfo.bigKFunctionArity != null ->
                 kFunctionBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_PROPERTY -> kPropertyBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_MUTABLE_PROPERTY -> kMutablePropertyBase
@@ -572,6 +581,7 @@ internal object DotNetRuntimeTypes {
             classifierInfo.fixedKMutablePropertyArity != null ->
                 fixedMutablePropertyClasses[classifierInfo.fixedKMutablePropertyArity]
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.FUNCTION -> functionBase
+            classifierInfo.bigFunctionArity != null -> bigArityFunctionClass
             else -> classifierInfo.fixedFunctionArity?.let(fixedFunctionClasses::get)
         }
     }
@@ -685,6 +695,13 @@ internal object DotNetRuntimeTypes {
         val owner = function.parent as? IrClass ?: return null
         val ownerInfo = typeMapper.classifierInfo(owner)
         return when {
+            owner.isDotNetBigArityFunctionN == true &&
+                    function.dotNetIlMethodName() in setOf("Invoke", "get_arity") ->
+                DotNetIlFunctionInfo(
+                    owner = bigArityFunctionClass,
+                    signature = function.dotNetSignature(typeMapper),
+                    physicalMethodName = function.dotNetIlMethodName(),
+                )
             owner.isDotNetFunctionReferenceBase == true &&
                     function.dotNetIlMethodName() in
                     setOf(
@@ -788,10 +805,16 @@ internal object DotNetRuntimeTypes {
                 if (functionArity != null) {
                     if (simpleType.arguments.size != functionArity + 1) return null
                     fixedFunctionClasses[functionArity]
+                } else if (info.bigFunctionArity != null) {
+                    if (simpleType.arguments.size != info.bigFunctionArity + 1) return null
+                    bigArityFunctionClass
                 } else {
                     val kFunctionArity = info.fixedKFunctionArity
                     if (kFunctionArity != null) {
                         if (simpleType.arguments.size != kFunctionArity + 1) return null
+                        kFunctionBase
+                    } else if (info.bigKFunctionArity != null) {
+                        if (simpleType.arguments.size != info.bigKFunctionArity + 1) return null
                         kFunctionBase
                     } else {
                         val propertyArity = info.fixedKPropertyArity
@@ -846,7 +869,10 @@ internal object DotNetRuntimeTypes {
             // declaration-erased on .NET, so only that extra continuation arity affects the CLR
             // carrier; the complete suspend signature remains authoritative in IR and KLIB.
             val suspendArity = simpleType.arguments.size - 1
-            return fixedFunctionClasses.getOrNull(suspendArity + 1)?.let { DotNetIlValueType.UserClass(it) }
+            val executionArity = suspendArity + 1
+            return DotNetIlValueType.UserClass(
+                fixedFunctionClasses.getOrNull(executionArity) ?: bigArityFunctionClass
+            )
         }
         if (type.isKSuspendFunction()) {
             // KSuspendFunctionN retains the orthogonal KFunction reflection identity. Its
@@ -1001,6 +1027,14 @@ internal object DotNetRuntimeTypes {
 
     fun fixedFunctionType(arity: Int): DotNetIlValueType.UserClass =
         DotNetIlValueType.UserClass(fixedFunctionClasses[arity])
+
+    fun bigArityFunctionType(): DotNetIlValueType.UserClass =
+        DotNetIlValueType.UserClass(bigArityFunctionClass)
+
+    fun functionExecutionType(arity: Int): DotNetIlValueType.UserClass =
+        fixedFunctionClasses.getOrNull(arity)
+            ?.let(DotNetIlValueType::UserClass)
+            ?: DotNetIlValueType.UserClass(bigArityFunctionClass)
 
     /** Closed optional execution capability for the logical parameter types followed by result. */
     fun exactFunctionType(argumentTypes: List<DotNetIlValueType>): DotNetIlValueType.GenericInstance? {
