@@ -8,10 +8,7 @@ package org.jetbrains.kotlin.fir.dotnet
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataDecoder
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyMetadata
-import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReference
-import org.jetbrains.kotlin.load.dotnet.DotNetClrAssemblyReferenceBinder
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
-import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeCoreTypes
 import org.jetbrains.kotlin.load.dotnet.DotNetClrCustomAttributeDecoder
 import org.jetbrains.kotlin.load.dotnet.DotNetClrDoesNotReturnMetadataDecoder
 import org.jetbrains.kotlin.load.dotnet.DotNetClrDoesNotReturnMetadataResolution
@@ -49,8 +46,8 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedMethodSignatureResoluti
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedSignatureResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrSelectedAssemblyBinder
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyBinder
-import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedAssemblyName
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSerializedTypeResolver
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureCallingConvention
 import org.jetbrains.kotlin.load.dotnet.DotNetClrSignatureResolver
@@ -59,6 +56,8 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeResolver
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeVisibility
+import org.jetbrains.kotlin.load.dotnet.resolveDotNetClrCustomAttributeCoreTypes
+import org.jetbrains.kotlin.load.dotnet.resolveDotNetClrSystemType
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.EffectiveVisibility
 import org.jetbrains.kotlin.descriptors.Modality
@@ -1305,10 +1304,10 @@ class DotNetClrFirSymbolProvider(
 
         companion object {
             fun create(assemblies: List<DotNetClrAssemblyMetadata>): ForeignAnnotationServices {
-                val binder = SelectedAssemblyBinder(assemblies)
+                val binder = DotNetClrSelectedAssemblyBinder(assemblies)
                 val typeResolver = DotNetClrTypeResolver(binder)
                 val signatureResolver = DotNetClrSignatureResolver(typeResolver)
-                val coreTypes = resolveCustomAttributeCoreTypes(assemblies, typeResolver)
+                val coreTypes = resolveDotNetClrCustomAttributeCoreTypes(assemblies, typeResolver)
                 if (coreTypes == null) {
                     return ForeignAnnotationServices(
                         declarationResolver = null,
@@ -1391,7 +1390,7 @@ class DotNetClrFirSymbolProvider(
                     is DotNetClrTypeResolution.Unresolved -> null
                 }
                 val systemValueType =
-                    resolveSystemType(assemblies, typeResolver, "ValueType")
+                    resolveDotNetClrSystemType(assemblies, typeResolver, "System", "ValueType")
                         ?: return unavailable(
                             signatureResolver,
                             allowNullDecoder,
@@ -1406,7 +1405,7 @@ class DotNetClrFirSymbolProvider(
                             paramArrayDecoder,
                         )
                 val systemNullable =
-                    resolveSystemType(assemblies, typeResolver, "Nullable`1")
+                    resolveDotNetClrSystemType(assemblies, typeResolver, "System", "Nullable`1")
                         ?: return unavailable(
                             signatureResolver,
                             allowNullDecoder,
@@ -1482,99 +1481,6 @@ class DotNetClrFirSymbolProvider(
                     paramArrayDecoder = paramArrayDecoder,
                 )
 
-            private fun resolveCustomAttributeCoreTypes(
-                assemblies: List<DotNetClrAssemblyMetadata>,
-                resolver: DotNetClrTypeResolver,
-            ): DotNetClrCustomAttributeCoreTypes? {
-                val systemAttribute = resolveSystemType(assemblies, resolver, "Attribute")
-                    ?: return null
-                val systemEnum = resolveSystemType(assemblies, resolver, "Enum")
-                    ?: return null
-                val systemType = resolveSystemType(assemblies, resolver, "Type")
-                    ?: return null
-                return DotNetClrCustomAttributeCoreTypes(
-                    systemAttribute,
-                    systemEnum,
-                    systemType,
-                )
-            }
-
-            private fun resolveSystemType(
-                assemblies: List<DotNetClrAssemblyMetadata>,
-                resolver: DotNetClrTypeResolver,
-                metadataName: String,
-            ): DotNetClrResolvedTypeDefinition? {
-                val matches = assemblies.mapNotNull { assembly ->
-                    when (
-                        val resolution = resolver.resolveTopLevelType(
-                            assembly,
-                            "System",
-                            metadataName,
-                        )
-                    ) {
-                        is DotNetClrTypeResolution.Resolved -> resolution.type
-                        is DotNetClrTypeResolution.Unresolved -> null
-                    }
-                }.distinct()
-                return matches.singleOrNull()
-            }
-        }
-    }
-
-    private class SelectedAssemblyBinder(
-        assemblies: List<DotNetClrAssemblyMetadata>,
-    ) : DotNetClrAssemblyReferenceBinder {
-        private val assembliesByName =
-            assemblies.groupBy { assembly -> assembly.identity.name.lowercase() }
-
-        override fun bind(
-            sourceAssembly: DotNetClrAssemblyMetadata,
-            reference: DotNetClrAssemblyReference,
-        ): DotNetClrAssemblyMetadata? {
-            val candidates = assembliesByName[reference.name.lowercase()].orEmpty()
-                .filter { assembly ->
-                    assembly.identity.version == reference.version &&
-                            assembly.identity.culture == reference.culture &&
-                            reference.publicKeyOrToken.matches(assembly, reference)
-                }
-            return candidates.singleOrNull()
-        }
-
-        fun bind(name: DotNetClrSerializedAssemblyName): DotNetClrAssemblyMetadata? {
-            val candidates = assembliesByName[name.name.lowercase()].orEmpty()
-                .filter { assembly ->
-                    name.version?.components?.joinToString(".")?.let { version ->
-                        assembly.identity.version == version
-                    } != false &&
-                            name.cultureName?.let { culture ->
-                                assembly.identity.culture ==
-                                        culture.ifEmpty { "neutral" }
-                            } != false &&
-                            name.publicKeyOrToken?.let { key ->
-                                if (name.hasPublicKey) {
-                                    assembly.identity.publicKey == key
-                                } else {
-                                    assembly.identity.publicKeyToken == key
-                                }
-                            } != false
-                }
-            return candidates.singleOrNull()
-        }
-
-        private fun List<Int>.matches(
-            assembly: DotNetClrAssemblyMetadata,
-            reference: DotNetClrAssemblyReference,
-        ): Boolean {
-            if (isEmpty()) {
-                return assembly.identity.publicKey.isEmpty() &&
-                        assembly.identity.publicKeyToken.isEmpty()
-            }
-            val hasFullPublicKey = reference.flags and 0x0001L != 0L
-            return if (hasFullPublicKey) {
-                assembly.identity.publicKey == this
-            } else {
-                assembly.identity.publicKeyToken == this
-            }
         }
     }
 
