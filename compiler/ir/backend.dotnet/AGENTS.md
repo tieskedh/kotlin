@@ -456,6 +456,32 @@ See the
   callable/reflection, imported CLR generics, generic methods, explicit export,
   and removable private optimization work. See
   [the reopening programme](docs/programmes/generic-class-owner-reopening.md).
+- Every Kotlin-owned single-field value class has one non-generic nominal CLR
+  box owner. Exact, statically known non-null uses may use the recursively
+  substituted underlying carrier; erased, interface, nullable-collision,
+  runtime-test, and reified CLR-generic positions use the nominal owner. This
+  includes generic methods, typed interface capabilities, callable
+  capabilities, and `Array<V>`/`vararg V` vector elements: CLR generics may
+  describe the box capability but must never expose the underlying carrier as
+  the value class's generic identity. Common owns constructor/member
+  implementations; the .NET value-usage lowering owns explicit box/unbox
+  transitions. Run that final representation pass after shared loop and
+  string body rewrites: JVM explicitly makes `ForLoopsLowering` a prerequisite
+  of its inline-class lowering, and generated `T -> V` casts must not bypass
+  .NET autoboxing. Producer-recorded primary-constructor, box, and unbox helper
+  names are compiler ABI and are never inferred from CLR spelling or exposed
+  as logical functions. A final primitive bound such as `T : Int` follows the
+  JVM descriptor precedent: keep method-generic arity and KLIB authority, map
+  value slots to the sole primitive carrier, and emit no untruthful exact-CLR
+  constraint. A nullable final primitive bound such as `T : Int?` has two
+  legal carriers and therefore retains the genuine CLR method token in value
+  slots, again without a physical CLR constraint; never collapse it to the
+  non-null carrier or erase the logical KLIB bound. Generic floating `eqeq`
+  (including generated value-class equality) follows JVM/Wasm total-order
+  semantics, while the separately typed `ieee754equals` builtin retains IEEE
+  semantics. Do not emit a CLR value-type owner, a CLR-generic owner, a
+  second box/struct identity, or typed C# surface as part of Kotlin runtime
+  ABI. See [the value-class ADR](docs/decisions/value-classes.md).
 - `KClass` is a nominal Kotlin runtime value over exact or classified CLR type
   evidence. KLIB owns logical `KClass<T>` and declaration identity;
   `System.Type` is a retained physical bridge and never becomes `KClass` or
@@ -851,6 +877,14 @@ Use `--no-daemon` only for CI-equivalent clean-room evidence, after suspected
 daemon/toolchain contamination, or when an explicitly selected checkpoint
 requires it. The daemon does not weaken test isolation guaranteed by the test
 tasks and shared external-tool locks.
+
+An external command timeout can kill `gradlew` without cancelling the build
+already accepted by its Gradle daemon. Before retrying a timed-out
+`dotNetTest`, inspect the Java process tree and daemon log; stop only the
+orphaned wrapper/daemon/test-worker tree belonging to that invocation. Never
+start a duplicate test against the same build outputs while the first daemon
+is still executing it. This is process hygiene, not evidence that
+`--no-daemon` should become the normal command.
 
 Do not trust quiet Gradle success alone. Audit every JUnit XML file under:
 

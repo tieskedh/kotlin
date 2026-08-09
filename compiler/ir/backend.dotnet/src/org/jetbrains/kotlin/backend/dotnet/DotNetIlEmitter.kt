@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.dotNetDefaultParameterIndices
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetInventedLocalClassName
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetLocalCaptureRejectionReason
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetCallableObject
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassBoxingHelpers
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.config.DotNetTarget
@@ -112,6 +113,8 @@ internal class DotNetIlEmitter(
             Map<IrClass, IrField> = emptyMap(),
     private val enumEntryFields:
             Map<IrEnumEntry, IrField> = emptyMap(),
+    private val valueClassBoxingHelpers:
+            Map<IrClass, DotNetValueClassBoxingHelpers> = emptyMap(),
     private val externalStaticInitializations:
             Map<IrSimpleFunction, DotNetBoundStaticInitialization> = emptyMap(),
     private val interfaceDefaultPromotions:
@@ -872,8 +875,9 @@ internal class DotNetIlEmitter(
                     checkOverrideKeepsIlReturnType(member, signature, signatureMapper)
                     val physicalMethodName = when {
                         irClass in genericInterfaces -> member.dotNetGenericInterfaceCanonicalMethodName()
-                        else -> DotNetStdlibLibrary.implementationPlatformMethodNameOrNull(member)
-                            ?: member.dotNetErasedCarrierMethodNameOrNull(typeMapper::isErasedGenericClass)
+                        else -> member.dotNetAbiMethodNameOrNull(
+                            isErasedGenericClass = typeMapper::isErasedGenericClass,
+                        )
                     }
                     // CLR method identity includes the generic ARITY (see
                     // dotNetIlGenericAritySuffix), for member methods as well as the facade gate
@@ -1536,6 +1540,7 @@ internal class DotNetIlEmitter(
             staticInitializations = staticInitializations,
             objectInstanceFields = objectInstanceFields,
             enumEntryFields = enumEntryFields,
+            valueClassBoxingHelpers = valueClassBoxingHelpers,
             typeMapper = typeMapper,
         )
         val managedResources = cSharpImplementationManifestTarget?.let { target ->
@@ -1792,7 +1797,6 @@ internal class DotNetIlEmitter(
             irClass.primaryConstructor
                 ?: dotNetUnsupported("data class '$name' has no primary constructor")
         }
-        if (irClass.isValue) dotNetUnsupported("value class '$name' is not supported")
         if (irClass.isExpect) dotNetUnsupported("expect class '$name' is not supported")
         // Modality maps directly onto CLR metadata like the JVM's class access flags: FINAL
         // keeps `sealed`, OPEN drops it (inheritprobe_s1), and ABSTRACT emits `abstract`
@@ -2620,16 +2624,20 @@ internal class DotNetIlEmitter(
                 classFunctions[member]?.physicalMethodName,
             )
             classFunctions.putLocal(member, memberInfo)
-            val rendered = DotNetIlMethodCodegen(
-                function = member,
-                functionInfo = memberInfo,
-                isEntryPoint = false,
-                availableFunctions = classFunctions,
-                intrinsicMethods = intrinsicMethods,
-                typeMapper = memberTypeMapper,
-                facadeClassInfoByFile = facadeClassInfoByFile,
-                covariantReturnImplementations = covariantReturnImplementations,
-            ).render()
+            val rendered = try {
+                DotNetIlMethodCodegen(
+                    function = member,
+                    functionInfo = memberInfo,
+                    isEntryPoint = false,
+                    availableFunctions = classFunctions,
+                    intrinsicMethods = intrinsicMethods,
+                    typeMapper = memberTypeMapper,
+                    facadeClassInfoByFile = facadeClassInfoByFile,
+                    covariantReturnImplementations = covariantReturnImplementations,
+                ).render()
+            } catch (failure: DotNetIlUnsupportedException) {
+                dotNetUnsupported("member '${member.name.asString()}' is not supported: ${failure.reason}")
+            }
             renderedMethods += rendered.ilText
         }
 
@@ -3088,7 +3096,9 @@ internal class DotNetIlEmitter(
 
     /** A source function from a companion block, excluding backend-created static dispatchers. */
     private fun IrSimpleFunction.isDotNetCompanionBlockFunction(): Boolean =
-        origin == IrDeclarationOrigin.DEFINED && correspondingPropertySymbol == null && isStaticMethodOfClass
+        origin == IrDeclarationOrigin.DEFINED && correspondingPropertySymbol == null && isStaticMethodOfClass &&
+                dotNetValueClassImplementationSourceOrNull() == null &&
+                dotNetValueClassConstructorImplementationSourceOrNull() == null
 
     /**
      * The member functions of a user class that codegen renders and call sites resolve through
