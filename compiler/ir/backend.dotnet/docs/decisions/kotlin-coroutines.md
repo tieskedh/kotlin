@@ -172,7 +172,14 @@ array-element spills, and a nullable-`Int` value class through a generic suspend
 override with direct and delayed resume. Member/extension coverage executes a
 local suspend extension, inline and non-inline extensions with a second dispatch
 receiver, repeated suspension in an ordinary member, virtual override and
-`super` dispatch, and a suspend operator. The same matrix covers a suspend-inline
+`super` dispatch, a suspend operator, private top-level/member state machines,
+and receiver-start dispatch. Context coverage executes the Common
+`plus`/replacement/`minusKey`/`fold` behavior, pins the interceptor as the last
+element, reads `coroutineContext` through top-level, receiver, and inline forms,
+and preserves the exact completion context before and after real suspension.
+It also proves that both arities of the `createCoroutineUnintercepted` wrapper
+remain in the completion chain and release their cached interceptor instead of
+being stranded as launch-only objects. The same matrix covers a suspend-inline
 producer/consumer boundary across both FIR parsers and both CLR profiles. A
 target-owned integration lane additionally executes
 suspend-inline code and races two CLR threads against one `SafeContinuation`,
@@ -186,9 +193,17 @@ superclass case.
 This is an implemented foundation, not a claim that the complete coroutine
 programme or every evidence lane below is closed. In particular, broader
 primitive live-value/result carriers, default/interface-bridge and reflective
-suspend-member shapes, broader context composition, stale-ABI behavior, and
+suspend-member shapes, stale-ABI behavior, and
 exhaustive residual-IR assertions still require explicit evidence before this
 ADR's full scope is called complete.
+
+The Common state-machine builder copies source visibility to its generated
+constructor. That is harmless for JS/Wasm, but a CLR file facade cannot call a
+private constructor declared on a separate generated TypeDef. The .NET
+lowering therefore retains a private state-machine type while giving its
+constructor the established public-in-private-type compiler-local shape. The
+constructor is not serialized as Kotlin ABI and cannot become a C# source
+surface while its declaring type remains inaccessible.
 
 The shared root `controlFlow_while1` and `controlFlow_while2` assertions also
 exercise repeated suspension, but depend on Common `String.trimIndent`. Keep

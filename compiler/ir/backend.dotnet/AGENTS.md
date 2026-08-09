@@ -917,6 +917,23 @@ target continuation base before invocation. That same object exposes the
 completion's context, caches one intercepted continuation, and releases it on
 completion; an existing target continuation is never wrapped again.
 
+The wrapper returned by `createCoroutineUnintercepted` is part of the
+continuation chain, not a disposable launcher. As on JVM and Native, its first
+resume invokes the suspend callable with the wrapper itself as completion; a
+later resume returns the suspended result through the wrapper before it is
+released and forwards to the original completion. Passing the original
+completion into the callable strands the intercepted wrapper on suspension,
+loses its release callback, and is forbidden for both receiver arities.
+
+Common gives a generated non-lambda state-machine constructor the source
+function's visibility. A CLR file facade and its generated state-machine class
+are separate TypeDefs, so a private source function must not leave that
+constructor CLR-private and inaccessible to its own facade. Keep the generated
+state-machine type private, but give its constructor the same public-in-private-
+type metadata shape as other .NET compiler-local classes. This adds no Kotlin,
+KLIB, or reachable C# surface; do not fix the access failure by publishing the
+state-machine type or weakening source visibility.
+
 Explicit state machines stress general CIL control flow. A branch target
 immediately before a `.try` must remain outside the protected region and fall
 through through a real landing instruction; a literal-true loop uses an
