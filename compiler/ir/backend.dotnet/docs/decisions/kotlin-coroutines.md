@@ -168,8 +168,14 @@ non-empty evaluation-stack control flow, direct and local suspend callable
 references, continuation interception/release, value-class result carriers,
 repeated suspension in `while`, `do while`, and `for` state machines, nullable
 reference and mutable-reference spills, null operands across two suspensions,
-array-element spills, and a nullable-`Int` value class through a generic suspend
-override with direct and delayed resume. Member/extension coverage executes a
+array-element spills, and `Boolean`, `Char`, `Byte`, `Short`, `Int`, `Long`, and
+`Double` locals/results across merges, calls, safe-call receivers, construction,
+direct resume, delayed resume, and exceptional resume. `Int`- and `Long`-backed
+value-class results and a nullable-`Int` value class through a generic suspend
+override cover representation transitions. A target-owned CLR test adds the
+otherwise absent `Float` edge, retaining a `float32` field across suspension and
+restoring a boxed `Continuation<Float>` result without widening it to
+`float64`. Member/extension coverage executes a
 local suspend extension, inline and non-inline extensions with a second dispatch
 receiver, repeated suspension in an ordinary member, virtual override and
 `super` dispatch, a suspend operator, private top-level/member state machines,
@@ -192,8 +198,8 @@ superclass case.
 
 This is an implemented foundation, not a claim that the complete coroutine
 programme or every evidence lane below is closed. In particular, broader
-primitive live-value/result carriers, default/interface-bridge and reflective
-suspend-member shapes, stale-ABI behavior, and
+callable arities, default/interface-bridge and reflective suspend-member
+shapes, stale-ABI behavior, and
 exhaustive residual-IR assertions still require explicit evidence before this
 ADR's full scope is called complete.
 
