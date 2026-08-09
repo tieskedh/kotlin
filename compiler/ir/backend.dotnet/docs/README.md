@@ -80,6 +80,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Function declaration flags](decisions/function-declaration-flags.md)
 - [Declaration-owned callable visibility and modality](decisions/callable-visibility-and-modality.md)
 - [Semantic erasure and canonical ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
+- [Single-field value classes use one box owner and contextual carriers](decisions/value-classes.md)
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)
 - [Profile-aware interface defaults](decisions/adr-profile-aware-interface-default-implementations.md)
 - [Erased ABI for Kotlin-owned generic interfaces](decisions/generic-interface-erased-identity.md)

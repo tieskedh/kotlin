@@ -12,10 +12,13 @@ import org.jetbrains.kotlin.backend.common.lower.DefaultArgumentStubGenerator
 import org.jetbrains.kotlin.backend.common.lower.DefaultParameterCleaner
 import org.jetbrains.kotlin.backend.common.lower.DefaultParameterInjector
 import org.jetbrains.kotlin.backend.common.lower.MaskedDefaultArgumentFunctionFactory
+import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.dotNetUnboxedValueClassTypeOrNull
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.builders.irReinterpretCast
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -26,11 +29,13 @@ import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrConstImpl
 import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.util.createStaticFunctionWithReceivers
+import org.jetbrains.kotlin.ir.util.defaultValueForType
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
@@ -85,11 +90,11 @@ internal class DotNetDefaultArgumentStubGenerator(
 }
 
 internal class DotNetDefaultParameterInjector(
-    context: DotNetBackendContext,
-    factory: DotNetDefaultArgumentFunctionFactory = DotNetDefaultArgumentFunctionFactory(context),
+    private val dotNetContext: DotNetBackendContext,
+    factory: DotNetDefaultArgumentFunctionFactory = DotNetDefaultArgumentFunctionFactory(dotNetContext),
 ) :
     DefaultParameterInjector<DotNetBackendContext>(
-        context,
+        dotNetContext,
         factory,
         skipExternalMethods = true,
     ) {
@@ -97,6 +102,24 @@ internal class DotNetDefaultParameterInjector(
     // DotNet needs a physical null placeholder for the masked dispatcher array parameter.
     override fun nullConst(startOffset: Int, endOffset: Int, irParameter: IrValueParameter): IrExpression =
         nullConst(startOffset, endOffset, irParameter.type)
+
+    /**
+     * A non-null value class uses its exact underlying carrier in the masked dispatcher signature.
+     * The ignored argument must therefore be that carrier's CLR zero value, not a nominal box
+     * containing the zero value. The reinterpret cast preserves the logical IR parameter type
+     * while telling value-class autoboxing that the expression is already in carrier form. This
+     * is the CLR counterpart of JVM's unsafe-coerce default placeholder.
+     */
+    override fun nullConst(startOffset: Int, endOffset: Int, type: IrType): IrExpression {
+        val carrierType = type.dotNetUnboxedValueClassTypeOrNull()
+            ?: return super.nullConst(startOffset, endOffset, type)
+        val carrierDefault = IrConstImpl.defaultValueForType(startOffset, endOffset, carrierType)
+        return dotNetContext.createIrBuilder(
+            dotNetContext.irBuiltIns.anyClass,
+            startOffset,
+            endOffset,
+        ).irReinterpretCast(carrierDefault, type)
+    }
 }
 
 internal class DotNetDefaultParameterCleaner(

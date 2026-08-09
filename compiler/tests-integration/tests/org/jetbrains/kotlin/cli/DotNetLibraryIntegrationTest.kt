@@ -207,6 +207,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetObjectInstance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetPortablePhysicalAbiDifference
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeArtifact
+import org.jetbrains.kotlin.backend.dotnet.DotNetValueClassAbi
 import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.config.canConsumeLibrary
 import org.jetbrains.kotlin.config.supportsByRefLikeGenericArguments
@@ -10209,6 +10210,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             "C:sample/Box" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Box"),
+                valueClassAbi = DotNetValueClassAbi(
+                    primaryConstructorMethodName = "constructor-impl",
+                    boxMethodName = "box-impl",
+                    unboxMethodName = "unbox-impl",
+                ),
             ),
             "C:sample/Counter" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Counter"),
@@ -27179,6 +27185,76 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 runDotNet(dotnetHost, modernCSharpConsumer, consumerDirectory, "C# marker consumer failed on $target")
             }
         }
+    }
+
+    @Test
+    fun testValueClassPublishesOneNominalOwnerAndCompilerAbi() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val libraryDirectory = File(tmpdir, "value-class-abi-library").apply { mkdirs() }
+        val librarySource = libraryDirectory.resolve("valueClassLibrary.kt").apply {
+            writeText(
+                """
+                package valueclassabi
+
+                public value class Token(public val value: String)
+                public value class GenericToken<T : Any>(public val value: T)
+
+                public fun makeToken(value: String): Token = Token(value)
+                public fun eraseToken(token: Token): Any = token
+                public fun readToken(value: Any): String = (value as Token).value
+                public fun makeGenericToken(value: String): GenericToken<String> = GenericToken(value)
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "ValueClass.Abi.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val assembly = libraryDirectory.resolve("ValueClass.Abi.Library.dll")
+        val libraryIl = libraryDirectory.resolve("ValueClass.Abi.Library.il").readText()
+        val tokenOwnerPattern = Regex("""(?m)^\s*\.class[^\r\n]*'valueclassabi\.Token'\s*$""")
+        assertEquals(1, tokenOwnerPattern.findAll(libraryIl).count(), libraryIl)
+        assertFalse("valueclassabi.Token`" in libraryIl) { libraryIl }
+        val genericTokenOwnerPattern = Regex("""(?m)^\s*\.class[^\r\n]*'valueclassabi\.GenericToken'\s*$""")
+        assertEquals(1, genericTokenOwnerPattern.findAll(libraryIl).count(), libraryIl)
+        assertFalse("valueclassabi.GenericToken`" in libraryIl) { libraryIl }
+
+        val declarations = DotNetLibraryAbiCodec.decode(assembly.readKlibManifest())
+        fun assertCompilerAbi(className: String) {
+            val tokenDeclaration = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+                .single { declaration -> declaration.ownerPath.last() == className }
+            val valueClassAbi = checkNotNull(tokenDeclaration.valueClassAbi) {
+                "The nominal value-class owner '$className' has no producer-published compiler ABI"
+            }
+            val helperNames = setOf(
+                valueClassAbi.primaryConstructorMethodName,
+                valueClassAbi.boxMethodName,
+                valueClassAbi.unboxMethodName,
+            )
+            assertEquals(3, helperNames.size)
+            helperNames.forEach { methodName ->
+                assertTrue("'$methodName'" in libraryIl) {
+                    "Value-class compiler helper '$methodName' is absent from the producer IL:\n$libraryIl"
+                }
+            }
+            val logicalTokenMethods = declarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.Function>()
+                .filter { declaration -> declaration.ownerPath.last() == className }
+            assertTrue(logicalTokenMethods.none { declaration -> declaration.methodName in helperNames }) {
+                "Compiler-only value-class helpers escaped into the logical function index: $logicalTokenMethods"
+            }
+        }
+        assertCompilerAbi("valueclassabi.Token")
+        assertCompilerAbi("valueclassabi.GenericToken")
     }
 
     @Test

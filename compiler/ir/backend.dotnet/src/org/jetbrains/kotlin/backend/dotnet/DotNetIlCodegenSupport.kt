@@ -1,7 +1,11 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_BOX_HELPER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_UNBOX_HELPER
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceBridgeMemberViewOrNull
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.descriptors.ValueClassBackendAgnosticApi
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
@@ -12,6 +16,7 @@ import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
+import org.jetbrains.kotlin.ir.declarations.isInlineClass
 import org.jetbrains.kotlin.ir.util.isAnnotationClass
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isGetter
@@ -20,14 +25,18 @@ import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrStarProjection
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isBoolean
 import org.jetbrains.kotlin.ir.types.isInt
+import org.jetbrains.kotlin.ir.types.isPrimitiveType
+import org.jetbrains.kotlin.ir.types.makeNullable
 import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableAny
@@ -35,8 +44,11 @@ import org.jetbrains.kotlin.ir.types.isNullableString
 import org.jetbrains.kotlin.ir.types.isString
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.defaultType
+import org.jetbrains.kotlin.ir.util.eraseTypeParameters
 import org.jetbrains.kotlin.ir.util.erasedUpperBound
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.getInlineClassUnderlyingType
+import org.jetbrains.kotlin.ir.util.isNullable
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 
@@ -104,6 +116,83 @@ internal fun IrType.isDotNetOutProjectedGenericArray(): Boolean {
     return argument.variance == Variance.OUT_VARIANCE
 }
 
+/** The logical value-class declaration carried by this type, if any. */
+@OptIn(ValueClassBackendAgnosticApi::class)
+internal fun IrType.dotNetValueClassOrNull(): IrClass? {
+    val irClass = ((this as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
+    return irClass.takeIf {
+        it.isInlineClass(treatCompatibleFullValueClassesAsInline = true)
+    }
+}
+
+/**
+ * The exact contextual carrier selected for a Kotlin value-class occurrence.
+ *
+ * This is deliberately a Kotlin-IR decision shared by value-usage lowering and the physical type
+ * mapper. If it returns null, the occurrence needs the nominal box owner; codegen must never
+ * independently rediscover a different representation from the same logical type.
+ */
+@OptIn(ValueClassBackendAgnosticApi::class)
+internal fun IrType.dotNetUnboxedValueClassTypeOrNull(): IrType? {
+    val simpleType = this as? IrSimpleType ?: return null
+    val valueClass = dotNetValueClassOrNull() ?: return null
+    if (simpleType.arguments.any { argument -> argument is IrStarProjection }) return null
+
+    val declaredUnderlying = getInlineClassUnderlyingType(
+        valueClass,
+        treatCompatibleFullValueClassesAsInline = true,
+    )
+    val substitutedUnderlying = AbstractIrTypeSubstitutor.forType(simpleType)
+        .substitute(declaredUnderlying)
+    val physicalUnderlying = substitutedUnderlying.dotNetUnboxedValueClassTypeOrNull()
+        ?: substitutedUnderlying
+    if (!simpleType.isMarkedNullable()) return physicalUnderlying
+    if (
+        physicalUnderlying.isNullable() ||
+        physicalUnderlying.isPrimitiveType() ||
+        (physicalUnderlying as? IrSimpleType)?.classifier is IrTypeParameterSymbol
+    ) {
+        return null
+    }
+    return physicalUnderlying.makeNullable()
+}
+
+/** The sole primitive carrier admitted by a final primitive type-parameter bound. */
+internal fun IrType.dotNetPrimitiveTypeParameterUpperBoundOrNull(): IrType? {
+    val simpleType = this as? IrSimpleType ?: return null
+    val typeParameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner ?: return null
+    // eraseTypeParameters() deliberately approximates some nullable bounds for descriptor
+    // purposes. That is too lossy for this optimization: `T : Int?` admits both Int and Int?,
+    // whereas `T : Int` has exactly one carrier. Inspect the authoritative declared bound first.
+    // Use semantic nullability rather than the outer marker alone: copied/synthetic type
+    // parameters can inherit nullability through another parameter, and Kotlin IR's own
+    // nullability predicate deliberately follows that bound chain.
+    if (typeParameter.superTypes.any { bound -> bound.isNullable() }) return null
+    val erasedType = eraseTypeParameters()
+    // `T : Int` has one possible unboxed carrier and follows the JVM descriptor precedent.
+    // `T : Int?` does not: T may be instantiated as Int or Int?, so the live CLR generic token
+    // remains the exact carrier and only KLIB records the nullable primitive bound.
+    return erasedType.takeIf { !it.isMarkedNullable() && it.isPrimitiveType(nullable = false) }
+}
+
+/**
+ * The generic interface slot whose type-parameter occurrences are nominal value-class
+ * boundaries for this implementation, if any.
+ *
+ * Ordinary split-interface bridges and generated ExactFunction capabilities share the same CLR
+ * fact: a constructed generic argument `V` denotes the nominal value-class TypeDef, never V's
+ * exact carrier. Keeping the test here prevents IR adaptation and signature mapping from
+ * independently choosing different representations for the same MethodImpl slot.
+ */
+internal fun IrSimpleFunction.dotNetValueClassGenericBoundarySlotOrNull(): IrSimpleFunction? {
+    val slot = overriddenSymbols.singleOrNull()?.owner ?: return null
+    val slotOwner = slot.parent as? IrClass ?: return null
+    return slot.takeIf {
+        origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null ||
+                slotOwner.dotNetExactFunctionArity != null
+    }
+}
+
 /**
  * Thrown while rendering a single function into IL when a construct the prototype .NET backend
  * cannot compile is encountered. The emitter catches it, discards the partial render, skips the
@@ -118,7 +207,17 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
     val isErasedCallableInvoke = isDotNetErasedCallableInvoke()
     val isErasedCallableCall = isDotNetKCallableInvocation()
     val isErasedPropertyAccess = isDotNetErasedPropertyAccess()
-    val ilReturnType = if (
+    val typedGenericInterfaceSlot = dotNetValueClassGenericBoundarySlotOrNull()
+    val typedGenericInterfaceOwner = typedGenericInterfaceSlot?.parent as? IrClass
+    val boxesTypedGenericInterfaceReturn = typedGenericInterfaceOwner != null &&
+            typedGenericInterfaceSlot.returnType.referencesTypeParameterOf(typedGenericInterfaceOwner) &&
+            returnType.dotNetValueClassOrNull() != null
+    val ilReturnType = if (origin == DOTNET_VALUE_CLASS_BOX_HELPER || boxesTypedGenericInterfaceReturn) {
+        DotNetIlReturnType.Value(
+            typeMapper.toDotNetIlBoxedValueClassType(returnType)
+                ?: dotNetUnsupported("value-class generic boundary has no nominal owner")
+        )
+    } else if (
         isErasedCallableInvoke || isErasedCallableCall ||
         (isErasedPropertyAccess && name.asString() == "get")
     ) {
@@ -132,7 +231,33 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
     // uniform, while `hasThis` makes signature rendering and slot numbering treat it as the
     // implicit CLR argument 0 (see DotNetIlMethodSignature).
     val hasThis = parameters.firstOrNull()?.kind == IrParameterKind.DispatchReceiver
-    val parameterTypes = if (isErasedCallableInvoke || isErasedPropertyAccess) {
+    val valueClassInstanceOwner = (parent as? IrClass)?.takeIf { owner ->
+        @OptIn(ValueClassBackendAgnosticApi::class)
+        owner.isInlineClass(treatCompatibleFullValueClassesAsInline = true)
+    }
+    val parameterTypes = if (origin == DOTNET_VALUE_CLASS_UNBOX_HELPER) {
+        parameters.map { parameter ->
+            typeMapper.toDotNetIlBoxedValueClassType(parameter.type)
+                ?: dotNetUnsupported("value-class unbox helper has no nominal owner")
+        }
+    } else if (typedGenericInterfaceOwner != null) {
+        val slot = checkNotNull(typedGenericInterfaceSlot)
+        parameters.mapIndexed { index, parameter ->
+            val slotParameter = slot.parameters.getOrNull(index)
+            if (slotParameter != null &&
+                slotParameter.type.referencesTypeParameterOf(typedGenericInterfaceOwner) &&
+                parameter.type.dotNetValueClassOrNull() != null
+            ) {
+                typeMapper.toDotNetIlBoxedValueClassType(parameter.type)
+                    ?: dotNetUnsupported("value-class generic parameter boundary has no nominal owner")
+            } else {
+                typeMapper.toDotNetIlParameterType(parameter)
+                    ?: dotNetUnsupported(
+                        "parameter '${parameter.name.asString()}' has unsupported type ${parameter.type.render()}"
+                    )
+            }
+        }
+    } else if (isErasedCallableInvoke || isErasedPropertyAccess) {
         parameters.map { parameter ->
             if (parameter.kind == IrParameterKind.DispatchReceiver) {
                 typeMapper.toDotNetIlValueType(parameter.type)
@@ -142,6 +267,20 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
                     )
             } else {
                 DotNetIlValueType.Object
+            }
+        }
+    } else if (hasThis && valueClassInstanceOwner != null) {
+        parameters.map { parameter ->
+            if (parameter.kind == IrParameterKind.DispatchReceiver) {
+                typeMapper.toDotNetIlBoxedValueClassType(parameter.type)
+                    ?: dotNetUnsupported(
+                        "value-class dispatch receiver '${parameter.name.asString()}' has no box owner"
+                    )
+            } else {
+                typeMapper.toDotNetIlParameterType(parameter)
+                    ?: dotNetUnsupported(
+                        "parameter '${parameter.name.asString()}' has unsupported type ${parameter.type.render()}"
+                    )
             }
         }
     } else {
@@ -286,6 +425,60 @@ internal fun IrSimpleFunction.dotNetErasedCarrierMethodNameOrNull(
 }
 
 /**
+ * The stable physical name used when a value-class carrier would otherwise erase a logical
+ * overload distinction. This mirrors JVM's unconditional value-class mangling rule while using
+ * the existing .NET logical-signature digest and CLR-valid spelling. Common's generated static
+ * implementations derive the suffix from their source member, not from the already-unboxed
+ * carrier signature.
+ *
+ * An existing exception/erased-carrier name remains authoritative and already hashes the complete
+ * logical signature, so this rule is consulted only when neither older non-injective carrier rule
+ * applies. `kotlin.Result` follows JVM's explicit no-mangling exception.
+ */
+@OptIn(ValueClassBackendAgnosticApi::class)
+internal fun IrSimpleFunction.dotNetValueClassCarrierMethodNameOrNull(
+    baseMethodName: String = dotNetIlMethodName(),
+): String? {
+    fun IrType.requiresValueClassMangling(): Boolean {
+        val classifier = erasedUpperBound
+        return classifier.isInlineClass(treatCompatibleFullValueClassesAsInline = true) &&
+                classifier.fqNameWhenAvailable?.asString() != "kotlin.Result"
+    }
+
+    fun IrSimpleFunction.logicalValueClassSignatureOrNull(): String? {
+        val requiresLogicalName = parameters.any { parameter ->
+            parameter.kind != IrParameterKind.DispatchReceiver &&
+                    parameter.type.requiresValueClassMangling()
+        } || returnType.requiresValueClassMangling()
+        if (!requiresLogicalName) return null
+        return with(DotNetIrMangler) {
+            this@logicalValueClassSignatureOrNull.signatureString(compatibleMode = false)
+        }
+    }
+
+    fun IrSimpleFunction.selectedSlotRoots(): List<IrSimpleFunction> {
+        val overridden = overriddenSymbols.map { it.owner }
+        if (overridden.isEmpty()) return listOf(this)
+        val classSlots = overridden.filter { overriddenMember ->
+            (overriddenMember.parent as? IrClass)?.isInterface == false
+        }
+        val selectedSlots = classSlots.ifEmpty { overridden }
+        return selectedSlots.flatMap { it.selectedSlotRoots() }
+    }
+
+    val logicalFunction = dotNetValueClassImplementationSourceOrNull() ?: this
+    val slotSignatures = logicalFunction.selectedSlotRoots()
+        .map { it.logicalValueClassSignatureOrNull() }
+        .distinct()
+    val logicalSignature = if (slotSignatures.size == 1) {
+        slotSignatures.single()
+    } else {
+        logicalFunction.logicalValueClassSignatureOrNull()
+    } ?: return null
+    return "${baseMethodName}__KotlinValue__${DotNetLibraryAbiCodec.logicalIdentityDigest(logicalSignature)}"
+}
+
+/**
  * The selected physical CLR name, including a bounded Common-stdlib platform name or the stable
  * logical erased-carrier ABI name when representation requires it. An explicit [baseMethodName]
  * is a caller-owned slot/capability spelling and therefore bypasses stdlib top-level name
@@ -305,6 +498,7 @@ internal fun IrSimpleFunction.dotNetAbiMethodNameOrNull(
         ?: DotNetStdlibLibrary.implementationPlatformMethodNameOrNull(this)
     val physicalBaseMethodName = selectedBaseMethodName ?: dotNetIlMethodName()
     return dotNetErasedCarrierMethodNameOrNull(isErasedGenericClass, physicalBaseMethodName)
+        ?: dotNetValueClassCarrierMethodNameOrNull(physicalBaseMethodName)
         ?: selectedBaseMethodName
 }
 
@@ -735,7 +929,7 @@ internal class DotNetIlTypeMapper private constructor(
         val arguments = simpleType.arguments.map { argument ->
             val projection = argument as? IrTypeProjection ?: return null
             if (projection.variance != Variance.INVARIANT) return null
-            carrierMapper.toDotNetIlValueType(projection.type) ?: return null
+            carrierMapper.toDotNetIlGenericArgumentType(projection.type) ?: return null
         }
         return DotNetIlValueType.GenericInstance(classInfo, arguments)
     }
@@ -778,6 +972,23 @@ internal class DotNetIlTypeMapper private constructor(
         }
     }
 
+    /** The nominal owner used only at a Kotlin-required value-class boxing boundary. */
+    @OptIn(ValueClassBackendAgnosticApi::class)
+    fun toDotNetIlBoxedValueClassType(type: IrType): DotNetIlValueType.UserClass? {
+        val valueClass = ((type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner ?: return null
+        if (!valueClass.isInlineClass(treatCompatibleFullValueClassesAsInline = true)) return null
+        val classInfo = classInfoOrNull(valueClass) ?: return null
+        return DotNetIlValueType.UserClass(classInfo)
+    }
+
+    /**
+     * Maps a reified CLR generic argument. Kotlin value classes are nominal objects in generic
+     * positions, just as JVM generic positions use their wrapper: substituting the exact carrier
+     * would make `G<V>` observe the underlying type as `T` and lose Kotlin's runtime identity.
+     */
+    fun toDotNetIlGenericArgumentType(type: IrType): DotNetIlValueType? =
+        toDotNetIlBoxedValueClassType(type) ?: toDotNetIlValueType(type)
+
     fun referencedFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? {
         val localStdlibFunction = {
             DotNetStdlibLibrary.implementationFunctionInfoOrNull(function, this, stdlibAssemblyName)
@@ -791,6 +1002,7 @@ internal class DotNetIlTypeMapper private constructor(
             ?: DotNetRuntimeTypes.reflectionFunctionInfoOrNull(function, this)
             ?: comparableFunctionInfoOrNull(function)
             ?: DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
+            ?: externalDeclarations.valueClassCompilerAbiFunctionInfoOrNull(function, this)
             ?: libraryFunction
             ?: importedClrDeclarations.functionInfoOrNull(function)).also { functionInfo ->
             functionInfo?.owner?.let(::recordAssemblyReference)
@@ -843,7 +1055,7 @@ internal class DotNetIlTypeMapper private constructor(
                         "as a direct value slot until nested invariant-carrier adapters are defined"
             )
         }
-        val elementType = toDotNetIlValueType(varargElementType) ?: return null
+        val elementType = toDotNetIlGenericArgumentType(varargElementType) ?: return null
         return DotNetIlValueType.GenericArray(elementType)
     }
 
@@ -896,6 +1108,16 @@ internal class DotNetIlTypeMapper private constructor(
         // `kotlin.Unit` parameter/field representation and the expression codegen contract.
         if (!isMarkedNullable && topClassifierInfo?.builtinKind == DotNetBuiltinClassifierKind.UNIT) {
             return DotNetRuntimeTypes.unitType
+        }
+        type.dotNetPrimitiveTypeParameterUpperBoundOrNull()?.let { upperBound ->
+            // JVM descriptors likewise map `T : Int`/`T : Char` to their primitive upper
+            // bound. The logical and CLR method generic arity remains, but ECMA-335 cannot
+            // express an exact primitive GenericParamConstraint, so value slots use the sole
+            // possible Kotlin carrier and KLIB retains the bound.
+            return mapDotNetIlValueType(upperBound)
+        }
+        type.dotNetUnboxedValueClassTypeOrNull()?.let { underlyingType ->
+            return mapDotNetIlValueType(underlyingType)
         }
         DotNetRuntimeTypes.mapCompilerRuntimeType(type, topClassifierInfo)?.let { return it }
         if (type.referencesErasedOwnerParameterForCurrentView()) {
@@ -976,8 +1198,10 @@ internal class DotNetIlTypeMapper private constructor(
      * Maps Kotlin `Array<E>` to a CLR vector while preserving it as the distinct
      * [DotNetIlValueType.GenericArray] structural kind. Concrete primitive elements are legal and
      * retain the natural CLR vector (`Array<Int>` -> `int32[]`) because specialized primitive
-     * arrays now have distinct Kotlin.Runtime wrapper types. An OPEN type parameter remains valid
-     * (`!n[]`/`!!n[]`) and substitutes reified CLR element types. A Kotlin `out` projection uses
+     * arrays now have distinct Kotlin.Runtime wrapper types. A Kotlin value class is nominal at
+     * this reified boundary (`Array<V>` -> `V[]`), rather than exposing its exact carrier as the
+     * CLR element identity. An OPEN type parameter remains valid (`!n[]`/`!!n[]`) and substitutes
+     * reified CLR element types. A Kotlin `out` projection uses
      * the classified [DotNetIlValueType.ErasedGenericArray] `System.Array` view because CLR
      * vector covariance cannot represent value-element or arbitrary method-generic widenings;
      * KLIB retains its stronger bounded read type. A star projection uses the same physical view
@@ -1008,7 +1232,7 @@ internal class DotNetIlTypeMapper private constructor(
         if (projection.variance == Variance.OUT_VARIANCE) {
             return DotNetIlValueType.ErasedGenericArray(coreLibrary.reference)
         }
-        val elementType = toDotNetIlValueType(elementIrType) ?: return null
+        val elementType = toDotNetIlGenericArgumentType(elementIrType) ?: return null
         return DotNetIlValueType.GenericArray(elementType)
     }
 
@@ -1114,7 +1338,7 @@ internal class DotNetIlTypeMapper private constructor(
                             "only as a direct value slot until nested invariant-carrier adapters are defined"
                 )
             }
-            toDotNetIlValueType(projection.type) ?: return null
+            toDotNetIlGenericArgumentType(projection.type) ?: return null
         }
         return DotNetIlValueType.GenericInstance(classInfo, arguments)
     }
@@ -1148,6 +1372,14 @@ internal class DotNetIlTypeMapper private constructor(
             return DotNetIlValueType.Object
         }
         if (parentGenericClass != null) {
+            // A non-generic Kotlin owner needs one storage/dispatch slot for every legal
+            // substitution. In particular `T : Int?` admits both `Int` and `Int?`; erasing the
+            // classifier to `Int` here would incorrectly freeze that slot to `int32`. Preserve
+            // the boxed-or-null universal carrier. A final non-null primitive bound (`T : Int`)
+            // has one carrier and has already taken the primitive-bound arm above.
+            if (typeParameter.superTypes.any { bound -> bound.isNullable() }) {
+                return DotNetIlValueType.Object
+            }
             val erasedUpperBound = type.erasedUpperBound
             return if (erasedUpperBound == parentGenericClass || erasedUpperBound.defaultType == type) {
                 DotNetIlValueType.Object
@@ -1258,6 +1490,8 @@ internal class DotNetIlTypeMapper private constructor(
  * `T : Any`, while CLR's `class` and `valuetype` flags each reject half of that set. KLIB retains
  * the logical non-null bound; future Roslyn `notnull` metadata is an additive warning view. The
  * historical function-only `String` bound keeps its pre-stage-1 slot erosion and is likewise omitted here.
+ * A final primitive bound (`T : Int`, etc.) is also omitted: as on JVM, every value slot maps
+ * to the sole possible primitive carrier while KLIB retains the logical constraint.
  * A logical `CharSequence` bound is also omitted: constraining the CLR parameter to the runtime
  * capability interface would reject the legal Kotlin substitution `T = String`, because sealed
  * `System.String` cannot implement that interface. KLIB retains the authoritative bound and
@@ -1298,6 +1532,7 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
     val mappedBounds = superTypes
         .filterNot {
             it.isNullableAny() || it.isAny() || it.isString() || it.isNullableString() ||
+                    it.isPrimitiveType(nullable = false) || it.isPrimitiveType(nullable = true) ||
                     it.isDotNetCharSequenceType()
         }
         .mapIndexedNotNull { index, bound ->
@@ -1505,6 +1740,12 @@ internal fun checkDotNetTypeParametersSupported(
                 superType.isString() || superType.isNullableString() -> !allowStringBounds
                 superType.isDotNetCharSequenceType() -> false
                 superType.isDotNetComparableSelfBound(typeParameter) -> false
+                // ECMA-335 has no exact primitive GenericParamConstraint. A final non-null
+                // primitive bound uses its sole carrier in value slots; a nullable primitive
+                // bound retains the CLR generic token because both T=Int and T=Int? are legal.
+                // In both cases KLIB remains authoritative for the logical bound.
+                superType.isPrimitiveType(nullable = false) ||
+                        superType.isPrimitiveType(nullable = true) -> false
                 else -> {
                     val simpleType = superType as? IrSimpleType
                     simpleType == null ||

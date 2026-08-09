@@ -725,7 +725,8 @@ The admitted numeric closure is the complete signed Common `Numeric.f_sum` famil
 
 The bootstrap generator selects these six `PrimitiveType.numericPrimitives` variants from the
 same template object that generates `_Collections.kt`. Unsigned variants remain excluded because
-unsigned value classes are not a supported scalar family; `Sequence`, object-array,
+their scalar/runtime product has not yet been admitted on top of the single-field value-class
+foundation; `Sequence`, object-array,
 primitive-array, and `sumOf` variants remain separate dependency closures. The signed Iterable
 average closure is selected independently below. No body is copied or rewritten for .NET.
 
@@ -767,8 +768,8 @@ interoperable than consuming the authoritative explicit platform names.
 The admitted average closure is the complete signed Common `Numeric.f_average` family for
 `Iterable`: Byte, Short, Int, Long, Float, and Double receivers all return `Double`. JVM, JS,
 Wasm, and Native consume these same generated bodies. Unsigned values remain excluded with their
-parked value classes; Sequence, object-array, and primitive-array variants remain distinct source
-and representation closures.
+separate scalar/runtime publication; Sequence, object-array, and primitive-array variants remain
+distinct source and representation closures.
 
 Every body accumulates into `Double` in encounter order, increments an `Int` count through Common
 `checkCountOverflow`, and returns `Double.NaN` when the receiver is empty or `sum / count`
@@ -812,7 +813,8 @@ The audit deliberately excludes the rest of the nearby generator frontier:
 - the Long and Double `sumOf` overloads were excluded from that batch until their parameterless
   `ExperimentalTypeInference` and `OverloadResolutionByLambdaReturnType` marker sources and erased
   physical overloads could land together; the subsequent signed-selector-sum tranche below
-  completes them, while the unsigned overloads still require unsigned value classes;
+  completes them, while the unsigned overloads still require the unsigned
+  scalar/runtime and generated-stdlib product;
 - mapping, filtering, snapshot, running-fold, and running-reduce families construct collection
   implementations that do not yet exist;
 - min/max families require truthful `Comparable`/`Comparator` representation plus their own

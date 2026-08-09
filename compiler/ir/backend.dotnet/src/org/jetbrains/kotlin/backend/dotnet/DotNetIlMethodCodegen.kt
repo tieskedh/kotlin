@@ -10,6 +10,8 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_ENUM_ENTRY_CONSTRUCTOR
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_BOX_HELPER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_VALUE_CLASS_UNBOX_HELPER
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceBridgeMemberViewOrNull
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceBridge
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -114,7 +116,14 @@ internal class DotNetIlMethodCodegen(
             // Kotlin-owned generic classes map their open default type to the same erased owner;
             // imported CLR generic classes retain their native open instantiation.
             val thisType =
-                if (constructedClass.typeParameters.isEmpty()) DotNetIlValueType.UserClass(functionInfo.owner)
+                if (constructedClass.typeParameters.isEmpty() ||
+                    constructedClass.defaultType.dotNetValueClassOrNull() != null
+                ) {
+                    // A generic Kotlin value class still has one non-generic nominal box owner.
+                    // Its constructor initializes that owner; only exact values outside the
+                    // constructor use the substituted underlying carrier.
+                    DotNetIlValueType.UserClass(functionInfo.owner)
+                }
                 else typeMapper.toDotNetIlValueType(constructedClass.defaultType)
                     ?: dotNetUnsupported(
                         "constructor of generic class '${constructedClass.name.asString()}' whose open type cannot be mapped"
@@ -245,7 +254,13 @@ internal class DotNetIlMethodCodegen(
                         for (attribute in attributes) appendLine("    $attribute")
                     }
                 }
-            if (function.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER || function.origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) {
+            val valueClassImplementation =
+                (function as? IrSimpleFunction)?.dotNetValueClassImplementationSourceOrNull()
+            if (valueClassImplementation != null) {
+                // Common copies the source member's origin onto its static value-class
+                // implementation. MethodImpl rows remain owned by the retained nominal wrapper;
+                // the static carrier method has no virtual/interface slot of its own.
+            } else if (function.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER || function.origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) {
                 appendInterfaceDefaultSlotOverrides()
             } else if (
                 function.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE ||
@@ -298,6 +313,7 @@ internal class DotNetIlMethodCodegen(
      *   directly (objprobe_s7a, nestedprobe_s2).
      */
     private fun IrFunction.dotNetMemberVisibility(): String {
+        if (origin == DOTNET_VALUE_CLASS_BOX_HELPER || origin == DOTNET_VALUE_CLASS_UNBOX_HELPER) return "public"
         // CLR enclosing types cannot call private members of their nested types. The enum entry
         // implementation class itself remains nested-private; only its compiler-generated
         // constructor is assembly-visible so the enclosing enum's `.cctor` can instantiate it.
@@ -356,6 +372,8 @@ internal class DotNetIlMethodCodegen(
                         origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER ||
                         origin == DOTNET_INTERFACE_DEFAULT_HELPER ||
                         origin == DOTNET_STATIC_INITIALIZATION_ENTRY ||
+                        origin == DOTNET_VALUE_CLASS_BOX_HELPER ||
+                        origin == DOTNET_VALUE_CLASS_UNBOX_HELPER ||
                         (this is IrSimpleFunction && name.asString().endsWith("\$default")) ||
                         visibility != DescriptorVisibilities.PUBLIC)
 
@@ -507,7 +525,7 @@ internal class DotNetIlMethodCodegen(
         val signatureMapper = typeMapper.genericInterfaceSignatureView(memberView)
         val arguments = interfaceClass.typeParameters.map { parameter ->
             val argumentType = substitutor.substitute(parameter.typeParameterDefaultType)
-            signatureMapper.toDotNetIlValueType(argumentType)
+            signatureMapper.toDotNetIlGenericArgumentType(argumentType)
                 ?: dotNetUnsupported(
                     "typed generic interface argument '${argumentType.render()}' is unavailable"
                 )
@@ -552,7 +570,7 @@ internal class DotNetIlMethodCodegen(
             )
             val arguments = overriddenOwner.typeParameters.map { parameter ->
                 val argumentType = substitutor.substitute(parameter.typeParameterDefaultType)
-                typeMapper.toDotNetIlValueType(argumentType)
+                typeMapper.toDotNetIlGenericArgumentType(argumentType)
                     ?: dotNetUnsupported("covariant-return owner argument '${argumentType.render()}' is unavailable")
             }
             DotNetIlValueType.GenericInstance(referencedInfo.owner, arguments).nameInSignature
@@ -598,6 +616,7 @@ internal class DotNetIlMethodCodegen(
      *   no virtual flags — the established plain-`call` model.
      */
     private fun IrFunction.dotNetVirtualFlags(): String {
+        if ((this as? IrSimpleFunction)?.dotNetValueClassImplementationSourceOrNull() != null) return ""
         if (origin == DOTNET_INTERFACE_DEFAULT_FORWARDER) return "newslot virtual final "
         if (origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) return "newslot virtual final "
         if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER) return "newslot virtual final "
@@ -971,7 +990,7 @@ internal class DotNetIlMethodCodegen(
             dotNetUnsupported("delegating constructor call of '${targetClass.name.asString()}' has an unsupported type-argument shape")
         }
         val instantiation = call.typeArguments.map { argumentType ->
-            argumentType?.let { constructorTypeMapper.toDotNetIlValueType(it) }
+            argumentType?.let { constructorTypeMapper.toDotNetIlGenericArgumentType(it) }
                 ?: dotNetUnsupported(
                     "delegating constructor call of '${targetClass.name.asString()}' instantiates a type parameter " +
                             "with an unsupported type argument"

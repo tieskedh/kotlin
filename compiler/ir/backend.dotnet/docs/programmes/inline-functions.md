@@ -571,8 +571,9 @@ semantics.
 - **Use `isinst Nullable<T>` as a new identity.** Rejected. Nullable values box as the underlying
   `T` or null. The runtime test must target the exact underlying box, matching the already-selected
   `is T` implementation.
-- **Admit `UInt` and other value classes because they also have scalar storage.** Rejected. Value
-  classes are a parked language programme whose Kotlin identity cannot be inferred from storage.
+- **Admit `UInt` and other value classes because they also have scalar storage.** Rejected for
+  this slice. Single-field value classes now have their own nominal-box/contextual-carrier ADR,
+  but scalar storage still cannot infer unsigned runtime and stdlib publication.
 
 The bounded implementation includes `Boolean`, `Byte`, `Short`, `Int`, `Long`, `Float`, `Double`,
 and `Char`, both nullable spellings, outer nullable/object widening, exact-type success, distinct-
@@ -666,7 +667,7 @@ Kotlin libraries, and explicit aliasing C# export adapters on both runtime profi
 The slice does not generalize generic arrays. In particular, it neither admits nullable primitive
 elements in `Array<T?>` nor selects a star-projected `Array<*>` carrier. It also does not infer the
 unsigned value-class array families from signed storage: `UByteArray`, `UShortArray`, `UIntArray`,
-and `ULongArray` remain part of the parked value-class programme.
+and `ULongArray` remain a separate runtime/stdlib product on top of the value-class foundation.
 
 This prerequisite is implemented. The complete wrapper registry now drives all eight signed
 families; `remainingPrimitiveArrays.kt` executes their missing constructor, initializer, literal,
@@ -753,7 +754,8 @@ representation, rejected alternatives, schema consequences, and adversarial gate
 [generic-class erased-identity ADR](../decisions/generic-class-erased-identity.md).
 
 The bounded implementation covers ordinary generic classes already admitted by the class model.
-It does not infer support for value classes, foreign CLR generic classes as Kotlin-owned
+It did not itself infer support for value classes (which were selected later by their own ADR),
+foreign CLR generic classes as Kotlin-owned
 declarations, currently rejected open-nullable nested constructions, reflection, or either public
 reified-inline gate.
 

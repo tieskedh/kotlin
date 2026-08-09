@@ -66,6 +66,7 @@ The following decisions constrain new work; their ADRs own the detail:
 - [classified CLR exceptions](../decisions/classified-clr-exceptions.md);
 - [primitive scalar carriers](../decisions/primitive-scalars.md);
 - [Kotlin-owned primitive arrays](../decisions/primitive-arrays.md);
+- [single-field value classes](../decisions/value-classes.md);
 - [runtime and stdlib ownership](../decisions/runtime-and-stdlib-ownership.md);
 - [generic nullability and covariant returns](../decisions/adr-hybrid-generic-nullability-and-covariant-returns.md);
 - [profile-aware interface defaults](../decisions/adr-profile-aware-interface-default-implementations.md);
@@ -460,7 +461,9 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
   invocation are complete for the admitted callable arities;
 - foreign CLR generic-method import, including method-owned parameter bounds,
   overload resolution, invocation/binding, and subsequent callable reflection;
-- value/inline classes;
+- multi-field value classes; the single-field box/carrier architecture is
+  accepted and implemented, but does not select a layout or ABI for multiple
+  underlying fields;
 - reflection-dependent inline operations beyond the completed reified
   type/class/array/enum/`typeOf` closure;
 - suspend inline functions until coroutine state machines are supported;
@@ -470,8 +473,9 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - collection/stdlib families outside admitted Common dependency closures; and
 - broad Gradle/KMP distribution integration beyond the current target model.
 
-An adjacent feature must not assume a parked representation. In particular, value classes
-constrain generic interfaces; coroutines constrain callables and cancellation; annotation
+An adjacent feature must not assume a parked representation. In particular, a future
+multi-field value-class model must extend rather than bypass the accepted single-field
+generic/interface boundaries; coroutines constrain callables and cancellation; annotation
 discovery must consume the completed KLIB value authority rather than re-decoding derived CLR
 rows; enums consume collection identity.
 

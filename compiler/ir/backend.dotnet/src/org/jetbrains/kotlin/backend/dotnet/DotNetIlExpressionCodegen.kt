@@ -123,6 +123,10 @@ internal class DotNetIlExpressionCodegen(
      */
     fun toDotNetIlValueType(type: IrType): DotNetIlValueType? = typeMapper.toDotNetIlValueType(type)
 
+    /** Maps an element/argument whose identity is reified by a CLR generic construction. */
+    fun toDotNetIlGenericArgumentType(type: IrType): DotNetIlValueType? =
+        typeMapper.toDotNetIlGenericArgumentType(type)
+
     fun permitsErasedGenericArrayElementWrite(type: IrType): Boolean =
         typeMapper.permitsErasedGenericArrayElementWrite(type)
 
@@ -374,7 +378,7 @@ internal class DotNetIlExpressionCodegen(
         val literalType = when (expectedType) {
             is DotNetIlValueType.PrimitiveArray -> expectedType
             is DotNetIlValueType.GenericArray -> {
-                val elementType = toDotNetIlValueType(expression.varargElementType)
+                val elementType = toDotNetIlGenericArgumentType(expression.varargElementType)
                     ?: dotNetUnsupported(
                         "residual IR vararg has unsupported element type ${expression.varargElementType.render()}"
                     )
@@ -791,8 +795,42 @@ internal class DotNetIlExpressionCodegen(
     private fun emitTypeOperatorCall(expression: IrTypeOperatorCall, expectedType: DotNetIlValueType) {
         val operandType = mappedNaturalType(expression.argument)
             ?: dotNetUnsupported("implicit cast of a value of unsupported type ${expression.argument.type.render()}")
-        val castType = typeMapper.toDotNetIlValueType(expression.typeOperand)
+        val boxedValueClassCastType = expression.typeOperand.dotNetValueClassOrNull()?.let {
+            typeMapper.toDotNetIlBoxedValueClassType(expression.typeOperand)
+        }
+        val valueClassRuntimeOperator = expression.operator == IrTypeOperator.CAST ||
+                expression.operator == IrTypeOperator.SAFE_CAST ||
+                expression.operator == IrTypeOperator.INSTANCEOF ||
+                expression.operator == IrTypeOperator.NOT_INSTANCEOF ||
+                // The value-usage lowering passes a frontend-proven IMPLICIT_CAST to the
+                // producer unbox helper. Its parameter is the nominal value-class owner, so the
+                // inner operation must produce that owner. An ordinary exact use instead asks
+                // for the carrier and therefore does not enter this branch.
+                (expression.operator == IrTypeOperator.IMPLICIT_CAST &&
+                        boxedValueClassCastType != null && expectedType == boxedValueClassCastType) ||
+                (expression.operator == IrTypeOperator.IMPLICIT_NOTNULL &&
+                        expression.argument.type.dotNetValueClassOrNull() != null &&
+                        expression.argument.type.dotNetUnboxedValueClassTypeOrNull() == null)
+        val castType = if (valueClassRuntimeOperator && boxedValueClassCastType != null) {
+            boxedValueClassCastType
+        } else {
+            typeMapper.toDotNetIlValueType(expression.typeOperand)
+        }
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
+        if (expression.operator == IrTypeOperator.REINTERPRET_CAST) {
+            if (operandType != castType || castType != expectedType) {
+                dotNetUnsupported(
+                    "reinterpret cast changes physical carrier from ${operandType.nameInSignature} " +
+                            "to ${castType.nameInSignature} where ${expectedType.nameInSignature} is expected"
+                )
+            }
+            // Shared value-class declaration lowering uses REINTERPRET_CAST only to change the
+            // logical IR type of an already exact underlying value. Equal mapped carriers prove
+            // that the CLR evaluation stack needs no instruction; every unequal shape remains a
+            // located failure instead of becoming an unchecked physical conversion.
+            emitExpression(expression.argument, operandType)
+            return
+        }
         if (expression.operator == IrTypeOperator.IMPLICIT_CAST &&
             expression.argument.type.isDotNetGenericArray() &&
             expression.typeOperand.isDotNetGenericArray() &&
@@ -1524,7 +1562,7 @@ internal class DotNetIlExpressionCodegen(
                 dotNetUnsupported("call to '$calleeName' has an unsupported type-argument shape")
             }
             call.typeArguments.map { argumentType ->
-                argumentType?.let { typeMapper.toDotNetIlValueType(it) }
+                argumentType?.let { typeMapper.toDotNetIlGenericArgumentType(it) }
                     ?: dotNetUnsupported(
                         "call to '$calleeName' instantiates a type parameter with an unsupported type argument"
                     )
@@ -1732,8 +1770,14 @@ internal class DotNetIlExpressionCodegen(
         val constructor = call.symbol.owner
         val irClass = constructor.constructedClass
         val constructedType = typeMapper.toDotNetIlValueType(call.type)
-        if (constructedType is DotNetIlValueType.PrimitiveArray ||
-            constructedType is DotNetIlValueType.GenericArray
+        // Constructor kind belongs to the declaration being instantiated, not to the contextual
+        // value representation of the call. A value class whose exact carrier is Array<E> maps
+        // `call.type` to that vector, but `new V(array)` still constructs V's one nominal box
+        // owner. Looking only at `constructedType` accidentally routed that box helper through
+        // the Kotlin Array constructor intrinsic.
+        if ((call.type.isSupportedDotNetPrimitiveArray() || call.type.isDotNetGenericArray()) &&
+            (constructedType is DotNetIlValueType.PrimitiveArray ||
+                    constructedType is DotNetIlValueType.GenericArray)
         ) {
             val intrinsic = intrinsicMethods.getIntrinsic(call.symbol)
             if (intrinsic != null && intrinsic.tryEmitConstructorAsExpression(call, this, expectedType)) return
@@ -1763,7 +1807,7 @@ internal class DotNetIlExpressionCodegen(
             // type parameters to the constructor call's typeArguments. Both are authoritative IR
             // encodings of the same constructed CLR owner.
             val argumentsFromCall = call.typeArguments.map { argument ->
-                argument?.let(constructorTypeMapper::toDotNetIlValueType)
+                argument?.let(constructorTypeMapper::toDotNetIlGenericArgumentType)
             }
             val instanceType = (constructorTypeMapper.toDotNetIlValueType(call.type) as? DotNetIlValueType.GenericInstance)
                 ?: argumentsFromCall
@@ -2136,7 +2180,7 @@ internal class DotNetIlExpressionCodegen(
             if (callee.typeParameters.isEmpty()) return emptyList()
             if (call.typeArguments.size != callee.typeParameters.size) return null
             return call.typeArguments.map { argument ->
-                argument?.let(mapper::toDotNetIlValueType) ?: return null
+                argument?.let(mapper::toDotNetIlGenericArgumentType) ?: return null
             }
         }
         val canonicalClassInfo = canonicalGenericSignatureTypeMapper.classInfoOrNull(interfaceClass)
@@ -2323,7 +2367,12 @@ internal class DotNetIlExpressionCodegen(
         }
 
         val logicalTypes = logicalIrTypes.map { type ->
-            typeMapper.toDotNetIlValueType(type) ?: return false
+            // ExactFunctionN is a CLR-generic capability. Its constructed arguments therefore
+            // use the nominal value-class TypeDef at every value-class boundary, just like an
+            // ordinary generic method instantiation; the surrounding IR autoboxing calls own
+            // the carrier transitions. Mapping these as ordinary value positions would ask a
+            // nominal box helper to produce the underlying carrier.
+            typeMapper.toDotNetIlGenericArgumentType(type) ?: return false
         }
         val resultType = logicalTypes.last()
         if (resultType != expectedType && !resultType.isDotNetAssignableTo(expectedType)) return false
