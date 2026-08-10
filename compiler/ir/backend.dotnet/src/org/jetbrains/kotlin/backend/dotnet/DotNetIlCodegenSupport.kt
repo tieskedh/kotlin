@@ -50,9 +50,11 @@ import org.jetbrains.kotlin.ir.util.eraseTypeParameters
 import org.jetbrains.kotlin.ir.util.erasedUpperBound
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.getInlineClassUnderlyingType
+import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.isNullable
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
+import org.jetbrains.kotlin.name.StandardClassIds
 
 /** Whether this is one of the primitive-array classifiers whose scalar element type is supported. */
 internal fun IrType.isSupportedDotNetPrimitiveArray(): Boolean = when (classFqName?.asString()) {
@@ -1123,6 +1125,8 @@ internal class DotNetIlTypeMapper private constructor(
             ?.owner
             ?.let(::classifierInfo)
         val isMarkedNullable = simpleType?.isMarkedNullable() == true
+        val hasFlexibleNullability =
+            type.hasAnnotation(StandardClassIds.Annotations.FlexibleNullability)
         // `void` is legal only in a CLR method's return slot. Every other occurrence of
         // Kotlin `Unit` is the ordinary singleton reference value, matching the JVM's
         // `kotlin.Unit` parameter/field representation and the expression codegen contract.
@@ -1163,7 +1167,7 @@ internal class DotNetIlTypeMapper private constructor(
                 return DotNetIlValueType.Object
             }
         }
-        if (!isMarkedNullable) {
+        if (!isMarkedNullable || hasFlexibleNullability) {
             when (topClassifierInfo?.builtinKind) {
                 DotNetBuiltinClassifierKind.BOOLEAN -> return DotNetIlValueType.Boolean
                 DotNetBuiltinClassifierKind.BYTE -> return DotNetIlValueType.Int8
@@ -1266,7 +1270,11 @@ internal class DotNetIlTypeMapper private constructor(
         type: IrType,
         classifierInfo: DotNetClassifierInfo?,
     ): DotNetIlValueType.NullableValue? {
-        if (type !is IrSimpleType || !type.isMarkedNullable()) return null
+        if (
+            type !is IrSimpleType ||
+            !type.isMarkedNullable() ||
+            type.hasAnnotation(StandardClassIds.Annotations.FlexibleNullability)
+        ) return null
         val elementType = when (classifierInfo?.builtinKind) {
             DotNetBuiltinClassifierKind.BOOLEAN -> DotNetIlValueType.Boolean
             DotNetBuiltinClassifierKind.BYTE -> DotNetIlValueType.Int8

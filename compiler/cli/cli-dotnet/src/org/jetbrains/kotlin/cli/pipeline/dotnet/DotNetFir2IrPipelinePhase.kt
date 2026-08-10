@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.compiler.plugin.getCompilerExtensions
 import org.jetbrains.kotlin.fir.backend.Fir2IrConfiguration
 import org.jetbrains.kotlin.fir.backend.Fir2IrVisibilityConverter
 import org.jetbrains.kotlin.fir.backend.dotnet.DotNetFir2IrExtensions
+import org.jetbrains.kotlin.fir.backend.dotnet.DotNetIrSpecialAnnotationSymbolProvider
 import org.jetbrains.kotlin.fir.backend.dotnet.collectDotNetExactContractProjections
 import org.jetbrains.kotlin.fir.pipeline.convertToIrAndActualize
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
@@ -31,7 +32,7 @@ object DotNetFir2IrPipelinePhase : PipelinePhase<DotNetFrontendPipelineArtifact,
             visibilityConverter = Fir2IrVisibilityConverter.Default,
             kotlinBuiltIns = DefaultBuiltIns.Instance,
             typeSystemContextProvider = ::IrTypeSystemContextImpl,
-            createSpecialAnnotationsProvider = null,
+            createSpecialAnnotationsProvider = ::DotNetIrSpecialAnnotationSymbolProvider,
             extraActualDeclarationExtractorsInitializer = { emptyList() },
         )
         val exactContractProjections = buildMap {
