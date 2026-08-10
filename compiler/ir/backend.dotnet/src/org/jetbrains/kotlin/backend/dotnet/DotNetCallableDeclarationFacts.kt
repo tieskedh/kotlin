@@ -69,5 +69,27 @@ internal fun IrFunction.dotNetCallableDeclarationFlags(): Int =
 internal fun IrProperty.dotNetCallableDeclarationFlags(): Int =
     DotNetCallableDeclarationFlags.encode(visibility, modality)
 
+internal fun IrSimpleFunction.dotNetFunctionFlags(): Int =
+    listOfNotNull(
+        DotNetFunctionReferenceFlags.IS_INLINE.takeIf { isInline },
+        DotNetFunctionReferenceFlags.IS_EXTERNAL.takeIf { isExternal },
+        DotNetFunctionReferenceFlags.IS_OPERATOR.takeIf { isOperator },
+        DotNetFunctionReferenceFlags.IS_INFIX.takeIf { isInfix },
+        DotNetFunctionReferenceFlags.IS_SUSPEND.takeIf { isSuspend },
+    ).sum()
+
+internal fun IrSimpleFunction.dotNetFunctionDeclarationFlags(): Int =
+    dotNetFunctionFlags() or dotNetCallableDeclarationFlags()
+
+internal object DotNetPropertyDeclarationFlags {
+    const val IS_CONST: Int = 1 shl 17
+    const val IS_LATEINIT: Int = 1 shl 18
+}
+
+internal fun IrProperty.dotNetPropertyDeclarationFlags(): Int =
+    dotNetCallableDeclarationFlags() or
+        (if (isConst) DotNetPropertyDeclarationFlags.IS_CONST else 0) or
+        (if (isLateinit) DotNetPropertyDeclarationFlags.IS_LATEINIT else 0)
+
 internal fun dotNetLocalCallableDeclarationFlags(): Int =
     DotNetCallableDeclarationFlags.encode(DescriptorVisibilities.LOCAL, Modality.FINAL)

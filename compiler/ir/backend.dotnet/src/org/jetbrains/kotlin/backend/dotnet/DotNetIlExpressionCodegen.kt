@@ -2196,6 +2196,18 @@ internal class DotNetIlExpressionCodegen(
      */
     private fun emitGetField(expression: IrGetField, expectedType: DotNetIlValueType) {
         val field = expression.symbol.owner
+        if (field.correspondingPropertySymbol?.owner?.isConst == true) {
+            val literal = field.initializer?.expression as? IrConst
+                ?: dotNetUnsupported(
+                    "const field '${field.name.asString()}' has no retained literal initializer"
+                )
+            // A CLR literal field has metadata but no storage, so ldsfld is invalid. Normally FIR
+            // has already inlined the value; the one intentional survivor is the private body of
+            // a Kotlin property-reference getter. Emit the retained Kotlin literal directly, as
+            // the JVM property-reference implementation does, without adding a physical accessor.
+            emitExpression(literal, expectedType)
+            return
+        }
         val [classInfo, declaredFieldType, isStatic] = resolveFieldAccess(field)
         if (classInfo.typeParameterCount > 0) {
             // A field on a genuinely generic CLR owner keeps its declared open field type while
@@ -2356,9 +2368,9 @@ internal class DotNetIlExpressionCodegen(
      * the static facade field of a top-level property. Every lookup goes through the
      * emission-scoped state, so field access to a class the emitter removed (or a field of a
      * type outside the supported set) aborts the surrounding render. The backing field of a
-     * `const val` is never accessed on either owner shape: it is a CLR `literal` field without
-     * storage (`ldsfld` would fail at runtime), and every read of the property is inlined by
-     * the frontend.
+     * `const val` is handled before this lookup by [emitGetField]: it is a CLR `literal` field
+     * without storage (`ldsfld` would fail at runtime), so any intentionally surviving read emits
+     * the retained Kotlin literal instead.
      */
     private fun resolveFieldAccess(field: IrField): Triple<DotNetIlClassInfo, DotNetIlValueType, Boolean> {
         val fieldName = field.name.asString()

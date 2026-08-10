@@ -111,6 +111,8 @@ internal object DotNetRuntimeLibraryHelpers {
             coreLibraryReference,
             compilerAbiTypeAttributesIl.replace("            |", ""),
         ).prependIndent("            |")
+        val propertyAccessorSupportTypesIl = propertyAccessorSupportTypesIl(coreLibraryReference)
+            .prependIndent("            |")
         val callableInvokerSwitchLabelsIl = (0 until BuiltInFunctionArity.BIG_ARITY)
             .joinToString(", ") { arity -> "CI_Call$arity" }
         val callableInvokerCasesIl = (0 until BuiltInFunctionArity.BIG_ARITY)
@@ -918,6 +920,8 @@ $callableInvokerCasesIl
             |    }
             |  }
             |
+$propertyAccessorSupportTypesIl
+            |
             |  .class private abstract auto ansi beforefieldinit PropertyReferenceBase
             |         extends ${coreLibraryReference}System.Object
             |         implements Kotlin.KProperty
@@ -928,6 +932,8 @@ $callableInvokerCasesIl
             |    .field private initonly class Kotlin.Collections.List 'typeParameters'
             |    .field private initonly class Kotlin.Collections.List 'annotations'
             |    .field private int32 'declarationFlags'
+            |    .field private class Kotlin.KProperty/Getter 'getterAccessor'
+            |    .field private class Kotlin.KMutableProperty/Setter 'setterAccessor'
             |
             |    .method family hidebysig specialname rtspecialname instance void .ctor(
             |        string 'name', object[] 'signature',
@@ -974,12 +980,99 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |
+            |    .method assembly hidebysig instance void InitializeAccessors(
+            |        int32 'receiverCount', object[] 'getterSignature',
+            |        class Kotlin.Collections.List 'getterAnnotations', int32 'getterFlags',
+            |        object[] 'setterSignature', class Kotlin.Collections.List 'setterAnnotations',
+            |        int32 'setterFlags', class Kotlin.Function2 'parameterFactory') cil managed
+            |    {
+            |      .maxstack 7
+            |      ldarg.0
+            |      ldarg.0
+            |      ldarg.1
+            |      ldarg.2
+            |      ldarg.s 8
+            |      ldarg.3
+            |      ldarg.s 4
+            |      call class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyAccessorFactory::CreateGetter(
+            |          class Kotlin.KProperty, int32, object[], class Kotlin.Function2,
+            |          class Kotlin.Collections.List, int32)
+            |      stfld class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyReferenceBase::'getterAccessor'
+            |      ldarg.s 5
+            |      brfalse.s PR_AccessorsDone
+            |      ldarg.0
+            |      ldarg.0
+            |      castclass Kotlin.KMutableProperty
+            |      ldarg.1
+            |      ldarg.s 5
+            |      ldarg.s 8
+            |      ldarg.s 6
+            |      ldarg.s 7
+            |      call class Kotlin.KMutableProperty/Setter Kotlin.Runtime.Internal.PropertyAccessorFactory::CreateSetter(
+            |          class Kotlin.KMutableProperty, int32, object[], class Kotlin.Function2,
+            |          class Kotlin.Collections.List, int32)
+            |      stfld class Kotlin.KMutableProperty/Setter Kotlin.Runtime.Internal.PropertyReferenceBase::'setterAccessor'
+            |    PR_AccessorsDone:
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig instance class Kotlin.KProperty/Getter GetGetterAccessor() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyReferenceBase::'getterAccessor'
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig instance class Kotlin.KMutableProperty/Setter GetSetterAccessor() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KMutableProperty/Setter Kotlin.Runtime.Internal.PropertyReferenceBase::'setterAccessor'
+            |      ret
+            |    }
+            |
             |    .method assembly hidebysig instance void SetDeclarationFlags(int32 'flags') cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      ldarg.1
             |      stfld int32 Kotlin.Runtime.Internal.PropertyReferenceBase::'declarationFlags'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isLateinit() cil managed
+            |    {
+            |      .override method instance bool Kotlin.KProperty::get_isLateinit()
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.PropertyReferenceBase::'declarationFlags'
+            |      ldc.i4 ${DotNetPropertyDeclarationFlags.IS_LATEINIT}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isConst() cil managed
+            |    {
+            |      .override method instance bool Kotlin.KProperty::get_isConst()
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.PropertyReferenceBase::'declarationFlags'
+            |      ldc.i4 ${DotNetPropertyDeclarationFlags.IS_CONST}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance class Kotlin.KProperty/Getter get_getter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KProperty/Getter Kotlin.KProperty::get_getter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyReferenceBase::'getterAccessor'
             |      ret
             |    }
             |
@@ -1226,6 +1319,16 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KProperty0/Getter get_fixedGetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KProperty0/Getter Kotlin.KProperty0::get_getter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyReferenceBase::GetGetterAccessor()
+            |      castclass Kotlin.KProperty0/Getter
+            |      ret
+            |    }
+            |
             |    .method public hidebysig newslot virtual final instance object Get() cil managed
             |    {
             |      .override method instance object Kotlin.KProperty0::Get()
@@ -1291,6 +1394,35 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KProperty0/Getter get_fixedGetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KProperty0/Getter Kotlin.KProperty0::get_getter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyReferenceBase::GetGetterAccessor()
+            |      castclass Kotlin.KProperty0/Getter
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KMutableProperty/Setter get_baseSetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KMutableProperty/Setter Kotlin.KMutableProperty::get_setter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KMutableProperty/Setter Kotlin.Runtime.Internal.PropertyReferenceBase::GetSetterAccessor()
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KMutableProperty0/Setter get_fixedSetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KMutableProperty0/Setter Kotlin.KMutableProperty0::get_setter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KMutableProperty/Setter Kotlin.Runtime.Internal.PropertyReferenceBase::GetSetterAccessor()
+            |      castclass Kotlin.KMutableProperty0/Setter
+            |      ret
+            |    }
+            |
             |    .method public hidebysig newslot virtual final instance object Get() cil managed
             |    {
             |      .override method instance object Kotlin.KProperty0::Get()
@@ -1352,6 +1484,16 @@ $callableInvokerCasesIl
             |      .maxstack 1
             |      ldarg.0
             |      ldfld class Kotlin.Function1 Kotlin.Runtime.Internal.Property1Impl::'getter'
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KProperty1/Getter get_fixedGetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KProperty1/Getter Kotlin.KProperty1::get_getter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyReferenceBase::GetGetterAccessor()
+            |      castclass Kotlin.KProperty1/Getter
             |      ret
             |    }
             |
@@ -1422,6 +1564,35 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KProperty1/Getter get_fixedGetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KProperty1/Getter Kotlin.KProperty1::get_getter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyReferenceBase::GetGetterAccessor()
+            |      castclass Kotlin.KProperty1/Getter
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KMutableProperty/Setter get_baseSetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KMutableProperty/Setter Kotlin.KMutableProperty::get_setter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KMutableProperty/Setter Kotlin.Runtime.Internal.PropertyReferenceBase::GetSetterAccessor()
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KMutableProperty1/Setter get_fixedSetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KMutableProperty1/Setter Kotlin.KMutableProperty1::get_setter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KMutableProperty/Setter Kotlin.Runtime.Internal.PropertyReferenceBase::GetSetterAccessor()
+            |      castclass Kotlin.KMutableProperty1/Setter
+            |      ret
+            |    }
+            |
             |    .method public hidebysig newslot virtual final instance object Get(object receiver) cil managed
             |    {
             |      .override method instance object Kotlin.KProperty1::Get(object)
@@ -1486,6 +1657,16 @@ $callableInvokerCasesIl
             |      .maxstack 1
             |      ldarg.0
             |      ldfld class Kotlin.Function2 Kotlin.Runtime.Internal.Property2Impl::'getter'
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KProperty2/Getter get_fixedGetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KProperty2/Getter Kotlin.KProperty2::get_getter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyReferenceBase::GetGetterAccessor()
+            |      castclass Kotlin.KProperty2/Getter
             |      ret
             |    }
             |
@@ -1558,6 +1739,35 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KProperty2/Getter get_fixedGetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KProperty2/Getter Kotlin.KProperty2::get_getter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyReferenceBase::GetGetterAccessor()
+            |      castclass Kotlin.KProperty2/Getter
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KMutableProperty/Setter get_baseSetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KMutableProperty/Setter Kotlin.KMutableProperty::get_setter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KMutableProperty/Setter Kotlin.Runtime.Internal.PropertyReferenceBase::GetSetterAccessor()
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KMutableProperty2/Setter get_fixedSetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KMutableProperty2/Setter Kotlin.KMutableProperty2::get_setter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance class Kotlin.KMutableProperty/Setter Kotlin.Runtime.Internal.PropertyReferenceBase::GetSetterAccessor()
+            |      castclass Kotlin.KMutableProperty2/Setter
+            |      ret
+            |    }
+            |
             |    .method public hidebysig newslot virtual final instance object Get(object receiver1, object receiver2) cil managed
             |    {
             |      .override method instance object Kotlin.KProperty2::Get(object, object)
@@ -1606,6 +1816,8 @@ $callableInvokerCasesIl
             |    .field private initonly class Kotlin.Collections.List 'typeParameters'
             |    .field private initonly class Kotlin.Collections.List 'annotations'
             |    .field private int32 'declarationFlags'
+            |    .field family class Kotlin.KProperty0/Getter 'getterAccessor'
+            |    .field family class Kotlin.KMutableProperty0/Setter 'setterAccessor'
             |
             |    .method family hidebysig specialname rtspecialname instance void .ctor(
             |        string 'name', object[] 'signature',
@@ -1652,12 +1864,94 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |
+            |    .method assembly hidebysig instance void InitializeAccessors(
+            |        object[] 'getterSignature', class Kotlin.Collections.List 'getterAnnotations',
+            |        int32 'getterFlags', object[] 'setterSignature',
+            |        class Kotlin.Collections.List 'setterAnnotations', int32 'setterFlags',
+            |        class Kotlin.Function2 'parameterFactory') cil managed
+            |    {
+            |      .maxstack 7
+            |      ldarg.0
+            |      ldarg.0
+            |      ldc.i4.0
+            |      ldarg.1
+            |      ldarg.s 7
+            |      ldarg.2
+            |      ldarg.3
+            |      call class Kotlin.KProperty/Getter Kotlin.Runtime.Internal.PropertyAccessorFactory::CreateGetter(
+            |          class Kotlin.KProperty, int32, object[], class Kotlin.Function2,
+            |          class Kotlin.Collections.List, int32)
+            |      castclass Kotlin.KProperty0/Getter
+            |      stfld class Kotlin.KProperty0/Getter Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'getterAccessor'
+            |      ldarg.s 4
+            |      brfalse.s LDP_AccessorsDone
+            |      ldarg.0
+            |      ldarg.0
+            |      castclass Kotlin.KMutableProperty
+            |      ldc.i4.0
+            |      ldarg.s 4
+            |      ldarg.s 7
+            |      ldarg.s 5
+            |      ldarg.s 6
+            |      call class Kotlin.KMutableProperty/Setter Kotlin.Runtime.Internal.PropertyAccessorFactory::CreateSetter(
+            |          class Kotlin.KMutableProperty, int32, object[], class Kotlin.Function2,
+            |          class Kotlin.Collections.List, int32)
+            |      castclass Kotlin.KMutableProperty0/Setter
+            |      stfld class Kotlin.KMutableProperty0/Setter Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'setterAccessor'
+            |    LDP_AccessorsDone:
+            |      ret
+            |    }
+            |
             |    .method assembly hidebysig instance void SetDeclarationFlags(int32 'flags') cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      ldarg.1
             |      stfld int32 Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'declarationFlags'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isLateinit() cil managed
+            |    {
+            |      .override method instance bool Kotlin.KProperty::get_isLateinit()
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'declarationFlags'
+            |      ldc.i4 ${DotNetPropertyDeclarationFlags.IS_LATEINIT}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance bool get_isConst() cil managed
+            |    {
+            |      .override method instance bool Kotlin.KProperty::get_isConst()
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'declarationFlags'
+            |      ldc.i4 ${DotNetPropertyDeclarationFlags.IS_CONST}
+            |      and
+            |      ldc.i4.0
+            |      cgt.un
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance class Kotlin.KProperty/Getter get_getter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KProperty/Getter Kotlin.KProperty::get_getter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KProperty0/Getter Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'getterAccessor'
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KProperty0/Getter get_fixedGetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KProperty0/Getter Kotlin.KProperty0::get_getter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KProperty0/Getter Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'getterAccessor'
             |      ret
             |    }
             |
@@ -1849,6 +2143,24 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KMutableProperty/Setter get_baseSetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KMutableProperty/Setter Kotlin.KMutableProperty::get_setter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KMutableProperty0/Setter Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'setterAccessor'
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig specialname newslot virtual final instance class Kotlin.KMutableProperty0/Setter get_fixedSetter() cil managed
+            |    {
+            |      .override method instance class Kotlin.KMutableProperty0/Setter Kotlin.KMutableProperty0::get_setter()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KMutableProperty0/Setter Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'setterAccessor'
+            |      ret
+            |    }
+            |
             |    .method public hidebysig newslot virtual final instance void Set(object 'value') cil managed
             |    {
             |      .override method instance void Kotlin.KMutableProperty0::Set(object)
@@ -1865,154 +2177,265 @@ $callableInvokerCasesIl
             |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig static class Kotlin.KProperty0 CreateProperty0<V>(
             |        string 'name', class Kotlin.Function0 'getter', object[] 'signature',
-            |        class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
-            |        int32 'declarationFlags') cil managed
+            |        object[] 'getterSignature', class Kotlin.Collections.List 'getterAnnotations',
+            |        int32 'getterFlags', class Kotlin.Function2 'parameterFactory',
+            |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 6
+            |      .maxstack 10
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
-            |      ldarg.3
-            |      ldarg.s 4
+            |      ldarg.s 6
+            |      ldarg.s 7
             |      newobj instance void Kotlin.Runtime.Internal.Property0Impl::.ctor(
             |          string, class Kotlin.Function0, object[], class Kotlin.Function2, class Kotlin.Collections.List)
             |      dup
+            |      ldc.i4.0
+            |      ldarg.3
+            |      ldarg.s 4
             |      ldarg.s 5
+            |      ldnull
+            |      ldnull
+            |      ldc.i4.0
+            |      ldarg.s 6
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::InitializeAccessors(
+            |          int32, object[], class Kotlin.Collections.List, int32, object[],
+            |          class Kotlin.Collections.List, int32, class Kotlin.Function2)
+            |      dup
+            |      ldarg.s 8
             |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty0 CreateMutableProperty0<V>(
             |        string 'name', class Kotlin.Function0 'getter', class Kotlin.Function1 'setter',
-            |        object[] 'signature', class Kotlin.Function2 'parameterFactory',
+            |        object[] 'signature', object[] 'getterSignature',
+            |        class Kotlin.Collections.List 'getterAnnotations', int32 'getterFlags',
+            |        object[] 'setterSignature', class Kotlin.Collections.List 'setterAnnotations',
+            |        int32 'setterFlags', class Kotlin.Function2 'parameterFactory',
             |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 7
+            |      .maxstack 10
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
             |      ldarg.3
-            |      ldarg.s 4
-            |      ldarg.s 5
+            |      ldarg.s 10
+            |      ldarg.s 11
             |      newobj instance void Kotlin.Runtime.Internal.MutableProperty0Impl::.ctor(
             |          string, class Kotlin.Function0, class Kotlin.Function1, object[],
             |          class Kotlin.Function2, class Kotlin.Collections.List)
             |      dup
+            |      ldc.i4.0
+            |      ldarg.s 4
+            |      ldarg.s 5
             |      ldarg.s 6
+            |      ldarg.s 7
+            |      ldarg.s 8
+            |      ldarg.s 9
+            |      ldarg.s 10
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::InitializeAccessors(
+            |          int32, object[], class Kotlin.Collections.List, int32, object[],
+            |          class Kotlin.Collections.List, int32, class Kotlin.Function2)
+            |      dup
+            |      ldarg.s 12
             |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KProperty1 CreateProperty1<R0, V>(
             |        string 'name', class Kotlin.Function1 'getter', object[] 'signature',
-            |        class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
-            |        int32 'declarationFlags') cil managed
+            |        object[] 'getterSignature', class Kotlin.Collections.List 'getterAnnotations',
+            |        int32 'getterFlags', class Kotlin.Function2 'parameterFactory',
+            |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 6
+            |      .maxstack 10
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
-            |      ldarg.3
-            |      ldarg.s 4
+            |      ldarg.s 6
+            |      ldarg.s 7
             |      newobj instance void Kotlin.Runtime.Internal.Property1Impl::.ctor(
             |          string, class Kotlin.Function1, object[], class Kotlin.Function2, class Kotlin.Collections.List)
             |      dup
+            |      ldc.i4.1
+            |      ldarg.3
+            |      ldarg.s 4
             |      ldarg.s 5
+            |      ldnull
+            |      ldnull
+            |      ldc.i4.0
+            |      ldarg.s 6
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::InitializeAccessors(
+            |          int32, object[], class Kotlin.Collections.List, int32, object[],
+            |          class Kotlin.Collections.List, int32, class Kotlin.Function2)
+            |      dup
+            |      ldarg.s 8
             |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty1 CreateMutableProperty1<R0, V>(
             |        string 'name', class Kotlin.Function1 'getter', class Kotlin.Function2 'setter',
-            |        object[] 'signature', class Kotlin.Function2 'parameterFactory',
+            |        object[] 'signature', object[] 'getterSignature',
+            |        class Kotlin.Collections.List 'getterAnnotations', int32 'getterFlags',
+            |        object[] 'setterSignature', class Kotlin.Collections.List 'setterAnnotations',
+            |        int32 'setterFlags', class Kotlin.Function2 'parameterFactory',
             |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 7
+            |      .maxstack 10
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
             |      ldarg.3
-            |      ldarg.s 4
-            |      ldarg.s 5
+            |      ldarg.s 10
+            |      ldarg.s 11
             |      newobj instance void Kotlin.Runtime.Internal.MutableProperty1Impl::.ctor(
             |          string, class Kotlin.Function1, class Kotlin.Function2, object[],
             |          class Kotlin.Function2, class Kotlin.Collections.List)
             |      dup
+            |      ldc.i4.1
+            |      ldarg.s 4
+            |      ldarg.s 5
             |      ldarg.s 6
+            |      ldarg.s 7
+            |      ldarg.s 8
+            |      ldarg.s 9
+            |      ldarg.s 10
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::InitializeAccessors(
+            |          int32, object[], class Kotlin.Collections.List, int32, object[],
+            |          class Kotlin.Collections.List, int32, class Kotlin.Function2)
+            |      dup
+            |      ldarg.s 12
             |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KProperty2 CreateProperty2<R0, R1, V>(
             |        string 'name', class Kotlin.Function2 'getter', object[] 'signature',
-            |        class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
-            |        int32 'declarationFlags') cil managed
+            |        object[] 'getterSignature', class Kotlin.Collections.List 'getterAnnotations',
+            |        int32 'getterFlags', class Kotlin.Function2 'parameterFactory',
+            |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 6
+            |      .maxstack 10
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
-            |      ldarg.3
-            |      ldarg.s 4
+            |      ldarg.s 6
+            |      ldarg.s 7
             |      newobj instance void Kotlin.Runtime.Internal.Property2Impl::.ctor(
             |          string, class Kotlin.Function2, object[], class Kotlin.Function2, class Kotlin.Collections.List)
             |      dup
+            |      ldc.i4.2
+            |      ldarg.3
+            |      ldarg.s 4
             |      ldarg.s 5
+            |      ldnull
+            |      ldnull
+            |      ldc.i4.0
+            |      ldarg.s 6
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::InitializeAccessors(
+            |          int32, object[], class Kotlin.Collections.List, int32, object[],
+            |          class Kotlin.Collections.List, int32, class Kotlin.Function2)
+            |      dup
+            |      ldarg.s 8
             |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty2 CreateMutableProperty2<R0, R1, V>(
             |        string 'name', class Kotlin.Function2 'getter', class Kotlin.Function3 'setter',
-            |        object[] 'signature', class Kotlin.Function2 'parameterFactory',
+            |        object[] 'signature', object[] 'getterSignature',
+            |        class Kotlin.Collections.List 'getterAnnotations', int32 'getterFlags',
+            |        object[] 'setterSignature', class Kotlin.Collections.List 'setterAnnotations',
+            |        int32 'setterFlags', class Kotlin.Function2 'parameterFactory',
             |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 7
+            |      .maxstack 10
             |      ldarg.0
             |      ldarg.1
             |      ldarg.2
             |      ldarg.3
-            |      ldarg.s 4
-            |      ldarg.s 5
+            |      ldarg.s 10
+            |      ldarg.s 11
             |      newobj instance void Kotlin.Runtime.Internal.MutableProperty2Impl::.ctor(
             |          string, class Kotlin.Function2, class Kotlin.Function3, object[],
             |          class Kotlin.Function2, class Kotlin.Collections.List)
             |      dup
+            |      ldc.i4.2
+            |      ldarg.s 4
+            |      ldarg.s 5
             |      ldarg.s 6
+            |      ldarg.s 7
+            |      ldarg.s 8
+            |      ldarg.s 9
+            |      ldarg.s 10
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::InitializeAccessors(
+            |          int32, object[], class Kotlin.Collections.List, int32, object[],
+            |          class Kotlin.Collections.List, int32, class Kotlin.Function2)
+            |      dup
+            |      ldarg.s 12
             |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KProperty0 CreateLocalDelegatedProperty0<V>(
-            |        string 'name', object[] 'signature', class Kotlin.Function2 'parameterFactory',
-            |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
+            |        string 'name', object[] 'signature', object[] 'getterSignature',
+            |        class Kotlin.Collections.List 'getterAnnotations', int32 'getterFlags',
+            |        class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
+            |        int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 5
+            |      .maxstack 9
             |      ldarg.0
             |      ldarg.1
-            |      ldarg.2
-            |      ldarg.3
+            |      ldarg.s 5
+            |      ldarg.s 6
             |      newobj instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Impl::.ctor(
             |          string, object[], class Kotlin.Function2, class Kotlin.Collections.List)
             |      dup
+            |      ldarg.2
+            |      ldarg.3
             |      ldarg.s 4
+            |      ldnull
+            |      ldnull
+            |      ldc.i4.0
+            |      ldarg.s 5
+            |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::InitializeAccessors(
+            |          object[], class Kotlin.Collections.List, int32, object[],
+            |          class Kotlin.Collections.List, int32, class Kotlin.Function2)
+            |      dup
+            |      ldarg.s 7
             |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::SetDeclarationFlags(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static class Kotlin.KMutableProperty0 CreateLocalDelegatedMutableProperty0<V>(
-            |        string 'name', object[] 'signature', class Kotlin.Function2 'parameterFactory',
+            |        string 'name', object[] 'signature', object[] 'getterSignature',
+            |        class Kotlin.Collections.List 'getterAnnotations', int32 'getterFlags',
+            |        object[] 'setterSignature', class Kotlin.Collections.List 'setterAnnotations',
+            |        int32 'setterFlags', class Kotlin.Function2 'parameterFactory',
             |        class Kotlin.Collections.List 'annotations', int32 'declarationFlags') cil managed
             |    {
-            |      .maxstack 5
+            |      .maxstack 9
             |      ldarg.0
             |      ldarg.1
-            |      ldarg.2
-            |      ldarg.3
+            |      ldarg.s 8
+            |      ldarg.s 9
             |      newobj instance void Kotlin.Runtime.Internal.LocalDelegatedMutableProperty0Impl::.ctor(
             |          string, object[], class Kotlin.Function2, class Kotlin.Collections.List)
             |      dup
+            |      ldarg.2
+            |      ldarg.3
             |      ldarg.s 4
+            |      ldarg.s 5
+            |      ldarg.s 6
+            |      ldarg.s 7
+            |      ldarg.s 8
+            |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::InitializeAccessors(
+            |          object[], class Kotlin.Collections.List, int32, object[],
+            |          class Kotlin.Collections.List, int32, class Kotlin.Function2)
+            |      dup
+            |      ldarg.s 10
             |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::SetDeclarationFlags(int32)
             |      ret
             |    }
@@ -4648,6 +5071,321 @@ $callableInvokerCasesIl
             |}
             |
         """.trimMargin()
+    }
+
+    private fun propertyAccessorSupportTypesIl(coreLibraryReference: String): String {
+        val getterTypesIl = (0..2).joinToString("\n\n") { arity ->
+            val arguments = (1..arity).joinToString(", ") { index -> "object receiver$index" }
+            val loadArguments = (1..arity).joinToString("\n") { index -> "      ldarg.$index" }
+            val getSignature = when (arity) {
+                0 -> "instance object Kotlin.KProperty0::Get()"
+                1 -> "instance object Kotlin.KProperty1::Get(object)"
+                else -> "instance object Kotlin.KProperty2::Get(object, object)"
+            }
+            val invokeSignature = if (arguments.isEmpty()) "Invoke()" else "Invoke($arguments)"
+            val invokeOverride = "instance object Kotlin.Function$arity::Invoke(" +
+                    List(arity) { "object" }.joinToString(", ") + ")"
+            val maxStack = arity + 1
+            """
+            .class private auto ansi sealed beforefieldinit PropertyGetter${arity}Accessor
+                   extends Kotlin.Runtime.Internal.PropertyAccessorBase
+                   implements Kotlin.KProperty$arity/Getter
+            {
+              .method assembly hidebysig specialname rtspecialname instance void .ctor(
+                  class Kotlin.KProperty 'property', object[] 'signature',
+                  class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
+                  int32 'flags') cil managed
+              {
+                .maxstack 8
+                ldarg.0
+                ldarg.1
+                ldstr "<get-"
+                ldarg.1
+                callvirt instance string Kotlin.KCallable::get_name()
+                ldstr ">"
+                call string ${coreLibraryReference}System.String::Concat(string, string, string)
+                ldarg.2
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                ldc.i4.$arity
+                call instance void Kotlin.Runtime.Internal.PropertyAccessorBase::.ctor(
+                    class Kotlin.KProperty, string, object[], class Kotlin.Function2,
+                    class Kotlin.Collections.List, int32, int32)
+                ret
+              }
+
+              .method public hidebysig newslot virtual final instance object $invokeSignature cil managed
+              {
+                .override method $invokeOverride
+                .maxstack $maxStack
+                ldarg.0
+                call instance class Kotlin.KProperty Kotlin.Runtime.Internal.PropertyAccessorBase::GetProperty()
+                castclass Kotlin.KProperty$arity
+$loadArguments
+                callvirt $getSignature
+                ret
+              }
+            }
+            """.trimIndent()
+        }
+        val setterTypesIl = (0..2).joinToString("\n\n") { receiverCount ->
+            val parameterCount = receiverCount + 1
+            val arguments = (1..receiverCount).map { index -> "object receiver$index" } + "object 'value'"
+            val loadArguments = (1..parameterCount).joinToString("\n") { index -> "      ldarg.$index" }
+            val setParameterTypes = List(parameterCount) { "object" }.joinToString(", ")
+            val setSignature = "instance void Kotlin.KMutableProperty$receiverCount::Set($setParameterTypes)"
+            val invokeSignature = "Invoke(${arguments.joinToString(", ")})"
+            val maxStack = parameterCount + 1
+            """
+            .class private auto ansi sealed beforefieldinit PropertySetter${receiverCount}Accessor
+                   extends Kotlin.Runtime.Internal.PropertyAccessorBase
+                   implements Kotlin.KMutableProperty$receiverCount/Setter
+            {
+              .method assembly hidebysig specialname rtspecialname instance void .ctor(
+                  class Kotlin.KMutableProperty 'property', object[] 'signature',
+                  class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
+                  int32 'flags') cil managed
+              {
+                .maxstack 8
+                ldarg.0
+                ldarg.1
+                ldstr "<set-"
+                ldarg.1
+                callvirt instance string Kotlin.KCallable::get_name()
+                ldstr ">"
+                call string ${coreLibraryReference}System.String::Concat(string, string, string)
+                ldarg.2
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                ldc.i4.$parameterCount
+                call instance void Kotlin.Runtime.Internal.PropertyAccessorBase::.ctor(
+                    class Kotlin.KProperty, string, object[], class Kotlin.Function2,
+                    class Kotlin.Collections.List, int32, int32)
+                ret
+              }
+
+              .method public hidebysig newslot virtual final instance object $invokeSignature cil managed
+              {
+                .override method instance object Kotlin.Function$parameterCount::$invokeSignature
+                .maxstack $maxStack
+                ldarg.0
+                call instance class Kotlin.KProperty Kotlin.Runtime.Internal.PropertyAccessorBase::GetProperty()
+                castclass Kotlin.KMutableProperty$receiverCount
+$loadArguments
+                callvirt $setSignature
+                ldsfld class Kotlin.Unit Kotlin.Unit::INSTANCE
+                ret
+              }
+            }
+            """.trimIndent()
+        }
+        return """
+            .class private abstract auto ansi beforefieldinit PropertyAccessorBase
+                   extends Kotlin.Runtime.Internal.FunctionReferenceBase
+                   implements Kotlin.KProperty/Accessor, Kotlin.KFunction
+            {
+              .field private initonly class Kotlin.KProperty 'property'
+              .field private initonly string 'name'
+
+              .method family hidebysig specialname rtspecialname instance void .ctor(
+                  class Kotlin.KProperty 'property', string 'name', object[] 'signature',
+                  class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
+                  int32 'flags', int32 'arity') cil managed
+              {
+                .maxstack 9
+                ldarg.0
+                ldarg.2
+                ldarg.s 7
+                ldarg.s 6
+                ldc.i4.1
+                ldarg.2
+                ldarg.s 5
+                ldarg.3
+                ldarg.s 4
+                call instance void Kotlin.Runtime.Internal.FunctionReferenceBase::.ctor(
+                    string, int32, int32, int32, string, class Kotlin.Collections.List,
+                    object[], class Kotlin.Function2)
+                ldarg.0
+                ldarg.1
+                stfld class Kotlin.KProperty Kotlin.Runtime.Internal.PropertyAccessorBase::'property'
+                ldarg.0
+                ldarg.2
+                stfld string Kotlin.Runtime.Internal.PropertyAccessorBase::'name'
+                ret
+              }
+
+              .method family hidebysig instance class Kotlin.KProperty GetProperty() cil managed
+              {
+                .maxstack 1
+                ldarg.0
+                ldfld class Kotlin.KProperty Kotlin.Runtime.Internal.PropertyAccessorBase::'property'
+                ret
+              }
+
+              .method family hidebysig virtual final instance object BoundValueAt(int32 'index') cil managed
+              {
+                .maxstack 1
+                ldarg.0
+                ldfld class Kotlin.KProperty Kotlin.Runtime.Internal.PropertyAccessorBase::'property'
+                ret
+              }
+
+              .method public hidebysig specialname newslot virtual final instance class Kotlin.KProperty get_property() cil managed
+              {
+                .override method instance class Kotlin.KProperty Kotlin.KProperty/Accessor::get_property()
+                .maxstack 1
+                ldarg.0
+                ldfld class Kotlin.KProperty Kotlin.Runtime.Internal.PropertyAccessorBase::'property'
+                ret
+              }
+
+              .method public hidebysig specialname newslot virtual final instance string get_name() cil managed
+              {
+                .override method instance string Kotlin.KCallable::get_name()
+                .maxstack 1
+                ldarg.0
+                ldfld string Kotlin.Runtime.Internal.PropertyAccessorBase::'name'
+                ret
+              }
+
+              .method public hidebysig specialname newslot virtual final instance class Kotlin.KType get_returnType() cil managed
+              {
+                .override method instance class Kotlin.KType Kotlin.KCallable::get_returnType()
+                .maxstack 1
+                ldarg.0
+                call instance class Kotlin.KType Kotlin.Runtime.Internal.FunctionReferenceBase::GetReturnType()
+                ret
+              }
+
+              .method public hidebysig specialname newslot virtual final instance class Kotlin.Collections.List get_parameters() cil managed
+              {
+                .override method instance class Kotlin.Collections.List Kotlin.KCallable::get_parameters()
+                .maxstack 1
+                ldarg.0
+                call instance class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::GetParameters()
+                ret
+              }
+
+              .method public hidebysig specialname newslot virtual final instance class Kotlin.Collections.List get_typeParameters() cil managed
+              {
+                .override method instance class Kotlin.Collections.List Kotlin.KCallable::get_typeParameters()
+                .maxstack 1
+                ldarg.0
+                call instance class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::GetTypeParameters()
+                ret
+              }
+
+              .method public hidebysig newslot virtual final instance object Call(object[] 'args') cil managed
+              {
+                .override method instance object Kotlin.KCallable::Call(object[])
+                .maxstack 2
+                ldarg.0
+                ldarg.1
+                call instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallErased(object[])
+                ret
+              }
+
+              .method public hidebysig newslot virtual final instance object CallBy(class Kotlin.Collections.Map 'args') cil managed
+              {
+                .override method instance object Kotlin.KCallable::CallBy(class Kotlin.Collections.Map)
+                .maxstack 2
+                ldarg.0
+                ldarg.1
+                call instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallByErased(class Kotlin.Collections.Map)
+                ret
+              }
+            }
+
+$getterTypesIl
+
+$setterTypesIl
+
+            .class private abstract sealed auto ansi beforefieldinit PropertyAccessorFactory
+                   extends ${coreLibraryReference}System.Object
+            {
+              .method assembly hidebysig static class Kotlin.KProperty/Getter CreateGetter(
+                  class Kotlin.KProperty 'property', int32 'arity', object[] 'signature',
+                  class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
+                  int32 'flags') cil managed
+              {
+                .maxstack 5
+                ldarg.1
+                switch (PAF_Get0, PAF_Get1, PAF_Get2)
+                ldstr "Unsupported Kotlin property-reference getter arity."
+                newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+                throw
+              PAF_Get0:
+                ldarg.0
+                ldarg.2
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                newobj instance void Kotlin.Runtime.Internal.PropertyGetter0Accessor::.ctor(
+                    class Kotlin.KProperty, object[], class Kotlin.Function2, class Kotlin.Collections.List, int32)
+                ret
+              PAF_Get1:
+                ldarg.0
+                ldarg.2
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                newobj instance void Kotlin.Runtime.Internal.PropertyGetter1Accessor::.ctor(
+                    class Kotlin.KProperty, object[], class Kotlin.Function2, class Kotlin.Collections.List, int32)
+                ret
+              PAF_Get2:
+                ldarg.0
+                ldarg.2
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                newobj instance void Kotlin.Runtime.Internal.PropertyGetter2Accessor::.ctor(
+                    class Kotlin.KProperty, object[], class Kotlin.Function2, class Kotlin.Collections.List, int32)
+                ret
+              }
+
+              .method assembly hidebysig static class Kotlin.KMutableProperty/Setter CreateSetter(
+                  class Kotlin.KMutableProperty 'property', int32 'receiverCount', object[] 'signature',
+                  class Kotlin.Function2 'parameterFactory', class Kotlin.Collections.List 'annotations',
+                  int32 'flags') cil managed
+              {
+                .maxstack 5
+                ldarg.1
+                switch (PAF_Set0, PAF_Set1, PAF_Set2)
+                ldstr "Unsupported Kotlin property-reference setter arity."
+                newobj instance void ${coreLibraryReference}System.InvalidOperationException::.ctor(string)
+                throw
+              PAF_Set0:
+                ldarg.0
+                ldarg.2
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                newobj instance void Kotlin.Runtime.Internal.PropertySetter0Accessor::.ctor(
+                    class Kotlin.KMutableProperty, object[], class Kotlin.Function2, class Kotlin.Collections.List, int32)
+                ret
+              PAF_Set1:
+                ldarg.0
+                ldarg.2
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                newobj instance void Kotlin.Runtime.Internal.PropertySetter1Accessor::.ctor(
+                    class Kotlin.KMutableProperty, object[], class Kotlin.Function2, class Kotlin.Collections.List, int32)
+                ret
+              PAF_Set2:
+                ldarg.0
+                ldarg.2
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                newobj instance void Kotlin.Runtime.Internal.PropertySetter2Accessor::.ctor(
+                    class Kotlin.KMutableProperty, object[], class Kotlin.Function2, class Kotlin.Collections.List, int32)
+                ret
+              }
+            }
+        """.trimIndent()
     }
 
     private fun callableInvokerCaseIl(arity: Int): String = buildString {

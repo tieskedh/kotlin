@@ -444,7 +444,7 @@
   }
   .method public hidebysig specialname instance int32 'get_delegatedValue'(class 'Cell' '<this>') cil managed
   {
-    .maxstack 10
+    .maxstack 15
     .locals init (
       [0] object[] '<arrayOfStorage>',
       [1] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@1',
@@ -457,7 +457,34 @@
       [8] object '<arrayElement>@8',
       [9] object[] '<arrayOfStorage>@9',
       [10] object '<arrayElement>@10',
-      [11] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@11'
+      [11] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@11',
+      [12] object[] '<arrayOfStorage>@12',
+      [13] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@13',
+      [14] object '<arrayElement>@14',
+      [15] object[] '<arrayOfStorage>@15',
+      [16] object[] '<arrayOfStorage>@16',
+      [17] object[] '<arrayOfStorage>@17',
+      [18] object '<arrayElement>@18',
+      [19] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@19',
+      [20] object '<arrayElement>@20',
+      [21] object[] '<arrayOfStorage>@21',
+      [22] object '<arrayElement>@22',
+      [23] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@23',
+      [24] object[] '<arrayOfStorage>@24',
+      [25] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@25',
+      [26] object '<arrayElement>@26',
+      [27] object[] '<arrayOfStorage>@27',
+      [28] object[] '<arrayOfStorage>@28',
+      [29] object[] '<arrayOfStorage>@29',
+      [30] object '<arrayElement>@30',
+      [31] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@31',
+      [32] object '<arrayElement>@32',
+      [33] object[] '<arrayOfStorage>@33',
+      [34] object '<arrayElement>@34',
+      [35] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@35',
+      [36] object[] '<arrayOfStorage>@36',
+      [37] object '<arrayElement>@37',
+      [38] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@38'
     )
     ldarg.0
     ldfld class 'ExtensionDelegate' 'ExtensionHost'::'delegatedValue$delegate'
@@ -625,16 +652,400 @@
     ldloc.2
     stelem object
     ldloc.0
+    ldc.i4 3
+    newarr object
+    stloc 12
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 13
+    ldloc 13
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 14
+    ldloc 12
+    ldc.i4 0
+    ldloc 14
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 15
+    ldloc 15
+    stloc 14
+    ldloc 12
+    ldc.i4 1
+    ldloc 14
+    stelem object
+    ldc.i4 2
+    newarr object
+    stloc 16
+    ldc.i4 6
+    newarr object
+    stloc 17
+    ldnull
+    stloc 18
+    ldloc 17
+    ldc.i4 0
+    ldloc 18
+    stelem object
+    ldtoken 'ExtensionHost'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "ExtensionHost"
+    ldstr "ExtensionHost"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 19
+    ldloc 19
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 18
+    ldloc 17
+    ldc.i4 1
+    ldloc 18
+    stelem object
+    ldc.i4 0
+    box [mscorlib]System.Int32
+    stloc 18
+    ldloc 17
+    ldc.i4 2
+    ldloc 18
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 18
+    ldloc 17
+    ldc.i4 3
+    ldloc 18
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 18
+    ldloc 17
+    ldc.i4 4
+    ldloc 18
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 18
+    ldloc 17
+    ldc.i4 5
+    ldloc 18
+    stelem object
+    ldloc 17
+    stloc 20
+    ldloc 16
+    ldc.i4 0
+    ldloc 20
+    stelem object
+    ldc.i4 6
+    newarr object
+    stloc 21
+    ldnull
+    stloc 22
+    ldloc 21
+    ldc.i4 0
+    ldloc 22
+    stelem object
+    ldtoken 'Cell'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Cell"
+    ldstr "Cell"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 23
+    ldloc 23
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 22
+    ldloc 21
+    ldc.i4 1
+    ldloc 22
+    stelem object
+    ldc.i4 2
+    box [mscorlib]System.Int32
+    stloc 22
+    ldloc 21
+    ldc.i4 2
+    ldloc 22
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 22
+    ldloc 21
+    ldc.i4 3
+    ldloc 22
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 22
+    ldloc 21
+    ldc.i4 4
+    ldloc 22
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 22
+    ldloc 21
+    ldc.i4 5
+    ldloc 22
+    stelem object
+    ldloc 21
+    stloc 20
+    ldloc 16
+    ldc.i4 1
+    ldloc 20
+    stelem object
+    ldloc 16
+    stloc 14
+    ldloc 12
+    ldc.i4 2
+    ldloc 14
+    stelem object
+    ldloc 12
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 17408
+    ldc.i4 3
+    newarr object
+    stloc 24
+    ldtoken [Kotlin.Runtime]'Kotlin.Unit'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Unit"
+    ldstr "kotlin.Unit"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 25
+    ldloc 25
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 26
+    ldloc 24
+    ldc.i4 0
+    ldloc 26
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 27
+    ldloc 27
+    stloc 26
+    ldloc 24
+    ldc.i4 1
+    ldloc 26
+    stelem object
+    ldc.i4 3
+    newarr object
+    stloc 28
+    ldc.i4 6
+    newarr object
+    stloc 29
+    ldnull
+    stloc 30
+    ldloc 29
+    ldc.i4 0
+    ldloc 30
+    stelem object
+    ldtoken 'ExtensionHost'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "ExtensionHost"
+    ldstr "ExtensionHost"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 31
+    ldloc 31
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 30
+    ldloc 29
+    ldc.i4 1
+    ldloc 30
+    stelem object
+    ldc.i4 0
+    box [mscorlib]System.Int32
+    stloc 30
+    ldloc 29
+    ldc.i4 2
+    ldloc 30
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 30
+    ldloc 29
+    ldc.i4 3
+    ldloc 30
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 30
+    ldloc 29
+    ldc.i4 4
+    ldloc 30
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 30
+    ldloc 29
+    ldc.i4 5
+    ldloc 30
+    stelem object
+    ldloc 29
+    stloc 32
+    ldloc 28
+    ldc.i4 0
+    ldloc 32
+    stelem object
+    ldc.i4 6
+    newarr object
+    stloc 33
+    ldnull
+    stloc 34
+    ldloc 33
+    ldc.i4 0
+    ldloc 34
+    stelem object
+    ldtoken 'Cell'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Cell"
+    ldstr "Cell"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 35
+    ldloc 35
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 34
+    ldloc 33
+    ldc.i4 1
+    ldloc 34
+    stelem object
+    ldc.i4 2
+    box [mscorlib]System.Int32
+    stloc 34
+    ldloc 33
+    ldc.i4 2
+    ldloc 34
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 34
+    ldloc 33
+    ldc.i4 3
+    ldloc 34
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 34
+    ldloc 33
+    ldc.i4 4
+    ldloc 34
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 34
+    ldloc 33
+    ldc.i4 5
+    ldloc 34
+    stelem object
+    ldloc 33
+    stloc 32
+    ldloc 28
+    ldc.i4 1
+    ldloc 32
+    stelem object
+    ldc.i4 6
+    newarr object
+    stloc 36
+    ldnull
+    stloc 37
+    ldloc 36
+    ldc.i4 0
+    ldloc 37
+    stelem object
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 38
+    ldloc 38
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 37
+    ldloc 36
+    ldc.i4 1
+    ldloc 37
+    stelem object
+    ldc.i4 3
+    box [mscorlib]System.Int32
+    stloc 37
+    ldloc 36
+    ldc.i4 2
+    ldloc 37
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 37
+    ldloc 36
+    ldc.i4 3
+    ldloc 37
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 37
+    ldloc 36
+    ldc.i4 4
+    ldloc 37
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 37
+    ldloc 36
+    ldc.i4 5
+    ldloc 37
+    stelem object
+    ldloc 36
+    stloc 32
+    ldloc 28
+    ldc.i4 2
+    ldloc 32
+    stelem object
+    ldloc 28
+    stloc 26
+    ldloc 24
+    ldc.i4 2
+    ldloc 26
+    stelem object
+    ldloc 24
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 17408
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
     ldc.i4 17408
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3', object[], object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     call instance int32 'ExtensionDelegate'::'getValue'(class 'Cell', class [Kotlin.Runtime]'Kotlin.KProperty')
     ret
   }
   .method public hidebysig specialname instance void 'set_delegatedValue'(class 'Cell' '<this>', int32 '<set-?>') cil managed
   {
-    .maxstack 10
+    .maxstack 15
     .locals init (
       [0] object[] '<arrayOfStorage>',
       [1] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@1',
@@ -647,7 +1058,34 @@
       [8] object '<arrayElement>@8',
       [9] object[] '<arrayOfStorage>@9',
       [10] object '<arrayElement>@10',
-      [11] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@11'
+      [11] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@11',
+      [12] object[] '<arrayOfStorage>@12',
+      [13] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@13',
+      [14] object '<arrayElement>@14',
+      [15] object[] '<arrayOfStorage>@15',
+      [16] object[] '<arrayOfStorage>@16',
+      [17] object[] '<arrayOfStorage>@17',
+      [18] object '<arrayElement>@18',
+      [19] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@19',
+      [20] object '<arrayElement>@20',
+      [21] object[] '<arrayOfStorage>@21',
+      [22] object '<arrayElement>@22',
+      [23] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@23',
+      [24] object[] '<arrayOfStorage>@24',
+      [25] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@25',
+      [26] object '<arrayElement>@26',
+      [27] object[] '<arrayOfStorage>@27',
+      [28] object[] '<arrayOfStorage>@28',
+      [29] object[] '<arrayOfStorage>@29',
+      [30] object '<arrayElement>@30',
+      [31] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@31',
+      [32] object '<arrayElement>@32',
+      [33] object[] '<arrayOfStorage>@33',
+      [34] object '<arrayElement>@34',
+      [35] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@35',
+      [36] object[] '<arrayOfStorage>@36',
+      [37] object '<arrayElement>@37',
+      [38] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@38'
     )
     ldarg.0
     ldfld class 'ExtensionDelegate' 'ExtensionHost'::'delegatedValue$delegate'
@@ -815,10 +1253,394 @@
     ldloc.2
     stelem object
     ldloc.0
+    ldc.i4 3
+    newarr object
+    stloc 12
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 13
+    ldloc 13
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 14
+    ldloc 12
+    ldc.i4 0
+    ldloc 14
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 15
+    ldloc 15
+    stloc 14
+    ldloc 12
+    ldc.i4 1
+    ldloc 14
+    stelem object
+    ldc.i4 2
+    newarr object
+    stloc 16
+    ldc.i4 6
+    newarr object
+    stloc 17
+    ldnull
+    stloc 18
+    ldloc 17
+    ldc.i4 0
+    ldloc 18
+    stelem object
+    ldtoken 'ExtensionHost'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "ExtensionHost"
+    ldstr "ExtensionHost"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 19
+    ldloc 19
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 18
+    ldloc 17
+    ldc.i4 1
+    ldloc 18
+    stelem object
+    ldc.i4 0
+    box [mscorlib]System.Int32
+    stloc 18
+    ldloc 17
+    ldc.i4 2
+    ldloc 18
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 18
+    ldloc 17
+    ldc.i4 3
+    ldloc 18
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 18
+    ldloc 17
+    ldc.i4 4
+    ldloc 18
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 18
+    ldloc 17
+    ldc.i4 5
+    ldloc 18
+    stelem object
+    ldloc 17
+    stloc 20
+    ldloc 16
+    ldc.i4 0
+    ldloc 20
+    stelem object
+    ldc.i4 6
+    newarr object
+    stloc 21
+    ldnull
+    stloc 22
+    ldloc 21
+    ldc.i4 0
+    ldloc 22
+    stelem object
+    ldtoken 'Cell'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Cell"
+    ldstr "Cell"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 23
+    ldloc 23
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 22
+    ldloc 21
+    ldc.i4 1
+    ldloc 22
+    stelem object
+    ldc.i4 2
+    box [mscorlib]System.Int32
+    stloc 22
+    ldloc 21
+    ldc.i4 2
+    ldloc 22
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 22
+    ldloc 21
+    ldc.i4 3
+    ldloc 22
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 22
+    ldloc 21
+    ldc.i4 4
+    ldloc 22
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 22
+    ldloc 21
+    ldc.i4 5
+    ldloc 22
+    stelem object
+    ldloc 21
+    stloc 20
+    ldloc 16
+    ldc.i4 1
+    ldloc 20
+    stelem object
+    ldloc 16
+    stloc 14
+    ldloc 12
+    ldc.i4 2
+    ldloc 14
+    stelem object
+    ldloc 12
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 17408
+    ldc.i4 3
+    newarr object
+    stloc 24
+    ldtoken [Kotlin.Runtime]'Kotlin.Unit'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Unit"
+    ldstr "kotlin.Unit"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 25
+    ldloc 25
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 26
+    ldloc 24
+    ldc.i4 0
+    ldloc 26
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 27
+    ldloc 27
+    stloc 26
+    ldloc 24
+    ldc.i4 1
+    ldloc 26
+    stelem object
+    ldc.i4 3
+    newarr object
+    stloc 28
+    ldc.i4 6
+    newarr object
+    stloc 29
+    ldnull
+    stloc 30
+    ldloc 29
+    ldc.i4 0
+    ldloc 30
+    stelem object
+    ldtoken 'ExtensionHost'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "ExtensionHost"
+    ldstr "ExtensionHost"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 31
+    ldloc 31
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 30
+    ldloc 29
+    ldc.i4 1
+    ldloc 30
+    stelem object
+    ldc.i4 0
+    box [mscorlib]System.Int32
+    stloc 30
+    ldloc 29
+    ldc.i4 2
+    ldloc 30
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 30
+    ldloc 29
+    ldc.i4 3
+    ldloc 30
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 30
+    ldloc 29
+    ldc.i4 4
+    ldloc 30
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 30
+    ldloc 29
+    ldc.i4 5
+    ldloc 30
+    stelem object
+    ldloc 29
+    stloc 32
+    ldloc 28
+    ldc.i4 0
+    ldloc 32
+    stelem object
+    ldc.i4 6
+    newarr object
+    stloc 33
+    ldnull
+    stloc 34
+    ldloc 33
+    ldc.i4 0
+    ldloc 34
+    stelem object
+    ldtoken 'Cell'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Cell"
+    ldstr "Cell"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 35
+    ldloc 35
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 34
+    ldloc 33
+    ldc.i4 1
+    ldloc 34
+    stelem object
+    ldc.i4 2
+    box [mscorlib]System.Int32
+    stloc 34
+    ldloc 33
+    ldc.i4 2
+    ldloc 34
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 34
+    ldloc 33
+    ldc.i4 3
+    ldloc 34
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 34
+    ldloc 33
+    ldc.i4 4
+    ldloc 34
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 34
+    ldloc 33
+    ldc.i4 5
+    ldloc 34
+    stelem object
+    ldloc 33
+    stloc 32
+    ldloc 28
+    ldc.i4 1
+    ldloc 32
+    stelem object
+    ldc.i4 6
+    newarr object
+    stloc 36
+    ldnull
+    stloc 37
+    ldloc 36
+    ldc.i4 0
+    ldloc 37
+    stelem object
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 38
+    ldloc 38
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 37
+    ldloc 36
+    ldc.i4 1
+    ldloc 37
+    stelem object
+    ldc.i4 3
+    box [mscorlib]System.Int32
+    stloc 37
+    ldloc 36
+    ldc.i4 2
+    ldloc 37
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 37
+    ldloc 36
+    ldc.i4 3
+    ldloc 37
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 37
+    ldloc 36
+    ldc.i4 4
+    ldloc 37
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 37
+    ldloc 36
+    ldc.i4 5
+    ldloc 37
+    stelem object
+    ldloc 36
+    stloc 32
+    ldloc 28
+    ldc.i4 2
+    ldloc 32
+    stelem object
+    ldloc 28
+    stloc 26
+    ldloc 24
+    ldc.i4 2
+    ldloc 26
+    stelem object
+    ldloc 24
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 17408
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
     ldc.i4 17408
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3', object[], object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     ldarg.2
     call instance void 'ExtensionDelegate'::'setValue'(class 'Cell', class [Kotlin.Runtime]'Kotlin.KProperty', int32)
     ret
@@ -1465,7 +2287,7 @@ IL_tryEnd_0:
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
-    .maxstack 8
+    .maxstack 13
     .locals init (
       [0] class [Kotlin.Runtime]'Kotlin.KProperty0' 'read',
       [1] object[] '<arrayOfStorage>',
@@ -1473,44 +2295,98 @@ IL_tryEnd_0:
       [3] object '<arrayElement>',
       [4] object[] '<arrayOfStorage>@4',
       [5] object[] '<arrayOfStorage>@5',
-      [6] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>',
-      [7] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
-      [8] int32 '<callableResult>',
-      [9] class [Kotlin.Runtime]'Kotlin.KMutableProperty0' 'mutable',
+      [6] object[] '<arrayOfStorage>@6',
+      [7] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@7',
+      [8] object '<arrayElement>@8',
+      [9] object[] '<arrayOfStorage>@9',
       [10] object[] '<arrayOfStorage>@10',
-      [11] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@11',
-      [12] object '<arrayElement>@12',
-      [13] object[] '<arrayOfStorage>@13',
-      [14] object[] '<arrayOfStorage>@14',
-      [15] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@15',
-      [16] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>@16',
-      [17] int32 '<callableResult>@17',
-      [18] class 'Cell' 'cell',
-      [19] class [Kotlin.Runtime]'Kotlin.KMutableProperty1' 'unbound',
+      [11] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>',
+      [12] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
+      [13] int32 '<callableResult>',
+      [14] class [Kotlin.Runtime]'Kotlin.KMutableProperty0' 'mutable',
+      [15] object[] '<arrayOfStorage>@15',
+      [16] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@16',
+      [17] object '<arrayElement>@17',
+      [18] object[] '<arrayOfStorage>@18',
+      [19] object[] '<arrayOfStorage>@19',
       [20] object[] '<arrayOfStorage>@20',
       [21] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@21',
       [22] object '<arrayElement>@22',
       [23] object[] '<arrayOfStorage>@23',
       [24] object[] '<arrayOfStorage>@24',
       [25] object[] '<arrayOfStorage>@25',
-      [26] object '<arrayElement>@26',
-      [27] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@27',
-      [28] object '<arrayElement>@28',
-      [29] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@29',
-      [30] class 'Cell' '<callableArgument>',
-      [31] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<class 'Cell', int32> '<exactCallable>@31',
-      [32] int32 '<callableResult>@32',
-      [33] class [Kotlin.Runtime]'Kotlin.KMutableProperty0' 'bound',
-      [34] object[] '<arrayOfStorage>@34',
-      [35] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@35',
-      [36] object '<arrayElement>@36',
-      [37] object[] '<arrayOfStorage>@37',
-      [38] object[] '<arrayOfStorage>@38',
-      [39] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@39',
-      [40] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>@40',
-      [41] int32 '<callableResult>@41',
-      [42] class 'ExtensionHost' 'extensionHost',
-      [43] class 'Cell' 'extensionCell'
+      [26] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@26',
+      [27] object '<arrayElement>@27',
+      [28] object[] '<arrayOfStorage>@28',
+      [29] object[] '<arrayOfStorage>@29',
+      [30] object[] '<arrayOfStorage>@30',
+      [31] object '<arrayElement>@31',
+      [32] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@32',
+      [33] object '<arrayElement>@33',
+      [34] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@34',
+      [35] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>@35',
+      [36] int32 '<callableResult>@36',
+      [37] class 'Cell' 'cell',
+      [38] class [Kotlin.Runtime]'Kotlin.KMutableProperty1' 'unbound',
+      [39] object[] '<arrayOfStorage>@39',
+      [40] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@40',
+      [41] object '<arrayElement>@41',
+      [42] object[] '<arrayOfStorage>@42',
+      [43] object[] '<arrayOfStorage>@43',
+      [44] object[] '<arrayOfStorage>@44',
+      [45] object '<arrayElement>@45',
+      [46] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@46',
+      [47] object '<arrayElement>@47',
+      [48] object[] '<arrayOfStorage>@48',
+      [49] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@49',
+      [50] object '<arrayElement>@50',
+      [51] object[] '<arrayOfStorage>@51',
+      [52] object[] '<arrayOfStorage>@52',
+      [53] object[] '<arrayOfStorage>@53',
+      [54] object '<arrayElement>@54',
+      [55] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@55',
+      [56] object '<arrayElement>@56',
+      [57] object[] '<arrayOfStorage>@57',
+      [58] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@58',
+      [59] object '<arrayElement>@59',
+      [60] object[] '<arrayOfStorage>@60',
+      [61] object[] '<arrayOfStorage>@61',
+      [62] object[] '<arrayOfStorage>@62',
+      [63] object '<arrayElement>@63',
+      [64] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@64',
+      [65] object '<arrayElement>@65',
+      [66] object[] '<arrayOfStorage>@66',
+      [67] object '<arrayElement>@67',
+      [68] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@68',
+      [69] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@69',
+      [70] class 'Cell' '<callableArgument>',
+      [71] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<class 'Cell', int32> '<exactCallable>@71',
+      [72] int32 '<callableResult>@72',
+      [73] class [Kotlin.Runtime]'Kotlin.KMutableProperty0' 'bound',
+      [74] object[] '<arrayOfStorage>@74',
+      [75] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@75',
+      [76] object '<arrayElement>@76',
+      [77] object[] '<arrayOfStorage>@77',
+      [78] object[] '<arrayOfStorage>@78',
+      [79] object[] '<arrayOfStorage>@79',
+      [80] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@80',
+      [81] object '<arrayElement>@81',
+      [82] object[] '<arrayOfStorage>@82',
+      [83] object[] '<arrayOfStorage>@83',
+      [84] object[] '<arrayOfStorage>@84',
+      [85] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@85',
+      [86] object '<arrayElement>@86',
+      [87] object[] '<arrayOfStorage>@87',
+      [88] object[] '<arrayOfStorage>@88',
+      [89] object[] '<arrayOfStorage>@89',
+      [90] object '<arrayElement>@90',
+      [91] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@91',
+      [92] object '<arrayElement>@92',
+      [93] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@93',
+      [94] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>@94',
+      [95] int32 '<callableResult>@95',
+      [96] class 'ExtensionHost' 'extensionHost',
+      [97] class 'Cell' 'extensionCell'
     )
     call void 'propertyReferencesKt'::'<EnsureInitialized>'()
     ldstr "topRead"
@@ -1556,10 +2432,52 @@ IL_tryEnd_0:
     ldloc.3
     stelem object
     ldloc.1
+    ldc.i4 3
+    newarr object
+    stloc 6
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 7
+    ldloc 7
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 8
+    ldloc 6
+    ldc.i4 0
+    ldloc 8
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 9
+    ldloc 9
+    stloc 8
+    ldloc 6
+    ldc.i4 1
+    ldloc 8
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 10
+    ldloc 10
+    stloc 8
+    ldloc 6
+    ldc.i4 2
+    ldloc 8
+    stelem object
+    ldloc 6
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 24576
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
     ldc.i4 24576
-    call class [Kotlin.Runtime]'Kotlin.KProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    call class [Kotlin.Runtime]'Kotlin.KProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', object[], object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     stloc.0
     ldloc.0
     callvirt instance string [Kotlin.Runtime]'Kotlin.KCallable'::'get_name'()
@@ -1573,23 +2491,23 @@ IL_tryEnd_0:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    stloc 6
-    ldloc 6
+    stloc 11
+    ldloc 11
     isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
-    stloc 7
-    ldloc 7
+    stloc 12
+    ldloc 12
     brfalse IL_callableErasedFallback_0
-    ldloc 7
+    ldloc 12
     callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
-    stloc 8
+    stloc 13
     br IL_callableExactEnd_1
 IL_callableErasedFallback_0:
-    ldloc 6
+    ldloc 11
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
-    stloc 8
+    stloc 13
 IL_callableExactEnd_1:
-    ldloc 8
+    ldloc 13
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -1602,7 +2520,7 @@ IL_callableExactEnd_1:
     ldsfld class 'propertyReferencesKt$main$mutable$2' 'propertyReferencesKt$main$mutable$2'::'INSTANCE'
     ldc.i4 3
     newarr object
-    stloc 10
+    stloc 15
     ldtoken [mscorlib]System.Int32
     call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
     ldstr "Int"
@@ -1612,74 +2530,34 @@ IL_callableExactEnd_1:
     call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
     ldc.i4 0
     newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
-    stloc 11
-    ldloc 11
-    ldc.i4.0
-    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
-    stloc 12
-    ldloc 10
-    ldc.i4 0
-    ldloc 12
-    stelem object
-    ldc.i4 0
-    newarr object
-    stloc 13
-    ldloc 13
-    stloc 12
-    ldloc 10
-    ldc.i4 1
-    ldloc 12
-    stelem object
-    ldc.i4 0
-    newarr object
-    stloc 14
-    ldloc 14
-    stloc 12
-    ldloc 10
-    ldc.i4 2
-    ldloc 12
-    stelem object
-    ldloc 10
-    call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
-    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    ldc.i4 24576
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Function1', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
-    stloc 9
-    ldloc 9
-    ldc.i4 41
-    box [mscorlib]System.Int32
-    callvirt instance void [Kotlin.Runtime]'Kotlin.KMutableProperty0'::'Set'(object)
-    ldloc 9
-    stloc 15
-    ldloc 15
-    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
     stloc 16
     ldloc 16
-    brfalse IL_callableErasedFallback_2
-    ldloc 16
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
     stloc 17
-    br IL_callableExactEnd_3
-IL_callableErasedFallback_2:
     ldloc 15
-    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
-    unbox.any [mscorlib]System.Int32
-    stloc 17
-IL_callableExactEnd_3:
+    ldc.i4 0
     ldloc 17
-    box [mscorlib]System.Int32
-    ldnull
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldc.i4 40
-    newobj instance void 'Cell'::.ctor(int32)
+    stelem object
+    ldc.i4 0
+    newarr object
     stloc 18
-    ldstr "value"
-    call void 'propertyReferencesKt$main$unbound$1'::'<EnsureInitialized>'()
-    ldsfld class 'propertyReferencesKt$main$unbound$1' 'propertyReferencesKt$main$unbound$1'::'INSTANCE'
-    call void 'propertyReferencesKt$main$unbound$2'::'<EnsureInitialized>'()
-    ldsfld class 'propertyReferencesKt$main$unbound$2' 'propertyReferencesKt$main$unbound$2'::'INSTANCE'
+    ldloc 18
+    stloc 17
+    ldloc 15
+    ldc.i4 1
+    ldloc 17
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 19
+    ldloc 19
+    stloc 17
+    ldloc 15
+    ldc.i4 2
+    ldloc 17
+    stelem object
+    ldloc 15
     ldc.i4 3
     newarr object
     stloc 20
@@ -1710,17 +2588,201 @@ IL_callableExactEnd_3:
     ldc.i4 1
     ldloc 22
     stelem object
-    ldc.i4 1
+    ldc.i4 0
     newarr object
     stloc 24
-    ldc.i4 6
+    ldloc 24
+    stloc 22
+    ldloc 20
+    ldc.i4 2
+    ldloc 22
+    stelem object
+    ldloc 20
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 24576
+    ldc.i4 3
     newarr object
     stloc 25
-    ldnull
+    ldtoken [Kotlin.Runtime]'Kotlin.Unit'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Unit"
+    ldstr "kotlin.Unit"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
     stloc 26
+    ldloc 26
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 27
     ldloc 25
     ldc.i4 0
-    ldloc 26
+    ldloc 27
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 28
+    ldloc 28
+    stloc 27
+    ldloc 25
+    ldc.i4 1
+    ldloc 27
+    stelem object
+    ldc.i4 1
+    newarr object
+    stloc 29
+    ldc.i4 6
+    newarr object
+    stloc 30
+    ldnull
+    stloc 31
+    ldloc 30
+    ldc.i4 0
+    ldloc 31
+    stelem object
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 32
+    ldloc 32
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 31
+    ldloc 30
+    ldc.i4 1
+    ldloc 31
+    stelem object
+    ldc.i4 3
+    box [mscorlib]System.Int32
+    stloc 31
+    ldloc 30
+    ldc.i4 2
+    ldloc 31
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 31
+    ldloc 30
+    ldc.i4 3
+    ldloc 31
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 31
+    ldloc 30
+    ldc.i4 4
+    ldloc 31
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 31
+    ldloc 30
+    ldc.i4 5
+    ldloc 31
+    stelem object
+    ldloc 30
+    stloc 33
+    ldloc 29
+    ldc.i4 0
+    ldloc 33
+    stelem object
+    ldloc 29
+    stloc 27
+    ldloc 25
+    ldc.i4 2
+    ldloc 27
+    stelem object
+    ldloc 25
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 24576
+    call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 24576
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Function1', object[], object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    stloc 14
+    ldloc 14
+    ldc.i4 41
+    box [mscorlib]System.Int32
+    callvirt instance void [Kotlin.Runtime]'Kotlin.KMutableProperty0'::'Set'(object)
+    ldloc 14
+    stloc 34
+    ldloc 34
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    stloc 35
+    ldloc 35
+    brfalse IL_callableErasedFallback_2
+    ldloc 35
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    stloc 36
+    br IL_callableExactEnd_3
+IL_callableErasedFallback_2:
+    ldloc 34
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    unbox.any [mscorlib]System.Int32
+    stloc 36
+IL_callableExactEnd_3:
+    ldloc 36
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 40
+    newobj instance void 'Cell'::.ctor(int32)
+    stloc 37
+    ldstr "value"
+    call void 'propertyReferencesKt$main$unbound$1'::'<EnsureInitialized>'()
+    ldsfld class 'propertyReferencesKt$main$unbound$1' 'propertyReferencesKt$main$unbound$1'::'INSTANCE'
+    call void 'propertyReferencesKt$main$unbound$2'::'<EnsureInitialized>'()
+    ldsfld class 'propertyReferencesKt$main$unbound$2' 'propertyReferencesKt$main$unbound$2'::'INSTANCE'
+    ldc.i4 3
+    newarr object
+    stloc 39
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 40
+    ldloc 40
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 41
+    ldloc 39
+    ldc.i4 0
+    ldloc 41
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 42
+    ldloc 42
+    stloc 41
+    ldloc 39
+    ldc.i4 1
+    ldloc 41
+    stelem object
+    ldc.i4 1
+    newarr object
+    stloc 43
+    ldc.i4 6
+    newarr object
+    stloc 44
+    ldnull
+    stloc 45
+    ldloc 44
+    ldc.i4 0
+    ldloc 45
     stelem object
     ldtoken 'Cell'
     call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
@@ -1731,112 +2793,58 @@ IL_callableExactEnd_3:
     call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
     ldc.i4 0
     newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
-    stloc 27
-    ldloc 27
+    stloc 46
+    ldloc 46
     ldc.i4.0
     call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
-    stloc 26
-    ldloc 25
+    stloc 45
+    ldloc 44
     ldc.i4 1
-    ldloc 26
+    ldloc 45
     stelem object
     ldc.i4 0
     box [mscorlib]System.Int32
-    stloc 26
-    ldloc 25
+    stloc 45
+    ldloc 44
     ldc.i4 2
-    ldloc 26
+    ldloc 45
     stelem object
     ldc.i4.0
     box [mscorlib]System.Boolean
-    stloc 26
-    ldloc 25
+    stloc 45
+    ldloc 44
     ldc.i4 3
-    ldloc 26
+    ldloc 45
     stelem object
     ldc.i4.0
     box [mscorlib]System.Boolean
-    stloc 26
-    ldloc 25
+    stloc 45
+    ldloc 44
     ldc.i4 4
-    ldloc 26
+    ldloc 45
     stelem object
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    stloc 26
-    ldloc 25
+    stloc 45
+    ldloc 44
     ldc.i4 5
-    ldloc 26
+    ldloc 45
     stelem object
-    ldloc 25
-    stloc 28
-    ldloc 24
+    ldloc 44
+    stloc 47
+    ldloc 43
     ldc.i4 0
-    ldloc 28
+    ldloc 47
     stelem object
-    ldloc 24
-    stloc 22
-    ldloc 20
+    ldloc 43
+    stloc 41
+    ldloc 39
     ldc.i4 2
-    ldloc 22
+    ldloc 41
     stelem object
-    ldloc 20
-    call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
-    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
-    ldc.i4 17408
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty1'<class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Function2', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
-    stloc 19
-    ldloc 19
-    callvirt instance string [Kotlin.Runtime]'Kotlin.KCallable'::'get_name'()
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 19
-    ldloc 18
-    callvirt instance object [Kotlin.Runtime]'Kotlin.KProperty1'::'Get'(object)
-    unbox.any [mscorlib]System.Int32
-    box [mscorlib]System.Int32
-    ldnull
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 19
-    ldloc 18
-    ldc.i4 42
-    box [mscorlib]System.Int32
-    callvirt instance void [Kotlin.Runtime]'Kotlin.KMutableProperty1'::'Set'(object, object)
-    ldloc 19
-    stloc 29
-    ldloc 18
-    stloc 30
-    ldloc 29
-    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<class 'Cell', int32>
-    stloc 31
-    ldloc 31
-    brfalse IL_callableErasedFallback_4
-    ldloc 31
-    ldloc 30
-    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<class 'Cell', int32>::'InvokeExact'(!0)
-    stloc 32
-    br IL_callableExactEnd_5
-IL_callableErasedFallback_4:
-    ldloc 29
-    ldloc 30
-    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
-    unbox.any [mscorlib]System.Int32
-    stloc 32
-IL_callableExactEnd_5:
-    ldloc 32
-    box [mscorlib]System.Int32
-    ldnull
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldstr "value"
-    ldloc 18
-    newobj instance void 'propertyReferencesKt$main$bound$1'::.ctor(class 'Cell')
-    ldloc 18
-    newobj instance void 'propertyReferencesKt$main$bound$2'::.ctor(class 'Cell')
+    ldloc 39
     ldc.i4 3
     newarr object
-    stloc 34
+    stloc 48
     ldtoken [mscorlib]System.Int32
     call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
     ldstr "Int"
@@ -1846,83 +2854,545 @@ IL_callableExactEnd_5:
     call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
     ldc.i4 0
     newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
-    stloc 35
-    ldloc 35
+    stloc 49
+    ldloc 49
     ldc.i4.0
     call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
-    stloc 36
-    ldloc 34
+    stloc 50
+    ldloc 48
     ldc.i4 0
-    ldloc 36
+    ldloc 50
     stelem object
     ldc.i4 0
     newarr object
-    stloc 37
-    ldloc 37
-    stloc 36
-    ldloc 34
+    stloc 51
+    ldloc 51
+    stloc 50
+    ldloc 48
     ldc.i4 1
-    ldloc 36
+    ldloc 50
+    stelem object
+    ldc.i4 1
+    newarr object
+    stloc 52
+    ldc.i4 6
+    newarr object
+    stloc 53
+    ldnull
+    stloc 54
+    ldloc 53
+    ldc.i4 0
+    ldloc 54
+    stelem object
+    ldtoken 'Cell'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Cell"
+    ldstr "Cell"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 55
+    ldloc 55
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 54
+    ldloc 53
+    ldc.i4 1
+    ldloc 54
+    stelem object
+    ldc.i4 0
+    box [mscorlib]System.Int32
+    stloc 54
+    ldloc 53
+    ldc.i4 2
+    ldloc 54
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 54
+    ldloc 53
+    ldc.i4 3
+    ldloc 54
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 54
+    ldloc 53
+    ldc.i4 4
+    ldloc 54
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 54
+    ldloc 53
+    ldc.i4 5
+    ldloc 54
+    stelem object
+    ldloc 53
+    stloc 56
+    ldloc 52
+    ldc.i4 0
+    ldloc 56
+    stelem object
+    ldloc 52
+    stloc 50
+    ldloc 48
+    ldc.i4 2
+    ldloc 50
+    stelem object
+    ldloc 48
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 17408
+    ldc.i4 3
+    newarr object
+    stloc 57
+    ldtoken [Kotlin.Runtime]'Kotlin.Unit'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Unit"
+    ldstr "kotlin.Unit"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 58
+    ldloc 58
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 59
+    ldloc 57
+    ldc.i4 0
+    ldloc 59
     stelem object
     ldc.i4 0
     newarr object
-    stloc 38
-    ldloc 38
-    stloc 36
-    ldloc 34
-    ldc.i4 2
-    ldloc 36
+    stloc 60
+    ldloc 60
+    stloc 59
+    ldloc 57
+    ldc.i4 1
+    ldloc 59
     stelem object
-    ldloc 34
+    ldc.i4 2
+    newarr object
+    stloc 61
+    ldc.i4 6
+    newarr object
+    stloc 62
+    ldnull
+    stloc 63
+    ldloc 62
+    ldc.i4 0
+    ldloc 63
+    stelem object
+    ldtoken 'Cell'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Cell"
+    ldstr "Cell"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 64
+    ldloc 64
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 63
+    ldloc 62
+    ldc.i4 1
+    ldloc 63
+    stelem object
+    ldc.i4 0
+    box [mscorlib]System.Int32
+    stloc 63
+    ldloc 62
+    ldc.i4 2
+    ldloc 63
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 63
+    ldloc 62
+    ldc.i4 3
+    ldloc 63
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 63
+    ldloc 62
+    ldc.i4 4
+    ldloc 63
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 63
+    ldloc 62
+    ldc.i4 5
+    ldloc 63
+    stelem object
+    ldloc 62
+    stloc 65
+    ldloc 61
+    ldc.i4 0
+    ldloc 65
+    stelem object
+    ldc.i4 6
+    newarr object
+    stloc 66
+    ldnull
+    stloc 67
+    ldloc 66
+    ldc.i4 0
+    ldloc 67
+    stelem object
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 68
+    ldloc 68
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 67
+    ldloc 66
+    ldc.i4 1
+    ldloc 67
+    stelem object
+    ldc.i4 3
+    box [mscorlib]System.Int32
+    stloc 67
+    ldloc 66
+    ldc.i4 2
+    ldloc 67
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 67
+    ldloc 66
+    ldc.i4 3
+    ldloc 67
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 67
+    ldloc 66
+    ldc.i4 4
+    ldloc 67
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 67
+    ldloc 66
+    ldc.i4 5
+    ldloc 67
+    stelem object
+    ldloc 66
+    stloc 65
+    ldloc 61
+    ldc.i4 1
+    ldloc 65
+    stelem object
+    ldloc 61
+    stloc 59
+    ldloc 57
+    ldc.i4 2
+    ldloc 59
+    stelem object
+    ldloc 57
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 17408
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
     ldc.i4 17408
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Function1', object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
-    stloc 33
-    ldloc 33
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty1'<class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Function2', object[], object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    stloc 38
+    ldloc 38
     callvirt instance string [Kotlin.Runtime]'Kotlin.KCallable'::'get_name'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 33
-    stloc 39
-    ldloc 39
+    ldloc 38
+    ldloc 37
+    callvirt instance object [Kotlin.Runtime]'Kotlin.KProperty1'::'Get'(object)
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 38
+    ldloc 37
+    ldc.i4 42
+    box [mscorlib]System.Int32
+    callvirt instance void [Kotlin.Runtime]'Kotlin.KMutableProperty1'::'Set'(object, object)
+    ldloc 38
+    stloc 69
+    ldloc 37
+    stloc 70
+    ldloc 69
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<class 'Cell', int32>
+    stloc 71
+    ldloc 71
+    brfalse IL_callableErasedFallback_4
+    ldloc 71
+    ldloc 70
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<class 'Cell', int32>::'InvokeExact'(!0)
+    stloc 72
+    br IL_callableExactEnd_5
+IL_callableErasedFallback_4:
+    ldloc 69
+    ldloc 70
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc 72
+IL_callableExactEnd_5:
+    ldloc 72
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "value"
+    ldloc 37
+    newobj instance void 'propertyReferencesKt$main$bound$1'::.ctor(class 'Cell')
+    ldloc 37
+    newobj instance void 'propertyReferencesKt$main$bound$2'::.ctor(class 'Cell')
+    ldc.i4 3
+    newarr object
+    stloc 74
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 75
+    ldloc 75
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 76
+    ldloc 74
+    ldc.i4 0
+    ldloc 76
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 77
+    ldloc 77
+    stloc 76
+    ldloc 74
+    ldc.i4 1
+    ldloc 76
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 78
+    ldloc 78
+    stloc 76
+    ldloc 74
+    ldc.i4 2
+    ldloc 76
+    stelem object
+    ldloc 74
+    ldc.i4 3
+    newarr object
+    stloc 79
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 80
+    ldloc 80
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 81
+    ldloc 79
+    ldc.i4 0
+    ldloc 81
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 82
+    ldloc 82
+    stloc 81
+    ldloc 79
+    ldc.i4 1
+    ldloc 81
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 83
+    ldloc 83
+    stloc 81
+    ldloc 79
+    ldc.i4 2
+    ldloc 81
+    stelem object
+    ldloc 79
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 17408
+    ldc.i4 3
+    newarr object
+    stloc 84
+    ldtoken [Kotlin.Runtime]'Kotlin.Unit'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Unit"
+    ldstr "kotlin.Unit"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 85
+    ldloc 85
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 86
+    ldloc 84
+    ldc.i4 0
+    ldloc 86
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 87
+    ldloc 87
+    stloc 86
+    ldloc 84
+    ldc.i4 1
+    ldloc 86
+    stelem object
+    ldc.i4 1
+    newarr object
+    stloc 88
+    ldc.i4 6
+    newarr object
+    stloc 89
+    ldnull
+    stloc 90
+    ldloc 89
+    ldc.i4 0
+    ldloc 90
+    stelem object
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 91
+    ldloc 91
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 90
+    ldloc 89
+    ldc.i4 1
+    ldloc 90
+    stelem object
+    ldc.i4 3
+    box [mscorlib]System.Int32
+    stloc 90
+    ldloc 89
+    ldc.i4 2
+    ldloc 90
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 90
+    ldloc 89
+    ldc.i4 3
+    ldloc 90
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 90
+    ldloc 89
+    ldc.i4 4
+    ldloc 90
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 90
+    ldloc 89
+    ldc.i4 5
+    ldloc 90
+    stelem object
+    ldloc 89
+    stloc 92
+    ldloc 88
+    ldc.i4 0
+    ldloc 92
+    stelem object
+    ldloc 88
+    stloc 86
+    ldloc 84
+    ldc.i4 2
+    ldloc 86
+    stelem object
+    ldloc 84
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 17408
+    call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 17408
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty0'<int32>(string, class [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Function1', object[], object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    stloc 73
+    ldloc 73
+    callvirt instance string [Kotlin.Runtime]'Kotlin.KCallable'::'get_name'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 73
+    stloc 93
+    ldloc 93
     isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
-    stloc 40
-    ldloc 40
+    stloc 94
+    ldloc 94
     brfalse IL_callableErasedFallback_6
-    ldloc 40
+    ldloc 94
     callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
-    stloc 41
+    stloc 95
     br IL_callableExactEnd_7
 IL_callableErasedFallback_6:
-    ldloc 39
+    ldloc 93
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
-    stloc 41
+    stloc 95
 IL_callableExactEnd_7:
-    ldloc 41
+    ldloc 95
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'ExtensionHost'::.ctor()
-    stloc 42
+    stloc 96
     ldc.i4 40
     newobj instance void 'Cell'::.ctor(int32)
-    stloc 43
-    ldloc 42
-    ldloc 43
+    stloc 97
+    ldloc 96
+    ldloc 97
     call instance int32 'ExtensionHost'::'read'(class 'Cell')
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 42
-    ldloc 43
+    ldloc 96
+    ldloc 97
     ldc.i4 42
     call instance void 'ExtensionHost'::'write'(class 'Cell', int32)
-    ldloc 43
+    ldloc 97
     call instance int32 'Cell'::'get_value'()
     box [mscorlib]System.Int32
     ldnull
@@ -1934,13 +3404,18 @@ IL_callableExactEnd_7:
   }
   .method assembly hidebysig static int32 'localDelegates$lambda$0'(class 'LocalDelegate' '$localRead$delegate') cil managed
   {
-    .maxstack 8
+    .maxstack 10
     .locals init (
       [0] object[] '<arrayOfStorage>',
       [1] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@1',
       [2] object '<arrayElement>',
       [3] object[] '<arrayOfStorage>@3',
-      [4] object[] '<arrayOfStorage>@4'
+      [4] object[] '<arrayOfStorage>@4',
+      [5] object[] '<arrayOfStorage>@5',
+      [6] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@6',
+      [7] object '<arrayElement>@7',
+      [8] object[] '<arrayOfStorage>@8',
+      [9] object[] '<arrayOfStorage>@9'
     )
     call void 'propertyReferencesKt'::'<EnsureInitialized>'()
     ldarg.0
@@ -1986,22 +3461,78 @@ IL_callableExactEnd_7:
     ldloc.2
     stelem object
     ldloc.0
+    ldc.i4 3
+    newarr object
+    stloc 5
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 6
+    ldloc 6
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 7
+    ldloc 5
+    ldc.i4 0
+    ldloc 7
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 8
+    ldloc 8
+    stloc 7
+    ldloc 5
+    ldc.i4 1
+    ldloc 7
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 9
+    ldloc 9
+    stloc 7
+    ldloc 5
+    ldc.i4 2
+    ldloc 7
+    stelem object
+    ldloc 5
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 16384
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
     ldc.i4 16384
-    call class [Kotlin.Runtime]'Kotlin.KProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedProperty0'<int32>(string, object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    call class [Kotlin.Runtime]'Kotlin.KProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedProperty0'<int32>(string, object[], object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     call instance int32 'LocalDelegate'::'getValue'(object, class [Kotlin.Runtime]'Kotlin.KProperty')
     ret
   }
   .method assembly hidebysig static int32 'localDelegates$lambda$1'(class 'LocalDelegate' '$localWrite$delegate') cil managed
   {
-    .maxstack 8
+    .maxstack 13
     .locals init (
       [0] object[] '<arrayOfStorage>',
       [1] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@1',
       [2] object '<arrayElement>',
       [3] object[] '<arrayOfStorage>@3',
-      [4] object[] '<arrayOfStorage>@4'
+      [4] object[] '<arrayOfStorage>@4',
+      [5] object[] '<arrayOfStorage>@5',
+      [6] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@6',
+      [7] object '<arrayElement>@7',
+      [8] object[] '<arrayOfStorage>@8',
+      [9] object[] '<arrayOfStorage>@9',
+      [10] object[] '<arrayOfStorage>@10',
+      [11] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@11',
+      [12] object '<arrayElement>@12',
+      [13] object[] '<arrayOfStorage>@13',
+      [14] object[] '<arrayOfStorage>@14',
+      [15] object[] '<arrayOfStorage>@15',
+      [16] object '<arrayElement>@16',
+      [17] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@17',
+      [18] object '<arrayElement>@18'
     )
     call void 'propertyReferencesKt'::'<EnsureInitialized>'()
     ldarg.0
@@ -2047,22 +3578,180 @@ IL_callableExactEnd_7:
     ldloc.2
     stelem object
     ldloc.0
+    ldc.i4 3
+    newarr object
+    stloc 5
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 6
+    ldloc 6
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 7
+    ldloc 5
+    ldc.i4 0
+    ldloc 7
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 8
+    ldloc 8
+    stloc 7
+    ldloc 5
+    ldc.i4 1
+    ldloc 7
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 9
+    ldloc 9
+    stloc 7
+    ldloc 5
+    ldc.i4 2
+    ldloc 7
+    stelem object
+    ldloc 5
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 16384
+    ldc.i4 3
+    newarr object
+    stloc 10
+    ldtoken [Kotlin.Runtime]'Kotlin.Unit'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Unit"
+    ldstr "kotlin.Unit"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 11
+    ldloc 11
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 12
+    ldloc 10
+    ldc.i4 0
+    ldloc 12
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 13
+    ldloc 13
+    stloc 12
+    ldloc 10
+    ldc.i4 1
+    ldloc 12
+    stelem object
+    ldc.i4 1
+    newarr object
+    stloc 14
+    ldc.i4 6
+    newarr object
+    stloc 15
+    ldnull
+    stloc 16
+    ldloc 15
+    ldc.i4 0
+    ldloc 16
+    stelem object
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 17
+    ldloc 17
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 16
+    ldloc 15
+    ldc.i4 1
+    ldloc 16
+    stelem object
+    ldc.i4 3
+    box [mscorlib]System.Int32
+    stloc 16
+    ldloc 15
+    ldc.i4 2
+    ldloc 16
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 16
+    ldloc 15
+    ldc.i4 3
+    ldloc 16
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 16
+    ldloc 15
+    ldc.i4 4
+    ldloc 16
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 16
+    ldloc 15
+    ldc.i4 5
+    ldloc 16
+    stelem object
+    ldloc 15
+    stloc 18
+    ldloc 14
+    ldc.i4 0
+    ldloc 18
+    stelem object
+    ldloc 14
+    stloc 12
+    ldloc 10
+    ldc.i4 2
+    ldloc 12
+    stelem object
+    ldloc 10
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 16384
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
     ldc.i4 16384
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedMutableProperty0'<int32>(string, object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedMutableProperty0'<int32>(string, object[], object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     call instance int32 'LocalDelegate'::'getValue'(object, class [Kotlin.Runtime]'Kotlin.KProperty')
     ret
   }
   .method assembly hidebysig static void 'localDelegates$lambda$2'(class 'LocalDelegate' '$localWrite$delegate', int32 '<set-?>') cil managed
   {
-    .maxstack 8
+    .maxstack 13
     .locals init (
       [0] object[] '<arrayOfStorage>',
       [1] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@1',
       [2] object '<arrayElement>',
       [3] object[] '<arrayOfStorage>@3',
-      [4] object[] '<arrayOfStorage>@4'
+      [4] object[] '<arrayOfStorage>@4',
+      [5] object[] '<arrayOfStorage>@5',
+      [6] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@6',
+      [7] object '<arrayElement>@7',
+      [8] object[] '<arrayOfStorage>@8',
+      [9] object[] '<arrayOfStorage>@9',
+      [10] object[] '<arrayOfStorage>@10',
+      [11] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@11',
+      [12] object '<arrayElement>@12',
+      [13] object[] '<arrayOfStorage>@13',
+      [14] object[] '<arrayOfStorage>@14',
+      [15] object[] '<arrayOfStorage>@15',
+      [16] object '<arrayElement>@16',
+      [17] class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[] '<arrayOfStorage>@17',
+      [18] object '<arrayElement>@18'
     )
     call void 'propertyReferencesKt'::'<EnsureInitialized>'()
     ldarg.0
@@ -2108,10 +3797,154 @@ IL_callableExactEnd_7:
     ldloc.2
     stelem object
     ldloc.0
+    ldc.i4 3
+    newarr object
+    stloc 5
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 6
+    ldloc 6
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 7
+    ldloc 5
+    ldc.i4 0
+    ldloc 7
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 8
+    ldloc 8
+    stloc 7
+    ldloc 5
+    ldc.i4 1
+    ldloc 7
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 9
+    ldloc 9
+    stloc 7
+    ldloc 5
+    ldc.i4 2
+    ldloc 7
+    stelem object
+    ldloc 5
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 16384
+    ldc.i4 3
+    newarr object
+    stloc 10
+    ldtoken [Kotlin.Runtime]'Kotlin.Unit'
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Unit"
+    ldstr "kotlin.Unit"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 11
+    ldloc 11
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 12
+    ldloc 10
+    ldc.i4 0
+    ldloc 12
+    stelem object
+    ldc.i4 0
+    newarr object
+    stloc 13
+    ldloc 13
+    stloc 12
+    ldloc 10
+    ldc.i4 1
+    ldloc 12
+    stelem object
+    ldc.i4 1
+    newarr object
+    stloc 14
+    ldc.i4 6
+    newarr object
+    stloc 15
+    ldnull
+    stloc 16
+    ldloc 15
+    ldc.i4 0
+    ldloc 16
+    stelem object
+    ldtoken [mscorlib]System.Int32
+    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)
+    ldstr "Int"
+    ldstr "kotlin.Int"
+    ldc.i4 0
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.KClass' [Kotlin.Runtime]'Kotlin.Runtime.Internal.KClassFactory'::'Create'(class [mscorlib]System.Type, string, string, int32, int32)
+    ldc.i4 0
+    newarr class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'
+    stloc 17
+    ldloc 17
+    ldc.i4.0
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    stloc 16
+    ldloc 15
+    ldc.i4 1
+    ldloc 16
+    stelem object
+    ldc.i4 3
+    box [mscorlib]System.Int32
+    stloc 16
+    ldloc 15
+    ldc.i4 2
+    ldloc 16
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 16
+    ldloc 15
+    ldc.i4 3
+    ldloc 16
+    stelem object
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    stloc 16
+    ldloc 15
+    ldc.i4 4
+    ldloc 16
+    stelem object
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    stloc 16
+    ldloc 15
+    ldc.i4 5
+    ldloc 16
+    stelem object
+    ldloc 15
+    stloc 18
+    ldloc 14
+    ldc.i4 0
+    ldloc 18
+    stelem object
+    ldloc 14
+    stloc 12
+    ldloc 10
+    ldc.i4 2
+    ldloc 12
+    stelem object
+    ldloc 10
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    ldc.i4 16384
     call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Stdlib]'Kotlin.Reflection.KParameters'::'dotNetKParameterFactory'()
     call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
     ldc.i4 16384
-    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedMutableProperty0'<int32>(string, object[], class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateLocalDelegatedMutableProperty0'<int32>(string, object[], object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, object[], class [Kotlin.Runtime]'Kotlin.Collections.List', int32, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
     ldarg.1
     call instance void 'LocalDelegate'::'setValue'(object, class [Kotlin.Runtime]'Kotlin.KProperty', int32)
     ret

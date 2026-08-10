@@ -15902,7 +15902,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         int Count([ForeignCallableMarker("vararg")] params string[] values);
 
                         [ForeignCallableMarker("property")]
-                        int Value { get; }
+                        int Value
+                        {
+                            [ForeignCallableMarker("getter")] get;
+                            [ForeignCallableMarker("setter")] set;
+                        }
 
                         string? MaybeText { get; }
                     }
@@ -15952,7 +15956,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 private class KotlinForeignCallable : ForeignCallable {
                     override fun Transform(value: Int): Int = value + 1
                     override fun Count(vararg values: String): Int = values.size
-                    override val Value: Int get() = 42
+                    override var Value: Int = 42
                     override val MaybeText: String? get() = null
                 }
 
@@ -16326,6 +16330,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         foreignValueReference, KVisibility.PUBLIC, false, false, true,
                         "foreign CLR interface property",
                     )
+                    if (foreignValueReference.isConst || foreignValueReference.isLateinit) {
+                        throw Error("foreign CLR property Kotlin-only flags")
+                    }
+                    val foreignGetter = foreignValueReference.getter
+                    val foreignSetter = foreignValueReference.setter
+                    if (foreignGetter.property !== foreignValueReference ||
+                        foreignSetter.property !== foreignValueReference
+                    ) {
+                        throw Error("foreign CLR accessor property backlink")
+                    }
+                    if (foreignGetter.annotations.map(::annotationName) !=
+                        listOf("ForeignCallableMarkerAttribute") ||
+                        foreignSetter.annotations.map(::annotationName) !=
+                        listOf("ForeignCallableMarkerAttribute")
+                    ) {
+                        throw Error("foreign CLR accessor annotation owners")
+                    }
+                    assertDeclarationFacts(
+                        foreignGetter, KVisibility.PUBLIC, false, false, true,
+                        "foreign CLR interface getter",
+                    )
+                    assertDeclarationFacts(
+                        foreignSetter, KVisibility.PUBLIC, false, false, true,
+                        "foreign CLR interface setter",
+                    )
+                    if (foreignGetter.isInline || foreignGetter.isExternal ||
+                        foreignGetter.isOperator || foreignGetter.isInfix || foreignGetter.isSuspend ||
+                        foreignSetter.isInline || foreignSetter.isExternal ||
+                        foreignSetter.isOperator || foreignSetter.isInfix || foreignSetter.isSuspend
+                    ) {
+                        throw Error("foreign CLR accessor function flags")
+                    }
+                    if (foreignGetter.callBy(mapOf(foreignGetter.parameters[0] to foreign)) != 42) {
+                        throw Error("foreign CLR getter named call")
+                    }
+                    foreignSetter.callBy(mapOf(
+                        foreignSetter.parameters[0] to foreign,
+                        foreignSetter.parameters[1] to 43,
+                    ))
+                    if (foreignGetter(foreign) != 43) throw Error("foreign CLR accessor invocation")
 
                 }
                 """.trimIndent()
@@ -33952,6 +33996,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClass.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KCallable.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KFunction.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KProperty.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClasses.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClassifier.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KType.kt").absoluteFile

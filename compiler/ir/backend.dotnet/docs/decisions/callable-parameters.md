@@ -175,9 +175,12 @@ leak through reflection.
 6. Parameter annotations retain their exact declaration/Param-row owner.
 7. Runtime never depends on Stdlib or reconstructs Kotlin signatures.
 8. Absence of the platform surface remains a feature-detected diagnostic path.
-9. `call` consumes this list through
-   [`callable-positional-invocation.md`](callable-positional-invocation.md);
-   `callBy`, accessor objects, and member enumeration require later decisions.
+9. `call` and `callBy` consume this list through
+   [`callable-positional-invocation.md`](callable-positional-invocation.md) and
+   [`callable-named-invocation.md`](callable-named-invocation.md). Direct
+   property accessors extend the same graph through
+   [`property-accessor-reflection.md`](property-accessor-reflection.md);
+   member enumeration remains a separate decision.
 10. The Common frontend prohibits direct references to a declaration that is
     both a member and an extension. Its two-receiver parameter view therefore
     remains coupled to future `KClass` member enumeration, not this direct-

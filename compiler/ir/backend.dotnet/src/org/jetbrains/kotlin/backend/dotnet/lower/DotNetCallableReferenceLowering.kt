@@ -13,8 +13,8 @@ import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetClassifierInfo
-import org.jetbrains.kotlin.backend.dotnet.DotNetFunctionReferenceFlags
 import org.jetbrains.kotlin.backend.dotnet.dotNetCallableDeclarationFlags
+import org.jetbrains.kotlin.backend.dotnet.dotNetFunctionFlags
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericArray
 import org.jetbrains.kotlin.backend.dotnet.serialization.DotNetIrMangler
 import org.jetbrains.kotlin.backend.dotnet.dotNetFixedFunctionArityOrNull
@@ -913,11 +913,7 @@ private fun IrRichFunctionReference.referenceFlags(): Int {
         (1 shl 2).takeIf { hasSuspendConversion },
         (1 shl 3).takeIf { hasUnitConversion },
         (1 shl 4).takeIf { isFunInterfaceConstructorAdapter() },
-        DotNetFunctionReferenceFlags.IS_INLINE.takeIf { target?.isInline == true },
-        DotNetFunctionReferenceFlags.IS_EXTERNAL.takeIf { target?.isExternal == true },
-        DotNetFunctionReferenceFlags.IS_OPERATOR.takeIf { target?.isOperator == true },
-        DotNetFunctionReferenceFlags.IS_INFIX.takeIf { target?.isInfix == true },
-        DotNetFunctionReferenceFlags.IS_SUSPEND.takeIf { target?.isSuspend == true },
+        target?.dotNetFunctionFlags(),
         reflectionTarget?.dotNetCallableDeclarationFlags(),
     ).sum()
 }

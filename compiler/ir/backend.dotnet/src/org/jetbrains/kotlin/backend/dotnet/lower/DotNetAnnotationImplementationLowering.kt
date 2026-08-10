@@ -242,6 +242,37 @@ internal class DotNetAnnotationImplementationLowering(
                         builder.buildCallableSignature(getter.returnType, getter.typeParameters, descriptors)
                     },
                 )
+                call.putDotNetPropertyFactoryArgument(
+                    "getterSignature",
+                    kTypeBuilder.run {
+                        builder.buildCallableSignature(getter.returnType, getter.typeParameters, descriptors)
+                    },
+                )
+                call.putDotNetPropertyFactoryArgument(
+                    "getterAnnotations",
+                    builder.irCall(factoryFor(getter) ?: context.callableAnnotationSymbols.empty),
+                )
+                property.setter?.let { setter ->
+                    val setterDescriptors = setter.callableParameterDescriptors(
+                        call.dotNetPropertyBoundReceiverCount ?: 0,
+                        builder,
+                        ::factoryFor,
+                    )
+                    call.putDotNetPropertyFactoryArgument(
+                        "setterSignature",
+                        kTypeBuilder.run {
+                            builder.buildCallableSignature(
+                                setter.returnType,
+                                setter.typeParameters,
+                                setterDescriptors,
+                            )
+                        },
+                    )
+                    call.putDotNetPropertyFactoryArgument(
+                        "setterAnnotations",
+                        builder.irCall(factoryFor(setter) ?: context.callableAnnotationSymbols.empty),
+                    )
+                }
             } else {
                 val localType = call.dotNetLocalPropertySignatureType ?: return@forEach
                 call.putDotNetPropertyFactoryArgument(
@@ -250,6 +281,33 @@ internal class DotNetAnnotationImplementationLowering(
                         builder.buildCallableSignature(localType, emptyList(), emptyList())
                     },
                 )
+                call.putDotNetPropertyFactoryArgument(
+                    "getterSignature",
+                    kTypeBuilder.run {
+                        builder.buildCallableSignature(localType, emptyList(), emptyList())
+                    },
+                )
+                if (call.dotNetLocalPropertyIsMutable == true) {
+                    call.putDotNetPropertyFactoryArgument(
+                        "setterSignature",
+                        kTypeBuilder.run {
+                            builder.buildCallableSignature(
+                                context.irBuiltIns.unitType,
+                                emptyList(),
+                                listOf(
+                                    DotNetCallableParameterDescriptor(
+                                        name = null,
+                                        type = localType,
+                                        kind = PARAMETER_VALUE,
+                                        isOptional = false,
+                                        isVararg = false,
+                                        annotations = builder.irCall(context.callableAnnotationSymbols.empty),
+                                    )
+                                ),
+                            )
+                        },
+                    )
+                }
             }
         }
         irFile.declarations += generated

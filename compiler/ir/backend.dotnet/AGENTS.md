@@ -592,7 +592,21 @@ See the
   receiver so source and reflective calls share virtual, separate-library
   behavior. Runtime carries exposed omission bits in 32-bit `IntArray` words;
   it must not rediscover CLR members or own Kotlin default-mask layout. The
-  JVM-shaped `KFunction` declaration flags (`isInline`,
+  direct `KProperty0`/`KProperty1`/`KProperty2` reflection surface is one
+  compile-time materialization above the same property wrapper. `isConst` and
+  `isLateinit` come from the exact property IR; the getter and optional setter
+  are cached `KFunction` objects whose `property` backlink and invocation reuse
+  the owning property's established `Get`/`Set` path. Accessor names,
+  signatures, annotations, visibility, modality, and declaration flags come
+  from their exact accessor IR, never from a CLR accessor MethodDef or runtime
+  lookup. A `const` reference's private getter reads the retained literal
+  directly without adding a public CLR accessor. The positive `isLateinit`
+  case remains locked by the separate `lateinit` language feature, and
+  `getDelegate` remains absent until delegate discovery has its own complete
+  semantic closure. Do not infer `KClass.members`, declared-member lookup, or
+  a runtime KLIB decoder from this direct-reference surface. See
+  [the property-accessor decision](docs/decisions/property-accessor-reflection.md).
+  The JVM-shaped `KFunction` declaration flags (`isInline`,
   `isExternal`, `isOperator`, `isInfix`, and `isSuspend`) are one shared
   property capability inherited by every admitted `KFunction` arity. Read
   them only from the exact KLIB/importer-IR reflection
@@ -609,8 +623,8 @@ See the
   reference must expose that same positional slot. Plain `callBy` cannot invent
   a continuation from the user-visible `KParameter` map and must fail closed
   until a coroutine-aware named-call helper owns the appended argument. Typed
-  foreign attribute import, accessor objects, and broader member reflection
-  remain separate. Admitted foreign CLR generic methods use one declaration-owned
+  foreign attribute import and broader member reflection remain separate.
+  Admitted foreign CLR generic methods use one declaration-owned
   FIR/IR type-parameter graph for resolution, bounds, invocation, and callable
   reflection while their retained MethodDef remains the sole physical authority.
   Emit ordinary MethodSpec calls and exact override slots; never erase them,
@@ -928,8 +942,9 @@ not be approximated by `System.Type` or the nominal `KClass` floor. Valued
 annotation construction and class/callable-reference runtime discovery are
 complete through Common/KLIB authority, fail-closed CLR projection, and
 disjoint exact foreign CLR paths. Callable parameters and their declaration
-annotations extend the same signature graph; do not infer member enumeration,
-reflective call, accessor objects, fields, or type-use reflection from those
+annotations extend the same signature graph. Direct property accessor objects
+likewise extend only an already-materialized property reference; do not infer
+member enumeration, fields, delegates, or type-use reflection from those
 surfaces. Multi-field value classes, broad member reflection, coroutine-aware
 reflection and export, concurrency primitives beyond the continuation
 protocol, and broad KMP/Gradle product integration remain separate programmes
