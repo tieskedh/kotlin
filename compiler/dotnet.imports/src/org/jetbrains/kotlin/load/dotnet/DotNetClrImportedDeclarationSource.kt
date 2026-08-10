@@ -10,6 +10,8 @@ import org.jetbrains.kotlin.serialization.deserialization.IncompatibleVersionErr
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedContainerAbiStability
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedContainerSource
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.PreReleaseInfo
+import java.util.Collections
+import java.util.IdentityHashMap
 
 /**
  * In-process protocol version for exact foreign CLR declaration linkage retained through FIR2IR.
@@ -19,19 +21,77 @@ import org.jetbrains.kotlin.serialization.deserialization.descriptors.PreRelease
  * unfamiliar carrier from names or tokens.
  */
 enum class DotNetClrImportedDeclarationCarrierVersion {
-    V1,
+    V2,
+}
+
+/** One selected CLR import graph, shared by every declaration carrier produced from it. */
+class DotNetClrImportedDeclarationGraph(
+    val assemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>,
+    val hierarchies: List<DotNetClrResolvedTypeHierarchy>,
+) {
+    private val assembliesByMetadata =
+        IdentityHashMap<DotNetClrAssemblyMetadata, DotNetClrClasspathAssembly.WithoutCarrier>()
+    private val hierarchiesByAssembly =
+        IdentityHashMap<DotNetClrAssemblyMetadata, Map<DotNetClrMetadataHandle, DotNetClrResolvedTypeHierarchy>>()
+
+    init {
+        require(assemblies.all { assembly ->
+            assembliesByMetadata.put(assembly.metadata, assembly) == null
+        }) {
+            "Imported CLR declaration graph retains one selected assembly more than once"
+        }
+        require(hierarchies.all { hierarchy ->
+            hierarchy.type.type.assembly in assembliesByMetadata
+        }) {
+            "Imported CLR declaration graph contains a hierarchy outside its selected assemblies"
+        }
+        val mutableHierarchies =
+            IdentityHashMap<DotNetClrAssemblyMetadata, MutableMap<DotNetClrMetadataHandle, DotNetClrResolvedTypeHierarchy>>()
+        require(hierarchies.all { hierarchy ->
+            mutableHierarchies.getOrPut(hierarchy.type.type.assembly, ::linkedMapOf)
+                .put(hierarchy.type.type.definition.handle, hierarchy) == null
+        }) {
+            "Imported CLR declaration graph retains one TypeDef hierarchy more than once"
+        }
+        for (entry in mutableHierarchies.entries) {
+            hierarchiesByAssembly[entry.key] = Collections.unmodifiableMap(entry.value)
+        }
+    }
+
+    fun assemblyOrNull(
+        metadata: DotNetClrAssemblyMetadata,
+    ): DotNetClrClasspathAssembly.WithoutCarrier? = assembliesByMetadata[metadata]
+
+    fun hierarchyOrNull(
+        type: DotNetClrResolvedTypeDefinition,
+    ): DotNetClrResolvedTypeHierarchy? =
+        hierarchiesByAssembly[type.assembly]?.get(type.definition.handle)
 }
 
 sealed class DotNetClrImportedDeclarationSource(
     val assembly: DotNetClrClasspathAssembly.WithoutCarrier,
     val declaringType: DotNetClrTypeDefinition,
+    val declaringHierarchy: DotNetClrResolvedTypeHierarchy,
+    val graph: DotNetClrImportedDeclarationGraph,
 ) : DeserializedContainerSource {
     val carrierVersion: DotNetClrImportedDeclarationCarrierVersion =
-        DotNetClrImportedDeclarationCarrierVersion.V1
+        DotNetClrImportedDeclarationCarrierVersion.V2
 
     init {
         require(assembly.metadata.typeDefinitions.any { it === declaringType }) {
             "Imported CLR TypeDef ${declaringType.handle} does not belong to '${assembly.assemblyFile}'"
+        }
+        require(
+            declaringHierarchy.type.type.assembly === assembly.metadata &&
+                    declaringHierarchy.type.type.definition === declaringType
+        ) {
+            "Imported CLR hierarchy does not describe TypeDef ${declaringType.handle} from '${assembly.assemblyFile}'"
+        }
+        require(graph.assemblyOrNull(assembly.metadata) === assembly) {
+            "Imported CLR carrier does not retain its declaring assembly '${assembly.assemblyFile}'"
+        }
+        require(graph.hierarchyOrNull(declaringHierarchy.type.type) === declaringHierarchy) {
+            "Imported CLR carrier does not retain its declaring TypeDef hierarchy"
         }
     }
 
@@ -55,14 +115,25 @@ sealed class DotNetClrImportedDeclarationSource(
 class DotNetClrImportedMethodSource(
     assembly: DotNetClrClasspathAssembly.WithoutCarrier,
     declaringType: DotNetClrTypeDefinition,
+    declaringHierarchy: DotNetClrResolvedTypeHierarchy,
+    graph: DotNetClrImportedDeclarationGraph,
     val method: DotNetClrMethodDefinition,
-) : DotNetClrImportedDeclarationSource(assembly, declaringType) {
+    val resolvedSignature: DotNetClrResolvedMethodSignature,
+) : DotNetClrImportedDeclarationSource(
+    assembly,
+    declaringType,
+    declaringHierarchy,
+    graph,
+) {
     init {
         require(method.declaringType == declaringType.handle) {
             "Imported CLR MethodDef ${method.handle} does not belong to TypeDef ${declaringType.handle}"
         }
         require(assembly.metadata.methodDefinitions.any { it === method }) {
             "Imported CLR MethodDef ${method.handle} does not belong to '${assembly.assemblyFile}'"
+        }
+        require(resolvedSignature.genericParameterCount == method.signature.genericParameterCount) {
+            "Imported CLR MethodDef ${method.handle} has inconsistent resolved generic arity"
         }
     }
 
@@ -81,10 +152,19 @@ class DotNetClrImportedMethodSource(
 class DotNetClrImportedPropertySource(
     assembly: DotNetClrClasspathAssembly.WithoutCarrier,
     declaringType: DotNetClrTypeDefinition,
+    declaringHierarchy: DotNetClrResolvedTypeHierarchy,
+    graph: DotNetClrImportedDeclarationGraph,
     val property: DotNetClrPropertyDefinition,
     val getter: DotNetClrMethodDefinition,
     val setter: DotNetClrMethodDefinition?,
-) : DotNetClrImportedDeclarationSource(assembly, declaringType) {
+    val getterSignature: DotNetClrResolvedMethodSignature,
+    val setterSignature: DotNetClrResolvedMethodSignature?,
+) : DotNetClrImportedDeclarationSource(
+    assembly,
+    declaringType,
+    declaringHierarchy,
+    graph,
+) {
     init {
         require(property.declaringType == declaringType.handle) {
             "Imported CLR Property ${property.handle} does not belong to TypeDef ${declaringType.handle}"
@@ -103,6 +183,9 @@ class DotNetClrImportedPropertySource(
         }
         require(setter == null || assembly.metadata.methodDefinitions.any { it === setter }) {
             "Imported CLR property setter ${setter?.handle} does not belong to '${assembly.assemblyFile}'"
+        }
+        require((setter == null) == (setterSignature == null)) {
+            "Imported CLR property '${property.name}' has inconsistent resolved setter evidence"
         }
     }
 
