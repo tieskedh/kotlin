@@ -17,6 +17,7 @@ dependencies {
     implementation(project(":compiler:fir:providers"))
     api(project(":compiler:fir:tree"))
     implementation(project(":compiler:frontend.common.dotnet"))
+    implementation(project(":compiler:ir.backend.common"))
     implementation(project(":core:language.model"))
     implementation(project(":core:names"))
 }

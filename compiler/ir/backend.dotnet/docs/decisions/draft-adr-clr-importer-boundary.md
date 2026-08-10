@@ -331,10 +331,11 @@ the vector consumes nullable metadata. The retained physical signature remains t
 vector; no Kotlin primitive-array wrapper is introduced.
 
 The closed imported interface is also a legal Kotlin superinterface. A Kotlin implementation binds
-directly to the retained CLR TypeDef and its exact abstract MethodDef slots, including array
-accessors; it does not acquire a Kotlin erased-interface identity or a C# implementation-manifest
-record. Those mechanisms describe Kotlin-owned logical contracts. Inventing them for a native CLR
-interface would replace, rather than preserve, the foreign declaration's authoritative identity.
+directly to the retained CLR TypeDef and its exact abstract MethodDef slots, including generic-owner
+substitution and array accessors; it does not acquire a Kotlin erased-interface identity or a C#
+implementation-manifest record. Those mechanisms describe Kotlin-owned logical contracts.
+Inventing them for a native CLR interface would replace, rather than preserve, the foreign
+declaration's authoritative identity.
 The target FIR2IR extension retains FIR's accepted override relationship when a rigid Kotlin
 implementation parameter overrides the interface's flexible array view; backend emission consumes
 that IR edge and does not rediscover source override intent.
@@ -349,10 +350,11 @@ One exact final Param carrying selected-core `System.ParamArrayAttribute()` maps
 `vararg` only for the admitted `string[]` and `object[]` vector shapes. FIR retains independent
 vector/element nullability, while physical linkage retains the original vector signature.
 Primitive parameter arrays remain separate: a Common-correct `vararg Int` has `IntArray` as its
-declaration carrier, so a complete foreign mapping needs both call and implementation bridges
-between that wrapper and `int32[]`. Relabelling `Array<Int>` as primitive `vararg` would make calls
-appear to work while leaving overrides and callable references dishonest. `ParamCollectionAttribute`
-also requires a separate representation.
+declaration carrier. The accepted foreign generic-TypeDef slice supplies exact call and MethodImpl
+boundary adapters when `params T[]` is constructed with `T = Int`; it does not thereby relabel an
+ordinary declared `params int[]` as Kotlin vararg. Relabelling `Array<Int>` as primitive `vararg`
+would make calls appear to work while leaving overrides and callable references dishonest.
+`ParamCollectionAttribute` also requires a separate representation.
 
 Extension, optional/default, indexer, required/init/read-only, event, marshalling, and broader
 attribute projections land only after their complete physical and Common semantics are specified.
@@ -360,10 +362,14 @@ No marker name alone creates a Kotlin declaration role.
 
 ### 12. FIR exposure is complete within an admitted grammar
 
-The first admitted classifier family is a public, top-level, non-generic CLR interface with a
-closed method/property grammar over `void`, supported primitive scalars, `string`, `object`,
-ordinary one-dimensional zero-based vectors over backend-supported scalar elements, and the
-explicitly admitted reference-vector vararg forms.
+The importer grows through accepted closed classifier families. The initial family is a public,
+top-level, non-generic CLR interface with a closed method/property grammar over `void`, supported
+primitive scalars, `string`, `object`, ordinary one-dimensional zero-based vectors over
+backend-supported scalar elements, and the explicitly admitted reference-vector vararg forms.
+The accepted generic-method and generic-TypeDef slices add declaration-owned `!!n` and owner-owned
+`!n` parameters without weakening that completeness rule; their exact admitted grammars are owned
+by [the generic-method decision](foreign-clr-generic-methods.md) and
+[the generic-TypeDef decision](foreign-clr-generic-type-identities.md).
 
 A classifier is withheld when a public declared member, signature, property association,
 attribute-dependent call view, or selected identity lies outside that grammar. It is never exposed

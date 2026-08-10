@@ -16,19 +16,21 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: exact foreign CLR method-generic import. The existing
-  complete-interface importer now creates declaration-owned FIR type parameters
-  before bounds and use-site types, retains one selected MethodDef as physical
-  authority, and emits ordinary MethodSpec calls for inferred and explicit
-  arguments. Direct `!!n`, `!!n[]`, relative bounds, admitted nominal interface
-  bounds, `params T[]`, generic/non-generic overloads, Kotlin implementations,
-  callable reflection, and Framework/CoreCLR consumption share that one model.
-  Special `class`/`struct`/`new()` constraints, constructed bounds, type-owned
-  parameters, and explicitly nullable unconstrained generic leaves still reject
-  the complete interface. In particular, Roslyn `T?` is not misrepresented as
-  Kotlin `T?` when `T` may be a CLR value type. Exact retained-signature checks
-  restore only frontend-approved overrides and prevent flexible array views from
-  manufacturing false covariant-return bridges. The preceding feature supplied
+- Last completed feature: exact foreign CLR generic-TypeDef import. Public
+  top-level generic interfaces now retain their selected native CLR identity,
+  while FIR exposes one source-named owner with declaration variance, admitted
+  bounds, owner `!n` and method `!!n` substitution, properties, vectors, and
+  `params`. String, `Int`, and `Int?` constructions, Kotlin implementations, and
+  reverse C# dispatch share the original constructed slots; imported owners never
+  enter the Kotlin-owned erased/split-interface ABI. JVM-style FIR flexibility
+  now survives FIR2IR, so a platform `Int!` maps to physical `int32` rather than
+  a fabricated `Nullable<int32>`. Exact primitive-vararg MethodImpl adapters
+  project vector storage into the canonical Kotlin primitive-array wrapper.
+  Generic inheritance, nested constructed signatures, unsigned carriers,
+  special constraints, and explicitly nullable generic leaves still reject the
+  complete classifier. The preceding exact foreign method-generic feature emits
+  ordinary MethodSpec calls and keeps declaration-owned callable type parameters
+  on the same retained binding. The preceding feature supplied
   coroutine-specific physical-ABI evidence. One portable producer DLL proves
   through objective CLR metadata that public
   top-level and virtual suspend entries append the erased `Continuation` and
@@ -95,8 +97,8 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The foreign CLR method-generic head passed the ordinary aggregate. The normal
-aggregate command is:
+The foreign CLR generic-TypeDef head passed every constituent of the strict
+target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -110,20 +112,16 @@ The audited full-aggregate evidence covers 158 XML files and 1900 tests:
 - 95 library-integration tests
 - zero failures, errors, or skips
 
-The actual FIR2IR Test task was explicitly repeated from the current compiler
-head and exited successfully after 10m21s with all 1,778 tests green; this
-avoided treating Gradle's stale reuse of the preceding coroutine result as
-current evidence. The final normal aggregate entry point recreated the full
-116-test `dn` root and exited successfully after 13m23s. Direct audit of all
-three roots reports a cumulative JUnit suite time of 1,643.29 seconds: 0.13 for
-the unchanged physical model, 852.20 for FIR/IL/box, and 790.96 for `dn`. Wall
-time is deliberately not compared with the previous baseline because another
-compiler session shared the machine during verification. Gradle 9's selected-
-task `--rerun` option is not full-matrix evidence on the empty backend lifecycle
-task; here it was applied to the concrete FIR2IR Test task before the ordinary
-aggregate was run unchanged.
+The ordinary aggregate produced green physical-model and complete 1,778-test
+FIR2IR roots. A concurrent compiler session then removed Gradle's temporary
+`dn/binary/in-progress-results-generic.bin`, so that aggregate process ended on a
+shared-output-directory race rather than a test failure. The exact 116-test `dn`
+task was immediately repeated in isolation and exited successfully. Direct audit
+of the three final roots reports the 158 files and 1,900 tests above with zero
+failures, errors, or skips. No duration or performance comparison is retained
+because the other compiler session shared the machine throughout verification.
 
-After that aggregate, the test-only evidence was strengthened to require the
+At the preceding coroutine head, test-only evidence was strengthened to require the
 imported member entries to retain their CLR virtual slots and to dispatch a
 base-typed consumer call to a distinct suspending override. The exact
 portable-coroutine test repeated green in 49.3 seconds; all production
@@ -1066,11 +1064,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
   collection-shaped params each require separate Kotlin-stability decisions.
-- Foreign CLR generic methods beyond the exact admitted grammar remain
-  fail-closed. Special constraints, constructed bounds/types, type-owned
-  parameters, and explicit nullable generic leaves require complete semantic,
-  binding, override, and reflection mappings rather than backend exceptions or
-  a private decoder inside callable reflection.
+- Foreign CLR generic methods and TypeDefs beyond their exact admitted grammars
+  remain fail-closed. Generic inheritance, nested constructed signatures,
+  unsigned carriers, special constraints, constructed bounds/types, and explicit
+  nullable generic leaves require complete semantic, binding, override, and
+  reflection mappings rather than backend exceptions or private reflection
+  decoders.
 - Foreign C# `Nullable<T>` signatures are nominal generic instantiations and
   remain outside the closed primitive importer until constructed-type identity
   is retained from the selected assembly graph through backend binding.
@@ -1079,12 +1078,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Extend foreign CLR import to exact generic TypeDef and GenericInstance
-   identities as the next deep interop closure. Type-owned parameters and
-   bounds, selected constructed identity, inheritance, calls, overrides,
-   nullability, separate binding, and reflection must land together. Preserve
-   native CLR identity; do not route imported C# libraries through Kotlin-owned
-   erased class rules or admit only a `List<T>` spelling.
+1. Extend the accepted foreign CLR generic-TypeDef grammar to exact constructed
+   member types and generic inheritance. Resolve every GenericInstance through
+   the selected graph, preserve owner substitution through FIR/IR/reflection and
+   backend binding, and test calls plus Kotlin implementations together. Do not
+   approximate a nested `Repository<T>` as `Any`, route it through Kotlin-owned
+   erasure, or admit only a `List<T>` spelling.
 2. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
    they may adapt the Kotlin continuation boundary but never replace its
    internal ABI or create a second state-machine representation.
