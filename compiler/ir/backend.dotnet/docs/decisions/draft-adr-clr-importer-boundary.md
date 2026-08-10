@@ -183,6 +183,14 @@ marker and valid multiplicity.
 These are CLR facts. They do not create Kotlin primitive, enum, value-class, function, nullable,
 or ref-like semantics without a separate import mapping.
 
+The first nullable-value mapping is deliberately exact and closed. A resolved generic instance
+whose owner is the selected `System.Nullable` TypeDef and whose sole argument is one of the eight
+signed Common primitive carriers receives the Kotlin view `V?`; its retained physical signature
+continues to own `valuetype System.Nullable<V>` for calls, properties, implementations, and nested
+constructed types. The nullable wrapper consumes no Roslyn reference-nullability flag. A
+same-spelled TypeDef, class-encoded signature, unsupported struct, open constrained parameter, or
+invalid construction is not this mapping and rejects the complete imported classifier.
+
 ### 7. Assignability and generic constraints preserve evidence
 
 The shared foreign-signature assignability layer is bounded and returns structured outcomes, not
@@ -397,8 +405,9 @@ The FIR provider produces a `compiler:dotnet.imports` carrier containing direct 
 already-selected resource-free assembly, declaring TypeDef and resolved hierarchy, and MethodDef
 or Property plus exact MethodSemantics accessors and resolved structural signatures. Every carrier
 from one provider points at one compilation-local selected declaration graph. That graph retains
-only assemblies owning admitted classifiers plus their admitted resolved hierarchies, validates
-assembly and TypeDef identity once, and is shared rather than copied or reconstructed per member.
+only assemblies owning admitted classifiers or the exact selected physical core identities needed
+by their signatures, plus admitted resolved hierarchies. It validates assembly, TypeDef, and core
+identity once and is shared rather than copied or reconstructed per member.
 Construction validates row membership and declaring-owner identity before the carrier can enter
 FIR; the backend consumes the retained graph and never repeats classpath, TypeRef, TypeSpec, or
 display-name resolution.

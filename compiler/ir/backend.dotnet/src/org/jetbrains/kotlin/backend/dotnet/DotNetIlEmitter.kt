@@ -331,7 +331,10 @@ internal class DotNetIlEmitter(
         // enter [externalDeclarations] or the Kotlin-interface physical ABI. Keep shape admission on
         // that carrier-backed path too: a Kotlin class may implement the same closed abstract
         // interface that Kotlin code is allowed to call.
-        val importedClrDeclarationsForShapeValidation = DotNetClrImportedDeclarations {}
+        val importedClrDeclarationsForShapeValidation = DotNetClrImportedDeclarations(
+            assemblyReferenceSink = {},
+            coreLibraryReference = coreLibrary.reference,
+        )
         fun isMappedKotlinGenericInterface(candidate: IrClass): Boolean =
             candidate.isDotNetGenericInterfaceDeclaration &&
                     (candidate in moduleInterfaces ||

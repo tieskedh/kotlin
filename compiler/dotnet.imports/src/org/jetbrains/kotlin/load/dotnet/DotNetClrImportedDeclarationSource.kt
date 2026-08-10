@@ -21,13 +21,14 @@ import java.util.IdentityHashMap
  * unfamiliar carrier from names or tokens.
  */
 enum class DotNetClrImportedDeclarationCarrierVersion {
-    V2,
+    V3,
 }
 
 /** One selected CLR import graph, shared by every declaration carrier produced from it. */
 class DotNetClrImportedDeclarationGraph(
     val assemblies: List<DotNetClrClasspathAssembly.WithoutCarrier>,
     val hierarchies: List<DotNetClrResolvedTypeHierarchy>,
+    val physicalCoreTypes: DotNetClrPhysicalTypeCoreTypes? = null,
 ) {
     private val assembliesByMetadata =
         IdentityHashMap<DotNetClrAssemblyMetadata, DotNetClrClasspathAssembly.WithoutCarrier>()
@@ -44,6 +45,20 @@ class DotNetClrImportedDeclarationGraph(
             hierarchy.type.type.assembly in assembliesByMetadata
         }) {
             "Imported CLR declaration graph contains a hierarchy outside its selected assemblies"
+        }
+        physicalCoreTypes?.let { coreTypes ->
+            require(
+                listOf(
+                    coreTypes.systemValueType,
+                    coreTypes.systemEnum,
+                    coreTypes.systemNullable,
+                ).all { type ->
+                    assembliesByMetadata.containsKey(type.assembly) &&
+                            type.assembly.typeDefinitions.any { definition -> definition === type.definition }
+                }
+            ) {
+                "Imported CLR declaration graph contains core identities outside its selected assemblies"
+            }
         }
         val mutableHierarchies =
             IdentityHashMap<DotNetClrAssemblyMetadata, MutableMap<DotNetClrMetadataHandle, DotNetClrResolvedTypeHierarchy>>()
@@ -75,7 +90,7 @@ sealed class DotNetClrImportedDeclarationSource(
     val graph: DotNetClrImportedDeclarationGraph,
 ) : DeserializedContainerSource {
     val carrierVersion: DotNetClrImportedDeclarationCarrierVersion =
-        DotNetClrImportedDeclarationCarrierVersion.V2
+        DotNetClrImportedDeclarationCarrierVersion.V3
 
     init {
         require(assembly.metadata.typeDefinitions.any { it === declaringType }) {

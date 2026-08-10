@@ -34,6 +34,7 @@ import java.util.IdentityHashMap
  */
 internal class DotNetClrImportedDeclarations(
     private val assemblyReferenceSink: (DotNetClrClasspathAssembly.WithoutCarrier) -> Unit,
+    private val coreLibraryReference: String,
 ) {
     private val classInfos = IdentityHashMap<IrClass, DotNetIlClassInfo>()
     private val resolvedClassInfos = hashMapOf<DotNetClrResolvedTypeDefinition, DotNetIlClassInfo>()
@@ -300,15 +301,33 @@ internal class DotNetClrImportedDeclarations(
             is DotNetClrResolvedTypeSignature.Named ->
                 DotNetIlValueType.UserClass(classInfo(type, source))
             is DotNetClrResolvedTypeSignature.GenericInstance -> {
-                val owner = classInfo(genericType.type, source)
-                val arguments = arguments.map { argument ->
-                    argument.toSupportedImportedIlTypeOrNull(
-                        source,
-                        ownerGenericParameterCount,
-                        methodGenericParameterCount,
-                    ) ?: return null
+                if (
+                    source.graph.physicalCoreTypes?.systemNullable?.let(
+                        genericType.type::hasSameIdentityAs
+                    ) == true
+                ) {
+                    val physicalElement = arguments.singleOrNull()
+                        ?.toSupportedImportedIlTypeOrNull(
+                            source,
+                            ownerGenericParameterCount,
+                            methodGenericParameterCount,
+                        )
+                        ?: return null
+                    if (!genericType.isValueType || !physicalElement.isSupportedImportedNullableElement()) {
+                        return null
+                    }
+                    DotNetIlValueType.NullableValue(physicalElement, coreLibraryReference)
+                } else {
+                    val owner = classInfo(genericType.type, source)
+                    val physicalArguments = arguments.map { argument ->
+                        argument.toSupportedImportedIlTypeOrNull(
+                            source,
+                            ownerGenericParameterCount,
+                            methodGenericParameterCount,
+                        ) ?: return null
+                    }
+                    DotNetIlValueType.GenericInstance(owner, physicalArguments)
                 }
-                DotNetIlValueType.GenericInstance(owner, arguments)
             }
             else -> null
         }
@@ -357,6 +376,21 @@ private fun validateAssemblyIdentity(assembly: DotNetClrClasspathAssembly.Withou
 
 private fun DotNetClrImportedDeclarationSource.requireSupportedCarrierVersion() {
         when (carrierVersion) {
-            DotNetClrImportedDeclarationCarrierVersion.V2 -> Unit
+            DotNetClrImportedDeclarationCarrierVersion.V3 -> Unit
         }
 }
+
+private fun DotNetIlValueType.isSupportedImportedNullableElement(): Boolean =
+    when (this) {
+        DotNetIlValueType.Boolean,
+        DotNetIlValueType.Char,
+        DotNetIlValueType.Int8,
+        DotNetIlValueType.Int16,
+        DotNetIlValueType.Int32,
+        DotNetIlValueType.Int64,
+        DotNetIlValueType.Float32,
+        DotNetIlValueType.Float64,
+        -> true
+
+        else -> false
+    }
