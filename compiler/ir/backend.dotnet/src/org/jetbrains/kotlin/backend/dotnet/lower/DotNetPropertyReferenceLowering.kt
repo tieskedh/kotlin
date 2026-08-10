@@ -6,14 +6,19 @@
 package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.lower.AbstractPropertyReferenceLowering
+import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
-import org.jetbrains.kotlin.backend.dotnet.dotNetCallableDeclarationFlags
 import org.jetbrains.kotlin.backend.dotnet.dotNetLocalCallableDeclarationFlags
+import org.jetbrains.kotlin.backend.dotnet.dotNetFunctionDeclarationFlags
+import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyDeclarationFlags
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnsupported
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
+import org.jetbrains.kotlin.ir.builders.irBlockBody
 import org.jetbrains.kotlin.ir.builders.irCall
+import org.jetbrains.kotlin.ir.builders.irGetField
 import org.jetbrains.kotlin.ir.builders.irInt
 import org.jetbrains.kotlin.ir.builders.irNull
+import org.jetbrains.kotlin.ir.builders.irReturn
 import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.expressions.IrExpression
@@ -62,13 +67,49 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
             setterReference?.let { putDotNetPropertyFactoryArgument("setter", it) }
             val property = reference.reflectionTargetSymbol?.owner as? IrProperty
                 ?: error("Internal .NET backend error: KProperty has no property target")
+            val getter = property.getter
+                ?: error("Internal .NET backend error: reflected property '${property.name}' has no getter")
+            if (property.isConst) {
+                val field = property.backingField
+                    ?: error("Internal .NET backend error: const property '${property.name}' has no backing field")
+                // JVM-shaped const references read the literal field from the generated reference
+                // object instead of reintroducing a public property accessor that the ordinary
+                // physical ABI deliberately omits. Keep that direction here: only the private
+                // callable-reference body changes, while the Kotlin property/getter identity used
+                // for KLIB facts remains the declaration-owned one.
+                getterReference.invokeFunction.body = backendContext
+                    .createIrBuilder(getterReference.invokeFunction.symbol)
+                    .irBlockBody {
+                        +irReturn(irGetField(null, field))
+                    }
+            }
             putDotNetPropertyFactoryArgument("signature", if (hasSignatureSurface) {
-                val getter = property.getter
-                    ?: error("Internal .NET backend error: reflected property '${property.name}' has no getter")
                 kTypeBuilder.run { buildCallableSignature(getter.returnType, getter.typeParameters) }
             } else {
                 irNull()
             })
+            putDotNetPropertyFactoryArgument("getterSignature", if (hasSignatureSurface) {
+                kTypeBuilder.run { buildCallableSignature(getter.returnType, getter.typeParameters) }
+            } else {
+                irNull()
+            })
+            putDotNetPropertyFactoryArgument(
+                "getterAnnotations",
+                irCall(backendContext.callableAnnotationSymbols.empty),
+            )
+            putDotNetPropertyFactoryArgument("getterFlags", irInt(getter.dotNetFunctionDeclarationFlags()))
+            property.setter?.takeIf { setterReference != null }?.let { setter ->
+                putDotNetPropertyFactoryArgument("setterSignature", if (hasSignatureSurface) {
+                    kTypeBuilder.run { buildCallableSignature(setter.returnType, setter.typeParameters) }
+                } else {
+                    irNull()
+                })
+                putDotNetPropertyFactoryArgument(
+                    "setterAnnotations",
+                    irCall(backendContext.callableAnnotationSymbols.empty),
+                )
+                putDotNetPropertyFactoryArgument("setterFlags", irInt(setter.dotNetFunctionDeclarationFlags()))
+            }
             putDotNetPropertyFactoryArgument("parameterFactory", backendContext.symbols.dotNetKParameterFactory
                 ?.takeIf { backendContext.hasCallableParameterSurface }
                 ?.let { factory -> irCall(factory) }
@@ -77,7 +118,7 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
                 "annotations",
                 irCall(backendContext.callableAnnotationSymbols.empty),
             )
-            putDotNetPropertyFactoryArgument("declarationFlags", irInt(property.dotNetCallableDeclarationFlags()))
+            putDotNetPropertyFactoryArgument("declarationFlags", irInt(property.dotNetPropertyDeclarationFlags()))
             dotNetPropertyAnnotationOwner = property
             dotNetPropertySignatureOwner = property
             dotNetPropertyBoundReceiverCount = reference.boundValues.size
@@ -106,6 +147,28 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
             } else {
                 irNull()
             })
+            putDotNetPropertyFactoryArgument("getterSignature", if (hasSignatureSurface) {
+                kTypeBuilder.run { buildCallableSignature(valueType, emptyList()) }
+            } else {
+                irNull()
+            })
+            putDotNetPropertyFactoryArgument(
+                "getterAnnotations",
+                irCall(backendContext.callableAnnotationSymbols.empty),
+            )
+            putDotNetPropertyFactoryArgument("getterFlags", irInt(dotNetLocalCallableDeclarationFlags()))
+            if (isMutable) {
+                putDotNetPropertyFactoryArgument("setterSignature", if (hasSignatureSurface) {
+                    kTypeBuilder.run { buildCallableSignature(backendContext.irBuiltIns.unitType, emptyList()) }
+                } else {
+                    irNull()
+                })
+                putDotNetPropertyFactoryArgument(
+                    "setterAnnotations",
+                    irCall(backendContext.callableAnnotationSymbols.empty),
+                )
+                putDotNetPropertyFactoryArgument("setterFlags", irInt(dotNetLocalCallableDeclarationFlags()))
+            }
             putDotNetPropertyFactoryArgument("parameterFactory", backendContext.symbols.dotNetKParameterFactory
                 ?.takeIf { backendContext.hasCallableParameterSurface }
                 ?.let { factory -> irCall(factory) }
@@ -117,6 +180,7 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
             putDotNetPropertyFactoryArgument("declarationFlags", irInt(dotNetLocalCallableDeclarationFlags()))
             dotNetPropertyAnnotationOwner = reference.reflectionTargetSymbol?.owner as? IrAnnotationContainer
             dotNetLocalPropertySignatureType = valueType
+            dotNetLocalPropertyIsMutable = isMutable
         }
     }
 }
@@ -143,3 +207,6 @@ internal var IrCall.dotNetPropertyBoundReceiverCount: Int? by irAttribute(copyBy
 
 /** Logical return type for a local delegated-property token, whose parameter list is empty. */
 internal var IrCall.dotNetLocalPropertySignatureType: IrType? by irAttribute(copyByDefault = false)
+
+/** Mutability of a local delegated-property token whose setter has no retained declaration. */
+internal var IrCall.dotNetLocalPropertyIsMutable: Boolean? by irAttribute(copyByDefault = false)
