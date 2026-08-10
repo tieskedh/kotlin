@@ -615,9 +615,15 @@ See the
   reflection while their retained MethodDef remains the sole physical authority.
   Emit ordinary MethodSpec calls and exact override slots; never erase them,
   rediscover them by name, or decode a reflection-private generic signature.
-  Special constraints, constructed bounds, and explicit unconstrained nullable
-  generic leaves reject the complete interface until Kotlin can express their
-  full CLR substitution contract. See
+  A constructed interface bound is admitted only when the shared selected-graph
+  validator proves every substituted nominal constraint and the bound's complete
+  TypeSpec/nullability tree maps to the same Kotlin type; retain that
+  GenericInstance in the structural type-parameter model and physical
+  GenericParamConstraint. An open generic non-null assertion preserves the
+  original `!n`/`!!n` local and checks only a boxed probe. Special constraints,
+  unsupported constructed bounds, and explicit unconstrained nullable generic
+  leaves reject the complete interface until Kotlin can express their full CLR
+  substitution contract. See
   [the annotation-value decision](docs/decisions/valued-annotation-classes.md),
   [the class-discovery decision](docs/decisions/annotation-discovery.md), and
   [the callable-discovery decision](docs/decisions/callable-annotation-discovery.md), and
@@ -674,9 +680,13 @@ See the
   explicit `1` to `T`, and an explicit `2` to `T?`. Fixed, reordered, mixed
   open/fixed, and inherited nullable-parameter uses are admitted only inside the
   same closed physical grammar and must keep the original TypeSpec slots. Never
-  send them through the Kotlin-owned erased/split-interface ABI. Constrained
-  constructed targets, unsupported constraints, or unsupported carriers reject
-  the complete classifier rather than approximating a member. See
+  send them through the Kotlin-owned erased/split-interface ABI. A nominally
+  constrained construction, including an InterfaceImpl or constructed upper
+  bound, is admitted only after declaration-qualified validation by the shared
+  constraint model; nested constraint types participate in the classifier
+  selection fixpoint. Special constraints, nullable constraint roots, invalid or
+  unsupported constraint proofs, and unsupported carriers reject the complete
+  classifier rather than approximating a member. See
   [the foreign generic-TypeDef decision](docs/decisions/foreign-clr-generic-type-identities.md).
   A foreign physical `System.Nullable<V>` becomes Kotlin `V?` only when its
   generic owner is the exact selected core TypeDef retained in that shared graph

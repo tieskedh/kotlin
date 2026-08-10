@@ -378,12 +378,13 @@ Do not flatten property/ref/out state, bypass Common smart-cast stability, or in
 role from an attribute name.
 
 The first exact foreign method-generic slice is complete: method-owned parameters,
-relative and admitted nominal bounds, MethodSpec calls, overrides, vectors/`params`,
-overload resolution, and callable reflection share one FIR/IR declaration and one
-retained MethodDef. Continue only by extending
+relative, nominal, and admitted constructed-interface bounds, MethodSpec calls,
+overrides, vectors/`params`, overload resolution, and callable reflection share
+one FIR/IR declaration and one retained MethodDef. Continue only by extending
 [its closed grammar](../decisions/foreign-clr-generic-methods.md). Special CLR
-constraints, constructed bounds, and explicit nullable generic leaves remain
-fail-closed; do not turn them into approximate Kotlin bounds or partially valid calls.
+constraints, unsupported constructed bounds, and explicit nullable generic
+leaves remain fail-closed; do not turn them into approximate Kotlin bounds or
+partially valid calls.
 
 The exact foreign generic-TypeDef programme now includes direct owner parameters,
 declaration variance, admitted bounds, properties, owner-plus-method substitution,
@@ -404,11 +405,15 @@ mixed fixed/open, and inherited `T?` owner-parameter substitutions therefore
 compose through FIR, overrides, CIL, and reverse Kotlin implementations. Concrete
 oblivious references remain platform types, while an oblivious supertype owner
 parameter stays `T` rather than manufacturing `T!`.
-Constrained constructed targets, unsigned carriers, special constraints,
-constructed bounds, nullable user structs, open constrained nullable parameters,
-and explicit unconstrained nullable generic leaves on declared members remain
-fail-closed. Never route an imported generic owner through the Kotlin-owned
-erased-interface ABI.
+Nominally constrained constructed members and InterfaceImpls now reuse the shared
+declaration-qualified CLR constraint proof. TypeSpec-backed interface bounds are
+structural Kotlin bounds with aligned child nullability while their original
+GenericParamConstraint remains the physical ABI; Kotlin implementations and open
+generic bound dispatch use the same constructed carrier. Unsigned carriers,
+special constraints, unsupported or nullable-root bounds, nullable user structs,
+open constrained nullable parameters, and explicit unconstrained nullable generic
+leaves on declared members remain fail-closed. Never route an imported generic
+owner through the Kotlin-owned erased-interface ABI.
 
 ### 7. Close the remaining draft ABI decisions before wider breadth
 
@@ -543,11 +548,12 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
   types/type parameters/parameters, and positional plus named/default
   invocation are complete for the admitted callable arities;
 - foreign CLR generic-method shapes beyond the accepted exact slice, including
-  special constraints, constructed bounds/types, and explicit unconstrained
-  nullable generic leaves;
+  special constraints, constructed types outside the admitted interface grammar,
+  nullable-root bounds, and explicit unconstrained nullable generic leaves;
 - foreign CLR generic-TypeDef shapes beyond the accepted exact slice, including
-  constrained constructed targets, unsigned carriers, special constraints,
-  constructed bounds, and explicit nullable generic leaves on declared members;
+  unsigned carriers, special constraints, constructed bounds outside the admitted
+  interface grammar, nullable constraint roots, and explicit nullable generic
+  leaves on declared members;
 - multi-field value classes; the single-field box/carrier architecture is
   accepted and implemented, but does not select a layout or ABI for multiple
   underlying fields;
