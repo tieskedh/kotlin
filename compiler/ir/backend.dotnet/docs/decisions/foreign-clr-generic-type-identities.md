@@ -18,6 +18,11 @@ public interface DerivedBox<T> : Box<T> {}
 public interface NestedBox<T> {
     Box<T> Nested();
 }
+
+public interface NullableValueApi {
+    int? Echo(int? value);
+    Box<int?> Nested(int? value);
+}
 ```
 
 is already one reified CLR TypeDef named ``Box`1``. Its members use owner parameters
@@ -64,8 +69,10 @@ corresponding Kotlin variance.
 The selected assembly and exact TypeDef, resolved hierarchy, MethodDef, Property,
 MethodSemantics rows, and resolved member signature remain attached to the
 imported declarations. All declaration carriers from one provider share one
-validated selected-graph object; carrier construction neither retains the whole
-unselected classpath nor repeats graph validation per member. The backend checks
+validated selected-graph object. It retains admitted classifier owners and the
+exact selected physical core identities needed to classify value carriers;
+carrier construction neither retains the whole unselected classpath nor repeats
+graph validation per member. The backend checks
 semantic and physical arity and emits the original metadata name and constructed
 CLR identity directly from that graph. It never routes this owner through the
 Kotlin-owned erased generic interface ABI, invents a split interface, rediscovers
@@ -84,6 +91,24 @@ Kotlin `Int?` still uses `System.Nullable<int32>`.
 This marker is semantic input to physical mapping, not a CLR annotation contract
 and not a second nullability authority. Kotlin-produced declarations remain
 KLIB-authoritative.
+
+### Physical `System.Nullable<V>` has a Kotlin nullable-scalar view
+
+An exact selected `valuetype System.Nullable<V>` in a foreign signature maps to
+the logical Kotlin type `V?` when `V` is one of the eight admitted signed Common
+primitive carriers. The nullable owner consumes no Roslyn reference-nullability
+flag; any enclosing reference construction and its children retain their normal
+preorder. Thus `Box<int?>` becomes `Box<Int?>`, while the retained signature still
+emits the original `Box<Nullable<int32>>` MethodDef slot.
+
+Recognition uses the selected core TypeDef retained in the declaration graph,
+never the namespace or metadata-name spelling. FIR2IR compares Kotlin overrides
+with that same identity and the backend lowers it through the target profile's
+existing `NullableValue` carrier. A malformed class-encoded nullable, nested
+nullable, nullable reference, open `T? where T : struct`, user struct, or lookalike
+TypeDef rejects the complete classifier in this slice. Roslyn's unconstrained
+annotated `T?` remains a generic nullability problem; it is not physical
+`System.Nullable<T>` and is not admitted by this mapping.
 
 ### Kotlin implementations fill the native slots
 
@@ -114,7 +139,9 @@ The admitted type-owned slice accepts an interface only when:
   inheritance graph is complete and cycle-free;
 - owner and method uses may be direct `!n`/`!!n`, supported signed primitive,
   `string`, `object`, supported SZARRAY, exact selected non-generic interface, or
-  a recursively constructed exact selected interface;
+  a recursively constructed exact selected interface; an exact selected
+  `System.Nullable<V>` is additionally admitted only for one of the eight signed
+  Common primitive carriers and may occur recursively inside those constructions;
 - every constructed target has matching arity and no special or nominal owner
   constraints in this slice, and every nominal node survives the same complete
   classifier-selection fixpoint;
@@ -159,6 +186,9 @@ Kotlin ABI; only proven boundary differences receive adapters.
   bounds, open generic inheritance, recursively constructed member types,
   declaration-owned `KType` reflection, and separate compilation share one
   declaration graph and one retained physical identity.
+- Foreign `Nullable<V>` scalar parameters, returns, properties, and recursively
+  constructed arguments use logical `V?` semantics and the exact original CLR
+  carrier without a wrapper or name-based rebinding.
 - Imported CLR generic interfaces never acquire Kotlin implementation manifests
   or canonical erased sibling TypeDefs.
 - Closed inherited constructions and constrained constructed targets require later
@@ -173,6 +203,9 @@ Coverage must retain both Framework CLR and current CoreCLR profiles and prove:
 - open generic class-literal identity and constructed `KType` arguments;
 - String, Int, and `Int?` owner constructions, mutable properties, owner plus
   method parameters, vectors, `params`, variance, and admitted bounds;
+- all eight exact foreign `System.Nullable<V>` scalar method carriers, nullable
+  values, mutable properties, nested `Box<V?>` constructions, and rejection of
+  unsupported nullable user structs;
 - Kotlin-to-C# and C#-to-Kotlin dispatch through the original interface,
   including primitive-vararg storage projection;
 - direct open generic inheritance and both Kotlin and C# implementations of its

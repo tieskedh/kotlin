@@ -681,7 +681,10 @@ internal class DotNetIlTypeMapper private constructor(
         localClasses,
         coreLibrary,
         externalDeclarations,
-        DotNetClrImportedDeclarations(foreignAssemblyReferenceSink),
+        DotNetClrImportedDeclarations(
+            foreignAssemblyReferenceSink,
+            coreLibrary.reference,
+        ),
         genericInterfaces,
         genericClasses,
         dotNetComparableInterfaceInfo(coreLibrary),

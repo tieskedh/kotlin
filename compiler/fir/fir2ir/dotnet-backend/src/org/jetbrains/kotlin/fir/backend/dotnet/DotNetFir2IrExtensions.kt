@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.nonDispatchParameters
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationGraph
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
@@ -134,6 +135,7 @@ private object DotNetClrImportedSignatureOverridabilityCondition : IrExternalOve
                 logicalPhysicalType,
                 ownerTypeArguments,
                 subFunction.typeParameters,
+                source.graph,
             )
         }
         return if (hasExactParameterCarriers) {
@@ -148,6 +150,7 @@ private fun IrType.hasImportedClrCarrier(
     physicalType: DotNetClrResolvedTypeSignature,
     ownerTypeArguments: List<IrType>,
     methodTypeParameters: List<IrTypeParameter>,
+    graph: DotNetClrImportedDeclarationGraph,
 ): Boolean =
     when (physicalType) {
         is DotNetClrResolvedTypeSignature.Primitive ->
@@ -165,6 +168,7 @@ private fun IrType.hasImportedClrCarrier(
                 physicalType.elementType,
                 ownerTypeArguments,
                 methodTypeParameters,
+                graph,
             )
         }
         is DotNetClrResolvedTypeSignature.GenericParameter -> {
@@ -187,6 +191,21 @@ private fun IrType.hasImportedClrCarrier(
                 ?.hasImportedClrIdentity(physicalType.type) == true
         is DotNetClrResolvedTypeSignature.GenericInstance -> {
             val simpleType = this as? IrSimpleType ?: return false
+            if (
+                graph.physicalCoreTypes?.systemNullable?.let(
+                    physicalType.genericType.type::hasSameIdentityAs
+                ) == true
+            ) {
+                return simpleType.isMarkedNullable() &&
+                        physicalType.arguments.singleOrNull()?.let { element ->
+                            hasImportedClrCarrier(
+                                element,
+                                ownerTypeArguments,
+                                methodTypeParameters,
+                                graph,
+                            )
+                        } == true
+            }
             val owner = simpleType.classifier.owner as? IrClass ?: return false
             if (!owner.hasImportedClrIdentity(physicalType.genericType.type) ||
                 simpleType.arguments.size != physicalType.arguments.size
@@ -201,6 +220,7 @@ private fun IrType.hasImportedClrCarrier(
                             physicalType.arguments[index],
                             ownerTypeArguments,
                             methodTypeParameters,
+                            graph,
                         )
             }
         }
