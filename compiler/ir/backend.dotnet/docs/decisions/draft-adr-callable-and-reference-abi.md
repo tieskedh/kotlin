@@ -100,10 +100,12 @@ The currently durable reflection facts are the callable name,
 declaration-owned runtime annotations and logical signature, and positional
 invocation through the callable's existing execution capability. Annotation discovery is governed by
 [`callable-annotation-discovery.md`](callable-annotation-discovery.md); it uses
-the reference's existing exact target without defining member lookup. Owner
-lookup, member enumeration, accessor objects, and named/default reflective call
-still require a separate reflection model and Kotlin metadata contract.
-Positional invocation is governed by
+the reference's existing exact target without defining member lookup. Direct
+property accessors and named/default reflective invocation are governed by
+[`property-accessor-reflection.md`](property-accessor-reflection.md) and
+[`callable-named-invocation.md`](callable-named-invocation.md). Owner lookup and
+member enumeration still require a separate reflection model and Kotlin
+metadata contract. Positional invocation is governed by
 [`callable-positional-invocation.md`](callable-positional-invocation.md).
 
 ### Function-reference `Any` behavior is structural

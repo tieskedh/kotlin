@@ -1048,17 +1048,78 @@ $throwableExceptionTypesIl
           .class interface public abstract auto ansi KProperty
                  implements Kotlin.KCallable
           {
+            .method public hidebysig specialname newslot abstract virtual instance bool get_isLateinit() cil managed
+            {
+            }
+            .method public hidebysig specialname newslot abstract virtual instance bool get_isConst() cil managed
+            {
+            }
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KProperty/Getter get_getter() cil managed
+            {
+            }
+            .property instance bool isLateinit()
+            {
+              .get instance bool Kotlin.KProperty::get_isLateinit()
+            }
+            .property instance bool isConst()
+            {
+              .get instance bool Kotlin.KProperty::get_isConst()
+            }
+            .property instance class Kotlin.KProperty/Getter getter()
+            {
+              .get instance class Kotlin.KProperty/Getter Kotlin.KProperty::get_getter()
+            }
+
+            .class nested public interface abstract auto ansi Accessor
+            {
+              .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KProperty get_property() cil managed
+              {
+              }
+              .property instance class Kotlin.KProperty 'property'()
+              {
+                .get instance class Kotlin.KProperty Kotlin.KProperty/Accessor::get_property()
+              }
+            }
+
+            .class nested public interface abstract auto ansi Getter
+                   implements Kotlin.KProperty/Accessor, Kotlin.KFunction
+            {
+            }
           }
 
           .class interface public abstract auto ansi KMutableProperty
                  implements Kotlin.KProperty
           {
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KMutableProperty/Setter get_setter() cil managed
+            {
+            }
+            .property instance class Kotlin.KMutableProperty/Setter setter()
+            {
+              .get instance class Kotlin.KMutableProperty/Setter Kotlin.KMutableProperty::get_setter()
+            }
+
+            .class nested public interface abstract auto ansi Setter
+                   implements Kotlin.KProperty/Accessor, Kotlin.KFunction
+            {
+            }
           }
 
           .class interface public abstract auto ansi KProperty0
                  implements Kotlin.KProperty, Kotlin.Function0
           {
             .method public hidebysig newslot abstract virtual instance object Get() cil managed
+            {
+            }
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KProperty0/Getter get_getter() cil managed
+            {
+            }
+            .property instance class Kotlin.KProperty0/Getter getter()
+            {
+              .get instance class Kotlin.KProperty0/Getter Kotlin.KProperty0::get_getter()
+            }
+
+            .class nested public interface abstract auto ansi Getter
+                   implements Kotlin.KProperty/Getter, Kotlin.Function0
             {
             }
           }
@@ -1069,12 +1130,36 @@ $throwableExceptionTypesIl
             .method public hidebysig newslot abstract virtual instance object Get(object receiver) cil managed
             {
             }
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KProperty1/Getter get_getter() cil managed
+            {
+            }
+            .property instance class Kotlin.KProperty1/Getter getter()
+            {
+              .get instance class Kotlin.KProperty1/Getter Kotlin.KProperty1::get_getter()
+            }
+
+            .class nested public interface abstract auto ansi Getter
+                   implements Kotlin.KProperty/Getter, Kotlin.Function1
+            {
+            }
           }
 
           .class interface public abstract auto ansi KProperty2
                  implements Kotlin.KProperty, Kotlin.Function2
           {
             .method public hidebysig newslot abstract virtual instance object Get(object receiver1, object receiver2) cil managed
+            {
+            }
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KProperty2/Getter get_getter() cil managed
+            {
+            }
+            .property instance class Kotlin.KProperty2/Getter getter()
+            {
+              .get instance class Kotlin.KProperty2/Getter Kotlin.KProperty2::get_getter()
+            }
+
+            .class nested public interface abstract auto ansi Getter
+                   implements Kotlin.KProperty/Getter, Kotlin.Function2
             {
             }
           }
@@ -1085,6 +1170,18 @@ $throwableExceptionTypesIl
             .method public hidebysig newslot abstract virtual instance void Set(object 'value') cil managed
             {
             }
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KMutableProperty0/Setter get_setter() cil managed
+            {
+            }
+            .property instance class Kotlin.KMutableProperty0/Setter setter()
+            {
+              .get instance class Kotlin.KMutableProperty0/Setter Kotlin.KMutableProperty0::get_setter()
+            }
+
+            .class nested public interface abstract auto ansi Setter
+                   implements Kotlin.KMutableProperty/Setter, Kotlin.Function1
+            {
+            }
           }
 
           .class interface public abstract auto ansi KMutableProperty1
@@ -1093,12 +1190,36 @@ $throwableExceptionTypesIl
             .method public hidebysig newslot abstract virtual instance void Set(object receiver, object 'value') cil managed
             {
             }
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KMutableProperty1/Setter get_setter() cil managed
+            {
+            }
+            .property instance class Kotlin.KMutableProperty1/Setter setter()
+            {
+              .get instance class Kotlin.KMutableProperty1/Setter Kotlin.KMutableProperty1::get_setter()
+            }
+
+            .class nested public interface abstract auto ansi Setter
+                   implements Kotlin.KMutableProperty/Setter, Kotlin.Function2
+            {
+            }
           }
 
           .class interface public abstract auto ansi KMutableProperty2
                  implements Kotlin.KProperty2, Kotlin.KMutableProperty
           {
             .method public hidebysig newslot abstract virtual instance void Set(object receiver1, object receiver2, object 'value') cil managed
+            {
+            }
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KMutableProperty2/Setter get_setter() cil managed
+            {
+            }
+            .property instance class Kotlin.KMutableProperty2/Setter setter()
+            {
+              .get instance class Kotlin.KMutableProperty2/Setter Kotlin.KMutableProperty2::get_setter()
+            }
+
+            .class nested public interface abstract auto ansi Setter
+                   implements Kotlin.KMutableProperty/Setter, Kotlin.Function3
             {
             }
           }

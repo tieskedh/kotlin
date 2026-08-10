@@ -16,9 +16,21 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: exact nominal constrained constructions and
-  constructed-interface bounds for admitted foreign generic interfaces and
-  methods. The FIR importer reuses the shared declaration-qualified CLR
+- Last completed feature: JVM-shaped direct property declaration facts and
+  accessor objects for `KProperty0` through `KProperty2` and their mutable
+  counterparts. One cached getter and optional setter call the owning
+  property's established execution path, preserving bound receivers, virtual
+  dispatch, mutation, exception identity, and separate compilation. Exact
+  KLIB/importer IR owns `isConst`, `isLateinit`, accessor signatures,
+  parameters, annotations, visibility, modality, and function flags; runtime
+  CLR reflection owns none of them. A private callable-reference getter reads
+  retained `const` literals without changing their ordinary field-only CLR
+  ABI. Library ABI and runtime surface 29 own the new payload, nested
+  interfaces, and implementation classes. Broad member discovery,
+  `getDelegate`, type-use annotation discovery, and the positive `isLateinit`
+  path remain separate programmes. The preceding feature completed exact
+  nominal constrained constructions and constructed-interface bounds for
+  admitted foreign generic interfaces and methods. The FIR importer reuses the shared declaration-qualified CLR
   constraint resolver/validator; it does not reconstruct satisfaction from
   Kotlin types. Constrained members and InterfaceImpls, method and owner bounds,
   nested Roslyn nullability, Kotlin implementations, open generic bound dispatch,
@@ -137,23 +149,23 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The exact foreign nominal-constraint/constructed-bound head passed every
+The direct property declaration-fact/accessor-object head passed every
 constituent of the strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 158 XML files and 1900 tests:
+The audited full-aggregate evidence covers 158 XML files and 1908 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1778 FIR, IL-text, and box tests
+- 1786 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 95 library-integration tests
 - zero failures, errors, or skips
 
 The aggregate exited successfully. Direct audit of its three final roots reports
-the 158 files and 1,900 tests above with zero failures, errors, or skips. No
+the 158 files and 1,908 tests above with zero failures, errors, or skips. No
 duration or performance comparison is retained because another compiler session
 shared the machine throughout verification.
 
@@ -861,9 +873,8 @@ Adversarial coverage exercises defaults, nested values, arrays, enums,
 bound/unbound callable references, invocation/mutation identity,
 property/accessor separation, read-only list behavior, separate KLIB
 consumption, exact foreign CLR method/property attributes, both runtime
-profiles, and `-no-stdlib` compilation. Member enumeration/invocation,
-accessor objects, and type-use annotation owners remain separate reflection
-decisions.
+profiles, and `-no-stdlib` compilation. Member enumeration/invocation and
+type-use annotation owners remain separate reflection decisions.
 
 `KCallable.returnType` now follows Native's declaration-target boundary rather
 than the generated invocation adapter. Functions and constructors use the rich
@@ -980,6 +991,20 @@ the typed getters and ordinary `KVisibility` enum; library ABI 25 rejects old
 materialized references. Separate Kotlin/C#/Roslyn and physical metadata tests
 also pin Runtime's lack of a Stdlib reference and Stdlib's implementation of
 the one Runtime-owned `EnumEntries` interface.
+
+Direct property reflection now publishes JVM-shaped `isConst`, `isLateinit`,
+getter, and mutable setter capabilities for the fixed property arities. Each
+property wrapper creates one cached accessor object whose `KFunction`
+signature and declaration facts come from the exact accessor IR and whose
+execution delegates to the owning property's existing `Get`/`Set` path.
+Getter/setter invocation therefore cannot diverge from property invocation in
+bound-receiver handling, virtual dispatch, mutation, exception identity, or
+separate libraries. A `const` reference reads its retained literal in the
+private reference body and does not add a public CLR accessor MethodDef.
+Runtime surface and library ABI 29 pin the new interfaces and factory payload.
+Positive `isLateinit` behavior remains unavailable until the parked language
+feature admits such declarations; broad member discovery, `getDelegate`, and
+type-use annotation discovery remain independent.
 
 Library ABI version 23 also retains the version-22 static ordinary-class
 default-dispatch shape; runtime surface level 24 includes the version-23
@@ -1111,17 +1136,15 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the independent reflection programme with broad member enumeration,
-   accessor objects, and type-use annotation discovery. Reuse the established
-   logical declaration graph; do not rediscover foreign or Kotlin members through
-   runtime CLR reflection.
-2. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
+1. Continue the independent reflection programme with broad member
+   enumeration. Reuse the established direct callable and property-accessor
+   objects plus the logical declaration graph; do not rediscover foreign or
+   Kotlin members through runtime CLR reflection.
+2. Treat type-use annotation discovery as its own reflection tranche over the
+   established logical type graph and exact foreign metadata owners.
+3. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
    they may adapt the Kotlin continuation boundary but never replace its
    internal ABI or create a second state-machine representation.
-3. Keep broad member enumeration, accessor objects, and type-use annotation
-   reflection as the next independent reflection programme. Direct member-
-   extension references remain coupled to that member model rather than being
-   approximated through CLR reflection.
 4. Keep coroutine scheduling, `kotlinx.coroutines`, sequence builders,
    debugger metadata, and coroutine-aware reflection outside this completed
    continuation/state-machine foundation until selected independently.

@@ -3,6 +3,7 @@
 // delegate tokens.
 
 import kotlin.reflect.KMutableProperty
+import kotlin.reflect.KMutableProperty0
 import kotlin.reflect.KMutableProperty2
 import kotlin.reflect.KProperty
 import kotlin.reflect.KProperty0
@@ -17,6 +18,16 @@ private val topRead: Int
 private class Cell(var value: Int)
 
 private class ManualProperty : kotlin.reflect.KMutableProperty1<Cell, Int> {
+    override val isLateinit: Boolean = false
+
+    override val isConst: Boolean = false
+
+    override val getter: KProperty1.Getter<Cell, Int>
+        get() = throw UnsupportedOperationException("manual accessor")
+
+    override val setter: kotlin.reflect.KMutableProperty1.Setter<Cell, Int>
+        get() = throw UnsupportedOperationException("manual accessor")
+
     override val name: String
         get() = "manual"
 
@@ -51,6 +62,16 @@ private class ManualProperty : kotlin.reflect.KMutableProperty1<Cell, Int> {
 }
 
 private class ManualProperty2 : KMutableProperty2<ExtensionHost, Cell, Int> {
+    override val isLateinit: Boolean = false
+
+    override val isConst: Boolean = false
+
+    override val getter: kotlin.reflect.KProperty2.Getter<ExtensionHost, Cell, Int>
+        get() = throw UnsupportedOperationException("manual accessor")
+
+    override val setter: KMutableProperty2.Setter<ExtensionHost, Cell, Int>
+        get() = throw UnsupportedOperationException("manual accessor")
+
     override val name: String
         get() = "manual2"
 
@@ -119,6 +140,10 @@ private var observedLocalVisibility: KVisibility? = KVisibility.PUBLIC
 private var observedLocalIsFinal: Boolean = false
 private var observedLocalIsOpen: Boolean = true
 private var observedLocalIsAbstract: Boolean = true
+private var observedLocalGetterFacts: Boolean = false
+private var observedLocalGetterFailure: Boolean = false
+private var observedLocalSetterFacts: Boolean = false
+private var observedLocalSetterFailure: Boolean = false
 
 private fun observeLocalProperty(property: KProperty<*>) {
     observedLocalName = property.name
@@ -129,6 +154,14 @@ private fun observeLocalProperty(property: KProperty<*>) {
     observedLocalIsOpen = property.isOpen
     observedLocalIsAbstract = property.isAbstract
     if (property is KProperty0<*>) {
+        val getter = property.getter
+        observedLocalGetterFacts = getter === property.getter && getter.property === property
+        observedLocalGetterFailure = try {
+            getter()
+            false
+        } catch (exception: UnsupportedOperationException) {
+            exception.message == "Not supported for local property reference."
+        }
         observedLocalGetFailure = try {
             property.get()
             false
@@ -153,11 +186,28 @@ private fun observeLocalProperty(property: KProperty<*>) {
         } catch (exception: UnsupportedOperationException) {
             exception.message == "Not supported for local property reference."
         }
+        if (property is KMutableProperty0<*>) {
+            val setter = property.setter
+            observedLocalSetterFacts = setter === property.setter && setter.property === property
+            observedLocalSetterFailure = try {
+                setter.call(null)
+                false
+            } catch (exception: UnsupportedOperationException) {
+                exception.message == "Not supported for local property reference."
+            }
+        } else {
+            observedLocalSetterFacts = false
+            observedLocalSetterFailure = false
+        }
     } else {
         observedLocalGetFailure = false
         observedLocalInvokeFailure = false
         observedLocalCallFailure = false
         observedLocalCallByFailure = false
+        observedLocalGetterFacts = false
+        observedLocalGetterFailure = false
+        observedLocalSetterFacts = false
+        observedLocalSetterFailure = false
     }
 }
 
@@ -260,6 +310,21 @@ fun box(): String {
     if (manual.name != "manual" || manual.get(cell) != 43 || manual(cell) != 43) {
         return "fail 11: user implementation"
     }
+    val manualBase: KProperty<Int> = manual
+    val manualMutableBase: KMutableProperty<Int> = manual
+    val manualGetterBridge = try {
+        manualBase.getter
+        false
+    } catch (exception: UnsupportedOperationException) {
+        exception.message == "manual accessor"
+    }
+    val manualSetterBridge = try {
+        manualMutableBase.setter
+        false
+    } catch (exception: UnsupportedOperationException) {
+        exception.message == "manual accessor"
+    }
+    if (!manualGetterBridge || !manualSetterBridge) return "fail 11a: user accessor bridges"
 
     val readFirst = ::topRead
     val readSecond = ::topRead
@@ -301,7 +366,8 @@ fun box(): String {
     if (readLocalDelegate() != 40) return "fail 25: local delegated val"
     if (observedLocalName != "localRead" || observedLocalMutable) return "fail 26: local val token"
     if (!observedLocalGetFailure || !observedLocalInvokeFailure || !observedLocalCallFailure ||
-        !observedLocalCallByFailure
+        !observedLocalCallByFailure || !observedLocalGetterFacts || !observedLocalGetterFailure ||
+        observedLocalSetterFacts || observedLocalSetterFailure
     ) {
         return "fail 27: local val unsupported access"
     }
@@ -317,7 +383,8 @@ fun box(): String {
     if (writeLocalDelegate() != 42) return "fail 29: local delegated var"
     if (observedLocalName != "localWrite" || !observedLocalMutable) return "fail 30: local var token"
     if (!observedLocalGetFailure || !observedLocalInvokeFailure || !observedLocalCallFailure ||
-        !observedLocalCallByFailure
+        !observedLocalCallByFailure || !observedLocalGetterFacts || !observedLocalGetterFailure ||
+        !observedLocalSetterFacts || !observedLocalSetterFailure
     ) {
         return "fail 31: local var unsupported access"
     }

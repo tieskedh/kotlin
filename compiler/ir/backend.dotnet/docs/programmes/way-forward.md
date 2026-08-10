@@ -153,7 +153,7 @@ same graph with JVM's owner, ordering, captured-receiver omission, reindexing,
 default, vararg, and equality rules. Kotlin parameter applications retain their
 exact declaration owners; admitted foreign callables use exact CLR Param rows
 without turning CLR optional flags into Kotlin default-call semantics. General
-members, accessor objects, and type-use annotations remain separate tranches.
+members and type-use annotations remain separate tranches.
 Positional `KCallable.call` now consumes that exact
 parameter order through the existing erased `FunctionN` capability. Runtime
 surface level 22 validates count and dispatches without CLR member discovery;
@@ -187,9 +187,21 @@ as semantic evidence. Runtime surface 26 publishes the ordinary Kotlin
 rejects already-materialized references without the declaration bits. To keep
 Runtime independent of Stdlib, Runtime also owns the physical member-free
 `EnumEntries` interface; the Common generic declaration and all list behavior
-remain Stdlib-owned. Member enumeration, accessor objects, type-use
-annotations, and reflective invocation beyond the admitted callable closure
-remain independent tranches.
+remain Stdlib-owned. Member enumeration, type-use annotations, and reflective
+invocation beyond the admitted callable closure remain independent tranches.
+
+Direct property declaration facts and accessor objects are now complete for
+`KProperty0` through `KProperty2` and their mutable counterparts. JVM supplies
+the public reflection contract; the existing Native/Wasm-shaped property
+wrapper supplies the one execution identity. Getter and setter objects are
+cached `KFunction` capabilities that call the owning property's `Get`/`Set`
+path, so bound receivers, virtual dispatch, mutation, exception identity, and
+separate libraries cannot diverge. KLIB/importer IR owns `isConst`,
+`isLateinit`, accessor signatures, annotations, visibility, modality, and
+function flags. Runtime CLR reflection owns none of them. Runtime surface and
+library ABI 29 publish this closure. Positive `isLateinit` observation waits
+for the independently parked language feature; `getDelegate`, class-member
+enumeration, and type-use annotation discovery remain separate tranches.
 
 Future member enumeration must include member extension properties with
 multiple callable-owned type parameters and, once context parameters are
@@ -543,10 +555,11 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - wider annotation use-site targets, type-use owners, and unsupported CLR-value
   projections; valued construction, defaults, KLIB applications, and exact
   class/callable runtime discovery are selected;
-- broad member reflection and accessor objects; the nominal `KClass` floor,
+- broad member reflection; the nominal `KClass` floor,
   logical `KType`/`typeOf` graph, callable annotations, callable return
   types/type parameters/parameters, and positional plus named/default
-  invocation are complete for the admitted callable arities;
+  invocation plus direct property accessor objects are complete for the
+  admitted callable/property arities;
 - foreign CLR generic-method shapes beyond the accepted exact slice, including
   special constraints, constructed types outside the admitted interface grammar,
   nullable-root bounds, and explicit unconstrained nullable generic leaves;
