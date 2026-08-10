@@ -671,6 +671,14 @@ See the
   constructed targets, unsupported constraints, or unsupported carriers reject
   the complete classifier rather than approximating a member. See
   [the foreign generic-TypeDef decision](docs/decisions/foreign-clr-generic-type-identities.md).
+  A foreign physical `System.Nullable<V>` becomes Kotlin `V?` only when its
+  generic owner is the exact selected core TypeDef retained in that shared graph
+  and `V` is one of the eight admitted signed Common primitive carriers. Preserve
+  the original `Nullable<V>` tree for physical calls and MethodImpl slots; the
+  wrapper consumes no Roslyn reference-nullability flag. Never infer this mapping
+  from namespace/name spelling, from an annotated unconstrained `T?`, or for an
+  unsupported user struct/open parameter. Those shapes reject the whole foreign
+  classifier until their complete Kotlin mapping is selected.
   A separately accepted BCL
   mapping such as `Comparable<T>` may expose an additional exact host
   capability only where independently truthful, and future typed C# surfaces
