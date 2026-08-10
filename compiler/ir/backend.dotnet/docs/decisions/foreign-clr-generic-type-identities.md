@@ -13,6 +13,11 @@ public interface Box<T> {
     T First(params T[] values);
     U Select<U>(T ownerValue, U selected);
 }
+
+public interface DerivedBox<T> : Box<T> {}
+public interface NestedBox<T> {
+    Box<T> Nested();
+}
 ```
 
 is already one reified CLR TypeDef named ``Box`1``. Its members use owner parameters
@@ -56,11 +61,15 @@ and methods. Every `!n` use resolves to that graph; method-owned `!!n` continues
 to use the method-generic graph. Declaration-site CLR variance becomes the
 corresponding Kotlin variance.
 
-The selected assembly and exact TypeDef, MethodDef, Property, and MethodSemantics
-rows remain attached to the imported declarations. The backend checks semantic
-and physical arity and emits the original metadata name and constructed CLR
-identity. It never routes this owner through the Kotlin-owned erased generic
-interface ABI, invents a split interface, or rediscovers a slot by display name.
+The selected assembly and exact TypeDef, resolved hierarchy, MethodDef, Property,
+MethodSemantics rows, and resolved member signature remain attached to the
+imported declarations. All declaration carriers from one provider share one
+validated selected-graph object; carrier construction neither retains the whole
+unselected classpath nor repeats graph validation per member. The backend checks
+semantic and physical arity and emits the original metadata name and constructed
+CLR identity directly from that graph. It never routes this owner through the
+Kotlin-owned erased generic interface ABI, invents a split interface, rediscovers
+a slot by display name, or resolves a second nominal graph after FIR enhancement.
 Its class literal uses the selected open generic TypeDef as CLR evidence, while a
 constructed `KType` retains the logical Kotlin arguments.
 
@@ -95,23 +104,37 @@ primitive-array identity rules.
 
 ### Closed admitted grammar
 
-The first type-owned slice admits an interface only when:
+The admitted type-owned slice accepts an interface only when:
 
-- it is public, top-level, abstract, unambiguous, and has no inherited interface;
+- it is public, top-level, abstract, and unambiguous;
 - GenericParam rows are contiguous, have valid variance, and have no `class`,
   `struct`, `new()`, or by-ref-like special constraint;
-- owner and method uses are direct `!n`/`!!n`, supported signed primitive,
-  `string`, `object`, or SZARRAY forms already supported by physical codegen;
+- every direct inherited interface is another exact selected public top-level
+  interface and its arguments are open owner `!n` parameters; the selected
+  inheritance graph is complete and cycle-free;
+- owner and method uses may be direct `!n`/`!!n`, supported signed primitive,
+  `string`, `object`, supported SZARRAY, exact selected non-generic interface, or
+  a recursively constructed exact selected interface;
+- every constructed target has matching arity and no special or nominal owner
+  constraints in this slice, and every nominal node survives the same complete
+  classifier-selection fixpoint;
 - explicit bounds are relative generic parameters or exact admitted nominal
   non-generic interfaces from the selected graph;
 - every variance occurrence is valid for its declaration position; and
 - no owner- or method-generic leaf has explicit nullable evidence.
 
+Nullable-reference flags for a constructed signature are consumed in Roslyn's
+preorder across the complete resolved type tree. Kotlin reflection keeps the
+declaration-owned type (`Box<T>` on `NestedBox<T>.Nested`), while an invocation on
+`NestedBox<String>` emits the substituted physical `Box<string>` signature.
+
 Unsigned CLR scalars remain outside this slice until Kotlin unsigned value-class
-carriers are implemented end to end. Constructed member types and bounds, generic
-interface inheritance, nested GenericInstance signatures, pointers, byrefs,
-general arrays, special constraints, and explicit nullable generic leaves reject
-the complete classifier. No public member is silently omitted.
+carriers are implemented end to end. Closed or otherwise fixed inherited views
+such as `Closed : Box<string>` remain withheld until InterfaceImpl nullability
+and substitution evidence are modeled completely. Constructed bounds,
+constrained constructed targets, pointers, byrefs, general arrays, special
+constraints, and explicit nullable generic leaves likewise reject the complete
+classifier. No public member or inherited contract is silently omitted.
 
 ## Design attack
 
@@ -133,12 +156,14 @@ Kotlin ABI; only proven boundary differences receive adapters.
   primitive, and explicitly nullable primitive arguments without wrappers around
   the foreign object.
 - Owner and method generic parameters, arrays, `params`, properties, variance,
-  bounds, constructed `KType` reflection, and separate compilation share one
+  bounds, open generic inheritance, recursively constructed member types,
+  declaration-owned `KType` reflection, and separate compilation share one
   declaration graph and one retained physical identity.
 - Imported CLR generic interfaces never acquire Kotlin implementation manifests
   or canonical erased sibling TypeDefs.
-- Broader foreign constructed types and inheritance require later exact slices;
-  this decision forbids approximating them but does not forbid implementing them.
+- Closed inherited constructions and constrained constructed targets require later
+  exact slices; this decision forbids approximating them but does not forbid
+  implementing them.
 
 ## Verification obligations
 
@@ -150,7 +175,14 @@ Coverage must retain both Framework CLR and current CoreCLR profiles and prove:
   method parameters, vectors, `params`, variance, and admitted bounds;
 - Kotlin-to-C# and C#-to-Kotlin dispatch through the original interface,
   including primitive-vararg storage projection;
+- direct open generic inheritance and both Kotlin and C# implementations of its
+  inherited physical slots;
+- recursively constructed member returns such as `Producer<Box<T>>`, including
+  exact call-site substitution and reverse Kotlin implementation dispatch;
+- declaration-owned callable reflection (`Box<T>`) remaining distinct from the
+  substituted CLR invocation carrier (`Box<string>`);
 - inferred and explicit method arguments inside a constructed owner;
 - separate producer/consumer compilation and exact physical MethodImpl rows; and
-- complete rejection of inheritance, nested constructed signatures, unsigned
-  scalar carriers, special constraints, and explicit nullable generic leaves.
+- complete rejection of closed inheritance, constrained constructed targets,
+  unsigned scalar carriers, special constraints, and explicit nullable generic
+  leaves.

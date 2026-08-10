@@ -17,7 +17,10 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
-import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedMethodSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeView
 import org.jetbrains.kotlin.types.Variance
 import java.util.IdentityHashMap
 
@@ -33,6 +36,9 @@ internal class DotNetClrImportedDeclarations(
     private val assemblyReferenceSink: (DotNetClrClasspathAssembly.WithoutCarrier) -> Unit,
 ) {
     private val classInfos = IdentityHashMap<IrClass, DotNetIlClassInfo>()
+    private val resolvedClassInfos = hashMapOf<DotNetClrResolvedTypeDefinition, DotNetIlClassInfo>()
+    private val initializedHierarchies = hashSetOf<DotNetClrResolvedTypeDefinition>()
+    private val hierarchiesInProgress = hashSetOf<DotNetClrResolvedTypeDefinition>()
 
     fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
         classInfos[irClass]?.let {
@@ -42,34 +48,21 @@ internal class DotNetClrImportedDeclarations(
         val source = irClass.importedClrSourceOrNull() ?: return null
         source.requireSupportedCarrierVersion()
         validateAssemblyIdentity(source.assembly)
-        val owner = source.declaringType
-        val ownerParameters = source.assembly.metadata.genericParameterDefinitions
-            .filter { parameter -> parameter.owner == owner.handle }
+        val owner = source.declaringHierarchy.type.type
+        val ownerParameters = owner.assembly.genericParameterDefinitions
+            .filter { parameter -> parameter.owner == owner.definition.handle }
             .sortedBy { parameter -> parameter.number }
         if (
             ownerParameters.map { parameter -> parameter.number } != ownerParameters.indices.toList() ||
             ownerParameters.size != irClass.typeParameters.size
         ) {
             dotNetUnsupported(
-                "foreign CLR TypeDef '${owner.metadataName}' has a generic arity that disagrees with FIR/IR"
+                "foreign CLR TypeDef '${owner.definition.metadataName}' has a generic arity that disagrees with FIR/IR"
             )
         }
-        val className =
-            if (owner.namespaceName.isEmpty()) owner.metadataName
-            else "${owner.namespaceName}.${owner.metadataName}"
-        return DotNetIlClassInfo(
-            ilClassName = className,
-            typeParameterVariances = ownerParameters.map { parameter ->
-                when (parameter.variance) {
-                    DotNetClrGenericParameterVariance.INVARIANT -> Variance.INVARIANT
-                    DotNetClrGenericParameterVariance.COVARIANT -> Variance.OUT_VARIANCE
-                    DotNetClrGenericParameterVariance.CONTRAVARIANT -> Variance.IN_VARIANCE
-                }
-            },
-            assemblyName = source.assembly.metadata.identity.name,
-        ).also { classInfo ->
+        return classInfo(owner, source).also { classInfo ->
             classInfos[irClass] = classInfo
-            assemblyReferenceSink(source.assembly)
+            initializeHierarchy(owner, source)
         }
     }
 
@@ -77,16 +70,18 @@ internal class DotNetClrImportedDeclarations(
         val source =
             function.containerSource as? DotNetClrImportedDeclarationSource ?: return null
         source.requireSupportedCarrierVersion()
-        val method = when (source) {
-            is DotNetClrImportedMethodSource -> source.method
+        val methodAndSignature: Pair<DotNetClrMethodDefinition, DotNetClrResolvedMethodSignature> = when (source) {
+            is DotNetClrImportedMethodSource -> source.method to source.resolvedSignature
             is DotNetClrImportedPropertySource -> {
                 val property = function.correspondingPropertySymbol?.owner
                     ?: dotNetUnsupported(
                         "foreign CLR property accessor '${function.name.asString()}' lost its IR property"
                     )
                 when (function) {
-                    property.getter -> source.getter
-                    property.setter -> source.setter
+                    property.getter -> source.getter to source.getterSignature
+                    property.setter -> source.setter?.let { setter ->
+                        setter to checkNotNull(source.setterSignature)
+                    }
                         ?: dotNetUnsupported(
                             "foreign CLR property '${source.property.name}' has no retained setter"
                         )
@@ -96,6 +91,8 @@ internal class DotNetClrImportedDeclarations(
                 }
             }
         }
+        val method = methodAndSignature.first
+        val resolvedSignature = methodAndSignature.second
         val ownerClass = function.parent as? IrClass
             ?: dotNetUnsupported(
                 "foreign CLR MethodDef '${method.name}' lost its imported interface owner"
@@ -104,7 +101,7 @@ internal class DotNetClrImportedDeclarations(
             ?: dotNetUnsupported(
                 "foreign CLR MethodDef '${method.name}' lost its exact TypeDef linkage"
             )
-        val signature = method.signature
+        val signature = resolvedSignature
         val ownerGenericParameterCount = ownerInfo.typeParameterCount
         if (signature.genericParameterCount != function.typeParameters.size) {
             dotNetUnsupported(
@@ -113,9 +110,10 @@ internal class DotNetClrImportedDeclarations(
             )
         }
         val returnType = when (val physicalReturn = signature.returnType) {
-            DotNetClrTypeSignature.Void -> DotNetIlReturnType.Void
+            DotNetClrResolvedTypeSignature.Void -> DotNetIlReturnType.Void
             else -> DotNetIlReturnType.Value(
                 physicalReturn.toSupportedImportedIlTypeOrNull(
+                    source,
                     ownerGenericParameterCount,
                     signature.genericParameterCount,
                 )
@@ -140,6 +138,7 @@ internal class DotNetClrImportedDeclarations(
             )
             signature.parameterTypes.mapTo(this) { physicalParameter ->
                 physicalParameter.toSupportedImportedIlTypeOrNull(
+                    source,
                     ownerGenericParameterCount,
                     signature.genericParameterCount,
                 )
@@ -163,6 +162,156 @@ internal class DotNetClrImportedDeclarations(
 
     private fun IrClass.importedClrSourceOrNull(): DotNetClrImportedDeclarationSource? =
         dotNetImportedClrSourceOrNull()
+
+    private fun classInfo(
+        type: DotNetClrResolvedTypeDefinition,
+        source: DotNetClrImportedDeclarationSource,
+    ): DotNetIlClassInfo = resolvedClassInfos.getOrPut(type) {
+        val selectedAssembly = source.linkedAssembly(type)
+        validateAssemblyIdentity(selectedAssembly)
+        val owner = type.definition
+        val parameters = type.assembly.genericParameterDefinitions
+            .filter { parameter -> parameter.owner == owner.handle }
+            .sortedBy { parameter -> parameter.number }
+        if (parameters.map { parameter -> parameter.number } != parameters.indices.toList()) {
+            dotNetUnsupported(
+                "foreign CLR TypeDef '${owner.metadataName}' has invalid generic parameter numbering"
+            )
+        }
+        val className =
+            if (owner.namespaceName.isEmpty()) owner.metadataName
+            else "${owner.namespaceName}.${owner.metadataName}"
+        DotNetIlClassInfo(
+            ilClassName = className,
+            typeParameterVariances = parameters.map { parameter ->
+                when (parameter.variance) {
+                    DotNetClrGenericParameterVariance.INVARIANT -> Variance.INVARIANT
+                    DotNetClrGenericParameterVariance.COVARIANT -> Variance.OUT_VARIANCE
+                    DotNetClrGenericParameterVariance.CONTRAVARIANT -> Variance.IN_VARIANCE
+                }
+            },
+            assemblyName = type.assembly.identity.name,
+        ).also {
+            assemblyReferenceSink(selectedAssembly)
+        }
+    }
+
+    private fun initializeHierarchy(
+        type: DotNetClrResolvedTypeDefinition,
+        source: DotNetClrImportedDeclarationSource,
+    ) {
+        if (type in initializedHierarchies || !hierarchiesInProgress.add(type)) return
+        try {
+            val hierarchy = source.graph.hierarchyOrNull(type) ?: dotNetUnsupported(
+                "foreign CLR TypeDef '${type.definition.metadataName}' lost its selected hierarchy"
+            )
+            val info = classInfo(type, source)
+            info.baseType = hierarchy.baseType?.toSupportedImportedIlTypeOrNull(
+                source,
+                info.typeParameterCount,
+            )
+            info.interfaces = hierarchy.interfaces.map { implementation ->
+                implementation.interfaceType.toSupportedImportedIlTypeOrNull(
+                    source,
+                    info.typeParameterCount,
+                )
+                    ?: dotNetUnsupported(
+                        "foreign CLR TypeDef '${type.definition.metadataName}' has an inherited interface " +
+                                "outside the retained backend grammar"
+                    )
+            }
+            initializedHierarchies += type
+            hierarchy.interfaces.forEach { implementation ->
+                initializeHierarchy(implementation.interfaceType.type, source)
+            }
+        } finally {
+            hierarchiesInProgress.remove(type)
+        }
+    }
+
+    private fun DotNetClrImportedDeclarationSource.linkedAssembly(
+        type: DotNetClrResolvedTypeDefinition,
+    ): DotNetClrClasspathAssembly.WithoutCarrier =
+        graph.assemblyOrNull(type.assembly)
+            ?: dotNetUnsupported(
+                "foreign CLR TypeDef '${type.definition.metadataName}' lost its selected assembly"
+            )
+
+    private fun DotNetClrResolvedTypeView.toSupportedImportedIlTypeOrNull(
+        source: DotNetClrImportedDeclarationSource,
+        ownerGenericParameterCount: Int,
+    ): DotNetIlValueType? =
+        if (arguments.isEmpty()) {
+            DotNetIlValueType.UserClass(classInfo(type, source))
+        } else {
+            DotNetIlValueType.GenericInstance(
+                classInfo(type, source),
+                arguments.map { argument ->
+                    argument.toSupportedImportedIlTypeOrNull(source, ownerGenericParameterCount, 0)
+                        ?: return null
+                },
+            )
+        }
+
+    private fun DotNetClrResolvedTypeSignature.toSupportedImportedIlTypeOrNull(
+        source: DotNetClrImportedDeclarationSource,
+        ownerGenericParameterCount: Int,
+        methodGenericParameterCount: Int,
+    ): DotNetIlValueType? =
+        when (this) {
+            is DotNetClrResolvedTypeSignature.Primitive -> when (type) {
+                DotNetClrPrimitiveType.BOOLEAN -> DotNetIlValueType.Boolean
+                DotNetClrPrimitiveType.CHAR -> DotNetIlValueType.Char
+                DotNetClrPrimitiveType.INT8 -> DotNetIlValueType.Int8
+                DotNetClrPrimitiveType.INT16 -> DotNetIlValueType.Int16
+                DotNetClrPrimitiveType.INT32 -> DotNetIlValueType.Int32
+                DotNetClrPrimitiveType.INT64 -> DotNetIlValueType.Int64
+                DotNetClrPrimitiveType.FLOAT32 -> DotNetIlValueType.Float32
+                DotNetClrPrimitiveType.FLOAT64 -> DotNetIlValueType.Float64
+                DotNetClrPrimitiveType.STRING -> DotNetIlValueType.String
+                DotNetClrPrimitiveType.OBJECT -> DotNetIlValueType.Object
+                DotNetClrPrimitiveType.UINT8,
+                DotNetClrPrimitiveType.UINT16,
+                DotNetClrPrimitiveType.UINT32,
+                DotNetClrPrimitiveType.UINT64,
+                DotNetClrPrimitiveType.NATIVE_INT,
+                DotNetClrPrimitiveType.NATIVE_UINT,
+                    -> null
+            }
+            is DotNetClrResolvedTypeSignature.GenericParameter ->
+                when (kind) {
+                    DotNetClrGenericParameterKind.TYPE ->
+                        if (index in 0 until ownerGenericParameterCount) {
+                            DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+                        } else null
+                    DotNetClrGenericParameterKind.METHOD ->
+                        if (index in 0 until methodGenericParameterCount) {
+                            DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
+                        } else null
+                }
+            is DotNetClrResolvedTypeSignature.SzArray -> {
+                val physicalElement = elementType.toSupportedImportedIlTypeOrNull(
+                    source,
+                    ownerGenericParameterCount,
+                    methodGenericParameterCount,
+                ) ?: return null
+                DotNetIlValueType.GenericArray(physicalElement)
+            }
+            is DotNetClrResolvedTypeSignature.Named ->
+                DotNetIlValueType.UserClass(classInfo(type, source))
+            is DotNetClrResolvedTypeSignature.GenericInstance -> {
+                val owner = classInfo(genericType.type, source)
+                val arguments = arguments.map { argument ->
+                    argument.toSupportedImportedIlTypeOrNull(
+                        source,
+                        ownerGenericParameterCount,
+                        methodGenericParameterCount,
+                    ) ?: return null
+                }
+                DotNetIlValueType.GenericInstance(owner, arguments)
+            }
+            else -> null
+        }
 }
 
 internal fun IrClass.dotNetImportedClrSourceOrNull(): DotNetClrImportedDeclarationSource? {
@@ -208,52 +357,6 @@ private fun validateAssemblyIdentity(assembly: DotNetClrClasspathAssembly.Withou
 
 private fun DotNetClrImportedDeclarationSource.requireSupportedCarrierVersion() {
         when (carrierVersion) {
-            DotNetClrImportedDeclarationCarrierVersion.V1 -> Unit
+            DotNetClrImportedDeclarationCarrierVersion.V2 -> Unit
         }
 }
-
-private fun DotNetClrTypeSignature.toSupportedImportedIlTypeOrNull(
-    ownerGenericParameterCount: Int,
-    methodGenericParameterCount: Int,
-): DotNetIlValueType? =
-    when (this) {
-        is DotNetClrTypeSignature.Primitive -> when (type) {
-            DotNetClrPrimitiveType.BOOLEAN -> DotNetIlValueType.Boolean
-            DotNetClrPrimitiveType.CHAR -> DotNetIlValueType.Char
-            DotNetClrPrimitiveType.INT8 -> DotNetIlValueType.Int8
-            DotNetClrPrimitiveType.INT16 -> DotNetIlValueType.Int16
-            DotNetClrPrimitiveType.INT32 -> DotNetIlValueType.Int32
-            DotNetClrPrimitiveType.INT64 -> DotNetIlValueType.Int64
-            DotNetClrPrimitiveType.FLOAT32 -> DotNetIlValueType.Float32
-            DotNetClrPrimitiveType.FLOAT64 -> DotNetIlValueType.Float64
-            DotNetClrPrimitiveType.STRING -> DotNetIlValueType.String
-            DotNetClrPrimitiveType.OBJECT -> DotNetIlValueType.Object
-            DotNetClrPrimitiveType.UINT8,
-            DotNetClrPrimitiveType.UINT16,
-            DotNetClrPrimitiveType.UINT32,
-            DotNetClrPrimitiveType.UINT64,
-            DotNetClrPrimitiveType.NATIVE_INT,
-            DotNetClrPrimitiveType.NATIVE_UINT,
-                -> null
-        }
-        is DotNetClrTypeSignature.GenericParameter ->
-            when (kind) {
-                DotNetClrGenericParameterKind.TYPE ->
-                    if (index in 0 until ownerGenericParameterCount) {
-                        DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
-                    } else null
-                DotNetClrGenericParameterKind.METHOD ->
-                    if (index in 0 until methodGenericParameterCount) {
-                        DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
-                    } else null
-            }
-        is DotNetClrTypeSignature.SzArray -> {
-            val physicalElement = elementType.toSupportedImportedIlTypeOrNull(
-                ownerGenericParameterCount,
-                methodGenericParameterCount,
-            )
-                ?: return null
-            DotNetIlValueType.GenericArray(physicalElement)
-        }
-        else -> null
-    }

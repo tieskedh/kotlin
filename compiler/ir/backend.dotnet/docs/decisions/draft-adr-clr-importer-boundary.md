@@ -394,10 +394,13 @@ emission.
 ### 13. Retained declaration linkage is a shared, versioned compiler carrier
 
 The FIR provider produces a `compiler:dotnet.imports` carrier containing direct references to the
-already-selected resource-free assembly, declaring TypeDef, and MethodDef or Property plus exact
-MethodSemantics accessors. The referenced method/property rows already own their structural
-signatures. Construction validates row membership and declaring-owner identity before the carrier
-can enter FIR; the backend consumes the retained references and never repeats classpath or
+already-selected resource-free assembly, declaring TypeDef and resolved hierarchy, and MethodDef
+or Property plus exact MethodSemantics accessors and resolved structural signatures. Every carrier
+from one provider points at one compilation-local selected declaration graph. That graph retains
+only assemblies owning admitted classifiers plus their admitted resolved hierarchies, validates
+assembly and TypeDef identity once, and is shared rather than copied or reconstructed per member.
+Construction validates row membership and declaring-owner identity before the carrier can enter
+FIR; the backend consumes the retained graph and never repeats classpath, TypeRef, TypeSpec, or
 display-name resolution.
 
 The carrier protocol is explicitly versioned and exhaustively matched by the backend. A future
