@@ -84,6 +84,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationCarrierVersion
+import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationGraph
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
 import org.jetbrains.kotlin.fir.dotnet.DotNetClrInputNullabilityEnhancer
@@ -165,6 +166,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedSignatureFailure
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedSignatureSubstitutionFailure
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedMethodSignatureResolution
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeDefinition
+import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeHierarchy
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeSignature
 import org.jetbrains.kotlin.load.dotnet.DotNetClrResolvedTypeView
 import org.jetbrains.kotlin.fir.dotnet.DotNetClrReturnNullabilityEnhancer
@@ -18984,59 +18986,140 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val getter = assembly.metadata.methodDefinitions.single { it.name == "get_Value" }
         val setter = assembly.metadata.methodDefinitions.single { it.name == "set_Value" }
         val property = assembly.metadata.propertyDefinitions.single { it.name == "Value" }
+        val typeResolver = DotNetClrTypeResolver(
+            DotNetClrAssemblyReferenceBinder { _, _ -> null }
+        )
+        val signatureResolver = DotNetClrSignatureResolver(typeResolver)
+        fun resolvedSignature(method: DotNetClrMethodDefinition): DotNetClrResolvedMethodSignature =
+            (signatureResolver.resolve(assembly.metadata, method.signature) as
+                    DotNetClrResolvedMethodSignatureResolution.Resolved).signature
+        val declaringHierarchy = (
+                DotNetClrTypeHierarchyViewResolver(typeResolver).resolve(
+                    DotNetClrResolvedTypeView(
+                        DotNetClrResolvedTypeDefinition(assembly.metadata, declaringType),
+                        emptyList(),
+                    )
+                ) as DotNetClrTypeHierarchyViewResolution.Resolved
+                ).hierarchy
+        val graph = DotNetClrImportedDeclarationGraph(
+            listOf(assembly),
+            listOf(declaringHierarchy),
+        )
+        val methodSignature = resolvedSignature(method)
+        val getterSignature = resolvedSignature(getter)
+        val setterSignature = resolvedSignature(setter)
 
-        val methodSource = DotNetClrImportedMethodSource(assembly, declaringType, method)
-        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V1, methodSource.carrierVersion)
+        val methodSource = DotNetClrImportedMethodSource(
+            assembly,
+            declaringType,
+            declaringHierarchy,
+            graph,
+            method,
+            methodSignature,
+        )
+        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V2, methodSource.carrierVersion)
         assertSame(assembly, methodSource.assembly)
         assertSame(declaringType, methodSource.declaringType)
         assertSame(method, methodSource.method)
+        assertSame(graph, methodSource.graph)
 
         val propertySource = DotNetClrImportedPropertySource(
             assembly,
             declaringType,
+            declaringHierarchy,
+            graph,
             property,
             getter,
             setter,
+            getterSignature,
+            setterSignature,
         )
-        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V1, propertySource.carrierVersion)
+        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V2, propertySource.carrierVersion)
         assertSame(property, propertySource.property)
         assertSame(getter, propertySource.getter)
         assertSame(setter, propertySource.setter)
+        assertSame(graph, propertySource.graph)
 
         assertThrows(IllegalArgumentException::class.java) {
-            DotNetClrImportedMethodSource(assembly, wrongOwner, method)
+            DotNetClrImportedDeclarationGraph(
+                listOf(assembly, assembly),
+                listOf(declaringHierarchy),
+            )
         }
         assertThrows(IllegalArgumentException::class.java) {
-            DotNetClrImportedMethodSource(assembly, declaringType.copy(), method)
+            DotNetClrImportedDeclarationGraph(
+                listOf(assembly),
+                listOf(declaringHierarchy, declaringHierarchy),
+            )
+        }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetClrImportedMethodSource(
+                assembly,
+                wrongOwner,
+                declaringHierarchy,
+                graph,
+                method,
+                methodSignature,
+            )
         }
         assertThrows(IllegalArgumentException::class.java) {
-            DotNetClrImportedMethodSource(assembly, declaringType, method.copy())
+            DotNetClrImportedMethodSource(
+                assembly,
+                declaringType.copy(),
+                declaringHierarchy,
+                graph,
+                method,
+                methodSignature,
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetClrImportedMethodSource(
+                assembly,
+                declaringType,
+                declaringHierarchy,
+                graph,
+                method.copy(),
+                methodSignature,
+            )
         }
         assertThrows(IllegalArgumentException::class.java) {
             DotNetClrImportedPropertySource(
                 assembly,
                 declaringType,
+                declaringHierarchy,
+                graph,
                 property.copy(),
                 getter,
                 setter,
+                getterSignature,
+                setterSignature,
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             DotNetClrImportedPropertySource(
                 assembly,
                 declaringType,
+                declaringHierarchy,
+                graph,
                 property,
                 getter.copy(),
                 setter,
+                getterSignature,
+                setterSignature,
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
             DotNetClrImportedPropertySource(
                 assembly,
                 declaringType,
+                declaringHierarchy,
+                graph,
                 property,
                 getter,
                 setter.copy(),
+                getterSignature,
+                setterSignature,
             )
         }
     }
@@ -22540,6 +22623,56 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         public interface NestedBox<T>
                         {
                             Box<T> Nested();
+                            Box<T> Value { get; }
+                        }
+
+                        public sealed class NestedBoxImpl<T> : NestedBox<T>
+                        {
+                            private readonly Box<T> value;
+                            public NestedBoxImpl(Box<T> value) { this.value = value; }
+                            public Box<T> Nested() { return value; }
+                            public Box<T> Value { get { return value; } }
+                        }
+
+                        public sealed class DerivedBoxImpl<T> : DerivedBox<T>
+                        {
+                            private T value;
+                            public DerivedBoxImpl(T value) { this.value = value; }
+                            public int Marker() { return 29; }
+                            public T Echo(T input) { return input; }
+                            public T[] ArrayIdentity(T[] values) { return values; }
+                            public U Select<U>(T ownerValue, U selected) { return selected; }
+                            public T First(params T[] values) { return values[0]; }
+                            public T Value
+                            {
+                                get { return value; }
+                                set { this.value = value; }
+                            }
+                        }
+
+                        public interface DeepNested<T>
+                        {
+                            Producer<Box<T>> Produce();
+                        }
+
+                        public sealed class DeepNestedImpl<T> : DeepNested<T>
+                        {
+                            private readonly Producer<Box<T>> producer;
+                            public DeepNestedImpl(Box<T> value)
+                            {
+                                producer = new ProducerImpl<Box<T>>(value);
+                            }
+                            public Producer<Box<T>> Produce() { return producer; }
+                        }
+
+                        public interface ClosedDerivedBox : Box<string>
+                        {
+                            int ClosedMarker();
+                        }
+
+                        public interface ConstrainedNestedBox<T> where T : GenericKey
+                        {
+                            KeyBox<T> Nested();
                         }
 
                         public interface ReferenceConstraintApi
@@ -22802,6 +22935,76 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         override fun ArrayIdentity(values: Array<Int>): Array<Int> = values
                         override fun <U> Select(ownerValue: Int, selected: U): U = selected
                         override fun First(vararg values: Int): Int = values[0]
+                    }
+
+                    public fun verifyDerivedBox(
+                        box: ForeignCallContracts.DerivedBox<String>,
+                    ): String {
+                        check(box.Marker() == 29)
+                        box.Value = "derived"
+                        return box.Echo(box.Value)
+                    }
+
+                    public fun verifyNestedBox(
+                        nested: ForeignCallContracts.NestedBox<String>,
+                    ): String {
+                        check(nested.Nested() === nested.Value)
+                        nested.Value.Value = "nested"
+                        return nested.Nested().Echo(nested.Value.Value)
+                    }
+
+                    public class KotlinDerivedStringBox : ForeignCallContracts.DerivedBox<String> {
+                        override var Value: String = "initial"
+                        override fun Marker(): Int = 31
+                        override fun Echo(value: String): String = value
+                        override fun ArrayIdentity(values: Array<String>): Array<String> = values
+                        override fun <U> Select(ownerValue: String, selected: U): U = selected
+                        override fun First(vararg values: String): String = values[0]
+                    }
+
+                    public class KotlinNestedStringBox : ForeignCallContracts.NestedBox<String> {
+                        private val box: ForeignCallContracts.Box<String> = KotlinStringBox()
+                        override fun Nested(): ForeignCallContracts.Box<String> = box
+                        override val Value: ForeignCallContracts.Box<String> get() = box
+                    }
+
+                    public fun verifyDeepNested(
+                        nested: ForeignCallContracts.DeepNested<String>,
+                    ): String {
+                        val box = nested.Produce().Produce()
+                        box.Value = "deep"
+                        return box.Echo(box.Value)
+                    }
+
+                    public class KotlinStringBoxProducer :
+                        ForeignCallContracts.Producer<ForeignCallContracts.Box<String>> {
+                        private val box: ForeignCallContracts.Box<String> = KotlinStringBox()
+                        override fun Produce(): ForeignCallContracts.Box<String> = box
+                    }
+
+                    public class KotlinDeepNestedString : ForeignCallContracts.DeepNested<String> {
+                        private val producer:
+                            ForeignCallContracts.Producer<ForeignCallContracts.Box<String>> =
+                                KotlinStringBoxProducer()
+
+                        override fun Produce():
+                            ForeignCallContracts.Producer<ForeignCallContracts.Box<String>> = producer
+                    }
+
+                    @OptIn(ExperimentalStdlibApi::class)
+                    public fun verifyNestedCallableType(
+                        nested: ForeignCallContracts.NestedBox<String>,
+                    ): String {
+                        val function: () -> ForeignCallContracts.Box<String> = nested::Nested
+                        val callable = function as kotlin.reflect.KCallable<*>
+                        val returnType = callable.returnType
+                        check(returnType.classifier == ForeignCallContracts.Box::class)
+                        val ownerParameter = returnType.arguments.single().type?.classifier
+                                as? kotlin.reflect.KTypeParameter
+                            ?: error("missing foreign owner type parameter")
+                        check(ownerParameter.name == "T")
+                        check(ownerParameter !in callable.typeParameters)
+                        return nested.Value.Value
                     }
 
                     public class KotlinStringProducer : ForeignCallContracts.Producer<String> {
@@ -23068,6 +23271,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "class [Foreign.CallContracts]'ForeignCallContracts.Consumer`1'<string>" in il &&
                         "class [Foreign.CallContracts]'ForeignCallContracts.Consumer`1'<object>" in il
             ) { il }
+            assertTrue(
+                "[Foreign.CallContracts]'ForeignCallContracts.NestedBox`1'<string>::'Nested'()" in il &&
+                        "class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<!0>" in il
+            ) { "A constructed foreign member signature lost its physical owner argument:\n$il" }
+            assertTrue(
+                "class [Foreign.CallContracts]'ForeignCallContracts.Producer`1'<class " +
+                        "[Foreign.CallContracts]'ForeignCallContracts.Box`1'<!0>> class " +
+                        "[Foreign.CallContracts]'ForeignCallContracts.DeepNested`1'<string>::'Produce'()" in il
+            ) { "A recursively constructed foreign member signature was flattened:\n$il" }
+            assertTrue(
+                "class [Foreign.CallContracts]'ForeignCallContracts.DerivedBox`1'<string>" in il
+            ) { "A foreign generic interface inheritance edge was not retained:\n$il" }
 
             val verifierSource = applicationDirectory.resolve("ForeignCallVerifier.cs").apply {
                 writeText(
@@ -23119,6 +23334,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Box<string> stringBox = new BoxImpl<string>("initial");
                             Box<int> intBox = new BoxImpl<int>(1);
                             Box<int?> nullableIntBox = new BoxImpl<int?>(2);
+                            DerivedBox<string> derivedBox = new DerivedBoxImpl<string>("initial");
+                            NestedBox<string> nestedBox = new NestedBoxImpl<string>(stringBox);
+                            DeepNested<string> deepNested = new DeepNestedImpl<string>(stringBox);
                             KeyBox<GenericKey> keyBox = new KeyBoxImpl<GenericKey>();
                             Producer<string> producer = new ProducerImpl<string>("variant");
                             var consumer = new ConsumerImpl<object>();
@@ -23231,6 +23449,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require((bool)Method(facade, "verifyGenericOwnerType").Invoke(
                                 null, new object[0]),
                                 "foreign generic-owner KType lost its construction argument");
+                            Require((string)Method(facade, "verifyDerivedBox").Invoke(
+                                null, new object[] { derivedBox }) == "derived" &&
+                                derivedBox.Value == "derived",
+                                "foreign inherited generic-interface dispatch failed");
+                            Require((string)Method(facade, "verifyNestedBox").Invoke(
+                                null, new object[] { nestedBox }) == "nested" &&
+                                Object.ReferenceEquals(nestedBox.Nested(), nestedBox.Value),
+                                "foreign constructed member dispatch or identity failed");
+                            Require((string)Method(facade, "verifyNestedCallableType").Invoke(
+                                null, new object[] { nestedBox }) == "nested",
+                                "foreign constructed callable KType lost its declaration argument");
+                            Require((string)Method(facade, "verifyDeepNested").Invoke(
+                                null, new object[] { deepNested }) == "deep" &&
+                                stringBox.Value == "deep",
+                                "foreign recursively constructed member dispatch failed");
                             Producer<object> widened = (Producer<object>)Method(
                                 facade, "widenProducer").Invoke(null, new object[] { producer });
                             Require(Object.ReferenceEquals(widened, producer) &&
@@ -23351,6 +23584,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 kotlinIntBox.Select<string>(1, "selected") == "selected" &&
                                 kotlinIntBox.First(73, 74) == 73,
                                 "Kotlin constructed value-owner implementation dispatch failed");
+                            DerivedBox<string> kotlinDerived = (DerivedBox<string>)Activator.CreateInstance(
+                                kotlin.GetType("consumer.KotlinDerivedStringBox", true));
+                            Require(kotlinDerived.Marker() == 31 &&
+                                kotlinDerived.Echo("reverse-derived") == "reverse-derived",
+                                "Kotlin inherited foreign-interface implementation dispatch failed");
+                            NestedBox<string> kotlinNested = (NestedBox<string>)Activator.CreateInstance(
+                                kotlin.GetType("consumer.KotlinNestedStringBox", true));
+                            Require(Object.ReferenceEquals(kotlinNested.Nested(), kotlinNested.Value) &&
+                                kotlinNested.Nested().Echo("reverse-nested") == "reverse-nested",
+                                "Kotlin constructed foreign member implementation dispatch failed");
+                            DeepNested<string> kotlinDeepNested = (DeepNested<string>)Activator.CreateInstance(
+                                kotlin.GetType("consumer.KotlinDeepNestedString", true));
+                            Require(kotlinDeepNested.Produce().Produce().Echo("reverse-deep") == "reverse-deep",
+                                "Kotlin recursively constructed foreign member implementation dispatch failed");
                             Producer<string> kotlinProducer = (Producer<string>)Activator.CreateInstance(
                                 kotlin.GetType("consumer.KotlinStringProducer", true));
                             Require(kotlinProducer.Produce() == "produced",
@@ -23424,8 +23671,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     import ForeignCallContracts.ConstructorConstraintApi
                     import ForeignCallContracts.ConstructorBox
-                    import ForeignCallContracts.DerivedBox
-                    import ForeignCallContracts.NestedBox
+                    import ForeignCallContracts.ClosedDerivedBox
+                    import ForeignCallContracts.ConstrainedNestedBox
                     import ForeignCallContracts.NullableBox
                     import ForeignCallContracts.OrdinaryArrayApi
                     import ForeignCallContracts.NullableGenericApi
@@ -23473,10 +23720,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public fun constructorOwner(api: ConstructorBox<Any>): Any =
                         api.Create()
 
-                    public fun inheritedOwner(api: DerivedBox<String>): Int =
-                        api.Marker()
+                    public fun inheritedOwner(api: ClosedDerivedBox): Int =
+                        api.ClosedMarker()
 
-                    public fun nestedOwner(api: NestedBox<String>): Int = 0
+                    public fun nestedOwner(
+                        api: ConstrainedNestedBox<ForeignCallContracts.GenericKey>,
+                    ): Int = 0
                     """.trimIndent()
                 )
             }
@@ -23507,8 +23756,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue("ReferenceBox" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ValueBox" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ConstructorBox" in arrayDiagnostics) { arrayDiagnostics }
-            assertTrue("DerivedBox" in arrayDiagnostics) { arrayDiagnostics }
-            assertTrue("NestedBox" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("ClosedDerivedBox" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("ConstrainedNestedBox" in arrayDiagnostics) { arrayDiagnostics }
 
             val nullableOverrideConsumer = applicationDirectory.resolve("rejectedNullableGenericOverride.kt").apply {
                 writeText(
