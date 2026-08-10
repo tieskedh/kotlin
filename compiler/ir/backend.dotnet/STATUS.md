@@ -16,8 +16,21 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: coroutine-specific physical-ABI evidence. One
-  portable producer DLL now proves through objective CLR metadata that public
+- Last completed feature: exact foreign CLR method-generic import. The existing
+  complete-interface importer now creates declaration-owned FIR type parameters
+  before bounds and use-site types, retains one selected MethodDef as physical
+  authority, and emits ordinary MethodSpec calls for inferred and explicit
+  arguments. Direct `!!n`, `!!n[]`, relative bounds, admitted nominal interface
+  bounds, `params T[]`, generic/non-generic overloads, Kotlin implementations,
+  callable reflection, and Framework/CoreCLR consumption share that one model.
+  Special `class`/`struct`/`new()` constraints, constructed bounds, type-owned
+  parameters, and explicitly nullable unconstrained generic leaves still reject
+  the complete interface. In particular, Roslyn `T?` is not misrepresented as
+  Kotlin `T?` when `T` may be a CLR value type. Exact retained-signature checks
+  restore only frontend-approved overrides and prevent flexible array views from
+  manufacturing false covariant-return bridges. The preceding feature supplied
+  coroutine-specific physical-ABI evidence. One portable producer DLL proves
+  through objective CLR metadata that public
   top-level and virtual suspend entries append the erased `Continuation` and
   return `Object`; non-tail bodies become private sealed
   `DotNetCoroutineImpl` subclasses with callable public-in-private-type
@@ -82,8 +95,8 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The coroutine physical-ABI evidence head passed the ordinary
-aggregate. The normal aggregate command is:
+The foreign CLR method-generic head passed the ordinary aggregate. The normal
+aggregate command is:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -97,14 +110,18 @@ The audited full-aggregate evidence covers 158 XML files and 1900 tests:
 - 95 library-integration tests
 - zero failures, errors, or skips
 
-The final aggregate completed the changed `dn` root at 2026-08-09 21:42:47
-local time; its wrapper exited successfully after 12m42s. The unchanged
-physical-model and FIR/IL/box results were reused, and all three result roots
-were audited directly. The resulting tree has a cumulative JUnit suite time of
-1504.97 seconds: 0.13 for the physical model, 755.04 for FIR/IL/box, and 749.80
-for `dn`. Gradle 9's selected-task `--rerun` option is
-not full-matrix evidence on the empty backend lifecycle task and is not part of
-the verification command.
+The actual FIR2IR Test task was explicitly repeated from the current compiler
+head and exited successfully after 10m21s with all 1,778 tests green; this
+avoided treating Gradle's stale reuse of the preceding coroutine result as
+current evidence. The final normal aggregate entry point recreated the full
+116-test `dn` root and exited successfully after 13m23s. Direct audit of all
+three roots reports a cumulative JUnit suite time of 1,643.29 seconds: 0.13 for
+the unchanged physical model, 852.20 for FIR/IL/box, and 790.96 for `dn`. Wall
+time is deliberately not compared with the previous baseline because another
+compiler session shared the machine during verification. Gradle 9's selected-
+task `--rerun` option is not full-matrix evidence on the empty backend lifecycle
+task; here it was applied to the concrete FIR2IR Test task before the ordinary
+aggregate was run unchanged.
 
 After that aggregate, the test-only evidence was strengthened to require the
 imported member entries to retain their CLR virtual slots and to dispatch a
@@ -679,9 +696,10 @@ CodeAnalysis row was stripped. KLIB remains the independent authority.
   export subset.
 - `:compiler:fir:fir-dotnet` owns foreign Kotlin projection and lazy FIR symbol
   construction without depending on backend or CLI implementation packages.
-- `:compiler:fir:fir2ir:dotnet-backend` owns the narrow target-specific IR
-  overridability rule for retained flexible CLR array declarations and derives
-  the neutral exact-contract projection while resolved FIR and IR coexist.
+- `:compiler:fir:fir2ir:dotnet-backend` owns narrow success-only IR
+  overridability rules for retained flexible CLR array and method-generic
+  declarations and derives the neutral exact-contract projection while resolved
+  FIR and IR coexist.
 - `:compiler:ir:backend.dotnet` owns Kotlin-to-CLR representation policy,
   target-profile legalization, IR lowering, physical-form construction, and
   backend product orchestration.
@@ -760,6 +778,14 @@ suspend inline now composes with the continuation/state-machine foundation.
 The nominal `KClass` floor and
 logical `KType`/`typeOf` graph are selected and published; they do not imply
 member reflection.
+
+Foreign CLR method generics now enter the Kotlin model through the same
+frontend-first boundary as JVM foreign generics. One method-owned type-parameter
+graph supplies inference, bounds, overloads, calls, overrides, callable types,
+and reflection, while the selected MethodDef supplies exact `!!n`/MethodSpec
+binding. The admitted grammar is intentionally closed; unsupported special or
+constructed constraints and explicitly nullable unconstrained generic leaves
+evict the complete interface rather than creating a partially truthful API.
 
 The coroutine continuation ABI now has an objective portable-library proof in
 addition to semantic execution and final-IR validation. Public top-level and
@@ -1040,10 +1066,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
   collection-shaped params each require separate Kotlin-stability decisions.
-- Foreign CLR generic-method import remains fail-closed. Its method-owned type
-  parameters, bounds, overload resolution, invocation, backend binding, and
-  subsequent callable reflection must land as one importer feature rather than
-  a private signature decoder inside `KCallable.returnType`.
+- Foreign CLR generic methods beyond the exact admitted grammar remain
+  fail-closed. Special constraints, constructed bounds/types, type-owned
+  parameters, and explicit nullable generic leaves require complete semantic,
+  binding, override, and reflection mappings rather than backend exceptions or
+  a private decoder inside callable reflection.
 - Foreign C# `Nullable<T>` signatures are nominal generic instantiations and
   remain outside the closed primitive importer until constructed-type identity
   is retained from the selected assembly graph through backend binding.
@@ -1052,11 +1079,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Implement foreign CLR generic-method import as the next deep interop
-   closure. Method-owned parameters and bounds, overload resolution,
-   invocation, physical binding, nullability/attribute evidence, and callable
-   reflection must land together; do not add a reflection-private metadata
-   decoder or admit only signatures that happen to execute one test.
+1. Extend foreign CLR import to exact generic TypeDef and GenericInstance
+   identities as the next deep interop closure. Type-owned parameters and
+   bounds, selected constructed identity, inheritance, calls, overrides,
+   nullability, separate binding, and reflection must land together. Preserve
+   native CLR identity; do not route imported C# libraries through Kotlin-owned
+   erased class rules or admit only a `List<T>` spelling.
 2. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
    they may adapt the Kotlin continuation boundary but never replace its
    internal ABI or create a second state-machine representation.
