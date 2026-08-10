@@ -80,7 +80,9 @@ internal val DotNetGenericInterfaceMemberView.physicalView: DotNetGenericInterfa
  * not be used to rewrite an imported CLR interface.
  */
 internal val IrClass.isDotNetGenericInterfaceDeclaration: Boolean
-    get() = isInterface && typeParameters.isNotEmpty()
+    get() = isInterface &&
+            typeParameters.isNotEmpty() &&
+            dotNetImportedClrSourceOrNull() == null
 
 
 /**

@@ -22247,6 +22247,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val nullableStringArrayType: String,
             val nullableIntArrayType: String,
             val nullableGenericDeclaration: String,
+            val nullableOwnerGenericDeclaration: String,
             val rejectsNullableGenericOverrideInFrontend: Boolean,
             val compileFixture: (File, File) -> CSharpCompilerResult,
             val systemReference: File,
@@ -22286,6 +22287,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 nullableIntArrayType = "int[]",
                 nullableGenericDeclaration =
                     "[return: MaybeNull] T Maybe<T>([AllowNull] T value);",
+                nullableOwnerGenericDeclaration =
+                    "[return: MaybeNull] T Maybe([AllowNull] T value);",
                 rejectsNullableGenericOverrideInFrontend = false,
                 compileFixture = { source, output ->
                     runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
@@ -22314,6 +22317,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 nullableStringArrayType = "string?[]?",
                 nullableIntArrayType = "int[]?",
                 nullableGenericDeclaration = "T? Maybe<T>(T? value);",
+                nullableOwnerGenericDeclaration = "T? Maybe(T? value);",
                 rejectsNullableGenericOverrideInFrontend = true,
                 compileFixture = { source, output ->
                     runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
@@ -22440,6 +22444,64 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             public T Pick<T>(T value) { return value; }
                         }
 
+                        public interface Box<T>
+                        {
+                            T Echo(T value);
+                            T[] ArrayIdentity(T[] values);
+                            U Select<U>(T ownerValue, U selected);
+                            T First(params T[] values);
+                            T Value { get; set; }
+                        }
+
+                        public sealed class BoxImpl<T> : Box<T>
+                        {
+                            private T value;
+
+                            public BoxImpl(T value) { this.value = value; }
+                            public T Echo(T input) { return input; }
+                            public T[] ArrayIdentity(T[] values) { return values; }
+                            public U Select<U>(T ownerValue, U selected) { return selected; }
+                            public T First(params T[] values) { return values[0]; }
+                            public T Value
+                            {
+                                get { return value; }
+                                set { this.value = value; }
+                            }
+                        }
+
+                        public interface Producer<out T>
+                        {
+                            T Produce();
+                        }
+
+                        public sealed class ProducerImpl<T> : Producer<T>
+                        {
+                            private readonly T value;
+                            public ProducerImpl(T value) { this.value = value; }
+                            public T Produce() { return value; }
+                        }
+
+                        public interface Consumer<in T>
+                        {
+                            void Consume(T value);
+                        }
+
+                        public sealed class ConsumerImpl<T> : Consumer<T>
+                        {
+                            public T Last;
+                            public void Consume(T value) { Last = value; }
+                        }
+
+                        public interface KeyBox<T> where T : GenericKey
+                        {
+                            T Echo(T value);
+                        }
+
+                        public sealed class KeyBoxImpl<T> : KeyBox<T> where T : GenericKey
+                        {
+                            public T Echo(T value) { return value; }
+                        }
+
                         public interface GenericSlot
                         {
                             T Identity<T>(T value);
@@ -22448,6 +22510,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         public interface NullableGenericApi
                         {
                             ${profile.nullableGenericDeclaration}
+                        }
+
+                        public interface NullableBox<T>
+                        {
+                            ${profile.nullableOwnerGenericDeclaration}
+                        }
+
+                        public interface ReferenceBox<T> where T : class
+                        {
+                            T Echo(T value);
+                        }
+
+                        public interface ValueBox<T> where T : struct
+                        {
+                            T Echo(T value);
+                        }
+
+                        public interface ConstructorBox<T> where T : new()
+                        {
+                            T Create();
+                        }
+
+                        public interface DerivedBox<T> : Box<T>
+                        {
+                            int Marker();
+                        }
+
+                        public interface NestedBox<T>
+                        {
+                            Box<T> Nested();
                         }
 
                         public interface ReferenceConstraintApi
@@ -22532,6 +22624,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             byte[] Bytes(byte[] values);
                         }
 
+                        public interface UnsignedScalarApi
+                        {
+                            uint Identity(uint value);
+                        }
+
                         public interface RectangularArrayApi
                         {
                             int[,] Matrix(int[,] values);
@@ -22552,6 +22649,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     package consumer
 
                     import ForeignCallContracts.Api
+                    import kotlin.reflect.typeOf
 
                     public fun verifyInt(api: Api): Int =
                         api.Compute(40)
@@ -22579,6 +22677,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public fun verifyExplicitGenericIdentity(api: ForeignCallContracts.GenericApi): Int =
                         api.Identity<Int>(42)
+
+                    public fun verifyInferredValueGenericIdentity(
+                        api: ForeignCallContracts.GenericApi,
+                    ): Int = api.Identity(43)
+
+                    public fun verifyExplicitNullableValueGenericIdentity(
+                        api: ForeignCallContracts.GenericApi,
+                        value: Int?,
+                    ): Int? = api.Identity<Int?>(value)
 
                     public fun verifyGenericArray(api: ForeignCallContracts.GenericApi): String =
                         api.ArrayIdentity(arrayOf("array"))[0]
@@ -22634,6 +22741,77 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         override fun <T> First(vararg values: T): T = values[0]
                         override fun Pick(value: Int): Int = value + 2
                         override fun <T> Pick(value: T): T = value
+                    }
+
+                    public fun verifyStringBox(box: ForeignCallContracts.Box<String>): String {
+                        check(box.Echo("echo") == "echo")
+                        check(box.ArrayIdentity(arrayOf("array"))[0] == "array")
+                        check(box.Select("owner", 42) == 42)
+                        check(box.First("first", "second") == "first")
+                        box.Value = "changed"
+                        return box.Value
+                    }
+
+                    public fun verifyIntBox(box: ForeignCallContracts.Box<Int>): Int {
+                        check(box.Echo(7) == 7)
+                        check(box.ArrayIdentity(arrayOf(8))[0] == 8)
+                        check(box.First(10, 11) == 10)
+                        box.Value = 9
+                        return box.Value
+                    }
+
+                    public fun verifyNullableIntBox(
+                        box: ForeignCallContracts.Box<Int?>,
+                    ): Int? {
+                        box.Value = null
+                        check(box.Echo(null) == null)
+                        return box.Value
+                    }
+
+                    public fun verifyKeyBox(
+                        box: ForeignCallContracts.KeyBox<ForeignCallContracts.GenericKey>,
+                        key: ForeignCallContracts.GenericKey,
+                    ): ForeignCallContracts.GenericKey = box.Echo(key)
+
+                    @OptIn(ExperimentalStdlibApi::class)
+                    public fun verifyGenericOwnerType(): Boolean {
+                        val type = typeOf<ForeignCallContracts.Box<String>>()
+                        return type.classifier == ForeignCallContracts.Box::class &&
+                                type.arguments.single().type?.classifier == String::class
+                    }
+
+                    public fun widenProducer(
+                        producer: ForeignCallContracts.Producer<String>,
+                    ): ForeignCallContracts.Producer<Any> = producer
+
+                    public fun narrowConsumer(
+                        consumer: ForeignCallContracts.Consumer<Any>,
+                    ): ForeignCallContracts.Consumer<String> = consumer
+
+                    public class KotlinStringBox : ForeignCallContracts.Box<String> {
+                        override var Value: String = "initial"
+                        override fun Echo(value: String): String = value
+                        override fun ArrayIdentity(values: Array<String>): Array<String> = values
+                        override fun <U> Select(ownerValue: String, selected: U): U = selected
+                        override fun First(vararg values: String): String = values[0]
+                    }
+
+                    public class KotlinIntBox : ForeignCallContracts.Box<Int> {
+                        override var Value: Int = 1
+                        override fun Echo(value: Int): Int = value
+                        override fun ArrayIdentity(values: Array<Int>): Array<Int> = values
+                        override fun <U> Select(ownerValue: Int, selected: U): U = selected
+                        override fun First(vararg values: Int): Int = values[0]
+                    }
+
+                    public class KotlinStringProducer : ForeignCallContracts.Producer<String> {
+                        override fun Produce(): String = "produced"
+                    }
+
+                    public class KotlinStringConsumer : ForeignCallContracts.Consumer<String> {
+                        private var last: String = ""
+                        override fun Consume(value: String) { last = value }
+                        public fun consumed(): String = last
                     }
 
                     public fun verifyExpandedParams(api: Api): String =
@@ -22849,6 +23027,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             for (signature in listOf(
                 "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Identity'<string>(!!0)",
                 "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Identity'<int32>(!!0)",
+                "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Identity'<" +
+                        "valuetype [mscorlib]System.Nullable`1<int32>>(!!0)",
                 "!!0[] [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'ArrayIdentity'<string>(!!0[])",
                 "!!1 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Upcast'<string, object>(!!0)",
                 "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'KeyIdentity'<class [Foreign.CallContracts]'ForeignCallContracts.GenericKey'>(!!0)",
@@ -22859,6 +23039,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             assertTrue(
                 "callvirt instance int32 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Pick'(int32)" in il
+            ) { il }
+            for (signature in listOf(
+                "!0 class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<string>::'Echo'(!0)",
+                "!0[] class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<string>::'ArrayIdentity'(!0[])",
+                "!!0 class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<string>::'Select'<int32>(!0, !!0)",
+                "!0 class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<string>::'First'(!0[])",
+                "void class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<string>::'set_Value'(!0)",
+                "!0 class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<string>::'get_Value'()",
+                "!0 class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<int32>::'Echo'(!0)",
+                "!0 class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<int32>::'First'(!0[])",
+                "!0 class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<" +
+                        "valuetype [mscorlib]System.Nullable`1<int32>>::'Echo'(!0)",
+            )) {
+                assertTrue("callvirt instance $signature" in il) { il }
+            }
+            assertTrue(
+                ".override method instance !0 class [Foreign.CallContracts]" +
+                        "'ForeignCallContracts.Box`1'<int32>::'First'(!0[])" in il &&
+                        "call class [Kotlin.Runtime]'Kotlin.IntArray' " +
+                        "[Kotlin.Runtime]'Kotlin.IntArray'::'WrapStorageOrNull'(int32[])" in il
+            ) { "A Kotlin primitive vararg implementation did not adapt the exact CLR vector slot:\n$il" }
+            assertTrue(
+                "class [Foreign.CallContracts]'ForeignCallContracts.Producer`1'<string>" in il &&
+                        "class [Foreign.CallContracts]'ForeignCallContracts.Producer`1'<object>" in il
+            ) { il }
+            assertTrue(
+                "class [Foreign.CallContracts]'ForeignCallContracts.Consumer`1'<string>" in il &&
+                        "class [Foreign.CallContracts]'ForeignCallContracts.Consumer`1'<object>" in il
             ) { il }
 
             val verifierSource = applicationDirectory.resolve("ForeignCallVerifier.cs").apply {
@@ -22908,6 +23116,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Api api = new ApiImpl();
                             GenericApi genericApi = new GenericApiImpl();
                             GenericKey genericKey = new GenericKeyImpl(73);
+                            Box<string> stringBox = new BoxImpl<string>("initial");
+                            Box<int> intBox = new BoxImpl<int>(1);
+                            Box<int?> nullableIntBox = new BoxImpl<int?>(2);
+                            KeyBox<GenericKey> keyBox = new KeyBoxImpl<GenericKey>();
+                            Producer<string> producer = new ProducerImpl<string>("variant");
+                            var consumer = new ConsumerImpl<object>();
                             OrdinaryArrayApi arrays = new OrdinaryArrayApiImpl();
                             Require((int)Method(facade, "verifyInt").Invoke(
                                 null, new object[] { api }) == 41,
@@ -22965,6 +23179,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require((int)Method(facade, "verifyExplicitGenericIdentity").Invoke(
                                 null, new object[] { genericApi }) == 42,
                                 "foreign explicit generic-method binding failed");
+                            Require((int)Method(facade, "verifyInferredValueGenericIdentity").Invoke(
+                                null, new object[] { genericApi }) == 43,
+                                "foreign inferred value-type MethodSpec binding failed");
+                            MethodInfo nullableIdentity = Method(
+                                facade, "verifyExplicitNullableValueGenericIdentity");
+                            Require(nullableIdentity.Invoke(
+                                null, new object[] { genericApi, null }) == null &&
+                                (int)nullableIdentity.Invoke(
+                                    null, new object[] { genericApi, 44 }) == 44,
+                                "foreign explicit nullable MethodSpec binding failed");
                             Require((string)Method(facade, "verifyGenericArray").Invoke(
                                 null, new object[] { genericApi }) == "array",
                                 "foreign generic vector binding failed");
@@ -22988,6 +23212,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require((string)Method(facade, "verifyGenericCallable").Invoke(
                                 null, new object[] { genericApi }) == "reflected",
                                 "foreign generic callable reflection/invocation failed");
+                            Require((string)Method(facade, "verifyStringBox").Invoke(
+                                null, new object[] { stringBox }) == "changed" &&
+                                stringBox.Value == "changed",
+                                "foreign constructed string owner dispatch failed");
+                            Require((int)Method(facade, "verifyIntBox").Invoke(
+                                null, new object[] { intBox }) == 9 && intBox.Value == 9,
+                                "foreign constructed value-type owner dispatch failed");
+                            Require(Method(facade, "verifyNullableIntBox").Invoke(
+                                null, new object[] { nullableIntBox }) == null &&
+                                nullableIntBox.Value == null,
+                                "foreign constructed nullable-value owner dispatch failed");
+                            Require(Object.ReferenceEquals(
+                                Method(facade, "verifyKeyBox").Invoke(
+                                    null, new object[] { keyBox, genericKey }),
+                                genericKey),
+                                "foreign generic-owner nominal bound changed identity");
+                            Require((bool)Method(facade, "verifyGenericOwnerType").Invoke(
+                                null, new object[0]),
+                                "foreign generic-owner KType lost its construction argument");
+                            Producer<object> widened = (Producer<object>)Method(
+                                facade, "widenProducer").Invoke(null, new object[] { producer });
+                            Require(Object.ReferenceEquals(widened, producer) &&
+                                (string)widened.Produce() == "variant",
+                                "foreign covariant owner changed identity or dispatch");
+                            Consumer<string> narrowed = (Consumer<string>)Method(
+                                facade, "narrowConsumer").Invoke(null, new object[] { consumer });
+                            narrowed.Consume("consumed");
+                            Require(Object.ReferenceEquals(narrowed, consumer) &&
+                                (string)consumer.Last == "consumed",
+                                "foreign contravariant owner changed identity or dispatch");
                             Require((string)Method(facade, "verifyExpandedParams").Invoke(
                                 null, new object[] { api }) == "expanded:2:a",
                                 "foreign expanded params binding failed");
@@ -23080,6 +23334,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 "Kotlin generic params implementation dispatch failed");
                             Require(kotlinGenericApi.Pick(40) == 42 && kotlinGenericApi.Pick<string>("pick") == "pick",
                                 "Kotlin generic overload implementation dispatch failed");
+                            Box<string> kotlinStringBox = (Box<string>)Activator.CreateInstance(
+                                kotlin.GetType("consumer.KotlinStringBox", true));
+                            Require(kotlinStringBox.Echo("reverse") == "reverse" &&
+                                kotlinStringBox.ArrayIdentity(new string[] { "array" })[0] == "array" &&
+                                kotlinStringBox.Select<int>("owner", 33) == 33 &&
+                                kotlinStringBox.First("first", "second") == "first",
+                                "Kotlin constructed string-owner implementation dispatch failed");
+                            kotlinStringBox.Value = "property";
+                            Require(kotlinStringBox.Value == "property",
+                                "Kotlin generic-owner property implementation dispatch failed");
+                            Box<int> kotlinIntBox = (Box<int>)Activator.CreateInstance(
+                                kotlin.GetType("consumer.KotlinIntBox", true));
+                            Require(kotlinIntBox.Echo(71) == 71 &&
+                                kotlinIntBox.ArrayIdentity(new int[] { 72 })[0] == 72 &&
+                                kotlinIntBox.Select<string>(1, "selected") == "selected" &&
+                                kotlinIntBox.First(73, 74) == 73,
+                                "Kotlin constructed value-owner implementation dispatch failed");
+                            Producer<string> kotlinProducer = (Producer<string>)Activator.CreateInstance(
+                                kotlin.GetType("consumer.KotlinStringProducer", true));
+                            Require(kotlinProducer.Produce() == "produced",
+                                "Kotlin covariant foreign-interface implementation failed");
+                            Consumer<string> kotlinConsumer = (Consumer<string>)Activator.CreateInstance(
+                                kotlin.GetType("consumer.KotlinStringConsumer", true));
+                            kotlinConsumer.Consume("reverse-consumer");
+                            MethodInfo consumed = kotlin.GetType("consumer.KotlinStringConsumer", true)
+                                .GetMethod("consumed", BindingFlags.Public | BindingFlags.Instance);
+                            Require(consumed != null &&
+                                (string)consumed.Invoke(kotlinConsumer, new object[0]) == "reverse-consumer",
+                                "Kotlin contravariant foreign-interface implementation failed");
                             RequireNothingGuard(Method(facade, "dishonestValue"), api);
                             RequireNothingGuard(Method(facade, "dishonestVoid"), api);
                             Console.WriteLine("OK");
@@ -23140,19 +23423,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     package rejected
 
                     import ForeignCallContracts.ConstructorConstraintApi
+                    import ForeignCallContracts.ConstructorBox
+                    import ForeignCallContracts.DerivedBox
+                    import ForeignCallContracts.NestedBox
+                    import ForeignCallContracts.NullableBox
                     import ForeignCallContracts.OrdinaryArrayApi
                     import ForeignCallContracts.NullableGenericApi
                     import ForeignCallContracts.PrimitiveParamArrayApi
                     import ForeignCallContracts.ReferenceConstraintApi
+                    import ForeignCallContracts.ReferenceBox
                     import ForeignCallContracts.RectangularArrayApi
                     import ForeignCallContracts.UnsignedArrayApi
+                    import ForeignCallContracts.UnsignedScalarApi
                     import ForeignCallContracts.ValueConstraintApi
+                    import ForeignCallContracts.ValueBox
 
                     public fun primitive(api: PrimitiveParamArrayApi): Int =
                         api.Sum(1, 2, 3)
 
                     public fun unsigned(api: UnsignedArrayApi, values: Array<UByte>): Array<UByte> =
                         api.Bytes(values)
+
+                    public fun unsignedScalar(api: UnsignedScalarApi, value: UInt): UInt =
+                        api.Identity(value)
 
                     public fun rectangular(api: RectangularArrayApi): Int = 0
 
@@ -23167,6 +23460,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public fun nullableGeneric(api: NullableGenericApi): String? =
                         api.Maybe<String>(null)
+
+                    public fun nullableOwner(api: NullableBox<String>): String? =
+                        api.Maybe(null)
+
+                    public fun referenceOwner(api: ReferenceBox<String>): String =
+                        api.Echo("unsupported")
+
+                    public fun valueOwner(api: ValueBox<Int>): Int =
+                        api.Echo(1)
+
+                    public fun constructorOwner(api: ConstructorBox<Any>): Any =
+                        api.Create()
+
+                    public fun inheritedOwner(api: DerivedBox<String>): Int =
+                        api.Marker()
+
+                    public fun nestedOwner(api: NestedBox<String>): Int = 0
                     """.trimIndent()
                 )
             }
@@ -23187,11 +23497,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(ExitCode.COMPILATION_ERROR, arrayExitCode, arrayDiagnostics)
             assertTrue("PrimitiveParamArrayApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("UnsignedArrayApi" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("UnsignedScalarApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("RectangularArrayApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ReferenceConstraintApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ValueConstraintApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ConstructorConstraintApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("NullableGenericApi" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("NullableBox" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("ReferenceBox" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("ValueBox" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("ConstructorBox" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("DerivedBox" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("NestedBox" in arrayDiagnostics) { arrayDiagnostics }
 
             val nullableOverrideConsumer = applicationDirectory.resolve("rejectedNullableGenericOverride.kt").apply {
                 writeText(

@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationCarrierVersion
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
@@ -17,6 +18,7 @@ import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
+import org.jetbrains.kotlin.types.Variance
 import java.util.IdentityHashMap
 
 /**
@@ -41,11 +43,29 @@ internal class DotNetClrImportedDeclarations(
         source.requireSupportedCarrierVersion()
         validateAssemblyIdentity(source.assembly)
         val owner = source.declaringType
+        val ownerParameters = source.assembly.metadata.genericParameterDefinitions
+            .filter { parameter -> parameter.owner == owner.handle }
+            .sortedBy { parameter -> parameter.number }
+        if (
+            ownerParameters.map { parameter -> parameter.number } != ownerParameters.indices.toList() ||
+            ownerParameters.size != irClass.typeParameters.size
+        ) {
+            dotNetUnsupported(
+                "foreign CLR TypeDef '${owner.metadataName}' has a generic arity that disagrees with FIR/IR"
+            )
+        }
         val className =
             if (owner.namespaceName.isEmpty()) owner.metadataName
             else "${owner.namespaceName}.${owner.metadataName}"
         return DotNetIlClassInfo(
             ilClassName = className,
+            typeParameterVariances = ownerParameters.map { parameter ->
+                when (parameter.variance) {
+                    DotNetClrGenericParameterVariance.INVARIANT -> Variance.INVARIANT
+                    DotNetClrGenericParameterVariance.COVARIANT -> Variance.OUT_VARIANCE
+                    DotNetClrGenericParameterVariance.CONTRAVARIANT -> Variance.IN_VARIANCE
+                }
+            },
             assemblyName = source.assembly.metadata.identity.name,
         ).also { classInfo ->
             classInfos[irClass] = classInfo
@@ -85,6 +105,7 @@ internal class DotNetClrImportedDeclarations(
                 "foreign CLR MethodDef '${method.name}' lost its exact TypeDef linkage"
             )
         val signature = method.signature
+        val ownerGenericParameterCount = ownerInfo.typeParameterCount
         if (signature.genericParameterCount != function.typeParameters.size) {
             dotNetUnsupported(
                 "foreign CLR MethodDef '${method.name}' retained ${signature.genericParameterCount} " +
@@ -94,7 +115,10 @@ internal class DotNetClrImportedDeclarations(
         val returnType = when (val physicalReturn = signature.returnType) {
             DotNetClrTypeSignature.Void -> DotNetIlReturnType.Void
             else -> DotNetIlReturnType.Value(
-                physicalReturn.toSupportedImportedIlTypeOrNull(signature.genericParameterCount)
+                physicalReturn.toSupportedImportedIlTypeOrNull(
+                    ownerGenericParameterCount,
+                    signature.genericParameterCount,
+                )
                     ?: dotNetUnsupported(
                         "foreign CLR MethodDef '${method.name}' has a physical return type " +
                                 "outside the current .NET backend value grammar"
@@ -102,9 +126,23 @@ internal class DotNetClrImportedDeclarations(
             )
         }
         val parameterTypes = buildList {
-            add(DotNetIlValueType.UserClass(ownerInfo))
+            add(
+                if (ownerGenericParameterCount == 0) {
+                    DotNetIlValueType.UserClass(ownerInfo)
+                } else {
+                    DotNetIlValueType.GenericInstance(
+                        ownerInfo,
+                        List(ownerGenericParameterCount) { index ->
+                            DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+                        },
+                    )
+                }
+            )
             signature.parameterTypes.mapTo(this) { physicalParameter ->
-                physicalParameter.toSupportedImportedIlTypeOrNull(signature.genericParameterCount)
+                physicalParameter.toSupportedImportedIlTypeOrNull(
+                    ownerGenericParameterCount,
+                    signature.genericParameterCount,
+                )
                     ?: dotNetUnsupported(
                         "foreign CLR MethodDef '${method.name}' has a physical parameter type " +
                                 "outside the current .NET backend value grammar"
@@ -123,33 +161,37 @@ internal class DotNetClrImportedDeclarations(
         )
     }
 
-    private fun IrClass.importedClrSourceOrNull(): DotNetClrImportedDeclarationSource? {
-        val sources = declarations.asSequence()
-            .mapNotNull { declaration ->
-                when (declaration) {
-                    is IrSimpleFunction ->
-                        declaration.containerSource as? DotNetClrImportedDeclarationSource
-                    is IrProperty ->
-                        declaration.containerSource as? DotNetClrImportedDeclarationSource
-                    else -> null
-                }
-            }
-            .toList()
-        if (sources.isEmpty()) return null
-        val first = sources.first()
-        if (sources.any { source ->
-                source.assembly !== first.assembly ||
-                        source.declaringType.handle != first.declaringType.handle
-            }
-        ) {
-            dotNetUnsupported(
-                "foreign CLR interface '${name.asString()}' has inconsistent physical declaration carriers"
-            )
-        }
-        return first
-    }
+    private fun IrClass.importedClrSourceOrNull(): DotNetClrImportedDeclarationSource? =
+        dotNetImportedClrSourceOrNull()
+}
 
-    private fun validateAssemblyIdentity(assembly: DotNetClrClasspathAssembly.WithoutCarrier) {
+internal fun IrClass.dotNetImportedClrSourceOrNull(): DotNetClrImportedDeclarationSource? {
+    val sources = declarations.asSequence()
+        .mapNotNull { declaration ->
+            when (declaration) {
+                is IrSimpleFunction ->
+                    declaration.containerSource as? DotNetClrImportedDeclarationSource
+                is IrProperty ->
+                    declaration.containerSource as? DotNetClrImportedDeclarationSource
+                else -> null
+            }
+        }
+        .toList()
+    if (sources.isEmpty()) return null
+    val first = sources.first()
+    if (sources.any { source ->
+            source.assembly !== first.assembly ||
+                    source.declaringType.handle != first.declaringType.handle
+        }
+    ) {
+        dotNetUnsupported(
+            "foreign CLR interface '${name.asString()}' has inconsistent physical declaration carriers"
+        )
+    }
+    return first
+}
+
+private fun validateAssemblyIdentity(assembly: DotNetClrClasspathAssembly.WithoutCarrier) {
         val identity = assembly.metadata.identity
         if (!identity.culture.equals("neutral", ignoreCase = true)) {
             dotNetUnsupported(
@@ -162,16 +204,16 @@ internal class DotNetClrImportedDeclarations(
                 "foreign CLR assembly '${identity.name}' has no exact eight-byte public-key token"
             )
         }
-    }
+}
 
-    private fun DotNetClrImportedDeclarationSource.requireSupportedCarrierVersion() {
+private fun DotNetClrImportedDeclarationSource.requireSupportedCarrierVersion() {
         when (carrierVersion) {
             DotNetClrImportedDeclarationCarrierVersion.V1 -> Unit
         }
-    }
 }
 
 private fun DotNetClrTypeSignature.toSupportedImportedIlTypeOrNull(
+    ownerGenericParameterCount: Int,
     methodGenericParameterCount: Int,
 ): DotNetIlValueType? =
     when (this) {
@@ -195,13 +237,21 @@ private fun DotNetClrTypeSignature.toSupportedImportedIlTypeOrNull(
                 -> null
         }
         is DotNetClrTypeSignature.GenericParameter ->
-            if (kind == DotNetClrGenericParameterKind.METHOD && index in 0 until methodGenericParameterCount) {
-                DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
-            } else {
-                null
+            when (kind) {
+                DotNetClrGenericParameterKind.TYPE ->
+                    if (index in 0 until ownerGenericParameterCount) {
+                        DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+                    } else null
+                DotNetClrGenericParameterKind.METHOD ->
+                    if (index in 0 until methodGenericParameterCount) {
+                        DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
+                    } else null
             }
         is DotNetClrTypeSignature.SzArray -> {
-            val physicalElement = elementType.toSupportedImportedIlTypeOrNull(methodGenericParameterCount)
+            val physicalElement = elementType.toSupportedImportedIlTypeOrNull(
+                ownerGenericParameterCount,
+                methodGenericParameterCount,
+            )
                 ?: return null
             DotNetIlValueType.GenericArray(physicalElement)
         }

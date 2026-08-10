@@ -567,6 +567,20 @@ internal class DotNetIlExpressionCodegen(
                 kind = DotNetKClassClassifierKind.EXACT,
             )
         }
+        if (irClass.dotNetImportedClrSourceOrNull() != null) {
+            val importedClass = typeMapper.classInfoOrNull(irClass)
+                ?: dotNetUnsupported(
+                    "imported class literal lost its retained CLR TypeDef: ${classType.render()}"
+                )
+            if (importedClass.typeParameterCount > 0) {
+                return StaticKClassClassifier(
+                    clrTypeRef = importedClass.ilTypeRef,
+                    simpleName = sourceSimpleName,
+                    qualifiedName = sourceQualifiedName,
+                    kind = DotNetKClassClassifierKind.OPEN_GENERIC,
+                )
+            }
+        }
         val mappedType = typeMapper.toDotNetIlValueType(classType)
             ?: return StaticKClassClassifier(
                 clrTypeRef = null,
@@ -1161,6 +1175,31 @@ internal class DotNetIlExpressionCodegen(
             val targetsBigArityStub = expression.typeOperand.classOrNull?.owner
                 ?.isDotNetBigArityFunctionN == true
             when {
+                operandType is DotNetIlValueType.GenericArray &&
+                        castType is DotNetIlValueType.PrimitiveArray &&
+                        operandType.elementType == castType.elementType -> {
+                    emitExpression(expression.argument, operandType)
+                    if (methodContext.isTerminated) return
+                    methodContext.emit(
+                        castType.abi.wrapStorageOrNullCallInstruction,
+                        pops = 1,
+                        pushes = 1,
+                    )
+                    if (!expression.typeOperand.isNullable()) {
+                        emitReferenceNotNullOrThrowNpe()
+                    }
+                }
+                operandType is DotNetIlValueType.PrimitiveArray &&
+                        castType is DotNetIlValueType.GenericArray &&
+                        operandType.elementType == castType.elementType -> {
+                    emitExpression(expression.argument, operandType)
+                    if (methodContext.isTerminated) return
+                    methodContext.emit(
+                        operandType.abi.projectStorageOrNullCallInstruction,
+                        pops = 1,
+                        pushes = 1,
+                    )
+                }
                 kFunctionArity != null &&
                         (kFunctionArity == expression.typeOperand.dotNetFunctionExecutionArityOrNull() ||
                                 targetsBigArityStub && kFunctionArity >= BuiltInFunctionArity.BIG_ARITY) -> {

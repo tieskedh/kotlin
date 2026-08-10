@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.fir.checkers.registerDotNetCheckers
 import org.jetbrains.kotlin.fir.declarations.FirDeclarationOrigin
 import org.jetbrains.kotlin.fir.deserialization.ModuleDataProvider
 import org.jetbrains.kotlin.fir.deserialization.SingleModuleDataProvider
+import org.jetbrains.kotlin.fir.dotnet.DotNetClrOverrideChecker
 import org.jetbrains.kotlin.fir.extensions.FirExtensionRegistrar
 import org.jetbrains.kotlin.fir.languageVersionSettings
 import org.jetbrains.kotlin.fir.resolve.providers.FirSymbolProvider
@@ -23,6 +24,7 @@ import org.jetbrains.kotlin.fir.resolve.providers.impl.FirCloneableSymbolProvide
 import org.jetbrains.kotlin.fir.resolve.providers.impl.FirFallbackBuiltinSymbolProvider
 import org.jetbrains.kotlin.fir.scopes.FirDefaultImportsProviderHolder
 import org.jetbrains.kotlin.fir.scopes.FirKotlinScopeProvider
+import org.jetbrains.kotlin.fir.scopes.FirOverrideChecker
 import org.jetbrains.kotlin.fir.scopes.impl.FirEnumEntriesSupport
 import org.jetbrains.kotlin.fir.session.environment.AbstractProjectEnvironment
 import org.jetbrains.kotlin.fir.session.environment.AbstractProjectFileSearchScope
@@ -269,6 +271,7 @@ abstract class AbstractFirMetadataSessionFactory(
         // the same service in its platform component bundle.
         if (targetPlatform.has<DotNetPlatform>()) {
             register(FirEnumEntriesSupport(this))
+            register(FirOverrideChecker::class, DotNetClrOverrideChecker(this))
         }
         registerDotNetMetadataComponentsIfNeeded()
     }

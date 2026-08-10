@@ -14,8 +14,11 @@ import org.jetbrains.kotlin.ir.overrides.MemberWithOriginal
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
+import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
+import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.nonDispatchParameters
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
@@ -58,7 +61,10 @@ private object DotNetClrImportedSignatureOverridabilityCondition : IrExternalOve
             ?: return IrExternalOverridabilityCondition.Result.UNKNOWN
         val physicalParameters = source.method.signature.parameterTypes
         if (
-            physicalParameters.none { it is DotNetClrTypeSignature.SzArray } &&
+            physicalParameters.none {
+                it is DotNetClrTypeSignature.SzArray ||
+                        it is DotNetClrTypeSignature.GenericParameter
+            } &&
             source.method.signature.genericParameterCount == 0
         ) {
             return IrExternalOverridabilityCondition.Result.UNKNOWN
@@ -81,6 +87,17 @@ private object DotNetClrImportedSignatureOverridabilityCondition : IrExternalOve
         ) {
             return IrExternalOverridabilityCondition.Result.UNKNOWN
         }
+        val importedOwner = superFunction.parent as? IrClass
+            ?: return IrExternalOverridabilityCondition.Result.UNKNOWN
+        val implementationOwner = subFunction.parent as? IrClass
+            ?: return IrExternalOverridabilityCondition.Result.UNKNOWN
+        val ownerSubstitutor = AbstractIrTypeSubstitutor.forSuperClass(
+            importedOwner.symbol,
+            implementationOwner.defaultType,
+        ) ?: return IrExternalOverridabilityCondition.Result.UNKNOWN
+        val ownerTypeArguments = importedOwner.typeParameters.map { parameter ->
+            ownerSubstitutor.substitute(parameter.typeParameterDefaultType)
+        }
         val hasExactParameterCarriers = physicalParameters.indices.all { index ->
             val physicalType = physicalParameters[index]
             val subParameter = subParameters[index]
@@ -100,6 +117,7 @@ private object DotNetClrImportedSignatureOverridabilityCondition : IrExternalOve
             }
             logicalType.hasImportedClrCarrier(
                 logicalPhysicalType,
+                ownerTypeArguments,
                 subFunction.typeParameters,
             )
         }
@@ -113,6 +131,7 @@ private object DotNetClrImportedSignatureOverridabilityCondition : IrExternalOve
 
 private fun IrType.hasImportedClrCarrier(
     physicalType: DotNetClrTypeSignature,
+    ownerTypeArguments: List<IrType>,
     methodTypeParameters: List<IrTypeParameter>,
 ): Boolean =
     when (physicalType) {
@@ -129,14 +148,23 @@ private fun IrType.hasImportedClrCarrier(
             if (elementProjection.variance != Variance.INVARIANT) return false
             elementProjection.type.hasImportedClrCarrier(
                 physicalType.elementType,
+                ownerTypeArguments,
                 methodTypeParameters,
             )
         }
         is DotNetClrTypeSignature.GenericParameter -> {
             val simpleType = this as? IrSimpleType
-            physicalType.kind == DotNetClrGenericParameterKind.METHOD &&
+            when (physicalType.kind) {
+                DotNetClrGenericParameterKind.TYPE ->
+                    ownerTypeArguments.getOrNull(physicalType.index)
+                        ?.let { ownerArgument ->
+                            hasSameImportedClrCarrierAs(ownerArgument)
+                        } == true
+                DotNetClrGenericParameterKind.METHOD ->
                     simpleType?.isMarkedNullable() == false &&
-                    simpleType.classifier == methodTypeParameters.getOrNull(physicalType.index)?.symbol
+                            simpleType.classifier ==
+                            methodTypeParameters.getOrNull(physicalType.index)?.symbol
+            }
         }
         DotNetClrTypeSignature.Void,
         DotNetClrTypeSignature.TypedReference,
@@ -149,6 +177,24 @@ private fun IrType.hasImportedClrCarrier(
         is DotNetClrTypeSignature.Pointer,
             -> false
     }
+
+private fun IrType.hasSameImportedClrCarrierAs(other: IrType): Boolean {
+    val left = this as? IrSimpleType ?: return this == other
+    val right = other as? IrSimpleType ?: return false
+    if (
+        left.classifier != right.classifier ||
+        left.isMarkedNullable() != right.isMarkedNullable() ||
+        left.arguments.size != right.arguments.size
+    ) {
+        return false
+    }
+    return left.arguments.indices.all { index ->
+        val leftArgument = left.arguments[index] as? IrTypeProjection ?: return@all false
+        val rightArgument = right.arguments[index] as? IrTypeProjection ?: return@all false
+        leftArgument.variance == rightArgument.variance &&
+                leftArgument.type.hasSameImportedClrCarrierAs(rightArgument.type)
+    }
+}
 
 private fun DotNetClrPrimitiveType.kotlinClassifierNameOrNull(): String? = when (this) {
     DotNetClrPrimitiveType.BOOLEAN -> "kotlin.Boolean"
