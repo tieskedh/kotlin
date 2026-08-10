@@ -34,6 +34,7 @@ import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
@@ -62,11 +63,12 @@ import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
-import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
+import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.Variance
 
 internal val DOTNET_COVARIANT_RETURN_BRIDGE: IrDeclarationOrigin =
@@ -341,7 +343,7 @@ internal class DotNetCovariantReturnBridgeLowering(
             )
         }
         if (!targetParameterTypes.zip(physicalSignature.parameterTypes).all { pair ->
-                pair.first.hasImportedClrCarrier(pair.second)
+                pair.first.hasImportedClrCarrier(pair.second, target.typeParameters)
             }
         ) {
             return false
@@ -354,11 +356,14 @@ internal class DotNetCovariantReturnBridgeLowering(
         )
         return when (val physicalReturnType = physicalSignature.returnType) {
             DotNetClrTypeSignature.Void -> targetReturnType.isUnit()
-            else -> targetReturnType.hasImportedClrCarrier(physicalReturnType)
+            else -> targetReturnType.hasImportedClrCarrier(physicalReturnType, target.typeParameters)
         }
     }
 
-    private fun IrType.hasImportedClrCarrier(physicalType: DotNetClrTypeSignature): Boolean =
+    private fun IrType.hasImportedClrCarrier(
+        physicalType: DotNetClrTypeSignature,
+        methodTypeParameters: List<IrTypeParameter>,
+    ): Boolean =
         when (physicalType) {
             is DotNetClrTypeSignature.Primitive ->
                 classOrNull?.owner?.fqNameWhenAvailable?.asString() ==
@@ -371,14 +376,22 @@ internal class DotNetCovariantReturnBridgeLowering(
                 val elementProjection = simpleType.arguments.singleOrNull() as? IrTypeProjection
                     ?: return false
                 elementProjection.variance == Variance.INVARIANT &&
-                        elementProjection.type.hasImportedClrCarrier(physicalType.elementType)
+                        elementProjection.type.hasImportedClrCarrier(
+                            physicalType.elementType,
+                            methodTypeParameters,
+                        )
+            }
+            is DotNetClrTypeSignature.GenericParameter -> {
+                val simpleType = this as? IrSimpleType
+                physicalType.kind == DotNetClrGenericParameterKind.METHOD &&
+                        simpleType?.isMarkedNullable() == false &&
+                        simpleType.classifier == methodTypeParameters.getOrNull(physicalType.index)?.symbol
             }
             DotNetClrTypeSignature.Void,
             DotNetClrTypeSignature.TypedReference,
             is DotNetClrTypeSignature.Array,
             is DotNetClrTypeSignature.ByReference,
             is DotNetClrTypeSignature.FunctionPointer,
-            is DotNetClrTypeSignature.GenericParameter,
             is DotNetClrTypeSignature.GenericInstance,
             is DotNetClrTypeSignature.Modified,
             is DotNetClrTypeSignature.Named,

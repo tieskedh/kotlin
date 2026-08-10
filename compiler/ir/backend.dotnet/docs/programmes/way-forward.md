@@ -377,6 +377,14 @@ semantics are all specified.
 Do not flatten property/ref/out state, bypass Common smart-cast stability, or infer a declaration
 role from an attribute name.
 
+The first exact foreign method-generic slice is complete: method-owned parameters,
+relative and admitted nominal bounds, MethodSpec calls, overrides, vectors/`params`,
+overload resolution, and callable reflection share one FIR/IR declaration and one
+retained MethodDef. Continue only by extending
+[its closed grammar](../decisions/foreign-clr-generic-methods.md). Special CLR
+constraints, constructed bounds, and explicit nullable generic leaves remain
+fail-closed; do not turn them into approximate Kotlin bounds or partially valid calls.
+
 ### 7. Close the remaining draft ABI decisions before wider breadth
 
 The accepted runtime decisions must be frozen and the remaining drafts accepted, revised, or
@@ -509,8 +517,9 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
   logical `KType`/`typeOf` graph, callable annotations, callable return
   types/type parameters/parameters, and positional plus named/default
   invocation are complete for the admitted callable arities;
-- foreign CLR generic-method import, including method-owned parameter bounds,
-  overload resolution, invocation/binding, and subsequent callable reflection;
+- foreign CLR generic-method shapes beyond the accepted exact slice, including
+  special constraints, constructed bounds/types, and explicit unconstrained
+  nullable generic leaves;
 - multi-field value classes; the single-field box/carrier architecture is
   accepted and implemented, but does not select a layout or ABI for multiple
   underlying fields;

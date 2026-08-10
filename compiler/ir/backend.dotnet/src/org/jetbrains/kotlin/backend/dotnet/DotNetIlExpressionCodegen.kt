@@ -1146,6 +1146,7 @@ internal class DotNetIlExpressionCodegen(
             emitExpression(expression.argument, operandType)
             if (methodContext.isTerminated) return
             when {
+                operandType == castType && operandType.isSupportedPrimitiveArrayElement() -> Unit
                 operandType is DotNetIlValueType.NullableValue && castType == operandType.elementType ->
                     emitNullableUnwrapOrThrowNpe(operandType)
                 operandType.isDotNetReferenceShaped() && operandType.isDotNetAssignableTo(castType) ->
