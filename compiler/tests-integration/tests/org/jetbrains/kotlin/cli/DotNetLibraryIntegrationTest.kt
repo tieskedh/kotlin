@@ -22246,6 +22246,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val nullableObjectArrayType: String,
             val nullableStringArrayType: String,
             val nullableIntArrayType: String,
+            val nullableGenericDeclaration: String,
+            val rejectsNullableGenericOverrideInFrontend: Boolean,
             val compileFixture: (File, File) -> CSharpCompilerResult,
             val systemReference: File,
             val compileVerifier: (File, File, File) -> CSharpCompilerResult,
@@ -22268,6 +22270,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             System.AttributeTargets.Field |
                             System.AttributeTargets.Parameter)]
                         public sealed class AllowNullAttribute : System.Attribute {}
+
+                        [System.AttributeUsage(
+                            System.AttributeTargets.Property |
+                            System.AttributeTargets.Field |
+                            System.AttributeTargets.Parameter |
+                            System.AttributeTargets.ReturnValue)]
+                        public sealed class MaybeNullAttribute : System.Attribute {}
                     }
                     """.trimIndent(),
                 nullableDirective = "",
@@ -22275,6 +22284,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 nullableObjectArrayType = "object[]",
                 nullableStringArrayType = "string[]",
                 nullableIntArrayType = "int[]",
+                nullableGenericDeclaration =
+                    "[return: MaybeNull] T Maybe<T>([AllowNull] T value);",
+                rejectsNullableGenericOverrideInFrontend = false,
                 compileFixture = { source, output ->
                     runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
                 },
@@ -22301,6 +22313,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 nullableObjectArrayType = "object?[]",
                 nullableStringArrayType = "string?[]?",
                 nullableIntArrayType = "int[]?",
+                nullableGenericDeclaration = "T? Maybe<T>(T? value);",
+                rejectsNullableGenericOverrideInFrontend = true,
                 compileFixture = { source, output ->
                     runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
                 },
@@ -22390,6 +22404,65 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             }
                             public int ReturnsValue() { return 999; }
                             public void ReturnsVoid() {}
+                        }
+
+                        public interface GenericKey
+                        {
+                            int Code();
+                        }
+
+                        public sealed class GenericKeyImpl : GenericKey
+                        {
+                            private readonly int code;
+                            public GenericKeyImpl(int code) { this.code = code; }
+                            public int Code() { return code; }
+                        }
+
+                        public interface GenericApi
+                        {
+                            T Identity<T>(T value);
+                            T[] ArrayIdentity<T>(T[] values);
+                            U Upcast<T, U>(T value) where T : U;
+                            T KeyIdentity<T>(T value) where T : GenericKey;
+                            T First<T>(params T[] values);
+                            int Pick(int value);
+                            T Pick<T>(T value);
+                        }
+
+                        public sealed class GenericApiImpl : GenericApi
+                        {
+                            public T Identity<T>(T value) { return value; }
+                            public T[] ArrayIdentity<T>(T[] values) { return values; }
+                            public U Upcast<T, U>(T value) where T : U { return value; }
+                            public T KeyIdentity<T>(T value) where T : GenericKey { return value; }
+                            public T First<T>(params T[] values) { return values[0]; }
+                            public int Pick(int value) { return value + 1; }
+                            public T Pick<T>(T value) { return value; }
+                        }
+
+                        public interface GenericSlot
+                        {
+                            T Identity<T>(T value);
+                        }
+
+                        public interface NullableGenericApi
+                        {
+                            ${profile.nullableGenericDeclaration}
+                        }
+
+                        public interface ReferenceConstraintApi
+                        {
+                            T Reference<T>(T value) where T : class;
+                        }
+
+                        public interface ValueConstraintApi
+                        {
+                            T Value<T>(T value) where T : struct;
+                        }
+
+                        public interface ConstructorConstraintApi
+                        {
+                            T Create<T>() where T : new();
                         }
 
                         public interface SplitApi
@@ -22500,6 +22573,68 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public fun verifyEcho(api: Api): String =
                         api.Echo("ok")
+
+                    public fun verifyGenericIdentity(api: ForeignCallContracts.GenericApi): String =
+                        api.Identity("generic")
+
+                    public fun verifyExplicitGenericIdentity(api: ForeignCallContracts.GenericApi): Int =
+                        api.Identity<Int>(42)
+
+                    public fun verifyGenericArray(api: ForeignCallContracts.GenericApi): String =
+                        api.ArrayIdentity(arrayOf("array"))[0]
+
+                    public fun verifyRelativeBound(
+                        api: ForeignCallContracts.GenericApi,
+                        value: String,
+                    ): Any = api.Upcast<String, Any>(value)
+
+                    public fun verifyNominalBound(
+                        api: ForeignCallContracts.GenericApi,
+                        value: ForeignCallContracts.GenericKey,
+                    ): ForeignCallContracts.GenericKey = api.KeyIdentity(value)
+
+                    public fun verifyGenericParams(api: ForeignCallContracts.GenericApi): String =
+                        api.First("first", "second")
+
+                    public fun verifyGenericSpread(
+                        api: ForeignCallContracts.GenericApi,
+                        values: Array<String>,
+                    ): String = api.First(*values)
+
+                    public fun verifyGenericOverload(api: ForeignCallContracts.GenericApi): String =
+                        "${'$'}{api.Pick(40)}:${'$'}{api.Pick<String>("typed")}"
+
+                    public fun verifyGenericCallable(api: ForeignCallContracts.GenericApi): String {
+                        val function: (String) -> String = api::Identity
+                        val callable = function as kotlin.reflect.KCallable<*>
+                        val parameter = callable.typeParameters.single()
+                        check(callable.returnType.classifier === parameter)
+                        check(callable.parameters.single().type.classifier === parameter)
+                        val upcastFunction: (String) -> Any = api::Upcast
+                        val upcast = upcastFunction as kotlin.reflect.KCallable<*>
+                        val upcastParameters = upcast.typeParameters
+                        check(upcastParameters.size == 2) { "upcast type-parameter count" }
+                        check(upcastParameters[0].upperBounds.single().classifier === upcastParameters[1]) {
+                            "upcast relative bound identity"
+                        }
+                        val keyedFunction:
+                                (ForeignCallContracts.GenericKey) -> ForeignCallContracts.GenericKey =
+                            api::KeyIdentity
+                        val keyed = keyedFunction as kotlin.reflect.KCallable<*>
+                        check(keyed.typeParameters.single().upperBounds.single().classifier ==
+                                ForeignCallContracts.GenericKey::class) { "nominal bound identity" }
+                        return callable.call("reflected") as String
+                    }
+
+                    public class KotlinGenericApi : ForeignCallContracts.GenericApi {
+                        override fun <T> Identity(value: T): T = value
+                        override fun <T> ArrayIdentity(values: Array<T>): Array<T> = values
+                        override fun <T, U> Upcast(value: T): U where T : U = value
+                        override fun <T : ForeignCallContracts.GenericKey> KeyIdentity(value: T): T = value
+                        override fun <T> First(vararg values: T): T = values[0]
+                        override fun Pick(value: Int): Int = value + 2
+                        override fun <T> Pick(value: T): T = value
+                    }
 
                     public fun verifyExpandedParams(api: Api): String =
                         api.Join("expanded", "a", "b")
@@ -22711,6 +22846,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(
                 "callvirt instance void [Foreign.CallContracts]'ForeignCallContracts.Api'::'set_Name'(string)" in il
             ) { il }
+            for (signature in listOf(
+                "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Identity'<string>(!!0)",
+                "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Identity'<int32>(!!0)",
+                "!!0[] [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'ArrayIdentity'<string>(!!0[])",
+                "!!1 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Upcast'<string, object>(!!0)",
+                "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'KeyIdentity'<class [Foreign.CallContracts]'ForeignCallContracts.GenericKey'>(!!0)",
+                "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'First'<string>(!!0[])",
+                "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Pick'<string>(!!0)",
+            )) {
+                assertTrue("callvirt instance $signature" in il) { il }
+            }
+            assertTrue(
+                "callvirt instance int32 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Pick'(int32)" in il
+            ) { il }
 
             val verifierSource = applicationDirectory.resolve("ForeignCallVerifier.cs").apply {
                 writeText(
@@ -22757,6 +22906,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Assembly kotlin = Assembly.LoadFrom("${application.name}");
                             Type facade = kotlin.GetType("consumer.foreignCallKt", true);
                             Api api = new ApiImpl();
+                            GenericApi genericApi = new GenericApiImpl();
+                            GenericKey genericKey = new GenericKeyImpl(73);
                             OrdinaryArrayApi arrays = new OrdinaryArrayApiImpl();
                             Require((int)Method(facade, "verifyInt").Invoke(
                                 null, new object[] { api }) == 41,
@@ -22808,6 +22959,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require((string)Method(facade, "verifyEcho").Invoke(
                                 null, new object[] { api }) == "ok!",
                                 "foreign reference return binding failed");
+                            Require((string)Method(facade, "verifyGenericIdentity").Invoke(
+                                null, new object[] { genericApi }) == "generic",
+                                "foreign inferred generic-method binding failed");
+                            Require((int)Method(facade, "verifyExplicitGenericIdentity").Invoke(
+                                null, new object[] { genericApi }) == 42,
+                                "foreign explicit generic-method binding failed");
+                            Require((string)Method(facade, "verifyGenericArray").Invoke(
+                                null, new object[] { genericApi }) == "array",
+                                "foreign generic vector binding failed");
+                            Require((string)Method(facade, "verifyRelativeBound").Invoke(
+                                null, new object[] { genericApi, "relative" }) == "relative",
+                                "foreign relative generic bound failed");
+                            Require(Object.ReferenceEquals(
+                                Method(facade, "verifyNominalBound").Invoke(
+                                    null, new object[] { genericApi, genericKey }),
+                                genericKey),
+                                "foreign nominal generic bound changed identity");
+                            Require((string)Method(facade, "verifyGenericParams").Invoke(
+                                null, new object[] { genericApi }) == "first",
+                                "foreign generic params expansion failed");
+                            Require((string)Method(facade, "verifyGenericSpread").Invoke(
+                                null, new object[] { genericApi, new string[] { "spread" } }) == "spread",
+                                "foreign generic params spread failed");
+                            Require((string)Method(facade, "verifyGenericOverload").Invoke(
+                                null, new object[] { genericApi }) == "41:typed",
+                                "foreign generic/non-generic overload resolution failed");
+                            Require((string)Method(facade, "verifyGenericCallable").Invoke(
+                                null, new object[] { genericApi }) == "reflected",
+                                "foreign generic callable reflection/invocation failed");
                             Require((string)Method(facade, "verifyExpandedParams").Invoke(
                                 null, new object[] { api }) == "expanded:2:a",
                                 "foreign expanded params binding failed");
@@ -22885,6 +23065,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 "Kotlin ordinary vector property implementation dispatch failed");
                             Require(kotlinArrays.MaybeStrings(null) == null && kotlinArrays.MaybeInts(null) == null,
                                 "Kotlin nullable ordinary vector implementation dispatch failed");
+                            GenericApi kotlinGenericApi = (GenericApi)Activator.CreateInstance(
+                                kotlin.GetType("consumer.KotlinGenericApi", true));
+                            Require(kotlinGenericApi.Identity<int>(81) == 81,
+                                "Kotlin generic-method implementation dispatch failed");
+                            Require(kotlinGenericApi.ArrayIdentity<string>(new string[] { "reverse" })[0] == "reverse",
+                                "Kotlin generic-vector implementation dispatch failed");
+                            Require(kotlinGenericApi.Upcast<string, object>("upcast").Equals("upcast"),
+                                "Kotlin relative-bound implementation dispatch failed");
+                            Require(Object.ReferenceEquals(
+                                kotlinGenericApi.KeyIdentity<GenericKey>(genericKey), genericKey),
+                                "Kotlin nominal-bound implementation changed identity");
+                            Require(kotlinGenericApi.First<int>(5, 6) == 5,
+                                "Kotlin generic params implementation dispatch failed");
+                            Require(kotlinGenericApi.Pick(40) == 42 && kotlinGenericApi.Pick<string>("pick") == "pick",
+                                "Kotlin generic overload implementation dispatch failed");
                             RequireNothingGuard(Method(facade, "dishonestValue"), api);
                             RequireNothingGuard(Method(facade, "dishonestVoid"), api);
                             Console.WriteLine("OK");
@@ -22944,10 +23139,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     """
                     package rejected
 
+                    import ForeignCallContracts.ConstructorConstraintApi
                     import ForeignCallContracts.OrdinaryArrayApi
+                    import ForeignCallContracts.NullableGenericApi
                     import ForeignCallContracts.PrimitiveParamArrayApi
+                    import ForeignCallContracts.ReferenceConstraintApi
                     import ForeignCallContracts.RectangularArrayApi
                     import ForeignCallContracts.UnsignedArrayApi
+                    import ForeignCallContracts.ValueConstraintApi
 
                     public fun primitive(api: PrimitiveParamArrayApi): Int =
                         api.Sum(1, 2, 3)
@@ -22956,6 +23155,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         api.Bytes(values)
 
                     public fun rectangular(api: RectangularArrayApi): Int = 0
+
+                    public fun referenceConstraint(api: ReferenceConstraintApi): String =
+                        api.Reference("unsupported")
+
+                    public fun valueConstraint(api: ValueConstraintApi): Int =
+                        api.Value(1)
+
+                    public fun constructorConstraint(api: ConstructorConstraintApi): Any =
+                        api.Create<Any>()
+
+                    public fun nullableGeneric(api: NullableGenericApi): String? =
+                        api.Maybe<String>(null)
                     """.trimIndent()
                 )
             }
@@ -22977,6 +23188,65 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue("PrimitiveParamArrayApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("UnsignedArrayApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("RectangularArrayApi" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("ReferenceConstraintApi" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("ValueConstraintApi" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("ConstructorConstraintApi" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("NullableGenericApi" in arrayDiagnostics) { arrayDiagnostics }
+
+            val nullableOverrideConsumer = applicationDirectory.resolve("rejectedNullableGenericOverride.kt").apply {
+                writeText(
+                    """
+                    package rejected
+
+                    import ForeignCallContracts.GenericSlot
+
+                    public class NullableGenericSlot : GenericSlot {
+                        override fun <T> Identity(value: T?): T? = value
+                    }
+                    """.trimIndent()
+                )
+            }
+            val nullableOverrideIl = applicationDirectory.resolve("RejectedNullableGenericOverride.il")
+            val [nullableOverrideDiagnostics, nullableOverrideExitCode] =
+                AbstractCliTest.executeCompilerGrabOutput(
+                    K2DotNetCompiler(),
+                    listOf(
+                        nullableOverrideConsumer.path,
+                        K2DotNetCompilerArguments::noStdlib.cliArgument,
+                        K2DotNetCompilerArguments::classpath.cliArgument,
+                        listOf(fixtureAssembly, profile.systemReference)
+                            .joinToString(File.pathSeparator, transform = File::getPath),
+                        K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                        K2DotNetCompilerArguments::moduleName.cliArgument, "RejectedNullableGenericOverride",
+                        K2DotNetCompilerArguments::destination.cliArgument,
+                        nullableOverrideIl.path,
+                    )
+                )
+            assertTrue("NullableGenericSlot" in nullableOverrideDiagnostics) {
+                nullableOverrideDiagnostics
+            }
+            if (profile.rejectsNullableGenericOverrideInFrontend) {
+                assertEquals(
+                    ExitCode.COMPILATION_ERROR,
+                    nullableOverrideExitCode,
+                    nullableOverrideDiagnostics,
+                )
+                assertTrue("overrides nothing" in nullableOverrideDiagnostics) {
+                    nullableOverrideDiagnostics
+                }
+            } else {
+                assertEquals(ExitCode.OK, nullableOverrideExitCode, nullableOverrideDiagnostics)
+                assertTrue("object vs !!0" in nullableOverrideDiagnostics) {
+                    nullableOverrideDiagnostics
+                }
+                assertTrue("no covariant-return MethodImpl bridge" in nullableOverrideDiagnostics) {
+                    nullableOverrideDiagnostics
+                }
+                val rejectedIl = nullableOverrideIl.readText()
+                assertFalse("rejected.NullableGenericSlot" in rejectedIl) {
+                    rejectedIl
+                }
+            }
         }
     }
 

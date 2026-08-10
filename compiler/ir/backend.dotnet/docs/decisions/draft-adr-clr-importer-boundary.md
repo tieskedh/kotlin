@@ -206,6 +206,12 @@ satisfied. Reference, value, default-constructor, `AllowByRefLike`, and dependen
 are evaluated separately. CLR `class`, `struct`, and `.ctor` constraints are not reinterpreted as
 Kotlin bounds or constructor syntax.
 
+The first executable method-generic projection is governed by
+[the foreign CLR generic-method decision](foreign-clr-generic-methods.md). It admits only
+method-owned parameters and bounds whose complete Kotlin and CLR meanings agree, retains the
+MethodDef as physical authority, and rejects explicit unconstrained nullable generic leaves rather
+than confusing Roslyn `T?` with Kotlin `T?` for value-type substitutions.
+
 ### 8. Custom attributes are decoded semantically
 
 A CustomAttribute retains its exact parent, constructor handle, raw bytes, row order, and
