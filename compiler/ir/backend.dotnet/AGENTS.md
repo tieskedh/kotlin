@@ -661,7 +661,14 @@ See the
   or an implementation-set-dependent typed ABI. Kotlin constructions,
   projections, casts, defaults, and separate consumers all use that one
   physical identity; KLIB retains the logical parameters and override graph.
-  Imported CLR generic interfaces remain native. A separately accepted BCL
+  Imported CLR generic interfaces remain native: keep one semantic owner backed
+  by the selected generic TypeDef, preserve platform flexibility through FIR2IR,
+  and bind Kotlin implementations to its exact constructed slots. Never send
+  them through the Kotlin-owned erased/split-interface ABI. Unsupported
+  inheritance, constructed signatures, constraints, or carriers reject the
+  complete classifier rather than approximating a member. See
+  [the foreign generic-TypeDef decision](docs/decisions/foreign-clr-generic-type-identities.md).
+  A separately accepted BCL
   mapping such as `Comparable<T>` may expose an additional exact host
   capability only where independently truthful, and future typed C# surfaces
   belong to explicit export. See

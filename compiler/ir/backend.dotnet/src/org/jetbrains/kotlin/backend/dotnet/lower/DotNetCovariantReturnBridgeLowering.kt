@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetStringType
 import org.jetbrains.kotlin.backend.dotnet.isDotNetVirtual
+import org.jetbrains.kotlin.backend.dotnet.isSupportedDotNetPrimitiveArray
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrElement
@@ -49,6 +50,7 @@ import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isPrimitiveType
 import org.jetbrains.kotlin.ir.types.isUnit
+import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
@@ -66,6 +68,7 @@ import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
+import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
 import org.jetbrains.kotlin.name.Name
@@ -319,19 +322,16 @@ internal class DotNetCovariantReturnBridgeLowering(
         target: IrSimpleFunction,
         owner: IrClass,
     ): Boolean {
-        val physicalMethod = when (val source = containerSource) {
-            is DotNetClrImportedMethodSource -> source.method
-            is DotNetClrImportedPropertySource -> {
-                val property = correspondingPropertySymbol?.owner ?: return false
-                when (this) {
-                    property.getter -> source.getter
-                    property.setter -> source.setter ?: return false
-                    else -> return false
-                }
-            }
-            else -> return false
-        }
+        val physicalMethod = importedClrPhysicalMethodOrNull() ?: return false
         val physicalSignature = physicalMethod.signature
+        val importedOwner = parent as? IrClass ?: return false
+        val ownerSubstitutor = AbstractIrTypeSubstitutor.forSuperClass(
+            importedOwner.symbol,
+            owner.classDefaultType,
+        ) ?: return false
+        val ownerTypeArguments = importedOwner.typeParameters.map { parameter ->
+            ownerSubstitutor.substitute(parameter.defaultType)
+        }
         val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         if (physicalSignature.parameterTypes.size != targetParameters.size) return false
         val targetParameterTypes = targetParameters.map { parameter ->
@@ -343,7 +343,11 @@ internal class DotNetCovariantReturnBridgeLowering(
             )
         }
         if (!targetParameterTypes.zip(physicalSignature.parameterTypes).all { pair ->
-                pair.first.hasImportedClrCarrier(pair.second, target.typeParameters)
+                pair.first.hasImportedClrCarrier(
+                    pair.second,
+                    ownerTypeArguments,
+                    target.typeParameters,
+                )
             }
         ) {
             return false
@@ -356,12 +360,61 @@ internal class DotNetCovariantReturnBridgeLowering(
         )
         return when (val physicalReturnType = physicalSignature.returnType) {
             DotNetClrTypeSignature.Void -> targetReturnType.isUnit()
-            else -> targetReturnType.hasImportedClrCarrier(physicalReturnType, target.typeParameters)
+            else -> targetReturnType.hasImportedClrCarrier(
+                physicalReturnType,
+                ownerTypeArguments,
+                target.typeParameters,
+            )
+        }
+    }
+
+    private fun IrSimpleFunction.hasSameImportedClrReturnCarrierAs(
+        target: IrSimpleFunction,
+        owner: IrClass,
+    ): Boolean {
+        val physicalReturnType = importedClrPhysicalMethodOrNull()?.signature?.returnType ?: return false
+        val importedOwner = parent as? IrClass ?: return false
+        val ownerSubstitutor = AbstractIrTypeSubstitutor.forSuperClass(
+            importedOwner.symbol,
+            owner.classDefaultType,
+        ) ?: return false
+        val ownerTypeArguments = importedOwner.typeParameters.map { parameter ->
+            ownerSubstitutor.substitute(parameter.defaultType)
+        }
+        val targetReturnType = target.typeIn(
+            target.returnType,
+            owner,
+            target.typeParameters,
+            keepOwnerTypeParameters = false,
+        )
+        return when (physicalReturnType) {
+            DotNetClrTypeSignature.Void -> targetReturnType.isUnit()
+            else -> targetReturnType.hasImportedClrCarrier(
+                physicalReturnType,
+                ownerTypeArguments,
+                target.typeParameters,
+            )
+        }
+    }
+
+    private fun IrSimpleFunction.importedClrPhysicalMethodOrNull(): DotNetClrMethodDefinition? {
+        return when (val source = containerSource) {
+            is DotNetClrImportedMethodSource -> source.method
+            is DotNetClrImportedPropertySource -> {
+                val property = correspondingPropertySymbol?.owner ?: return null
+                when (this) {
+                    property.getter -> source.getter
+                    property.setter -> source.setter
+                    else -> null
+                }
+            }
+            else -> null
         }
     }
 
     private fun IrType.hasImportedClrCarrier(
         physicalType: DotNetClrTypeSignature,
+        ownerTypeArguments: List<IrType>,
         methodTypeParameters: List<IrTypeParameter>,
     ): Boolean =
         when (physicalType) {
@@ -378,14 +431,23 @@ internal class DotNetCovariantReturnBridgeLowering(
                 elementProjection.variance == Variance.INVARIANT &&
                         elementProjection.type.hasImportedClrCarrier(
                             physicalType.elementType,
+                            ownerTypeArguments,
                             methodTypeParameters,
                         )
             }
             is DotNetClrTypeSignature.GenericParameter -> {
                 val simpleType = this as? IrSimpleType
-                physicalType.kind == DotNetClrGenericParameterKind.METHOD &&
+                when (physicalType.kind) {
+                    DotNetClrGenericParameterKind.TYPE ->
+                        ownerTypeArguments.getOrNull(physicalType.index)
+                            ?.let { ownerArgument ->
+                                hasSameImportedClrCarrierAs(ownerArgument)
+                            } == true
+                    DotNetClrGenericParameterKind.METHOD ->
                         simpleType?.isMarkedNullable() == false &&
-                        simpleType.classifier == methodTypeParameters.getOrNull(physicalType.index)?.symbol
+                                simpleType.classifier ==
+                                methodTypeParameters.getOrNull(physicalType.index)?.symbol
+                }
             }
             DotNetClrTypeSignature.Void,
             DotNetClrTypeSignature.TypedReference,
@@ -398,6 +460,24 @@ internal class DotNetCovariantReturnBridgeLowering(
             is DotNetClrTypeSignature.Pointer,
                 -> false
         }
+
+    private fun IrType.hasSameImportedClrCarrierAs(other: IrType): Boolean {
+        val left = this as? IrSimpleType ?: return this == other
+        val right = other as? IrSimpleType ?: return false
+        if (
+            left.classifier != right.classifier ||
+            left.isMarkedNullable() != right.isMarkedNullable() ||
+            left.arguments.size != right.arguments.size
+        ) {
+            return false
+        }
+        return left.arguments.indices.all { index ->
+            val leftArgument = left.arguments[index] as? IrTypeProjection ?: return@all false
+            val rightArgument = right.arguments[index] as? IrTypeProjection ?: return@all false
+            leftArgument.variance == rightArgument.variance &&
+                    leftArgument.type.hasSameImportedClrCarrierAs(rightArgument.type)
+        }
+    }
 
     private fun DotNetClrPrimitiveType.kotlinClassifierNameOrNull(): String? = when (this) {
         DotNetClrPrimitiveType.BOOLEAN -> "kotlin.Boolean"
@@ -470,9 +550,46 @@ internal class DotNetCovariantReturnBridgeLowering(
                 return slotMethodSubstitutor.substitute(ownerSubstituted)
             }
 
-            returnType = bridgeType(slot.returnType)
-            for (slotParameter in slotParameters) {
-                addValueParameter(slotParameter.name.asString(), bridgeType(slotParameter.type))
+            val retainedParameterTypes = slot.importedClrPhysicalMethodOrNull()?.signature?.parameterTypes
+            val adaptsPrimitiveVararg = slotParameters.indices.any { index ->
+                retainedParameterTypes?.getOrNull(index) is DotNetClrTypeSignature.SzArray &&
+                        targetParameters[index].varargElementType != null &&
+                        targetParameters[index].type.isSupportedDotNetPrimitiveArray()
+            }
+            returnType = if (
+                adaptsPrimitiveVararg &&
+                slot.hasSameImportedClrReturnCarrierAs(target, owner)
+            ) {
+                target.typeIn(
+                    target.returnType,
+                    owner,
+                    bridgeTypeParameters,
+                    keepOwnerTypeParameters = false,
+                )
+            } else {
+                bridgeType(slot.returnType)
+            }
+            for (indexedParameter in slotParameters.withIndex()) {
+                val index = indexedParameter.index
+                val slotParameter = indexedParameter.value
+                val targetParameter = targetParameters[index]
+                val retainedParameterType = retainedParameterTypes?.getOrNull(index)
+                val bridgeParameterType = if (
+                    retainedParameterType is DotNetClrTypeSignature.SzArray &&
+                    targetParameter.varargElementType != null &&
+                    targetParameter.type.isSupportedDotNetPrimitiveArray()
+                ) {
+                    val elementType = target.typeIn(
+                        targetParameter.varargElementType!!,
+                        owner,
+                        bridgeTypeParameters,
+                        keepOwnerTypeParameters = false,
+                    )
+                    context.irBuiltIns.arrayClass.typeWith(elementType)
+                } else {
+                    bridgeType(slotParameter.type)
+                }
+                addValueParameter(slotParameter.name.asString(), bridgeParameterType)
             }
             body = context.createIrBuilder(symbol).irBlockBody {
                 val targetOwner = target.parent as? IrClass
