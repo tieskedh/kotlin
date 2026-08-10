@@ -73,6 +73,7 @@ tasks.named<ProcessResources>("processResources") {
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KClass.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KCallable.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KFunction.kt"),
+        rootProject.file("libraries/stdlib/src/kotlin/reflect/KProperty.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KClasses.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KClassifier.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/reflect/KType.kt"),

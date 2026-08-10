@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredCovariantReturnBridge
+import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
@@ -223,7 +224,13 @@ internal class DotNetCovariantReturnBridgeLowering(
     private fun isOrdinaryPhysicalSlot(slot: IrSimpleFunction): Boolean {
         if (slot.isFakeOverride) return false
         val slotOwner = slot.parent as? IrClass ?: return false
-        return !slotOwner.isDotNetGenericInterfaceDeclaration
+        if (!slotOwner.isDotNetGenericInterfaceDeclaration) return true
+        // Resolution-only built-ins such as KProperty0 are logically generic, but their complete
+        // physical owner is one dedicated non-generic Kotlin.Runtime interface rather than the
+        // split generic-interface ABI. Its covariant accessor slots therefore belong to this
+        // lowering. Collection-like built-in generic mappings still remain owned exclusively by
+        // DotNetGenericInterfaceBridgeLowering.
+        return DotNetRuntimeTypes.hasBuiltInPropertyInterfaceMapping(slotOwner)
     }
 
     private fun addBridgeIfRequired(

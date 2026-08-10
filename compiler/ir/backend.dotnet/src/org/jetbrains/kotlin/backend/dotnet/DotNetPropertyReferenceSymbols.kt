@@ -121,6 +121,26 @@ internal class DotNetPropertyReferenceSymbols(
             irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
         )
         function.addValueParameter(
+            "getterSignature",
+            irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
+        )
+        function.addValueParameter(
+            "getterAnnotations",
+            irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),
+        )
+        function.addValueParameter("getterFlags", irBuiltIns.intType)
+        if (mutable) {
+            function.addValueParameter(
+                "setterSignature",
+                irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
+            )
+            function.addValueParameter(
+                "setterAnnotations",
+                irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),
+            )
+            function.addValueParameter("setterFlags", irBuiltIns.intType)
+        }
+        function.addValueParameter(
             "parameterFactory",
             irBuiltIns.functionN(2).symbol.typeWithArguments(
                 listOf(irBuiltIns.anyNType, irBuiltIns.anyNType, irBuiltIns.anyNType),
@@ -153,6 +173,26 @@ internal class DotNetPropertyReferenceSymbols(
             "signature",
             irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
         )
+        function.addValueParameter(
+            "getterSignature",
+            irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
+        )
+        function.addValueParameter(
+            "getterAnnotations",
+            irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),
+        )
+        function.addValueParameter("getterFlags", irBuiltIns.intType)
+        if (mutable) {
+            function.addValueParameter(
+                "setterSignature",
+                irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)).makeNullable(),
+            )
+            function.addValueParameter(
+                "setterAnnotations",
+                irBuiltIns.listClass.typeWithArguments(listOf(irBuiltIns.annotationType)),
+            )
+            function.addValueParameter("setterFlags", irBuiltIns.intType)
+        }
         function.addValueParameter(
             "parameterFactory",
             irBuiltIns.functionN(2).symbol.typeWithArguments(

@@ -443,9 +443,24 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
+    private val kPropertyAccessorBase = DotNetIlClassInfo(
+        ilClassName = "Accessor",
+        enclosingClass = kPropertyBase,
+    )
+
+    private val kPropertyGetterBase = DotNetIlClassInfo(
+        ilClassName = "Getter",
+        enclosingClass = kPropertyBase,
+    )
+
     private val kMutablePropertyBase = DotNetIlClassInfo(
         ilClassName = "Kotlin.KMutableProperty",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
+    private val kMutablePropertySetterBase = DotNetIlClassInfo(
+        ilClassName = "Setter",
+        enclosingClass = kMutablePropertyBase,
     )
 
     private val fixedPropertyClasses = List(3) { arity ->
@@ -459,6 +474,20 @@ internal object DotNetRuntimeTypes {
         DotNetIlClassInfo(
             ilClassName = "Kotlin.KMutableProperty$arity",
             assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+        )
+    }
+
+    private val fixedPropertyGetterClasses = List(3) { arity ->
+        DotNetIlClassInfo(
+            ilClassName = "Getter",
+            enclosingClass = fixedPropertyClasses[arity],
+        )
+    }
+
+    private val fixedMutablePropertySetterClasses = List(3) { arity ->
+        DotNetIlClassInfo(
+            ilClassName = "Setter",
+            enclosingClass = fixedMutablePropertyClasses[arity],
         )
     }
 
@@ -533,7 +562,15 @@ internal object DotNetRuntimeTypes {
         }
         bigArityFunctionClass.interfaces = listOf(DotNetIlValueType.UserClass(functionBase))
         kPropertyBase.interfaces = listOf(DotNetIlValueType.UserClass(kCallableBase))
+        kPropertyGetterBase.interfaces = listOf(
+            DotNetIlValueType.UserClass(kPropertyAccessorBase),
+            DotNetIlValueType.UserClass(kFunctionBase),
+        )
         kMutablePropertyBase.interfaces = listOf(DotNetIlValueType.UserClass(kPropertyBase))
+        kMutablePropertySetterBase.interfaces = listOf(
+            DotNetIlValueType.UserClass(kPropertyAccessorBase),
+            DotNetIlValueType.UserClass(kFunctionBase),
+        )
         fixedPropertyClasses.forEachIndexed { arity, classInfo ->
             classInfo.interfaces = listOf(
                 DotNetIlValueType.UserClass(kPropertyBase),
@@ -546,6 +583,18 @@ internal object DotNetRuntimeTypes {
                 DotNetIlValueType.UserClass(kMutablePropertyBase),
             )
         }
+        fixedPropertyGetterClasses.forEachIndexed { arity, classInfo ->
+            classInfo.interfaces = listOf(
+                DotNetIlValueType.UserClass(kPropertyGetterBase),
+                DotNetIlValueType.UserClass(fixedFunctionClasses[arity]),
+            )
+        }
+        fixedMutablePropertySetterClasses.forEachIndexed { arity, classInfo ->
+            classInfo.interfaces = listOf(
+                DotNetIlValueType.UserClass(kMutablePropertySetterBase),
+                DotNetIlValueType.UserClass(fixedFunctionClasses[arity + 1]),
+            )
+        }
     }
 
     fun classInfoFor(
@@ -553,6 +602,8 @@ internal object DotNetRuntimeTypes {
         classifierInfo: DotNetClassifierInfo = DotNetClassifierInfo.derive(irClass),
     ): DotNetIlClassInfo? {
         genericInterfaceInfoFor(irClass, classifierInfo)?.let { return it.canonicalClassInfo }
+        propertyAccessorClassInfoOrNull(classifierInfo.fqNameString, irClass.typeParameters.size)
+            ?.let { return it }
         return when {
             classifierInfo.isCharSequence -> charSequenceClass
             irClass.isDotNetMutableRefStub == true -> mutableRefClass
@@ -613,6 +664,15 @@ internal object DotNetRuntimeTypes {
         classifierInfo: DotNetClassifierInfo = DotNetClassifierInfo.derive(irClass),
     ): Boolean = hasBuiltInGenericInterfaceMapping(irClass, classifierInfo) ||
             irClass.isInterface && classInfoFor(irClass, classifierInfo) != null
+
+    /** KProperty interfaces use one dedicated erased runtime owner, not the split-interface ABI. */
+    fun hasBuiltInPropertyInterfaceMapping(
+        irClass: IrClass,
+        classifierInfo: DotNetClassifierInfo = DotNetClassifierInfo.derive(irClass),
+    ): Boolean = classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_PROPERTY ||
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_MUTABLE_PROPERTY ||
+            classifierInfo.fixedKPropertyArity != null ||
+            classifierInfo.fixedKMutablePropertyArity != null
 
     /**
      * Runtime-owned Kotlin interfaces whose complete physical implementation contract is emitted
@@ -769,6 +829,25 @@ internal object DotNetRuntimeTypes {
         }
     }
 
+    private fun propertyAccessorClassInfoOrNull(
+        fqName: String?,
+        typeArgumentCount: Int,
+    ): DotNetIlClassInfo? {
+        val descriptor = when (fqName) {
+            "kotlin.reflect.KProperty.Accessor" -> kPropertyAccessorBase to 1
+            "kotlin.reflect.KProperty.Getter" -> kPropertyGetterBase to 1
+            "kotlin.reflect.KMutableProperty.Setter" -> kMutablePropertySetterBase to 1
+            "kotlin.reflect.KProperty0.Getter" -> fixedPropertyGetterClasses[0] to 1
+            "kotlin.reflect.KProperty1.Getter" -> fixedPropertyGetterClasses[1] to 2
+            "kotlin.reflect.KProperty2.Getter" -> fixedPropertyGetterClasses[2] to 3
+            "kotlin.reflect.KMutableProperty0.Setter" -> fixedMutablePropertySetterClasses[0] to 1
+            "kotlin.reflect.KMutableProperty1.Setter" -> fixedMutablePropertySetterClasses[1] to 2
+            "kotlin.reflect.KMutableProperty2.Setter" -> fixedMutablePropertySetterClasses[2] to 3
+            else -> return null
+        }
+        return descriptor.first.takeIf { typeArgumentCount == descriptor.second }
+    }
+
     fun mapCallableType(
         type: IrType,
         classifierInfo: DotNetClassifierInfo? = null,
@@ -778,6 +857,9 @@ internal object DotNetRuntimeTypes {
         val info = classifierInfo ?: DotNetClassifierInfo.derive(irClass)
         if (irClass.isDotNetMutableRefStub == true && simpleType.arguments.size == 1) {
             return DotNetIlValueType.UserClass(mutableRefClass)
+        }
+        propertyAccessorClassInfoOrNull(info.fqNameString, simpleType.arguments.size)?.let { classInfo ->
+            return DotNetIlValueType.UserClass(classInfo)
         }
         val classInfo = when {
             info.runtimeKind == DotNetRuntimeClassifierKind.FUNCTION -> {
@@ -949,6 +1031,62 @@ internal object DotNetRuntimeTypes {
                     getter.dotNetSignature(typeMapper),
                 )
             }
+        val kProperty = irBuiltIns.kPropertyClass.owner
+        for (propertyName in listOf("isLateinit", "isConst", "getter")) {
+            val getter = kProperty.properties
+                .singleOrNull { property -> property.name.asString() == propertyName }
+                ?.getter
+                ?: continue
+            availableFunctions[getter] = DotNetIlFunctionInfo(
+                kPropertyBase,
+                getter.dotNetSignature(typeMapper),
+            )
+        }
+        kProperty.declarations.filterIsInstance<IrClass>()
+            .singleOrNull { nested -> nested.name.asString() == "Accessor" }
+            ?.properties
+            ?.singleOrNull { property -> property.name.asString() == "property" }
+            ?.getter
+            ?.let { getter ->
+                availableFunctions[getter] = DotNetIlFunctionInfo(
+                    kPropertyAccessorBase,
+                    getter.dotNetSignature(typeMapper),
+                )
+            }
+        val kMutableProperty = irBuiltIns.kMutableProperty0Class.owner.superTypes
+            .mapNotNull { type -> type.classOrNull?.owner }
+            .single { superClass ->
+                superClass.fqNameWhenAvailable?.asString() == "kotlin.reflect.KMutableProperty"
+            }
+        kMutableProperty.properties
+            .singleOrNull { property -> property.name.asString() == "setter" }
+            ?.getter
+            ?.let { getter ->
+                availableFunctions[getter] = DotNetIlFunctionInfo(
+                    kMutablePropertyBase,
+                    getter.dotNetSignature(typeMapper),
+                )
+            }
+        for (arity in 0..2) {
+            irBuiltIns.getKPropertyClass(mutable = false, n = arity).owner.properties
+                .singleOrNull { property -> property.name.asString() == "getter" }
+                ?.getter
+                ?.let { getter ->
+                    availableFunctions[getter] = DotNetIlFunctionInfo(
+                        fixedPropertyClasses[arity],
+                        getter.dotNetSignature(typeMapper),
+                    )
+                }
+            irBuiltIns.getKPropertyClass(mutable = true, n = arity).owner.properties
+                .singleOrNull { property -> property.name.asString() == "setter" }
+                ?.getter
+                ?.let { getter ->
+                    availableFunctions[getter] = DotNetIlFunctionInfo(
+                        fixedMutablePropertyClasses[arity],
+                        getter.dotNetSignature(typeMapper),
+                    )
+                }
+        }
         val kClass = irBuiltIns.kClassClass.owner
         for (propertyName in listOf("simpleName", "qualifiedName")) {
             val getter = kClass.properties.single { it.name.asString() == propertyName }.getter
