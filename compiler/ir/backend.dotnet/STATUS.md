@@ -16,8 +16,21 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: exact InterfaceImpl nullability and substitution for
-  admitted foreign generic interfaces. The selected graph now validates each
+- Last completed feature: exact nominal constrained constructions and
+  constructed-interface bounds for admitted foreign generic interfaces and
+  methods. The FIR importer reuses the shared declaration-qualified CLR
+  constraint resolver/validator; it does not reconstruct satisfaction from
+  Kotlin types. Constrained members and InterfaceImpls, method and owner bounds,
+  nested Roslyn nullability, Kotlin implementations, open generic bound dispatch,
+  and the original TypeSpec/GenericParamConstraint slots agree on Framework CLR
+  and CoreCLR. An intentionally invalid IL producer proves that an unbounded
+  `T` cannot smuggle `KeyBox<T>` into lookup. The backend retains constructed
+  foreign bounds as structural GenericInstance capabilities, and a non-null
+  assertion on an open CLR parameter checks a boxed probe while preserving the
+  original `!n`/`!!n` value. Special constraints, nullable constraint roots, and
+  unsupported constructed shapes remain fail-closed. The preceding feature
+  completed exact InterfaceImpl nullability and substitution for admitted
+  foreign generic interfaces. The selected graph validates each
   retained InterfaceImpl row, implementing owner, target TypeDef, and assembly by
   identity. FIR consumes Roslyn's row-local preorder while retaining the original
   TypeSpec, so closed, reordered, mixed fixed/open, and inherited `T?` owner-
@@ -46,8 +59,8 @@ verification, and work state.
   remains declaration-owned (`Box<T>`), while invocation on `NestedBox<String>`
   emits the substituted physical `Box<string>` carrier. C# calls into Kotlin and
   Kotlin calls into C# prove recursively constructed dispatch on Framework CLR
-  and CoreCLR. Constrained constructed targets, unsigned carriers, special
-  constraints, constructed bounds, and explicitly nullable generic leaves on
+  and CoreCLR. Unsigned carriers, special constraints, nullable constraint roots,
+  unsupported constructed bounds, and explicitly nullable generic leaves on
   declared members still reject the complete classifier. The preceding exact
   foreign generic-TypeDef slice retains
   public top-level generic interfaces as their selected native CLR identity,
@@ -124,7 +137,7 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The exact foreign InterfaceImpl nullability/substitution head passed every
+The exact foreign nominal-constraint/constructed-bound head passed every
 constituent of the strict target gate. The normal aggregate command remains:
 
 ```text
@@ -1088,19 +1101,20 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
   collection-shaped params each require separate Kotlin-stability decisions.
 - Foreign CLR generic methods and TypeDefs beyond their exact admitted grammars
-  remain fail-closed. Constrained constructed targets, unsigned carriers, special
-  constraints, constructed bounds, and explicit nullable generic leaves on
-  declared members require complete semantic, binding, override, and reflection
-  mappings rather than backend exceptions or private reflection decoders.
+  remain fail-closed. Unsigned carriers, special constraints, nullable constraint
+  roots, constructed shapes outside the admitted interface grammar, and explicit
+  nullable generic leaves on declared members require complete semantic, binding,
+  override, and reflection mappings rather than backend exceptions or private
+  reflection decoders.
 - Gate A and ABI-freeze work remain open; current prototype identities may be
   corrected rather than compatibility-shimmed.
 
 ## Next bounded work
 
-1. Decide and implement the next exact foreign-generic closure around constrained
-   constructed InterfaceImpl targets and constructed bounds. Admit it only when
-   CLR constraints, Kotlin bounds, substitution, overrides, and physical slots
-   agree; otherwise retain the complete-classifier rejection.
+1. Continue the independent reflection programme with broad member enumeration,
+   accessor objects, and type-use annotation discovery. Reuse the established
+   logical declaration graph; do not rediscover foreign or Kotlin members through
+   runtime CLR reflection.
 2. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
    they may adapt the Kotlin continuation boundary but never replace its
    internal ABI or create a second state-machine representation.

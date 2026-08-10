@@ -1377,7 +1377,8 @@ internal class DotNetIlTypeMapper private constructor(
     /**
      * A reference to a type parameter of the enclosing generic declaration maps positionally to
      * the CLR `!n` (class) / `!!n` (method) token. Stage 2 additionally carries every supported
-     * module-local class/interface bound on the structural token; the rendered slot remains
+     * retained class/interface bound on the structural token, including an exact selected foreign
+     * constructed-interface capability; the rendered slot remains
      * positional and open. A nullable type-parameter occurrence uses `object`: one frozen
      * boxed-or-null carrier is required because a CLR signature cannot alternate between
      * `Nullable<T>` and a reference after substitution. Constraints outside
@@ -1425,6 +1426,7 @@ internal class DotNetIlTypeMapper private constructor(
             upperBounds = constraintTypes.flatMap { constraint ->
                 when (constraint) {
                     is DotNetIlValueType.UserClass -> listOf(constraint)
+                    is DotNetIlValueType.GenericInstance -> listOf(constraint)
                     // A CLR `R : T` constraint is represented directly in metadata. For the
                     // backend's structural member model, R also inherits T's effective concrete
                     // class/interface bounds; the positional T token itself is not a class owner.
@@ -1578,6 +1580,10 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
             val erasedGenericClassBound = boundClass?.let(typeMapper::isErasedGenericClass) == true
             val erasedGenericInterfaceBound = boundClass?.let(typeMapper::isErasedGenericInterface) == true
             val erasedGenericClassifierBound = erasedGenericClassBound || erasedGenericInterfaceBound
+            val constructedForeignInterfaceBound =
+                boundClass?.isInterface == true &&
+                        boundClass.dotNetImportedClrSourceOrNull() != null &&
+                        simpleBound.arguments.isNotEmpty()
             val nullableBoundParameter = (simpleBound.classifier as? IrTypeParameterSymbol)
                 ?.takeIf { simpleBound.isMarkedNullable() }
             if (nullableBoundParameter != null) {
@@ -1588,7 +1594,12 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
             }
             if (
                 simpleBound.isMarkedNullable() ||
-                (simpleBound.arguments.isNotEmpty() && !isComparableSelfBound && !erasedGenericClassifierBound)
+                (
+                        simpleBound.arguments.isNotEmpty() &&
+                                !isComparableSelfBound &&
+                                !erasedGenericClassifierBound &&
+                                !constructedForeignInterfaceBound
+                        )
             ) {
                 dotNetUnsupported(
                     "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
@@ -1615,6 +1626,15 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
                         "type parameter '${name.asString()}' has no erased CLR classifier constraint for ${bound.render()}"
                     )
                 return@mapIndexedNotNull Triple(if (classifier.owner.isInterface) 1 else 0, index, mappedBound)
+            }
+            if (constructedForeignInterfaceBound) {
+                val mappedBound = typeMapper.toDotNetIlValueType(bound) as?
+                        DotNetIlValueType.GenericInstance
+                    ?: dotNetUnsupported(
+                        "type parameter '${name.asString()}' has no exact constructed CLR " +
+                                "constraint for ${bound.render()}"
+                    )
+                return@mapIndexedNotNull Triple(1, index, mappedBound)
             }
             val boundParameter = (simpleBound.classifier as? IrTypeParameterSymbol)?.owner
             val erasedClassOwner = (boundParameter?.parent as? IrClass)
@@ -1799,16 +1819,17 @@ internal fun checkDotNetTypeParametersSupported(
 }
 
 /**
- * Shape-gate candidate for a Kotlin-owned generic class/interface bound. The live mapper later
- * proves that this classifier has the accepted erased ABI; foreign CLR generic instances
- * therefore still fail instead of being silently erased.
+ * Shape-gate candidate for a generic class/interface bound. The live mapper later proves either
+ * an accepted erased Kotlin ABI or an exact imported CLR generic interface identity; every other
+ * generic classifier still fails instead of being silently erased or rebound.
  */
 private fun IrSimpleType.isPotentialErasedKotlinClassifierBound(): Boolean {
     if (classifier !is IrClassSymbol) return false
     // A projected declaration may already have had its owner's physical parameters erased before
     // this early shape gate runs. Arguments on the logical bound are the stable evidence
     // (`Enum<E>`, `Iterable<T>`); the live mapper still has to prove that the classifier is a
-    // registered erased Kotlin class/interface, so a foreign CLR generic cannot pass accidentally.
+    // registered erased Kotlin class/interface or an imported CLR interface, so an arbitrary
+    // generic classifier cannot pass accidentally.
     return arguments.isNotEmpty()
 }
 

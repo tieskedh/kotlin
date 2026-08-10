@@ -142,8 +142,32 @@ construction already determine whether `T` itself denotes a nullable type.
 
 Within the existing admitted type grammar, this permits closed, reordered,
 mixed fixed/open, and explicitly nullable owner-parameter InterfaceImpl uses.
-It does not admit a constrained constructed target, an unsupported carrier, or
-an incomplete target graph.
+It does not admit an unsupported carrier or an incomplete target graph.
+
+### Nominal constrained constructions and constructed bounds stay structural
+
+A constructed interface target may itself declare nominal CLR constraints. The
+importer admits that construction only when the shared selected-graph validator
+proves every substituted argument against every retained GenericParamConstraint
+row. For an open argument, the proof uses the exact declaration-qualified source
+parameter and its own selected bounds; matching an index from another owner is
+not evidence. Unsupported, violated, cyclic, or invalid assignability withholds
+the complete importing classifier.
+
+A TypeSpec-backed bound such as `T : KeyBox<U>` has the corresponding structural
+Kotlin upper bound when `KeyBox<U>` is already inside the admitted interface type
+grammar. Roslyn nullability is aligned across that constraint TypeSpec before the
+bound is built, so a child such as `string?` or `U?` remains distinct without
+changing the physical constraint. The constraint root must remain non-null.
+Oblivious parameter leaves stay the rigid declaration parameter, as in an
+InterfaceImpl use; concrete oblivious reference leaves retain a platform view.
+
+This is the CLR counterpart of JVM foreign-bound conversion: FIR owns one
+enhanced Kotlin bound while the selected foreign signature remains backend
+linkage. It is not permission to translate CLR-only special constraints. CLR
+`class`, `struct`, `new()`, and by-ref-like eligibility still reject this slice,
+because Kotlin bounds and constructor syntax do not express their complete
+substitution and runtime rules.
 
 ### Kotlin implementations fill the native slots
 
@@ -178,11 +202,15 @@ The admitted type-owned slice accepts an interface only when:
   a recursively constructed exact selected interface; an exact selected
   `System.Nullable<V>` is additionally admitted only for one of the eight signed
   Common primitive carriers and may occur recursively inside those constructions;
-- every constructed target has matching arity and no special or nominal owner
-  constraints in this slice, and every nominal node survives the same complete
-  classifier-selection fixpoint;
-- explicit bounds are relative generic parameters or exact admitted nominal
-  non-generic interfaces from the selected graph;
+- every constructed target has matching arity and no special owner constraints;
+  an unconstrained target is admitted directly, while a nominally constrained
+  target is admitted only after complete substituted validation against the
+  declaration-qualified source context;
+- explicit bounds are relative generic parameters, exact admitted nominal
+  non-generic interfaces, or non-null TypeSpec constructions inside the same
+  recursively admitted interface grammar; every nominal node, including nodes
+  nested in a constructed bound, survives the same classifier-selection
+  fixpoint;
 - every variance occurrence is valid for its declaration position; and
 - no declared member owner- or method-generic leaf has explicit nullable
   evidence. An InterfaceImpl use may project an owner parameter as `T?` because
@@ -194,10 +222,10 @@ declaration-owned type (`Box<T>` on `NestedBox<T>.Nested`), while an invocation 
 `NestedBox<String>` emits the substituted physical `Box<string>` signature.
 
 Unsigned CLR scalars remain outside this slice until Kotlin unsigned value-class
-carriers are implemented end to end. Constructed bounds, constrained constructed
-targets, pointers, byrefs, general arrays, special constraints, and explicit
-nullable generic leaves on declared members likewise reject the complete
-classifier. No public member or inherited contract is silently omitted.
+carriers are implemented end to end. Pointers, byrefs, general arrays, special
+constraints, nullable constraint roots, and explicit nullable generic leaves on
+declared members likewise reject the complete classifier. No public member or
+inherited contract is silently omitted.
 
 ## Design attack
 
@@ -230,8 +258,9 @@ Kotlin ABI; only proven boundary differences receive adapters.
   CLR TypeSpec and its inherited physical slots.
 - Imported CLR generic interfaces never acquire Kotlin implementation manifests
   or canonical erased sibling TypeDefs.
-- Constrained constructed targets require a later exact slice; this decision
-  forbids approximating them but does not forbid implementing them.
+- Nominal constrained constructions and constructed interface bounds now use the
+  same selected constraint graph as direct declarations; CLR-only special
+  constraints remain deliberately unavailable rather than approximated.
 
 ## Verification obligations
 
@@ -256,6 +285,7 @@ Coverage must retain both Framework CLR and current CoreCLR profiles and prove:
   substituted CLR invocation carrier (`Box<string>`);
 - inferred and explicit method arguments inside a constructed owner;
 - separate producer/consumer compilation and exact physical MethodImpl rows; and
-- complete rejection of constrained constructed targets, unsigned scalar
-  carriers, special constraints, and explicit nullable generic leaves on
-  declared members.
+- successful and rejected constrained constructions, constructed bounds with
+  reordered/open/fixed nullable arguments, and complete rejection of unsigned
+  scalar carriers, special constraints, nullable constraint roots, and explicit
+  nullable generic leaves on declared members.

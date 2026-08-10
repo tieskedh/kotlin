@@ -78,8 +78,10 @@ The first accepted slice admits a method only when all of the following are true
 - each use is a supported primitive/reference leaf, a method-owned `!!n`, or an
   SZARRAY over one of those leaves;
 - `params` is present only on the final supported reference/generic vector;
-- every explicit bound is either another method parameter or one exact nominal
-  non-generic interface admitted from the same selected graph; and
+- every explicit bound is another method parameter, one exact nominal
+  non-generic interface, or a non-null constructed interface inside the admitted
+  structural grammar; each constructed target's substituted nominal constraints
+  must be proved from the declaration-qualified method/owner context; and
 - nullable evidence does not explicitly mark a method-generic leaf nullable.
 
 An unconstrained parameter receives Kotlin's ordinary nullable `Any?` default
@@ -90,9 +92,17 @@ constraint admits `S` but rejects `Nullable<S>`. Explicit nullable constraint
 evidence is therefore rejected rather than silently weakened.
 
 As with the existing importer, one unsupported public member rejects the complete
-interface. Special constraints, type-owned parameters, constructed generic bounds,
+interface. Special constraints, type-owned parameters outside an admitted owner,
+constructed bounds outside the closed interface grammar, nullable constraint roots,
 general arrays, pointers/byrefs, malformed rows, unresolved or ambiguous nominal
 bounds, and unsupported nullable generic leaves remain absent from Kotlin lookup.
+
+An admitted constructed bound remains one exact TypeSpec in CLR metadata and one
+structural Kotlin bound in FIR/IR. Nested Roslyn nullability is aligned before the
+Kotlin bound is built; open parameter leaves remain declaration-rigid. Kotlin
+implementations emit that same GenericParamConstraint. Structural codegen retains
+the GenericInstance as an upper-bound capability, so calls through the open
+parameter use the selected foreign owner rather than a name-based remapping.
 
 ### Why unconstrained C# `T?` is rejected
 
@@ -129,22 +139,25 @@ and reject the whole declaration everywhere else.
 
 - Kotlin can infer or explicitly supply foreign method arguments, including CLR
   value types already representable by the backend.
-- Relative and admitted nominal bounds participate in Kotlin checking and retain
-  their physical GenericParamConstraint rows for implementations.
+- Relative, nominal, and admitted constructed-interface bounds participate in
+  Kotlin checking and retain their physical GenericParamConstraint rows for
+  implementations and open bound dispatch.
 - Generic arrays, `params T[]`, generic/non-generic overloads, callable references,
   reflection, separate consumers, and reverse C# dispatch share one declaration.
 - Primitive MethodSpec results may carry a redundant platform not-null assertion;
   code generation treats an identical non-null CLR scalar as an already-proven
   no-op rather than boxing it.
-- Broader CLR generic constraints and constructed types require new exact importer
-  slices. They may extend this grammar but may not weaken it.
+- Broader CLR special constraints and constructed types outside the admitted
+  interface grammar require new exact importer slices. They may extend this
+  grammar but may not weaken it.
 
 ## Verification obligations
 
 Coverage must retain both Framework CLR and current CoreCLR profiles and prove:
 
 - inferred and explicit MethodSpec calls, value/reference arguments, vectors,
-  relative and nominal bounds, `params` expansion/spread, and overload resolution;
+  relative, nominal, and constructed-interface bounds, `params` expansion/spread,
+  and overload resolution;
 - exact IL MethodSpec signatures and same-object nominal results;
 - a Kotlin implementation called through the original C# interface;
 - declaration-owned callable type parameters, relative-bound identity, nominal

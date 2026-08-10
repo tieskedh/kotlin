@@ -740,6 +740,23 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
+     * `!!`/IMPLICIT_NOTNULL on an open CLR generic parameter cannot branch on the unboxed slot:
+     * one legal instantiation may be a value type and another a nullable reference. Preserve the
+     * original slot in a local, box only the probe (`box !n` keeps references and turns an empty
+     * Nullable value into null), apply the ordinary reference check, discard the probe, and reload
+     * the unchanged generic value. The check is therefore representation-independent and does not
+     * manufacture a second generic carrier.
+     */
+    private fun emitTypeParameterNotNullOrThrowNpe(type: DotNetIlValueType.TypeParameter) {
+        val slot = spillToSyntheticLocal(type, "<genericNotNull>")
+        methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+        methodContext.emit("box ${type.nameInSignature}", pops = 1, pushes = 1)
+        emitReferenceNotNullOrThrowNpe()
+        methodContext.emit("pop", pops = 1)
+        methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+    }
+
+    /**
      * Throws the CLR type `kotlin.NullPointerException` maps to (probe-verified spelling and
      * catchability, `boxprobe_s4`), so a failing `!!` stays catchable as
      * `catch (e: NullPointerException)` through the existing exception registry.
@@ -1163,6 +1180,8 @@ internal class DotNetIlExpressionCodegen(
                 operandType == castType && operandType.isSupportedPrimitiveArrayElement() -> Unit
                 operandType is DotNetIlValueType.NullableValue && castType == operandType.elementType ->
                     emitNullableUnwrapOrThrowNpe(operandType)
+                operandType is DotNetIlValueType.TypeParameter && operandType == castType ->
+                    emitTypeParameterNotNullOrThrowNpe(operandType)
                 operandType.isDotNetReferenceShaped() && operandType.isDotNetAssignableTo(castType) ->
                     emitReferenceNotNullOrThrowNpe()
                 else -> dotNetUnsupported(
