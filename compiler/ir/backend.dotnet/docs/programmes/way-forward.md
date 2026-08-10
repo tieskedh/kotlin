@@ -398,11 +398,17 @@ carriers to Kotlin `V?`, compose inside admitted constructed interfaces, and
 preserve the original CLR slots in both call directions. This is a selected-
 identity mapping, not recognition of a type name or of Roslyn's unconstrained
 annotated `T?`.
-Closed/fixed inherited views, constrained constructed targets, unsigned carriers,
-special constraints, constructed bounds, nullable user structs, open constrained
-nullable parameters, and explicit unconstrained nullable generic leaves remain
-fail-closed. Never route an imported generic owner through the Kotlin-owned erased-
-interface ABI.
+Inherited foreign views now retain their exact InterfaceImpl row and apply its
+Roslyn preorder independently from the physical TypeSpec. Closed, reordered,
+mixed fixed/open, and inherited `T?` owner-parameter substitutions therefore
+compose through FIR, overrides, CIL, and reverse Kotlin implementations. Concrete
+oblivious references remain platform types, while an oblivious supertype owner
+parameter stays `T` rather than manufacturing `T!`.
+Constrained constructed targets, unsigned carriers, special constraints,
+constructed bounds, nullable user structs, open constrained nullable parameters,
+and explicit unconstrained nullable generic leaves on declared members remain
+fail-closed. Never route an imported generic owner through the Kotlin-owned
+erased-interface ABI.
 
 ### 7. Close the remaining draft ABI decisions before wider breadth
 
@@ -540,8 +546,8 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
   special constraints, constructed bounds/types, and explicit unconstrained
   nullable generic leaves;
 - foreign CLR generic-TypeDef shapes beyond the accepted exact slice, including
-  closed/fixed inherited views, constrained constructed targets, unsigned carriers,
-  special constraints, constructed bounds, and explicit nullable generic leaves;
+  constrained constructed targets, unsigned carriers, special constraints,
+  constructed bounds, and explicit nullable generic leaves on declared members;
 - multi-field value classes; the single-field box/carrier architecture is
   accepted and implemented, but does not select a layout or ABI for multiple
   underlying fields;

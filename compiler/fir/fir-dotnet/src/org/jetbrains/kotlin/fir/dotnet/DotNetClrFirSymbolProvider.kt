@@ -495,7 +495,7 @@ class DotNetClrFirSymbolProvider(
             hierarchy.interfaces.distinctBy { implementation -> implementation.interfaceType }.size !=
             hierarchy.interfaces.size ||
             hierarchy.interfaces.any { implementation ->
-                !implementation.hasSupportedOpenInterfaceView()
+                !implementation.hasSupportedInterfaceTarget()
             }
         ) {
             return null
@@ -505,6 +505,12 @@ class DotNetClrFirSymbolProvider(
         ) {
             is DotNetClrGenericParameterContextResolution.Resolved -> resolution.context
             is DotNetClrGenericParameterContextResolution.Invalid -> return null
+        }
+        if (hierarchy.interfaces.any { implementation ->
+                !implementation.hasSupportedInterfaceView(assembly, genericContext)
+            }
+        ) {
+            return null
         }
         if (!genericContext.hasSupportedOwnerParameterContract(assembly)) return null
         val properties = assembly.propertyDefinitions.filter { property ->
@@ -554,18 +560,28 @@ class DotNetClrFirSymbolProvider(
         return CompleteContract(hierarchy, genericContext, methodCandidates, propertyCandidates)
     }
 
-    private fun DotNetClrResolvedInterfaceImplementation.hasSupportedOpenInterfaceView(): Boolean {
+    private fun DotNetClrResolvedInterfaceImplementation.hasSupportedInterfaceTarget(): Boolean {
         val definition = interfaceType.type.definition
-        if (
-            !definition.isInterface ||
-            definition.classIdOrNull(interfaceType.type.assembly) == null
-        ) {
+        return definition.isInterface &&
+                definition.classIdOrNull(interfaceType.type.assembly) != null
+    }
+
+    private fun DotNetClrResolvedInterfaceImplementation.hasSupportedInterfaceView(
+        assembly: DotNetClrAssemblyMetadata,
+        genericContext: DotNetClrResolvedGenericParameterContext,
+    ): Boolean {
+        if (!hasSupportedInterfaceTarget()) return false
+        val physicalType = interfaceType.toInterfaceSignature()
+        if (!physicalType.isSupportedMethodType(genericContext, allowVoid = false)) {
             return false
         }
-        return interfaceType.arguments.all { argument ->
-            argument is DotNetClrResolvedTypeSignature.GenericParameter &&
-                    argument.kind == DotNetClrGenericParameterKind.TYPE
-        }
+        val root = annotationServices.typeQualifiers(
+            assembly,
+            physicalType,
+            DotNetClrNullableDeclarationTarget.InterfaceImplementation(row),
+        ).firstOrNull() ?: return false
+        return root.type == physicalType &&
+                root.qualifier != DotNetClrKotlinNullabilityQualifier.NULLABLE
     }
 
     private fun DotNetClrResolvedTypeSignature.hasSupportedOwnerVariance(
@@ -1003,7 +1019,10 @@ class DotNetClrFirSymbolProvider(
             }
             candidate.hierarchy.interfaces.mapTo(superTypeRefs) { implementation ->
                 buildResolvedTypeRef {
-                    coneType = implementation.interfaceType.toKotlinSuperType(typeParameterSymbols)
+                    coneType = implementation.toKotlinSuperType(
+                        candidate.assembly.metadata,
+                        typeParameterSymbols,
+                    )
                 }
             }
 
@@ -1365,20 +1384,44 @@ class DotNetClrFirSymbolProvider(
         }
     }
 
-    private fun DotNetClrResolvedTypeView.toKotlinSuperType(
+    private fun DotNetClrResolvedInterfaceImplementation.toKotlinSuperType(
+        assembly: DotNetClrAssemblyMetadata,
         typeParameterSymbols: TypeParameterSymbols,
     ): ConeClassLikeType {
-        val classId = type.definition.classIdOrNull(type.assembly)
+        val physicalType = interfaceType.toInterfaceSignature()
+        val qualifiers = TypeQualifierCursor(
+            annotationServices.typeQualifiers(
+                assembly,
+                physicalType,
+                DotNetClrNullableDeclarationTarget.InterfaceImplementation(row),
+            )
+        )
+        check(qualifiers.consume(physicalType) != DotNetClrKotlinNullabilityQualifier.NULLABLE) {
+            "Nullable root entered an imported CLR InterfaceImpl supertype"
+        }
+        val classId = interfaceType.type.definition.classIdOrNull(interfaceType.type.assembly)
             ?: error("Unsupported inherited CLR interface entered FIR")
-        val arguments = arguments.map { argument ->
-            val parameter = argument as? DotNetClrResolvedTypeSignature.GenericParameter
-                ?: error("Unsupported inherited CLR interface argument entered FIR")
-            val symbol = typeParameterSymbols.symbol(parameter.kind, parameter.index)
-                ?: error("Inherited CLR interface references a missing owner parameter")
-            ConeTypeParameterType(symbol.toLookupTag(), isMarkedNullable = false)
+        val arguments = interfaceType.arguments.map { argument ->
+            argument.toKotlinType(
+                qualifiers,
+                typeParameterSymbols,
+                keepObliviousTypeParametersRigid = true,
+            )
         }.toTypedArray()
-        return classId.toLookupTag().constructClassType(arguments)
+        return classId.toLookupTag().constructClassType(arguments).also {
+            qualifiers.requireExhausted()
+        }
     }
+
+    private fun DotNetClrResolvedTypeView.toInterfaceSignature(): DotNetClrResolvedTypeSignature =
+        if (arguments.isEmpty()) {
+            DotNetClrResolvedTypeSignature.Named(type, isValueType = false)
+        } else {
+            DotNetClrResolvedTypeSignature.GenericInstance(
+                DotNetClrResolvedTypeSignature.Named(type, isValueType = false),
+                arguments,
+            )
+        }
 
     private inner class TypeQualifierCursor(
         private val components: List<DotNetClrKotlinNullabilityComponent>,
@@ -1457,8 +1500,13 @@ class DotNetClrFirSymbolProvider(
         arrayQualifier: DotNetClrKotlinNullabilityQualifier,
         isVararg: Boolean,
         typeParameterSymbols: TypeParameterSymbols,
+        keepObliviousTypeParametersRigid: Boolean = false,
     ): ConeKotlinType {
-        val elementType = toKotlinType(qualifiers, typeParameterSymbols)
+        val elementType = toKotlinType(
+            qualifiers,
+            typeParameterSymbols,
+            keepObliviousTypeParametersRigid,
+        )
         val outArray = ConeKotlinTypeProjectionOut(elementType).createArrayType(
             nullable = false,
             createPrimitiveArrayTypeIfPossible = false,
@@ -1525,6 +1573,7 @@ class DotNetClrFirSymbolProvider(
     private fun DotNetClrResolvedTypeSignature.toKotlinType(
         qualifiers: TypeQualifierCursor,
         typeParameterSymbols: TypeParameterSymbols,
+        keepObliviousTypeParametersRigid: Boolean = false,
     ): ConeKotlinType =
         when (this) {
             DotNetClrResolvedTypeSignature.Void -> session.builtinTypes.unitType.coneType
@@ -1552,8 +1601,20 @@ class DotNetClrFirSymbolProvider(
             is DotNetClrResolvedTypeSignature.GenericParameter -> {
                 val symbol = typeParameterSymbols.symbol(kind, index)
                     ?: error("Foreign CLR ${kind.name.lowercase()} parameter $index has no FIR symbol")
+                val qualifier = qualifiers.consume(this).let { qualifier ->
+                    // An oblivious InterfaceImpl use is physical `T`, not `T!`: the owner
+                    // construction supplies T's eventual nullability. Only an explicit 2 means T?.
+                    if (
+                        keepObliviousTypeParametersRigid &&
+                        qualifier == DotNetClrKotlinNullabilityQualifier.FORCE_FLEXIBILITY
+                    ) {
+                        DotNetClrKotlinNullabilityQualifier.NOT_NULL
+                    } else {
+                        qualifier
+                    }
+                }
                 ConeTypeParameterType(symbol.toLookupTag(), isMarkedNullable = false)
-                    .withQualifier(qualifiers.consume(this))
+                    .withQualifier(qualifier)
             }
             is DotNetClrResolvedTypeSignature.SzArray -> {
                 val arrayQualifier = qualifiers.consume(this)
@@ -1562,6 +1623,7 @@ class DotNetClrFirSymbolProvider(
                     arrayQualifier,
                     isVararg = false,
                     typeParameterSymbols,
+                    keepObliviousTypeParametersRigid,
                 )
             }
             is DotNetClrResolvedTypeSignature.Named -> {
@@ -1574,7 +1636,11 @@ class DotNetClrFirSymbolProvider(
                 if (isSystemNullable(annotationServices.physicalCoreTypes)) {
                     val element = arguments.singleOrNull()
                         ?: error("Selected System.Nullable<T> entered FIR with invalid arity")
-                    val kotlinElement = element.toKotlinType(qualifiers, typeParameterSymbols)
+                    val kotlinElement = element.toKotlinType(
+                        qualifiers,
+                        typeParameterSymbols,
+                        keepObliviousTypeParametersRigid,
+                    )
                     val rigidElement = kotlinElement as? ConeRigidType
                         ?: error("Selected System.Nullable<T> entered FIR with a flexible element")
                     rigidElement.withNullability(nullable = true, session.typeContext)
@@ -1583,7 +1649,11 @@ class DotNetClrFirSymbolProvider(
                         ?: error("Unsupported constructed CLR type entered FIR")
                     val qualifier = qualifiers.consume(this)
                     val arguments = arguments.map { argument ->
-                        argument.toKotlinType(qualifiers, typeParameterSymbols)
+                        argument.toKotlinType(
+                            qualifiers,
+                            typeParameterSymbols,
+                            keepObliviousTypeParametersRigid,
+                        )
                     }.toTypedArray()
                     classId.toLookupTag().constructClassType(arguments)
                         .withQualifier(qualifier)
@@ -1723,6 +1793,7 @@ class DotNetClrFirSymbolProvider(
                 is DotNetClrNullableDeclarationTarget.MethodReturn ->
                     returnQualifier(assembly, target.method, root.qualifier)
                 is DotNetClrNullableDeclarationTarget.Property -> root.qualifier
+                is DotNetClrNullableDeclarationTarget.InterfaceImplementation -> root.qualifier
                 else -> error("Unsupported foreign declaration target $target")
             }
             return if (enhanced == root.qualifier) {

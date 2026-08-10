@@ -23,6 +23,10 @@ sealed interface DotNetClrNullableDeclarationTarget {
         val property: DotNetClrPropertyDefinition,
     ) : DotNetClrNullableDeclarationTarget
 
+    data class InterfaceImplementation(
+        val implementation: DotNetClrInterfaceImplementation,
+    ) : DotNetClrNullableDeclarationTarget
+
     data class GenericParameter(
         val parameter: DotNetClrGenericParameterDefinition,
     ) : DotNetClrNullableDeclarationTarget
@@ -261,6 +265,32 @@ class DotNetClrNullableDeclarationResolver(
                             contextOwners = contexts,
                             accessibility =
                                 accessibilityResolver.resolve(assembly, target.property),
+                        )
+                    }
+                }
+            }
+
+            is DotNetClrNullableDeclarationTarget.InterfaceImplementation -> {
+                val implementation = target.implementation
+                if (assembly.interfaceImplementations.none { row -> row == implementation }) {
+                    invalid(
+                        DotNetClrNullableDeclarationFailure.DECLARATION_NOT_FOUND,
+                        implementation.handle,
+                    )
+                } else {
+                    resolveTypeContexts(
+                        assembly,
+                        implementation.handle,
+                        implementation.implementingType,
+                    ) { contexts ->
+                        Site(
+                            declaration = implementation.handle,
+                            annotationParent = implementation.handle,
+                            contextOwners = contexts,
+                            accessibility = accessibilityResolver.resolve(
+                                assembly,
+                                implementation,
+                            ),
                         )
                     }
                 }
