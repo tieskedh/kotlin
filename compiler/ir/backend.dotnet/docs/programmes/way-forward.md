@@ -392,10 +392,17 @@ member signatures, Kotlin implementations, and primitive-vararg boundary adapter
 They retain one native CLR TypeDef graph and its exact constructed slots through a
 shared versioned carrier. Extend only
 [its closed grammar](../decisions/foreign-clr-generic-type-identities.md).
+The same graph now retains exact selected physical core identities: foreign
+`System.Nullable<V>` methods and properties map all eight signed primitive
+carriers to Kotlin `V?`, compose inside admitted constructed interfaces, and
+preserve the original CLR slots in both call directions. This is a selected-
+identity mapping, not recognition of a type name or of Roslyn's unconstrained
+annotated `T?`.
 Closed/fixed inherited views, constrained constructed targets, unsigned carriers,
-special constraints, constructed bounds, and explicit nullable generic leaves
-remain fail-closed. Never route an imported generic owner through the Kotlin-owned
-erased-interface ABI.
+special constraints, constructed bounds, nullable user structs, open constrained
+nullable parameters, and explicit unconstrained nullable generic leaves remain
+fail-closed. Never route an imported generic owner through the Kotlin-owned erased-
+interface ABI.
 
 ### 7. Close the remaining draft ABI decisions before wider breadth
 

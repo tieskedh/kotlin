@@ -16,19 +16,28 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: exact constructed foreign CLR member types and open
-  generic-interface inheritance. Resolved `Named` and recursively nested
-  `GenericInstance` trees such as `Producer<Box<T>>` now remain attached from
-  selected metadata through FIR2IR and CIL; the backend never rebinds TypeRefs or
-  TypeSpecs by name. Direct `Derived<T> : Base<T>`-style edges enter FIR and exact
-  CLR interface metadata, including Kotlin implementations of inherited slots.
-  All declaration carriers share one identity-indexed, compilation-local selected
-  graph instead of retaining and validating the whole classpath per member.
-  Roslyn nullable flags are consumed across the complete resolved type preorder.
-  Callable reflection remains declaration-owned (`Box<T>`), while invocation on
-  `NestedBox<String>` emits the substituted physical `Box<string>` carrier.
-  C# calls into Kotlin and Kotlin calls into C# prove recursively constructed
-  dispatch on Framework CLR and CoreCLR. Closed/fixed inherited views,
+- Last completed feature: exact foreign `System.Nullable<V>` import for all eight
+  signed Common primitive carriers. Only the selected core TypeDef retained in
+  the shared declaration graph receives the Kotlin view `V?`; the original
+  `Nullable<V>` signature remains authoritative for direct methods, mutable
+  properties, nested `Box<V?>` constructions, overrides, and CIL. The nullable
+  wrapper consumes no Roslyn reference-nullability flag and is never inferred
+  from a namespace/name spelling or unconstrained annotated `T?`. Kotlin and C#
+  implement and call the complete scalar family on Framework CLR and CoreCLR;
+  unsupported nullable user structs remain fail-closed. The preceding feature
+  completed exact constructed foreign CLR member types and open generic-interface
+  inheritance. Resolved `Named` and recursively nested `GenericInstance` trees
+  such as `Producer<Box<T>>` remain attached from selected metadata through FIR2IR
+  and CIL; the backend never rebinds TypeRefs or TypeSpecs by name. Direct
+  `Derived<T> : Base<T>`-style edges enter FIR and exact CLR interface metadata,
+  including Kotlin implementations of inherited slots. All declaration carriers
+  share one identity-indexed, compilation-local selected graph instead of
+  retaining and validating the whole classpath per member. Roslyn nullable flags
+  are consumed across the complete resolved type preorder. Callable reflection
+  remains declaration-owned (`Box<T>`), while invocation on `NestedBox<String>`
+  emits the substituted physical `Box<string>` carrier. C# calls into Kotlin and
+  Kotlin calls into C# prove recursively constructed dispatch on Framework CLR
+  and CoreCLR. Closed/fixed inherited views,
   constrained constructed targets, unsigned carriers, special constraints,
   constructed bounds, and explicitly nullable generic leaves still reject the
   complete classifier. The preceding exact foreign generic-TypeDef slice retains
@@ -106,8 +115,8 @@ integration remain substantial open programmes.
 
 ## Current green gate
 
-The foreign constructed-signature/open-inheritance head passed every constituent of the strict
-target gate. The normal aggregate command remains:
+The exact foreign `System.Nullable<V>` head passed every constituent of the strict target gate.
+The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -121,14 +130,10 @@ The audited full-aggregate evidence covers 158 XML files and 1900 tests:
 - 95 library-integration tests
 - zero failures, errors, or skips
 
-The ordinary aggregate produced green physical-model and complete 1,778-test
-FIR2IR roots. A concurrent compiler session then removed Gradle's temporary
-`dn/binary/in-progress-results-generic.bin`, so that aggregate process ended on a
-shared-output-directory race rather than a test failure. The exact 116-test `dn`
-task was immediately repeated in isolation and exited successfully. Direct audit
-of the three final roots reports the 158 files and 1,900 tests above with zero
-failures, errors, or skips. No duration or performance comparison is retained
-because the other compiler session shared the machine throughout verification.
+The aggregate exited successfully. Direct audit of its three final roots reports
+the 158 files and 1,900 tests above with zero failures, errors, or skips. No
+duration or performance comparison is retained because another compiler session
+shared the machine throughout verification.
 
 At the preceding coroutine head, test-only evidence was strengthened to require the
 imported member entries to retain their CLR virtual slots and to dispatch a
@@ -1079,30 +1084,22 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
   explicit nullable generic leaves require complete semantic, binding, override,
   and reflection mappings rather than backend exceptions or private reflection
   decoders.
-- Foreign C# `Nullable<T>` signatures are nominal generic instantiations and
-  remain outside the closed primitive importer until constructed-type identity
-  is retained from the selected assembly graph through backend binding.
 - Gate A and ABI-freeze work remain open; current prototype identities may be
   corrected rather than compatibility-shimmed.
 
 ## Next bounded work
 
-1. Admit foreign `System.Nullable<T>` only through its exact selected identity and
-   a complete value-carrier mapping now that constructed TypeSpec identity reaches
-   backend binding. Cover nullable scalar calls, properties, nested constructions,
-   Kotlin implementations, and both profiles; do not recognize a namespace/name
-   spelling or confuse Roslyn unconstrained `T?` with physical `Nullable<T>`.
-2. Model InterfaceImpl nullability and substitution evidence before considering
+1. Model InterfaceImpl nullability and substitution evidence before considering
    closed/fixed inherited views such as `Closed : Box<string>`; keep them
    fail-closed until their Kotlin view, override graph, and physical slots agree.
-3. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
+2. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
    they may adapt the Kotlin continuation boundary but never replace its
    internal ABI or create a second state-machine representation.
-4. Keep broad member enumeration, accessor objects, and type-use annotation
+3. Keep broad member enumeration, accessor objects, and type-use annotation
    reflection as the next independent reflection programme. Direct member-
    extension references remain coupled to that member model rather than being
    approximated through CLR reflection.
-5. Keep coroutine scheduling, `kotlinx.coroutines`, sequence builders,
+4. Keep coroutine scheduling, `kotlinx.coroutines`, sequence builders,
    debugger metadata, and coroutine-aware reflection outside this completed
    continuation/state-machine foundation until selected independently.
 

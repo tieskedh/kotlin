@@ -19017,7 +19017,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             method,
             methodSignature,
         )
-        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V2, methodSource.carrierVersion)
+        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V3, methodSource.carrierVersion)
         assertSame(assembly, methodSource.assembly)
         assertSame(declaringType, methodSource.declaringType)
         assertSame(method, methodSource.method)
@@ -19034,7 +19034,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             getterSignature,
             setterSignature,
         )
-        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V2, propertySource.carrierVersion)
+        assertEquals(DotNetClrImportedDeclarationCarrierVersion.V3, propertySource.carrierVersion)
         assertSame(property, propertySource.property)
         assertSame(getter, propertySource.getter)
         assertSame(setter, propertySource.setter)
@@ -22665,6 +22665,53 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             public Producer<Box<T>> Produce() { return producer; }
                         }
 
+                        public interface NullableValueApi
+                        {
+                            bool? Boolean(bool? value);
+                            char? Char(char? value);
+                            sbyte? Byte(sbyte? value);
+                            short? Short(short? value);
+                            int? Echo(int? value);
+                            long? Long(long? value);
+                            float? Float(float? value);
+                            double? Double(double? value);
+                            Box<int?> Nested(int? value);
+                            int? Value { get; set; }
+                        }
+
+                        public sealed class NullableValueApiImpl : NullableValueApi
+                        {
+                            private int? value;
+
+                            public bool? Boolean(bool? input) { return input; }
+                            public char? Char(char? input) { return input; }
+                            public sbyte? Byte(sbyte? input) { return input; }
+                            public short? Short(short? input) { return input; }
+                            public int? Echo(int? input) { return input; }
+                            public long? Long(long? input) { return input; }
+                            public float? Float(float? input) { return input; }
+                            public double? Double(double? input) { return input; }
+                            public Box<int?> Nested(int? input)
+                            {
+                                return new BoxImpl<int?>(input);
+                            }
+                            public int? Value
+                            {
+                                get { return value; }
+                                set { this.value = value; }
+                            }
+                        }
+
+                        public struct UserValue
+                        {
+                            public int Value;
+                        }
+
+                        public interface UnsupportedNullableStructApi
+                        {
+                            UserValue? Echo(UserValue? value);
+                        }
+
                         public interface ClosedDerivedBox : Box<string>
                         {
                             int ClosedMarker();
@@ -22935,6 +22982,47 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         override fun ArrayIdentity(values: Array<Int>): Array<Int> = values
                         override fun <U> Select(ownerValue: Int, selected: U): U = selected
                         override fun First(vararg values: Int): Int = values[0]
+                    }
+
+                    public class KotlinNullableIntBox(initial: Int?) : ForeignCallContracts.Box<Int?> {
+                        override var Value: Int? = initial
+                        override fun Echo(value: Int?): Int? = value
+                        override fun ArrayIdentity(values: Array<Int?>): Array<Int?> = values
+                        override fun <U> Select(ownerValue: Int?, selected: U): U = selected
+                        override fun First(vararg values: Int?): Int? = values[0]
+                    }
+
+                    public fun verifyNullableValueApi(
+                        api: ForeignCallContracts.NullableValueApi,
+                    ): Int? {
+                        check(api.Boolean(true) == true && api.Boolean(null) == null)
+                        check(api.Char('K') == 'K' && api.Char(null) == null)
+                        check(api.Byte((-8).toByte()) == (-8).toByte() && api.Byte(null) == null)
+                        check(api.Short((-16).toShort()) == (-16).toShort() && api.Short(null) == null)
+                        check(api.Echo(null) == null)
+                        check(api.Long(64L) == 64L && api.Long(null) == null)
+                        check(api.Float(1.25f) == 1.25f && api.Float(null) == null)
+                        check(api.Double(2.5) == 2.5 && api.Double(null) == null)
+                        api.Value = 41
+                        check(api.Value == 41)
+                        val nested = api.Nested(null)
+                        check(nested.Value == null)
+                        nested.Value = 42
+                        return api.Echo(nested.Value)
+                    }
+
+                    public class KotlinNullableValueApi : ForeignCallContracts.NullableValueApi {
+                        override var Value: Int? = null
+                        override fun Boolean(value: Boolean?): Boolean? = value
+                        override fun Char(value: Char?): Char? = value
+                        override fun Byte(value: Byte?): Byte? = value
+                        override fun Short(value: Short?): Short? = value
+                        override fun Echo(value: Int?): Int? = value
+                        override fun Long(value: Long?): Long? = value
+                        override fun Float(value: Float?): Float? = value
+                        override fun Double(value: Double?): Double? = value
+                        override fun Nested(value: Int?): ForeignCallContracts.Box<Int?> =
+                            KotlinNullableIntBox(value)
                     }
 
                     public fun verifyDerivedBox(
@@ -23257,6 +23345,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )) {
                 assertTrue("callvirt instance $signature" in il) { il }
             }
+            val nullableInt = "valuetype [mscorlib]System.Nullable`1<int32>"
+            for (entry in listOf(
+                "bool" to "Boolean",
+                "char" to "Char",
+                "int8" to "Byte",
+                "int16" to "Short",
+                "int32" to "Echo",
+                "int64" to "Long",
+                "float32" to "Float",
+                "float64" to "Double",
+            )) {
+                val element = entry.first
+                val method = entry.second
+                val carrier = "valuetype [mscorlib]System.Nullable`1<$element>"
+                val signature = "$carrier [Foreign.CallContracts]" +
+                        "'ForeignCallContracts.NullableValueApi'::'$method'($carrier)"
+                assertTrue("callvirt instance $signature" in il) {
+                    "A nullable $element signature lost its exact physical carrier:\n$il"
+                }
+            }
+            for (signature in listOf(
+                "$nullableInt [Foreign.CallContracts]'ForeignCallContracts.NullableValueApi'::'get_Value'()",
+                "void [Foreign.CallContracts]'ForeignCallContracts.NullableValueApi'::" +
+                        "'set_Value'($nullableInt)",
+                "class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<$nullableInt> " +
+                        "[Foreign.CallContracts]'ForeignCallContracts.NullableValueApi'::" +
+                        "'Nested'($nullableInt)",
+            )) {
+                assertTrue("callvirt instance $signature" in il) {
+                    "A selected System.Nullable<T> signature lost its exact physical carrier:\n$il"
+                }
+            }
             assertTrue(
                 ".override method instance !0 class [Foreign.CallContracts]" +
                         "'ForeignCallContracts.Box`1'<int32>::'First'(!0[])" in il &&
@@ -23334,6 +23454,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Box<string> stringBox = new BoxImpl<string>("initial");
                             Box<int> intBox = new BoxImpl<int>(1);
                             Box<int?> nullableIntBox = new BoxImpl<int?>(2);
+                            NullableValueApi nullableValueApi = new NullableValueApiImpl();
                             DerivedBox<string> derivedBox = new DerivedBoxImpl<string>("initial");
                             NestedBox<string> nestedBox = new NestedBoxImpl<string>(stringBox);
                             DeepNested<string> deepNested = new DeepNestedImpl<string>(stringBox);
@@ -23441,6 +23562,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 null, new object[] { nullableIntBox }) == null &&
                                 nullableIntBox.Value == null,
                                 "foreign constructed nullable-value owner dispatch failed");
+                            Require((int)Method(facade, "verifyNullableValueApi").Invoke(
+                                null, new object[] { nullableValueApi }) == 42 &&
+                                nullableValueApi.Value == 41,
+                                "foreign physical Nullable<T> member dispatch failed");
                             Require(Object.ReferenceEquals(
                                 Method(facade, "verifyKeyBox").Invoke(
                                     null, new object[] { keyBox, genericKey }),
@@ -23584,6 +23709,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 kotlinIntBox.Select<string>(1, "selected") == "selected" &&
                                 kotlinIntBox.First(73, 74) == 73,
                                 "Kotlin constructed value-owner implementation dispatch failed");
+                            NullableValueApi kotlinNullableValueApi =
+                                (NullableValueApi)Activator.CreateInstance(
+                                    kotlin.GetType("consumer.KotlinNullableValueApi", true));
+                            Require(kotlinNullableValueApi.Echo(null) == null &&
+                                kotlinNullableValueApi.Echo(76) == 76,
+                                "Kotlin physical Nullable<T> method implementation dispatch failed");
+                            Require(kotlinNullableValueApi.Boolean(true) == true &&
+                                kotlinNullableValueApi.Boolean(null) == null &&
+                                kotlinNullableValueApi.Char('K') == 'K' &&
+                                kotlinNullableValueApi.Char(null) == null &&
+                                kotlinNullableValueApi.Byte(-8) == -8 &&
+                                kotlinNullableValueApi.Byte(null) == null &&
+                                kotlinNullableValueApi.Short(-16) == -16 &&
+                                kotlinNullableValueApi.Short(null) == null &&
+                                kotlinNullableValueApi.Long(64L) == 64L &&
+                                kotlinNullableValueApi.Long(null) == null &&
+                                kotlinNullableValueApi.Float(1.25f) == 1.25f &&
+                                kotlinNullableValueApi.Float(null) == null &&
+                                kotlinNullableValueApi.Double(2.5) == 2.5 &&
+                                kotlinNullableValueApi.Double(null) == null,
+                                "Kotlin nullable scalar-family implementation dispatch failed");
+                            kotlinNullableValueApi.Value = 77;
+                            Require(kotlinNullableValueApi.Value == 77 &&
+                                kotlinNullableValueApi.Nested(null).Value == null &&
+                                kotlinNullableValueApi.Nested(78).Value == 78,
+                                "Kotlin physical Nullable<T> property or nested implementation failed");
                             DerivedBox<string> kotlinDerived = (DerivedBox<string>)Activator.CreateInstance(
                                 kotlin.GetType("consumer.KotlinDerivedStringBox", true));
                             Require(kotlinDerived.Marker() == 31 &&
@@ -23682,6 +23833,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     import ForeignCallContracts.RectangularArrayApi
                     import ForeignCallContracts.UnsignedArrayApi
                     import ForeignCallContracts.UnsignedScalarApi
+                    import ForeignCallContracts.UnsupportedNullableStructApi
                     import ForeignCallContracts.ValueConstraintApi
                     import ForeignCallContracts.ValueBox
 
@@ -23693,6 +23845,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public fun unsignedScalar(api: UnsignedScalarApi, value: UInt): UInt =
                         api.Identity(value)
+
+                    public fun nullableStruct(api: UnsupportedNullableStructApi): Int = 0
 
                     public fun rectangular(api: RectangularArrayApi): Int = 0
 
@@ -23747,6 +23901,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue("PrimitiveParamArrayApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("UnsignedArrayApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("UnsignedScalarApi" in arrayDiagnostics) { arrayDiagnostics }
+            assertTrue("UnsupportedNullableStructApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("RectangularArrayApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ReferenceConstraintApi" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ValueConstraintApi" in arrayDiagnostics) { arrayDiagnostics }

@@ -232,8 +232,23 @@ class DotNetClrFirSymbolProvider(
                     add(candidate.assembly)
                 }
             }
+            annotationServices.physicalCoreTypes?.let { coreTypes ->
+                listOf(
+                    coreTypes.systemValueType,
+                    coreTypes.systemEnum,
+                    coreTypes.systemNullable,
+                ).forEach { type ->
+                    val selectedAssembly = foreignAssemblies.single { assembly ->
+                        assembly.metadata === type.assembly
+                    }
+                    if (none { selected -> selected.metadata === selectedAssembly.metadata }) {
+                        add(selectedAssembly)
+                    }
+                }
+            }
         },
         hierarchies = selectedHierarchies,
+        physicalCoreTypes = annotationServices.physicalCoreTypes,
     )
     private val symbols = ConcurrentHashMap<ClassId, FirRegularClassSymbol>()
     private val classifierNamesByPackage: Map<FqName, Set<Name>> =
@@ -375,7 +390,9 @@ class DotNetClrFirSymbolProvider(
         when (this) {
             is DotNetClrResolvedTypeSignature.Named -> destination += type
             is DotNetClrResolvedTypeSignature.GenericInstance -> {
-                destination += genericType.type
+                if (!isSystemNullable(annotationServices.physicalCoreTypes)) {
+                    destination += genericType.type
+                }
                 arguments.forEach { argument -> argument.collectReferencedTypesTo(destination) }
             }
             is DotNetClrResolvedTypeSignature.SzArray ->
@@ -570,6 +587,12 @@ class DotNetClrFirSymbolProvider(
             is DotNetClrResolvedTypeSignature.SzArray ->
                 elementType.hasSupportedOwnerVariance(context, position)
             is DotNetClrResolvedTypeSignature.GenericInstance -> {
+                if (isSystemNullable(annotationServices.physicalCoreTypes)) {
+                    val element = arguments.singleOrNull()
+                    return genericType.isValueType &&
+                            element is DotNetClrResolvedTypeSignature.Primitive &&
+                            element.type in NULLABLE_VALUE_PRIMITIVES
+                }
                 val parameters = genericType.type.assembly.genericParameterDefinitions
                     .filter { parameter -> parameter.owner == genericType.type.definition.handle }
                     .sortedBy { parameter -> parameter.number }
@@ -808,6 +831,12 @@ class DotNetClrFirSymbolProvider(
                         } &&
                         type.definition.classIdOrNull(type.assembly) != null
             is DotNetClrResolvedTypeSignature.GenericInstance -> {
+                if (isSystemNullable(annotationServices.physicalCoreTypes)) {
+                    val element = arguments.singleOrNull()
+                    return genericType.isValueType &&
+                            element is DotNetClrResolvedTypeSignature.Primitive &&
+                            element.type in NULLABLE_VALUE_PRIMITIVES
+                }
                 val parameters = genericType.type.assembly.genericParameterDefinitions
                     .filter { parameter -> parameter.owner == genericType.type.definition.handle }
                     .sortedBy { parameter -> parameter.number }
@@ -1542,14 +1571,23 @@ class DotNetClrFirSymbolProvider(
                     .withQualifier(qualifiers.consume(this))
             }
             is DotNetClrResolvedTypeSignature.GenericInstance -> {
-                val classId = genericType.type.definition.classIdOrNull(genericType.type.assembly)
-                    ?: error("Unsupported constructed CLR type entered FIR")
-                val qualifier = qualifiers.consume(this)
-                val arguments = arguments.map { argument ->
-                    argument.toKotlinType(qualifiers, typeParameterSymbols)
-                }.toTypedArray()
-                classId.toLookupTag().constructClassType(arguments)
-                    .withQualifier(qualifier)
+                if (isSystemNullable(annotationServices.physicalCoreTypes)) {
+                    val element = arguments.singleOrNull()
+                        ?: error("Selected System.Nullable<T> entered FIR with invalid arity")
+                    val kotlinElement = element.toKotlinType(qualifiers, typeParameterSymbols)
+                    val rigidElement = kotlinElement as? ConeRigidType
+                        ?: error("Selected System.Nullable<T> entered FIR with a flexible element")
+                    rigidElement.withNullability(nullable = true, session.typeContext)
+                } else {
+                    val classId = genericType.type.definition.classIdOrNull(genericType.type.assembly)
+                        ?: error("Unsupported constructed CLR type entered FIR")
+                    val qualifier = qualifiers.consume(this)
+                    val arguments = arguments.map { argument ->
+                        argument.toKotlinType(qualifiers, typeParameterSymbols)
+                    }.toTypedArray()
+                    classId.toLookupTag().constructClassType(arguments)
+                        .withQualifier(qualifier)
+                }
             }
             else -> error("Unsupported type entered the closed foreign CLR FIR slice: $this")
         }
@@ -1574,6 +1612,7 @@ class DotNetClrFirSymbolProvider(
         }
 
     private class ForeignAnnotationServices(
+        val physicalCoreTypes: DotNetClrPhysicalTypeCoreTypes?,
         private val declarationResolver: DotNetClrNullableDeclarationResolver?,
         private val evidenceApplicator: DotNetClrNullableEvidenceApplicator?,
         private val projector: DotNetClrKotlinNullabilityProjector,
@@ -1703,8 +1742,9 @@ class DotNetClrFirSymbolProvider(
                     is DotNetClrResolvedTypeSignature.GenericParameter,
                     is DotNetClrResolvedTypeSignature.SzArray,
                     is DotNetClrResolvedTypeSignature.Named,
-                    is DotNetClrResolvedTypeSignature.GenericInstance,
                     -> true
+                    is DotNetClrResolvedTypeSignature.GenericInstance ->
+                        !type.isSystemNullable(physicalCoreTypes)
                     else -> false
                 }
                 if (consumes) {
@@ -1963,6 +2003,7 @@ class DotNetClrFirSymbolProvider(
                 val coreTypes = resolveDotNetClrCustomAttributeCoreTypes(assemblies, typeResolver)
                 if (coreTypes == null) {
                     return ForeignAnnotationServices(
+                        physicalCoreTypes = null,
                         declarationResolver = null,
                         evidenceApplicator = null,
                         projector = DotNetClrKotlinNullabilityProjector(),
@@ -2069,20 +2110,22 @@ class DotNetClrFirSymbolProvider(
                             obsoleteDecoder,
                             paramArrayDecoder,
                         )
+                val physicalCoreTypes = DotNetClrPhysicalTypeCoreTypes(
+                    systemValueType = systemValueType,
+                    systemEnum = coreTypes.systemEnum,
+                    systemNullable = systemNullable,
+                )
                 val declarationResolver = DotNetClrNullableDeclarationResolver(
                     DotNetClrNullableMetadataDecoder(customAttributeDecoder)
                 )
                 return ForeignAnnotationServices(
+                    physicalCoreTypes = physicalCoreTypes,
                     declarationResolver = declarationResolver,
                     evidenceApplicator = DotNetClrNullableEvidenceApplicator(
                         DotNetClrNullableTypeTransformApplicator(
                             DotNetClrPhysicalTypeClassifier(
                                 typeResolver,
-                                DotNetClrPhysicalTypeCoreTypes(
-                                    systemValueType = systemValueType,
-                                    systemEnum = coreTypes.systemEnum,
-                                    systemNullable = systemNullable,
-                                ),
+                                physicalCoreTypes,
                             )
                         )
                     ),
@@ -2113,6 +2156,7 @@ class DotNetClrFirSymbolProvider(
                 paramArrayDecoder: DotNetClrParamArrayMetadataDecoder?,
             ): ForeignAnnotationServices =
                 ForeignAnnotationServices(
+                    physicalCoreTypes = null,
                     declarationResolver = null,
                     evidenceApplicator = null,
                     projector = DotNetClrKotlinNullabilityProjector(),
@@ -2162,5 +2206,20 @@ class DotNetClrFirSymbolProvider(
             DotNetClrPrimitiveType.STRING,
             DotNetClrPrimitiveType.OBJECT,
         )
+
+        val NULLABLE_VALUE_PRIMITIVES = setOf(
+            DotNetClrPrimitiveType.BOOLEAN,
+            DotNetClrPrimitiveType.CHAR,
+            DotNetClrPrimitiveType.INT8,
+            DotNetClrPrimitiveType.INT16,
+            DotNetClrPrimitiveType.INT32,
+            DotNetClrPrimitiveType.INT64,
+            DotNetClrPrimitiveType.FLOAT32,
+            DotNetClrPrimitiveType.FLOAT64,
+        )
     }
 }
+
+private fun DotNetClrResolvedTypeSignature.GenericInstance.isSystemNullable(
+    coreTypes: DotNetClrPhysicalTypeCoreTypes?,
+): Boolean = coreTypes?.systemNullable?.let(genericType.type::hasSameIdentityAs) == true
