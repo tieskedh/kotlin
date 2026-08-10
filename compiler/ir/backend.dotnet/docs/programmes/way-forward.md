@@ -385,14 +385,17 @@ retained MethodDef. Continue only by extending
 constraints, constructed bounds, and explicit nullable generic leaves remain
 fail-closed; do not turn them into approximate Kotlin bounds or partially valid calls.
 
-The first exact foreign generic-TypeDef slice is also complete: direct owner
-parameters, declaration variance, admitted bounds, properties, owner-plus-method
-substitution, vectors/`params`, Kotlin implementations, and primitive-vararg
-boundary adapters retain one native CLR TypeDef and its constructed slots. Extend
-only [its closed grammar](../decisions/foreign-clr-generic-type-identities.md).
-Generic inheritance, nested constructed signatures, unsigned carriers, special
-constraints, and explicit nullable generic leaves remain fail-closed. Never route
-an imported generic owner through the Kotlin-owned erased-interface ABI.
+The exact foreign generic-TypeDef programme now includes direct owner parameters,
+declaration variance, admitted bounds, properties, owner-plus-method substitution,
+vectors/`params`, open generic interface inheritance, recursively constructed
+member signatures, Kotlin implementations, and primitive-vararg boundary adapters.
+They retain one native CLR TypeDef graph and its exact constructed slots through a
+shared versioned carrier. Extend only
+[its closed grammar](../decisions/foreign-clr-generic-type-identities.md).
+Closed/fixed inherited views, constrained constructed targets, unsigned carriers,
+special constraints, constructed bounds, and explicit nullable generic leaves
+remain fail-closed. Never route an imported generic owner through the Kotlin-owned
+erased-interface ABI.
 
 ### 7. Close the remaining draft ABI decisions before wider breadth
 
@@ -530,8 +533,8 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
   special constraints, constructed bounds/types, and explicit unconstrained
   nullable generic leaves;
 - foreign CLR generic-TypeDef shapes beyond the accepted exact slice, including
-  generic inheritance, nested constructed signatures, unsigned carriers, special
-  constraints, and explicit nullable generic leaves;
+  closed/fixed inherited views, constrained constructed targets, unsigned carriers,
+  special constraints, constructed bounds, and explicit nullable generic leaves;
 - multi-field value classes; the single-field box/carrier architecture is
   accepted and implemented, but does not select a layout or ABI for multiple
   underlying fields;
