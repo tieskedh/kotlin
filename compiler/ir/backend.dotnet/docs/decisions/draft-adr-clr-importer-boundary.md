@@ -214,6 +214,13 @@ satisfied. Reference, value, default-constructor, `AllowByRefLike`, and dependen
 are evaluated separately. CLR `class`, `struct`, and `.ctor` constraints are not reinterpreted as
 Kotlin bounds or constructor syntax.
 
+The admitted generic-interface slice may consume the nominal half of that validation for a
+constructed target after separately proving that neither its target parameters nor the source
+declaration require special CLR constraints. TypeSpec-backed interface bounds are projected as
+structural Kotlin bounds with aligned child nullability while the original constraint row remains
+physical linkage. This is one use of the shared proof model, not a FIR-local reconstruction of
+constraint satisfaction.
+
 The first executable method-generic projection is governed by
 [the foreign CLR generic-method decision](foreign-clr-generic-methods.md). It admits only
 method-owned parameters and bounds whose complete Kotlin and CLR meanings agree, retains the

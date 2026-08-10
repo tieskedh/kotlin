@@ -22549,6 +22549,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             T[] ArrayIdentity<T>(T[] values);
                             U Upcast<T, U>(T value) where T : U;
                             T KeyIdentity<T>(T value) where T : GenericKey;
+                            TBox ConstructedIdentity<TKey, TBox>(TBox value)
+                                where TKey : GenericKey
+                                where TBox : KeyBox<TKey>;
                             T First<T>(params T[] values);
                             int Pick(int value);
                             T Pick<T>(T value);
@@ -22560,6 +22563,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             public T[] ArrayIdentity<T>(T[] values) { return values; }
                             public U Upcast<T, U>(T value) where T : U { return value; }
                             public T KeyIdentity<T>(T value) where T : GenericKey { return value; }
+                            public TBox ConstructedIdentity<TKey, TBox>(TBox value)
+                                where TKey : GenericKey
+                                where TBox : KeyBox<TKey> { return value; }
                             public T First<T>(params T[] values) { return values[0]; }
                             public int Pick(int value) { return value + 1; }
                             public T Pick<T>(T value) { return value; }
@@ -22623,6 +22629,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             public T Echo(T value) { return value; }
                         }
 
+                        public interface ConstrainedDerivedKeyBox<T> : KeyBox<T>
+                            where T : GenericKey
+                        {
+                            int Marker();
+                        }
+
+                        public sealed class ConstrainedDerivedKeyBoxImpl<T> :
+                            ConstrainedDerivedKeyBox<T> where T : GenericKey
+                        {
+                            public T Echo(T value) { return value; }
+                            public int Marker() { return 67; }
+                        }
+
+                        public interface ConstructedBoundApi<TKey, TBox>
+                            where TKey : GenericKey
+                            where TBox : KeyBox<TKey>
+                        {
+                            TBox Echo(TBox value);
+                        }
+
+                        public sealed class ConstructedBoundApiImpl<TKey, TBox> :
+                            ConstructedBoundApi<TKey, TBox>
+                            where TKey : GenericKey
+                            where TBox : KeyBox<TKey>
+                        {
+                            public TBox Echo(TBox value) { return value; }
+                        }
+
                         public interface GenericSlot
                         {
                             T Identity<T>(T value);
@@ -22662,6 +22696,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         {
                             TLeft Left(TLeft value);
                             TRight Right(TRight value);
+                        }
+
+                        public sealed class PairApiImpl<TLeft, TRight> :
+                            PairApi<TLeft, TRight>
+                        {
+                            public TLeft Left(TLeft value) { return value; }
+                            public TRight Right(TRight value) { return value; }
+                        }
+
+                        public interface NullableConstructedBoundApi<TPair>
+                            where TPair : PairApi<${profile.nullableStringType}, GenericKey>
+                        {
+                            TPair Echo(TPair value);
+                        }
+
+                        public sealed class NullableConstructedBoundApiImpl<TPair> :
+                            NullableConstructedBoundApi<TPair>
+                            where TPair : PairApi<${profile.nullableStringType}, GenericKey>
+                        {
+                            public TPair Echo(TPair value) { return value; }
                         }
 
                         public interface ReorderedPair<TLeft, TRight> : PairApi<TRight, TLeft>
@@ -22811,6 +22865,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             KeyBox<T> Nested();
                         }
 
+                        public sealed class ConstrainedNestedBoxImpl<T> :
+                            ConstrainedNestedBox<T> where T : GenericKey
+                        {
+                            private readonly KeyBox<T> value = new KeyBoxImpl<T>();
+                            public KeyBox<T> Nested() { return value; }
+                        }
+
                         public interface ReferenceConstraintApi
                         {
                             T Reference<T>(T value) where T : class;
@@ -22909,9 +22970,87 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val fixtureAssembly = fixtureDirectory.resolve("Foreign.CallContracts.dll")
             val fixtureResult = profile.compileFixture(fixtureSource, fixtureAssembly)
             assertEquals(0, fixtureResult.exitCode, fixtureResult.output)
+            val invalidConstraintIl = fixtureDirectory.resolve("Invalid.Constrained.il").apply {
+                writeText(
+                    """
+                    .assembly extern mscorlib {}
+                    .assembly extern 'Foreign.CallContracts'
+                    {
+                      .ver 3:4:5:6
+                    }
+                    .assembly 'Invalid.Constrained' {}
+                    .module 'Invalid.Constrained.dll'
+
+                    .class interface public abstract auto ansi
+                        'InvalidConstraint.Bad`1'<T>
+                    {
+                      .method public hidebysig newslot abstract virtual instance
+                          class [Foreign.CallContracts]
+                              'ForeignCallContracts.KeyBox`1'<!0> 'Nested'()
+                          cil managed
+                      {
+                      }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val invalidConstraintAssembly = fixtureDirectory.resolve("Invalid.Constrained.dll")
+            assertTrue(
+                DotNetIlAssembler.assembleLibrary(
+                    invalidConstraintIl,
+                    invalidConstraintAssembly,
+                    if (profile.target == "net48") {
+                        DotNetTarget.NET48
+                    } else {
+                        DotNetTarget.NET10_0
+                    },
+                    MessageCollector.NONE,
+                )
+            ) { "The hostile constrained-construction fixture did not assemble for ${profile.target}" }
 
             val applicationDirectory =
                 File(tmpdir, "foreign-call-consumer-${profile.target.replace('.', '-')}").apply { mkdirs() }
+            val invalidConstraintConsumer = applicationDirectory.resolve(
+                "rejectedInvalidConstraintConstruction.kt"
+            ).apply {
+                writeText(
+                    """
+                    package rejected
+
+                    import ForeignCallContracts.GenericKey
+                    import InvalidConstraint.Bad
+
+                    public fun rejected(api: Bad<GenericKey>): Int = 0
+                    """.trimIndent()
+                )
+            }
+            val [invalidConstraintDiagnostics, invalidConstraintExitCode] =
+                AbstractCliTest.executeCompilerGrabOutput(
+                    K2DotNetCompiler(),
+                    listOf(
+                        invalidConstraintConsumer.path,
+                        K2DotNetCompilerArguments::noStdlib.cliArgument,
+                        K2DotNetCompilerArguments::classpath.cliArgument,
+                        listOf(
+                            invalidConstraintAssembly,
+                            fixtureAssembly,
+                            profile.systemReference,
+                        ).joinToString(File.pathSeparator, transform = File::getPath),
+                        K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                        K2DotNetCompilerArguments::moduleName.cliArgument,
+                        "RejectedInvalidConstraintConstruction",
+                        K2DotNetCompilerArguments::destination.cliArgument,
+                        applicationDirectory.resolve(
+                            "RejectedInvalidConstraintConstruction.il"
+                        ).path,
+                    )
+                )
+            assertEquals(
+                ExitCode.COMPILATION_ERROR,
+                invalidConstraintExitCode,
+                invalidConstraintDiagnostics,
+            )
+            assertTrue("Bad" in invalidConstraintDiagnostics) { invalidConstraintDiagnostics }
             val kotlinSource = applicationDirectory.resolve("foreignCall.kt").apply {
                 writeText(
                     """
@@ -22969,6 +23108,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         value: ForeignCallContracts.GenericKey,
                     ): ForeignCallContracts.GenericKey = api.KeyIdentity(value)
 
+                    public fun verifyMethodConstructedBound(
+                        api: ForeignCallContracts.GenericApi,
+                        box: ForeignCallContracts.KeyBox<ForeignCallContracts.GenericKey>,
+                    ): ForeignCallContracts.KeyBox<ForeignCallContracts.GenericKey> =
+                        api.ConstructedIdentity<
+                                ForeignCallContracts.GenericKey,
+                                ForeignCallContracts.KeyBox<ForeignCallContracts.GenericKey>>(box)
+
+                    public fun <TKey, TBox> verifyKotlinConstructedConstraintDispatch(
+                        box: TBox,
+                        key: TKey,
+                    ): TKey
+                            where TKey : ForeignCallContracts.GenericKey,
+                                  TBox : ForeignCallContracts.KeyBox<TKey> = box.Echo(key)
+
                     public fun verifyGenericParams(api: ForeignCallContracts.GenericApi): String =
                         api.First("first", "second")
 
@@ -23007,6 +23161,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         override fun <T> ArrayIdentity(values: Array<T>): Array<T> = values
                         override fun <T, U> Upcast(value: T): U where T : U = value
                         override fun <T : ForeignCallContracts.GenericKey> KeyIdentity(value: T): T = value
+                        override fun <TKey, TBox> ConstructedIdentity(value: TBox): TBox
+                                where TKey : ForeignCallContracts.GenericKey,
+                                      TBox : ForeignCallContracts.KeyBox<TKey> = value
                         override fun <T> First(vararg values: T): T = values[0]
                         override fun Pick(value: Int): Int = value + 2
                         override fun <T> Pick(value: T): T = value
@@ -23041,6 +23198,98 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         box: ForeignCallContracts.KeyBox<ForeignCallContracts.GenericKey>,
                         key: ForeignCallContracts.GenericKey,
                     ): ForeignCallContracts.GenericKey = box.Echo(key)
+
+                    public fun verifyConstrainedNestedBox(
+                        api: ForeignCallContracts.ConstrainedNestedBox<
+                                ForeignCallContracts.GenericKey>,
+                        key: ForeignCallContracts.GenericKey,
+                    ): ForeignCallContracts.GenericKey = api.Nested().Echo(key)
+
+                    public fun verifyConstrainedDerivedKeyBox(
+                        api: ForeignCallContracts.ConstrainedDerivedKeyBox<
+                                ForeignCallContracts.GenericKey>,
+                        key: ForeignCallContracts.GenericKey,
+                    ): ForeignCallContracts.GenericKey {
+                        check(api.Marker() == 67)
+                        return api.Echo(key)
+                    }
+
+                    public fun verifyConstructedBound(
+                        api: ForeignCallContracts.ConstructedBoundApi<
+                                ForeignCallContracts.GenericKey,
+                                ForeignCallContracts.KeyBox<ForeignCallContracts.GenericKey>>,
+                        box: ForeignCallContracts.KeyBox<ForeignCallContracts.GenericKey>,
+                        key: ForeignCallContracts.GenericKey,
+                    ): ForeignCallContracts.GenericKey = api.Echo(box).Echo(key)
+
+                    public class KotlinGenericKeyBox :
+                        ForeignCallContracts.KeyBox<ForeignCallContracts.GenericKey> {
+                        override fun Echo(
+                            value: ForeignCallContracts.GenericKey,
+                        ): ForeignCallContracts.GenericKey = value
+                    }
+
+                    public class KotlinConstrainedNestedBox :
+                        ForeignCallContracts.ConstrainedNestedBox<
+                                ForeignCallContracts.GenericKey> {
+                        private val box: ForeignCallContracts.KeyBox<
+                                ForeignCallContracts.GenericKey> = KotlinGenericKeyBox()
+
+                        override fun Nested(): ForeignCallContracts.KeyBox<
+                                ForeignCallContracts.GenericKey> = box
+                    }
+
+                    public class KotlinConstrainedDerivedKeyBox :
+                        ForeignCallContracts.ConstrainedDerivedKeyBox<
+                                ForeignCallContracts.GenericKey> {
+                        override fun Echo(
+                            value: ForeignCallContracts.GenericKey,
+                        ): ForeignCallContracts.GenericKey = value
+                        override fun Marker(): Int = 71
+                    }
+
+                    public class KotlinConstructedBoundApi :
+                        ForeignCallContracts.ConstructedBoundApi<
+                                ForeignCallContracts.GenericKey,
+                                ForeignCallContracts.KeyBox<ForeignCallContracts.GenericKey>> {
+                        override fun Echo(
+                            value: ForeignCallContracts.KeyBox<
+                                    ForeignCallContracts.GenericKey>,
+                        ): ForeignCallContracts.KeyBox<
+                                ForeignCallContracts.GenericKey> = value
+                    }
+
+                    public fun verifyNullableConstructedBound(
+                        api: ForeignCallContracts.NullableConstructedBoundApi<
+                                ForeignCallContracts.PairApi<
+                                        String?, ForeignCallContracts.GenericKey>>,
+                        pair: ForeignCallContracts.PairApi<
+                                String?, ForeignCallContracts.GenericKey>,
+                        key: ForeignCallContracts.GenericKey,
+                    ): Boolean {
+                        val echoed = api.Echo(pair)
+                        return echoed.Left(null) == null && echoed.Right(key) === key
+                    }
+
+                    public class KotlinNullablePair :
+                        ForeignCallContracts.PairApi<
+                                String?, ForeignCallContracts.GenericKey> {
+                        override fun Left(value: String?): String? = value
+                        override fun Right(
+                            value: ForeignCallContracts.GenericKey,
+                        ): ForeignCallContracts.GenericKey = value
+                    }
+
+                    public class KotlinNullableConstructedBoundApi :
+                        ForeignCallContracts.NullableConstructedBoundApi<
+                                ForeignCallContracts.PairApi<
+                                        String?, ForeignCallContracts.GenericKey>> {
+                        override fun Echo(
+                            value: ForeignCallContracts.PairApi<
+                                    String?, ForeignCallContracts.GenericKey>,
+                        ): ForeignCallContracts.PairApi<
+                                String?, ForeignCallContracts.GenericKey> = value
+                    }
 
                     @OptIn(ExperimentalStdlibApi::class)
                     public fun verifyGenericOwnerType(): Boolean {
@@ -23369,11 +23618,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         """
                         package rejected
 
+                        import ForeignCallContracts.GenericKey
+                        import ForeignCallContracts.NullableConstructedBoundApi
+                        import ForeignCallContracts.PairApi
                         import ForeignCallContracts.ReorderedPair
 
                         public fun rejected(
                             pair: ReorderedPair<String, Int>,
                         ): String = pair.Right(null)
+
+                        public fun rejectedConstructedBound(
+                            api: NullableConstructedBoundApi<
+                                    PairApi<String, GenericKey>>,
+                        ): Int = 0
                         """.trimIndent()
                     )
                 }
@@ -23488,6 +23745,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "!!0[] [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'ArrayIdentity'<string>(!!0[])",
                 "!!1 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Upcast'<string, object>(!!0)",
                 "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'KeyIdentity'<class [Foreign.CallContracts]'ForeignCallContracts.GenericKey'>(!!0)",
+                "!!1 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'ConstructedIdentity'<" +
+                        "class [Foreign.CallContracts]'ForeignCallContracts.GenericKey', class " +
+                        "[Foreign.CallContracts]'ForeignCallContracts.KeyBox`1'<class " +
+                        "[Foreign.CallContracts]'ForeignCallContracts.GenericKey'>>(!!1)",
                 "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'First'<string>(!!0[])",
                 "!!0 [Foreign.CallContracts]'ForeignCallContracts.GenericApi'::'Pick'<string>(!!0)",
             )) {
@@ -23560,6 +23821,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "[Foreign.CallContracts]'ForeignCallContracts.NestedBox`1'<string>::'Nested'()" in il &&
                         "class [Foreign.CallContracts]'ForeignCallContracts.Box`1'<!0>" in il
             ) { "A constructed foreign member signature lost its physical owner argument:\n$il" }
+            assertTrue(
+                "[Foreign.CallContracts]'ForeignCallContracts.ConstrainedNestedBox`1'<class " +
+                        "[Foreign.CallContracts]'ForeignCallContracts.GenericKey'>::'Nested'()" in il &&
+                        "class [Foreign.CallContracts]'ForeignCallContracts.KeyBox`1'<!0>" in il
+            ) { "A nominally constrained construction lost its retained TypeSpec:\n$il" }
+            assertTrue(
+                "class [Foreign.CallContracts]'ForeignCallContracts.ConstrainedDerivedKeyBox`1'<class " +
+                        "[Foreign.CallContracts]'ForeignCallContracts.GenericKey'>" in il &&
+                        "class [Foreign.CallContracts]'ForeignCallContracts.KeyBox`1'<!0>" in il
+            ) { "A constrained InterfaceImpl lost its substituted native base:\n$il" }
+            assertTrue(
+                "[Foreign.CallContracts]'ForeignCallContracts.ConstructedBoundApi`2'<class " +
+                        "[Foreign.CallContracts]'ForeignCallContracts.GenericKey', class " +
+                        "[Foreign.CallContracts]'ForeignCallContracts.KeyBox`1'<class " +
+                        "[Foreign.CallContracts]'ForeignCallContracts.GenericKey'>>::'Echo'(!1)" in il
+            ) { "A constructed foreign bound lost its substituted physical owner:\n$il" }
             assertTrue(
                 "class [Foreign.CallContracts]'ForeignCallContracts.Producer`1'<class " +
                         "[Foreign.CallContracts]'ForeignCallContracts.Box`1'<!0>> class " +
@@ -23641,6 +23918,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             NestedBox<string> nestedBox = new NestedBoxImpl<string>(stringBox);
                             DeepNested<string> deepNested = new DeepNestedImpl<string>(stringBox);
                             KeyBox<GenericKey> keyBox = new KeyBoxImpl<GenericKey>();
+                            ConstrainedNestedBox<GenericKey> constrainedNestedBox =
+                                new ConstrainedNestedBoxImpl<GenericKey>();
+                            ConstrainedDerivedKeyBox<GenericKey> constrainedDerivedKeyBox =
+                                new ConstrainedDerivedKeyBoxImpl<GenericKey>();
+                            ConstructedBoundApi<GenericKey, KeyBox<GenericKey>> constructedBound =
+                                new ConstructedBoundApiImpl<GenericKey, KeyBox<GenericKey>>();
+                            PairApi<${profile.nullableStringType}, GenericKey> nullablePair =
+                                new PairApiImpl<${profile.nullableStringType}, GenericKey>();
+                            NullableConstructedBoundApi<
+                                PairApi<${profile.nullableStringType}, GenericKey>> nullableBound =
+                                    new NullableConstructedBoundApiImpl<
+                                        PairApi<${profile.nullableStringType}, GenericKey>>();
                             Producer<string> producer = new ProducerImpl<string>("variant");
                             var consumer = new ConsumerImpl<object>();
                             OrdinaryArrayApi arrays = new OrdinaryArrayApiImpl();
@@ -23721,6 +24010,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                     null, new object[] { genericApi, genericKey }),
                                 genericKey),
                                 "foreign nominal generic bound changed identity");
+                            Require(Object.ReferenceEquals(
+                                Method(facade, "verifyMethodConstructedBound").Invoke(
+                                    null, new object[] { genericApi, keyBox }),
+                                keyBox),
+                                "foreign method constructed bound changed identity");
+                            MethodInfo kotlinConstructedConstraint = Method(
+                                facade, "verifyKotlinConstructedConstraintDispatch")
+                                    .MakeGenericMethod(
+                                        typeof(GenericKey), typeof(KeyBox<GenericKey>));
+                            Require(Object.ReferenceEquals(
+                                kotlinConstructedConstraint.Invoke(
+                                    null, new object[] { keyBox, genericKey }),
+                                genericKey),
+                                "Kotlin constructed constraint did not dispatch through its bound");
                             Require((string)Method(facade, "verifyGenericParams").Invoke(
                                 null, new object[] { genericApi }) == "first",
                                 "foreign generic params expansion failed");
@@ -23762,6 +24065,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                     null, new object[] { keyBox, genericKey }),
                                 genericKey),
                                 "foreign generic-owner nominal bound changed identity");
+                            Require(Object.ReferenceEquals(
+                                Method(facade, "verifyConstrainedNestedBox").Invoke(
+                                    null, new object[] { constrainedNestedBox, genericKey }),
+                                genericKey),
+                                "foreign constrained constructed member changed identity");
+                            Require(Object.ReferenceEquals(
+                                Method(facade, "verifyConstrainedDerivedKeyBox").Invoke(
+                                    null, new object[] { constrainedDerivedKeyBox, genericKey }),
+                                genericKey),
+                                "foreign constrained InterfaceImpl changed identity");
+                            Require(Object.ReferenceEquals(
+                                Method(facade, "verifyConstructedBound").Invoke(
+                                    null, new object[] { constructedBound, keyBox, genericKey }),
+                                genericKey),
+                                "foreign constructed generic bound changed identity");
+                            Require((bool)Method(facade, "verifyNullableConstructedBound").Invoke(
+                                null, new object[] { nullableBound, nullablePair, genericKey }),
+                                "foreign constructed-bound child nullability was not retained");
                             Require((bool)Method(facade, "verifyGenericOwnerType").Invoke(
                                 null, new object[0]),
                                 "foreign generic-owner KType lost its construction argument");
@@ -23879,6 +24200,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require(Object.ReferenceEquals(
                                 kotlinGenericApi.KeyIdentity<GenericKey>(genericKey), genericKey),
                                 "Kotlin nominal-bound implementation changed identity");
+                            Require(Object.ReferenceEquals(
+                                kotlinGenericApi.ConstructedIdentity<
+                                    GenericKey, KeyBox<GenericKey>>(keyBox),
+                                keyBox),
+                                "Kotlin method constructed-bound implementation changed identity");
                             Require(kotlinGenericApi.First<int>(5, 6) == 5,
                                 "Kotlin generic params implementation dispatch failed");
                             Require(kotlinGenericApi.Pick(40) == 42 && kotlinGenericApi.Pick<string>("pick") == "pick",
@@ -23946,6 +24272,50 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require(kotlinOpenNullableEcho.Echo(null) == null &&
                                 kotlinOpenNullableEcho.Marker() == 61,
                                 "Kotlin nullable owner-parameter InterfaceImpl dispatch failed");
+                            KeyBox<GenericKey> kotlinKeyBox =
+                                (KeyBox<GenericKey>)Activator.CreateInstance(
+                                    kotlin.GetType("consumer.KotlinGenericKeyBox", true));
+                            ConstrainedNestedBox<GenericKey> kotlinConstrainedNested =
+                                (ConstrainedNestedBox<GenericKey>)Activator.CreateInstance(
+                                    kotlin.GetType("consumer.KotlinConstrainedNestedBox", true));
+                            Require(Object.ReferenceEquals(
+                                kotlinConstrainedNested.Nested().Echo(genericKey), genericKey),
+                                "Kotlin constrained constructed member implementation failed");
+                            ConstrainedDerivedKeyBox<GenericKey> kotlinConstrainedDerived =
+                                (ConstrainedDerivedKeyBox<GenericKey>)Activator.CreateInstance(
+                                    kotlin.GetType(
+                                        "consumer.KotlinConstrainedDerivedKeyBox",
+                                        true));
+                            Require(kotlinConstrainedDerived.Marker() == 71 &&
+                                Object.ReferenceEquals(
+                                    kotlinConstrainedDerived.Echo(genericKey), genericKey),
+                                "Kotlin constrained InterfaceImpl implementation failed");
+                            ConstructedBoundApi<GenericKey, KeyBox<GenericKey>>
+                                kotlinConstructedBound =
+                                    (ConstructedBoundApi<GenericKey, KeyBox<GenericKey>>)
+                                        Activator.CreateInstance(
+                                            kotlin.GetType("consumer.KotlinConstructedBoundApi", true));
+                            Require(Object.ReferenceEquals(
+                                kotlinConstructedBound.Echo(kotlinKeyBox).Echo(genericKey),
+                                genericKey),
+                                "Kotlin constructed-bound implementation dispatch failed");
+                            PairApi<${profile.nullableStringType}, GenericKey> kotlinNullablePair =
+                                (PairApi<${profile.nullableStringType}, GenericKey>)
+                                    Activator.CreateInstance(
+                                        kotlin.GetType("consumer.KotlinNullablePair", true));
+                            NullableConstructedBoundApi<
+                                PairApi<${profile.nullableStringType}, GenericKey>>
+                                    kotlinNullableBound =
+                                        (NullableConstructedBoundApi<
+                                            PairApi<${profile.nullableStringType}, GenericKey>>)
+                                                Activator.CreateInstance(
+                                                    kotlin.GetType(
+                                                        "consumer.KotlinNullableConstructedBoundApi",
+                                                        true));
+                            Require(kotlinNullableBound.Echo(kotlinNullablePair).Left(null) == null &&
+                                Object.ReferenceEquals(
+                                    kotlinNullablePair.Right(genericKey), genericKey),
+                                "Kotlin nullable constructed-bound implementation failed");
                             DerivedBox<string> kotlinDerived = (DerivedBox<string>)Activator.CreateInstance(
                                 kotlin.GetType("consumer.KotlinDerivedStringBox", true));
                             Require(kotlinDerived.Marker() == 31 &&
@@ -24033,7 +24403,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     import ForeignCallContracts.ConstructorConstraintApi
                     import ForeignCallContracts.ConstructorBox
-                    import ForeignCallContracts.ConstrainedNestedBox
                     import ForeignCallContracts.NullableBox
                     import ForeignCallContracts.OrdinaryArrayApi
                     import ForeignCallContracts.NullableGenericApi
@@ -24084,9 +24453,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public fun constructorOwner(api: ConstructorBox<Any>): Any =
                         api.Create()
 
-                    public fun nestedOwner(
-                        api: ConstrainedNestedBox<ForeignCallContracts.GenericKey>,
-                    ): Int = 0
                     """.trimIndent()
                 )
             }
@@ -24118,7 +24484,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue("ReferenceBox" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ValueBox" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ConstructorBox" in arrayDiagnostics) { arrayDiagnostics }
-            assertTrue("ConstrainedNestedBox" in arrayDiagnostics) { arrayDiagnostics }
 
             val nullableOverrideConsumer = applicationDirectory.resolve("rejectedNullableGenericOverride.kt").apply {
                 writeText(
