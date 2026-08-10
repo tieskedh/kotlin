@@ -15,6 +15,9 @@ public interface Box<T> {
 }
 
 public interface DerivedBox<T> : Box<T> {}
+public interface Reordered<L, R> : Pair<R, L> {}
+public interface Fixed<T> : Pair<string?, T> {}
+public interface NullableUse<T> : Box<T?> {}
 public interface NestedBox<T> {
     Box<T> Nested();
 }
@@ -40,11 +43,13 @@ normal C# libraries.
 ## Mature-target precedent
 
 Kotlin/JVM imports a Java generic owner into one semantic class symbol while
-retaining the class-file owner and signature as physical linkage. Java platform
-types remain flexible through FIR and FIR2IR; the backend does not reinterpret an
-enhanced Kotlin view as a different JVM member descriptor. Kotlin/Native follows
-the same direction for platform interop and owns target-specific override rules
-in its FIR session.
+retaining the class-file owner and signature as physical linkage. Its FIR Java
+class keeps the resolved foreign supertypes and enhances their nullability as
+class-header types; type-parameter bounds and supertype uses remain separate
+evidence. Java platform types survive FIR and FIR2IR, while the backend does not
+reinterpret an enhanced Kotlin view as a different JVM member descriptor.
+Kotlin/Native follows the same direction for platform interop and owns target-
+specific override rules in its FIR session.
 
 The reusable architecture is therefore:
 
@@ -110,6 +115,36 @@ TypeDef rejects the complete classifier in this slice. Roslyn's unconstrained
 annotated `T?` remains a generic nullability problem; it is not physical
 `System.Nullable<T>` and is not admitted by this mapping.
 
+### InterfaceImpl owns inherited use-site nullability
+
+An inherited generic interface is retained as one exact selected InterfaceImpl
+row plus its resolved TypeSpec. Roslyn emits the same physical TypeSpec for
+`Box<string>` and `Box<string?>`; their difference is a `NullableAttribute` on
+the InterfaceImpl row. Its preorder begins with structural root `0`, followed by
+the generic arguments: `[0, 1]` for the non-null use and `[0, 2]` for the nullable
+use. Reordered, mixed fixed/open, and nested constructions extend that same
+preorder rather than changing physical type identity.
+
+The shared nullable declarationsite resolver therefore treats InterfaceImpl as
+its own local attribute parent and uses the implementing TypeDef for containing
+context, effective accessibility, and `NullablePublicOnly`. The selected graph
+validates the physical row, implementing owner, target TypeDef, and selected
+assembly by identity. FIR consumes the structural root without making a nullable
+supertype and enhances only its arguments; the backend continues to emit the
+unchanged resolved TypeSpec.
+
+Oblivious concrete reference arguments remain platform types. An owner type
+parameter in a supertype is different: absent/`0` and `1` both retain `T`,
+while `2` produces `T?`. Turning the first case into `T!` would manufacture a
+nullable branch after substitution (for example around `Int`) and break an
+otherwise exact inherited override. The type-parameter declaration and actual
+construction already determine whether `T` itself denotes a nullable type.
+
+Within the existing admitted type grammar, this permits closed, reordered,
+mixed fixed/open, and explicitly nullable owner-parameter InterfaceImpl uses.
+It does not admit a constrained constructed target, an unsupported carrier, or
+an incomplete target graph.
+
 ### Kotlin implementations fill the native slots
 
 A Kotlin class may implement an admitted constructed interface directly. The
@@ -135,8 +170,9 @@ The admitted type-owned slice accepts an interface only when:
 - GenericParam rows are contiguous, have valid variance, and have no `class`,
   `struct`, `new()`, or by-ref-like special constraint;
 - every direct inherited interface is another exact selected public top-level
-  interface and its arguments are open owner `!n` parameters; the selected
-  inheritance graph is complete and cycle-free;
+  interface; its fixed, reordered, duplicated, or open arguments must satisfy
+  this same closed physical grammar, and the selected inheritance graph is
+  complete and cycle-free;
 - owner and method uses may be direct `!n`/`!!n`, supported signed primitive,
   `string`, `object`, supported SZARRAY, exact selected non-generic interface, or
   a recursively constructed exact selected interface; an exact selected
@@ -148,7 +184,9 @@ The admitted type-owned slice accepts an interface only when:
 - explicit bounds are relative generic parameters or exact admitted nominal
   non-generic interfaces from the selected graph;
 - every variance occurrence is valid for its declaration position; and
-- no owner- or method-generic leaf has explicit nullable evidence.
+- no declared member owner- or method-generic leaf has explicit nullable
+  evidence. An InterfaceImpl use may project an owner parameter as `T?` because
+  its row supplies the complete use-site evidence and physical substitution.
 
 Nullable-reference flags for a constructed signature are consumed in Roslyn's
 preorder across the complete resolved type tree. Kotlin reflection keeps the
@@ -156,11 +194,9 @@ declaration-owned type (`Box<T>` on `NestedBox<T>.Nested`), while an invocation 
 `NestedBox<String>` emits the substituted physical `Box<string>` signature.
 
 Unsigned CLR scalars remain outside this slice until Kotlin unsigned value-class
-carriers are implemented end to end. Closed or otherwise fixed inherited views
-such as `Closed : Box<string>` remain withheld until InterfaceImpl nullability
-and substitution evidence are modeled completely. Constructed bounds,
-constrained constructed targets, pointers, byrefs, general arrays, special
-constraints, and explicit nullable generic leaves likewise reject the complete
+carriers are implemented end to end. Constructed bounds, constrained constructed
+targets, pointers, byrefs, general arrays, special constraints, and explicit
+nullable generic leaves on declared members likewise reject the complete
 classifier. No public member or inherited contract is silently omitted.
 
 ## Design attack
@@ -189,11 +225,13 @@ Kotlin ABI; only proven boundary differences receive adapters.
 - Foreign `Nullable<V>` scalar parameters, returns, properties, and recursively
   constructed arguments use logical `V?` semantics and the exact original CLR
   carrier without a wrapper or name-based rebinding.
+- Fixed, reordered, mixed open/fixed, and nullable-parameter InterfaceImpl uses
+  receive their exact Kotlin supertype arguments while retaining one unchanged
+  CLR TypeSpec and its inherited physical slots.
 - Imported CLR generic interfaces never acquire Kotlin implementation manifests
   or canonical erased sibling TypeDefs.
-- Closed inherited constructions and constrained constructed targets require later
-  exact slices; this decision forbids approximating them but does not forbid
-  implementing them.
+- Constrained constructed targets require a later exact slice; this decision
+  forbids approximating them but does not forbid implementing them.
 
 ## Verification obligations
 
@@ -210,12 +248,14 @@ Coverage must retain both Framework CLR and current CoreCLR profiles and prove:
   including primitive-vararg storage projection;
 - direct open generic inheritance and both Kotlin and C# implementations of its
   inherited physical slots;
+- closed, reordered, fixed/open, and inherited `T?` InterfaceImpl substitution,
+  including nullable versus oblivious evidence and reverse implementations;
 - recursively constructed member returns such as `Producer<Box<T>>`, including
   exact call-site substitution and reverse Kotlin implementation dispatch;
 - declaration-owned callable reflection (`Box<T>`) remaining distinct from the
   substituted CLR invocation carrier (`Box<string>`);
 - inferred and explicit method arguments inside a constructed owner;
 - separate producer/consumer compilation and exact physical MethodImpl rows; and
-- complete rejection of closed inheritance, constrained constructed targets,
-  unsigned scalar carriers, special constraints, and explicit nullable generic
-  leaves.
+- complete rejection of constrained constructed targets, unsigned scalar
+  carriers, special constraints, and explicit nullable generic leaves on
+  declared members.
