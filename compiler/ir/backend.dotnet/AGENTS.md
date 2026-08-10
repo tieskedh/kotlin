@@ -664,10 +664,17 @@ See the
   Imported CLR generic interfaces remain native: keep one semantic owner backed
   by the selected generic TypeDef, preserve platform flexibility through FIR2IR,
   and bind Kotlin implementations to its exact constructed slots. Resolved
-  TypeSpec member trees and open owner-parameter inheritance must travel through
+  TypeSpec member trees and inherited owner constructions must travel through
   the shared selected declaration graph; the backend must never rebind them by
-  ClassId, metadata name, or classpath order. Never send them through the
-  Kotlin-owned erased/split-interface ABI. Closed/fixed inheritance, constrained
+  ClassId, metadata name, or classpath order. An inherited construction receives
+  nullable evidence from its exact InterfaceImpl row, whose implementing owner,
+  target TypeDef, and selected assembly are identity-validated. Consume the
+  structural root without making a nullable supertype; retain oblivious concrete
+  references as platform types, but map an oblivious owner parameter to `T`, an
+  explicit `1` to `T`, and an explicit `2` to `T?`. Fixed, reordered, mixed
+  open/fixed, and inherited nullable-parameter uses are admitted only inside the
+  same closed physical grammar and must keep the original TypeSpec slots. Never
+  send them through the Kotlin-owned erased/split-interface ABI. Constrained
   constructed targets, unsupported constraints, or unsupported carriers reject
   the complete classifier rather than approximating a member. See
   [the foreign generic-TypeDef decision](docs/decisions/foreign-clr-generic-type-identities.md).

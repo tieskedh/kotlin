@@ -100,6 +100,22 @@ class DotNetClrNullableEffectiveAccessibilityResolver(
 
     fun resolve(
         assembly: DotNetClrAssemblyMetadata,
+        implementation: DotNetClrInterfaceImplementation,
+    ): DotNetClrEffectiveAccessibilityResolution {
+        if (assembly.interfaceImplementations.none { row -> row == implementation }) {
+            return notFound(implementation.handle)
+        }
+        // InterfaceImpl rows have no independent visibility. Roslyn applies nullable-public-only
+        // policy using the implementing type as the access symbol.
+        return resolveOwnerType(
+            assembly,
+            implementation.handle,
+            implementation.implementingType,
+        )
+    }
+
+    fun resolve(
+        assembly: DotNetClrAssemblyMetadata,
         parameter: DotNetClrParameterDefinition,
     ): DotNetClrEffectiveAccessibilityResolution {
         if (assembly.parameterDefinitions.none { definition -> definition == parameter }) {

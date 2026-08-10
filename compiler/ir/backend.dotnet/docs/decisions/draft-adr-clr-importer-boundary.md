@@ -269,6 +269,12 @@ have no CLR accessibility, so their inclusion is derived from the containing typ
 MethodDefs are filtered independently by their own visibility. Effective visibility always folds
 through the complete containing-type chain.
 
+InterfaceImpl is likewise a distinct nullable declarationsite. Roslyn retains the constructed
+interface solely in its TypeDefOrRef/TypeSpec and places the use-site nullable preorder on the
+InterfaceImpl row. Its implementing TypeDef supplies effective accessibility and containing
+context. The selected foreign graph retains and identity-validates that row, owner, target TypeDef,
+and assembly; FIR enhances its arguments without changing the physical TypeSpec used by CIL.
+
 Roslyn preorder is aligned against the original resolved CLR signature. Reference nodes consume a
 flag; non-generic value types, `Nullable<T>`, by-reference wrappers, and modifiers do not. Generic
 value-type padding is validated as physical evidence but does not become Kotlin nullability.

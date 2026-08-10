@@ -18934,6 +18934,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 .module Foreign.Carrier.dll
 
                 .class interface public abstract auto ansi Foreign.IContract
+                       implements Foreign.IOther
                 {
                   .method public hidebysig newslot abstract virtual instance int32 Echo(int32 'value') cil managed
                   {
@@ -19050,6 +19051,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetClrImportedDeclarationGraph(
                 listOf(assembly),
                 listOf(declaringHierarchy, declaringHierarchy),
+            )
+        }
+        val interfaceImplementation = declaringHierarchy.interfaces.single()
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetClrImportedDeclarationGraph(
+                listOf(assembly),
+                listOf(
+                    declaringHierarchy.copy(
+                        interfaces = listOf(
+                            interfaceImplementation.copy(
+                                row = interfaceImplementation.row.copy()
+                            )
+                        )
+                    )
+                ),
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetClrImportedDeclarationGraph(
+                listOf(assembly),
+                listOf(
+                    declaringHierarchy.copy(
+                        interfaces = listOf(
+                            interfaceImplementation.copy(
+                                row = interfaceImplementation.row.copy(
+                                    implementingType = wrongOwner.handle,
+                                )
+                            )
+                        )
+                    )
+                ),
             )
         }
 
@@ -22331,12 +22363,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val nullableIntArrayType: String,
             val nullableGenericDeclaration: String,
             val nullableOwnerGenericDeclaration: String,
+            val nullableOpenType: String,
             val rejectsNullableGenericOverrideInFrontend: Boolean,
             val compileFixture: (File, File) -> CSharpCompilerResult,
             val systemReference: File,
             val compileVerifier: (File, File, File) -> CSharpCompilerResult,
             val executionCommand: (File) -> List<String>,
-        )
+        ) {
+            val hasRoslynNullableMetadata: Boolean
+                get() = nullableDirective.isNotEmpty()
+        }
 
         val profiles = listOf(
             Profile(
@@ -22372,6 +22408,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "[return: MaybeNull] T Maybe<T>([AllowNull] T value);",
                 nullableOwnerGenericDeclaration =
                     "[return: MaybeNull] T Maybe([AllowNull] T value);",
+                nullableOpenType = "T",
                 rejectsNullableGenericOverrideInFrontend = false,
                 compileFixture = { source, output ->
                     runCSharpCompiler(checkNotNull(frameworkCSharp), source, output)
@@ -22401,6 +22438,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 nullableIntArrayType = "int[]?",
                 nullableGenericDeclaration = "T? Maybe<T>(T? value);",
                 nullableOwnerGenericDeclaration = "T? Maybe(T? value);",
+                nullableOpenType = "T?",
                 rejectsNullableGenericOverrideInFrontend = true,
                 compileFixture = { source, output ->
                     runModernCSharpCompiler(checkNotNull(modernCSharp), source, output)
@@ -22618,6 +22656,57 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         public interface DerivedBox<T> : Box<T>
                         {
                             int Marker();
+                        }
+
+                        public interface PairApi<TLeft, TRight>
+                        {
+                            TLeft Left(TLeft value);
+                            TRight Right(TRight value);
+                        }
+
+                        public interface ReorderedPair<TLeft, TRight> : PairApi<TRight, TLeft>
+                        {
+                            int Marker();
+                        }
+
+                        public sealed class ReorderedPairImpl<TLeft, TRight> :
+                            ReorderedPair<TLeft, TRight>
+                        {
+                            public TRight Left(TRight value) { return value; }
+                            public TLeft Right(TLeft value) { return value; }
+                            public int Marker() { return 43; }
+                        }
+
+                        public interface FixedNullablePair<T> :
+                            PairApi<${profile.nullableStringType}, T>
+                        {
+                            int Marker();
+                        }
+
+                        public sealed class FixedNullablePairImpl<T> : FixedNullablePair<T>
+                        {
+                            public ${profile.nullableStringType} Left(
+                                ${profile.nullableStringType} value) { return value; }
+                            public T Right(T value) { return value; }
+                            public int Marker() { return 47; }
+                        }
+
+                        public interface EchoApi<T>
+                        {
+                            T Echo(T value);
+                        }
+
+                        public interface OpenNullableEcho<T> :
+                            EchoApi<${profile.nullableOpenType}>
+                        {
+                            int Marker();
+                        }
+
+                        public sealed class OpenNullableEchoImpl<T> : OpenNullableEcho<T>
+                        {
+                            public ${profile.nullableOpenType} Echo(
+                                ${profile.nullableOpenType} value) { return value; }
+                            public int Marker() { return 49; }
                         }
 
                         public interface NestedBox<T>
@@ -23025,6 +23114,49 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             KotlinNullableIntBox(value)
                     }
 
+                    public fun verifyReorderedPair(
+                        pair: ForeignCallContracts.ReorderedPair<String, Int>,
+                    ): String {
+                        check(pair.Marker() == 43)
+                        check(pair.Left(51) == 51)
+                        return pair.Right("reordered")
+                    }
+
+                    public class KotlinReorderedPair :
+                        ForeignCallContracts.ReorderedPair<String, Int> {
+                        override fun Left(value: Int): Int = value
+                        override fun Right(value: String): String = value
+                        override fun Marker(): Int = 53
+                    }
+
+                    public fun verifyFixedNullablePair(
+                        pair: ForeignCallContracts.FixedNullablePair<Int>,
+                    ): Int {
+                        check(pair.Marker() == 47)
+                        check(pair.Left(null) == null)
+                        return pair.Right(57)
+                    }
+
+                    public class KotlinFixedNullablePair :
+                        ForeignCallContracts.FixedNullablePair<Int> {
+                        override fun Left(value: String?): String? = value
+                        override fun Right(value: Int): Int = value
+                        override fun Marker(): Int = 59
+                    }
+
+                    public fun verifyOpenNullableEcho(
+                        echo: ForeignCallContracts.OpenNullableEcho<String>,
+                    ): String? {
+                        check(echo.Marker() == 49)
+                        return echo.Echo(null)
+                    }
+
+                    public class KotlinOpenNullableEcho :
+                        ForeignCallContracts.OpenNullableEcho<String> {
+                        override fun Echo(value: String?): String? = value
+                        override fun Marker(): Int = 61
+                    }
+
                     public fun verifyDerivedBox(
                         box: ForeignCallContracts.DerivedBox<String>,
                     ): String {
@@ -23231,6 +23363,39 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertFalse("not supported by the .NET backend" in applicationDiagnostics) {
                 applicationDiagnostics
             }
+            if (profile.hasRoslynNullableMetadata) {
+                val nonNullConsumer = applicationDirectory.resolve("rejectedInheritedNull.kt").apply {
+                    writeText(
+                        """
+                        package rejected
+
+                        import ForeignCallContracts.ReorderedPair
+
+                        public fun rejected(
+                            pair: ReorderedPair<String, Int>,
+                        ): String = pair.Right(null)
+                        """.trimIndent()
+                    )
+                }
+                val [nonNullDiagnostics, nonNullExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                    K2DotNetCompiler(),
+                    listOf(
+                        nonNullConsumer.path,
+                        K2DotNetCompilerArguments::noStdlib.cliArgument,
+                        K2DotNetCompilerArguments::classpath.cliArgument,
+                        listOf(fixtureAssembly, profile.systemReference)
+                            .joinToString(File.pathSeparator, transform = File::getPath),
+                        K2DotNetCompilerArguments::dotNetTarget.cliArgument, profile.target,
+                        K2DotNetCompilerArguments::moduleName.cliArgument, "RejectedInheritedNull",
+                        K2DotNetCompilerArguments::destination.cliArgument,
+                        applicationDirectory.resolve("RejectedInheritedNull.il").path,
+                    )
+                )
+                assertEquals(ExitCode.COMPILATION_ERROR, nonNullExitCode, nonNullDiagnostics)
+                assertTrue("null" in nonNullDiagnostics && "String" in nonNullDiagnostics) {
+                    nonNullDiagnostics
+                }
+            }
             val packagedFixture = applicationDirectory.resolve("Foreign.CallContracts.dll")
             assertTrue(packagedFixture.isFile) {
                 "The referenced foreign assembly was not packaged for ${profile.target}"
@@ -23403,6 +23568,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(
                 "class [Foreign.CallContracts]'ForeignCallContracts.DerivedBox`1'<string>" in il
             ) { "A foreign generic interface inheritance edge was not retained:\n$il" }
+            for (signature in listOf(
+                "!0 class [Foreign.CallContracts]'ForeignCallContracts.PairApi`2'<int32, string>::'Left'(!0)",
+                "!1 class [Foreign.CallContracts]'ForeignCallContracts.PairApi`2'<int32, string>::'Right'(!1)",
+                "!0 class [Foreign.CallContracts]'ForeignCallContracts.PairApi`2'<string, int32>::'Left'(!0)",
+                "!1 class [Foreign.CallContracts]'ForeignCallContracts.PairApi`2'<string, int32>::'Right'(!1)",
+                "!0 class [Foreign.CallContracts]'ForeignCallContracts.EchoApi`1'<string>::'Echo'(!0)",
+            )) {
+                assertTrue("callvirt instance $signature" in il) {
+                    "An InterfaceImpl substitution lost its exact constructed owner:\n$il"
+                }
+            }
 
             val verifierSource = applicationDirectory.resolve("ForeignCallVerifier.cs").apply {
                 writeText(
@@ -23455,6 +23631,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Box<int> intBox = new BoxImpl<int>(1);
                             Box<int?> nullableIntBox = new BoxImpl<int?>(2);
                             NullableValueApi nullableValueApi = new NullableValueApiImpl();
+                            ReorderedPair<string, int> reorderedPair =
+                                new ReorderedPairImpl<string, int>();
+                            FixedNullablePair<int> fixedNullablePair =
+                                new FixedNullablePairImpl<int>();
+                            OpenNullableEcho<string> openNullableEcho =
+                                new OpenNullableEchoImpl<string>();
                             DerivedBox<string> derivedBox = new DerivedBoxImpl<string>("initial");
                             NestedBox<string> nestedBox = new NestedBoxImpl<string>(stringBox);
                             DeepNested<string> deepNested = new DeepNestedImpl<string>(stringBox);
@@ -23566,6 +23748,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 null, new object[] { nullableValueApi }) == 42 &&
                                 nullableValueApi.Value == 41,
                                 "foreign physical Nullable<T> member dispatch failed");
+                            Require((string)Method(facade, "verifyReorderedPair").Invoke(
+                                null, new object[] { reorderedPair }) == "reordered",
+                                "foreign reordered InterfaceImpl substitution failed");
+                            Require((int)Method(facade, "verifyFixedNullablePair").Invoke(
+                                null, new object[] { fixedNullablePair }) == 57,
+                                "foreign fixed nullable InterfaceImpl substitution failed");
+                            Require(Method(facade, "verifyOpenNullableEcho").Invoke(
+                                null, new object[] { openNullableEcho }) == null,
+                                "foreign nullable owner-parameter InterfaceImpl substitution failed");
                             Require(Object.ReferenceEquals(
                                 Method(facade, "verifyKeyBox").Invoke(
                                     null, new object[] { keyBox, genericKey }),
@@ -23735,6 +23926,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 kotlinNullableValueApi.Nested(null).Value == null &&
                                 kotlinNullableValueApi.Nested(78).Value == 78,
                                 "Kotlin physical Nullable<T> property or nested implementation failed");
+                            ReorderedPair<string, int> kotlinReorderedPair =
+                                (ReorderedPair<string, int>)Activator.CreateInstance(
+                                    kotlin.GetType("consumer.KotlinReorderedPair", true));
+                            Require(kotlinReorderedPair.Left(79) == 79 &&
+                                kotlinReorderedPair.Right("reverse-reordered") == "reverse-reordered" &&
+                                kotlinReorderedPair.Marker() == 53,
+                                "Kotlin reordered InterfaceImpl implementation dispatch failed");
+                            FixedNullablePair<int> kotlinFixedNullablePair =
+                                (FixedNullablePair<int>)Activator.CreateInstance(
+                                    kotlin.GetType("consumer.KotlinFixedNullablePair", true));
+                            Require(kotlinFixedNullablePair.Left(null) == null &&
+                                kotlinFixedNullablePair.Right(81) == 81 &&
+                                kotlinFixedNullablePair.Marker() == 59,
+                                "Kotlin fixed nullable InterfaceImpl implementation dispatch failed");
+                            OpenNullableEcho<string> kotlinOpenNullableEcho =
+                                (OpenNullableEcho<string>)Activator.CreateInstance(
+                                    kotlin.GetType("consumer.KotlinOpenNullableEcho", true));
+                            Require(kotlinOpenNullableEcho.Echo(null) == null &&
+                                kotlinOpenNullableEcho.Marker() == 61,
+                                "Kotlin nullable owner-parameter InterfaceImpl dispatch failed");
                             DerivedBox<string> kotlinDerived = (DerivedBox<string>)Activator.CreateInstance(
                                 kotlin.GetType("consumer.KotlinDerivedStringBox", true));
                             Require(kotlinDerived.Marker() == 31 &&
@@ -23822,7 +24033,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     import ForeignCallContracts.ConstructorConstraintApi
                     import ForeignCallContracts.ConstructorBox
-                    import ForeignCallContracts.ClosedDerivedBox
                     import ForeignCallContracts.ConstrainedNestedBox
                     import ForeignCallContracts.NullableBox
                     import ForeignCallContracts.OrdinaryArrayApi
@@ -23874,9 +24084,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public fun constructorOwner(api: ConstructorBox<Any>): Any =
                         api.Create()
 
-                    public fun inheritedOwner(api: ClosedDerivedBox): Int =
-                        api.ClosedMarker()
-
                     public fun nestedOwner(
                         api: ConstrainedNestedBox<ForeignCallContracts.GenericKey>,
                     ): Int = 0
@@ -23911,7 +24118,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue("ReferenceBox" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ValueBox" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ConstructorBox" in arrayDiagnostics) { arrayDiagnostics }
-            assertTrue("ClosedDerivedBox" in arrayDiagnostics) { arrayDiagnostics }
             assertTrue("ConstrainedNestedBox" in arrayDiagnostics) { arrayDiagnostics }
 
             val nullableOverrideConsumer = applicationDirectory.resolve("rejectedNullableGenericOverride.kt").apply {

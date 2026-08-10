@@ -46,6 +46,20 @@ class DotNetClrImportedDeclarationGraph(
         }) {
             "Imported CLR declaration graph contains a hierarchy outside its selected assemblies"
         }
+        require(hierarchies.all { hierarchy ->
+            hierarchy.interfaces.all { implementation ->
+                hierarchy.type.type.assembly.interfaceImplementations.any { row ->
+                    row === implementation.row
+                } &&
+                        implementation.row.implementingType == hierarchy.type.type.definition.handle &&
+                        assembliesByMetadata.containsKey(implementation.interfaceType.type.assembly) &&
+                        implementation.interfaceType.type.assembly.typeDefinitions.any { definition ->
+                            definition === implementation.interfaceType.type.definition
+                        }
+            }
+        }) {
+            "Imported CLR declaration graph contains a detached interface implementation"
+        }
         physicalCoreTypes?.let { coreTypes ->
             require(
                 listOf(
