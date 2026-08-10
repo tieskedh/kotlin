@@ -8,14 +8,17 @@ package org.jetbrains.kotlin.fir.backend.dotnet
 import org.jetbrains.kotlin.fir.backend.Fir2IrExtensions
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.overrides.IrExternalOverridabilityCondition
 import org.jetbrains.kotlin.ir.overrides.MemberWithOriginal
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classOrNull
+import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.nonDispatchParameters
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.load.dotnet.DotNetClrTypeSignature
@@ -24,22 +27,22 @@ import org.jetbrains.kotlin.types.Variance
 /** Target-specific FIR2IR rules, kept next to the JVM counterpart rather than in CIL codegen. */
 object DotNetFir2IrExtensions : Fir2IrExtensions by Fir2IrExtensions.Default {
     override val externalOverridabilityConditions: List<IrExternalOverridabilityCondition> =
-        listOf(DotNetClrFlexibleArrayOverridabilityCondition)
+        listOf(DotNetClrImportedSignatureOverridabilityCondition)
 }
 
 /**
- * Restores the override edge already accepted by FIR for an imported CLR array platform type.
+ * Restores an override edge already accepted by FIR for one retained CLR method signature.
  *
- * FIR2IR's target-neutral checker compares the rigid Kotlin implementation parameter with the
- * imported flexible upper view (`Array<E>` versus `Array<out E>?`) and otherwise leaves a fake
- * override behind. JVM has target-specific IR overridability rules for the same architectural
- * reason. This condition is deliberately narrower: it can report success only for a function
- * carrying an exact admitted CLR MethodDef, only when at least one physical parameter is an
- * ordinary SZARRAY, and only when every Kotlin implementation parameter has the classifier shape
- * dictated by that retained physical signature. Kotlin frontend override checking remains the
- * authority for source-level nullability and return covariance.
+ * FIR2IR's target-neutral checker can lose the frontend-approved edge when a rigid Kotlin
+ * implementation is compared with an imported flexible array view, or when method-owned type
+ * parameters originate in different declaration objects. JVM has target-specific IR
+ * overridability rules for the same architectural reason. This success-only condition is
+ * deliberately narrower: it requires an exact admitted CLR MethodDef, equal method arity and
+ * parameter kinds, and the complete rigid classifier shape dictated by the retained physical
+ * signature. Kotlin frontend override checking remains authoritative for source-level
+ * nullability, bounds, and return covariance.
  */
-private object DotNetClrFlexibleArrayOverridabilityCondition : IrExternalOverridabilityCondition {
+private object DotNetClrImportedSignatureOverridabilityCondition : IrExternalOverridabilityCondition {
     override val contract: IrExternalOverridabilityCondition.Contract =
         IrExternalOverridabilityCondition.Contract.SUCCESS_ONLY
 
@@ -54,13 +57,16 @@ private object DotNetClrFlexibleArrayOverridabilityCondition : IrExternalOverrid
         val source = superFunction.containerSource as? DotNetClrImportedMethodSource
             ?: return IrExternalOverridabilityCondition.Result.UNKNOWN
         val physicalParameters = source.method.signature.parameterTypes
-        if (physicalParameters.none { it is DotNetClrTypeSignature.SzArray }) {
+        if (
+            physicalParameters.none { it is DotNetClrTypeSignature.SzArray } &&
+            source.method.signature.genericParameterCount == 0
+        ) {
             return IrExternalOverridabilityCondition.Result.UNKNOWN
         }
         if (
             superFunction.name != subFunction.name ||
             superFunction.typeParameters.size != subFunction.typeParameters.size ||
-            superFunction.typeParameters.isNotEmpty()
+            superFunction.typeParameters.size != source.method.signature.genericParameterCount
         ) {
             return IrExternalOverridabilityCondition.Result.UNKNOWN
         }
@@ -70,13 +76,32 @@ private object DotNetClrFlexibleArrayOverridabilityCondition : IrExternalOverrid
             superParameters.size != physicalParameters.size ||
             subParameters.size != physicalParameters.size ||
             superParameters.map { it.kind } != subParameters.map { it.kind } ||
-            superParameters.any { it.varargElementType != null } ||
-            subParameters.any { it.varargElementType != null }
+            superParameters.map { it.varargElementType != null } !=
+                    subParameters.map { it.varargElementType != null }
         ) {
             return IrExternalOverridabilityCondition.Result.UNKNOWN
         }
         val hasExactParameterCarriers = physicalParameters.indices.all { index ->
-            subParameters[index].type.hasImportedClrCarrier(physicalParameters[index])
+            val physicalType = physicalParameters[index]
+            val subParameter = subParameters[index]
+            val logicalType = if (
+                physicalType is DotNetClrTypeSignature.SzArray &&
+                subParameter.varargElementType != null
+            ) {
+                subParameter.varargElementType!!
+            } else {
+                subParameter.type
+            }
+            val logicalPhysicalType = if (subParameter.varargElementType != null) {
+                (physicalType as? DotNetClrTypeSignature.SzArray)?.elementType
+                    ?: return@all false
+            } else {
+                physicalType
+            }
+            logicalType.hasImportedClrCarrier(
+                logicalPhysicalType,
+                subFunction.typeParameters,
+            )
         }
         return if (hasExactParameterCarriers) {
             IrExternalOverridabilityCondition.Result.OVERRIDABLE
@@ -86,7 +111,10 @@ private object DotNetClrFlexibleArrayOverridabilityCondition : IrExternalOverrid
     }
 }
 
-private fun IrType.hasImportedClrCarrier(physicalType: DotNetClrTypeSignature): Boolean =
+private fun IrType.hasImportedClrCarrier(
+    physicalType: DotNetClrTypeSignature,
+    methodTypeParameters: List<IrTypeParameter>,
+): Boolean =
     when (physicalType) {
         is DotNetClrTypeSignature.Primitive ->
             classOrNull?.owner?.fqNameWhenAvailable?.asString() ==
@@ -99,14 +127,22 @@ private fun IrType.hasImportedClrCarrier(physicalType: DotNetClrTypeSignature): 
             val elementProjection = simpleType.arguments.singleOrNull() as? IrTypeProjection
                 ?: return false
             if (elementProjection.variance != Variance.INVARIANT) return false
-            elementProjection.type.hasImportedClrCarrier(physicalType.elementType)
+            elementProjection.type.hasImportedClrCarrier(
+                physicalType.elementType,
+                methodTypeParameters,
+            )
+        }
+        is DotNetClrTypeSignature.GenericParameter -> {
+            val simpleType = this as? IrSimpleType
+            physicalType.kind == DotNetClrGenericParameterKind.METHOD &&
+                    simpleType?.isMarkedNullable() == false &&
+                    simpleType.classifier == methodTypeParameters.getOrNull(physicalType.index)?.symbol
         }
         DotNetClrTypeSignature.Void,
         DotNetClrTypeSignature.TypedReference,
         is DotNetClrTypeSignature.Array,
         is DotNetClrTypeSignature.ByReference,
         is DotNetClrTypeSignature.FunctionPointer,
-        is DotNetClrTypeSignature.GenericParameter,
         is DotNetClrTypeSignature.GenericInstance,
         is DotNetClrTypeSignature.Modified,
         is DotNetClrTypeSignature.Named,

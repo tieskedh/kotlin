@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.load.dotnet.DotNetClrClasspathAssembly
+import org.jetbrains.kotlin.load.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationCarrierVersion
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedDeclarationSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
@@ -84,10 +85,16 @@ internal class DotNetClrImportedDeclarations(
                 "foreign CLR MethodDef '${method.name}' lost its exact TypeDef linkage"
             )
         val signature = method.signature
+        if (signature.genericParameterCount != function.typeParameters.size) {
+            dotNetUnsupported(
+                "foreign CLR MethodDef '${method.name}' retained ${signature.genericParameterCount} " +
+                        "method parameters but FIR/IR exposes ${function.typeParameters.size}"
+            )
+        }
         val returnType = when (val physicalReturn = signature.returnType) {
             DotNetClrTypeSignature.Void -> DotNetIlReturnType.Void
             else -> DotNetIlReturnType.Value(
-                physicalReturn.toSupportedImportedIlTypeOrNull()
+                physicalReturn.toSupportedImportedIlTypeOrNull(signature.genericParameterCount)
                     ?: dotNetUnsupported(
                         "foreign CLR MethodDef '${method.name}' has a physical return type " +
                                 "outside the current .NET backend value grammar"
@@ -97,7 +104,7 @@ internal class DotNetClrImportedDeclarations(
         val parameterTypes = buildList {
             add(DotNetIlValueType.UserClass(ownerInfo))
             signature.parameterTypes.mapTo(this) { physicalParameter ->
-                physicalParameter.toSupportedImportedIlTypeOrNull()
+                physicalParameter.toSupportedImportedIlTypeOrNull(signature.genericParameterCount)
                     ?: dotNetUnsupported(
                         "foreign CLR MethodDef '${method.name}' has a physical parameter type " +
                                 "outside the current .NET backend value grammar"
@@ -164,7 +171,9 @@ internal class DotNetClrImportedDeclarations(
     }
 }
 
-private fun DotNetClrTypeSignature.toSupportedImportedIlTypeOrNull(): DotNetIlValueType? =
+private fun DotNetClrTypeSignature.toSupportedImportedIlTypeOrNull(
+    methodGenericParameterCount: Int,
+): DotNetIlValueType? =
     when (this) {
         is DotNetClrTypeSignature.Primitive -> when (type) {
             DotNetClrPrimitiveType.BOOLEAN -> DotNetIlValueType.Boolean
@@ -185,28 +194,15 @@ private fun DotNetClrTypeSignature.toSupportedImportedIlTypeOrNull(): DotNetIlVa
             DotNetClrPrimitiveType.NATIVE_UINT,
                 -> null
         }
-        is DotNetClrTypeSignature.SzArray -> {
-            val elementType = elementType as? DotNetClrTypeSignature.Primitive
-                ?: return null
-            val physicalElement = when (elementType.type) {
-                DotNetClrPrimitiveType.BOOLEAN -> DotNetIlValueType.Boolean
-                DotNetClrPrimitiveType.CHAR -> DotNetIlValueType.Char
-                DotNetClrPrimitiveType.INT8 -> DotNetIlValueType.Int8
-                DotNetClrPrimitiveType.INT16 -> DotNetIlValueType.Int16
-                DotNetClrPrimitiveType.INT32 -> DotNetIlValueType.Int32
-                DotNetClrPrimitiveType.INT64 -> DotNetIlValueType.Int64
-                DotNetClrPrimitiveType.FLOAT32 -> DotNetIlValueType.Float32
-                DotNetClrPrimitiveType.FLOAT64 -> DotNetIlValueType.Float64
-                DotNetClrPrimitiveType.STRING -> DotNetIlValueType.String
-                DotNetClrPrimitiveType.OBJECT -> DotNetIlValueType.Object
-                DotNetClrPrimitiveType.UINT8,
-                DotNetClrPrimitiveType.UINT16,
-                DotNetClrPrimitiveType.UINT32,
-                DotNetClrPrimitiveType.UINT64,
-                DotNetClrPrimitiveType.NATIVE_INT,
-                DotNetClrPrimitiveType.NATIVE_UINT,
-                -> return null
+        is DotNetClrTypeSignature.GenericParameter ->
+            if (kind == DotNetClrGenericParameterKind.METHOD && index in 0 until methodGenericParameterCount) {
+                DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
+            } else {
+                null
             }
+        is DotNetClrTypeSignature.SzArray -> {
+            val physicalElement = elementType.toSupportedImportedIlTypeOrNull(methodGenericParameterCount)
+                ?: return null
             DotNetIlValueType.GenericArray(physicalElement)
         }
         else -> null

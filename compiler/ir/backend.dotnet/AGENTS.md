@@ -608,13 +608,16 @@ See the
   continuation and then uses positional `KCallable.call`, so a suspend
   reference must expose that same positional slot. Plain `callBy` cannot invent
   a continuation from the user-visible `KParameter` map and must fail closed
-  until a coroutine-aware named-call helper owns the appended argument. Typed foreign attribute
-  import, foreign CLR generic methods, accessor objects, `KCallable`
-  visibility/modality, and broader member reflection remain separate. A
-  foreign generic method must continue to fail the current interface importer
-  closed until its
-  own complete FIR/import/binding feature lands; never decode it privately in
-  callable reflection. See
+  until a coroutine-aware named-call helper owns the appended argument. Typed
+  foreign attribute import, accessor objects, and broader member reflection
+  remain separate. Admitted foreign CLR generic methods use one declaration-owned
+  FIR/IR type-parameter graph for resolution, bounds, invocation, and callable
+  reflection while their retained MethodDef remains the sole physical authority.
+  Emit ordinary MethodSpec calls and exact override slots; never erase them,
+  rediscover them by name, or decode a reflection-private generic signature.
+  Special constraints, constructed bounds, and explicit unconstrained nullable
+  generic leaves reject the complete interface until Kotlin can express their
+  full CLR substitution contract. See
   [the annotation-value decision](docs/decisions/valued-annotation-classes.md),
   [the class-discovery decision](docs/decisions/annotation-discovery.md), and
   [the callable-discovery decision](docs/decisions/callable-annotation-discovery.md), and
@@ -624,7 +627,8 @@ See the
   [the positional-call decision](docs/decisions/callable-positional-invocation.md), and
   [the named-call decision](docs/decisions/callable-named-invocation.md),
   [the big-arity decision](docs/decisions/big-arity-callables.md), and
-  [the function-flag decision](docs/decisions/function-declaration-flags.md).
+  [the function-flag decision](docs/decisions/function-declaration-flags.md), and
+  [the foreign generic-method decision](docs/decisions/foreign-clr-generic-methods.md).
 - Reified functions use shared IR call-site substitution only. A selected KLIB
   body is authoritative; CLR generic dispatch, `System.Type`, and a closed
   Kotlin-owned `C<T>` are never alternate reification mechanisms. Preserve
