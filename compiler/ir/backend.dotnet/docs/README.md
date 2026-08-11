@@ -81,6 +81,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Function declaration flags](decisions/function-declaration-flags.md)
 - [Declaration-owned callable visibility and modality](decisions/callable-visibility-and-modality.md)
 - [Direct property declaration facts and accessor objects](decisions/property-accessor-reflection.md)
+- [Dedicated .NET class-member reflection](decisions/class-member-reflection.md)
 - [Semantic erasure and canonical ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
 - [Single-field value classes use one box owner and contextual carriers](decisions/value-classes.md)
 - [Kotlin coroutines use the Common continuation ABI and an explicit CIL state machine](decisions/kotlin-coroutines.md)

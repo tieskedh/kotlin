@@ -31,6 +31,10 @@ object DotNetConfigurationKeys {
     @JvmField
     val PRODUCE_LIBRARY = CompilerConfigurationKey.create<Boolean>("PRODUCE_LIBRARY")
 
+    // Emit executable producer metadata for optional Kotlin class-member reflection.
+    @JvmField
+    val MEMBER_REFLECTION = CompilerConfigurationKey.create<Boolean>("MEMBER_REFLECTION")
+
     // Target .NET API/runtime profile.
     @JvmField
     val TARGET = CompilerConfigurationKey.create<DotNetTarget>("TARGET")
@@ -52,6 +56,10 @@ var CompilerConfiguration.dotNetProducesStdlib: Boolean
 var CompilerConfiguration.dotNetProducesLibrary: Boolean
     get() = getBoolean(DotNetConfigurationKeys.PRODUCE_LIBRARY)
     set(value) { put(DotNetConfigurationKeys.PRODUCE_LIBRARY, value) }
+
+var CompilerConfiguration.dotNetMemberReflection: Boolean
+    get() = getBoolean(DotNetConfigurationKeys.MEMBER_REFLECTION)
+    set(value) { put(DotNetConfigurationKeys.MEMBER_REFLECTION, value) }
 
 var CompilerConfiguration.dotNetTarget: DotNetTarget
     get() = get(DotNetConfigurationKeys.TARGET, DotNetTarget.DEFAULT)

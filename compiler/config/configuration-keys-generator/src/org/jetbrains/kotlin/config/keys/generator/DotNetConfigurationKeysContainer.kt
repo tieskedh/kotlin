@@ -30,6 +30,10 @@ object DotNetConfigurationKeysContainer :
         comment = "Produce a Kotlin/.NET library assembly.",
         accessorName = "dotNetProducesLibrary",
     )
+    val MEMBER_REFLECTION by key<Boolean>(
+        comment = "Emit executable producer metadata for optional Kotlin class-member reflection.",
+        accessorName = "dotNetMemberReflection",
+    )
     val TARGET by key<DotNetTarget>(
         comment = "Target .NET API/runtime profile.",
         defaultValue = "DotNetTarget.DEFAULT",

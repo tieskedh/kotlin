@@ -41,6 +41,7 @@ import org.jetbrains.kotlin.config.LanguageVersion
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.config.MessageCollectorAccess
 import org.jetbrains.kotlin.config.dotNetAssemblyName
+import org.jetbrains.kotlin.config.dotNetMemberReflection
 import org.jetbrains.kotlin.config.dotNetOutput
 import org.jetbrains.kotlin.config.dotNetProducesLibrary
 import org.jetbrains.kotlin.config.dotNetTarget
@@ -349,6 +350,8 @@ private class DotNetEnvironmentConfigurator(
         configuration.targetPlatform = DotNetPlatforms.defaultDotNetPlatform
         configuration.dotNetAssemblyName = artifactName
         configuration.dotNetProducesLibrary = isLibraryModule(module)
+        configuration.dotNetMemberReflection =
+            DotNetCodegenDirectives.DOTNET_MEMBER_REFLECTION in module.directives
         configuration.dotNetExports = module.directives[DotNetCodegenDirectives.DOTNET_EXPORT]
             .map(DotNetExport::parse)
         configuration.dotNetPropertyExports = module.directives[DotNetCodegenDirectives.DOTNET_EXPORT_PROPERTY]
@@ -467,6 +470,9 @@ private fun LanguageVersionSettings.withDotNetSourceProductSettings(): LanguageV
 }
 
 private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
+    val DOTNET_MEMBER_REFLECTION by directive(
+        "Emit the pre-ABI executable producer metadata consumed by Kotlin.Reflection.dll"
+    )
     val DOTNET_STDLIB_FROM_SOURCE by directive(
         "Compile the compiler-owned Kotlin/.NET stdlib source product in this test instead of consuming the reusable fixture"
     )

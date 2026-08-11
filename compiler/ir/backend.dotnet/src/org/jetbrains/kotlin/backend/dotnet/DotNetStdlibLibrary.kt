@@ -1095,6 +1095,7 @@ internal object DotNetStdlibLibrary {
         "JvmAnnotationsH.kt" to "kotlin.jvm",
         "Multiplatform.kt" to "kotlin",
         "KClass.kt" to "kotlin.reflect",
+        "KDeclarationContainer.kt" to "kotlin.reflect",
         "KCallable.kt" to "kotlin.reflect",
         "KVisibility.kt" to "kotlin.reflect",
         "KFunction.kt" to "kotlin.reflect",
