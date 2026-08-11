@@ -380,7 +380,7 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     ),
     DotNetStdlibSourceResource(
         "KTypeImpl.kt",
-        "common-non-jvm/src/kotlin/reflect/KTypeImpl.kt",
+        "dotnet/src/kotlin/reflect/KTypeImpl.kt",
     ),
     DotNetStdlibSourceResource(
         "KTypeParameterBase.kt",

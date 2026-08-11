@@ -76,6 +76,8 @@ internal class DotNetTypeOfLowering(
 internal class DotNetKTypeIrBuilder(
     private val backendContext: DotNetBackendContext,
     private val operation: String,
+    private val includeDeclarationAnnotations: Boolean = false,
+    private val transformAnnotationValue: ((IrExpression) -> IrExpression)? = null,
 ) {
     fun IrBuilderWithScope.buildGraph(
         representedType: IrType,
@@ -241,6 +243,25 @@ internal class DotNetKTypeIrBuilder(
                 projections,
             )
             arguments[2] = simpleType.isMarkedNullable().toIrConst(backendContext.irBuiltIns.booleanType)
+            val annotationValues = if (includeDeclarationAnnotations) {
+                simpleType.annotations.dotNetRuntimeAnnotationValues { value ->
+                    transformAnnotationValue?.invoke(value) ?: value
+                }
+            } else {
+                emptyList()
+            }
+            arguments[3] = if (annotationValues.isEmpty()) {
+                irCall(backendContext.callableAnnotationSymbols.empty)
+            } else {
+                irCall(backendContext.callableAnnotationSymbols.create).apply {
+                    arguments[0] = backendContext.createArrayOfExpression(
+                        startOffset,
+                        endOffset,
+                        backendContext.irBuiltIns.annotationType,
+                        annotationValues,
+                    )
+                }
+            }
         }
     }
 

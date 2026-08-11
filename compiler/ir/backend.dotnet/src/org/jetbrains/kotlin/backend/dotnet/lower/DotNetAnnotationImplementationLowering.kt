@@ -78,10 +78,11 @@ import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
-import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedMethodSource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrImportedPropertySource
 import org.jetbrains.kotlin.load.dotnet.DotNetClrMethodDefinition
+import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.name.StandardClassIds
 import java.util.Collections
 import java.util.IdentityHashMap
 
@@ -167,7 +168,12 @@ internal class DotNetAnnotationImplementationLowering(
      * the getter and setter references they contain.
      */
     private fun addCallableAnnotationFactories(irFile: IrFile, transformer: Transformer) {
-        val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable signature")
+        val kTypeBuilder = DotNetKTypeIrBuilder(
+            context,
+            operation = "callable signature",
+            includeDeclarationAnnotations = true,
+            transformAnnotationValue = { value -> value.transform(transformer, null) },
+        )
         val references = mutableListOf<IrRichFunctionReference>()
         val propertyCalls = mutableListOf<IrCall>()
         irFile.acceptVoid(object : IrVisitorVoid() {
@@ -427,17 +433,8 @@ internal class DotNetAnnotationImplementationLowering(
     }
 
     private fun IrAnnotationContainer.runtimeAnnotationValues(transformer: Transformer): List<IrExpression> =
-        annotations.mapNotNull { annotation ->
-            val annotationClass = annotation.classSymbol.owner
-            if (!annotationClass.isSupportedDotNetAnnotationClass() ||
-                !annotationClass.isDotNetRuntimeRetainedAnnotation() ||
-                annotationClass.isDotNetResolutionOnlyStdlibDeclaration ||
-                annotationClass.fqNameWhenAvailable in resolutionOnlyBuiltInAnnotations ||
-                annotation.arguments.filterNotNull().any { value -> !value.hasExecutableAnnotationValue() }
-            ) {
-                return@mapNotNull null
-            }
-            annotation.deepCopyWithoutPatchingParents().transform(transformer, null)
+        annotations.dotNetRuntimeAnnotationValues { value ->
+            value.transform(transformer, null)
         }
 
     private fun IrAnnotationContainer.foreignAnnotationMemberOrNull(): ForeignAnnotationMember? = when (this) {
@@ -520,20 +517,6 @@ internal class DotNetAnnotationImplementationLowering(
         return holder
     }
 
-    private fun IrExpression.hasExecutableAnnotationValue(): Boolean = when (this) {
-        is IrAnnotation -> {
-            val annotationClass = classSymbol.owner
-            annotationClass.isSupportedDotNetAnnotationClass() &&
-                    !annotationClass.isDotNetResolutionOnlyStdlibDeclaration &&
-                    annotationClass.fqNameWhenAvailable !in resolutionOnlyBuiltInAnnotations &&
-                    arguments.filterNotNull().all { value -> value.hasExecutableAnnotationValue() }
-        }
-        is IrGetEnumValue ->
-            (symbol.owner.parent as? IrClass)?.isDotNetResolutionOnlyStdlibDeclaration != true
-        is IrVararg -> elements.filterIsInstance<IrExpression>().all { value -> value.hasExecutableAnnotationValue() }
-        else -> true
-    }
-
     private companion object {
         const val FOREIGN_METHOD = 0
         const val FOREIGN_PROPERTY = 1
@@ -543,19 +526,6 @@ internal class DotNetAnnotationImplementationLowering(
         const val PARAMETER_EXTENSION = 2
         const val PARAMETER_VALUE = 3
 
-        /** Built-in declarations remain frontend/KLIB facts until their own runtime objects exist. */
-        val resolutionOnlyBuiltInAnnotations = setOf(
-            // Unlike its BINARY-retained companions, Deprecated is runtime-retained. Its
-            // compiler-built-in declaration nevertheless has no physical .NET annotation class
-            // yet, so the KLIB application remains authoritative and the optional discovery
-            // factory omits it instead of making the annotated declaration uncompilable.
-            StandardNames.FqNames.deprecated,
-            StandardNames.FqNames.deprecatedSinceKotlin,
-            StandardNames.FqNames.target,
-            StandardNames.FqNames.retention,
-            StandardNames.FqNames.repeatable,
-            StandardNames.FqNames.mustBeDocumented,
-        )
     }
 
     private data class ForeignAnnotationMember(
@@ -755,6 +725,64 @@ internal class DotNetAnnotationImplementationLowering(
         }
     }
 }
+
+/**
+ * Selects the one executable runtime annotation value set shared by declaration and type-use
+ * reflection. The caller controls only how the copied annotation expression enters its lowering
+ * phase; retention, supported-value, and resolution-only policy stay centralized here.
+ */
+internal fun List<IrAnnotation>.dotNetRuntimeAnnotationValues(
+    transform: (IrExpression) -> IrExpression = { value -> value },
+): List<IrExpression> = mapNotNull { annotation ->
+    val annotationClass = annotation.classSymbol.owner
+    if (!annotationClass.isSupportedDotNetAnnotationClass() ||
+        !annotationClass.isDotNetRuntimeRetainedAnnotation() ||
+        annotationClass.isDotNetResolutionOnlyStdlibDeclaration ||
+        annotationClass.isCompilerInternalSyntheticAnnotation ||
+        annotationClass.fqNameWhenAvailable in dotNetResolutionOnlyBuiltInAnnotations ||
+        annotation.arguments.filterNotNull().any { value -> !value.hasExecutableDotNetAnnotationValue() }
+    ) {
+        return@mapNotNull null
+    }
+    transform(annotation.deepCopyWithoutPatchingParents())
+}
+
+private fun IrExpression.hasExecutableDotNetAnnotationValue(): Boolean = when (this) {
+    is IrAnnotation -> {
+        val annotationClass = classSymbol.owner
+        annotationClass.isSupportedDotNetAnnotationClass() &&
+                !annotationClass.isDotNetResolutionOnlyStdlibDeclaration &&
+                !annotationClass.isCompilerInternalSyntheticAnnotation &&
+                annotationClass.fqNameWhenAvailable !in dotNetResolutionOnlyBuiltInAnnotations &&
+                arguments.filterNotNull().all { value -> value.hasExecutableDotNetAnnotationValue() }
+    }
+    is IrGetEnumValue ->
+        (symbol.owner.parent as? IrClass)?.isDotNetResolutionOnlyStdlibDeclaration != true
+    is IrVararg ->
+        elements.filterIsInstance<IrExpression>().all { value -> value.hasExecutableDotNetAnnotationValue() }
+    else -> true
+}
+
+/** JVM also treats these IR-only type-enhancement markers as non-reflective. */
+private val IrClass.isCompilerInternalSyntheticAnnotation: Boolean
+    get() {
+        val fqName = fqNameWhenAvailable ?: return false
+        return fqName == StandardClassIds.Annotations.EnhancedNullability.asSingleFqName() ||
+                fqName.startsWith(StandardClassIds.BASE_INTERNAL_IR_PACKAGE)
+    }
+
+/** Built-in declarations remain frontend/KLIB facts until their own runtime objects exist. */
+private val dotNetResolutionOnlyBuiltInAnnotations = setOf(
+    // Unlike its BINARY-retained companions, Deprecated is runtime-retained. Its compiler-built-in
+    // declaration nevertheless has no physical .NET annotation class yet, so optional discovery
+    // omits it instead of making the annotated declaration uncompilable.
+    StandardNames.FqNames.deprecated,
+    StandardNames.FqNames.deprecatedSinceKotlin,
+    StandardNames.FqNames.target,
+    StandardNames.FqNames.retention,
+    StandardNames.FqNames.repeatable,
+    StandardNames.FqNames.mustBeDocumented,
+)
 
 /** Private factory derived before callable lowering removes the declaration target. */
 internal var IrRichFunctionReference.dotNetCallableAnnotationFactory: IrSimpleFunction?

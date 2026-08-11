@@ -8,8 +8,9 @@
   [`draft-adr-callable-and-reference-abi.md`](draft-adr-callable-and-reference-abi.md)
 - Does not enable: `KParameter`,
   visibility/modality flags, accessor objects, member lookup, reflective
-  invocation, type-use annotation discovery, or a complete `kotlin-reflect`
-  product
+  invocation, or a complete `kotlin-reflect` product. Declaration-owned
+  type-use annotation reflection was selected later by
+  [`type-use-annotation-reflection.md`](type-use-annotation-reflection.md).
 
 ## Context and target precedent
 
@@ -62,8 +63,10 @@ CLR reflection state. Bound and unbound references retain their ordinary
 execution and equality behavior.
 
 The minimal physical `KType` interface moves beside `KClass` and `KCallable`
-into `Kotlin.Runtime.dll`. Its unchanged Common implementation remains in
-`Kotlin.Stdlib.dll`. This makes the public callable slot truthfully typed
+into `Kotlin.Runtime.dll`. At this historical surface its Common behavior
+remained in `Kotlin.Stdlib.dll`; the later type-use tranche added a
+.NET-specific implementation without changing that structural behavior. This
+makes the public callable slot truthfully typed
 without a Runtime-to-Stdlib assembly cycle, an object-return bridge, a wrapper,
 or a second type identity.
 
@@ -141,13 +144,14 @@ classifiers.
   one additional logical `KType`; local delegated properties carry the same
   value explicitly.
 - Runtime owns the one physical `KType` interface; Stdlib-owned `KTypeImpl`
-  implements it and continues to own Common behavior.
+  implements it and continues to own structural Common behavior. The later
+  type-use tranche adds the platform-specific annotation view.
 - Runtime surface level advances to 19; the physical Kotlin declaration-index
   schema is unchanged.
 - The extracted type-graph builder becomes the single producer for `typeOf`
   and callable return types.
-- Parameters, accessor objects, type-use
-  annotations, general members, and reflective invocation remain parked.
+- Parameters, accessor objects, general members, and reflective invocation
+  remained parked at this tranche. Type-use annotations were selected later.
 
 ## Invariants
 

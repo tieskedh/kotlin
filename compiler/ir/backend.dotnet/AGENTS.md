@@ -525,13 +525,20 @@ See the
   parameter identities before initializing any bound. A classifier with no
   physical CLR Type uses a separate KLIB-mangled logical key; never use its
   display name as identity. The minimal physical `KType` interface lives in
-  `Kotlin.Runtime.dll`, beside `KClass` and runtime-owned `KCallable`; Common
-  behavior and `KTypeImpl` remain in `Kotlin.Stdlib.dll`. Do not create a
+  `Kotlin.Runtime.dll`, beside `KClass` and runtime-owned `KCallable`; graph
+  behavior and the .NET-specific `KTypeImpl` remain in `Kotlin.Stdlib.dll`.
+  JVM-shaped declaration type-use discovery is an explicit platform extension:
+  the physical interface implements `KAnnotatedElement`, and each
+  declaration-derived node receives only its own runtime-retained KLIB/IR
+  annotations. Do not populate annotations for `typeOf`, flatten nested uses,
+  decode Kotlin values from emitted CLR attributes, or turn Roslyn nullable
+  metadata into annotation objects. Do not create a
   Runtime-to-Stdlib assembly dependency, weaken the callable slot to `object`,
   or emit a second Stdlib `KType` identity. Compiler helpers are runtime/stdlib ABI, and a
   separate-module test must use the CLI's metadata-serialization and
   finalization phases rather than a same-invocation source dependency. See
-  [the KType decision](docs/decisions/ktype-and-typeof.md).
+  [the KType decision](docs/decisions/ktype-and-typeof.md) and
+  [the type-use annotation ADR](docs/decisions/type-use-annotation-reflection.md).
 - A Kotlin annotation is one concrete sealed CLR `System.Attribute` subtype
   with Common-generated value semantics. KLIB owns its logical declaration,
   values, defaults, targets, retention, and applications. Only a complete
@@ -555,7 +562,10 @@ See the
   `KCallable.returnType` uses the exact reflection target and the shared
   logical `KType` graph: Kotlin declarations are KLIB-derived, imported CLR
   declarations are importer-enhanced IR, and generated `invoke` adapters or
-  runtime CLR reflection are never signature authority. `KCallable.typeParameters`
+  runtime CLR reflection are never signature authority. Runtime-retained type
+  annotations remain attached to their exact return, parameter, receiver,
+  projected argument, or upper-bound node; declaration annotations and CLR
+  metadata rows keep their own owners. `KCallable.typeParameters`
   is the JVM-shaped declaration-owned extension above Native's smaller floor.
   Return types, every callable-owned parameter, their recursive bounds, and
   reachable enclosing parameters must be allocated in one graph. The exposed

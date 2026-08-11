@@ -507,7 +507,8 @@ IL_whenNext_1:
     stloc.1
     ldloc.1
     ldc.i4.0
-    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool, class [Kotlin.Runtime]'Kotlin.Collections.List')
     stloc.2
     ldloc.0
     ldc.i4 0
@@ -546,7 +547,8 @@ IL_whenNext_1:
     stloc 7
     ldloc 7
     ldc.i4.0
-    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool, class [Kotlin.Runtime]'Kotlin.Collections.List')
     stloc 6
     ldloc 5
     ldc.i4 1
@@ -712,7 +714,8 @@ IL_whenNext_1:
     stloc.1
     ldloc.1
     ldc.i4.0
-    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool, class [Kotlin.Runtime]'Kotlin.Collections.List')
     stloc.2
     ldloc.0
     ldc.i4 0
@@ -751,7 +754,8 @@ IL_whenNext_1:
     stloc 7
     ldloc 7
     ldc.i4.0
-    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool, class [Kotlin.Runtime]'Kotlin.Collections.List')
     stloc 6
     ldloc 5
     ldc.i4 1
@@ -811,7 +815,8 @@ IL_whenNext_1:
     stloc 11
     ldloc 11
     ldc.i4.0
-    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool, class [Kotlin.Runtime]'Kotlin.Collections.List')
     stloc 10
     ldloc 9
     ldc.i4 1
@@ -871,7 +876,8 @@ IL_whenNext_1:
     stloc 14
     ldloc 14
     ldc.i4.0
-    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool, class [Kotlin.Runtime]'Kotlin.Collections.List')
     stloc 13
     ldloc 12
     ldc.i4 1
@@ -1024,7 +1030,8 @@ IL_whenNext_1:
     stloc.1
     ldloc.1
     ldc.i4.0
-    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.CallableAnnotationFactory'::'Empty'()
+    call class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Stdlib]'Kotlin.Reflection.TypeOfIntrinsics'::'dotNetCreateKType'(class [Kotlin.Runtime]'Kotlin.KClassifier', class [Kotlin.Stdlib]'Kotlin.Reflection.KTypeProjection'[], bool, class [Kotlin.Runtime]'Kotlin.Collections.List')
     stloc.2
     ldloc.0
     ldc.i4 0

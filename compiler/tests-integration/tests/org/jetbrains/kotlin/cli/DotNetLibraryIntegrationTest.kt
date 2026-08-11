@@ -15528,6 +15528,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         Kotlin.KType concrete = ktype.boundary.KTypeBoundaryKt.concreteType();
                         if (concrete.classifier == null || concrete.isMarkedNullable) return 1;
+                        Kotlin.Collections.List annotations =
+                            ((Kotlin.KAnnotatedElement)concrete).annotations;
+                        if (annotations.Size != 0) return 3;
                         Kotlin.KType declared =
                             ktype.boundary.KTypeBoundaryKt.declarationType<string>();
                         Kotlin.Reflection.KTypeProjection projection =
@@ -23185,12 +23188,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         val parameter = callable.typeParameters.single()
                         check(callable.returnType.classifier === parameter)
                         check(callable.parameters.single().type.classifier === parameter)
+                        check(callable.returnType.annotations.isEmpty()) {
+                            "foreign return metadata leaked into KType annotations"
+                        }
+                        check(callable.parameters.single().type.annotations.isEmpty()) {
+                            "foreign parameter metadata leaked into KType annotations"
+                        }
                         val upcastFunction: (String) -> Any = api::Upcast
                         val upcast = upcastFunction as kotlin.reflect.KCallable<*>
                         val upcastParameters = upcast.typeParameters
                         check(upcastParameters.size == 2) { "upcast type-parameter count" }
                         check(upcastParameters[0].upperBounds.single().classifier === upcastParameters[1]) {
                             "upcast relative bound identity"
+                        }
+                        check(upcastParameters.flatMap { it.upperBounds }.all { it.annotations.isEmpty() }) {
+                            "foreign constraint metadata leaked into KType annotations"
                         }
                         val keyedFunction:
                                 (ForeignCallContracts.GenericKey) -> ForeignCallContracts.GenericKey =
@@ -34193,7 +34205,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SharedVariableBox.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SyntheticConstructorMarker.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/ThrowHelpers.kt").absoluteFile
-        sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/reflect/KTypeImpl.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/reflect/KTypeParameterBase.kt").absoluteFile
         sourceFiles.sortBy(File::invariantSeparatorsPath)
         assertEquals(DOTNET_STDLIB_SOURCES.keys.sorted(), sourceFiles.map(File::getName).sorted())
