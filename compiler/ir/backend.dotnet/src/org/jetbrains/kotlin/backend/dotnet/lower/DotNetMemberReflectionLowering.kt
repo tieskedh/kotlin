@@ -122,11 +122,11 @@ internal class DotNetMemberReflectionLowering(
 
     /**
      * Builds the first product-owned catalog from Kotlin class scopes while the Stdlib module is
-     * still semantic IR. The eight concrete Common scalars and `String` exercise mapped CLR
-     * carriers; the built-in collection interfaces exercise the split-interface model; and the
-     * Stdlib collection classes exercise Kotlin-owned implementations and abstract bases. Adding
-     * a classifier changes only this selected data set, never the member construction or
-     * invocation implementation.
+     * still semantic IR. The eight concrete Common scalars, broad `Number`, and `String`
+     * exercise mapped and classified CLR carriers; the built-in collection interfaces exercise
+     * the split-interface model; and the Stdlib collection classes exercise Kotlin-owned
+     * implementations and abstract bases. Adding a classifier changes only this selected data
+     * set, never the member construction or invocation implementation.
      */
     private fun IrModuleFragment.addStdlibCatalog() {
         val functions = mutableListOf<IrSimpleFunction>()
@@ -171,6 +171,7 @@ internal class DotNetMemberReflectionLowering(
                 longClass,
                 floatClass,
                 doubleClass,
+                numberClass,
                 stringClass,
                 iterableClass,
                 mutableIterableClass,

@@ -996,23 +996,8 @@ ${dynamicExactTypeCases(coreLibraryReference).prependIndent("      ")}
       ret
     KCF_InstanceNumber:
       ldarg.0
-      isinst ${coreLibraryReference}System.SByte
-      brtrue.s KCF_InstanceTrue
-      ldarg.0
-      isinst ${coreLibraryReference}System.Int16
-      brtrue.s KCF_InstanceTrue
-      ldarg.0
-      isinst ${coreLibraryReference}System.Int32
-      brtrue.s KCF_InstanceTrue
-      ldarg.0
-      isinst ${coreLibraryReference}System.Int64
-      brtrue.s KCF_InstanceTrue
-      ldarg.0
-      isinst ${coreLibraryReference}System.Single
-      brtrue.s KCF_InstanceTrue
-      ldarg.0
-      isinst ${coreLibraryReference}System.Double
-      brtrue.s KCF_InstanceTrue
+      call bool Kotlin.Runtime.Internal.Intrinsics::'IsNumber'(object)
+      ret
     KCF_InstanceFalse:
       ldc.i4.0
       ret

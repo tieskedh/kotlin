@@ -359,6 +359,15 @@ See the
   calls, casts, and type tests share one classifier. Do not wrap strings,
   constrain generic parameters to the marker, or admit arbitrary objects. See
   [the `CharSequence` carrier ADR](docs/decisions/char-sequence-carrier.md).
+- `Number` remains Common's abstract superclass. Broad values use a classified
+  `System.Object` carrier whose positive set is the six signed built-in numeric
+  boxes plus instances of the runtime-owned abstract `Kotlin.Number` subclass
+  base. Kotlin-written subclasses physically extend that base; broad calls,
+  casts, type tests, and `KClass.isInstance` share one runtime classifier and
+  dispatch boundary. Do not substitute `System.IConvertible`, wrap built-in
+  boxes, turn `Number` into an interface, emit an unsound `T : Kotlin.Number`
+  CLR constraint, or infer its reflection family from concrete scalars. See
+  [the `Number` carrier ADR](docs/decisions/number-carrier.md).
 - `Appendable` and `StringBuilder` are Kotlin-owned `Kotlin.Stdlib` identities.
   The builder may use `System.Text.StringBuilder` only as private storage;
   never expose that storage, map the Kotlin class directly to it, or add the
