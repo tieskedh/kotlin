@@ -143,11 +143,28 @@ Selected assemblies, embedded-KLIB state, physical bindings, and target
 compilation caches remain scoped to that build session; environment reuse does
 not authorize process-global target state.
 
+The operation model must describe the product that actually exists. JS and
+Wasm distinguish reusable KLIB compilation from a later link operation and
+test each argument partition and output root independently. Kotlin/.NET instead
+produces or consumes one self-describing DLL containing both Kotlin KLIB and
+CLR implementation. It must not invent a standalone KLIB/link operation or
+route through JS/JVM operations to fit an existing BTA shape. If a later
+application-link or export operation consumes a producer DLL, its input and
+output roots are distinct and the producer artifact identity—not a repeated
+display/module name—selects the input.
+
 Unsafe common-source incremental compilation, if introduced, has a distinct
 .NET property and defaults to disabled until task inputs and invalidation cover
 source-set visibility, selected DLL/KLIB identity, friend authorization,
 physical ABI metadata, and inline bodies. It never consumes a JVM, JS, or Wasm
 switch merely because the shared Gradle machinery is similar.
+
+Gradle-side dependency, target, and incremental caches use project-isolation-
+safe, build-session-scoped services with stable structural keys. They do not
+retain compiler IR, selected assembly objects, project instances from another
+isolated project, or target state in static/process-global maps. Cross-project
+coordination goes through the shared Build Service lifecycle rather than root-
+project lookup or eager task realization.
 
 Its snapshot must also retain logical expanded typealias dependencies from the
 embedded KLIB wherever an alias changes the visible declaration shape. A JVM
