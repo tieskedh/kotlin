@@ -1,3 +1,4 @@
+import kotlin.reflect.KFunction
 import kotlin.reflect.KFunction1
 
 private class ReflectedBound(private val value: Int) {
@@ -67,6 +68,8 @@ fun box(): String {
     val valueReference: () -> Int = ::reflectedValue
     val unitReference: () -> Unit = ::reflectedValue
     if (valueReference.equals(unitReference)) return "fail 19: adapted reference identity"
+    if (valueReference !is KFunction<*>) return "fail 19a: exact reference lost KFunction identity"
+    if (unitReference is KFunction<*>) return "fail 19b: adapted reference gained KFunction identity"
 
     val constructor: (Int) -> ReflectedBound = ::ReflectedBound
     if (constructor.toString() != "constructor") return "fail 20: constructor rendering"
