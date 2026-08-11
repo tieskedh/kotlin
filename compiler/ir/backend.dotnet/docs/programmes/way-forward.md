@@ -130,9 +130,11 @@ The product matrix covers static creation, reified substitution, declaration par
 recursive bounds, erased Kotlin classifiers, arrays, nullable relative bounds, production-pipeline
 separate compilation, both CLR profiles, and direct C# graph inspection. Ordinary Kotlin-produced
   class-member enumeration now composes this graph with the completed callable invocation surface.
-  The first generated catalog admits mapped `String` and Kotlin-owned Stdlib
-  `ArrayList`; remaining mapped/Stdlib and foreign classifier families remain
-  follow-on closures.
+  The generated catalog admits mapped `String` and the complete current
+  Kotlin-owned collection implementation family: the read-only and mutable
+  abstract bases plus `ArrayList`, `HashMap`, and `HashSet`. Linked hash
+  collections retain their actual-typealias identity. Remaining mapped/Stdlib
+  and foreign classifier families remain follow-on closures.
 Valued annotation classes now use the Common member generator and embedded KLIB
 as their complete semantic representation; exact runtime-retained
 scalar/string/vector values receive an additive CLR custom-attribute row,
@@ -158,9 +160,10 @@ same graph with JVM's owner, ordering, captured-receiver omission, reindexing,
 default, vararg, and equality rules. Kotlin parameter applications retain their
 exact declaration owners; admitted foreign callables use exact CLR Param rows
   without turning CLR optional flags into Kotlin default-call semantics. The
-  selected mapped/Stdlib catalog now reuses the same graphs; foreign and
-  remaining classifier families plus type-use annotations remain separate
-  tranches.
+  selected mapped/Stdlib catalog now reuses the same graphs for one- and
+  two-parameter collection owners, concrete classes, and abstract bases;
+  foreign and remaining classifier families plus type-use annotations remain
+  separate tranches.
 Positional `KCallable.call` now consumes that exact
 parameter order through the existing erased `FunctionN` capability. Runtime
 surface level 22 validates count and dispatches without CLR member discovery;
@@ -232,14 +235,17 @@ carriers. Direct ordinary-IR thunks continue through the normal default,
 suspend, virtual-dispatch, and value-representation lowerings; no CLR
 reflection path was introduced. Runtime/library surface 32 versions the new
   factory. Runtime/library surface 33 adds a Stdlib-owned catalog generated
-  after KLIB serialization from complete Kotlin scopes. Its first entries cover
-  mapped `String` and Kotlin-owned `ArrayList`; lookup remains optional-product
-  policy, arbitrary BCL members never enter the result, and inherited fake
-  overrides retain declaration identity while their resolved overrides supply
-  execution only. The catalog also forced authoritative Common
-  `@IgnorableReturnValue` into the Stdlib source closure instead of dropping a
-  reflected annotation. The ordinary user/library producer remains explicitly
-  opted in: default enablement still
+  after KLIB serialization from complete Kotlin scopes. Its admitted entries
+  cover mapped `String` and the current Kotlin-owned collection implementation
+  family; adding those complete scopes does not version the catalog protocol.
+  Lookup remains optional-product policy, arbitrary BCL members never enter the
+  result, and inherited fake overrides retain declaration identity while their
+  resolved overrides supply execution only. Abstract skeletal-class members
+  still require a real subclass receiver; sharing a collection interface does
+  not invent a class-inheritance edge. The catalog also forced authoritative
+  Common `@IgnorableReturnValue` into the Stdlib source closure instead of
+  dropping a reflected annotation. The ordinary user/library producer remains
+  explicitly opted in: default enablement still
   requires product-size, trimming, NativeAOT, startup, and invocation evidence,
   plus the remaining mapped/foreign/Stdlib authority paths.
 
