@@ -19,6 +19,11 @@ fun apply23(function: Function23OfInt): Int = function(
 
 fun applyBigCombiner(function: BigCombiner): Int = apply23(function)
 
+fun invokeBigCombiner(function: BigCombiner): Int = function(
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+    13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+)
+
 fun make23(): Function23OfInt = {
         p1, _, _, _, _, _, _, _, _, _, _, p12,
         _, _, _, _, _, _, _, _, _, _, p23,
@@ -131,6 +136,7 @@ private fun invoke23(function: LocalFunction23): Int = function(
 fun box(): String {
     if (invoke23(TwentyThree()) != 36) return "fail 1: user Function23"
     if (applyBigCombiner(TransitiveTwentyThree()) != 36) return "fail 1a: transitive Function23 interface"
+    if (invokeBigCombiner(TransitiveTwentyThree()) != 36) return "fail 1b: direct transitive Function23 invoke"
 
     val lambda: LocalFunction23 = {
             p1, _, _, _, _, _, _, _, _, _, _, p12,
