@@ -29,6 +29,8 @@ import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
+import org.jetbrains.kotlin.ir.expressions.IrStatementOriginImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrFunctionReferenceImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrPropertyReferenceImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrVarargImpl
@@ -46,6 +48,10 @@ import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.name.Name
+
+/** Distinguishes producer-owned KClass member values from ordinary user callable references. */
+internal val DOTNET_REFLECTED_MEMBER_REFERENCE: IrStatementOrigin =
+    IrStatementOriginImpl("DOTNET_REFLECTED_MEMBER_REFERENCE")
 
 /**
  * Emits producer-owned executable member metadata after KLIB serialization and before ordinary
@@ -161,6 +167,7 @@ internal class DotNetMemberReflectionLowering(
             typeArgumentsCount = function.typeParameters.size,
             reflectionTarget = function.symbol,
         ).apply {
+            origin = DOTNET_REFLECTED_MEMBER_REFERENCE
             function.typeParameters.forEachIndexed { index, typeParameter ->
                 typeArguments[index] = typeParameter.defaultType.eraseTypeParameters()
             }
@@ -188,6 +195,7 @@ internal class DotNetMemberReflectionLowering(
             getter = getter.symbol,
             setter = property.setter?.symbol,
         ).apply {
+            origin = DOTNET_REFLECTED_MEMBER_REFERENCE
             getter.typeParameters.forEachIndexed { index, typeParameter ->
                 typeArguments[index] = typeParameter.defaultType.eraseTypeParameters()
             }

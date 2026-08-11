@@ -222,24 +222,25 @@ foreign classifiers fail closed rather than publishing a partial member set;
 constructors and declared-member convenience APIs remain separate. Preserve
 the owner split and the path-independent, `visibleCrossFile` callable identity
 rule in the [class-member reflection ADR](../decisions/class-member-reflection.md).
-Its current per-member executable factories prove semantic reuse but are not a
-frozen compact encoding. Applying them generally demonstrated material
-producer expansion, so a compact KLIB-derived descriptor plus
-reflection-product decoder, or equally compact shared thunks, is required
-before default enablement or ABI freeze. Preserve the exact semantic matrix
-while assessing producer size, trimming, NativeAOT behavior, startup, and
-invocation; this replacement is architecture work rather than a performance
-micro-tuning tranche.
+Private protocol 2 now retains that semantic reuse with one generated
+dispatcher TypeDef per reflected producer class and shared exact-arity Runtime
+carriers. Direct ordinary-IR thunks continue through the normal default,
+suspend, virtual-dispatch, and value-representation lowerings; no CLR
+reflection path was introduced. Runtime/library surface 32 versions the new
+factory. The producer remains explicitly opted in: default enablement still
+requires product-size, trimming, NativeAOT, startup, and invocation evidence,
+plus complete mapped/foreign/Stdlib authority paths.
 
-The first bounded size correction is complete at runtime surface and library
-ABI 31. `FunctionReferenceBase` now owns common callable reflection bodies once,
+The first bounded size correction completed at runtime surface and library
+ABI 31. `FunctionReferenceBase` owns common callable reflection bodies once,
 as JVM `CallableReference`/`FunctionReference` and Wasm `KFunctionImpl` do;
 generated references retain only declaration-specific execution hooks. The
 base deliberately does not implement `KFunction`, preserving the JVM boundary
 for adapted `FunctionN`-only references. Five generated-IL baselines lost 693
-repeated lines, but executable member factories still create one class per
-member. Treat this as prerequisite cleanup, not as satisfaction of the compact
-descriptor/dispatcher requirement.
+repeated lines. The following protocol-2 closure completes the structural
+correction at surface/ABI 32: member count now grows dispatcher cases and
+MethodDefs, not callable TypeDefs. Treat later representation work as measured
+product trade-offs; do not rebuild a second callable implementation.
 
 Future member enumeration must still cover member extension properties with
 multiple callable-owned type parameters and, once context parameters are

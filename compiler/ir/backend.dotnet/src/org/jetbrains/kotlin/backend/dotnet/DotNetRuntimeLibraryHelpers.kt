@@ -113,6 +113,10 @@ internal object DotNetRuntimeLibraryHelpers {
         ).prependIndent("            |")
         val propertyAccessorSupportTypesIl = propertyAccessorSupportTypesIl(coreLibraryReference)
             .prependIndent("            |")
+        val memberReferenceSupportTypesIl = memberReferenceSupportTypesIl(
+            coreLibraryReference,
+            compilerAbiTypeAttributesIl.replace("            |", ""),
+        ).prependIndent("            |")
         val callableInvokerSwitchLabelsIl = (0 until BuiltInFunctionArity.BIG_ARITY)
             .joinToString(", ") { arity -> "CI_Call$arity" }
         val callableInvokerCasesIl = (0 until BuiltInFunctionArity.BIG_ARITY)
@@ -644,7 +648,7 @@ $callableInvokerCasesIl
             |      .maxstack 2
             |      ldarg.0
             |      ldarg.1
-            |      call instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallErased(object[])
+            |      callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallErased(object[])
             |      ret
             |    }
             |
@@ -700,7 +704,7 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |
-            |    .method family hidebysig instance object CallErased(object[] 'args') cil managed
+            |    .method family hidebysig newslot virtual instance object CallErased(object[] 'args') cil managed
             |    {
             |      .maxstack 3
             |      ldarg.0
@@ -824,7 +828,7 @@ $callableInvokerCasesIl
             |      brtrue.s FR_By_Default
             |      ldarg.0
             |      ldloc.0
-            |      call instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallErased(object[])
+            |      callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallErased(object[])
             |      ret
             |    FR_By_Default:
             |      ldarg.0
@@ -989,6 +993,8 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |  }
+            |
+$memberReferenceSupportTypesIl
             |
 $propertyAccessorSupportTypesIl
             |
@@ -5394,6 +5400,310 @@ $setterTypesIl
                 newobj instance void Kotlin.Runtime.Internal.PropertySetter2Accessor::.ctor(
                     class Kotlin.KMutableProperty, object[], class Kotlin.Function2, class Kotlin.Collections.List, int32)
                 ret
+              }
+            }
+        """.trimIndent()
+    }
+
+    /**
+     * Shared arity-correct KFunction carriers for producer-owned KClass member enumeration.
+     *
+     * One generated Function3 dispatcher remains in each reflected producer class. These Runtime
+     * types preserve the exact fixed Function$arity physical test while keeping member count out
+     * of producer TypeDef growth. The dispatcher receives only boxed arguments; its ordinary IR
+     * thunks own all casts, default dispatch and suspend continuation forwarding.
+     */
+    private fun memberReferenceSupportTypesIl(
+        coreLibraryReference: String,
+        compilerAbiTypeAttributesIl: String,
+    ): String {
+        val systemObject = coreLibraryReference + "System.Object"
+        val systemInt32 = coreLibraryReference + "System.Int32"
+        val systemArgumentException = coreLibraryReference + "System.ArgumentException"
+        val systemNotSupportedException = coreLibraryReference + "System.NotSupportedException"
+        val suspendFlag = DotNetFunctionReferenceFlags.IS_SUSPEND
+        val constructorParameters =
+            "class Kotlin.Function3 'dispatcher', int32 'memberIndex', string 'id', int32 'arity', " +
+                    "int32 'flags', string 'name', class Kotlin.Collections.List 'annotations', " +
+                    "object[] 'signature', class Kotlin.Function2 'parameterFactory', object[] 'emptyVarargs'"
+
+        fun loadArgument(index: Int): String = when (index) {
+            0 -> "ldarg.0"
+            1 -> "ldarg.1"
+            2 -> "ldarg.2"
+            3 -> "ldarg.3"
+            else -> "ldarg.s $index"
+        }
+
+        val fixedCarrierTypes = (0 until BuiltInFunctionArity.BIG_ARITY).joinToString("\n\n") { arity ->
+            val parameterNames = (0 until arity).joinToString(", ") { index -> "object p$index" }
+            val parameterTypes = List(arity) { "object" }.joinToString(", ")
+            val argumentStores = (0 until arity).joinToString("\n") { index ->
+                val load = loadArgument(index + 1)
+                """
+                  ldloc.0
+                  ldc.i4 $index
+                  $load
+                  stelem.ref
+                """.trimIndent()
+            }
+            """
+            .class private auto ansi sealed beforefieldinit MemberFunction$arity
+                   extends Kotlin.Runtime.Internal.MemberFunctionReferenceBase
+                   implements Kotlin.Function$arity
+            {
+              .method assembly hidebysig specialname rtspecialname instance void .ctor(
+                  $constructorParameters) cil managed
+              {
+                .maxstack 11
+                ldarg.0
+                ldarg.1
+                ldarg.2
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                ldarg.s 6
+                ldarg.s 7
+                ldarg.s 8
+                ldarg.s 9
+                ldarg.s 10
+                call instance void Kotlin.Runtime.Internal.MemberFunctionReferenceBase::.ctor(
+                    $constructorParameters)
+                ret
+              }
+
+              .method public hidebysig newslot virtual final instance object Invoke($parameterNames) cil managed
+              {
+                .override method instance object Kotlin.Function$arity::Invoke($parameterTypes)
+                .maxstack 3
+                .locals init ([0] object[] args)
+                ldc.i4 $arity
+                newarr $systemObject
+                stloc.0
+$argumentStores
+                ldarg.0
+                ldloc.0
+                callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallErased(object[])
+                ret
+              }
+            }
+            """.trimIndent()
+        }
+        val switchLabels = (0 until BuiltInFunctionArity.BIG_ARITY)
+            .joinToString(", ") { arity -> "MRF_Create$arity" }
+        val factoryCases = (0 until BuiltInFunctionArity.BIG_ARITY).joinToString("\n") { arity ->
+            val loads = (0..9).joinToString("\n") { index -> "      " + loadArgument(index) }
+            """
+              MRF_Create$arity:
+$loads
+                newobj instance void Kotlin.Runtime.Internal.MemberFunction$arity::.ctor(
+                    $constructorParameters)
+                ret
+            """.trimIndent()
+        }
+        val factoryLoads = (0..9).joinToString("\n") { index -> "      " + loadArgument(index) }
+
+        return """
+            .class private abstract auto ansi beforefieldinit MemberFunctionReferenceBase
+                   extends Kotlin.Runtime.Internal.FunctionReferenceBase
+                   implements Kotlin.KFunction
+            {
+              .field private initonly class Kotlin.Function3 'dispatcher'
+              .field private initonly int32 'memberIndex'
+              .field family initonly int32 'memberArity'
+              .field private initonly bool 'isSuspend'
+              .field private initonly object[] 'emptyVarargs'
+
+              .method family hidebysig specialname rtspecialname instance void .ctor(
+                  $constructorParameters) cil managed
+              {
+                .maxstack 9
+                ldarg.0
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                ldc.i4.0
+                ldarg.s 6
+                ldarg.s 7
+                ldarg.s 8
+                ldarg.s 9
+                call instance void Kotlin.Runtime.Internal.FunctionReferenceBase::.ctor(
+                    string, int32, int32, int32, string, class Kotlin.Collections.List,
+                    object[], class Kotlin.Function2)
+                ldarg.0
+                ldarg.1
+                stfld class Kotlin.Function3 Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'dispatcher'
+                ldarg.0
+                ldarg.2
+                stfld int32 Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'memberIndex'
+                ldarg.0
+                ldarg.s 4
+                stfld int32 Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'memberArity'
+                ldarg.0
+                ldarg.s 5
+                ldc.i4 $suspendFlag
+                and
+                ldc.i4.0
+                cgt.un
+                stfld bool Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'isSuspend'
+                ldarg.0
+                ldarg.s 10
+                stfld object[] Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'emptyVarargs'
+                ret
+              }
+
+              .method family hidebysig virtual instance object CallErased(object[] 'args') cil managed
+              {
+                .maxstack 4
+                ldarg.0
+                ldfld class Kotlin.Function3 Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'dispatcher'
+                ldarg.0
+                ldfld int32 Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'memberIndex'
+                box $systemInt32
+                ldarg.1
+                ldnull
+                callvirt instance object Kotlin.Function3::Invoke(object, object, object)
+                ret
+              }
+
+              .method family hidebysig virtual instance object CallDefaultErased(
+                  object[] 'args', class Kotlin.IntArray 'masks') cil managed
+              {
+                .maxstack 4
+                ldarg.0
+                ldfld class Kotlin.Function3 Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'dispatcher'
+                ldarg.0
+                ldfld int32 Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'memberIndex'
+                box $systemInt32
+                ldarg.1
+                ldarg.2
+                callvirt instance object Kotlin.Function3::Invoke(object, object, object)
+                ret
+              }
+
+              .method family hidebysig virtual instance object CallByErased(
+                  class Kotlin.Collections.Map 'args') cil managed
+              {
+                .maxstack 2
+                ldarg.0
+                ldfld bool Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'isSuspend'
+                brfalse.s MRF_CallByOrdinary
+                ldstr "callBy cannot supply a suspend continuation; use a coroutine-aware reflective call."
+                newobj instance void $systemNotSupportedException::.ctor(string)
+                throw
+              MRF_CallByOrdinary:
+                ldarg.0
+                ldarg.1
+                call instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallByErased(
+                    class Kotlin.Collections.Map)
+                ret
+              }
+
+              .method family hidebysig virtual instance object EmptyVarargAt(int32 'index') cil managed
+              {
+                .maxstack 2
+                .locals init ([0] object 'value')
+                ldarg.1
+                ldc.i4.0
+                blt.s MRF_NoVararg
+                ldarg.0
+                ldfld object[] Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'emptyVarargs'
+                brfalse.s MRF_NoVararg
+                ldarg.1
+                ldarg.0
+                ldfld object[] Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'emptyVarargs'
+                ldlen
+                conv.i4
+                bge.s MRF_NoVararg
+                ldarg.0
+                ldfld object[] Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'emptyVarargs'
+                ldarg.1
+                ldelem.ref
+                stloc.0
+                ldloc.0
+                brfalse.s MRF_NoVararg
+                ldloc.0
+                ret
+              MRF_NoVararg:
+                ldstr "Callable has no vararg at this position."
+                newobj instance void $systemNotSupportedException::.ctor(string)
+                throw
+              }
+            }
+
+$fixedCarrierTypes
+
+            .class private auto ansi sealed beforefieldinit MemberFunctionN
+                   extends Kotlin.Runtime.Internal.MemberFunctionReferenceBase
+                   implements Kotlin.FunctionN
+            {
+              .method assembly hidebysig specialname rtspecialname instance void .ctor(
+                  $constructorParameters) cil managed
+              {
+                .maxstack 11
+                ldarg.0
+                ldarg.1
+                ldarg.2
+                ldarg.3
+                ldarg.s 4
+                ldarg.s 5
+                ldarg.s 6
+                ldarg.s 7
+                ldarg.s 8
+                ldarg.s 9
+                ldarg.s 10
+                call instance void Kotlin.Runtime.Internal.MemberFunctionReferenceBase::.ctor(
+                    $constructorParameters)
+                ret
+              }
+
+              .method public hidebysig newslot virtual final instance object Invoke(object[] 'args') cil managed
+              {
+                .override method instance object Kotlin.FunctionN::Invoke(object[])
+                .maxstack 2
+                ldarg.0
+                ldarg.1
+                callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallErased(object[])
+                ret
+              }
+
+              .method public hidebysig specialname newslot virtual final instance int32 get_arity() cil managed
+              {
+                .override method instance int32 Kotlin.FunctionN::get_arity()
+                .maxstack 1
+                ldarg.0
+                ldfld int32 Kotlin.Runtime.Internal.MemberFunctionReferenceBase::'memberArity'
+                ret
+              }
+
+              .property instance int32 arity()
+              {
+                .get instance int32 Kotlin.Runtime.Internal.MemberFunctionN::get_arity()
+              }
+            }
+
+            .class public abstract sealed auto ansi beforefieldinit MemberReferenceFactory
+                   extends $systemObject
+            {
+              $compilerAbiTypeAttributesIl
+              .method public hidebysig static object CreateFunction(
+                  $constructorParameters) cil managed
+              {
+                .maxstack 10
+                ldarg.3
+                ldc.i4.0
+                blt MRF_InvalidArity
+                ldarg.3
+                switch ($switchLabels)
+$factoryLoads
+                newobj instance void Kotlin.Runtime.Internal.MemberFunctionN::.ctor(
+                    $constructorParameters)
+                ret
+$factoryCases
+              MRF_InvalidArity:
+                ldstr "Invalid reflected member arity."
+                newobj instance void $systemArgumentException::.ctor(string)
+                throw
               }
             }
         """.trimIndent()

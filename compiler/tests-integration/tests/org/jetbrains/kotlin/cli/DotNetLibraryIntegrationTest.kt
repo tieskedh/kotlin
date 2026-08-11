@@ -32612,13 +32612,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
         val ordinary = compile("Ordinary", enableMemberReflection = false)
         val ordinaryIl = ordinary.first
-        assertFalse("<GetKotlinMembers-v1>" in ordinaryIl) {
+        assertFalse("<GetKotlinMembers-v2>" in ordinaryIl) {
             "Ordinary producers must not emit the pre-ABI executable member factory"
         }
         val reflection = compile("OptIn", enableMemberReflection = true)
         val reflectionIl = reflection.first
         val reflectionLibrary = reflection.second
-        assertTrue("<GetKotlinMembers-v1>" in reflectionIl) {
+        assertTrue("<GetKotlinMembers-v2>" in reflectionIl) {
             "-Xdotnet-reflection did not reach the member-reflection lowering"
         }
         val reflectedMemberCallableTypes = DotNetClrMetadataReader.read(reflectionLibrary)
