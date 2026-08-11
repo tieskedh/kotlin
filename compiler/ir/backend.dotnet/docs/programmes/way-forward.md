@@ -237,12 +237,15 @@ suspend, virtual-dispatch, and value-representation lowerings; no CLR
 reflection path was introduced. Runtime/library surface 32 versions the new
   factory. Runtime/library surface 33 adds a Stdlib-owned catalog generated
   after KLIB serialization from complete Kotlin scopes. Its admitted entries
-  cover mapped `String`, the complete built-in collection-interface family,
-  and the current Kotlin-owned collection implementation family; adding those
-  complete scopes does not version the catalog protocol. Built-in interface
-  entries come from `IrBuiltIns`, never their canonical or exact constructed
-  CLR capabilities. Lookup remains optional-product policy, arbitrary BCL
-  members never enter the result, and inherited fake overrides retain
+  cover the eight concrete Common scalar built-ins, mapped `String`, the
+  complete built-in collection-interface family, and the current Kotlin-owned
+  collection implementation family; adding those complete scopes does not
+  version the catalog protocol. `Number` remains a separate classified-carrier
+  family rather than being inferred from concrete scalar entries. Built-in
+  entries come from `IrBuiltIns`, never their boxed CLR carriers or canonical/
+  exact constructed interface capabilities. Lookup remains optional-product
+  policy, arbitrary BCL members never enter the result, and inherited fake
+  overrides retain
   declaration identity while their resolved overrides supply execution only.
   Abstract skeletal-class members
   still require a real subclass receiver; sharing a collection interface does
