@@ -75,6 +75,7 @@ The following decisions constrain new work; their ADRs own the detail:
 - [static-initialization failures](../decisions/adr-kotlin-static-initialization-failures.md);
 - [reified inline call-site substitution](../decisions/reified-inline-functions.md);
 - [logical `KType` and `typeOf`](../decisions/ktype-and-typeof.md); and
+- [Common delegated-property semantics over ordinary CLR state](../decisions/delegated-properties.md);
 - [CIL/PE production direction](../decisions/cil-and-pe-production.md).
 
 New features build on these decisions or amend them explicitly. They do not restate a competing

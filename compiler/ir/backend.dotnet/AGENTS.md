@@ -645,6 +645,16 @@ See the
   semantic closure. Do not infer `KClass.members`, declared-member lookup, or
   a runtime KLIB decoder from this direct-reference surface. See also
   [the property-accessor decision](docs/decisions/property-accessor-reflection.md).
+  Delegated-property execution is independently Common/FIR-owned. Member,
+  local, and top-level declarations keep one delegate carrier; a top-level
+  carrier is private facade state initialized once, in declaration order, by
+  the established `.cctor` pipeline. Accessors execute the exact selected
+  `getValue`/`setValue` calls and `provideDelegate` remains initialization, not
+  access. Do not infer delegation from CLR attributes, expose the delegate
+  field as C# API, or enable Common's synthetic property-reference-field cache
+  until raw file fields have complete facade ownership and initialization.
+  `KProperty.getDelegate` remains parked. See
+  [the delegated-property decision](docs/decisions/delegated-properties.md).
   `KClass.members` is a JVM-shaped platform extension owned by the optional
   `Kotlin.Reflection.dll` product. Runtime owns only the physical
   `KDeclarationContainer`/`KClass` slot, per-`KClass` cache, exact provider

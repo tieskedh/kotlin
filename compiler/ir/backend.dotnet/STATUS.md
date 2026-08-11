@@ -17,7 +17,29 @@ verification, and work state.
   nine shared paths, architectural directions, stat-cache-only IL false
   positives, and post-rebase verification are recorded in
   [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
-- Last completed foundation: Common-owned `lateinit` now uses the repository's
+- Last completed foundation: top-level delegated properties now reuse the
+  exact operator calls and property-reference identity already produced by
+  FIR/Common, matching the established member and local paths. One private
+  static delegate field lives on the file facade; the existing static-
+  initializer lowering executes its initializer and optional
+  `provideDelegate` once, in source order, while ordinary generated accessors
+  call `getValue`/`setValue`. The backend no longer rejects this already-
+  supported IR shape and adds no target delegation protocol, value mirror,
+  CLR attribute authority, or manifest contract. A failed `provideDelegate`
+  follows the accepted JVM-shaped file-initialization state machine:
+  non-`Error` failures retain cause identity inside
+  `ExceptionInInitializerError`, and later access receives
+  `NoClassDefFoundError`; accessor-time failures propagate unchanged. Five
+  unchanged compatible Common tests plus a target-owned hostile failure test
+  run through PSI and LightTree on Framework CLR and CoreCLR. A portable
+  producer is also consumed by separate Kotlin and Roslyn applications, with
+  physical assertions for the single private delegate field, facade `.cctor`,
+  operator calls, and ordinary CLR property. Common's optional unbound-
+  property-reference cache stays off until raw synthetic file fields have a
+  complete facade owner; `KProperty.getDelegate` remains a separate reflection
+  closure. No runtime-surface or library-codec version changes because this
+  tranche only admits existing logical and physical contracts.
+  The preceding foundation: Common-owned `lateinit` uses the repository's
   ordinary nullable-carrier lowering for member, top-level, local, captured,
   inherited, generic-reference, and separately compiled declarations. KLIB
   retains the non-null Kotlin property and exact `isLateinit` fact; executable
@@ -37,7 +59,7 @@ verification, and work state.
   is needed because the exception/helper, property payload, and manifest schema
   already existed; this tranche enables producer lowering and adds the Common
   Stdlib intrinsic source.
-  The preceding foundation: JVM-shaped declaration-owned type-use reflection
+  The earlier foundation: JVM-shaped declaration-owned type-use reflection
   now extends the .NET `KType` actual with `KAnnotatedElement` while retaining
   the existing Common structural graph. Return, parameter, extension-receiver,
   nested projected argument, and callable upper-bound nodes receive only the
@@ -303,38 +325,41 @@ programmes.
 
 ## Current green gate
 
-The rebased `lateinit` head plus the compiler-distribution module-closure
-correction passed every constituent of the strict target gate. The correction
-registers the extracted `.NET` FIR-to-IR and IR-serialization modules with the
-same central fat-compiler owner used by the other backends; project dependencies
-alone had left the installed `kotlinc-dotnet` launcher without those classes.
-Both installed launcher cases now execute and the two module entry classes are
-physically present in `kotlin-compiler.jar`. Because another development
-session shared the machine, this checkpoint records correctness only and makes
-no duration or performance claim. The normal aggregate command remains:
+The top-level delegated-property head plus the compiler-distribution module-
+closure correction passed every constituent of the strict target gate. The
+correction registers the extracted `.NET` FIR-to-IR and IR-serialization
+modules with the same central fat-compiler owner used by the other backends;
+project dependencies alone had left the installed `kotlinc-dotnet` launcher
+without those classes. Both installed launcher cases execute and the two module
+entry classes are physically present in `kotlin-compiler.jar`. Because another
+development session shared the machine, this checkpoint records correctness
+only and makes no duration or performance claim. The normal aggregate command
+remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 174 XML files and 2073 tests:
+The audited full-aggregate evidence covers 182 XML files and 2098 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1950 FIR, IL-text, and box tests
+- 1974 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 96 library-integration tests
+- 97 library-integration tests
 - zero failures, errors, or skips
 
 The aggregate exited successfully. Direct audit of its three final roots reports
-the 174 files and 2,073 tests above with zero failures, errors, or skips. No
+the 182 files and 2,098 tests above with zero failures, errors, or skips. No
 duration or performance comparison is retained because another compiler session
 shared the machine throughout verification.
 
-Post-rebase focused evidence additionally reports 8 packed-KLIB loader tests,
+Focused delegated-property evidence additionally reports 24 Common/hostile
+semantic executions across PSI, LightTree, Framework CLR, and CoreCLR plus one
+separate Kotlin/Roslyn boundary execution, all with zero failures, errors, or
+skips. Post-rebase focused evidence also retains 8 packed-KLIB loader tests,
 4 prepared/main/selected/reified inline-library tests, and 2 installed
-`kotlinc-dotnet` launcher tests, all with zero failures, errors, or skips. The
-compiler-argument JSON, BTA API, FIR2IR test, and KGP API owners produced no
-tracked generated churn.
+`kotlinc-dotnet` launcher tests. The compiler-argument JSON, BTA API, FIR2IR
+test, and KGP API owners produced no tracked generated churn.
 
 At the preceding coroutine head, test-only evidence was strengthened to require the
 imported member entries to retain their CLR virtual slots and to dispatch a
@@ -1317,9 +1342,13 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    compiler/stdlib coverage, not by the number of declarations it adds. Audit
    Common plus JVM, JS, Wasm, and Native phase ownership first; keep a feature
    parked when its representation requires a material ABI choice. The completed
-   `lateinit` tranche is the model: one Common semantic lowering, exact KLIB
-   authority, target-only physical mapping, adversarial cross-language and
-   separate-compilation evidence.
+   delegated-property tranche is the current model: accept the authoritative
+   Common/FIR IR, add only the missing physical-owner integration, reuse the
+   existing initialization and reflection foundations, and prove the result
+   with unchanged Common tests plus hostile cross-language and separate-
+   compilation evidence. The preceding `lateinit` tranche remains the model
+   where Common supplies a semantic lowering rather than an already-expanded
+   declaration shape.
 2. Continue the generated catalog only by complete classifier families, not by
    handwritten members. The concrete Common scalars, classified `Number`,
    built-in collection interfaces, and Kotlin-owned collection implementations

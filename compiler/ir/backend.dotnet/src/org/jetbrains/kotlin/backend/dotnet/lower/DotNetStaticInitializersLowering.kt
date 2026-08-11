@@ -68,8 +68,10 @@ internal val DOTNET_STATIC_INITIALIZER: IrDeclarationOrigin = IrDeclarationOrigi
  *   [IrConst][org.jetbrains.kotlin.ir.expressions.IrConst] initializer stays on the
  *   field so the emitter can render a CLR `literal` field — the ConstantValue-attribute
  *   analogue — with no `.cctor` entry.
- * - delegated properties: rejected by the emitter's property pre-pass; their delegate
- *   initializer must not end up in a `.cctor` that outlives the rejection.
+ * - delegated properties are deliberately included: FIR/Common has already put the selected
+ *   delegate or `provideDelegate` expression in the property's backing-field initializer. Moving
+ *   that one expression into the owning `.cctor` preserves declaration order and one-time
+ *   initialization without reconstructing delegation in this target lowering.
  * - `lateinit` has already been transformed by Common and has no initializer to move; the CLR
  *   default `null` is its selected uninitialized sentinel.
  */
@@ -84,7 +86,7 @@ internal class DotNetStaticInitializersLowering(private val context: DotNetBacke
     private fun lowerFileStatics(irFile: IrFile) {
         val statements = mutableListOf<IrStatement>()
         for (declaration in irFile.declarations) {
-            if (declaration !is IrProperty || declaration.isConst || declaration.isDelegated) continue
+            if (declaration !is IrProperty || declaration.isConst) continue
             val field = declaration.backingField ?: continue
             statements += moveFieldInitializerOrNull(field) ?: continue
         }
@@ -102,7 +104,7 @@ internal class DotNetStaticInitializersLowering(private val context: DotNetBacke
         for (declaration in declarations) {
             val field = when (declaration) {
                 is IrField -> declaration
-                is IrProperty -> if (declaration.isConst || declaration.isDelegated) null else declaration.backingField
+                is IrProperty -> if (declaration.isConst) null else declaration.backingField
                 else -> null
             } ?: continue
             if (!field.isStatic) continue
