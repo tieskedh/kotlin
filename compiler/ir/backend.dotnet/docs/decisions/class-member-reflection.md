@@ -6,6 +6,8 @@
 - Initial private member-factory protocol: 1
 - Compact shared-thunk protocol: 2
 - Compact protocol library ABI/runtime surface: 32
+- First Stdlib catalog protocol: 1
+- Stdlib catalog library ABI/runtime surface: 33
 - Scope: the owner, public boundary, and explicitly opted-in first executable
   closure for `KClass.members`
 - Depends on:
@@ -205,6 +207,68 @@ view. Mapped built-ins and Stdlib member enumeration therefore advance together
 in a later dedicated closure; ordinary user/library reflection does not wait for
 it.
 
+### Generated Stdlib member catalog
+
+The first mapped/Stdlib closure advances both physical cases through one
+catalog architecture. `kotlin.String` proves a Kotlin classifier whose runtime
+carrier is the foreign `System.String` TypeDef; `kotlin.collections.ArrayList`
+proves a Kotlin-owned Stdlib implementation class. The catalog machinery is
+data-driven and must not acquire handwritten member descriptions as additional
+classifiers are admitted.
+
+The authoritative member set still comes from the Kotlin declarations visible
+while `Kotlin.Stdlib.dll` is produced. For a mapped built-in that means the
+compiler's Kotlin built-ins declaration, never enumeration of its BCL carrier.
+For a Stdlib implementation class it means the actualized post-KLIB IR class
+scope. Each admitted classifier either contributes its complete accessible
+function/property set or has no catalog entry; the catalog never returns a
+partial collection.
+
+After KLIB serialization, Stdlib production emits one reserved product catalog
+and producer-local direct thunks. The thunks enter the same callable-reference,
+property-reference, default, suspend, value-representation, and compact shared-
+carrier pipeline used by ordinary producer factories. A mapped member call is
+therefore lowered through the target's existing exact built-in intrinsic or
+physical mapping. No callable is implemented by `MethodInfo.Invoke`, and a CLR
+method name or signature never becomes Kotlin declaration authority.
+
+An inherited fake override remains the reflected declaration visible in the
+selected class scope, while its resolved real override is only the execution
+target. This is the same declaration/execution split used by JVM property
+references. It matters on .NET when, for example, an `ArrayList` scope member
+has the logical `Collection` receiver but its body is owned by
+`AbstractCollection`; substituting the execution target as reflection identity
+would corrupt signatures and equality, while invoking the fake receiver shape
+would produce an invalid physical cast.
+
+Catalog generation may expose runtime-retained annotations that earlier
+Stdlib subsets never needed to materialize. Such an annotation is not filtered
+out to make a member executable. Its authoritative shared source joins the
+Stdlib product instead. The first closure therefore compiles Common
+`ReturnValue.kt`, so `@IgnorableReturnValue` on mutable-collection members is
+both a real Kotlin annotation class and part of the reflected callable facts.
+
+`Kotlin.Reflection.dll` owns lookup order. Its versioned provider asks the
+Stdlib catalog first and then the ordinary producer-factory path. The catalog
+returns an array only for an exact Kotlin `KClass` identity and the reflection
+product exposes it through an ordinary read-only Kotlin collection. Unsupported
+Stdlib/mapped classifiers continue to fail closed through the existing stable
+unsupported-reflection result.
+
+The catalog entry is CLR-public compiler ABI but Kotlin-internal metadata. It is
+marked and hidden from ordinary C# discovery like other `@PublishedApi internal`
+cross-assembly helpers. Runtime has no static dependency on Stdlib and does not
+know the catalog shape. Removing `Kotlin.Reflection.dll` still makes the catalog
+unreachable through `KClass.members` and changes no lightweight reflection
+semantics.
+
+This closure deliberately puts the derived executable catalog beside the
+Stdlib code it invokes instead of teaching the optional product to decode
+arbitrary embedded KLIB at runtime. A later reflection-owned descriptor decoder
+may replace that private representation only if it preserves the same direct
+execution, identity, trimming, and NativeAOT properties. It may not reconstruct
+mapped Kotlin members by scanning `System.String` or another host carrier.
+
 ### Foreign and mapped classifiers
 
 Kotlin-produced factories and foreign CLR reflection are disjoint authority
@@ -217,8 +281,10 @@ Foreign support requires a separate complete family that constructs Kotlin
 callables from exact CLR declaration identities and applies the same importer
 enhancement rules used by compilation. Mapped built-ins likewise need an
 explicit Kotlin declaration mapping rather than exposing arbitrary BCL
-implementation methods. Neither gap may be hidden by general `Type.GetMethods`
-or `Type.GetProperties` enumeration.
+implementation methods. The generated Stdlib catalog supplies that mapping for
+its explicitly admitted classifiers; the remaining mapped classifiers continue
+to fail closed. Neither gap may be hidden by general `Type.GetMethods` or
+`Type.GetProperties` enumeration.
 
 ## Design attack
 
@@ -308,7 +374,8 @@ temporarily exposes the complete semantic experiment.
    no static dependency on it.
 4. Enumerated members use the established callable/property objects and their
    invocation paths, not reflection-only duplicates.
-5. Kotlin and foreign authority paths remain disjoint.
+5. Kotlin and foreign authority paths remain disjoint; a resolved real override
+   is an execution adapter and never replaces the reflected scope declaration.
 6. Unsupported classifiers fail closed rather than returning a misleading
    partial or empty member set.
 7. Removing `Kotlin.Reflection.dll` cannot change non-member `KClass`, direct
@@ -323,11 +390,22 @@ temporarily exposes the complete semantic experiment.
     dispatcher calls Kotlin declarations directly and is removable without
     changing public signatures, callable equality, object identity, or member
     semantics.
+11. A mapped/Stdlib catalog entry is generated from one complete Kotlin class
+    scope and guarded by exact `KClass` identity; a host carrier's CLR members
+    never augment that set.
+12. Runtime neither references `Kotlin.Stdlib.dll` nor interprets the Stdlib
+    catalog. Lookup and collection projection remain optional-product policy.
 
 Library ABI and Runtime surface 32 version the shared carrier factory and the
 protocol-2 producer call. An old Runtime/new producer combination is rejected
 at the existing surface-floor check instead of failing later with a missing
 carrier MethodRef.
+
+Library ABI and Runtime surface 33 atomically version the first Stdlib catalog
+and the reflection-provider entry that can call it. The catalog itself is
+Stdlib compiler ABI protocol 1; unsupported or mismatched product combinations
+must fail during the existing product/surface checks rather than at a later
+catalog MethodRef.
 
 ## First closure verification
 
@@ -345,8 +423,11 @@ The first complete gate must prove:
 - constructors and compiler-generated physical helpers do not appear;
 - producer-created and dynamically obtained `KClass` values enumerate a
   separately compiled producer without consumer-generated tables;
-- foreign, mapped, and Stdlib classifiers fail clearly until their complete
-  providers are selected;
+- foreign and unadmitted mapped/Stdlib classifiers fail clearly until their
+  complete providers are selected;
+- admitted mapped and Stdlib classifiers enumerate only their complete Kotlin
+  scopes, preserve callable identity and direct invocation, and exclude
+  unrelated methods present on the CLR carrier;
 - the reflection product has only Runtime/Stdlib dependencies and those base
   products have no reverse AssemblyRef;
 - ordinary and packaged reflection sources build the same optional

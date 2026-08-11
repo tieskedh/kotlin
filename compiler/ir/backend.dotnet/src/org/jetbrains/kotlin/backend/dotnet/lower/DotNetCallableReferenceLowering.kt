@@ -110,6 +110,7 @@ internal val IrClass.isDotNetCallableObject: Boolean
 
 /** Execution facts retained only until reflected members are folded into their class dispatcher. */
 internal data class DotNetReflectedMemberCallableInfo(
+    val targetName: Name,
     val executionFunction: IrSimpleFunction,
     val defaultFunction: IrSimpleFunction?,
     val exposedParameters: List<IrValueParameter>,
@@ -686,6 +687,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             val target = functionReference.reflectionTargetSymbol?.owner
                 ?: error("Internal .NET backend error: reflected member callable has no target")
             functionReferenceClass.dotNetReflectedMemberCallableInfo = DotNetReflectedMemberCallableInfo(
+                targetName = target.name,
                 executionFunction = executionInvokeByReference[functionReference]
                     ?: error("Internal .NET backend error: reflected member callable has no execution method"),
                 defaultFunction = defaultInvokeByReference[functionReference],

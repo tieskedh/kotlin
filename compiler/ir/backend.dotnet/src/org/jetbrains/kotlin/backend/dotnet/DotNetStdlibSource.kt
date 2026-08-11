@@ -115,6 +115,10 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/reflect/DotNetKClass.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetMemberReflectionCatalog.kt",
+        "dotnet/src/kotlin/reflect/DotNetMemberReflectionCatalog.kt",
+    ),
+    DotNetStdlibSourceResource(
         "KDeclarationContainer.kt",
         "jvm/src/kotlin/reflect/KDeclarationContainer.kt",
     ),
@@ -297,6 +301,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "WasExperimental.kt",
         "src/kotlin/annotations/WasExperimental.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "ReturnValue.kt",
+        "src/kotlin/annotations/ReturnValue.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(

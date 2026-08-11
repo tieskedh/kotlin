@@ -120,6 +120,14 @@ The emitted annotation declaration also receives `AttributeUsageAttribute`:
 This usage attribute is a foreign-language authoring view. FIR and KLIB remain
 the authority for Kotlin target checks.
 
+When a newly selected Common/Stdlib declaration exposes an admitted
+runtime-retained marker, the marker's authoritative shared source joins the
+.NET Stdlib source closure. The backend must not drop the application, invent a
+target-private substitute, or special-case reflection merely because the
+previous source subset did not need that declaration. `ReturnValue.kt` is the
+first such dependency: it supplies the real `IgnorableReturnValue` and
+`MustUseReturnValues` declarations used by collection and builder APIs.
+
 ### Separate compilation and import
 
 An admitted annotation declaration and its applications survive Kotlin
@@ -194,6 +202,9 @@ and inherited CLR attributes require a separate reflection programme.
    .NET lowering.
 7. This feature does not imply annotation discovery, `KType`, enums, or broad
    foreign attribute import.
+8. Expanding the admitted Stdlib source graph preserves supported annotation
+   applications by compiling their shared declarations, never by filtering or
+   synthesizing them.
 
 ## Verification
 

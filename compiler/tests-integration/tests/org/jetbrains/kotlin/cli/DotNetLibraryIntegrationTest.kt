@@ -32528,6 +32528,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     private fun produceAndInspectReflectionProduct(stdlibDirectory: File, target: String) {
+        val stdlibMetadata = DotNetClrMetadataReader.read(stdlibDirectory.resolve("Kotlin.Stdlib.dll"))
+        val catalog = stdlibMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "Kotlin.Reflection" &&
+                    type.metadataName == "DotNetMemberReflectionCatalog"
+        }
+        val catalogMethod = stdlibMetadata.methodDefinitions.single { method ->
+            method.declaringType == catalog.handle && method.name == "dotNetGetStdlibMembersV1"
+        }
+        assertEquals(DotNetClrMethodVisibility.PUBLIC, catalogMethod.visibility)
+        assertTrue(catalogMethod.isStatic)
+
         val reflectionDirectory = File(tmpdir, "produced-$target-reflection").apply { mkdirs() }
         val sourceFiles = dotNetReflectionSourceFiles()
         compileInProcess(
@@ -32564,11 +32575,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue(provider.isAbstract && provider.isSealed)
         assertTrue(metadata.methodDefinitions.any { method ->
-            method.declaringType == provider.handle && method.name == "getMembersV1"
+            method.declaringType == provider.handle && method.name == "getMembersV2"
         })
         val il = reflectionDirectory.resolve("Kotlin.Reflection.il").readText()
         assertTrue("Kotlin.Runtime.Internal.KClassFactory::'GetGeneratedMembersV1'" in il) {
             "The optional provider must delegate through the versioned Runtime bootstrap:\n$il"
+        }
+        assertTrue("'Kotlin.Reflection.DotNetMemberReflectionCatalog'::'dotNetGetStdlibMembersV1'" in il) {
+            "The optional provider must consult the generated Stdlib member catalog:\n$il"
         }
         if (target == "net10.0") {
             verifyMemberReflectionCompilerFlag(stdlibDirectory, target)
@@ -34159,6 +34173,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/annotations/Multiplatform.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/annotations/WasExperimental.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/annotations/ReturnValue.kt").absoluteFile
         sourceFiles +=
             File("libraries/stdlib/src/kotlin/contextParameters/ExperimentalContextParameters.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KClass.kt").absoluteFile

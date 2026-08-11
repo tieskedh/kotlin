@@ -86,6 +86,11 @@ internal object DotNetStdlibLibrary {
     const val KCLASSES_FACADE_IL_NAME = "Kotlin.Reflection.KClasses"
     const val KPARAMETERS_FACADE_IL_NAME = "Kotlin.Reflection.KParameters"
     const val KTYPE_INTRINSICS_FACADE_IL_NAME = "Kotlin.Reflection.TypeOfIntrinsics"
+    const val MEMBER_REFLECTION_CATALOG_FACADE_IL_NAME =
+        "Kotlin.Reflection.DotNetMemberReflectionCatalog"
+    const val MEMBER_REFLECTION_CATALOG_FUNCTION_FQ_NAME =
+        "kotlin.reflect.dotNetGetStdlibMembersV1"
+    const val MEMBER_REFLECTION_CATALOG_FUNCTION_NAME = "dotNetGetStdlibMembersV1"
     const val ARRAY_ITERATOR_FACTORY_NAME = "dotNetArrayIterator"
     const val ARRAY_ITERABLE_FACTORY_NAME = "dotNetArrayIterable"
     const val ERASED_ARRAY_ITERATOR_FACTORY_NAME = "dotNetErasedArrayIterator"
@@ -1082,6 +1087,11 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.reflect",
             facadeIlName = KPARAMETERS_FACADE_IL_NAME,
         ),
+        "DotNetMemberReflectionCatalog.kt" to ImplementationSource(
+            packageFqName = "kotlin.reflect",
+            facadeIlName = MEMBER_REFLECTION_CATALOG_FACADE_IL_NAME,
+        ),
+        "ReturnValue.kt" to ImplementationSource(packageFqName = "kotlin"),
     )
     private val resolutionOnlySources = mapOf(
         // FIR actualization may retain either declaration as kotlin.Enum's IR owner. Both are
