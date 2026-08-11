@@ -95,6 +95,18 @@ dropping an incompatible public setter, or validate named functions while
 forgetting constructors and properties. This is a fail-closed export check,
 not a reason to remove generics from the Kotlin declaration.
 
+Admission is also dependency-graph complete. Each selected module has an
+explicit full, transitive, or excluded export role. Excluding a dependency does
+not erase its use from inheritance, bounds, parameters, results, or nested type
+arguments. A referenced excluded declaration receives only a truthful host
+stub when that preserves the complete type relation; otherwise the dependent
+export is rejected. It is never replaced with `object`, `dynamic`, a bottom
+type, or an unrelated wrapper merely to keep generation running.
+
+Generated marker, protocol, facade, and adapter identities derive from the
+complete logical Kotlin identity, including package and owner. Simple names
+are presentation only and may not select or bind a cross-module export.
+
 ### Export is explicit and additive
 
 One export request selects exactly one supported public declaration and an
@@ -173,6 +185,13 @@ the logical authority.
 A null delegate maps both ways where Kotlin permits it. Supplying null to a
 non-null callable boundary fails explicitly rather than entering Kotlin under
 a false type.
+
+Roslyn nullable metadata is not runtime enforcement. Every non-null reference
+or boxed-value position entering through a generated facade receives the same
+Kotlin call-boundary validation as the declaration shape it exposes, before
+delegate adaptation, unboxing, or target invocation. Disabling or omitting
+nullable attributes must not change that execution behavior, and emitting an
+attribute may not be used as a reason to omit the check.
 
 ### Kotlin defaults become facade overloads
 
