@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.backend.common.lower.ArrayConstructorLowering
 import org.jetbrains.kotlin.backend.common.lower.InlineClassDeclarationLowering
 import org.jetbrains.kotlin.backend.common.lower.InlineClassUsageLowering
 import org.jetbrains.kotlin.backend.common.lower.KotlinNothingValueExceptionLowering
+import org.jetbrains.kotlin.backend.common.lower.LateinitLowering
 import org.jetbrains.kotlin.backend.common.lower.LocalDelegatedPropertiesLowering
 import org.jetbrains.kotlin.backend.common.lower.RedundantCastsRemoverLowering
 import org.jetbrains.kotlin.backend.common.lower.RangeContainsLowering
@@ -121,12 +122,13 @@ private fun createIrValidationAfterInliningAllFunctionsKlibSecondStagePhase(
     )
 
 private val dotNetInlineLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
-    // BEGIN: Common Native/JS/Wasm inline prefix. `lateinit` stays parked for the target, so its
-    // shared lowering is intentionally absent until .NET owns the required throw-helper symbol.
+    // BEGIN: Common Native/JS/Wasm inline prefix. The .NET identity pass only records rich
+    // callable facts, then Common `lateinit` runs at the mature-target boundary before captures.
     ::IrValidationBeforeLoweringsKlibSecondStagePhase,
     ::InlineCallCycleCheckerLowering,
     ::DotNetUpgradeCallableReferences,
     ::DotNetCallableReferenceIdentityLowering,
+    ::LateinitLowering,
     ::DotNetSharedVariablesLowering,
     ::LocalClassesInInlineLambdasLowering,
     ::ArrayConstructorLowering,

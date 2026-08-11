@@ -71,12 +71,13 @@ explicitly weaker execution contract.
 CLR property reports false for both because CLR `literal` fields are not CLR
 properties and CLR metadata has no Kotlin `lateinit` declaration fact.
 
-The `isLateinit` bit is carried now so the callable ABI does not need to change
-when the separately parked `lateinit` language feature is implemented. A
-positive runtime observation is not claimed in this tranche: the current
-backend still rejects every `lateinit` declaration before code generation.
-Ordinary, `const`, local, and foreign property references exercise the false
-case; the later language-feature tranche must add the positive semantic test.
+The callable ABI carried the `isLateinit` bit before executable `lateinit`
+support so enabling the language feature would not require another reflection
+representation. That feature is now complete: Common's lowering owns storage,
+reads, failure, and `isInitialized`, while the existing exact IR declaration
+bit makes positive `isLateinit` observations truthful. Ordinary, `const`,
+local, and foreign property references continue to exercise the false case.
+See [`lateinit-properties.md`](lateinit-properties.md).
 
 ### One execution identity
 
@@ -186,11 +187,9 @@ distinction. Delegate discovery needs its own complete decision.
 The feature gate covers both FIR parsers and both CLR profiles, plus separate
 producer/consumer binaries where applicable:
 
-- positive top-level/object `const`, negative ordinary/local/foreign
-  `isConst`/`isLateinit` flags, and literal execution without an accessor
-  MethodDef;
-  positive `isLateinit` remains locked by the parked language feature described
-  above;
+- positive top-level/object `const`, positive executable `lateinit`, negative
+  ordinary/local/foreign `isConst`/`isLateinit` flags, and literal execution
+  without an accessor MethodDef;
 - top-level, member, extension, member-extension, bound, and unbound references;
 - `val` getter and `var` getter/setter access through `invoke`, `call`, and
   `callBy` for arities zero through two;
