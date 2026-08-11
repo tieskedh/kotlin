@@ -210,13 +210,16 @@ it.
 ### Generated Stdlib member catalog
 
 The mapped/Stdlib closure advances both physical cases through one catalog
-architecture. `kotlin.String` proves a Kotlin classifier whose runtime carrier
-is the foreign `System.String` TypeDef. The complete built-in collection
-interface family proves Kotlin declaration identity over the .NET split-
-interface representation: iterable/iterator/list-iterator, collection/list/
-set/map, every mutable counterpart, and both nested map-entry interfaces. The
-current Kotlin-owned collection implementation family proves concrete classes
-and skeletal abstract bases:
+architecture. The eight concrete Common scalar built-ins prove complete Kotlin
+class scopes over boxed/unboxed CLR value carriers; `kotlin.String` proves a
+Kotlin classifier whose runtime carrier is the foreign `System.String` TypeDef.
+`kotlin.Number` is not inferred from those entries: its classified `object`
+carrier and logical supertype behavior remain a separate complete family. The
+complete built-in collection interface family proves Kotlin declaration
+identity over the .NET split-interface representation: iterable/iterator/list-
+iterator, collection/list/set/map, every mutable counterpart, and both nested
+map-entry interfaces. The current Kotlin-owned collection implementation family
+proves concrete classes and skeletal abstract bases:
 `AbstractCollection`, `AbstractList`, `AbstractMap`, `AbstractSet`, their four
 mutable counterparts, `ArrayList`, `HashMap`, and `HashSet`.
 `LinkedHashMap`/`LinkedHashSet` are actual typealiases and therefore retain the
@@ -239,6 +242,16 @@ carrier pipeline used by ordinary producer factories. A mapped member call is
 therefore lowered through the target's existing exact built-in intrinsic or
 physical mapping. No callable is implemented by `MethodInfo.Invoke`, and a CLR
 method name or signature never becomes Kotlin declaration authority.
+
+Admitting a complete class scope is also an execution-completeness check on the
+ordinary intrinsic registry. The scalar family exposed missing eager
+`Boolean.and`/`or`/`xor` and deprecated signed-number `toChar` paths; both now
+follow the same Common/JVM built-in boundary as direct calls. Deprecated members
+remain declarations and JVM can invoke them through reflection, so the catalog
+does not erase them. Byte/Short sign extension, Int/Long low-16-bit truncation,
+and Float/Double `toInt()` saturation followed by Char conversion are retained.
+This is ordinary scalar semantics reused by reflection, not a reflective
+implementation of those operators.
 
 An inherited fake override remains the reflected declaration visible in the
 selected class scope, while its resolved real override is only the execution
@@ -447,6 +460,10 @@ The first complete gate must prove:
 - all built-in collection interfaces preserve distinct logical `KClass`
   identities, declaration-owned type graphs, annotations, and calls across
   their canonical and exact constructed CLR capabilities;
+- all eight concrete Common scalar scopes preserve logical signatures over
+  boxed/unboxed CLR carriers, execute mixed promotions and Kotlin floating total
+  ordering, retain deprecated conversion semantics, and expose no CLR-only
+  member names;
 - the reflection product has only Runtime/Stdlib dependencies and those base
   products have no reverse AssemblyRef;
 - ordinary and packaged reflection sources build the same optional

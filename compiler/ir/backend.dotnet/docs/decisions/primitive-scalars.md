@@ -61,6 +61,17 @@ identity and signed value hashes. Kotlin string conversion uses invariant format
 the current CLR culture. CLR imports map exact `sbyte`/`short` metadata to these Kotlin builtins;
 they do not synthesize user classes or silently widen the foreign signature to `Int`.
 
+Boolean's eager `and`, `or`, and `xor` members compile to the corresponding CIL operations, just
+as JVM registers them in its primitive binary-operation matrix. They are ordinary functions and
+evaluate both operands; they never acquire `&&`/`||` short-circuit behavior.
+
+Deprecated direct signed-number `toChar()` declarations remain part of the physical built-in
+class scopes and can still be invoked through reflection, matching JVM. Byte and Short first
+sign-extend and then retain the low 16 bits, Int and Long retain the low 16 bits directly, and
+Float/Double apply their Common `toInt()` NaN/saturation rule before the same Char conversion.
+Source-level deprecation is not permission for a backend or reflection catalog to omit the
+declaration.
+
 ### Float semantic closure
 
 Kotlin `Float` is an exact CLR `float32`/`System.Single` in signatures, fields, locals, generic
@@ -149,6 +160,7 @@ Before these carriers freeze, tests must cover:
 - nullable typed positions and boxed-or-null `Any?` boundaries;
 - equality, hash, invariant string rendering, type tests, smart-cast recovery, and hostile
   widening cases (general explicit `as` lowering remains a separate backend gate);
+- eager Boolean members and reflective execution of physically retained deprecated conversions;
 - exact C# production/consumption and imported CLR `sbyte`/`short` declarations; and
 - identical behavior on Framework CLR and CoreCLR, including portable libraries.
 
