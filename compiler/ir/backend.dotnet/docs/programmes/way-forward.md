@@ -152,7 +152,13 @@ reflection-target rule and reuses the same logical graph producer as `typeOf`;
 Kotlin declarations come from KLIB-derived IR and imported CLR declarations
 from importer-enhanced semantic IR. Runtime owns the minimal physical `KType`
 interface needed by its typed callable slot, while Stdlib retains Common graph
-behavior. `KCallable.typeParameters` now takes JVM's declaration-owned rule:
+behavior. Runtime/Stdlib surface 35 now follows JVM's platform extension by
+making `KType` a `KAnnotatedElement`: declaration-derived return, parameter,
+receiver, nested-argument, and upper-bound nodes retain only their exact
+runtime KLIB/IR annotations. `typeOf` remains annotation-empty as on JVM, and
+CLR nullable or nearby custom attributes never become Kotlin annotation
+objects. Structural `KType` equality, hashing, and rendering remain unchanged.
+`KCallable.typeParameters` now takes JVM's declaration-owned rule:
 functions and generic extension properties exclude enclosing class parameters,
 while constructors expose the constructed class's own parameters. Return
 types, exposed parameters, recursive bounds, and reachable enclosing parameters
@@ -164,7 +170,7 @@ exact declaration owners; admitted foreign callables use exact CLR Param rows
   selected mapped/Stdlib catalog now reuses the same graphs for one- and
   two-parameter collection owners, read-only/mutable interfaces, nested map
   entries, concrete classes, and abstract bases; foreign and remaining
-  classifier families plus type-use annotations remain separate tranches.
+  classifier families remain separate tranches.
 Positional `KCallable.call` now consumes that exact
 parameter order through the existing erased `FunctionN` capability. Runtime
 surface level 22 validates count and dispatches without CLR member discovery;
@@ -198,8 +204,8 @@ as semantic evidence. Runtime surface 26 publishes the ordinary Kotlin
 rejects already-materialized references without the declaration bits. To keep
 Runtime independent of Stdlib, Runtime also owns the physical member-free
 `EnumEntries` interface; the Common generic declaration and all list behavior
-remain Stdlib-owned. Type-use annotations, constructors, and reflective
-invocation beyond the admitted callable/member closure remain independent tranches.
+remain Stdlib-owned. Constructors and reflective invocation beyond the
+admitted callable/member closure remain independent tranches.
 
 Direct property declaration facts and accessor objects are now complete for
 `KProperty0` through `KProperty2` and their mutable counterparts. JVM supplies
@@ -211,8 +217,9 @@ separate libraries cannot diverge. KLIB/importer IR owns `isConst`,
 `isLateinit`, accessor signatures, annotations, visibility, modality, and
 function flags. Runtime CLR reflection owns none of them. Runtime surface and
 library ABI 29 publish this closure. Positive `isLateinit` observation waits
-for the independently parked language feature; `getDelegate` and type-use
-annotation discovery remain separate tranches.
+for the independently parked language feature; `getDelegate` remains a
+separate tranche. Type-use annotations were selected later under their own
+declaration-owned ADR.
 
 JVM-shaped `KClass.members` is now executable for Kotlin-produced user/library
 classifiers whose producer explicitly opts in with `-Xdotnet-reflection`,
@@ -618,9 +625,10 @@ The current verified count and command belong only in [`../../STATUS.md`](../../
 
 Parking means “fail clearly and do not constrain a future ABI,” not “approximate now.”
 
-- wider annotation use-site targets, type-use owners, and unsupported CLR-value
-  projections; valued construction, defaults, KLIB applications, and exact
-  class/callable runtime discovery are selected;
+- wider declaration/field/accessor-object annotation use-site targets and
+  unsupported CLR-value projections; valued construction, defaults, KLIB
+  applications, exact class/callable discovery, and declaration-owned
+  `KType` type-use discovery are selected;
 - default, mapped/Stdlib/foreign, and convenience-API member reflection; the
   opt-in ordinary Kotlin-producer closure, nominal `KClass` floor,
   logical `KType`/`typeOf` graph, callable annotations, callable return

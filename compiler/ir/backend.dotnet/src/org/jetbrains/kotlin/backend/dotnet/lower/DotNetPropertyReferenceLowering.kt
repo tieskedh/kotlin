@@ -42,7 +42,11 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
     AbstractPropertyReferenceLowering<DotNetBackendContext>(context) {
 
     private val backendContext = context
-    private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable signature")
+    private val kTypeBuilder = DotNetKTypeIrBuilder(
+        context,
+        operation = "callable signature",
+        includeDeclarationAnnotations = true,
+    )
 
     private val hasSignatureSurface: Boolean
         get() = backendContext.irBuiltIns.kCallableClass.owner.properties
