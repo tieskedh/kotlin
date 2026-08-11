@@ -16,7 +16,28 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed foundation: the generated Stdlib member catalog now makes all
+- Last completed foundation: Common `Number` is now an executable abstract
+  superclass family rather than a classifier-name special case over `object`.
+  Broad `Number` signatures retain the identity-preserving `System.Object`
+  carrier required by the CLR, while the runtime classifier admits exactly the
+  six signed built-in numeric boxes and instances of one runtime-owned abstract
+  `Kotlin.Number` base. Kotlin-written subclasses physically extend that base;
+  their six abstract conversion slots and open deprecated `toChar` slot use
+  ordinary CLR virtual dispatch, including a non-virtual `super.toChar()` path.
+  Broad and `T : Number` calls share one runtime operation boundary whose
+  Float/Double NaN, infinity, truncation, and saturation behavior is the same
+  as the established direct scalar intrinsics. KLIB retains the logical
+  `T : Number` bound while CLR metadata omits the unsound constraint that would
+  reject built-in value types. Checked/safe casts, nullable and negative type
+  tests, and `Number::class.isInstance` now use the same classifier and preserve
+  successful object identity. The generated Stdlib reflection catalog treats
+  `IrBuiltIns.numberClass` as its own complete family and invokes those ordinary
+  helpers for boxed and user-defined receivers; it is never inferred from the
+  eight scalar entries. Library ABI/runtime surface 34 version the new base,
+  classifier, helpers, physical subclass edge, and catalog dependency. The
+  adversarial separate-module and member-reflection matrix is green on PSI and
+  LightTree with Framework CLR and CoreCLR.
+  The preceding foundation made the generated Stdlib member catalog expose all
   eight concrete Common scalar built-ins, mapped `kotlin.String`, all sixteen
   built-in collection interfaces, and the complete current Kotlin-owned
   collection implementation family executable through `KClass.members`. Scalar
@@ -244,7 +265,7 @@ programmes.
 
 ## Current green gate
 
-The complete current scalar/collection member-catalog head
+The complete current Common `Number` foundation head
 passed every constituent of the strict target gate. Because another
 development session shared the machine, this checkpoint records correctness
 only and makes no duration or performance claim. The normal aggregate command
@@ -254,16 +275,16 @@ remains:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 158 XML files and 1920 tests:
+The audited full-aggregate evidence covers 158 XML files and 1924 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1798 FIR, IL-text, and box tests
+- 1802 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 95 library-integration tests
 - zero failures, errors, or skips
 
 The aggregate exited successfully. Direct audit of its three final roots reports
-the 158 files and 1,920 tests above with zero failures, errors, or skips. No
+the 158 files and 1,924 tests above with zero failures, errors, or skips. No
 duration or performance comparison is retained because another compiler session
 shared the machine throughout verification.
 
@@ -1234,20 +1255,19 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the generated catalog by complete classifier families, not by
-   handwritten members. The concrete Common scalar, built-in collection-
-   interface, and Kotlin-owned implementation families are complete. Treat
-   `Number` as a separate next candidate: first prove its classified `object`
-   carrier can dispatch the complete Common conversion surface for every
-   admitted boxed numeric scalar, rather than inferring it from concrete scalar
-   entries. Then select later mapped/Stdlib families from Kotlin declaration
+1. Treat type-use annotation discovery as its own reflection tranche over the
+   established logical type graph and exact foreign metadata owners. Marker
+   and valued declaration annotations are already executable; do not infer
+   Kotlin type-use authority from emitted CLR nullable attributes or other
+   foreign-language views.
+2. Continue the generated catalog only by complete classifier families, not by
+   handwritten members. The concrete Common scalars, classified `Number`,
+   built-in collection interfaces, and Kotlin-owned collection implementations
+   are complete. Select later mapped/Stdlib families from Kotlin declaration
    scopes and foreign classifiers from exact importer identities and
-   enhancement. Reuse the
-   established callable/property objects
-   and never expose a partial CLR MethodDef/Property scan. Constructors and
-   declared-member convenience APIs remain separate selections.
-2. Treat type-use annotation discovery as its own reflection tranche over the
-   established logical type graph and exact foreign metadata owners.
+   enhancement. Reuse the established callable/property objects and never
+   expose a partial CLR MethodDef/Property scan. Constructors and declared-
+   member convenience APIs remain separate selections.
 3. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
    they may adapt the Kotlin continuation boundary but never replace its
    internal ABI or create a second state-machine representation.

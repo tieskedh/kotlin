@@ -8,6 +8,7 @@
 - Compact protocol library ABI/runtime surface: 32
 - First Stdlib catalog protocol: 1
 - Stdlib catalog library ABI/runtime surface: 33
+- Classified `Number` catalog library ABI/runtime surface: 34
 - Scope: the owner, public boundary, and explicitly opted-in first executable
   closure for `KClass.members`
 - Depends on:
@@ -432,6 +433,13 @@ Stdlib compiler ABI protocol 1; adding complete classifier scopes to that
 catalog changes its generated data, not its protocol or public surface.
 Unsupported or mismatched product combinations must fail during the existing
 product/surface checks rather than at a later catalog MethodRef.
+
+Library ABI and Runtime surface 34 add the independently classified Common
+`Number` family. Its catalog entry is taken directly from
+`IrBuiltIns.numberClass` and invokes the same classified conversion boundary as
+ordinary calls. It is never inferred as the intersection or union of concrete
+scalar catalog entries: that would omit user subclasses and lose `Number`'s
+own declaration identity.
 
 ## First closure verification
 

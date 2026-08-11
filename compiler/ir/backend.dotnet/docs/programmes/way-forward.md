@@ -240,8 +240,10 @@ reflection path was introduced. Runtime/library surface 32 versions the new
   cover the eight concrete Common scalar built-ins, mapped `String`, the
   complete built-in collection-interface family, and the current Kotlin-owned
   collection implementation family; adding those complete scopes does not
-  version the catalog protocol. `Number` remains a separate classified-carrier
-  family rather than being inferred from concrete scalar entries. Built-in
+  version the catalog protocol. Runtime/library surface 34 adds `Number` as its
+  own complete classified-carrier family, derived directly from
+  `IrBuiltIns.numberClass` rather than inferred from concrete scalar entries.
+  Built-in
   entries come from `IrBuiltIns`, never their boxed CLR carriers or canonical/
   exact constructed interface capabilities. Lookup remains optional-product
   policy, arbitrary BCL members never enter the result, and inherited fake

@@ -58,6 +58,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Logical `T : Any` with an unconstrained CLR parameter](decisions/non-null-generic-upper-bound.md)
 - [`@InlineOnly` physical CLR ABI](decisions/inline-only-physical-abi.md)
 - [Classified `CharSequence` carrier](decisions/char-sequence-carrier.md)
+- [Classified `Number` superclass carrier](decisions/number-carrier.md)
 - [Common `Comparable` over CLR interface views](decisions/comparable-clr-views.md)
 - [Kotlin-owned `Appendable` and `StringBuilder`](decisions/appendable-string-builder.md)
 - [Classified CLR exception model](decisions/classified-clr-exceptions.md)
