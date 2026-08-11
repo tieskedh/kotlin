@@ -77,6 +77,7 @@ internal object DotNetStdlibLibrary {
         "Kotlin.Dotnet.Internal.DotNetCoroutineCompilerIntrinsicsKt"
     const val IO_FACADE_IL_NAME = "Kotlin.Io.ConsoleKt"
     const val ENUM_ENTRIES_FACADE_IL_NAME = "Kotlin.Enums.EnumEntriesKt"
+    const val LATEINIT_FACADE_IL_NAME = "Kotlin.LateinitKt"
     const val THROW_HELPERS_FACADE_IL_NAME = "Kotlin.Internal.ThrowHelpersKt"
     const val THROW_NO_WHEN_BRANCH_MATCHED_FACADE_IL_NAME =
         "kotlin.internal.DotNetThrowNoWhenBranchMatchedExceptionKt"
@@ -388,6 +389,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.reflect.qualifiedOrSimpleName" to KCLASSES_FACADE_IL_NAME,
         "kotlin.coroutines.coroutineContext" to CONTINUATION_FACADE_IL_NAME,
         "kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED" to COROUTINE_INTRINSICS_FACADE_IL_NAME,
+        "kotlin.isInitialized" to LATEINIT_FACADE_IL_NAME,
     )
 
     fun hasImplementation(module: IrModuleFragment): Boolean =
@@ -1061,6 +1063,10 @@ internal object DotNetStdlibLibrary {
         "ThrowHelpers.kt" to ImplementationSource(
             packageFqName = "kotlin.internal",
             facadeIlName = THROW_HELPERS_FACADE_IL_NAME,
+        ),
+        "Lateinit.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = LATEINIT_FACADE_IL_NAME,
         ),
         "KClasses.kt" to ImplementationSource(
             packageFqName = "kotlin.reflect",

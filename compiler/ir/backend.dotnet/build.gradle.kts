@@ -56,6 +56,9 @@ tasks.named<ProcessResources>("processResources") {
     from(rootProject.file("libraries/stdlib/src/kotlin/util/HashCode.kt")) {
         into("kotlin-dotnet-stdlib/src/kotlin/util")
     }
+    from(rootProject.file("libraries/stdlib/src/kotlin/util/Lateinit.kt")) {
+        into("kotlin-dotnet-stdlib/src/kotlin/util")
+    }
     from(rootProject.file("libraries/stdlib/src/kotlin/util/Result.kt")) {
         into("kotlin-dotnet-stdlib/src/kotlin/util")
     }

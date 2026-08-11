@@ -93,6 +93,12 @@ fun main(args: Array<String>) {
                 // the stdlib builtin and is ignored by the other non-JVM backends as well.
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model(
+                    "box/lateinit",
+                    pattern = "^(inBaseClass|initialized|innerIsInitialized|localCapturedInitialized|" +
+                            "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
+                )
+                model("box/properties/lateinit", testClassName = "PropertiesLateinit")
+                model(
                     "box/annotations/instances",
                     pattern = "^(AnnotationInstantiationWithArray|annotationAnnotationParam|annotationEqHc|" +
                             "arrayContentEqAny|multifileEqHc|naNAndZero|withDefaults)\\.kt$",
@@ -225,6 +231,12 @@ fun main(args: Array<String>) {
             }
 
             testClass<AbstractFirPsiDotNetBoxTest> {
+                model(
+                    "box/lateinit",
+                    pattern = "^(inBaseClass|initialized|innerIsInitialized|localCapturedInitialized|" +
+                            "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
+                )
+                model("box/properties/lateinit", testClassName = "PropertiesLateinit")
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model(
                     "box/annotations/instances",
@@ -359,6 +371,12 @@ fun main(args: Array<String>) {
             }
 
             testClass<AbstractFirLightTreeDotNetFrameworkBoxTest> {
+                model(
+                    "box/lateinit",
+                    pattern = "^(inBaseClass|initialized|innerIsInitialized|localCapturedInitialized|" +
+                            "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
+                )
+                model("box/properties/lateinit", testClassName = "PropertiesLateinit")
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model(
                     "box/annotations/instances",
@@ -493,6 +511,12 @@ fun main(args: Array<String>) {
             }
 
             testClass<AbstractFirPsiDotNetFrameworkBoxTest> {
+                model(
+                    "box/lateinit",
+                    pattern = "^(inBaseClass|initialized|innerIsInitialized|localCapturedInitialized|" +
+                            "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
+                )
+                model("box/properties/lateinit", testClassName = "PropertiesLateinit")
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model(
                     "box/annotations/instances",
