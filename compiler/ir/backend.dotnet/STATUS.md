@@ -7,15 +7,16 @@ verification, and work state.
 ## Current branch
 
 - Branch: `dotnet`
-- Upstream base: exact reviewed upstream commit `0e8c5f3f53`
-- Last integration checkpoint: the complete reviewed 195-commit range was
-  integrated by a pure rebase on 2026-08-07. All 409 target commits were
-  retained: range-diff classified 408 patches as identical and one inline
-  patch as context-only because upstream renamed its validator factory. The
-  three shared paths, virtual-merge evidence, contract-level
-  reverse-dependency/architecture audit, and post-rebase checks are
-  recorded in
-  [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
+- Upstream base: exact reviewed upstream commit `d78e4a4c14`
+- Last integration checkpoint: the complete 170-commit range after
+  `0e8c5f3f53` was audited by subject, paths, shared contract, and target-owned
+  reverse dependencies, then integrated by rebase on 2026-08-11. All 462
+  target commits remain present: range-diff classified 460 patches as
+  identical and exactly two inline patches as context-adjusted for upstream's
+  shared `IrErrorModuleFragment`; no target patch was added or removed. The
+  nine shared paths, architectural directions, stat-cache-only IL false
+  positives, and post-rebase verification are recorded in
+  [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
 - Last completed foundation: Common-owned `lateinit` now uses the repository's
   ordinary nullable-carrier lowering for member, top-level, local, captured,
   inherited, generic-reference, and separately compiled declarations. KLIB
@@ -302,11 +303,15 @@ programmes.
 
 ## Current green gate
 
-The complete declaration-owned type-use annotation reflection head
-passed every constituent of the strict target gate. Because another
-development session shared the machine, this checkpoint records correctness
-only and makes no duration or performance claim. The normal aggregate command
-remains:
+The rebased `lateinit` head plus the compiler-distribution module-closure
+correction passed every constituent of the strict target gate. The correction
+registers the extracted `.NET` FIR-to-IR and IR-serialization modules with the
+same central fat-compiler owner used by the other backends; project dependencies
+alone had left the installed `kotlinc-dotnet` launcher without those classes.
+Both installed launcher cases now execute and the two module entry classes are
+physically present in `kotlin-compiler.jar`. Because another development
+session shared the machine, this checkpoint records correctness only and makes
+no duration or performance claim. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -324,6 +329,12 @@ The aggregate exited successfully. Direct audit of its three final roots reports
 the 174 files and 2,073 tests above with zero failures, errors, or skips. No
 duration or performance comparison is retained because another compiler session
 shared the machine throughout verification.
+
+Post-rebase focused evidence additionally reports 8 packed-KLIB loader tests,
+4 prepared/main/selected/reified inline-library tests, and 2 installed
+`kotlinc-dotnet` launcher tests, all with zero failures, errors, or skips. The
+compiler-argument JSON, BTA API, FIR2IR test, and KGP API owners produced no
+tracked generated churn.
 
 At the preceding coroutine head, test-only evidence was strengthened to require the
 imported member entries to retain their CLR virtual slots and to dispatch a
