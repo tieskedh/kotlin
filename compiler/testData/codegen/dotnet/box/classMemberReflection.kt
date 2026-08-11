@@ -301,6 +301,52 @@ fun box(): String {
     if (arrayListMembers.named("contains").single().call(reflectedList, "value") != true) {
         return "fail 32g: stdlib inherited member"
     }
+
+    val hashMapClass = HashMap::class
+    val hashMapMembers = hashMapClass.members
+    if (hashMapMembers !== hashMapClass.members) return "fail 32h: hash map cache"
+    val reflectedMap = HashMap<String, Int>()
+    val hashMapPut = hashMapMembers.named("put").single { it.parameters.size == 3 }
+    if (hashMapPut.annotations.none { it is IgnorableReturnValue }) {
+        return "fail 32i: hash map annotation"
+    }
+    if (hashMapPut.call(reflectedMap, "one", 1) != null) return "fail 32j: hash map put"
+    val hashMapGet = hashMapMembers.named("get").single { it.parameters.size == 2 }
+    if (hashMapGet.call(reflectedMap, "one") != 1) return "fail 32k: hash map get"
+    if (hashMapGet.returnType.classifier != hashMapPut.parameters.last().type.classifier) {
+        return "fail 32l: hash map value-parameter declaration identity"
+    }
+    if (LinkedHashMap::class != HashMap::class) return "fail 32m: linked hash map typealias"
+
+    val hashSetClass = HashSet::class
+    val hashSetMembers = hashSetClass.members
+    if (hashSetMembers !== hashSetClass.members) return "fail 32n: hash set cache"
+    val reflectedSet = HashSet<String>()
+    val hashSetAdd = hashSetMembers.named("add").single { it.parameters.size == 2 }
+    if (hashSetAdd.call(reflectedSet, "set") != true ||
+        hashSetMembers.named("contains").single().call(reflectedSet, "set") != true
+    ) {
+        return "fail 32o: hash set execution"
+    }
+    if (LinkedHashSet::class != HashSet::class) return "fail 32p: linked hash set typealias"
+
+    val abstractMapPut = AbstractMutableMap::class.members.named("put").single()
+    val abstractMap = object : AbstractMutableMap<String, Int>() {
+        private val backing = HashMap<String, Int>()
+
+        override val entries: MutableSet<MutableMap.MutableEntry<String, Int>>
+            get() = backing.entries
+
+        override fun put(key: String, value: Int): Int? = backing.put(key, value)
+    }
+    if (abstractMapPut.call(abstractMap, "two", 2) != null || abstractMap["two"] != 2) {
+        return "fail 32q: abstract mutable map dispatch"
+    }
+    if (AbstractCollection::class.members.named("contains").single()
+            .call(reflectedList, "value") != true
+    ) {
+        return "fail 32r: abstract collection dispatch"
+    }
     class Local
     if (!hasStableUnsupportedMembers(Local::class)) return "fail 33: local class did not fail closed"
     if (!hasStableUnsupportedMembers(object {}::class)) return "fail 34: anonymous class did not fail closed"
