@@ -33,6 +33,7 @@ import org.jetbrains.kotlin.config.DotNetTarget
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.config.dotNetAssemblyName
+import org.jetbrains.kotlin.config.dotNetMemberReflection
 import org.jetbrains.kotlin.config.dotNetOutput
 import org.jetbrains.kotlin.config.dotNetProducesLibrary
 import org.jetbrains.kotlin.config.dotNetProducesStdlib
@@ -69,6 +70,7 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         )
         configuration.dotNetProducesStdlib = arguments.dotNetProduceStdlib
         configuration.dotNetProducesLibrary = arguments.dotNetProduceLibrary
+        configuration.dotNetMemberReflection = arguments.dotNetReflection
         val commonSources = arguments.commonSources.toSet()
         if (arguments.dotNetProduceStdlib && arguments.dotNetProduceLibrary) {
             configuration.report(

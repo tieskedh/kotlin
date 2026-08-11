@@ -5,8 +5,9 @@
 
 package org.jetbrains.kotlin.cli
 
-import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_REFLECTION_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_COMMON_SOURCE_NAMES
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataFailure
 import org.jetbrains.kotlin.load.dotnet.DotNetClrAllowNullMetadataResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
@@ -32479,6 +32480,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
     private fun produceAndConsumeSelfDescribingStdlib(target: String) {
         val firstDirectory = produceSelfDescribingStdlib(target, "first")
+        produceAndInspectReflectionProduct(firstDirectory, target)
         val secondDirectory = produceSelfDescribingStdlib(target, "second")
         val sourceDirectory = produceSelfDescribingStdlib(
             target,
@@ -32523,6 +32525,98 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         consumeSelfDescribingStdlib(firstDirectory, target)
         consumeInstalledStdlib(firstDirectory, target)
         if (target == "net10.0") verifyNet10CSharpStdlibBoundary(firstDirectory)
+    }
+
+    private fun produceAndInspectReflectionProduct(stdlibDirectory: File, target: String) {
+        val reflectionDirectory = File(tmpdir, "produced-$target-reflection").apply { mkdirs() }
+        val sourceFiles = dotNetReflectionSourceFiles()
+        compileInProcess(
+            K2DotNetCompiler(),
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            "-Xallow-kotlin-package",
+            K2DotNetCompilerArguments::noStdlib.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            stdlibDirectory.resolve("Kotlin.Stdlib.dll").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Kotlin.Reflection",
+            K2DotNetCompilerArguments::destination.cliArgument, reflectionDirectory.path,
+            *sourceFiles.map(File::getPath).toTypedArray(),
+        )
+
+        val reflectionLibrary = reflectionDirectory.resolve("Kotlin.Reflection.dll")
+        assertTrue(reflectionLibrary.isFile) {
+            "Expected the optional reflection product at $reflectionLibrary"
+        }
+        val manifest = readCSharpImplementationManifestEnvelope(reflectionLibrary)
+        assertEquals("Kotlin.Reflection", manifest.assemblyName)
+        assertEquals(target, manifest.targetProfile)
+
+        val metadata = DotNetClrMetadataReader.read(reflectionLibrary)
+        val kotlinReferences = metadata.assemblyReferences
+            .map { reference -> reference.name }
+            .filterTo(linkedSetOf()) { name -> name.startsWith("Kotlin.") }
+        assertEquals(setOf(DotNetRuntimeArtifact.ASSEMBLY_NAME, "Kotlin.Stdlib"), kotlinReferences) {
+            "The reflection product may depend on Runtime and Stdlib, but no other Kotlin product"
+        }
+        val provider = metadata.typeDefinitions.single { type ->
+            type.namespaceName == "kotlin.reflect.dotnet.internal" &&
+                    type.metadataName == "ReflectionFactoryImplKt"
+        }
+        assertTrue(provider.isAbstract && provider.isSealed)
+        assertTrue(metadata.methodDefinitions.any { method ->
+            method.declaringType == provider.handle && method.name == "getMembersV1"
+        })
+        val il = reflectionDirectory.resolve("Kotlin.Reflection.il").readText()
+        assertTrue("Kotlin.Runtime.Internal.KClassFactory::'GetGeneratedMembersV1'" in il) {
+            "The optional provider must delegate through the versioned Runtime bootstrap:\n$il"
+        }
+        if (target == "net10.0") {
+            verifyMemberReflectionCompilerFlag(stdlibDirectory, target)
+        }
+    }
+
+    private fun verifyMemberReflectionCompilerFlag(stdlibDirectory: File, target: String) {
+        val directory = File(tmpdir, "member-reflection-compiler-flag").apply { mkdirs() }
+        val source = directory.resolve("ReflectionSubject.kt").apply {
+            writeText(
+                """
+                class ReflectionSubject(val value: String) {
+                    fun append(suffix: String): String = value + suffix
+                }
+                """.trimIndent()
+            )
+        }
+
+        fun compile(run: String, enableMemberReflection: Boolean): String {
+            val output = directory.resolve(run)
+            val optionalArguments = if (enableMemberReflection) {
+                arrayOf(K2DotNetCompilerArguments::dotNetReflection.cliArgument)
+            } else {
+                emptyArray()
+            }
+            compileInProcess(
+                K2DotNetCompiler(),
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::noStdlib.cliArgument,
+                K2DotNetCompilerArguments::classpath.cliArgument,
+                stdlibDirectory.resolve("Kotlin.Stdlib.dll").path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Reflection.Flag.$run",
+                K2DotNetCompilerArguments::destination.cliArgument, output.path,
+                *optionalArguments,
+                source.path,
+            )
+            return output.resolve("Reflection.Flag.$run.il").readText()
+        }
+
+        val ordinaryIl = compile("Ordinary", enableMemberReflection = false)
+        assertFalse("<GetKotlinMembers-v1>" in ordinaryIl) {
+            "Ordinary producers must not emit the pre-ABI executable member factory"
+        }
+        val reflectionIl = compile("OptIn", enableMemberReflection = true)
+        assertTrue("<GetKotlinMembers-v1>" in reflectionIl) {
+            "-Xdotnet-reflection did not reach the member-reflection lowering"
+        }
     }
 
     private fun verifyNet10CSharpStdlibBoundary(stdlibDirectory: File) {
@@ -32783,6 +32877,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 type.namespaceName == namespaceName && type.metadataName == metadataName
             }
         val kClassifierType = runtimeType("Kotlin", "KClassifier")
+        val kDeclarationContainerType = runtimeType("Kotlin", "KDeclarationContainer")
         val kClassType = runtimeType("Kotlin", "KClass")
         val kClassImplType = runtimeType("Kotlin", "KClassImpl")
         val kClassFactoryType = runtimeType("Kotlin.Runtime.Internal", "KClassFactory")
@@ -32823,6 +32918,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }) {
             "Kotlin.Runtime must not acquire an upward dependency on Kotlin.Stdlib"
         }
+        assertTrue(runtimeMetadata.assemblyReferences.none { reference ->
+            reference.name == "Kotlin.Reflection"
+        }) {
+            "Kotlin.Runtime must discover the optional reflection product without a static assembly dependency"
+        }
+        assertTrue(implementationMetadata.assemblyReferences.none { reference ->
+            reference.name == "Kotlin.Reflection"
+        }) {
+            "Kotlin.Stdlib must not acquire a dependency on the optional reflection product"
+        }
         val runtimeReference = implementationMetadata.assemblyReferences.single { reference ->
             reference.name == DotNetRuntimeArtifact.ASSEMBLY_NAME
         }
@@ -32842,21 +32947,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassifierType.visibility)
         assertTrue(kClassifierType.isInterface)
+        assertEquals(DotNetClrTypeVisibility.PUBLIC, kDeclarationContainerType.visibility)
+        assertTrue(kDeclarationContainerType.isInterface)
         assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassType.visibility)
         assertTrue(kClassType.isInterface)
+        assertTrue(runtimeMetadata.interfaceImplementations.any { implementation ->
+            implementation.implementingType == kClassType.handle &&
+                    implementation.interfaceType == kDeclarationContainerType.handle
+        }) {
+            "KClass must physically implement the JVM-shaped KDeclarationContainer contract"
+        }
         assertEquals(DotNetClrTypeVisibility.NOT_PUBLIC, kClassImplType.visibility)
         assertTrue(kClassImplType.isSealed)
         assertEquals(DotNetClrTypeVisibility.PUBLIC, kClassFactoryType.visibility)
         assertTrue(kClassFactoryType.isAbstract && kClassFactoryType.isSealed)
         assertTrue(
-            setOf("get_simpleName", "get_qualifiedName", "isInstance").all { methodName ->
+            setOf("get_simpleName", "get_qualifiedName", "get_members", "isInstance").all { methodName ->
                 runtimeMetadata.methodDefinitions.any { method ->
                     method.declaringType == kClassType.handle && method.name == methodName
                 }
             }
         )
+        assertTrue(runtimeMetadata.methodDefinitions.any { method ->
+            method.declaringType == kDeclarationContainerType.handle && method.name == "get_members"
+        })
         assertTrue(
-            setOf("Create", "GetClass", "GetClrType").all { methodName ->
+            setOf("Create", "GetClass", "GetClrType", "GetGeneratedMembersV1").all { methodName ->
                 runtimeMetadata.methodDefinitions.any { method ->
                     method.declaringType == kClassFactoryType.handle && method.name == methodName
                 }
@@ -34004,6 +34120,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KTypeProjection.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/KVariance.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/jvm/src/kotlin/reflect/KVisibility.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/jvm/src/kotlin/reflect/KDeclarationContainer.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/reflect/typeOf.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/Exceptions.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common-non-jvm/src/kotlin/internal/SharedVariableBox.kt").absoluteFile
@@ -34018,6 +34135,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 sourceFile.readText(),
                 DOTNET_STDLIB_SOURCES.getValue(sourceFile.name),
                 "Packaged fallback source differs from ${sourceFile.path}",
+            )
+        }
+        return sourceFiles
+    }
+
+    private fun dotNetReflectionSourceFiles(): List<File> {
+        val sourceDirectory = File("libraries/reflect/dotnet/src").absoluteFile
+        assertTrue(sourceDirectory.isDirectory) {
+            "Missing ordinary Kotlin/.NET reflection source directory: $sourceDirectory"
+        }
+        val sourceFiles = sourceDirectory.walkTopDown()
+            .filter(File::isFile)
+            .filter { file -> file.extension == "kt" }
+            .sortedBy(File::invariantSeparatorsPath)
+            .toList()
+        assertEquals(DOTNET_REFLECTION_SOURCES.keys.sorted(), sourceFiles.map(File::getName).sorted())
+        for (sourceFile in sourceFiles) {
+            assertEquals(
+                sourceFile.readText(),
+                DOTNET_REFLECTION_SOURCES.getValue(sourceFile.name),
+                "Packaged reflection source differs from ${sourceFile.path}",
             )
         }
         return sourceFiles

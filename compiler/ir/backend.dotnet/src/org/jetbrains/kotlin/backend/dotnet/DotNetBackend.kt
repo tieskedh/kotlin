@@ -152,7 +152,13 @@ object DotNetBackend {
             ilTarget.delete()
         }
 
-        val context = DotNetBackendContext(irBuiltIns, configuration, symbolTable, irModuleFragment)
+        val context = DotNetBackendContext(
+            irBuiltIns,
+            configuration,
+            symbolTable,
+            irModuleFragment,
+            preLoweringDeclarationKeys,
+        )
         val runtimeCSharpImplementationManifest =
             collectDotNetRuntimeCSharpImplementationManifest(context, target)
         try {

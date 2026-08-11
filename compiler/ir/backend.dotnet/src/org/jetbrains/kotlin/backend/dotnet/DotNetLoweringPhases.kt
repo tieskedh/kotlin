@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnnotationImplementationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCallableReferenceLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCallableReferenceIdentityLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetClassDefaultArgumentsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCompanionStaticsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializationFailureLowering
@@ -44,6 +45,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInventNamesForLocalClasse
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInventNamesForLocalFunctions
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetKFunctionInvokeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationPopupLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetMemberReflectionLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrivateNestedAccessLowering
@@ -122,6 +124,7 @@ private val dotNetInlineLowerings: List<NamedCompilerPhase<DotNetBackendContext,
     ::IrValidationBeforeLoweringsKlibSecondStagePhase,
     ::InlineCallCycleCheckerLowering,
     ::DotNetUpgradeCallableReferences,
+    ::DotNetCallableReferenceIdentityLowering,
     ::DotNetSharedVariablesLowering,
     ::LocalClassesInInlineLambdasLowering,
     ::ArrayConstructorLowering,
@@ -155,6 +158,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // JS/Wasm/Native precedent: the shared inliner has substituted T, so bind the three enum
     // intrinsics to the concrete enum's ordinary synthetic values/valueOf/entries declarations.
     ::DotNetEnumUsageLowering,
+    // JVM reflection ownership with Native/Wasm callable materialization: emit one exact private
+    // member factory from the KLIB-derived class scope while it still contains only logical
+    // declarations. The ordinary reference pipeline below owns all executable semantics.
+    ::DotNetMemberReflectionLowering,
     // Normalize companion-block backing fields before any shared lowering can classify state.
     // The receiver-free accessor pair is the FIR2IR semantic marker; later phases may synthesize
     // additional static functions which are not companion declarations.
@@ -164,6 +171,7 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // then move only transformed declarations to the nearest metadata container. This precedes
     // inner classes and initializer merging, as on the JVM (localprobe_s1/s2, anonprobe_s1/s2).
     ::DotNetUpgradeCallableReferences,
+    ::DotNetCallableReferenceIdentityLowering,
     // Native/Wasm precedent: split KProperty values into a runtime wrapper around rich getter
     // and optional setter references while their bound values can still be shared exactly once.
     // The following callable lowering turns those references into the established FunctionN

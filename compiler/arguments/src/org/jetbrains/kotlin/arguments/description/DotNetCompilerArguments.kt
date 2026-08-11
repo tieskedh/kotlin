@@ -109,6 +109,18 @@ val actualDotNetArguments by compilerArgumentsLevel(CompilerArgumentsLevelNames.
     }
 
     compilerArgument {
+        name = "Xdotnet-reflection"
+        compilerName = "dotNetReflection"
+        description = (
+                "Emit pre-ABI executable member metadata for the optional Kotlin.Reflection.dll product. " +
+                        "This experimental representation can materially increase producer size."
+                ).asReleaseDependent()
+        valueType = BooleanType.defaultFalse
+
+        lifecycle(introducedVersion = KotlinReleaseVersion.v2_5_0)
+    }
+
+    compilerArgument {
         name = "Xdotnet-target"
         compilerName = "dotNetTarget"
         description = (

@@ -606,6 +606,35 @@ See the
   semantic closure. Do not infer `KClass.members`, declared-member lookup, or
   a runtime KLIB decoder from this direct-reference surface. See
   [the property-accessor decision](docs/decisions/property-accessor-reflection.md).
+  `KClass.members` is a JVM-shaped platform extension owned by the optional
+  `Kotlin.Reflection.dll` product. Runtime owns only the physical
+  `KDeclarationContainer`/`KClass` slot, per-`KClass` cache, exact provider
+  bootstrap, and versioned generated-factory entry point; Runtime and Stdlib
+  must retain no static `Kotlin.Reflection` dependency. After KLIB
+  serialization, the backend may emit a private producer-owned executable
+  factory from the exact logical class scope only when the producer explicitly
+  opts in with `-Xdotnet-reflection`; ordinary compilation must emit none. The
+  backend must not own discovery,
+  decode KLIB at runtime, or infer Kotlin members from CLR MethodDefs,
+  properties, helper names, or bridges. Enumerated members reuse the ordinary
+  callable/property objects and therefore their exact identity, invocation,
+  parameters, annotations, accessors, and exception behavior. The first
+  closure admits ordinary user/library classes, interfaces, nested classes,
+  objects, and enums; local/anonymous, mapped, foreign, and Stdlib classifiers
+  fail closed until their complete authority path is selected. A private
+  factory must be found by exact parameter and return signature, never name
+  alone. Cross-module callable identity may use an upstream `IdSignature` only
+  when `visibleCrossFile` is true; file-scoped identities must be normalized
+  without absolute checkout or temporary resource paths so ordinary-source and
+  packaged-source IL remain reproducible. See
+  [the class-member reflection decision](docs/decisions/class-member-reflection.md).
+  Do not mistake its first executable factory for a frozen compact encoding:
+  one generated callable class per member is an opt-in semantic proof whose
+  material producer expansion prevents default emission. A compact
+  KLIB-derived descriptor plus reflection-product decoder, or equally compact
+  shared thunks, is mandatory before default enablement or ABI freeze. The
+  experimental flag is not permission to create different Kotlin semantics or
+  a second stable reflection ABI.
   The JVM-shaped `KFunction` declaration flags (`isInline`,
   `isExternal`, `isOperator`, `isInfix`, and `isSuspend`) are one shared
   property capability inherited by every admitted `KFunction` arity. Read

@@ -45,6 +45,7 @@ internal class DotNetIlIntrinsicMethods(
     private val kotlinIoFqn = FqName("kotlin.io")
     private val kotlinCollectionsFqn = FqName("kotlin.collections")
     private val kotlinTextFqn = FqName("kotlin.text")
+    private val kotlinReflectDotNetInternalFqn = FqName("kotlin.reflect.dotnet.internal")
     private val safeContinuationFqn = FqName("kotlin.coroutines.SafeContinuation")
 
     private val anyFqn = StandardNames.FqNames.any.toSafe()
@@ -181,6 +182,12 @@ internal class DotNetIlIntrinsicMethods(
         Key(safeContinuationFqn, null, "compareAndSetResult", listOf(anyFqn, anyFqn))
                 to DotNetIlSafeContinuationCompareAndSetIntrinsic,
         Key(kotlinIoFqn, null, "dotNetReadLine", emptyList()) to DotNetIlReadLineIntrinsic,
+        Key(
+            kotlinReflectDotNetInternalFqn,
+            null,
+            "dotNetGetGeneratedMembersV1",
+            listOf(FqName("kotlin.reflect.KClass")),
+        ) to DotNetIlGeneratedMembersIntrinsic,
         Key(kotlinIoFqn, null, "print", listOf(anyFqn)) to DotNetIlPrintIntrinsic,
         Key(kotlinIoFqn, null, "println", emptyList()) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(stringFqn)) to DotNetIlPrintlnIntrinsic,
@@ -3722,6 +3729,31 @@ private object DotNetIlReadLineIntrinsic : DotNetIlIntrinsicMethod() {
         if (call.arguments.isNotEmpty() || expectedType != DotNetIlValueType.String) return false
         codegen.emit(
             "call string ${codegen.coreLibraryReference}System.Console::ReadLine()",
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Exact optional-reflection provider call into Runtime's generated-factory bootstrap. */
+private object DotNetIlGeneratedMembersIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val kClass = call.arguments.singleOrNull()
+            ?: dotNetUnsupported("generated-member reflection bootstrap requires one KClass argument")
+        val kClassType = codegen.toDotNetIlValueType(kClass.type)
+            ?: dotNetUnsupported("generated-member reflection bootstrap has an unmapped KClass argument")
+        codegen.emitExpression(kClass, kClassType)
+        codegen.emit(
+            "call class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]Kotlin.Collections.Collection " +
+                    "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]Kotlin.Runtime.Internal.KClassFactory::" +
+                    "'GetGeneratedMembersV1'(class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]Kotlin.KClass)",
+            pops = 1,
             pushes = 1,
         )
         return true

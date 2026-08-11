@@ -430,6 +430,7 @@ internal object DotNetRuntimeTypes {
 
     private val kClassifierBase = DotNetKClassRuntime.kClassifierClassInfo
     private val kAnnotatedElementBase = DotNetKClassRuntime.kAnnotatedElementClassInfo
+    private val kDeclarationContainerBase = DotNetKClassRuntime.kDeclarationContainerClassInfo
     private val kClassBase = DotNetKClassRuntime.kClassClassInfo
     private val kTypeBase = DotNetKClassRuntime.kTypeClassInfo
 
@@ -549,8 +550,9 @@ internal object DotNetRuntimeTypes {
         collectionBase.interfaces = listOf(iterableType)
         listBase.interfaces = listOf(collectionType)
         kClassBase.interfaces = listOf(
-            DotNetIlValueType.UserClass(kClassifierBase),
+            DotNetIlValueType.UserClass(kDeclarationContainerBase),
             DotNetIlValueType.UserClass(kAnnotatedElementBase),
+            DotNetIlValueType.UserClass(kClassifierBase),
         )
         kCallableBase.interfaces = listOf(DotNetIlValueType.UserClass(kAnnotatedElementBase))
         kFunctionBase.interfaces = listOf(
@@ -619,6 +621,8 @@ internal object DotNetRuntimeTypes {
             irClass.isDotNetCallableAnnotationFactory == true -> callableAnnotationFactory
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CLASSIFIER -> kClassifierBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_ANNOTATED_ELEMENT -> kAnnotatedElementBase
+            classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_DECLARATION_CONTAINER ->
+                kDeclarationContainerBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CLASS -> kClassBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_TYPE -> kTypeBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CALLABLE -> kCallableBase
@@ -931,6 +935,9 @@ internal object DotNetRuntimeTypes {
         if (info.runtimeKind == DotNetRuntimeClassifierKind.K_ANNOTATED_ELEMENT && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(kAnnotatedElementBase)
         }
+        if (info.runtimeKind == DotNetRuntimeClassifierKind.K_DECLARATION_CONTAINER && simpleType.arguments.isEmpty()) {
+            return DotNetIlValueType.UserClass(kDeclarationContainerBase)
+        }
         if (info.runtimeKind == DotNetRuntimeClassifierKind.K_CLASS && simpleType.arguments.size == 1) {
             // KClass's type argument remains authoritative in IR/KLIB. Runtime equality and
             // instance checks use the declaration-erased Kotlin classifier carried by KClassImpl.
@@ -1112,6 +1119,30 @@ internal object DotNetRuntimeTypes {
             availableFunctions[annotationsGetter] = DotNetIlFunctionInfo(
                 kAnnotatedElementBase,
                 annotationsGetter.dotNetSignature(typeMapper),
+            )
+        }
+        val kDeclarationContainer = kClass.superTypes
+            .mapNotNull { type -> type.classOrNull?.owner }
+            .singleOrNull { superClass ->
+                typeMapper.classifierInfo(superClass).runtimeKind ==
+                        DotNetRuntimeClassifierKind.K_DECLARATION_CONTAINER
+        }
+        if (kDeclarationContainer != null) {
+            val kClassMembersGetter = kClass.properties
+                .single { property -> property.name.asString() == "members" }
+                .getter
+                ?: error("Internal .NET backend error: kotlin.reflect.KClass.members has no getter")
+            availableFunctions[kClassMembersGetter] = DotNetIlFunctionInfo(
+                kClassBase,
+                kClassMembersGetter.dotNetSignature(typeMapper),
+            )
+            val membersGetter = kDeclarationContainer.properties
+                .single { property -> property.name.asString() == "members" }
+                .getter
+                ?: error("Internal .NET backend error: kotlin.reflect.KDeclarationContainer.members has no getter")
+            availableFunctions[membersGetter] = DotNetIlFunctionInfo(
+                kDeclarationContainerBase,
+                membersGetter.dotNetSignature(typeMapper),
             )
         }
         val isInstance = kClass.functions.single { function -> function.name.asString() == "isInstance" }

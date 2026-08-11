@@ -16,8 +16,35 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: JVM-shaped direct property declaration facts and
-  accessor objects for `KProperty0` through `KProperty2` and their mutable
+- Last completed feature: JVM-shaped `KClass.members` for
+  explicitly opted-in Kotlin-produced user/library classifiers through an
+  optional `Kotlin.Reflection.dll`. Producers use `-Xdotnet-reflection` while
+  this executable representation remains pre-ABI; ordinary compilation emits
+  no member factory. Runtime owns the physical
+  `KDeclarationContainer`/`KClass` slot, exact provider bootstrap, stable
+  absence/mismatch failure, and per-`KClass` cache without a reverse static
+  dependency. The optional product owns discovery; the backend emits only a
+  private versioned producer factory from the post-KLIB logical class scope.
+  Enumerated values are the established callable/property objects, so exact
+  KLIB-derived annotations, parameters and type graphs, accessors, visibility,
+  invocation, `callBy`, equality, mutation, dispatch, and exception identity
+  retain one implementation. Separate compilation covers inheritance,
+  interfaces/defaults, generic erasure, overloads, member extensions, nested
+  classes, objects, and enums. Local/anonymous, mapped, Stdlib, and foreign
+  classifiers fail closed rather than exposing partial CLR-derived members.
+  Library ABI/runtime surface 30 and private factory protocol 1 identify this
+  pre-ABI opt-in closure. The actual packaged reflection source builds as
+  `Kotlin.Reflection.dll` with only Runtime/Stdlib Kotlin dependencies; those
+  base products have no reverse AssemblyRef. Reproducible stdlib production
+  additionally pins upstream `IdSignature.visibleCrossFile` as the only
+  cross-module callable-identity boundary, excluding absolute source paths.
+  The private executable factory is a semantic proof, not a frozen compact
+  encoding. General emission demonstrated material producer expansion; a
+  compact KLIB-derived descriptor plus reflection-product decoder or equally
+  compact shared thunks is therefore required before default enablement or ABI
+  freeze.
+  The preceding feature completed JVM-shaped direct property declaration facts
+  and accessor objects for `KProperty0` through `KProperty2` and their mutable
   counterparts. One cached getter and optional setter call the owning
   property's established execution path, preserving bound receivers, virtual
   dispatch, mutation, exception identity, and separate compilation. Exact
@@ -25,12 +52,12 @@ verification, and work state.
   parameters, annotations, visibility, modality, and function flags; runtime
   CLR reflection owns none of them. A private callable-reference getter reads
   retained `const` literals without changing their ordinary field-only CLR
-  ABI. Library ABI and runtime surface 29 own the new payload, nested
-  interfaces, and implementation classes. Broad member discovery,
-  `getDelegate`, type-use annotation discovery, and the positive `isLateinit`
-  path remain separate programmes. The preceding feature completed exact
-  nominal constrained constructions and constructed-interface bounds for
-  admitted foreign generic interfaces and methods. The FIR importer reuses the shared declaration-qualified CLR
+  ABI. Library ABI and runtime surface 29 own the payload, nested interfaces,
+  and implementation classes. `getDelegate`, type-use annotation discovery,
+  and the positive `isLateinit` path remain separate programmes. The preceding
+  feature completed exact nominal constrained constructions and
+  constructed-interface bounds for admitted foreign generic interfaces and
+  methods. The FIR importer reuses the shared declaration-qualified CLR
   constraint resolver/validator; it does not reconstruct satisfaction from
   Kotlin types. Constrained members and InterfaceImpls, method and owner bounds,
   nested Roslyn nullability, Kotlin implementations, open generic bound dispatch,
@@ -141,31 +168,32 @@ verification, and work state.
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
-stdlib. The target is not close to 98% feature-complete: broad member/property
-reflection and invocation, the remaining coroutine programme beyond its
-executable continuation/state-machine foundation, multi-field value classes,
-Sequence and Grouping families, sorting/random, and Gradle/KMP product
-integration remain substantial open programmes.
+stdlib. The target is not close to 98% feature-complete: mapped/Stdlib/foreign
+member reflection, constructors and declared-member APIs, the remaining
+coroutine programme beyond its executable continuation/state-machine
+foundation, multi-field value classes, Sequence and Grouping families,
+sorting/random, and Gradle/KMP product integration remain substantial open
+programmes.
 
 ## Current green gate
 
-The direct property declaration-fact/accessor-object head passed every
+The opt-in class-member-reflection head passed every
 constituent of the strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 158 XML files and 1908 tests:
+The audited full-aggregate evidence covers 158 XML files and 1920 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1786 FIR, IL-text, and box tests
+- 1798 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 95 library-integration tests
 - zero failures, errors, or skips
 
 The aggregate exited successfully. Direct audit of its three final roots reports
-the 158 files and 1,908 tests above with zero failures, errors, or skips. No
+the 158 files and 1,920 tests above with zero failures, errors, or skips. No
 duration or performance comparison is retained because another compiler session
 shared the machine throughout verification.
 
@@ -1136,10 +1164,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the independent reflection programme with broad member
-   enumeration. Reuse the established direct callable and property-accessor
-   objects plus the logical declaration graph; do not rediscover foreign or
-   Kotlin members through runtime CLR reflection.
+1. Continue the independent reflection programme in complete authority
+   families: mapped/Stdlib classifiers from their Kotlin declaration mapping,
+   then foreign classifiers from exact importer identities and enhancement.
+   Reuse the established callable/property objects and never expose a partial
+   CLR MethodDef/Property scan. Constructors and declared-member convenience
+   APIs remain separate selections.
 2. Treat type-use annotation discovery as its own reflection tranche over the
    established logical type graph and exact foreign metadata owners.
 3. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;
