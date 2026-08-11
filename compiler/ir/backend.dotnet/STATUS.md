@@ -16,12 +16,24 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed foundation: the generated Stdlib member catalog now makes
-  mapped `kotlin.String`, all sixteen built-in collection interfaces, and the
-  complete current Kotlin-owned collection implementation family executable
-  through `KClass.members`. Interface members come directly from `IrBuiltIns`,
-  preserving logical read-only/mutable and nested-entry identities over the
-  canonical/exact split-interface representation. The implementation family
+- Last completed foundation: the generated Stdlib member catalog now makes all
+  eight concrete Common scalar built-ins, mapped `kotlin.String`, all sixteen
+  built-in collection interfaces, and the complete current Kotlin-owned
+  collection implementation family executable through `KClass.members`. Scalar
+  entries come directly from `IrBuiltIns`, preserving complete logical Kotlin
+  scopes and signatures over their boxed/unboxed CLR value carriers while
+  excluding CLR-only names. Their complete scopes exposed two ordinary backend
+  gaps rather than reflection exceptions: eager `Boolean.and`/`or`/`xor` now
+  follow JVM's primitive intrinsic registry, and physically retained deprecated
+  signed-number `toChar` members preserve Byte/Short sign extension, Int/Long
+  truncation, and Float/Double `toInt()` saturation when called reflectively.
+  Mixed promotions and Kotlin Float/Double NaN/signed-zero total ordering execute
+  through the existing callable pipeline. `Number` remains a separate family
+  because its logical supertype uses a classified `object` carrier; it is not
+  inferred from the eight concrete entries. Interface members likewise come
+  directly from `IrBuiltIns`, preserving logical read-only/mutable and nested-
+  entry identities over the canonical/exact split-interface representation.
+  The implementation family
   covers the four read-only abstract bases, their four mutable counterparts,
   `ArrayList`, `HashMap`, and `HashSet`. `LinkedHashMap`/`LinkedHashSet` retain
   the same `KClass` and catalog identity as their actual typealias targets. The
@@ -232,7 +244,7 @@ programmes.
 
 ## Current green gate
 
-The complete current collection-interface/implementation member-catalog head
+The complete current scalar/collection member-catalog head
 passed every constituent of the strict target gate. Because another
 development session shared the machine, this checkpoint records correctness
 only and makes no duration or performance claim. The normal aggregate command
@@ -1223,10 +1235,14 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 ## Next bounded work
 
 1. Continue the generated catalog by complete classifier families, not by
-   handwritten members. The current built-in collection-interface and
-   Kotlin-owned implementation families are complete; select the next
-   mapped/Stdlib family from Kotlin declaration scopes, then add foreign
-   classifiers from exact importer identities and enhancement. Reuse the
+   handwritten members. The concrete Common scalar, built-in collection-
+   interface, and Kotlin-owned implementation families are complete. Treat
+   `Number` as a separate next candidate: first prove its classified `object`
+   carrier can dispatch the complete Common conversion surface for every
+   admitted boxed numeric scalar, rather than inferring it from concrete scalar
+   entries. Then select later mapped/Stdlib families from Kotlin declaration
+   scopes and foreign classifiers from exact importer identities and
+   enhancement. Reuse the
    established callable/property objects
    and never expose a partial CLR MethodDef/Property scan. Constructors and
    declared-member convenience APIs remain separate selections.

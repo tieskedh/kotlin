@@ -469,6 +469,12 @@ fun box(): String {
                 callable.returnType.classifier == Boolean::class
     }
     if (booleanNot.call(false) != true) return "fail 32ak: Boolean intrinsic execution"
+    if (Boolean::class.binaryMember("and", Boolean::class, Boolean::class).call(true, false) != false ||
+        Boolean::class.binaryMember("or", Boolean::class, Boolean::class).call(false, true) != true ||
+        Boolean::class.binaryMember("xor", Boolean::class, Boolean::class).call(true, true) != false
+    ) {
+        return "fail 32aka: eager Boolean intrinsic execution"
+    }
     if (Char::class.binaryMember("plus", Int::class, Char::class).call('A', 2) != 'C') {
         return "fail 32al: Char intrinsic execution"
     }
