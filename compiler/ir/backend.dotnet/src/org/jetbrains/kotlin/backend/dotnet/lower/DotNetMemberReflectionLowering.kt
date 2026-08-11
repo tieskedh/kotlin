@@ -122,9 +122,10 @@ internal class DotNetMemberReflectionLowering(
 
     /**
      * Builds the first product-owned catalog from Kotlin class scopes while the Stdlib module is
-     * still semantic IR. `String` exercises a mapped CLR carrier and the collection family
-     * exercises Kotlin-owned implementations and abstract bases. Adding a classifier changes only
-     * this selected data set, never the member construction or invocation implementation.
+     * still semantic IR. `String` exercises a mapped CLR carrier; the built-in collection
+     * interfaces exercise the split-interface model; and the Stdlib collection classes exercise
+     * Kotlin-owned implementations and abstract bases. Adding a classifier changes only this
+     * selected data set, never the member construction or invocation implementation.
      */
     private fun IrModuleFragment.addStdlibCatalog() {
         val functions = mutableListOf<IrSimpleFunction>()
@@ -159,7 +160,28 @@ internal class DotNetMemberReflectionLowering(
                 "Internal .NET backend error: Stdlib production does not contain exactly one $fqName class"
             )
         }
-        val entries = (listOf(context.irBuiltIns.stringClass.owner) + selectedClasses).map { irClass ->
+        val builtInClasses = with(context.irBuiltIns) {
+            listOf(
+                stringClass,
+                iterableClass,
+                mutableIterableClass,
+                iteratorClass,
+                mutableIteratorClass,
+                listIteratorClass,
+                mutableListIteratorClass,
+                collectionClass,
+                mutableCollectionClass,
+                listClass,
+                mutableListClass,
+                setClass,
+                mutableSetClass,
+                mapClass,
+                mapEntryClass,
+                mutableMapClass,
+                mutableMapEntryClass,
+            ).map { symbol -> symbol.owner }
+        }
+        val entries = (builtInClasses + selectedClasses).map { irClass ->
             val references = irClass.logicalMemberReferencesOrNull()
                 ?: error(
                     "Internal .NET backend error: the selected Stdlib reflection classifier " +
