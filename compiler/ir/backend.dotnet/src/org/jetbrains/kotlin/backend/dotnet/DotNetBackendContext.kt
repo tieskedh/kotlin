@@ -284,7 +284,7 @@ internal class DotNetSymbols(
     }
     val dotNetCreateKType: IrSimpleFunctionSymbol by with(irBuiltIns) {
         CallableId(StandardNames.KOTLIN_REFLECT_FQ_NAME, Name.identifier("dotNetCreateKType")).functionSymbol {
-            it.hasShape(regularParameters = 3)
+            it.hasShape(regularParameters = 4)
         }
     }
     val dotNetCreateKTypeParameter: IrSimpleFunctionSymbol by with(irBuiltIns) {

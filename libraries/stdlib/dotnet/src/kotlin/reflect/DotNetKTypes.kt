@@ -33,7 +33,8 @@ internal fun dotNetCreateKType(
     classifier: KClassifier?,
     arguments: Array<KTypeProjection>,
     isMarkedNullable: Boolean,
-): KType = KTypeImpl(classifier, arguments.asList(), isMarkedNullable)
+    annotations: List<Annotation>,
+): KType = KTypeImpl(classifier, arguments.asList(), isMarkedNullable, annotations)
 
 @PublishedApi
 @UsedFromCompilerGeneratedCode
