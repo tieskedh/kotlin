@@ -112,6 +112,8 @@ internal data class DotNetClassifierInfo(
                 fqNameString == "kotlin.reflect.KVisibility" && typeParameterCount == 0 -> DotNetRuntimeClassifierKind.K_VISIBILITY
                 fqNameString == "kotlin.reflect.KClassifier" && typeParameterCount == 0 -> DotNetRuntimeClassifierKind.K_CLASSIFIER
                 fqNameString == "kotlin.reflect.KAnnotatedElement" && typeParameterCount == 0 -> DotNetRuntimeClassifierKind.K_ANNOTATED_ELEMENT
+                fqNameString == "kotlin.reflect.KDeclarationContainer" && typeParameterCount == 0 ->
+                    DotNetRuntimeClassifierKind.K_DECLARATION_CONTAINER
                 fqNameString == "kotlin.reflect.KClass" && typeParameterCount == 1 -> DotNetRuntimeClassifierKind.K_CLASS
                 fqNameString == "kotlin.reflect.KType" && typeParameterCount == 0 -> DotNetRuntimeClassifierKind.K_TYPE
                 fqNameString == "kotlin.reflect.KFunction" && typeParameterCount == 1 -> DotNetRuntimeClassifierKind.K_FUNCTION
@@ -179,6 +181,7 @@ internal enum class DotNetRuntimeClassifierKind {
     K_VISIBILITY,
     K_CLASSIFIER,
     K_ANNOTATED_ELEMENT,
+    K_DECLARATION_CONTAINER,
     K_CLASS,
     K_TYPE,
     K_FUNCTION,

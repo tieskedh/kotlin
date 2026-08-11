@@ -29,6 +29,7 @@ import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
 import org.jetbrains.kotlin.ir.declarations.IrEnumEntry
@@ -111,6 +112,8 @@ internal class DotNetBackendContext(
     override val configuration: CompilerConfiguration,
     val symbolTable: SymbolTable,
     irModuleFragment: IrModuleFragment,
+    /** KLIB-authoritative public identities captured before mutable backend lowerings. */
+    val preLoweringDeclarationKeys: Map<IrDeclaration, String> = emptyMap(),
 ) : CommonBackendContext {
     override val irFactory: IrFactory = symbolTable.irFactory
     override val typeSystem: IrTypeSystemContext = IrTypeSystemContextImpl(irBuiltIns)

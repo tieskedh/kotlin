@@ -68,6 +68,16 @@ class K2DotNetCompilerArguments : CommonKlibBasedCompilerArguments() {
         }
 
     @Argument(
+        value = "-Xdotnet-reflection",
+        description = "Emit pre-ABI executable member metadata for the optional Kotlin.Reflection.dll product. This experimental representation can materially increase producer size.",
+    )
+    var dotNetReflection: Boolean = false
+        set(value) {
+            checkFrozen()
+            field = value
+        }
+
+    @Argument(
         value = "-Xdotnet-target",
         valueDescription = "{net48|netstandard2.0|net10.0}",
         description = "Select the target-framework/API profile independently of product kind. net48 and net10.0 support applications and libraries; netstandard2.0 supports libraries only.",
