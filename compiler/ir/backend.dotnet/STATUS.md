@@ -16,7 +16,24 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed foundation: private member-factory protocol 2 now emits one
+- Last completed foundation: the first generated Stdlib member catalog now
+  makes mapped `kotlin.String` and Kotlin-owned
+  `kotlin.collections.ArrayList` executable through `KClass.members`. The
+  complete member sets come from the Kotlin built-ins/actualized Stdlib class
+  scopes after KLIB serialization; arbitrary `System.String`/BCL members never
+  enter the result. One Stdlib-owned catalog feeds the existing compact
+  callable/property pipeline, while optional `Kotlin.Reflection.dll` owns
+  lookup order and Runtime retains neither a Stdlib dependency nor catalog
+  policy. Inherited fake overrides remain reflection identity and use their
+  resolved real override only for execution, fixing the `Collection` versus
+  `AbstractCollection` receiver boundary generically. The selected collection
+  members also pulled authoritative Common `ReturnValue.kt` into Stdlib, so
+  runtime `@IgnorableReturnValue` applications are preserved rather than
+  filtered. Library ABI/runtime surface 33 and provider `getMembersV2` version
+  the cross-product change. Focused PSI/LightTree, Framework/CoreCLR, malformed
+  provider, packaged-source, reproducibility, and installed-product checks are
+  green.
+  The preceding foundation, private member-factory protocol 2, emits one
   generated dispatcher TypeDef per reflected Kotlin producer class instead of
   one callable TypeDef per function/getter/setter. Shared Runtime carriers
   implement `KFunction` plus exactly one matching `Function0..22` capability,
@@ -54,8 +71,9 @@ verification, and work state.
   invocation, `callBy`, equality, mutation, dispatch, and exception identity
   retain one implementation. Separate compilation covers inheritance,
   interfaces/defaults, generic erasure, overloads, member extensions, nested
-  classes, objects, and enums. Local/anonymous, mapped, Stdlib, and foreign
-  classifiers fail closed rather than exposing partial CLR-derived members.
+  classes, objects, and enums. Local/anonymous, foreign, and unadmitted
+  mapped/Stdlib classifiers fail closed rather than exposing partial
+  CLR-derived members.
   Library ABI/runtime surface 30 and private factory protocol 1 identify this
   pre-ABI opt-in closure. The actual packaged reflection source builds as
   `Kotlin.Reflection.dll` with only Runtime/Stdlib Kotlin dependencies; those
@@ -192,8 +210,9 @@ verification, and work state.
 
 This maturity statement measures the coherence and adversarial verification of
 the admitted subset, not percentage completion of Kotlin as a language or
-stdlib. The target is not close to 98% feature-complete: mapped/Stdlib/foreign
-member reflection, constructors and declared-member APIs, the remaining
+stdlib. The target is not close to 98% feature-complete: remaining
+mapped/Stdlib and foreign member reflection, constructors and declared-member
+APIs, the remaining
 coroutine programme beyond its executable continuation/state-machine
 foundation, multi-field value classes, Sequence and Grouping families,
 sorting/random, and Gradle/KMP product integration remain substantial open
@@ -201,10 +220,10 @@ programmes.
 
 ## Current green gate
 
-The compact reflected-member dispatcher head passed every constituent of the
-strict target gate. A subsequent non-semantic import and formatting cleanup
-also passed the backend production-source compile. The normal aggregate
-command remains:
+The generated mapped/Stdlib member-catalog head passed every constituent of
+the strict target gate. Because another development session shared the machine,
+this checkpoint records correctness only and makes no duration or performance
+claim. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -1190,12 +1209,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Continue the independent reflection programme in complete authority
-   families: mapped/Stdlib classifiers from their Kotlin declaration mapping,
-   then foreign classifiers from exact importer identities and enhancement.
-   Reuse the established callable/property objects and never expose a partial
-   CLR MethodDef/Property scan. Constructors and declared-member convenience
-   APIs remain separate selections.
+1. Broaden the generated catalog by complete classifier families, not by
+   handwritten members: finish the supported mapped/Stdlib set from Kotlin
+   declaration scopes, then add foreign classifiers from exact importer
+   identities and enhancement. Reuse the established callable/property objects
+   and never expose a partial CLR MethodDef/Property scan. Constructors and
+   declared-member convenience APIs remain separate selections.
 2. Treat type-use annotation discovery as its own reflection tranche over the
    established logical type graph and exact foreign metadata owners.
 3. Keep `Task`/`ValueTask` and C# `async` as a future explicit export product;

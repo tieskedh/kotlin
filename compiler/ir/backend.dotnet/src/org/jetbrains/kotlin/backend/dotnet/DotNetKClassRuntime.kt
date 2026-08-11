@@ -35,7 +35,7 @@ internal object DotNetKClassRuntime {
     internal const val MEMBER_DISPATCHER_CLASS_NAME = "<MemberDispatcher-v2>"
     private const val REFLECTION_PROVIDER_TYPE_NAME =
         "kotlin.reflect.dotnet.internal.ReflectionFactoryImplKt, Kotlin.Reflection"
-    private const val REFLECTION_PROVIDER_METHOD_NAME = "getMembersV1"
+    private const val REFLECTION_PROVIDER_METHOD_NAME = "getMembersV2"
     internal const val PRODUCED_ASSEMBLY_MARKER_TYPE_NAME =
         "Kotlin.Runtime.Internal.<KotlinProducedAssembly>"
     private const val LOCAL_NAME_ATTRIBUTE_TYPE_NAME =

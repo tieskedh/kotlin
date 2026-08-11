@@ -9,11 +9,14 @@ import kotlin.reflect.KCallable
 import kotlin.reflect.KClass
 
 /** Versioned entry point loaded reflectively by the lightweight Kotlin.Runtime bootstrap. */
-public fun getMembersV1(kClass: KClass<*>): Collection<KCallable<*>>? =
-    dotNetGetGeneratedMembersV1(kClass)
+public fun getMembersV2(kClass: KClass<*>): Collection<KCallable<*>>? =
+    dotNetGetStdlibMembersV1(kClass)?.asList() ?: dotNetGetGeneratedMembersV1(kClass)
 
 /**
  * Irreducible Runtime bootstrap call. Logical member selection remains in this optional product;
  * Runtime only invokes the exact compiler-emitted factory selected by that policy.
  */
 private external fun dotNetGetGeneratedMembersV1(kClass: KClass<*>): Collection<KCallable<*>>?
+
+/** Exact compiler-ABI call to the generated catalog owned by Kotlin.Stdlib. */
+private external fun dotNetGetStdlibMembersV1(kClass: KClass<*>): Array<KCallable<*>>?
