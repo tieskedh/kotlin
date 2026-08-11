@@ -607,6 +607,75 @@ $callableInvokerCasesIl
             |      .get instance bool Kotlin.Runtime.Internal.FunctionReferenceBase::get_isSuspend()
             |    }
             |
+            |    .method public hidebysig specialname newslot virtual final instance string get_name() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'name'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance class Kotlin.KType get_returnType() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.KType Kotlin.Runtime.Internal.FunctionReferenceBase::'returnType'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance class Kotlin.Collections.List get_typeParameters() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::'typeParameters'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance class Kotlin.Collections.List get_parameters() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::'parameters'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Call(object[] 'args') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallErased(object[])
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object CallBy(
+            |        class Kotlin.Collections.Map 'args') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallByErased(
+            |          class Kotlin.Collections.Map)
+            |      ret
+            |    }
+            |
+            |    .property instance string name()
+            |    {
+            |      .get instance string Kotlin.Runtime.Internal.FunctionReferenceBase::get_name()
+            |    }
+            |    .property instance class Kotlin.KType returnType()
+            |    {
+            |      .get instance class Kotlin.KType Kotlin.Runtime.Internal.FunctionReferenceBase::get_returnType()
+            |    }
+            |    .property instance class Kotlin.Collections.List typeParameters()
+            |    {
+            |      .get instance class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::get_typeParameters()
+            |    }
+            |    .property instance class Kotlin.Collections.List parameters()
+            |    {
+            |      .get instance class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::get_parameters()
+            |    }
+            |
             |    .method family hidebysig instance class Kotlin.Collections.List GetTypeParameters() cil managed
             |    {
             |      .maxstack 1
@@ -642,7 +711,8 @@ $callableInvokerCasesIl
             |      ret
             |    }
             |
-            |    .method family hidebysig instance object CallByErased(class Kotlin.Collections.Map 'args') cil managed
+            |    .method family hidebysig newslot virtual instance object CallByErased(
+            |        class Kotlin.Collections.Map 'args') cil managed
             |    {
             |      .maxstack 6
             |      .locals init (
@@ -5187,7 +5257,6 @@ $loadArguments
                    implements Kotlin.KProperty/Accessor, Kotlin.KFunction
             {
               .field private initonly class Kotlin.KProperty 'property'
-              .field private initonly string 'name'
 
               .method family hidebysig specialname rtspecialname instance void .ctor(
                   class Kotlin.KProperty 'property', string 'name', object[] 'signature',
@@ -5210,9 +5279,6 @@ $loadArguments
                 ldarg.0
                 ldarg.1
                 stfld class Kotlin.KProperty Kotlin.Runtime.Internal.PropertyAccessorBase::'property'
-                ldarg.0
-                ldarg.2
-                stfld string Kotlin.Runtime.Internal.PropertyAccessorBase::'name'
                 ret
               }
 
@@ -5241,61 +5307,6 @@ $loadArguments
                 ret
               }
 
-              .method public hidebysig specialname newslot virtual final instance string get_name() cil managed
-              {
-                .override method instance string Kotlin.KCallable::get_name()
-                .maxstack 1
-                ldarg.0
-                ldfld string Kotlin.Runtime.Internal.PropertyAccessorBase::'name'
-                ret
-              }
-
-              .method public hidebysig specialname newslot virtual final instance class Kotlin.KType get_returnType() cil managed
-              {
-                .override method instance class Kotlin.KType Kotlin.KCallable::get_returnType()
-                .maxstack 1
-                ldarg.0
-                call instance class Kotlin.KType Kotlin.Runtime.Internal.FunctionReferenceBase::GetReturnType()
-                ret
-              }
-
-              .method public hidebysig specialname newslot virtual final instance class Kotlin.Collections.List get_parameters() cil managed
-              {
-                .override method instance class Kotlin.Collections.List Kotlin.KCallable::get_parameters()
-                .maxstack 1
-                ldarg.0
-                call instance class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::GetParameters()
-                ret
-              }
-
-              .method public hidebysig specialname newslot virtual final instance class Kotlin.Collections.List get_typeParameters() cil managed
-              {
-                .override method instance class Kotlin.Collections.List Kotlin.KCallable::get_typeParameters()
-                .maxstack 1
-                ldarg.0
-                call instance class Kotlin.Collections.List Kotlin.Runtime.Internal.FunctionReferenceBase::GetTypeParameters()
-                ret
-              }
-
-              .method public hidebysig newslot virtual final instance object Call(object[] 'args') cil managed
-              {
-                .override method instance object Kotlin.KCallable::Call(object[])
-                .maxstack 2
-                ldarg.0
-                ldarg.1
-                call instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallErased(object[])
-                ret
-              }
-
-              .method public hidebysig newslot virtual final instance object CallBy(class Kotlin.Collections.Map 'args') cil managed
-              {
-                .override method instance object Kotlin.KCallable::CallBy(class Kotlin.Collections.Map)
-                .maxstack 2
-                ldarg.0
-                ldarg.1
-                call instance object Kotlin.Runtime.Internal.FunctionReferenceBase::CallByErased(class Kotlin.Collections.Map)
-                ret
-              }
             }
 
 $getterTypesIl

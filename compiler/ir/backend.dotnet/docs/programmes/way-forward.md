@@ -231,6 +231,16 @@ while assessing producer size, trimming, NativeAOT behavior, startup, and
 invocation; this replacement is architecture work rather than a performance
 micro-tuning tranche.
 
+The first bounded size correction is complete at runtime surface and library
+ABI 31. `FunctionReferenceBase` now owns common callable reflection bodies once,
+as JVM `CallableReference`/`FunctionReference` and Wasm `KFunctionImpl` do;
+generated references retain only declaration-specific execution hooks. The
+base deliberately does not implement `KFunction`, preserving the JVM boundary
+for adapted `FunctionN`-only references. Five generated-IL baselines lost 693
+repeated lines, but executable member factories still create one class per
+member. Treat this as prerequisite cleanup, not as satisfaction of the compact
+descriptor/dispatcher requirement.
+
 Future member enumeration must still cover member extension properties with
 multiple callable-owned type parameters and, once context parameters are
 admitted, nested/member properties with multiple context-owned types. The

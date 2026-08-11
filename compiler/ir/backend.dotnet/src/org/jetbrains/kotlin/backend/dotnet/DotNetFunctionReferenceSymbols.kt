@@ -26,7 +26,6 @@ import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.types.makeNullable
-import org.jetbrains.kotlin.ir.types.defaultType as symbolDefaultType
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.types.classOrNull
@@ -65,10 +64,6 @@ internal class DotNetFunctionReferenceSymbols(
     val baseClass: IrClass
     val constructor: IrConstructor
     val boundValueAt: IrSimpleFunction
-    val getReturnType: IrSimpleFunction
-    val getParameters: IrSimpleFunction?
-    val getTypeParameters: IrSimpleFunction?
-    val callErased: IrSimpleFunction
     val callByErased: IrSimpleFunction?
     val callDefaultErased: IrSimpleFunction
     val emptyVarargAt: IrSimpleFunction
@@ -198,28 +193,6 @@ internal class DotNetFunctionReferenceSymbols(
             parameters += createDispatchReceiverParameterWithClassParent()
             addValueParameter("index", irBuiltIns.intType)
         }
-        getReturnType = baseClass.addFunction {
-            origin = IrDeclarationOrigin.IR_BUILTINS_STUB
-            name = Name.identifier("GetReturnType")
-            visibility = DescriptorVisibilities.PROTECTED
-            modality = Modality.FINAL
-            returnType = irBuiltIns.kTypeClass.symbolDefaultType
-        }.apply {
-            parameters += createDispatchReceiverParameterWithClassParent()
-        }
-        callErased = baseClass.addFunction {
-            origin = IrDeclarationOrigin.IR_BUILTINS_STUB
-            name = Name.identifier("CallErased")
-            visibility = DescriptorVisibilities.PROTECTED
-            modality = Modality.FINAL
-            returnType = irBuiltIns.anyNType
-        }.apply {
-            parameters += createDispatchReceiverParameterWithClassParent()
-            addValueParameter(
-                "args",
-                irBuiltIns.arrayClass.typeWithArguments(listOf(irBuiltIns.anyNType)),
-            )
-        }
         callByErased = irBuiltIns.kCallableClass.owner.functions
             .singleOrNull { function -> function.name.asString() == "callBy" }
             ?.let { callBy ->
@@ -228,7 +201,7 @@ internal class DotNetFunctionReferenceSymbols(
                     origin = IrDeclarationOrigin.IR_BUILTINS_STUB
                     name = Name.identifier("CallByErased")
                     visibility = DescriptorVisibilities.PROTECTED
-                    modality = Modality.FINAL
+                    modality = Modality.OPEN
                     returnType = irBuiltIns.anyNType
                 }.apply {
                     parameters += createDispatchReceiverParameterWithClassParent()
@@ -258,34 +231,6 @@ internal class DotNetFunctionReferenceSymbols(
         }.apply {
             parameters += createDispatchReceiverParameterWithClassParent()
             addValueParameter("index", irBuiltIns.intType)
-        }
-        getParameters = irBuiltIns.kCallableClass.owner.properties
-            .singleOrNull { property -> property.name.asString() == "parameters" }
-            ?.getter
-            ?.let { parametersGetter ->
-                baseClass.addFunction {
-                    origin = IrDeclarationOrigin.IR_BUILTINS_STUB
-                    name = Name.identifier("GetParameters")
-                    visibility = DescriptorVisibilities.PROTECTED
-                    modality = Modality.FINAL
-                    returnType = parametersGetter.returnType
-                }.apply {
-                    parameters += createDispatchReceiverParameterWithClassParent()
-                }
-            }
-        getTypeParameters = irBuiltIns.kCallableClass.owner.properties
-            .singleOrNull { property -> property.name.asString() == "typeParameters" }
-            ?.getter
-            ?.let { typeParametersGetter ->
-                baseClass.addFunction {
-                    origin = IrDeclarationOrigin.IR_BUILTINS_STUB
-                    name = Name.identifier("GetTypeParameters")
-                    visibility = DescriptorVisibilities.PROTECTED
-                    modality = Modality.FINAL
-                    returnType = typeParametersGetter.returnType
-                }.apply {
-                    parameters += createDispatchReceiverParameterWithClassParent()
-                }
         }
     }
 }
