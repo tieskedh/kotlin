@@ -7,7 +7,7 @@
 package kotlin.reflect.dotnet.internal
 
 // Same provider type and method name, but intentionally the wrong versioned protocol shape.
-public fun getMembersV1(value: String): String = value
+public fun getMembersV2(value: String): String = value
 
 // MODULE: main(Kotlin.Reflection)
 // FILE: main.kt

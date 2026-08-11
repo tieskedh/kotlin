@@ -188,6 +188,12 @@ internal class DotNetIlIntrinsicMethods(
             "dotNetGetGeneratedMembersV1",
             listOf(FqName("kotlin.reflect.KClass")),
         ) to DotNetIlGeneratedMembersIntrinsic,
+        Key(
+            kotlinReflectDotNetInternalFqn,
+            null,
+            "dotNetGetStdlibMembersV1",
+            listOf(FqName("kotlin.reflect.KClass")),
+        ) to DotNetIlStdlibMembersIntrinsic,
         Key(kotlinIoFqn, null, "print", listOf(anyFqn)) to DotNetIlPrintIntrinsic,
         Key(kotlinIoFqn, null, "println", emptyList()) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(stringFqn)) to DotNetIlPrintlnIntrinsic,
@@ -3753,6 +3759,35 @@ private object DotNetIlGeneratedMembersIntrinsic : DotNetIlIntrinsicMethod() {
             "call class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]Kotlin.Collections.Collection " +
                     "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]Kotlin.Runtime.Internal.KClassFactory::" +
                     "'GetGeneratedMembersV1'(class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]Kotlin.KClass)",
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Exact optional-reflection call into Stdlib's KLIB-derived mapped/member catalog. */
+private object DotNetIlStdlibMembersIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val kClass = call.arguments.singleOrNull()
+            ?: dotNetUnsupported("Stdlib-member reflection catalog requires one KClass argument")
+        val kClassType = codegen.toDotNetIlValueType(kClass.type)
+            ?: dotNetUnsupported("Stdlib-member reflection catalog has an unmapped KClass argument")
+        val stdlibAssemblyName = codegen.stdlibAssemblyName
+            ?: dotNetUnsupported("Stdlib-member reflection catalog requires Kotlin.Stdlib")
+        codegen.recordAssemblyReference(stdlibAssemblyName)
+        codegen.emitExpression(kClass, kClassType)
+        codegen.emit(
+            "call class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]Kotlin.KCallable[] " +
+                    "[$stdlibAssemblyName]${DotNetStdlibLibrary.MEMBER_REFLECTION_CATALOG_FACADE_IL_NAME.toIlIdentifier()}::" +
+                    "'${DotNetStdlibLibrary.MEMBER_REFLECTION_CATALOG_FUNCTION_NAME}'(" +
+                    "class [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]Kotlin.KClass)",
             pops = 1,
             pushes = 1,
         )
