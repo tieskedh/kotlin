@@ -150,6 +150,17 @@ private typealias StarKFunction24 = kotlin.reflect.KFunction24<
 
 private fun Collection<KCallable<*>>.named(name: String): List<KCallable<*>> = filter { it.name == name }
 
+private fun KClass<*>.binaryMember(
+    name: String,
+    argumentType: KClass<*>,
+    returnType: KClass<*>,
+): KCallable<*> = members.named(name).single { callable ->
+    callable.parameters.size == 2 &&
+            callable.parameters[0].type.classifier == this &&
+            callable.parameters[1].type.classifier == argumentType &&
+            callable.returnType.classifier == returnType
+}
+
 private fun marker(callable: KCallable<*>): String? =
     (callable.annotations.singleOrNull() as? Marker)?.value
 
@@ -428,6 +439,73 @@ fun box(): String {
         setValue.call(reflectedEntry, 4) != 1 || reflectedMap["one"] != 4
     ) {
         return "fail 32ah: mutable map entry execution and type identity"
+    }
+
+    val scalarClasses = listOf<KClass<*>>(
+        Boolean::class,
+        Char::class,
+        Byte::class,
+        Short::class,
+        Int::class,
+        Long::class,
+        Float::class,
+        Double::class,
+    )
+    if (scalarClasses.any { it.members !== it.members }) {
+        return "fail 32ai: scalar class cache"
+    }
+    if (scalarClasses.any { scalarClass ->
+            scalarClass.members.any { member ->
+                member.name == "CompareTo" || member.name == "GetType" || member.name == "op_Addition"
+            }
+        }
+    ) {
+        return "fail 32aj: CLR scalar member leaked"
+    }
+
+    val booleanNot = Boolean::class.members.named("not").single { callable ->
+        callable.parameters.size == 1 &&
+                callable.parameters[0].type.classifier == Boolean::class &&
+                callable.returnType.classifier == Boolean::class
+    }
+    if (booleanNot.call(false) != true) return "fail 32ak: Boolean intrinsic execution"
+    if (Char::class.binaryMember("plus", Int::class, Char::class).call('A', 2) != 'C') {
+        return "fail 32al: Char intrinsic execution"
+    }
+    if (Byte::class.binaryMember("plus", Byte::class, Int::class)
+            .call(1.toByte(), 2.toByte()) != 3
+    ) {
+        return "fail 32am: Byte promotion"
+    }
+    if (Short::class.binaryMember("plus", Short::class, Int::class)
+            .call(2.toShort(), 3.toShort()) != 5
+    ) {
+        return "fail 32an: Short promotion"
+    }
+    if (Int::class.binaryMember("plus", Long::class, Long::class).call(3, 4L) != 7L) {
+        return "fail 32ao: Int mixed promotion"
+    }
+    if (Long::class.binaryMember("plus", Int::class, Long::class).call(5L, 6) != 11L) {
+        return "fail 32ap: Long mixed promotion"
+    }
+    if (Float::class.binaryMember("plus", Double::class, Double::class).call(1.5f, 0.25) != 1.75) {
+        return "fail 32aq: Float mixed promotion"
+    }
+    if (Double::class.binaryMember("plus", Float::class, Double::class).call(2.5, 0.25f) != 2.75) {
+        return "fail 32ar: Double mixed promotion"
+    }
+
+    val floatCompare = Float::class.binaryMember("compareTo", Float::class, Int::class)
+    if ((floatCompare.call(Float.NaN, Float.POSITIVE_INFINITY) as Int) <= 0 ||
+        (floatCompare.call(-0.0f, 0.0f) as Int) >= 0
+    ) {
+        return "fail 32as: reflected Float total order"
+    }
+    val doubleCompare = Double::class.binaryMember("compareTo", Double::class, Int::class)
+    if ((doubleCompare.call(Double.NaN, Double.POSITIVE_INFINITY) as Int) <= 0 ||
+        (doubleCompare.call(-0.0, 0.0) as Int) >= 0
+    ) {
+        return "fail 32at: reflected Double total order"
     }
 
     class Local
