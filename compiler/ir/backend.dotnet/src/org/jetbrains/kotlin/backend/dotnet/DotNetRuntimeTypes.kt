@@ -497,6 +497,11 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
+    private val memberReferenceFactory = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Runtime.Internal.MemberReferenceFactory",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
     private val callableAnnotationFactory = DotNetIlClassInfo(
         ilClassName = "Kotlin.Runtime.Internal.CallableAnnotationFactory",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
@@ -618,6 +623,7 @@ internal object DotNetRuntimeTypes {
                 typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
             irClass.isDotNetBigArityFunctionN == true -> bigArityFunctionClass
             irClass.isDotNetPropertyReferenceFactory == true -> propertyReferenceFactory
+            irClass.isDotNetMemberReferenceFactory == true -> memberReferenceFactory
             irClass.isDotNetCallableAnnotationFactory == true -> callableAnnotationFactory
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_CLASSIFIER -> kClassifierBase
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.K_ANNOTATED_ELEMENT -> kAnnotatedElementBase
@@ -975,6 +981,7 @@ internal object DotNetRuntimeTypes {
     fun registerCallableFunctions(
         irBuiltIns: IrBuiltIns,
         propertyReferenceFactoryFunctions: List<IrSimpleFunction>,
+        memberReferenceFactoryFunctions: List<IrSimpleFunction>,
         callableAnnotationFactoryFunctions: List<IrSimpleFunction>,
         typeMapper: DotNetIlTypeMapper,
         availableFunctions: MutableMap<IrSimpleFunction, DotNetIlFunctionInfo>,
@@ -1176,6 +1183,12 @@ internal object DotNetRuntimeTypes {
         propertyReferenceFactoryFunctions.forEach { factory ->
             availableFunctions[factory] = DotNetIlFunctionInfo(
                 propertyReferenceFactory,
+                factory.dotNetSignature(typeMapper),
+            )
+        }
+        memberReferenceFactoryFunctions.forEach { factory ->
+            availableFunctions[factory] = DotNetIlFunctionInfo(
+                memberReferenceFactory,
                 factory.dotNetSignature(typeMapper),
             )
         }

@@ -46,6 +46,8 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInventNamesForLocalFuncti
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetKFunctionInvokeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationPopupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetMemberReflectionLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetMemberReferenceCompactionLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetMemberDispatcherBodyLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrivateNestedAccessLowering
@@ -198,6 +200,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInventNamesForLocalClasses,
     ::DotNetAnonymousObjectSuperConstructorLowering,
     ::DotNetCallableReferenceLowering,
+    // The ordinary reference pipeline above owns semantic construction. Fold only producer-owned
+    // KClass member values into one class-local dispatcher and shared arity-correct Runtime
+    // carriers; ordinary user references retain their established per-expression representation.
+    ::DotNetMemberReferenceCompactionLowering,
     ::DotNetKFunctionInvokeLowering,
     // JVM/common ordering: mutable locals become shared reference cells before closure conversion
     // captures the cell object in local classes and generated callable classes.
@@ -236,6 +242,9 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // receiver-free parameter mask. Translate between them only after class/interface lowering
     // has selected the final helper, keeping generated size linear through Function22.
     ::DotNetReflectiveDefaultMaskLowering,
+    // Suspend and masked-default lowering have selected every member thunk's physical signature.
+    // Complete the dispatcher's direct ordinary-IR calls at this single late boundary.
+    ::DotNetMemberDispatcherBodyLowering,
     // Apply the erased-identity/typed-member split uniformly to module, library, and runtime-owned
     // generic interfaces, including Iterator/Iterable. Every implementation receives its
     // erased MethodImpl bridge from this one lowering. An independently truthful mapped host

@@ -66,6 +66,12 @@ class Derived(value: String) : Base<String>(value) {
 
     suspend fun suspended(suffix: String): String = value + suffix
 
+    fun big(
+        p1: Int, p2: Int, p3: Int, p4: Int, p5: Int, p6: Int, p7: Int, p8: Int,
+        p9: Int, p10: Int, p11: Int, p12: Int, p13: Int, p14: Int, p15: Int, p16: Int,
+        p17: Int, p18: Int, p19: Int, p20: Int, p21: Int, p22: Int, p23: Int,
+    ): Int = value.length + p1 + p12 + p23
+
     private fun hidden(): String = "hidden"
 }
 
@@ -123,6 +129,23 @@ import kotlin.reflect.KMutableProperty1
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
 
+private typealias ReflectedMemberFunction24 = (
+    Derived,
+    Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int,
+    Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int,
+) -> Int
+
+private typealias StarKFunction23 = kotlin.reflect.KFunction23<
+    *, *, *, *, *, *, *, *, *, *, *, *,
+    *, *, *, *, *, *, *, *, *, *, *, *,
+>
+
+private typealias StarKFunction24 = kotlin.reflect.KFunction24<
+    *, *, *, *, *, *, *, *, *, *, *, *,
+    *, *, *, *, *, *, *, *, *, *, *, *,
+    *,
+>
+
 private fun Collection<KCallable<*>>.named(name: String): List<KCallable<*>> = filter { it.name == name }
 
 private fun marker(callable: KCallable<*>): String? =
@@ -156,6 +179,7 @@ fun box(): String {
     }
     val childFunction = child as? Function2<Derived, String, String>
         ?: return "fail 3c: enumerated function arity"
+    if ((child as Any) is Function1<*, *>) return "fail 3e: wrong fixed function arity"
     if (childFunction(Derived("invoke:"), "value") != "invoke:value") {
         return "fail 3d: enumerated function invoke"
     }
@@ -289,6 +313,7 @@ fun box(): String {
     if (!suspended.isSuspend) return "fail 44: suspend declaration flag"
     val suspendFunction = suspended as? Function3<Derived, String, Continuation<String>, Any?>
         ?: return "fail 45: suspend execution arity"
+    if ((suspended as Any) is Function2<*, *, *>) return "fail 45b: wrong suspend execution arity"
     var resumed: Result<String>? = null
     val completion = object : Continuation<String> {
         override val context = EmptyCoroutineContext
@@ -316,6 +341,21 @@ fun box(): String {
         "callBy cannot supply a suspend continuation; use a coroutine-aware reflective call."
     ) {
         return "fail 49: suspend callBy failure $suspendCallByFailure"
+    }
+
+    val big = members.named("big").single()
+    val bigValue: Any = big
+    if (bigValue !is StarKFunction24) return "fail 50: big member reflection arity"
+    if (bigValue is StarKFunction23) return "fail 51: wrong big member reflection arity"
+    val bigFunction = big as? ReflectedMemberFunction24
+        ?: return "fail 52: big member execution capability"
+    if (bigFunction(
+            instance,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+            13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+        ) != 41
+    ) {
+        return "fail 53: big member direct invoke"
     }
     return "OK"
 }

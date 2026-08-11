@@ -4,6 +4,8 @@
 - Initial library ABI version: 30
 - Initial runtime surface level: 30
 - Initial private member-factory protocol: 1
+- Compact shared-thunk protocol: 2
+- Compact protocol library ABI/runtime surface: 32
 - Scope: the owner, public boundary, and explicitly opted-in first executable
   closure for `KClass.members`
 - Depends on:
@@ -116,12 +118,12 @@ reader into Runtime. A later dedicated reflection-product decoder may replace
 the private factory format only through a versioned ABI decision; it may not
 move into `backend.dotnet` or make CLR metadata authoritative.
 
-This is a semantic proof, not a decision to freeze one generated callable
-class per reflected member as the final compact representation. Applying the
-factory lowering to ordinary target test producers demonstrated material,
-widespread executable and textual-IL expansion. The current private factories
-therefore knowingly trade producer size for reuse of the one proven callable
-implementation only when the producer explicitly opts in.
+Protocol 1 was a semantic proof, not a decision to freeze one generated
+callable class per reflected member. Applying that factory lowering to
+ordinary target test producers demonstrated material, widespread executable
+and textual-IL expansion. Protocol 2 replaces those per-member TypeDefs while
+retaining the explicit producer opt-in until the remaining reflection-product
+and foreign/mapped-classifier boundaries are closed.
 
 Runtime surface and library ABI 31 centralize the common `KFunction` and
 `KCallable` method bodies in `FunctionReferenceBase`. Generated direct/member
@@ -140,6 +142,60 @@ must preserve this closure's exact member set, declaration graphs, callable
 identity, invocation, and separate-compilation behavior while being compared
 for producer size, trimming, NativeAOT behavior, startup, and invocation. This
 is required architecture work, not an optional later micro-optimization.
+
+### Compact shared-thunk protocol
+
+Protocol 2 selects the shared-executable-thunk alternative for the admitted
+Kotlin-produced closure. It does not make Runtime or the backend the owner of
+member discovery:
+
+- the producer still derives the complete logical member set from the exact
+  post-KLIB class scope;
+- `Kotlin.Reflection` still owns lookup, availability policy, and the public
+  `members` result;
+- Runtime supplies a fixed family of callable carriers shared by every
+  producer; and
+- each admitted Kotlin class supplies one private indexed dispatcher plus
+  small direct-call MethodDefs, rather than one generated CLR callable class
+  per function, getter, and setter.
+
+The fixed carriers extend the established `FunctionReferenceBase`, implement
+`KFunction`, and expose exactly the callable's execution arity through the
+matching `Function0` through `Function22` capability or the big-arity
+`FunctionN` capability. This follows the JVM requirement that a function
+obtained through `KClass.members` remains invokable through its correct
+function type. A carrier must not implement the wrong fixed arities merely to
+reduce the number of Runtime classes; on CLR, ordinary interface tests are
+physical and there is no JVM `FunctionWithAllInvokes` cast intrinsic to hide
+that lie from Kotlin callers.
+
+The carrier retains the same declaration id, flags, logical signature,
+parameter factory, exact annotations, and empty-vararg value as a direct
+reference. Its positional and masked-default calls enter the producer
+dispatcher. The dispatcher performs ordinary IR calls to producer-owned
+thunks; it never uses `System.Reflection`, a metadata token, a MethodDef name,
+or a CLR signature to rediscover the target. Shared Common default lowering,
+continuation lowering, virtual/interface dispatch, value representation, and
+exception propagation therefore remain the only execution implementations.
+
+Properties continue to use the established Runtime property wrappers. Their
+getter and optional setter identities are shared carriers, so property
+equality, accessor backlinks, mutation, and direct-reference equality retain
+the existing implementation rather than acquiring a reflection-only path.
+
+Protocol 2 is private and replaceable before ABI freeze. Its compactness
+invariant is nevertheless explicit: for a producer class without unrelated
+direct callable references, increasing the reflected member count may add
+descriptor data, dispatcher cases, and MethodDefs, but must not add one CLR
+TypeDef per member. Ordinary compilation still emits none of this support.
+
+This protocol deliberately keeps executable thunks instead of selecting a
+Runtime KLIB decoder now. A decoder remains a viable future size trade-off for
+the optional reflection product, but only if it preserves direct invocation,
+default and vararg behavior, suspend continuation behavior, exact target
+exceptions, trimming/NativeAOT reachability, and equality with direct
+references. Introducing a decoder merely to replace MethodDefs while falling
+back to `MethodInfo.Invoke` is not equivalent and is rejected.
 
 Kotlin Stdlib implementation classes are fail-closed in this first closure.
 Generating direct references for every Stdlib member would make ordinary builds
@@ -214,6 +270,25 @@ enumerated. Compacting that support before the complete logical surface is
 known risks either encoding too little authority or creating a second callable
 implementation. The private versioned protocol remains replaceable pre-ABI.
 
+### Invoke compact members through CLR reflection
+
+Rejected. `MethodInfo.Invoke` would wrap target exceptions, make lowered
+defaults and suspend continuations a second reconstruction problem, weaken
+trimming and NativeAOT reachability, and make physical CLR rows authoritative
+over the selected Kotlin declaration. An indexed direct-call dispatcher is a
+real CLR-specific implementation technique; reflective member lookup is a
+semantic change.
+
+### Use one carrier that physically implements every fixed Function interface
+
+Rejected for this target. JVM can put all invoke methods on one implementation
+and make Kotlin function casts consult a separate arity intrinsic. The current
+.NET fixed-arity model uses exact CLR interface capabilities for those casts
+and calls. Advertising every `FunctionN` interface would make `is Function0`
+and `is Function3` true for a reflected `Function2`, unless the target first
+replaced that complete classifier/cast ABI. Fixed Runtime carrier classes are
+bounded product cost and preserve the already accepted function model.
+
 ### Emit executable factories in every producer
 
 Rejected for the pre-ABI representation. The approach preserves semantics but
@@ -244,6 +319,15 @@ temporarily exposes the complete semantic experiment.
 9. Without `-Xdotnet-reflection`, ordinary producers emit no executable member
    factory. Enabling member reflection by default requires a compact protocol
    and a new explicit pre-ABI decision.
+10. Protocol 2 emits no member-specific callable TypeDef. Its producer
+    dispatcher calls Kotlin declarations directly and is removable without
+    changing public signatures, callable equality, object identity, or member
+    semantics.
+
+Library ABI and Runtime surface 32 version the shared carrier factory and the
+protocol-2 producer call. An old Runtime/new producer combination is rejected
+at the existing surface-floor check instead of failing later with a missing
+carrier MethodRef.
 
 ## First closure verification
 

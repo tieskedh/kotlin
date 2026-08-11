@@ -638,13 +638,19 @@ See the
   without absolute checkout or temporary resource paths so ordinary-source and
   packaged-source IL remain reproducible. See
   [the class-member reflection decision](docs/decisions/class-member-reflection.md).
-  Do not mistake its first executable factory for a frozen compact encoding:
-  one generated callable class per member is an opt-in semantic proof whose
-  material producer expansion prevents default emission. A compact
-  KLIB-derived descriptor plus reflection-product decoder, or equally compact
-  shared thunks, is mandatory before default enablement or ABI freeze. The
-  experimental flag is not permission to create different Kotlin semantics or
-  a second stable reflection ABI.
+  Private member-factory protocol 2 folds those ordinary reference semantics
+  into one generated dispatcher TypeDef per reflected class and shared
+  arity-correct Runtime carriers. Never reintroduce one callable TypeDef per
+  member, implement multiple fixed `FunctionN` interfaces on one carrier, or
+  route dispatcher execution through CLR reflection. The dispatcher retains
+  direct ordinary-IR thunks; Common default lowering, continuation lowering,
+  value representation, and virtual dispatch remain authoritative. Because
+  compaction runs after local-name invention, every newly created dispatcher
+  must inherit an already invented producer-local CLR name anchor explicitly.
+  The shared big-arity carrier must implement the physical `FunctionN.arity`
+  slot as well as `Invoke`. Protocol 2 and Runtime/library surface 32 remain
+  pre-ABI and explicitly opted in; compactness alone does not authorize
+  default emission or a second stable reflection ABI.
   The JVM-shaped `KFunction` declaration flags (`isInline`,
   `isExternal`, `isOperator`, `isInfix`, and `isSuspend`) are one shared
   property capability inherited by every admitted `KFunction` arity. Read
