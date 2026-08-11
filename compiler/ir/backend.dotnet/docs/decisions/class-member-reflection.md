@@ -211,8 +211,12 @@ it.
 
 The mapped/Stdlib closure advances both physical cases through one catalog
 architecture. `kotlin.String` proves a Kotlin classifier whose runtime carrier
-is the foreign `System.String` TypeDef. The current Kotlin-owned collection
-family proves concrete implementations and skeletal abstract bases:
+is the foreign `System.String` TypeDef. The complete built-in collection
+interface family proves Kotlin declaration identity over the .NET split-
+interface representation: iterable/iterator/list-iterator, collection/list/
+set/map, every mutable counterpart, and both nested map-entry interfaces. The
+current Kotlin-owned collection implementation family proves concrete classes
+and skeletal abstract bases:
 `AbstractCollection`, `AbstractList`, `AbstractMap`, `AbstractSet`, their four
 mutable counterparts, `ArrayList`, `HashMap`, and `HashSet`.
 `LinkedHashMap`/`LinkedHashSet` are actual typealiases and therefore retain the
@@ -222,11 +226,11 @@ additional classifiers are admitted.
 
 The authoritative member set still comes from the Kotlin declarations visible
 while `Kotlin.Stdlib.dll` is produced. For a mapped built-in that means the
-compiler's Kotlin built-ins declaration, never enumeration of its BCL carrier.
-For a Stdlib implementation class it means the actualized post-KLIB IR class
-scope. Each admitted classifier either contributes its complete accessible
-function/property set or has no catalog entry; the catalog never returns a
-partial collection.
+compiler's Kotlin built-ins declaration, never enumeration of its BCL or
+physical split-interface carrier. For a Stdlib implementation class it means
+the actualized post-KLIB IR class scope. Each admitted classifier either
+contributes its complete accessible function/property set or has no catalog
+entry; the catalog never returns a partial collection.
 
 After KLIB serialization, Stdlib production emits one reserved product catalog
 and producer-local direct thunks. The thunks enter the same callable-reference,
@@ -440,6 +444,9 @@ The first complete gate must prove:
 - concrete map/set classes preserve two-parameter generic graphs, Common
   annotations, typealias identity, and direct execution, while abstract-base
   members require a physically valid subclass receiver;
+- all built-in collection interfaces preserve distinct logical `KClass`
+  identities, declaration-owned type graphs, annotations, and calls across
+  their canonical and exact constructed CLR capabilities;
 - the reflection product has only Runtime/Stdlib dependencies and those base
   products have no reverse AssemblyRef;
 - ordinary and packaged reflection sources build the same optional

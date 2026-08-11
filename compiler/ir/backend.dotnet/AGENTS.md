@@ -633,13 +633,16 @@ See the
   objects, and enums; local/anonymous and foreign classifiers fail closed until
   their complete authority path is selected. Mapped and Stdlib classifiers use
   one generated catalog physically owned by `Kotlin.Stdlib.dll`: the first
-  selected entries are the built-ins declaration for `kotlin.String` and the
-  actualized Kotlin class scopes for the current collection implementation
-  family: the four read-only abstract bases, their four mutable counterparts,
-  `ArrayList`, `HashMap`, and `HashSet`. `LinkedHashMap` and `LinkedHashSet`
-  remain actual typealiases with the same catalog identity as their hash
-  implementations. Never scan a host CLR carrier or publish a partial scope. The
-  optional reflection product asks that catalog before the ordinary
+  selected entries are the built-ins declarations for `kotlin.String` and the
+  complete collection-interface family, plus the actualized Kotlin class
+  scopes for the current collection implementation family: the four read-only
+  abstract bases, their four mutable counterparts, `ArrayList`, `HashMap`, and
+  `HashSet`. The interface entries come directly from `IrBuiltIns`; never infer
+  logical members from the canonical or exact constructed CLR interface view.
+  `LinkedHashMap` and `LinkedHashSet` remain actual typealiases with the same
+  catalog identity as their hash implementations. Never scan a host CLR
+  carrier or publish a partial scope. The optional reflection product asks
+  that catalog before the ordinary
   producer-factory path; Runtime neither references Stdlib nor interprets the
   catalog. If a selected Stdlib member exposes a runtime-retained annotation,
   compile its authoritative shared declaration source rather than filtering the

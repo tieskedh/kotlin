@@ -17,14 +17,17 @@ verification, and work state.
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
 - Last completed foundation: the generated Stdlib member catalog now makes
-  mapped `kotlin.String` and the complete current Kotlin-owned collection
-  implementation family executable through `KClass.members`: the four
-  read-only abstract bases, their four mutable counterparts, `ArrayList`,
-  `HashMap`, and `HashSet`. `LinkedHashMap`/`LinkedHashSet` retain the same
-  `KClass` and catalog identity as their actual typealias targets. The complete
-  member sets come from the Kotlin built-ins/actualized Stdlib class scopes
-  after KLIB serialization; arbitrary `System.String`/BCL members never enter
-  the result. One Stdlib-owned catalog feeds the existing compact
+  mapped `kotlin.String`, all sixteen built-in collection interfaces, and the
+  complete current Kotlin-owned collection implementation family executable
+  through `KClass.members`. Interface members come directly from `IrBuiltIns`,
+  preserving logical read-only/mutable and nested-entry identities over the
+  canonical/exact split-interface representation. The implementation family
+  covers the four read-only abstract bases, their four mutable counterparts,
+  `ArrayList`, `HashMap`, and `HashSet`. `LinkedHashMap`/`LinkedHashSet` retain
+  the same `KClass` and catalog identity as their actual typealias targets. The
+  complete member sets come from the Kotlin built-ins/actualized Stdlib class
+  scopes after KLIB serialization; arbitrary `System.String`/BCL members never
+  enter the result. One Stdlib-owned catalog feeds the existing compact
   callable/property pipeline, while optional `Kotlin.Reflection.dll` owns
   lookup order and Runtime retains neither a Stdlib dependency nor catalog
   policy. Inherited fake overrides remain reflection identity and use their
@@ -32,8 +35,9 @@ verification, and work state.
   `AbstractCollection` receiver boundary generically. Abstract skeletal-class
   members conversely require a real subclass receiver: reflection does not
   pretend that direct `MutableMap` implementor `HashMap` inherits
-  `AbstractMutableMap`. One- and two-parameter owner graphs, concrete and
-  abstract dispatch, Common annotations, and per-`KClass` caching are covered.
+  `AbstractMutableMap`. One- and two-parameter owner graphs, concrete, abstract,
+  and exact interface dispatch, Common annotations, mutation, nested entries,
+  and per-`KClass` caching are covered.
   The selected collection members also pulled authoritative Common
   `ReturnValue.kt` into Stdlib, so
   runtime `@IgnorableReturnValue` applications are preserved rather than
@@ -228,10 +232,11 @@ programmes.
 
 ## Current green gate
 
-The complete current collection-family member-catalog head passed every
-constituent of the strict target gate. Because another development session
-shared the machine, this checkpoint records correctness only and makes no
-duration or performance claim. The normal aggregate command remains:
+The complete current collection-interface/implementation member-catalog head
+passed every constituent of the strict target gate. Because another
+development session shared the machine, this checkpoint records correctness
+only and makes no duration or performance claim. The normal aggregate command
+remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -1218,10 +1223,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 ## Next bounded work
 
 1. Continue the generated catalog by complete classifier families, not by
-   handwritten members. The current Kotlin-owned collection implementation
-   family is complete; select the next mapped/Stdlib family from Kotlin
-   declaration scopes, then add foreign classifiers from exact importer
-   identities and enhancement. Reuse the established callable/property objects
+   handwritten members. The current built-in collection-interface and
+   Kotlin-owned implementation families are complete; select the next
+   mapped/Stdlib family from Kotlin declaration scopes, then add foreign
+   classifiers from exact importer identities and enhancement. Reuse the
+   established callable/property objects
    and never expose a partial CLR MethodDef/Property scan. Constructors and
    declared-member convenience APIs remain separate selections.
 2. Treat type-use annotation discovery as its own reflection tranche over the
