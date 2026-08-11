@@ -32587,7 +32587,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
         }
 
-        fun compile(run: String, enableMemberReflection: Boolean): String {
+        fun compile(run: String, enableMemberReflection: Boolean): Pair<String, File> {
             val output = directory.resolve(run)
             val optionalArguments = if (enableMemberReflection) {
                 arrayOf(K2DotNetCompilerArguments::dotNetReflection.cliArgument)
@@ -32606,16 +32606,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 *optionalArguments,
                 source.path,
             )
-            return output.resolve("Reflection.Flag.$run.il").readText()
+            return output.resolve("Reflection.Flag.$run.il").readText() to
+                    output.resolve("Reflection.Flag.$run.dll")
         }
 
-        val ordinaryIl = compile("Ordinary", enableMemberReflection = false)
+        val ordinary = compile("Ordinary", enableMemberReflection = false)
+        val ordinaryIl = ordinary.first
         assertFalse("<GetKotlinMembers-v1>" in ordinaryIl) {
             "Ordinary producers must not emit the pre-ABI executable member factory"
         }
-        val reflectionIl = compile("OptIn", enableMemberReflection = true)
+        val reflection = compile("OptIn", enableMemberReflection = true)
+        val reflectionIl = reflection.first
+        val reflectionLibrary = reflection.second
         assertTrue("<GetKotlinMembers-v1>" in reflectionIl) {
             "-Xdotnet-reflection did not reach the member-reflection lowering"
+        }
+        val reflectedMemberCallableTypes = DotNetClrMetadataReader.read(reflectionLibrary)
+            .typeDefinitions
+            .filter { type -> type.metadataName.startsWith("ReflectionSubject\$<MemberFactory>\$") }
+        assertEquals(1, reflectedMemberCallableTypes.size) {
+            "Compact member reflection must emit one dispatcher TypeDef per reflected class, " +
+                    "not one callable TypeDef per member: " +
+                    reflectedMemberCallableTypes.map { type -> type.metadataName }
+        }
+        assertTrue("<MemberDispatcher-v2>" in reflectedMemberCallableTypes.single().metadataName) {
+            "The sole reflected-member support TypeDef must be the versioned dispatcher: " +
+                    reflectedMemberCallableTypes.single().metadataName
         }
 
         val runtimeMetadata = DotNetClrMetadataReader.read(

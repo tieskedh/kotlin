@@ -55,6 +55,17 @@ class Derived(value: String) : Base<String>(value) {
 
     fun explode(failure: Throwable): Nothing = throw failure
 
+    fun withDefaults(prefix: String = "default:", suffix: String = "!"): String =
+        prefix + value + suffix
+
+    fun join(vararg parts: String): String {
+        var result = value
+        for (part in parts) result += part
+        return result
+    }
+
+    suspend fun suspended(suffix: String): String = value + suffix
+
     private fun hidden(): String = "hidden"
 }
 
@@ -109,6 +120,8 @@ import kotlin.reflect.KCallable
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
 import kotlin.reflect.KMutableProperty1
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
 
 private fun Collection<KCallable<*>>.named(name: String): List<KCallable<*>> = filter { it.name == name }
 
@@ -140,6 +153,11 @@ fun box(): String {
         )) != "call:by"
     ) {
         return "fail 3b: child callBy"
+    }
+    val childFunction = child as? Function2<Derived, String, String>
+        ?: return "fail 3c: enumerated function arity"
+    if (childFunction(Derived("invoke:"), "value") != "invoke:value") {
+        return "fail 3d: enumerated function invoke"
     }
     if (child != Derived::child) return "fail 4: direct function identity"
 
@@ -253,5 +271,51 @@ fun box(): String {
 
     val enumLabel = Choice::class.members.named("label").single()
     if (enumLabel.call(Choice.FIRST, "value") != "first:value") return "fail 40: enum dispatch"
+
+    val defaults = members.named("withDefaults").single()
+    if (defaults.callBy(mapOf(defaults.parameters[0] to instance)) != "default:after!") {
+        return "fail 41: shared default dispatch"
+    }
+
+    val join = members.named("join").single()
+    if (join.callBy(mapOf(join.parameters[0] to instance)) != "after") {
+        return "fail 42: shared empty vararg"
+    }
+    if (join.call(instance, arrayOf("+", "parts")) != "after+parts") {
+        return "fail 43: shared supplied vararg"
+    }
+
+    val suspended = members.named("suspended").single() as KFunction<*>
+    if (!suspended.isSuspend) return "fail 44: suspend declaration flag"
+    val suspendFunction = suspended as? Function3<Derived, String, Continuation<String>, Any?>
+        ?: return "fail 45: suspend execution arity"
+    var resumed: Result<String>? = null
+    val completion = object : Continuation<String> {
+        override val context = EmptyCoroutineContext
+
+        override fun resumeWith(result: Result<String>) {
+            resumed = result
+        }
+    }
+    if (suspendFunction(Derived("suspend:"), "value", completion) != "suspend:value") {
+        return "fail 46: suspend direct invoke"
+    }
+    if (resumed != null) return "fail 47: immediate suspend call resumed completion"
+    val suspendCallByFailure = try {
+        suspended.callBy(
+            mapOf(
+                suspended.parameters[0] to Derived("suspend:"),
+                suspended.parameters[1] to "value",
+            )
+        )
+        return "fail 48: suspend callBy accepted no continuation"
+    } catch (failure: Throwable) {
+        failure
+    }
+    if (suspendCallByFailure.message !=
+        "callBy cannot supply a suspend continuation; use a coroutine-aware reflective call."
+    ) {
+        return "fail 49: suspend callBy failure $suspendCallByFailure"
+    }
     return "OK"
 }
