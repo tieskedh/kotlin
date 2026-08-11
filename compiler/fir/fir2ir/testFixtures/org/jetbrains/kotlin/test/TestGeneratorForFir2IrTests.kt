@@ -50,6 +50,11 @@ private const val DOT_NET_COROUTINE_VAR_SPILLING_PATTERN = "^(kt64139|nullSpilli
 private const val DOT_NET_COROUTINE_INT_LIKE_VAR_SPILLING_PATTERN =
     "^(complicatedMerge|i2bResult|loadFromBooleanArray|loadFromByteArray|noVariableInTable|" +
             "sameIconst1ManyVars|usedInMethodCall|usedInVarStore)\\.kt$"
+// `packageLevel` tests the same delegate shape but also requires Common String.trimIndent;
+// admit it with that stdlib closure rather than hiding the dependency behind a target copy.
+private const val DOT_NET_TOP_LEVEL_DELEGATED_PROPERTY_PATTERN =
+    "^(accessTopLevelDelegatedPropertyInClinit|topLevelVal|topLevelVar)\\.kt$"
+private const val DOT_NET_PROVIDE_DELEGATE_PATTERN = "^(evaluationOrderVar|propertyMetadata)\\.kt$"
 
 fun main(args: Array<String>) {
     val mainClassName = TestGeneratorUtil.getMainClassName()
@@ -98,6 +103,17 @@ fun main(args: Array<String>) {
                             "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
                 )
                 model("box/properties/lateinit", testClassName = "PropertiesLateinit")
+                model(
+                    "box/delegatedProperty",
+                    pattern = DOT_NET_TOP_LEVEL_DELEGATED_PROPERTY_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/delegatedProperty/provideDelegate",
+                    pattern = DOT_NET_PROVIDE_DELEGATE_PATTERN,
+                    recursive = false,
+                    testClassName = "ProvideDelegate",
+                )
                 model(
                     "box/annotations/instances",
                     pattern = "^(AnnotationInstantiationWithArray|annotationAnnotationParam|annotationEqHc|" +
@@ -237,6 +253,17 @@ fun main(args: Array<String>) {
                             "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
                 )
                 model("box/properties/lateinit", testClassName = "PropertiesLateinit")
+                model(
+                    "box/delegatedProperty",
+                    pattern = DOT_NET_TOP_LEVEL_DELEGATED_PROPERTY_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/delegatedProperty/provideDelegate",
+                    pattern = DOT_NET_PROVIDE_DELEGATE_PATTERN,
+                    recursive = false,
+                    testClassName = "ProvideDelegate",
+                )
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model(
                     "box/annotations/instances",
@@ -377,6 +404,17 @@ fun main(args: Array<String>) {
                             "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
                 )
                 model("box/properties/lateinit", testClassName = "PropertiesLateinit")
+                model(
+                    "box/delegatedProperty",
+                    pattern = DOT_NET_TOP_LEVEL_DELEGATED_PROPERTY_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/delegatedProperty/provideDelegate",
+                    pattern = DOT_NET_PROVIDE_DELEGATE_PATTERN,
+                    recursive = false,
+                    testClassName = "ProvideDelegate",
+                )
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model(
                     "box/annotations/instances",
@@ -517,6 +555,17 @@ fun main(args: Array<String>) {
                             "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
                 )
                 model("box/properties/lateinit", testClassName = "PropertiesLateinit")
+                model(
+                    "box/delegatedProperty",
+                    pattern = DOT_NET_TOP_LEVEL_DELEGATED_PROPERTY_PATTERN,
+                    recursive = false,
+                )
+                model(
+                    "box/delegatedProperty/provideDelegate",
+                    pattern = DOT_NET_PROVIDE_DELEGATE_PATTERN,
+                    recursive = false,
+                    testClassName = "ProvideDelegate",
+                )
                 model("box/annotations", pattern = "^(nestedAnnotation|resolveWithLowPriorityAnnotation)\\.kt$")
                 model(
                     "box/annotations/instances",

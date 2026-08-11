@@ -15532,6 +15532,161 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testTopLevelDelegatedPropertyAcrossKotlinAndCSharpBoundaries() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val producerDirectory = File(tmpdir, "delegated-property-producer")
+        val producerSource = File(tmpdir, "DelegatedBoundary.kt").apply {
+            writeText(
+                """
+                package delegated.boundary
+
+                import kotlin.reflect.KProperty
+
+                private var log: String = ""
+
+                private class StateDelegate(private var value: String) {
+                    operator fun getValue(receiver: Any?, property: KProperty<*>): String {
+                        log += "get:${'$'}{property.name};"
+                        return value
+                    }
+
+                    operator fun setValue(receiver: Any?, property: KProperty<*>, newValue: String) {
+                        log += "set:${'$'}{property.name}=${'$'}newValue;"
+                        value = newValue
+                    }
+                }
+
+                private fun newDelegate(value: String): StateDelegate {
+                    log += "create;"
+                    return StateDelegate(value)
+                }
+
+                private operator fun StateDelegate.provideDelegate(
+                    receiver: Any?,
+                    property: KProperty<*>,
+                ): StateDelegate {
+                    log += "provide:${'$'}{property.name};"
+                    return this
+                }
+
+                public var state: String by newDelegate("start")
+
+                public fun trace(): String = log
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Delegated.Boundary",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val producerAssembly = producerDirectory.resolve("Delegated.Boundary.dll")
+        val producerIl = producerDirectory.resolve("Delegated.Boundary.il").readText()
+        val facadeIl = producerIl
+            .substringAfter(".class public abstract sealed auto ansi 'delegated.boundary.DelegatedBoundaryKt'")
+            .substringBefore("\n.class ")
+        assertTrue(".field private static class 'delegated.boundary.StateDelegate' 'state${'$'}delegate'" in facadeIl) {
+            facadeIl
+        }
+        assertEquals(1, Regex("(?m)^\\s*\\.field .*'state\\${'$'}delegate'").findAll(facadeIl).count()) {
+            "A top-level delegated property needs exactly one private delegate field:\n$facadeIl"
+        }
+        assertTrue("static void .cctor()" in facadeIl) { facadeIl }
+        assertTrue("::'provideDelegate'(" in facadeIl) { facadeIl }
+        assertTrue("::'getValue'(" in facadeIl) { facadeIl }
+        assertTrue("::'setValue'(" in facadeIl) { facadeIl }
+
+        val kotlinDirectory = File(tmpdir, "delegated-property-kotlin-consumer").apply { mkdirs() }
+        val kotlinSource = kotlinDirectory.resolve("main.kt").apply {
+            writeText(
+                """
+                import delegated.boundary.state
+                import delegated.boundary.trace
+
+                fun main() {
+                    if (trace() != "create;provide:state;") throw Error("initialization: ${'$'}{trace()}")
+                    if (state != "start") throw Error("initial read")
+                    state = "Kotlin"
+                    if (state != "Kotlin") throw Error("mutation")
+                    if (trace() != "create;provide:state;get:state;set:state=Kotlin;get:state;") {
+                        throw Error("trace: ${'$'}{trace()}")
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val kotlinAssembly = kotlinDirectory.resolve("DelegatedPropertyKotlinConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            kotlinSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, producerAssembly.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "DelegatedPropertyKotlinConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, kotlinAssembly.path,
+        )
+        runDotNet(
+            dotnetHost,
+            kotlinAssembly,
+            kotlinDirectory,
+            "Kotlin top-level delegated-property consumer failed across a portable library boundary",
+        )
+
+        val csharpDirectory = File(tmpdir, "delegated-property-csharp-consumer").apply { mkdirs() }
+        val csharpSource = csharpDirectory.resolve("Program.cs").apply {
+            writeText(
+                """
+                public static class Program
+                {
+                    public static int Main()
+                    {
+                        if (delegated.boundary.DelegatedBoundaryKt.trace() != "create;provide:state;") return 1;
+                        if (delegated.boundary.DelegatedBoundaryKt.state != "start") return 2;
+                        delegated.boundary.DelegatedBoundaryKt.state = "CSharp";
+                        if (delegated.boundary.DelegatedBoundaryKt.state != "CSharp") return 3;
+                        if (delegated.boundary.DelegatedBoundaryKt.trace() !=
+                            "create;provide:state;get:state;set:state=CSharp;get:state;") return 4;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = csharpDirectory.resolve("DelegatedPropertyCSharpConsumer.dll")
+        val runtimeAssembly = kotlinDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+        val stdlibAssembly = kotlinDirectory.resolve("Kotlin.Stdlib.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            checkNotNull(csharpToolchain),
+            csharpSource,
+            csharpAssembly,
+            producerAssembly,
+            runtimeAssembly,
+            stdlibAssembly,
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        producerAssembly.copyTo(csharpDirectory.resolve(producerAssembly.name), overwrite = true)
+        runtimeAssembly.copyTo(csharpDirectory.resolve(runtimeAssembly.name), overwrite = true)
+        stdlibAssembly.copyTo(csharpDirectory.resolve(stdlibAssembly.name), overwrite = true)
+        csharpDirectory.resolve("DelegatedPropertyCSharpConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            checkNotNull(csharpToolchain).dotNetHost,
+            csharpAssembly,
+            csharpDirectory,
+            "C# top-level delegated-property consumer failed",
+        )
+    }
+
+    @Test
     fun testKTypeGraphAcrossLibraryBoundary() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
