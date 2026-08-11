@@ -633,12 +633,18 @@ See the
   objects, and enums; local/anonymous and foreign classifiers fail closed until
   their complete authority path is selected. Mapped and Stdlib classifiers use
   one generated catalog physically owned by `Kotlin.Stdlib.dll`: the first
-  selected entries are the built-ins declarations for `kotlin.String` and the
-  complete collection-interface family, plus the actualized Kotlin class
-  scopes for the current collection implementation family: the four read-only
-  abstract bases, their four mutable counterparts, `ArrayList`, `HashMap`, and
-  `HashSet`. The interface entries come directly from `IrBuiltIns`; never infer
-  logical members from the canonical or exact constructed CLR interface view.
+  selected entries are the built-ins declarations for all eight concrete
+  Common scalars, `kotlin.String`, and the complete collection-interface family,
+  plus the actualized Kotlin class scopes for the current collection
+  implementation family: the four read-only abstract bases, their four mutable
+  counterparts, `ArrayList`, `HashMap`, and `HashSet`. Built-in entries come
+  directly from `IrBuiltIns`; never infer logical members from boxed scalar
+  carriers or the canonical/exact constructed CLR interface view. Do not infer
+  `Number` from concrete scalar entries: its classified `object` carrier is a
+  separate complete family. A complete scalar scope must execute through the
+  ordinary intrinsic registry, including eager Boolean members and physically
+  retained deprecated conversions; never filter a declaration merely to make
+  reflection emission succeed.
   `LinkedHashMap` and `LinkedHashSet` remain actual typealiases with the same
   catalog identity as their hash implementations. Never scan a host CLR
   carrier or publish a partial scope. The optional reflection product asks

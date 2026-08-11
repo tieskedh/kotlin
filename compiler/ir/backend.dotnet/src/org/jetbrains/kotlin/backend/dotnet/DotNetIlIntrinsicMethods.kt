@@ -127,10 +127,8 @@ internal class DotNetIlIntrinsicMethods(
         // fir2ir routes `==` over operands statically known to be Double/Float through
         // `irBuiltIns.ieee754equalsFunByOperandType` (see OperatorExpressionGenerator), NOT
         // through `eqeqSymbol`; the JVM backend registers these symbols separately to its
-        // Ieee754Equals intrinsic. CIL `ceq` on float64 *is* IEEE 754 equality (NaN != NaN,
-        // -0.0 == 0.0), which is exactly the required semantics. The Float entry is registered
-        // only so that Float equality fails explicitly inside the intrinsic (Float is deferred)
-        // instead of falling through to generic call handling.
+        // Ieee754Equals intrinsic. CIL `ceq` on float32/float64 *is* IEEE 754 equality (NaN !=
+        // NaN, -0.0 == 0.0), which is exactly the required primitive semantics for both entries.
         irBuiltIns.ieee754equalsFunByOperandType.getValue(irBuiltIns.doubleClass).toKey()!!
                 to DotNetIlEqualityIntrinsic(referenceEquality = false, ieee754FloatingPoint = true),
         irBuiltIns.ieee754equalsFunByOperandType.getValue(irBuiltIns.floatClass).toKey()!!
@@ -214,7 +212,8 @@ internal class DotNetIlIntrinsicMethods(
         Key(doubleFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(charFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(booleanFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
-    ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
+    ) + comparisonIntrinsics(irBuiltIns) + booleanOperatorIntrinsics() +
+            numericOperatorIntrinsics() + charOperatorIntrinsics() +
             primitiveRangeToIntrinsics() +
             conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
             genericArrayIntrinsics() + arrayCopyIntrinsics() + arrayContentIntrinsics() +
@@ -568,6 +567,13 @@ internal class DotNetIlIntrinsicMethods(
         }
     }
 
+    /** Boolean's eager Common operators, matching the JVM primitive `and`/`or`/`xor` registry. */
+    private fun booleanOperatorIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> =
+        listOf("and", "or", "xor").map { name ->
+            Key(booleanFqn, null, name, listOf(booleanFqn)) to
+                    DotNetIlBooleanBinaryOperatorIntrinsic(name)
+        }
+
     /**
      * Member operators of the landed numeric scalars including all mixed-type overloads
      * (`Int.plus(Long): Long` etc.), following the JVM backend's
@@ -713,13 +719,10 @@ internal class DotNetIlIntrinsicMethods(
     /**
      * `to<Type>()` conversions between the supported primitives, following the JVM backend's
      * `numberConversionMethods`/`NumberCast` (JVM registers every `NUMBER_CONVERSIONS` name on
-     * every number type; here only conversions between supported types are registered, so
-     * `toFloat` still falls through to regular call handling and fails as an unsupported callee).
-     *
-     * The deprecated `Long.toChar()`/`Double.toChar()` are registered as explicitly unsupported
-     * (registry entry now, explicit failure) rather than silently compiled: Kotlin deprecated
-     * them precisely because their two-step truncation semantics surprise users, and this
-     * backend has no legacy code to stay compatible with.
+     * every number type; here only conversions between supported types are registered). The
+     * deprecated signed-number `toChar()` declarations remain physical built-in members and JVM
+     * reflection can invoke them, so their historic sign-extension/truncation semantics remain
+     * executable even though current Kotlin source cannot call most of them directly.
      *
      * `Char.code` is `Char.toInt()` under an extension-property hat. The target admits the exact
      * Common `@InlineOnly` declaration and its assembly-visible physical getter, while this
@@ -741,24 +744,50 @@ internal class DotNetIlIntrinsicMethods(
             }
         }
         add(
+            Key(byteFqn, null, "toChar", emptyList())
+                    to DotNetIlNumberConversionIntrinsic(
+                        DotNetIlValueType.Int8, DotNetIlValueType.Char, listOf("conv.u2"),
+                    )
+        )
+        add(
+            Key(shortFqn, null, "toChar", emptyList())
+                    to DotNetIlNumberConversionIntrinsic(
+                        DotNetIlValueType.Int16, DotNetIlValueType.Char, listOf("conv.u2"),
+                    )
+        )
+        add(
             Key(intFqn, null, "toChar", emptyList())
-                    to DotNetIlNumberConversionIntrinsic(DotNetIlValueType.Int32, DotNetIlValueType.Char, listOf("conv.u2"))
+                    to DotNetIlNumberConversionIntrinsic(
+                        DotNetIlValueType.Int32, DotNetIlValueType.Char, listOf("conv.u2"),
+                    )
+        )
+        add(
+            Key(longFqn, null, "toChar", emptyList())
+                    to DotNetIlNumberConversionIntrinsic(
+                        DotNetIlValueType.Int64, DotNetIlValueType.Char, listOf("conv.u2"),
+                    )
+        )
+        add(
+            Key(floatFqn, null, "toChar", emptyList())
+                    to DotNetIlFloatingToIntegralIntrinsic(
+                        DotNetIlValueType.Float32,
+                        DotNetIlValueType.Int32,
+                        DotNetIlValueType.Char,
+                        listOf("conv.u2"),
+                    )
+        )
+        add(
+            Key(doubleFqn, null, "toChar", emptyList())
+                    to DotNetIlFloatingToIntegralIntrinsic(
+                        DotNetIlValueType.Float64,
+                        DotNetIlValueType.Int32,
+                        DotNetIlValueType.Char,
+                        listOf("conv.u2"),
+                    )
         )
         add(
             Key(charFqn, null, "toChar", emptyList())
                     to DotNetIlNumberConversionIntrinsic(DotNetIlValueType.Char, DotNetIlValueType.Char, emptyList())
-        )
-        add(
-            Key(longFqn, null, "toChar", emptyList())
-                    to DotNetIlUnsupportedIntrinsic("'Long.toChar()' is deprecated in Kotlin; use 'toInt().toChar()'")
-        )
-        add(
-            Key(floatFqn, null, "toChar", emptyList())
-                    to DotNetIlUnsupportedIntrinsic("'Float.toChar()' is deprecated in Kotlin; use 'toInt().toChar()'")
-        )
-        add(
-            Key(doubleFqn, null, "toChar", emptyList())
-                    to DotNetIlUnsupportedIntrinsic("'Double.toChar()' is deprecated in Kotlin; use 'toInt().toChar()'")
         )
         add(
             // The exact Common InlineOnly declaration is emitted in Kotlin.StandardKt for the
@@ -2276,6 +2305,27 @@ private object DotNetIlBooleanNotIntrinsic : DotNetIlIntrinsicMethod() {
     }
 }
 
+/** Kotlin Boolean's eager (non-short-circuiting) `and`, `or`, and `xor` members. */
+private class DotNetIlBooleanBinaryOperatorIntrinsic(
+    private val instruction: String,
+) : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Boolean || call.arguments.size != 2) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing receiver of Boolean '$instruction'")
+        val argument = call.arguments[1]
+            ?: dotNetUnsupported("missing argument of Boolean '$instruction'")
+        codegen.emitExpression(receiver, DotNetIlValueType.Boolean)
+        codegen.emitExpression(argument, DotNetIlValueType.Boolean)
+        codegen.emit(instruction, pops = 2, pushes = 1)
+        return true
+    }
+}
+
 /**
  * The legacy synthetic `noWhenBranchMatchedException` builtin fir2ir appends to an exhaustive
  * `when` without a source `else` when the subject-aware Kotlin 2.5 language feature is disabled
@@ -3482,13 +3532,15 @@ private class DotNetIlNumberConversionIntrinsic(
 private class DotNetIlFloatingToIntegralIntrinsic(
     private val sourceType: DotNetIlValueType,
     private val targetType: DotNetIlValueType,
+    private val resultType: DotNetIlValueType = targetType,
+    private val resultInstructions: List<String> = emptyList(),
 ) : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
         expectedType: DotNetIlValueType,
     ): Boolean {
-        if (expectedType != targetType || call.arguments.size != 1) return false
+        if (expectedType != resultType || call.arguments.size != 1) return false
         val receiver = call.arguments.single()
             ?: dotNetUnsupported(
                 "missing receiver of a ${sourceType.nameInSignature} to ${targetType.nameInSignature} conversion"
@@ -3560,6 +3612,9 @@ private class DotNetIlFloatingToIntegralIntrinsic(
             DotNetIlValueType.Int8 -> codegen.emit("conv.i1", pops = 1, pushes = 1)
             DotNetIlValueType.Int16 -> codegen.emit("conv.i2", pops = 1, pushes = 1)
             else -> Unit
+        }
+        for (instruction in resultInstructions) {
+            codegen.emit(instruction, pops = 1, pushes = 1)
         }
         return true
     }
