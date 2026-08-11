@@ -174,7 +174,55 @@ CLR exception to Common semantics.
 
 ## Integration and verification outcome
 
-Pending at the time of the pre-rebase review. The exact rebase, range-diff,
-generated-owner checks, focused boundary checks, strict aggregate audit, and
-preservation of the 147 user-owned EOL-only IL baseline changes are recorded
-here after mechanical integration.
+The branch was rebased onto the exact reviewed head
+`d78e4a4c1465c00475b8019654b5905124dc30a6`. Its merge base now equals that
+commit, `origin/master` has no commit absent from the branch, and all 462
+target commits remain present. The safety reference
+`refs/backup/dotnet-before-upstream-rebase-20260811` retains the pre-rebase
+head.
+
+The one predicted textual conflict occurred while replaying ordinary inline
+function support. Its resolution keeps the target's selected-library,
+supporting-main-IR, and built-in-symbol logic while replacing only the
+detached dummy file's ad-hoc error module with upstream's shared
+`IrErrorModuleFragment`. A complete range-diff classifies 460 patches as
+identical and exactly two inline patches as context-adjusted around that same
+shared file; it reports no added or removed target patch. The other eight
+overlaps retain both owners' changes on inspection. In particular, the target
+prefer-actual exhaustive-when lookup composes with the upstream FIR visitor,
+the generated BTA/KGP entries remain present, and the launcher, Gradle
+isolation, and metrics changes are inherited from the new base.
+
+The 147 IL-text paths which initially appeared modified were not user content
+changes or EOL rewrites: every worktree blob was byte-identical to the index.
+Refreshing Git's stat cache removed all 147 false positives without staging a
+content change.
+
+The shared launcher suite then exposed an indirect distribution defect which
+neither path overlap nor project-classpath tests could detect. The previously
+extracted `.NET` FIR-to-IR and IR-serialization modules were direct
+dependencies of `cli-dotnet`, but absent from the central `CompilerModules`
+fat-compiler closure. Consequently the assembled `kotlinc-dotnet` launcher
+failed with `NoClassDefFoundError` although `dn` integration tests compiled.
+Both modules now belong to `dotnetCompilerModules`; the two installed launcher
+cases execute successfully and the corresponding entry classes are physically
+present in `kotlin-compiler.jar`. This establishes a lasting review rule:
+every production module extraction requires both dependency wiring and an
+installed-distribution test.
+
+The compiler-argument JSON, Build Tools API dump, FIR2IR test generator, and
+KGP API dump owners completed together and produced no tracked output change.
+The component-complete packed-KLIB loader reported 8 tests and the four
+selected inline-library regressions reported 4 tests, all with zero failures,
+errors, or skips. After the distribution correction, both installed launcher
+cases reported green and direct jar inspection found
+`DotNetFir2IrExtensions.class` and `DotNetIrModuleSerializer.class` in the
+assembled compiler.
+
+The strict `dotNetTest` aggregate was then forced to rebuild and rerun every
+task. Its three XML roots contain 174 suites and 2,073 tests: 6 physical
+CLI/model tests, 1,950 FIR/IL-text/box tests, 21 generated CLI tests, and 96
+library-integration tests. Every root reports zero failures, errors, or skips.
+Runs performed while another compiler session shared the machine establish
+correctness only; none of their durations is retained as a performance
+baseline.

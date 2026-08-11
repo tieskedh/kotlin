@@ -168,6 +168,8 @@ object CompilerModules {
      */
     val dotnetCompilerModules = arrayOf(
         ":compiler:backend.dotnet",
+        ":compiler:fir:fir2ir:dotnet-backend",
+        ":compiler:ir.serialization.dotnet",
     )
 
     /**
