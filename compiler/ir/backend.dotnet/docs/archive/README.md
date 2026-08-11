@@ -29,6 +29,11 @@ Archived snapshots:
   normalized compiler/export/test directions, strict post-rebase gate, and
   pure-rebase evidence. Git and the exact range own its exhaustive per-commit
   ledger.
+- [`upstream-impact-2026-08-11.md`](upstream-impact-2026-08-11.md) records the
+  exact 170-commit range through `d78e4a4c14`, the one non-linking-deserializer
+  conflict, contract-level reverse-dependency audit, and normalized inline,
+  export, IDE/KLIB, BTA, Gradle, and test implications. Git and the exact range
+  own its exhaustive per-commit ledger.
 - [`common-io-source-partition.md`](common-io-source-partition.md) preserves a
   completed programme whose durable rules now live in the runtime/stdlib ADR.
 - [`superseded-hybrid-exception-identity.md`](superseded-hybrid-exception-identity.md)
