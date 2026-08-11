@@ -108,6 +108,16 @@ private val DOTNET_CALLABLE_CONSTRUCTOR: IrDeclarationOrigin =
 internal val IrClass.isDotNetCallableObject: Boolean
     get() = origin == DOTNET_LAMBDA_IMPL || origin == DOTNET_FUNCTION_REFERENCE_IMPL
 
+/** Execution facts retained only until reflected members are folded into their class dispatcher. */
+internal data class DotNetReflectedMemberCallableInfo(
+    val executionFunction: IrSimpleFunction,
+    val defaultFunction: IrSimpleFunction?,
+    val exposedParameters: List<IrValueParameter>,
+)
+
+internal var IrClass.dotNetReflectedMemberCallableInfo: DotNetReflectedMemberCallableInfo?
+    by irAttribute(copyByDefault = false)
+
 /** Builds rich callable IR while deliberately leaving SAM conversions outside this slice. */
 internal class DotNetUpgradeCallableReferences(context: DotNetBackendContext) :
     UpgradeCallableReferences(context, upgradeSamConversions = false)
@@ -147,6 +157,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable signature")
     internal val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
     private val executionInvokeByReference = IdentityHashMap<IrRichFunctionReference, IrSimpleFunction>()
+    private val defaultInvokeByReference = IdentityHashMap<IrRichFunctionReference, IrSimpleFunction>()
 
     private val IrRichFunctionReference.isStateMachineSuspendLambda: Boolean
         get() = origin.isLambda && invokeFunction.isSuspend
@@ -505,6 +516,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             executionInvoke,
             optionalIndices,
         )
+        defaultInvokeByReference[reference] = capability
     }
 
     private fun populateDefaultCallCapability(
@@ -670,6 +682,16 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     }
 
     override fun postprocessClass(functionReferenceClass: IrClass, functionReference: IrRichFunctionReference) {
+        if (functionReference.origin == DOTNET_REFLECTED_MEMBER_REFERENCE) {
+            val target = functionReference.reflectionTargetSymbol?.owner
+                ?: error("Internal .NET backend error: reflected member callable has no target")
+            functionReferenceClass.dotNetReflectedMemberCallableInfo = DotNetReflectedMemberCallableInfo(
+                executionFunction = executionInvokeByReference[functionReference]
+                    ?: error("Internal .NET backend error: reflected member callable has no execution method"),
+                defaultFunction = defaultInvokeByReference[functionReference],
+                exposedParameters = target.exposedCallableParameters(functionReference.boundValues.size),
+            )
+        }
         functionReferenceClass.dotNetInventedLocalClassName = functionReference.dotNetInventedLocalClassName
         // The Common builder adds inherited fake declarations after every concrete capability
         // above has been generated. They are not executable members and are not needed by the

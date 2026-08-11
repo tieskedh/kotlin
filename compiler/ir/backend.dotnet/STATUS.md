@@ -16,7 +16,21 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed foundation: common callable-reflection bodies now live once
+- Last completed foundation: private member-factory protocol 2 now emits one
+  generated dispatcher TypeDef per reflected Kotlin producer class instead of
+  one callable TypeDef per function/getter/setter. Shared Runtime carriers
+  implement `KFunction` plus exactly one matching `Function0..22` capability,
+  or `FunctionN` with its physical `arity` slot. The dispatcher contains
+  direct ordinary-IR thunks and is completed only after Common suspend and
+  masked-default lowering select their physical signatures; CLR reflection is
+  never an invocation fallback. Existing property wrappers retain getter/
+  setter identity and backlinks. The focused semantic matrix covers exact
+  function-type invocation, defaults, empty and supplied varargs, suspend
+  continuation forwarding, and stable suspend `callBy` rejection. Library
+  ABI/runtime surface 32 and private factory method
+  `<GetKotlinMembers-v2>` version the change. Producer opt-in remains required
+  pending broader product/authority work.
+  The preceding foundation moved common callable-reflection bodies once
   in Runtime's `FunctionReferenceBase`, following the JVM/Wasm runtime-base
   ownership direction. Generated direct/member references retain only
   invocation, bound-value, default, vararg, and suspend-specific hooks;
@@ -25,8 +39,7 @@ verification, and work state.
   reflective identity. The five affected generated-IL baselines lost 693
   repeated lines without changing callable behavior. Library ABI/runtime
   surface 31 rejects an old Runtime/new producer combination. This is a
-  prerequisite reduction, not the compact descriptor/dispatcher required for
-  default member reflection.
+  prerequisite reduction for the compact dispatcher above.
   The preceding feature completed JVM-shaped `KClass.members` for
   explicitly opted-in Kotlin-produced user/library classifiers through an
   optional `Kotlin.Reflection.dll`. Producers use `-Xdotnet-reflection` while
@@ -188,8 +201,10 @@ programmes.
 
 ## Current green gate
 
-The shared callable-reference Runtime-base head passed every constituent of
-the strict target gate. The normal aggregate command remains:
+The compact reflected-member dispatcher head passed every constituent of the
+strict target gate. A subsequent non-semantic import and formatting cleanup
+also passed the backend production-source compile. The normal aggregate
+command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
