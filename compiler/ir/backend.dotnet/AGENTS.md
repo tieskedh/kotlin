@@ -582,6 +582,16 @@ See the
   object-shaped. Only true reflective reference classes implement the slot;
   internal getter/adaptation callable helpers that share
   `FunctionReferenceBase` must not become KCallable accidentally.
+  `FunctionReferenceBase` owns the common callable method bodies once:
+  `name`, `returnType`, `parameters`, `typeParameters`, `call`, `callBy`,
+  visibility, modality, annotations, and function flags. Generated reflective
+  subclasses acquire the `KFunction` interface slots through those inherited
+  final bodies and must not recreate forwarders. The base itself deliberately
+  remains only `KAnnotatedElement`: exact references implement `KFunction`,
+  while JVM-shaped adapted `FunctionN`-only references retain identity and
+  rendering without gaining reflective-callable identity. Property accessor
+  implementations inherit the same bodies and add only their property
+  backlink and execution capability.
   `KCallable.callBy` extends the same parameter-identity graph for every
   admitted `KFunction` arity. Map presence
   distinguishes an

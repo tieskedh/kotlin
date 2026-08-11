@@ -28,8 +28,6 @@ import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.declarations.addFunction
-import org.jetbrains.kotlin.ir.builders.declarations.addGetter
-import org.jetbrains.kotlin.ir.builders.declarations.addProperty
 import org.jetbrains.kotlin.ir.builders.declarations.buildValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildField
 import org.jetbrains.kotlin.ir.builders.irDelegatingConstructorCall
@@ -373,203 +371,20 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         }
         if (!reference.type.isKFunction() && !reference.type.isKSuspendFunction()) return
         if (reference.reflectionTargetSymbol == null) return
-        // JVM's callSuspend appends the current continuation and then delegates to KCallable.call.
-        // Keep that positional contract: the runtime arity includes the continuation-shaped
-        // FunctionN slot. Named suspend invocation needs a distinct callSuspendBy operation to
-        // supply the continuation outside the KParameter map, so plain callBy fails closed until
-        // that separate reflection surface is selected.
-        addPositionalCall(functionReferenceClass, reference)
+        // JVM's CallableReference/FunctionReference and Wasm's KFunctionImpl own the common
+        // reflection surface once in their runtime base. Keep generated .NET subclasses limited
+        // to declaration-specific execution capabilities. Named suspend invocation still needs a
+        // distinct callSuspendBy operation to supply the continuation outside the KParameter map,
+        // so its protected runtime hook fails closed until that surface is selected.
         if (reference.type.isKSuspendFunction()) {
             addUnsupportedSuspendNamedCall(functionReferenceClass, reference)
         } else {
             addNamedCall(functionReferenceClass, reference)
         }
-        val superProperty = context.irBuiltIns.kCallableClass.owner.properties
-            .single { it.name.asString() == "name" }
-        val superGetter = superProperty.getter
-            ?: error("Internal .NET backend error: kotlin.reflect.KCallable.name has no getter")
-
-        val nameProperty = functionReferenceClass.addProperty {
-            startOffset = reference.startOffset
-            endOffset = reference.endOffset
-            origin = IrDeclarationOrigin.DEFINED
-            name = superProperty.name
-            visibility = superProperty.visibility
-        }.apply {
-            overriddenSymbols = listOf(superProperty.symbol)
-        }
-        nameProperty.addGetter {
-            startOffset = reference.startOffset
-            endOffset = reference.endOffset
-            origin = IrDeclarationOrigin.DEFINED
-            returnType = context.irBuiltIns.stringType
-            visibility = superGetter.visibility
-        }.apply {
-            overriddenSymbols = listOf(superGetter.symbol)
-            parameters += createDispatchReceiverParameterWithClassParent()
-            body = context.createIrBuilder(symbol).irBlockBody {
-                +irReturn(irString(reference.reflectedName()))
-            }
-        }
-
-        val returnTypeProperty = context.irBuiltIns.kCallableClass.owner.properties
-            .singleOrNull { property -> property.name.asString() == "returnType" }
-            ?: return
-        val returnTypeSuperGetter = returnTypeProperty.getter
-            ?: error("Internal .NET backend error: kotlin.reflect.KCallable.returnType has no getter")
-        val generatedReturnTypeProperty = functionReferenceClass.addProperty {
-            startOffset = reference.startOffset
-            endOffset = reference.endOffset
-            origin = IrDeclarationOrigin.DEFINED
-            name = returnTypeProperty.name
-            visibility = returnTypeProperty.visibility
-        }.apply {
-            overriddenSymbols = listOf(returnTypeProperty.symbol)
-        }
-        generatedReturnTypeProperty.addGetter {
-            startOffset = reference.startOffset
-            endOffset = reference.endOffset
-            origin = IrDeclarationOrigin.DEFINED
-            returnType = returnTypeSuperGetter.returnType
-            visibility = returnTypeSuperGetter.visibility
-        }.apply getter@{
-            overriddenSymbols = listOf(returnTypeSuperGetter.symbol)
-            parameters += createDispatchReceiverParameterWithClassParent()
-            body = context.createIrBuilder(symbol).irBlockBody {
-                +irReturn(irCall(this@DotNetCallableReferenceLowering.context.functionReferenceSymbols.getReturnType).apply {
-                    arguments[0] = irGet(this@getter.dispatchReceiverParameter!!)
-                })
-            }
-        }
-
-        val parametersProperty = context.irBuiltIns.kCallableClass.owner.properties
-            .singleOrNull { property -> property.name.asString() == "parameters" }
-        if (parametersProperty != null) {
-            val parametersSuperGetter = parametersProperty.getter
-                ?: error("Internal .NET backend error: kotlin.reflect.KCallable.parameters has no getter")
-            val generatedParametersProperty = functionReferenceClass.addProperty {
-                startOffset = reference.startOffset
-                endOffset = reference.endOffset
-                origin = IrDeclarationOrigin.DEFINED
-                name = parametersProperty.name
-                visibility = parametersProperty.visibility
-            }.apply {
-                overriddenSymbols = listOf(parametersProperty.symbol)
-            }
-            generatedParametersProperty.addGetter {
-                startOffset = reference.startOffset
-                endOffset = reference.endOffset
-                origin = IrDeclarationOrigin.DEFINED
-                returnType = parametersSuperGetter.returnType
-                visibility = parametersSuperGetter.visibility
-            }.apply getter@{
-                overriddenSymbols = listOf(parametersSuperGetter.symbol)
-                parameters += createDispatchReceiverParameterWithClassParent()
-                body = context.createIrBuilder(symbol).irBlockBody {
-                    val getParameters = this@DotNetCallableReferenceLowering.context.functionReferenceSymbols.getParameters
-                        ?: error("Internal .NET backend error: KCallable.parameters has no runtime helper")
-                    +irReturn(irCall(getParameters).apply {
-                        arguments[0] = irGet(this@getter.dispatchReceiverParameter!!)
-                    })
-                }
-            }
-        }
-
-        val typeParametersProperty = context.irBuiltIns.kCallableClass.owner.properties
-            .singleOrNull { property -> property.name.asString() == "typeParameters" }
-            ?: return
-        val typeParametersSuperGetter = typeParametersProperty.getter
-            ?: error("Internal .NET backend error: kotlin.reflect.KCallable.typeParameters has no getter")
-        val generatedTypeParametersProperty = functionReferenceClass.addProperty {
-            startOffset = reference.startOffset
-            endOffset = reference.endOffset
-            origin = IrDeclarationOrigin.DEFINED
-            name = typeParametersProperty.name
-            visibility = typeParametersProperty.visibility
-        }.apply {
-            overriddenSymbols = listOf(typeParametersProperty.symbol)
-        }
-        generatedTypeParametersProperty.addGetter {
-            startOffset = reference.startOffset
-            endOffset = reference.endOffset
-            origin = IrDeclarationOrigin.DEFINED
-            returnType = typeParametersSuperGetter.returnType
-            visibility = typeParametersSuperGetter.visibility
-        }.apply getter@{
-            overriddenSymbols = listOf(typeParametersSuperGetter.symbol)
-            parameters += createDispatchReceiverParameterWithClassParent()
-            body = context.createIrBuilder(symbol).irBlockBody {
-                val getTypeParameters = this@DotNetCallableReferenceLowering.context.functionReferenceSymbols.getTypeParameters
-                    ?: error("Internal .NET backend error: KCallable.typeParameters has no runtime helper")
-                +irReturn(irCall(getTypeParameters).apply {
-                    arguments[0] = irGet(this@getter.dispatchReceiverParameter!!)
-                })
-            }
-        }
     }
 
-    /** Implements KCallable.call while sharing count validation and arity dispatch in Runtime. */
-    private fun addPositionalCall(functionReferenceClass: IrClass, reference: IrRichFunctionReference) {
-        val superCall = context.irBuiltIns.kCallableClass.owner.functions
-            .singleOrNull { function -> function.name.asString() == "call" }
-            ?: return
-        val argumentParameter = superCall.parameters.single { parameter ->
-            parameter.kind == IrParameterKind.Regular
-        }
-        functionReferenceClass.addFunction {
-            startOffset = reference.startOffset
-            endOffset = reference.endOffset
-            origin = IrDeclarationOrigin.DEFINED
-            name = superCall.name
-            visibility = superCall.visibility
-            modality = Modality.FINAL
-            returnType = reference.invokeFunction.returnType
-        }.apply call@{
-            overriddenSymbols = listOf(superCall.symbol)
-            parameters += createDispatchReceiverParameterWithClassParent()
-            parameters += argumentParameter.copyTo(this)
-            body = context.createIrBuilder(symbol).irBlockBody {
-                val erasedCall = irCall(
-                    this@DotNetCallableReferenceLowering.context.functionReferenceSymbols.callErased
-                ).apply {
-                    arguments[0] = irGet(this@call.dispatchReceiverParameter!!)
-                    arguments[1] = irGet(this@call.parameters.single { it.kind == IrParameterKind.Regular })
-                }
-                +irReturn(irImplicitCast(erasedCall, this@call.returnType))
-            }
-        }
-    }
-
-    /** Implements KCallable.callBy while leaving producer-mask construction to the shared lowering. */
+    /** Adds only declaration-specific default/vararg hooks; Runtime owns KCallable.callBy. */
     private fun addNamedCall(functionReferenceClass: IrClass, reference: IrRichFunctionReference) {
-        val superCallBy = context.irBuiltIns.kCallableClass.owner.functions
-            .singleOrNull { function -> function.name.asString() == "callBy" }
-            ?: return
-        val erasedCallBy = context.functionReferenceSymbols.callByErased ?: return
-        val argumentParameter = superCallBy.parameters.single { parameter ->
-            parameter.kind == IrParameterKind.Regular
-        }
-        functionReferenceClass.addFunction {
-            startOffset = reference.startOffset
-            endOffset = reference.endOffset
-            origin = IrDeclarationOrigin.DEFINED
-            name = superCallBy.name
-            visibility = superCallBy.visibility
-            modality = Modality.FINAL
-            returnType = reference.invokeFunction.returnType
-        }.apply callBy@{
-            overriddenSymbols = listOf(superCallBy.symbol)
-            parameters += createDispatchReceiverParameterWithClassParent()
-            parameters += argumentParameter.copyTo(this)
-            body = context.createIrBuilder(symbol).irBlockBody {
-                val erasedCall = irCall(erasedCallBy).apply {
-                    arguments[0] = irGet(this@callBy.dispatchReceiverParameter!!)
-                    arguments[1] = irGet(this@callBy.parameters.single { it.kind == IrParameterKind.Regular })
-                }
-                +irReturn(irImplicitCast(erasedCall, this@callBy.returnType))
-            }
-        }
-
         val target = reference.reflectionTargetSymbol?.owner
             ?: error("Internal .NET backend error: KFunction callBy target is absent")
         val exposedParameters = target.exposedCallableParameters(reference.boundValues.size)
@@ -607,17 +422,12 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         }
     }
 
-    /** Implements the mandatory KCallable slot without pretending a map contains Continuation. */
+    /** Overrides Runtime's protected named-call hook without pretending a map has Continuation. */
     private fun addUnsupportedSuspendNamedCall(
         functionReferenceClass: IrClass,
         reference: IrRichFunctionReference,
     ) {
-        val superCallBy = context.irBuiltIns.kCallableClass.owner.functions
-            .singleOrNull { function -> function.name.asString() == "callBy" }
-            ?: return
-        val argumentParameter = superCallBy.parameters.single { parameter ->
-            parameter.kind == IrParameterKind.Regular
-        }
+        val superCallBy = context.functionReferenceSymbols.callByErased ?: return
         functionReferenceClass.addFunction {
             startOffset = reference.startOffset
             endOffset = reference.endOffset
@@ -625,11 +435,13 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             name = superCallBy.name
             visibility = superCallBy.visibility
             modality = Modality.FINAL
-            returnType = reference.invokeFunction.returnType
+            returnType = superCallBy.returnType
         }.apply {
             overriddenSymbols = listOf(superCallBy.symbol)
             parameters += createDispatchReceiverParameterWithClassParent()
-            parameters += argumentParameter.copyTo(this)
+            superCallBy.parameters
+                .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+                .forEach { parameter -> parameters += parameter.copyTo(this) }
             body = context.createIrBuilder(symbol).irBlockBody {
                 +irCall(this@DotNetCallableReferenceLowering.context.symbols.throwUnsupportedOperationException).apply {
                     arguments[0] = irString(
