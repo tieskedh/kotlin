@@ -7,8 +7,13 @@
 This decision admits the Common `KType`, `KTypeProjection`, `KVariance`,
 `KTypeParameter`, and `typeOf` surface for denotable runtime type graphs. It
 does not admit callable or member enumeration and invocation, annotation
-discovery or valued annotation classes, value classes, unsigned types,
-suspend reflection, or broad `kotlin-reflect` compatibility.
+discovery or valued annotation classes in this original tranche, value
+classes, unsigned types, suspend reflection, or broad `kotlin-reflect`
+compatibility.
+
+The later JVM-shaped platform extension for declaration-derived
+`KType.annotations` is governed separately by
+[`type-use-annotation-reflection.md`](type-use-annotation-reflection.md).
 
 ## Context
 
@@ -37,11 +42,12 @@ model:
 - use-site nullability is retained independently from the physical carrier;
 - type parameters retain name, variance, reified status, upper bounds, and
   declaration identity; and
-- equality, hashing, validation, and rendering follow the unchanged Common
-  implementation.
+- equality, hashing, validation, and rendering follow the Common non-JVM
+  behavior.
 
-The .NET target compiles those Common sources rather than replacing them with
-a BCL-shaped model.
+The .NET target preserves that model rather than replacing it with a
+BCL-shaped graph. Its small target-specific implementation adds only the later
+platform annotation property while retaining those structural operations.
 
 ## Mature-target precedent
 
@@ -69,8 +75,9 @@ imported classifier; it is not the logical Kotlin type graph.
 
 ### Runtime graph
 
-The target uses the unchanged Common non-JVM `KTypeImpl` and a narrow target
-`KTypeParameter` implementation. A parameter's declaring-container key is
+The target uses a .NET `KTypeImpl` that retains the Common non-JVM structural
+behavior and a narrow target `KTypeParameter` implementation. A parameter's
+declaring-container key is
 derived from the stable Kotlin IR mangling of its declaring class or function,
 not from a CLR owner, metadata token, or source-level name alone.
 
@@ -121,11 +128,12 @@ site; the target does not publish a callable CLR-generic `typeOf<T>` remainder.
 `Kotlin.Runtime.dll` owns the minimal physical `KType` interface, following
 the existing `KClass` precedent. This is necessary because runtime-owned
 `KCallable` exposes a typed `returnType` slot and Runtime may not depend on
-Stdlib. `Kotlin.Stdlib.dll` still owns the unchanged Common `KTypeImpl`, type
-parameters, projections, equality, hashing, validation, rendering, and graph
-construction helpers. The assembly split introduces neither an `object`
-bridge nor a second `KType` identity: Stdlib implementations implement the
-single Runtime interface.
+Stdlib. `Kotlin.Stdlib.dll` still owns `KTypeImpl`, type parameters,
+projections, equality, hashing, validation, rendering, and graph construction
+helpers. The later platform annotation extension adds `KAnnotatedElement` to
+the one Runtime interface without changing that ownership. The assembly split
+introduces neither an `object` bridge nor a second `KType` identity: Stdlib
+implementations implement the single Runtime interface.
 
 ## Design attacks and rejected alternatives
 
@@ -162,11 +170,14 @@ stronger than their source names.
 
 Rejected because type graphs are their prerequisite but do not settle member
 discovery, invocation, annotation retention, or foreign metadata enhancement.
-Those remain separately reviewable language features.
+Those remained separately reviewable language features. Declaration-owned
+type-use annotation discovery was admitted later under its own ADR after the
+annotation-value and callable-owner foundations existed.
 
 ## Invariants
 
-- Common owns `KType` equality, hashing, validation, and string rendering.
+- Common behavior owns `KType` equality, hashing, validation, and string
+  rendering; the .NET implementation adds only platform annotation state.
 - Runtime owns only the cycle-free physical `KType` interface; Stdlib owns its
   Common behavior and implementations.
 - `System.Type` may contribute classifier evidence only through `KClass`.
@@ -183,6 +194,8 @@ Those remain separately reviewable language features.
   constraints rather than strengthened.
 - Every admitted classifier extends ordinary and reified type operations and
   `typeOf` together.
+- Declaration-derived type annotations use the exact IR/KLIB node;
+  `typeOf` annotations remain empty in alignment with JVM.
 
 ## Verification
 

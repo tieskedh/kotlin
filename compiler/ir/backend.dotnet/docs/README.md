@@ -74,6 +74,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [KLIB-first class annotation discovery](decisions/annotation-discovery.md)
 - [KLIB-first callable annotation discovery](decisions/callable-annotation-discovery.md)
 - [KLIB-first callable return types](decisions/callable-return-types.md)
+- [Declaration-owned type-use annotation reflection](decisions/type-use-annotation-reflection.md)
 - [Declaration-owned callable type parameters](decisions/callable-type-parameters.md)
 - [Declaration-owned callable parameters](decisions/callable-parameters.md)
 - [Positional callable invocation](decisions/callable-positional-invocation.md)

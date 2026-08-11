@@ -565,6 +565,7 @@ internal object DotNetRuntimeTypes {
             DotNetIlValueType.UserClass(kAnnotatedElementBase),
             DotNetIlValueType.UserClass(kClassifierBase),
         )
+        kTypeBase.interfaces = listOf(DotNetIlValueType.UserClass(kAnnotatedElementBase))
         kCallableBase.interfaces = listOf(DotNetIlValueType.UserClass(kAnnotatedElementBase))
         kFunctionBase.interfaces = listOf(
             DotNetIlValueType.UserClass(kCallableBase),

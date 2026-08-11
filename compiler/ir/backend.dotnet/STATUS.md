@@ -16,7 +16,22 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed foundation: Common `Number` is now an executable abstract
+- Last completed foundation: JVM-shaped declaration-owned type-use reflection
+  now extends the .NET `KType` actual with `KAnnotatedElement` while retaining
+  the existing Common structural graph. Return, parameter, extension-receiver,
+  nested projected argument, and callable upper-bound nodes receive only the
+  runtime-retained Kotlin annotations attached to that exact semantic IR/KLIB
+  node; repeat order and read-only list identity are preserved. Source/binary
+  applications, nearby CLR rows, Roslyn nullable metadata, and FIR's synthetic
+  type-enhancement markers never become Kotlin annotation objects. Annotated
+  `typeOf` stays empty in alignment with JVM, and annotations do not alter
+  `KType` equality, hashing, or rendering. One existing annotation-value
+  pipeline constructs all objects; no CLR reflection decoder or flattened
+  type path was added. Runtime/Stdlib surface 35 versions the physical
+  `KType : KAnnotatedElement` edge and four-argument graph factory. Separate
+  Kotlin and C# consumers plus the PSI/LightTree and Framework/CoreCLR matrix
+  cover the authority and physical capability boundaries.
+  The preceding foundation: Common `Number` is now an executable abstract
   superclass family rather than a classifier-name special case over `object`.
   Broad `Number` signatures retain the identity-preserving `System.Object`
   carrier required by the CLR, while the runtime classifier admits exactly the
@@ -140,8 +155,9 @@ verification, and work state.
   CLR reflection owns none of them. A private callable-reference getter reads
   retained `const` literals without changing their ordinary field-only CLR
   ABI. Library ABI and runtime surface 29 own the payload, nested interfaces,
-  and implementation classes. `getDelegate`, type-use annotation discovery,
-  and the positive `isLateinit` path remain separate programmes. The preceding
+  and implementation classes. `getDelegate` and the positive `isLateinit`
+  path remain separate programmes; type-use annotations were selected later.
+  The preceding
   feature completed exact nominal constrained constructions and
   constructed-interface bounds for admitted foreign generic interfaces and
   methods. The FIR importer reuses the shared declaration-qualified CLR
@@ -265,7 +281,7 @@ programmes.
 
 ## Current green gate
 
-The complete current Common `Number` foundation head
+The complete declaration-owned type-use annotation reflection head
 passed every constituent of the strict target gate. Because another
 development session shared the machine, this checkpoint records correctness
 only and makes no duration or performance claim. The normal aggregate command
@@ -275,16 +291,16 @@ remains:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 158 XML files and 1924 tests:
+The audited full-aggregate evidence covers 158 XML files and 1928 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1802 FIR, IL-text, and box tests
+- 1806 FIR, IL-text, and box tests
 - 21 generated CLI tests
 - 95 library-integration tests
 - zero failures, errors, or skips
 
 The aggregate exited successfully. Direct audit of its three final roots reports
-the 158 files and 1,924 tests above with zero failures, errors, or skips. No
+the 158 files and 1,928 tests above with zero failures, errors, or skips. No
 duration or performance comparison is retained because another compiler session
 shared the machine throughout verification.
 
@@ -992,8 +1008,9 @@ Adversarial coverage exercises defaults, nested values, arrays, enums,
 bound/unbound callable references, invocation/mutation identity,
 property/accessor separation, read-only list behavior, separate KLIB
 consumption, exact foreign CLR method/property attributes, both runtime
-profiles, and `-no-stdlib` compilation. Member enumeration/invocation and
-type-use annotation owners remain separate reflection decisions.
+profiles, and `-no-stdlib` compilation. Member enumeration/invocation remained
+separate reflection decisions; declaration-owned type-use annotations were
+selected later under their own ADR.
 
 `KCallable.returnType` now follows Native's declaration-target boundary rather
 than the generated invocation adapter. Functions and constructors use the rich
@@ -1014,6 +1031,12 @@ and C# consumers prove one type identity without an object bridge, wrapper, or
 Runtime-to-Stdlib dependency. Target-owned adversarial coverage and two
 unchanged upstream override tests execute across both FIR parsers and CLR
 profiles; exact IL pins the additional graph and getter shape.
+
+Runtime/Stdlib surface 35 later extends that same physical interface with
+JVM-shaped `KAnnotatedElement`. Declaration-derived graph nodes receive their
+exact runtime-retained KLIB/IR applications through the existing annotation
+value pipeline. `typeOf` nodes remain empty as on JVM, and compiler-internal
+foreign type-enhancement markers are explicitly non-reflective.
 
 `KCallable.typeParameters` now deliberately extends that Native-shaped floor
 with JVM's declaration-owned rule. Function and generic-extension-property
@@ -1122,8 +1145,8 @@ separate libraries. A `const` reference reads its retained literal in the
 private reference body and does not add a public CLR accessor MethodDef.
 Runtime surface and library ABI 29 pin the new interfaces and factory payload.
 Positive `isLateinit` behavior remains unavailable until the parked language
-feature admits such declarations; broad member discovery, `getDelegate`, and
-type-use annotation discovery remain independent.
+feature admits such declarations; broad member discovery and `getDelegate`
+remain independent. Declaration-owned type-use discovery was selected later.
 
 Library ABI version 23 also retains the version-22 static ordinary-class
 default-dispatch shape; runtime surface level 24 includes the version-23
@@ -1145,8 +1168,9 @@ assembly-visible throwing remainders; signatures without one truthful open CLR
 shape are omitted. Neither form enters the physical Kotlin declaration index
 or explicit C# export, and cross-library calls disappear in all three KLIB
 inliner modes. The completed `KType`/`typeOf` graph composes this same
-substitution path; annotation discovery, future classifier families,
-and coroutine-aware reflection/export remain separate programmes.
+substitution path; declaration-owned type annotations were selected later,
+while future classifier families and coroutine-aware reflection/export remain
+separate programmes.
 Physically exact non-generic reference casts are
 complete for Kotlin classes/interfaces, imported CLR interfaces, strings,
 `Any`, primitive-array wrappers, and exact CLR vectors without admitting closed
@@ -1255,11 +1279,14 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Treat type-use annotation discovery as its own reflection tranche over the
-   established logical type graph and exact foreign metadata owners. Marker
-   and valued declaration annotations are already executable; do not infer
-   Kotlin type-use authority from emitted CLR nullable attributes or other
-   foreign-language views.
+1. Select `lateinit` as the next language foundation, following Common/JVM
+   declaration and failure semantics before enabling its already published
+   positive reflection flag. Specify storage sentinels for nullable-capable
+   reference carriers, initialization checks on every read path, inheritance,
+   top-level/member/local ownership, callable/property references, exact
+   `UninitializedPropertyAccessException` identity and message, separate
+   libraries, and CLR interop visibility. Do not infer initialization from a
+   CLR field default or let reflection bypass the Kotlin read check.
 2. Continue the generated catalog only by complete classifier families, not by
    handwritten members. The concrete Common scalars, classified `Number`,
    built-in collection interfaces, and Kotlin-owned collection implementations

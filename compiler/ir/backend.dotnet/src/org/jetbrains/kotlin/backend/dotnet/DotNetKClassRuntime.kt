@@ -126,7 +126,10 @@ internal object DotNetKClassRuntime {
           // KCallable is runtime-owned, so its typed returnType slot needs the minimal KType
           // identity in this assembly as well. Common/Stdlib still owns the graph behavior and
           // Kotlin.Stdlib owns KTypeImpl; this interface is only the cycle-free physical floor.
+          // The annotation capability is the selected JVM-shaped .NET reflection extension;
+          // declaration-derived values remain KLIB/IR-owned.
           .class interface public abstract auto ansi KType
+                 implements Kotlin.KAnnotatedElement
           {
             .method public hidebysig specialname newslot abstract virtual instance class Kotlin.KClassifier 'get_classifier'() cil managed
             {

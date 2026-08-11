@@ -1,8 +1,9 @@
 # CLR annotation interoperability programme
 
 - Status: **Active — exact Common-contract export, foreign flow-contract
-  import, Kotlin valued-annotation production, and class/callable discovery
-  implemented; wider member surfaces and foreign grammar remain open**
+  import, Kotlin valued-annotation production, declaration/type-use
+  discovery implemented; wider member surfaces and foreign grammar remain
+  open**
 - Owner: .NET importer and foreign FIR integration
 - Governing decision:
   [`../decisions/draft-adr-clr-importer-boundary.md`](../decisions/draft-adr-clr-importer-boundary.md)
@@ -94,7 +95,8 @@ type.
 | Class annotation discovery | Implemented | Reconstruct Kotlin applications from KLIB-derived factories; use CLR reflection only for unmarked foreign assemblies |
 | Callable/property-reference annotation discovery | Implemented | Use exact reference targets; keep property and accessor ownership distinct |
 | Callable-parameter discovery | Implemented | Reuse the callable signature graph and exact declaration/Param-row owners |
-| Member enumeration and type-use discovery | Parked | Select declaration ownership, use sites, overrides, and lookup identity before exposing a surface |
+| Member enumeration | Parked | Select declaration ownership, overrides, and lookup identity before exposing a surface |
+| Declaration-owned type-use discovery | Implemented | Preserve exact KLIB/IR node ownership; do not flatten CLR rows or populate `typeOf` |
 | Kotlin-to-.NET export controls | Undecided public API | Make one language-facing proposal |
 
 ## Ordered work
@@ -228,10 +230,19 @@ Callable parameters and their declaration applications are complete under
 Kotlin applications use their exact IR/KLIB owner, while admitted foreign
 parameters use exact Param rows. The remaining chain covers built-in Kotlin
 meta-annotation runtime values, typed foreign attribute import, member
-enumeration, and field/accessor-object/type-use ownership. Each needs an
-admitted declaration identity and use-site model before it can extend the
-reflection surface. The exact CLR value/parent grammar may grow independently
-only when its physical representation is exact.
+enumeration, and field/accessor-object ownership. Each needs an admitted
+declaration identity and use-site model before it can extend the reflection
+surface. The exact CLR value/parent grammar may grow independently only when
+its physical representation is exact.
+
+Declaration-owned type-use discovery is complete under
+[`../decisions/type-use-annotation-reflection.md`](../decisions/type-use-annotation-reflection.md).
+The .NET `KType` actual follows JVM by adding `KAnnotatedElement`; each
+declaration-derived node receives only its own runtime-retained Kotlin
+applications from semantic IR/KLIB. Nested arguments, receivers, parameters,
+and upper bounds retain separate owners. Binary/source-retained values, CLR
+nullable metadata, and nearby custom-attribute rows never become Kotlin
+`KType` annotation objects. Annotated `typeOf` remains empty, matching JVM.
 
 This is a bounded annotation-reflection layer, not permission to build broad member enumeration or
 invocation first. The foreign decoder and Kotlin producer may share a neutral value algebra, but a
