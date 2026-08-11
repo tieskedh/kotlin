@@ -16,18 +16,26 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed foundation: the first generated Stdlib member catalog now
-  makes mapped `kotlin.String` and Kotlin-owned
-  `kotlin.collections.ArrayList` executable through `KClass.members`. The
-  complete member sets come from the Kotlin built-ins/actualized Stdlib class
-  scopes after KLIB serialization; arbitrary `System.String`/BCL members never
-  enter the result. One Stdlib-owned catalog feeds the existing compact
+- Last completed foundation: the generated Stdlib member catalog now makes
+  mapped `kotlin.String` and the complete current Kotlin-owned collection
+  implementation family executable through `KClass.members`: the four
+  read-only abstract bases, their four mutable counterparts, `ArrayList`,
+  `HashMap`, and `HashSet`. `LinkedHashMap`/`LinkedHashSet` retain the same
+  `KClass` and catalog identity as their actual typealias targets. The complete
+  member sets come from the Kotlin built-ins/actualized Stdlib class scopes
+  after KLIB serialization; arbitrary `System.String`/BCL members never enter
+  the result. One Stdlib-owned catalog feeds the existing compact
   callable/property pipeline, while optional `Kotlin.Reflection.dll` owns
   lookup order and Runtime retains neither a Stdlib dependency nor catalog
   policy. Inherited fake overrides remain reflection identity and use their
   resolved real override only for execution, fixing the `Collection` versus
-  `AbstractCollection` receiver boundary generically. The selected collection
-  members also pulled authoritative Common `ReturnValue.kt` into Stdlib, so
+  `AbstractCollection` receiver boundary generically. Abstract skeletal-class
+  members conversely require a real subclass receiver: reflection does not
+  pretend that direct `MutableMap` implementor `HashMap` inherits
+  `AbstractMutableMap`. One- and two-parameter owner graphs, concrete and
+  abstract dispatch, Common annotations, and per-`KClass` caching are covered.
+  The selected collection members also pulled authoritative Common
+  `ReturnValue.kt` into Stdlib, so
   runtime `@IgnorableReturnValue` applications are preserved rather than
   filtered. Library ABI/runtime surface 33 and provider `getMembersV2` version
   the cross-product change. Focused PSI/LightTree, Framework/CoreCLR, malformed
@@ -220,10 +228,10 @@ programmes.
 
 ## Current green gate
 
-The generated mapped/Stdlib member-catalog head passed every constituent of
-the strict target gate. Because another development session shared the machine,
-this checkpoint records correctness only and makes no duration or performance
-claim. The normal aggregate command remains:
+The complete current collection-family member-catalog head passed every
+constituent of the strict target gate. Because another development session
+shared the machine, this checkpoint records correctness only and makes no
+duration or performance claim. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
@@ -1209,8 +1217,9 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Broaden the generated catalog by complete classifier families, not by
-   handwritten members: finish the supported mapped/Stdlib set from Kotlin
+1. Continue the generated catalog by complete classifier families, not by
+   handwritten members. The current Kotlin-owned collection implementation
+   family is complete; select the next mapped/Stdlib family from Kotlin
    declaration scopes, then add foreign classifiers from exact importer
    identities and enhancement. Reuse the established callable/property objects
    and never expose a partial CLR MethodDef/Property scan. Constructors and

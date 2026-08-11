@@ -209,12 +209,16 @@ it.
 
 ### Generated Stdlib member catalog
 
-The first mapped/Stdlib closure advances both physical cases through one
-catalog architecture. `kotlin.String` proves a Kotlin classifier whose runtime
-carrier is the foreign `System.String` TypeDef; `kotlin.collections.ArrayList`
-proves a Kotlin-owned Stdlib implementation class. The catalog machinery is
-data-driven and must not acquire handwritten member descriptions as additional
-classifiers are admitted.
+The mapped/Stdlib closure advances both physical cases through one catalog
+architecture. `kotlin.String` proves a Kotlin classifier whose runtime carrier
+is the foreign `System.String` TypeDef. The current Kotlin-owned collection
+family proves concrete implementations and skeletal abstract bases:
+`AbstractCollection`, `AbstractList`, `AbstractMap`, `AbstractSet`, their four
+mutable counterparts, `ArrayList`, `HashMap`, and `HashSet`.
+`LinkedHashMap`/`LinkedHashSet` are actual typealiases and therefore retain the
+same `KClass` and catalog identity as `HashMap`/`HashSet`. The catalog machinery
+is data-driven and must not acquire handwritten member descriptions as
+additional classifiers are admitted.
 
 The authoritative member set still comes from the Kotlin declarations visible
 while `Kotlin.Stdlib.dll` is produced. For a mapped built-in that means the
@@ -239,7 +243,11 @@ references. It matters on .NET when, for example, an `ArrayList` scope member
 has the logical `Collection` receiver but its body is owned by
 `AbstractCollection`; substituting the execution target as reflection identity
 would corrupt signatures and equality, while invoking the fake receiver shape
-would produce an invalid physical cast.
+would produce an invalid physical cast. The inverse is forbidden too: a member
+declared on `AbstractMutableMap` accepts only a real subclass receiver.
+Native/Wasm-shaped `HashMap` implements `MutableMap` directly, so reflection
+must not invent an `AbstractMutableMap` inheritance edge or duck-typed receiver
+cast.
 
 Catalog generation may expose runtime-retained annotations that earlier
 Stdlib subsets never needed to materialize. Such an annotation is not filtered
@@ -403,9 +411,10 @@ carrier MethodRef.
 
 Library ABI and Runtime surface 33 atomically version the first Stdlib catalog
 and the reflection-provider entry that can call it. The catalog itself is
-Stdlib compiler ABI protocol 1; unsupported or mismatched product combinations
-must fail during the existing product/surface checks rather than at a later
-catalog MethodRef.
+Stdlib compiler ABI protocol 1; adding complete classifier scopes to that
+catalog changes its generated data, not its protocol or public surface.
+Unsupported or mismatched product combinations must fail during the existing
+product/surface checks rather than at a later catalog MethodRef.
 
 ## First closure verification
 
@@ -428,6 +437,9 @@ The first complete gate must prove:
 - admitted mapped and Stdlib classifiers enumerate only their complete Kotlin
   scopes, preserve callable identity and direct invocation, and exclude
   unrelated methods present on the CLR carrier;
+- concrete map/set classes preserve two-parameter generic graphs, Common
+  annotations, typealias identity, and direct execution, while abstract-base
+  members require a physically valid subclass receiver;
 - the reflection product has only Runtime/Stdlib dependencies and those base
   products have no reverse AssemblyRef;
 - ordinary and packaged reflection sources build the same optional
