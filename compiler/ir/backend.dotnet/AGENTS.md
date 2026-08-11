@@ -1287,6 +1287,13 @@ inherit compiler-distribution or Wasm products without an actual target test
 consumer. See the
 [test-product ADR](docs/decisions/test-product-and-validation-ownership.md).
 
+When production compiler code moves into a new module, update both the direct
+project dependencies and the central `CompilerModules` distribution closure.
+Project-classpath tests do not prove the latter. Run an installed
+`kotlinc-dotnet` launcher test and verify the extracted module's entry classes
+are physically present in `dist/kotlinc/lib/kotlin-compiler.jar`; never repair
+a partial compiler distribution with a test-only or KGP-added classpath.
+
 ## Box tests
 
 Like mature targets, Kotlin/.NET box tests execute on real runtimes. PSI and

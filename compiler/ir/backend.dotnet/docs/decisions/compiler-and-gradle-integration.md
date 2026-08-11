@@ -130,6 +130,15 @@ project classes. That distribution includes the .NET frontend/FIR checker in
 the same module closure as other target checkers. KGP never repairs a partial
 compiler distribution by adding compiler-internal modules to user classpaths.
 
+Every production module extracted from that executable closure must also be
+registered with the repository's central `CompilerModules` distribution
+owner. A project dependency is insufficient evidence: repository tests can
+see the dependency while the assembled `kotlin-compiler.jar` silently omits
+it. The installed `kotlinc-dotnet` launcher must execute after each such split,
+and the expected entry classes must be physically present in the assembled
+compiler jar. This obligation applies equally to frontend adapters, FIR-to-IR
+extensions, serializers, lowerings, and code generation.
+
 ### Temporary execution/product restrictions are explicit
 
 Until compiler protocols acquire a .NET target identity, tasks run the .NET
