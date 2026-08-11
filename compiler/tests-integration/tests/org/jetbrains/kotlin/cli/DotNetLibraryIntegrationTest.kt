@@ -32617,6 +32617,42 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("<GetKotlinMembers-v1>" in reflectionIl) {
             "-Xdotnet-reflection did not reach the member-reflection lowering"
         }
+
+        val runtimeMetadata = DotNetClrMetadataReader.read(
+            stdlibDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+        )
+        val functionReferenceBase = runtimeMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "Kotlin.Runtime.Internal" &&
+                    type.metadataName == "FunctionReferenceBase"
+        }
+        val sharedCallableMethods = runtimeMetadata.methodDefinitions
+            .filter { method -> method.declaringType == functionReferenceBase.handle }
+            .mapTo(linkedSetOf()) { method -> method.name }
+        assertTrue(
+            sharedCallableMethods.containsAll(
+                listOf("get_name", "get_returnType", "get_parameters", "Call", "CallBy")
+            )
+        ) {
+            "FunctionReferenceBase must own the shared callable method bodies: $sharedCallableMethods"
+        }
+        val kFunction = runtimeMetadata.typeDefinitions.single { type ->
+            type.namespaceName == "Kotlin" && type.metadataName == "KFunction"
+        }
+        assertFalse(runtimeMetadata.interfaceImplementations.any { implementation ->
+            implementation.implementingType == functionReferenceBase.handle &&
+                    implementation.interfaceType == kFunction.handle
+        }) {
+            "FunctionReferenceBase must not turn adapted FunctionN-only references into KFunction"
+        }
+
+        val generatedNameForwarders = Regex("Kotlin\\.KCallable'?::'?get_name").findAll(reflectionIl).count()
+        val generatedCallForwarders = Regex("Kotlin\\.KCallable'?::'?Call\\(").findAll(reflectionIl).count()
+        assertEquals(0, generatedNameForwarders) {
+            "Opt-in member reflection repeated KCallable.name in generated producer classes"
+        }
+        assertEquals(0, generatedCallForwarders) {
+            "Opt-in member reflection repeated KCallable.call in generated producer classes"
+        }
     }
 
     private fun verifyNet10CSharpStdlibBoundary(stdlibDirectory: File) {
