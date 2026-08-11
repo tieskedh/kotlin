@@ -50,14 +50,14 @@ internal class DotNetFunctionNVarargBridgeLowering(
     }
 
     override fun visitFunctionAccess(expression: IrFunctionAccessExpression): IrExpression {
-        val arity = expression.symbol.owner.parentClassOrNull
-            ?.let(::logicalBigArity)
+        val function = expression.symbol.owner as? IrSimpleFunction
             ?: return super.visitFunctionAccess(expression)
-        if (expression.nonDispatchArguments.size != arity ||
-            expression.symbol.owner.name != OperatorNameConventions.INVOKE
-        ) {
+        if (function.name != OperatorNameConventions.INVOKE) {
             return super.visitFunctionAccess(expression)
         }
+        val arity = logicalBigArityOfInvoke(function)
+            ?: return super.visitFunctionAccess(expression)
+        if (expression.nonDispatchArguments.size != arity) return super.visitFunctionAccess(expression)
         val receiver = expression.dispatchReceiver
             ?: error("Internal .NET backend error: Function$arity.invoke has no dispatch receiver")
         val builder = context.createIrBuilder(currentScope!!.scope.scopeOwnerSymbol).at(expression)
@@ -221,6 +221,24 @@ internal class DotNetFunctionNVarargBridgeLowering(
             .toIntOrNull()
             ?.plus(1)
             ?.takeIf { it >= BuiltInFunctionArity.BIG_ARITY }
+    }
+
+    /**
+     * A call may retain the fake override declared on an intermediate functional interface rather
+     * than the FunctionN declaration itself. Follow that function's override graph, as the JVM
+     * functional-type predicate does, while retaining .NET's exact logical-arity requirement.
+     */
+    private fun logicalBigArityOfInvoke(function: IrSimpleFunction): Int? {
+        val arities = (sequenceOf(function) + function.allOverridden())
+            .mapNotNull { overridden -> logicalBigArity(overridden.parentClassOrNull) }
+            .distinct()
+            .toList()
+        if (arities.size > 1) {
+            dotNetUnsupported(
+                "one invoke member inheriting multiple FunctionN execution arities (${arities.joinToString()})"
+            )
+        }
+        return arities.singleOrNull()
     }
 
     private fun IrExpression.transformVoid(): IrExpression =
