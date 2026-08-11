@@ -5,13 +5,14 @@
 
 package org.jetbrains.kotlin.backend.dotnet.lower
 
-import org.jetbrains.kotlin.backend.common.FileLoweringPass
+import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetKClassRuntime
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibLibrary
 import org.jetbrains.kotlin.backend.dotnet.isDotNetResolutionOnlyStdlibDeclaration
 import org.jetbrains.kotlin.config.dotNetMemberReflection
+import org.jetbrains.kotlin.config.dotNetProducesStdlib
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
@@ -20,11 +21,19 @@ import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.builders.irBlockBody
+import org.jetbrains.kotlin.ir.builders.irBranch
+import org.jetbrains.kotlin.ir.builders.irElseBranch
+import org.jetbrains.kotlin.ir.builders.irEquals
+import org.jetbrains.kotlin.ir.builders.irGet
+import org.jetbrains.kotlin.ir.builders.irNull
 import org.jetbrains.kotlin.ir.builders.irReturn
+import org.jetbrains.kotlin.ir.builders.irWhen
+import org.jetbrains.kotlin.ir.builders.kClassReference
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrFile
+import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
@@ -36,6 +45,7 @@ import org.jetbrains.kotlin.ir.expressions.impl.IrPropertyReferenceImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrVarargImpl
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.types.makeNotNull
 import org.jetbrains.kotlin.ir.types.starProjectedType
 import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
@@ -44,6 +54,8 @@ import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.getKFunctionType
 import org.jetbrains.kotlin.ir.util.isAnonymousObject
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
+import org.jetbrains.kotlin.ir.util.resolveFakeOverride
+import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
@@ -61,18 +73,26 @@ internal val DOTNET_REFLECTED_MEMBER_REFERENCE: IrStatementOrigin =
  */
 internal class DotNetMemberReflectionLowering(
     private val context: DotNetBackendContext,
-) : FileLoweringPass {
+) : ModuleLoweringPass {
 
-    override fun lower(irFile: IrFile) {
+    override fun lower(irModule: IrModuleFragment) {
+        if (context.configuration.dotNetProducesStdlib) {
+            irModule.addStdlibCatalog()
+        }
         if (!context.configuration.dotNetMemberReflection) return
+
+        irModule.files.forEach { irFile -> irFile.addProducerFactories() }
+    }
+
+    private fun IrFile.addProducerFactories() {
         // The first optional-product closure is deliberately disjoint from Stdlib/mapped
         // classifiers. Several compiler-only Stdlib declarations do not yet have complete direct
         // callable-reference execution shapes; emitting a partial member set would be a lie, and
         // making every ordinary build depend on those shapes would violate reflection optionality.
-        if (DotNetStdlibLibrary.hasImplementation(irFile)) return
+        if (DotNetStdlibLibrary.hasImplementation(this)) return
 
         val classes = mutableListOf<IrClass>()
-        irFile.acceptVoid(object : IrVisitorVoid() {
+        acceptVoid(object : IrVisitorVoid() {
             override fun visitElement(element: IrElement) {
                 element.acceptChildrenVoid(this)
             }
@@ -86,6 +106,78 @@ internal class DotNetMemberReflectionLowering(
         classes.forEach { irClass -> irClass.addMemberFactoryOrSkip() }
     }
 
+    /**
+     * Builds the first product-owned catalog from Kotlin class scopes while the Stdlib module is
+     * still semantic IR. `String` exercises a mapped CLR carrier and `ArrayList` a Kotlin-owned
+     * implementation; adding a classifier changes only this selected data set, never the member
+     * construction or invocation implementation.
+     */
+    private fun IrModuleFragment.addStdlibCatalog() {
+        val functions = mutableListOf<IrSimpleFunction>()
+        val classes = mutableListOf<IrClass>()
+        acceptVoid(object : IrVisitorVoid() {
+            override fun visitElement(element: IrElement) {
+                element.acceptChildrenVoid(this)
+            }
+
+            override fun visitClass(declaration: IrClass) {
+                classes += declaration
+                declaration.acceptChildrenVoid(this)
+            }
+
+            override fun visitSimpleFunction(declaration: IrSimpleFunction) {
+                functions += declaration
+                declaration.acceptChildrenVoid(this)
+            }
+        })
+
+        val catalog = functions.singleOrNull { function ->
+            function.fqNameWhenAvailable?.asString() ==
+                    DotNetStdlibLibrary.MEMBER_REFLECTION_CATALOG_FUNCTION_FQ_NAME
+        } ?: error(
+            "Internal .NET backend error: Stdlib production has no member-reflection catalog anchor"
+        )
+        val arrayList = classes.singleOrNull { irClass ->
+            irClass.fqNameWhenAvailable?.asString() == "kotlin.collections.ArrayList"
+        } ?: error(
+            "Internal .NET backend error: Stdlib production has no kotlin.collections.ArrayList actual"
+        )
+        val entries = listOf(context.irBuiltIns.stringClass.owner, arrayList).map { irClass ->
+            val references = irClass.logicalMemberReferencesOrNull()
+                ?: error(
+                    "Internal .NET backend error: the selected Stdlib reflection classifier " +
+                            "'${irClass.fqNameWhenAvailable}' has an unsupported member shape"
+                )
+            irClass to references
+        }
+
+        val kClass = catalog.parameters.singleOrNull { parameter ->
+            parameter.kind == IrParameterKind.Regular
+        } ?: error("Internal .NET backend error: Stdlib member catalog has no KClass parameter")
+        val callableType = context.irBuiltIns.kCallableClass.starProjectedType
+        val arrayType = context.irBuiltIns.arrayClass.typeWithArguments(listOf(callableType))
+        check(catalog.returnType.makeNotNull() == arrayType) {
+            "Internal .NET backend error: Stdlib member catalog has unexpected return type ${catalog.returnType}"
+        }
+        catalog.body = context.createIrBuilder(catalog.symbol).irBlockBody {
+            val branches = entries.map { entry ->
+                val irClass = entry.first
+                val references = entry.second
+                irBranch(
+                    irEquals(irGet(kClass), kClassReference(irClass.symbol.starProjectedType)),
+                    IrVarargImpl(
+                        UNDEFINED_OFFSET,
+                        UNDEFINED_OFFSET,
+                        arrayType,
+                        callableType,
+                        references,
+                    ),
+                )
+            } + irElseBranch(irNull(catalog.returnType))
+            +irReturn(irWhen(catalog.returnType, branches))
+        }
+    }
+
     private fun IrClass.addMemberFactoryOrSkip() {
         if (isDotNetResolutionOnlyStdlibDeclaration ||
             visibility == DescriptorVisibilities.LOCAL ||
@@ -96,14 +188,7 @@ internal class DotNetMemberReflectionLowering(
             return
         }
 
-        val logicalMembers = declarations.filter(::isLogicalMemberDeclaration)
-        val references = logicalMembers.map { declaration ->
-            when (declaration) {
-                is IrSimpleFunction -> functionReference(declaration)
-                is IrProperty -> propertyReferenceOrNull(declaration) ?: return
-                else -> error("Unexpected member declaration: $declaration")
-            }
-        }
+        val references = logicalMemberReferencesOrNull() ?: return
 
         val owner = this
         val holder = context.irFactory.buildClass {
@@ -147,7 +232,17 @@ internal class DotNetMemberReflectionLowering(
         declarations += holder
     }
 
+    private fun IrClass.logicalMemberReferencesOrNull(): List<IrExpression>? =
+        declarations.filter(::isLogicalMemberDeclaration).map { declaration ->
+            when (declaration) {
+                is IrSimpleFunction -> functionReference(declaration)
+                is IrProperty -> propertyReferenceOrNull(declaration) ?: return null
+                else -> error("Unexpected member declaration: $declaration")
+            }
+        }
+
     private fun IrClass.functionReference(function: IrSimpleFunction): IrExpression {
+        val executionTarget = function.executionTarget()
         val parameterTypes = function.parameters.map { parameter ->
             if (parameter.kind == IrParameterKind.DispatchReceiver) symbol.starProjectedType
             else parameter.type.eraseTypeParameters()
@@ -163,12 +258,12 @@ internal class DotNetMemberReflectionLowering(
             function.startOffset,
             function.endOffset,
             referenceType,
-            function.symbol,
-            typeArgumentsCount = function.typeParameters.size,
+            executionTarget.symbol,
+            typeArgumentsCount = executionTarget.typeParameters.size,
             reflectionTarget = function.symbol,
         ).apply {
             origin = DOTNET_REFLECTED_MEMBER_REFERENCE
-            function.typeParameters.forEachIndexed { index, typeParameter ->
+            executionTarget.typeParameters.forEachIndexed { index, typeParameter ->
                 typeArguments[index] = typeParameter.defaultType.eraseTypeParameters()
             }
         }
@@ -176,6 +271,8 @@ internal class DotNetMemberReflectionLowering(
 
     private fun IrClass.propertyReferenceOrNull(property: IrProperty): IrExpression? {
         val getter = property.getter ?: return null
+        val executionGetter = getter.executionTarget()
+        val executionSetter = property.setter?.executionTarget()
         val parameterTypes = getter.parameters.map { parameter ->
             if (parameter.kind == IrParameterKind.DispatchReceiver) symbol.starProjectedType
             else parameter.type.eraseTypeParameters()
@@ -190,17 +287,26 @@ internal class DotNetMemberReflectionLowering(
             property.endOffset,
             referenceType,
             property.symbol,
-            typeArgumentsCount = getter.typeParameters.size,
+            typeArgumentsCount = executionGetter.typeParameters.size,
             field = property.backingField?.symbol,
-            getter = getter.symbol,
-            setter = property.setter?.symbol,
+            getter = executionGetter.symbol,
+            setter = executionSetter?.symbol,
         ).apply {
             origin = DOTNET_REFLECTED_MEMBER_REFERENCE
-            getter.typeParameters.forEachIndexed { index, typeParameter ->
+            executionGetter.typeParameters.forEachIndexed { index, typeParameter ->
                 typeArguments[index] = typeParameter.defaultType.eraseTypeParameters()
             }
         }
     }
+
+    /**
+     * A fake override is the declaration visible in the reflected class scope, but its receiver
+     * type need not be the class that physically owns the inherited implementation. Keep the fake
+     * override as reflection identity and invoke only the concrete/abstract execution target, just
+     * as JVM property-reference lowering separates its reflected property from resolved accessors.
+     */
+    private fun IrSimpleFunction.executionTarget(): IrSimpleFunction =
+        resolveFakeOverride() ?: resolveFakeOverrideMaybeAbstract() ?: this
 
     private fun isLogicalMemberDeclaration(declaration: IrDeclaration): Boolean = when (declaration) {
         is IrProperty -> true

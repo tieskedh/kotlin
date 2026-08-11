@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetKClassRuntime
+import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibLibrary
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
@@ -66,6 +67,7 @@ import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.functions
+import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
@@ -108,6 +110,15 @@ internal class DotNetMemberReferenceCompactionLowering(
                             function.name.asString() == DotNetKClassRuntime.MEMBER_FACTORY_METHOD_NAME
                         }
                         ?.let(::compactFactory)
+                }
+                declaration.acceptChildrenVoid(this)
+            }
+
+            override fun visitSimpleFunction(declaration: IrSimpleFunction) {
+                if (declaration.fqNameWhenAvailable?.asString() ==
+                    DotNetStdlibLibrary.MEMBER_REFLECTION_CATALOG_FUNCTION_FQ_NAME
+                ) {
+                    compactFactory(declaration)
                 }
                 declaration.acceptChildrenVoid(this)
             }
@@ -244,10 +255,18 @@ internal class DotNetMemberReferenceCompactionLowering(
                 executionFunction = moveThunk(
                     candidate.info.executionFunction,
                     dispatcher,
-                    Name.special("<InvokeMember-$index>"),
+                    name = Name.special(
+                        "<InvokeMember-$index-${candidate.info.targetName.asString()}>"
+                    ),
                 ),
                 defaultFunction = candidate.info.defaultFunction?.let { function ->
-                    moveThunk(function, dispatcher, Name.special("<InvokeDefault-$index>"))
+                    moveThunk(
+                        function,
+                        dispatcher,
+                        name = Name.special(
+                            "<InvokeDefault-$index-${candidate.info.targetName.asString()}>"
+                        ),
+                    )
                 },
             )
         }

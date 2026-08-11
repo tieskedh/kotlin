@@ -9,7 +9,7 @@ package kotlin.reflect.dotnet.internal
 import kotlin.reflect.KCallable
 import kotlin.reflect.KClass
 
-public fun getMembersV1(kClass: KClass<*>): Collection<KCallable<*>>? =
+public fun getMembersV2(kClass: KClass<*>): Collection<KCallable<*>>? =
     dotNetGetStdlibMembersV1(kClass)?.asList() ?: dotNetGetGeneratedMembersV1(kClass)
 
 private external fun dotNetGetGeneratedMembersV1(kClass: KClass<*>): Collection<KCallable<*>>?
@@ -267,8 +267,9 @@ fun box(): String {
         return "fail 29: inherited Any members"
     }
     if (empty.any { it.name.length > 0 && it.name[0] == '<' }) return "fail 30: physical helper leaked"
-    val stringMembers = String::class.members
-    if (stringMembers !== String::class.members) return "fail 31a: mapped class cache"
+    val stringClass = String::class
+    val stringMembers = stringClass.members
+    if (stringMembers !== stringClass.members) return "fail 31a: mapped class cache"
     val stringLength = stringMembers.named("length").single()
     if (stringLength.call("mapped") != 6 || stringLength != String::length) {
         return "fail 31b: mapped property"
@@ -281,20 +282,24 @@ fun box(): String {
         return "fail 31d: arbitrary BCL member leaked"
     }
 
-    val arrayListMembers = ArrayList::class.members
-    if (arrayListMembers !== ArrayList::class.members) return "fail 32a: stdlib class cache"
+    val arrayListClass = ArrayList::class
+    val arrayListMembers = arrayListClass.members
+    if (arrayListMembers !== arrayListClass.members) return "fail 32a: stdlib class cache"
     val reflectedList = ArrayList<String>()
     val arrayListAdd = arrayListMembers.named("add").single { it.parameters.size == 2 }
-    if (arrayListAdd.call(reflectedList, "value") != true) return "fail 32b: stdlib add"
+    if (arrayListAdd.annotations.none { it is IgnorableReturnValue }) {
+        return "fail 32b: stdlib member annotation"
+    }
+    if (arrayListAdd.call(reflectedList, "value") != true) return "fail 32c: stdlib add"
     val arrayListSize = arrayListMembers.named("size").single()
-    if (arrayListSize.call(reflectedList) != 1) return "fail 32c: stdlib property"
+    if (arrayListSize.call(reflectedList) != 1) return "fail 32d: stdlib property"
     val arrayListGet = arrayListMembers.named("get").single()
-    if (arrayListGet.call(reflectedList, 0) != "value") return "fail 32d: stdlib generic get"
-    if (arrayListGet.returnType.classifier !== arrayListAdd.parameters.last().type.classifier) {
-        return "fail 32e: stdlib owner-parameter identity"
+    if (arrayListGet.call(reflectedList, 0) != "value") return "fail 32e: stdlib generic get"
+    if (arrayListGet.returnType.classifier != arrayListAdd.parameters.last().type.classifier) {
+        return "fail 32f: stdlib owner-parameter declaration identity"
     }
     if (arrayListMembers.named("contains").single().call(reflectedList, "value") != true) {
-        return "fail 32f: stdlib inherited member"
+        return "fail 32g: stdlib inherited member"
     }
     class Local
     if (!hasStableUnsupportedMembers(Local::class)) return "fail 33: local class did not fail closed"
