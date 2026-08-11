@@ -507,6 +507,22 @@ fun box(): String {
     ) {
         return "fail 32at: reflected Double total order"
     }
+    val deprecatedToCharCases = listOf(
+        Triple(Byte::class, (-128).toByte() as Any, '\uFF80'),
+        Triple(Short::class, Short.MIN_VALUE as Any, '\u8000'),
+        Triple(Int::class, 0x1_0041 as Any, 'A'),
+        Triple(Long::class, 0x1_0041L as Any, 'A'),
+        Triple(Float::class, Float.NaN as Any, '\u0000'),
+        Triple(Double::class, Double.POSITIVE_INFINITY as Any, '\uFFFF'),
+    )
+    for ((owner, receiver, expected) in deprecatedToCharCases) {
+        val toChar = owner.members.named("toChar").single { callable ->
+            callable.parameters.size == 1 && callable.returnType.classifier == Char::class
+        }
+        if (toChar.call(receiver) != expected) {
+            return "fail 32au: reflected ${owner.simpleName}.toChar"
+        }
+    }
 
     class Local
     if (!hasStableUnsupportedMembers(Local::class)) return "fail 33: local class did not fail closed"
