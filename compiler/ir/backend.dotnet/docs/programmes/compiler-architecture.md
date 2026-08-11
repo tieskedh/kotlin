@@ -75,6 +75,12 @@ owner, method name, property/event shape, and intentional export absence from th
 physical ABI/placement model used by compilation and C# export. It must not reuse JVM
 `javaMethodName` queries or recompute lowering-owned names in the plugin.
 
+Compiled annotation classes are the sharp example: constructor parameters,
+property folding, and default values come from Kotlin metadata, following the
+shared decompiler/Analysis API path. CLR properties and custom-attribute rows
+remain physical or foreign-language evidence and may not be used to recreate
+the authoritative Kotlin annotation declaration.
+
 ## Objective CLR evidence versus Kotlin policy
 
 The loader may establish facts such as:
@@ -238,6 +244,13 @@ expands: selector resolution, complete-family admission, and the host-facing exp
 of `DotNetIlEmitter` into a precisely named export/interop owner. The backend retains IR-to-CIL
 wrapper construction, physical collision validation, and bridge binding. The current emitter-local
 model is provisional POC debt, not mature-target precedent.
+
+That owner consumes explicit input modules built from the shared selected
+KLIB/DLL loading result, parallel to standalone TypeScript and Swift export
+input construction. It owns full/transitive/excluded dependency roles and
+keeps referenced excluded declarations as validated stubs or rejects the
+dependent export. Neither CLI nor backend rediscovers a module graph by paths,
+display names, or emitted CLR references.
 
 ### 4. Runtime and stdlib product descriptions
 

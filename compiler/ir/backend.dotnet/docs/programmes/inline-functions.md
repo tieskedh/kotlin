@@ -191,6 +191,15 @@ inlinable IR serves the modern intra/full paths. The disabled/legacy path requir
 resolver to read inline bodies from main IR; silently forcing `full`, ignoring the flag, or leaving
 an external inline call as an ordinary call is not acceptable.
 
+Upstream's JVM header-mode correction establishes the same artifact-content
+invariant at another host boundary: a declaration body under inline scope is
+retained even when ordinary non-inline bodies are intentionally stripped.
+For .NET this remains KLIB work, not CIL-header work. Prepared/main IR retain
+the authoritative body, and a CLR fallback MethodDef never substitutes for a
+missing serialized body. Detached non-linking deserializer files use the
+shared `IrErrorModuleFragment`; they do not manufacture one error module per
+file or make that sentinel a selected-library identity.
+
 `-no-stdlib` remains a valid diagnostic and foreign-CLR compilation mode. When the Common
 `SharedVariableBox` and `SyntheticConstructorMarker` compiler ABI classes are absent, the CLI does
 not construct a pre-serialization KLIB lowering context. This does not define a reduced inline

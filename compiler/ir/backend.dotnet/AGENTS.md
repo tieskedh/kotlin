@@ -151,6 +151,13 @@ recorded in the integration ADRs indexed by
 [`docs/README.md`](docs/README.md). Do not restore handwritten generated
 argument/option models.
 
+Gradle and Build Tools API state must be project-isolation safe and scoped to
+one build session. Use target-specific operations and shared Build Services;
+do not route .NET through JVM/JS operation identities, retain compiler IR or
+selected assemblies in process-global KGP caches, or discover another project
+through root-project state. The self-describing DLL is the one reusable
+Kotlin/CLR artifact; no operation invents a sibling KLIB merely to mirror JS.
+
 ## Pre-ABI and publication policy
 
 Nothing has shipped and no public Kotlin/.NET ABI 1 exists. Until an explicit
@@ -1014,6 +1021,12 @@ Cross-module IR inlining is the upstream production default for stdlib and
 retain target-owned mode variants only where they prove the supported
 disabled/intra-module/full compiler ABI, embedded-KLIB linkage, or physical
 fallback. Do not create a duplicate runner merely to force the default mode.
+Detached non-linking inline deserialization uses the shared
+`IrErrorModuleFragment` only as a dummy parent after real lowerings and library
+selection have completed. Do not allocate a competing error module per file,
+use that sentinel as KLIB identity, or let a CLR fallback body replace missing
+serialized inline IR.
+
 An inlined caller-targeted return may occur with older expression operands on
 the CIL evaluation stack. Preserve Kotlin evaluation order: spill the return
 value, drain only those older operands, reload the result, and then `ret`, or

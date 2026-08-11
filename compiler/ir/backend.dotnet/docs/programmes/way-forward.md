@@ -443,6 +443,21 @@ binding split. The completed callable-parameter graph remained compile-time
 lowering over an exact declaration target rather than runtime member discovery;
 future reflective invocation and enumeration must preserve that owner split.
 
+Before generic, member, inheritance, or coroutine export expands, that owner
+also acquires an explicit selected input-module graph. Modules are full,
+transitive, or excluded; a referenced excluded declaration becomes a validated
+stub only where the complete host type relation remains truthful, otherwise
+the dependent export fails. Fully qualified Kotlin identity owns generated
+names, and every non-null host input receives an executable Kotlin boundary
+check in addition to Roslyn metadata.
+
+Build Tools API and incremental work follows only after a real .NET operation
+model and build-session lifetime exist. Functional coverage must distinguish
+producer artifact inputs from output roots, argument ownership, friends,
+missing dependencies, diagnostics, logging, and metrics. The operation consumes
+one self-describing DLL and stays project-isolation safe; it does not copy the
+JS compile/link split or JVM snapshot protocol merely to reuse an API shape.
+
 The physical writer boundary now follows
 [`structured-cli-ir.md`](structured-cli-ir.md). `backend.dotnet` chooses Kotlin
 representation, ABI, export, and target-profile policy and lowers those choices
