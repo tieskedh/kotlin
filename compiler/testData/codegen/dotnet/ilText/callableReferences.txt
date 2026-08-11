@@ -257,69 +257,6 @@ IL_whenNext_1:
     box [mscorlib]System.Int32
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Call'(object[] 'args') cil managed
-  {
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    call instance object [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'CallErased'(object[])
-    unbox.any [mscorlib]System.Int32
-    box [mscorlib]System.Int32
-    ret
-  }
-  .method public hidebysig newslot virtual final instance object 'CallBy'(class [Kotlin.Runtime]'Kotlin.Collections.Map' 'args') cil managed
-  {
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    call instance object [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'CallByErased'(class [Kotlin.Runtime]'Kotlin.Collections.Map')
-    unbox.any [mscorlib]System.Int32
-    box [mscorlib]System.Int32
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
-  {
-    .maxstack 1
-    ldstr "incrementReference"
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.KType' 'get_returnType'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetReturnType'()
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_parameters'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetParameters'()
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_typeParameters'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetTypeParameters'()
-    ret
-  }
-  .property instance string 'name'()
-  {
-    .get instance string 'callableReferencesKt$reflectedReference$1'::'get_name'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.KType' 'returnType'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.KType' 'callableReferencesKt$reflectedReference$1'::'get_returnType'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'parameters'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableReferencesKt$reflectedReference$1'::'get_parameters'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'typeParameters'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableReferencesKt$reflectedReference$1'::'get_typeParameters'()
-  }
 }
 .class private auto ansi sealed 'callableReferencesKt$main$narrow$1'
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
@@ -508,67 +445,6 @@ IL_whenNext_1:
     callvirt instance string 'callableReferencesKt$main$narrow$1'::'InvokeExact'(object)
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Call'(object[] 'args') cil managed
-  {
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    call instance object [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'CallErased'(object[])
-    castclass string
-    ret
-  }
-  .method public hidebysig newslot virtual final instance object 'CallBy'(class [Kotlin.Runtime]'Kotlin.Collections.Map' 'args') cil managed
-  {
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    call instance object [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'CallByErased'(class [Kotlin.Runtime]'Kotlin.Collections.Map')
-    castclass string
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
-  {
-    .maxstack 1
-    ldstr "labelReference"
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.KType' 'get_returnType'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetReturnType'()
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_parameters'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetParameters'()
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_typeParameters'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetTypeParameters'()
-    ret
-  }
-  .property instance string 'name'()
-  {
-    .get instance string 'callableReferencesKt$main$narrow$1'::'get_name'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.KType' 'returnType'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.KType' 'callableReferencesKt$main$narrow$1'::'get_returnType'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'parameters'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableReferencesKt$main$narrow$1'::'get_parameters'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'typeParameters'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableReferencesKt$main$narrow$1'::'get_typeParameters'()
-  }
 }
 .class private auto ansi sealed beforefieldinit 'callableReferencesKt$main$bound$1'
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
@@ -668,69 +544,6 @@ IL_whenNext_1:
     ldfld class 'BoundValue' 'callableReferencesKt$main$bound$1'::'f$0'
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Call'(object[] 'args') cil managed
-  {
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    call instance object [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'CallErased'(object[])
-    unbox.any [mscorlib]System.Int32
-    box [mscorlib]System.Int32
-    ret
-  }
-  .method public hidebysig newslot virtual final instance object 'CallBy'(class [Kotlin.Runtime]'Kotlin.Collections.Map' 'args') cil managed
-  {
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    call instance object [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'CallByErased'(class [Kotlin.Runtime]'Kotlin.Collections.Map')
-    unbox.any [mscorlib]System.Int32
-    box [mscorlib]System.Int32
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
-  {
-    .maxstack 1
-    ldstr "read"
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.KType' 'get_returnType'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetReturnType'()
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_parameters'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetParameters'()
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_typeParameters'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetTypeParameters'()
-    ret
-  }
-  .property instance string 'name'()
-  {
-    .get instance string 'callableReferencesKt$main$bound$1'::'get_name'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.KType' 'returnType'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.KType' 'callableReferencesKt$main$bound$1'::'get_returnType'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'parameters'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableReferencesKt$main$bound$1'::'get_parameters'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'typeParameters'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableReferencesKt$main$bound$1'::'get_typeParameters'()
-  }
 }
 .class private auto ansi sealed beforefieldinit 'callableReferencesKt$main$1'
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
@@ -829,69 +642,6 @@ IL_whenNext_1:
     ldarg.0
     ldfld class 'BoundValue' 'callableReferencesKt$main$1'::'f$0'
     ret
-  }
-  .method public hidebysig newslot virtual final instance object 'Call'(object[] 'args') cil managed
-  {
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    call instance object [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'CallErased'(object[])
-    unbox.any [mscorlib]System.Int32
-    box [mscorlib]System.Int32
-    ret
-  }
-  .method public hidebysig newslot virtual final instance object 'CallBy'(class [Kotlin.Runtime]'Kotlin.Collections.Map' 'args') cil managed
-  {
-    .maxstack 2
-    ldarg.0
-    ldarg.1
-    call instance object [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'CallByErased'(class [Kotlin.Runtime]'Kotlin.Collections.Map')
-    unbox.any [mscorlib]System.Int32
-    box [mscorlib]System.Int32
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
-  {
-    .maxstack 1
-    ldstr "read"
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.KType' 'get_returnType'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.KType' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetReturnType'()
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_parameters'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetParameters'()
-    ret
-  }
-  .method public hidebysig specialname newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_typeParameters'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::'GetTypeParameters'()
-    ret
-  }
-  .property instance string 'name'()
-  {
-    .get instance string 'callableReferencesKt$main$1'::'get_name'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.KType' 'returnType'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.KType' 'callableReferencesKt$main$1'::'get_returnType'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'parameters'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableReferencesKt$main$1'::'get_parameters'()
-  }
-  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'typeParameters'()
-  {
-    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'callableReferencesKt$main$1'::'get_typeParameters'()
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'callableReferencesKt'

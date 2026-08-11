@@ -123,6 +123,16 @@ widespread executable and textual-IL expansion. The current private factories
 therefore knowingly trade producer size for reuse of the one proven callable
 implementation only when the producer explicitly opts in.
 
+Runtime surface and library ABI 31 centralize the common `KFunction` and
+`KCallable` method bodies in `FunctionReferenceBase`. Generated direct/member
+references now contain only declaration-specific invocation, bound-value,
+default, vararg, and suspend hooks; property accessors reuse the same bodies.
+The base does not itself implement `KFunction`, so a JVM-shaped adapted
+`FunctionN`-only reference cannot acquire reflection identity merely by sharing
+identity storage. This mature-target-aligned correction removed 693 repeated
+lines from the five affected generated-IL baselines without changing logical
+callable behavior.
+
 A compact KLIB-derived producer descriptor plus reflection-product decoder, or
 equally compact shared executable thunks, is required before member reflection
 can become a default producer capability or enter ABI freeze. The replacement

@@ -16,7 +16,18 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed feature: JVM-shaped `KClass.members` for
+- Last completed foundation: common callable-reflection bodies now live once
+  in Runtime's `FunctionReferenceBase`, following the JVM/Wasm runtime-base
+  ownership direction. Generated direct/member references retain only
+  invocation, bound-value, default, vararg, and suspend-specific hooks;
+  property accessors inherit the same bodies. The base deliberately remains
+  outside `KFunction`, so an adapted `FunctionN`-only reference does not gain
+  reflective identity. The five affected generated-IL baselines lost 693
+  repeated lines without changing callable behavior. Library ABI/runtime
+  surface 31 rejects an old Runtime/new producer combination. This is a
+  prerequisite reduction, not the compact descriptor/dispatcher required for
+  default member reflection.
+  The preceding feature completed JVM-shaped `KClass.members` for
   explicitly opted-in Kotlin-produced user/library classifiers through an
   optional `Kotlin.Reflection.dll`. Producers use `-Xdotnet-reflection` while
   this executable representation remains pre-ABI; ordinary compilation emits
@@ -177,8 +188,8 @@ programmes.
 
 ## Current green gate
 
-The opt-in class-member-reflection head passed every
-constituent of the strict target gate. The normal aggregate command remains:
+The shared callable-reference Runtime-base head passed every constituent of
+the strict target gate. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
