@@ -88,6 +88,17 @@ class GenericBox<T>(
 
 class Empty
 
+@Suppress("DEPRECATION_ERROR", "OVERRIDE_DEPRECATION")
+class ReflectedNumber(private val value: Int) : Number() {
+    override fun toByte(): Byte = value.toByte()
+    override fun toShort(): Short = value.toShort()
+    override fun toInt(): Int = value
+    override fun toLong(): Long = value.toLong()
+    override fun toFloat(): Float = value.toFloat()
+    override fun toDouble(): Double = value.toDouble()
+    override fun toChar(): Char = 'Q'
+}
+
 interface Contract<T> {
     val token: T
 
@@ -528,6 +539,35 @@ fun box(): String {
         if (toChar.call(receiver) != expected) {
             return "fail 32au: reflected ${owner.simpleName}.toChar"
         }
+    }
+
+    val numberClass = Number::class
+    val numberMembers = numberClass.members
+    if (numberMembers !== numberClass.members) return "fail 32av: Number class cache"
+    if (numberMembers.any { member ->
+            member.name == "Convert" || member.name == "GetType" || member.name == "ToInt32"
+        }
+    ) {
+        return "fail 32aw: CLR Number member leaked"
+    }
+    val numberToInt = numberMembers.named("toInt").single { callable ->
+        callable.parameters.size == 1 && callable.returnType.classifier == Int::class
+    }
+    val reflectedNumber = ReflectedNumber(73)
+    if (numberToInt.call(42) != 42 || numberToInt.call(reflectedNumber) != 73) {
+        return "fail 32ax: reflected Number.toInt dispatch"
+    }
+    val numberToDouble = numberMembers.named("toDouble").single { callable ->
+        callable.parameters.size == 1 && callable.returnType.classifier == Double::class
+    }
+    if (numberToDouble.call(2.5f) != 2.5 || numberToDouble.call(reflectedNumber) != 73.0) {
+        return "fail 32ay: reflected Number.toDouble dispatch"
+    }
+    val numberToChar = numberMembers.named("toChar").single { callable ->
+        callable.parameters.size == 1 && callable.returnType.classifier == Char::class
+    }
+    if (numberToChar.call(65) != 'A' || numberToChar.call(reflectedNumber) != 'Q') {
+        return "fail 32az: reflected Number.toChar dispatch"
     }
 
     class Local

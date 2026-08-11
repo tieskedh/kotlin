@@ -528,7 +528,7 @@ internal class DotNetIlEmitter(
             } else {
                 irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
                     try {
-                        typeMapper.toDotNetIlValueType(baseSuperType)
+                        typeMapper.toDotNetIlBaseClassType(baseSuperType)
                     } catch (_: DotNetIlUnsupportedException) {
                         null
                     }
@@ -2512,7 +2512,7 @@ internal class DotNetIlEmitter(
                     "its base class '${baseClass.diagnosticName()}' could not be compiled: " +
                             (classSkipReasons[baseClass] ?: "the base class is not available in this module")
                 )
-                when (val baseType = baseTypeMapper.toDotNetIlValueType(baseSuperType)) {
+                when (val baseType = baseTypeMapper.toDotNetIlBaseClassType(baseSuperType)) {
                     is DotNetIlValueType.UserClass -> baseType.ilTypeRef
                     is DotNetIlValueType.GenericInstance -> baseType.nameInSignature
                     else -> dotNetUnsupported(

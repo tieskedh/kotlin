@@ -82,6 +82,14 @@ internal fun IrType.isDotNetCharSequenceType(): Boolean =
 internal fun IrClass.isDotNetCharSequenceClass(): Boolean =
     fqNameWhenAvailable == StandardNames.FqNames.charSequence.toSafe()
 
+/** Whether this is the logical Common `Number` classifier (nullable or non-null). */
+internal fun IrType.isDotNetNumberType(): Boolean =
+    classFqName?.asString() == "kotlin.Number"
+
+/** Whether this declaration is Common Kotlin's abstract `Number` class. */
+internal fun IrClass.isDotNetNumberClass(): Boolean =
+    fqNameWhenAvailable?.asString() == "kotlin.Number"
+
 /** Whether this declaration is Common Kotlin's contravariant `Comparable<T>` interface. */
 internal fun IrClass.isDotNetComparableClass(): Boolean =
     fqNameWhenAvailable?.asString() == "kotlin.Comparable"
@@ -838,7 +846,7 @@ internal class DotNetIlTypeMapper private constructor(
         if (stdlibClassLinksInProgress.add(irClass)) {
             try {
                 val baseType = irClass.dotNetBaseSuperTypeOrNull()
-                info.classInfo.baseType = baseType?.let(::toDotNetIlValueType)
+                info.classInfo.baseType = baseType?.let(::toDotNetIlBaseClassType)
                 info.classInfo.interfaces = irClass.dotNetDirectInterfaceTypes()
                     .mapNotNull(::toDotNetIlImplementedInterfaceType)
                     .distinct()
@@ -856,7 +864,7 @@ internal class DotNetIlTypeMapper private constructor(
         stdlibClasses[irClass] = info
         if (stdlibClassLinksInProgress.add(irClass)) {
             try {
-                info.baseType = irClass.dotNetBaseSuperTypeOrNull()?.let(::toDotNetIlValueType)
+                info.baseType = irClass.dotNetBaseSuperTypeOrNull()?.let(::toDotNetIlBaseClassType)
                 info.interfaces = irClass.dotNetDirectInterfaceTypes()
                     .mapNotNull(::toDotNetIlImplementedInterfaceType)
                     .distinct()
@@ -1115,6 +1123,20 @@ internal class DotNetIlTypeMapper private constructor(
         val irClass = (type.classifier as? IrClassSymbol)?.owner ?: return null
         return if (classifierInfo(irClass).isCharSequence) {
             DotNetRuntimeTypes.charSequenceImplementationType.also(::recordAssemblyReferences)
+        } else {
+            toDotNetIlValueType(type)
+        }
+    }
+
+    /**
+     * Maps a declared superclass edge rather than a value slot. Broad `Number` values need the
+     * classified object carrier, but a Kotlin-written subclass must physically extend the
+     * runtime-owned abstract `Kotlin.Number` arm of that classifier.
+     */
+    fun toDotNetIlBaseClassType(type: IrSimpleType): DotNetIlValueType? {
+        val irClass = (type.classifier as? IrClassSymbol)?.owner ?: return null
+        return if (classifierInfo(irClass).builtinKind == DotNetBuiltinClassifierKind.NUMBER) {
+            DotNetRuntimeTypes.numberImplementationType.also(::recordAssemblyReferences)
         } else {
             toDotNetIlValueType(type)
         }
@@ -1566,7 +1588,7 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
         .filterNot {
             it.isNullableAny() || it.isAny() || it.isString() || it.isNullableString() ||
                     it.isPrimitiveType(nullable = false) || it.isPrimitiveType(nullable = true) ||
-                    it.isDotNetCharSequenceType()
+                    it.isDotNetCharSequenceType() || it.isDotNetNumberType()
         }
         .mapIndexedNotNull { index, bound ->
             val simpleBound = bound as? IrSimpleType
@@ -1789,7 +1811,7 @@ internal fun checkDotNetTypeParametersSupported(
                 // types. Preserve the bound in KLIB and retain an unconstrained physical token.
                 superType.isAny() -> false
                 superType.isString() || superType.isNullableString() -> !allowStringBounds
-                superType.isDotNetCharSequenceType() -> false
+                superType.isDotNetCharSequenceType() || superType.isDotNetNumberType() -> false
                 superType.isDotNetComparableSelfBound(typeParameter) -> false
                 // ECMA-335 has no exact primitive GenericParamConstraint. A final non-null
                 // primitive bound uses its sole carrier in value slots; a nullable primitive

@@ -14,6 +14,7 @@ import java.io.File
  * orthogonal KCallable/KFunction
  * reflection view, erased KProperty0/1/2 identities, the split Iterator/ListIterator/Iterable/
  * Collection/List execution interfaces,
+ * the abstract subclass arm and classified operation boundary for Common `Number`,
  * the singleton Unit value required when a callable result crosses the object-shaped invocation
  * boundary, and Kotlin-owned exception identities that have no faithful BCL type. Compiler
  * support shared by generated modules, including the constructor-default ABI marker, optional
@@ -645,6 +646,55 @@ $throwableExceptionTypesIl
               ldarg.1
               call instance void Kotlin.Error::.ctor(string)
               ret
+            }
+          }
+
+          // Kotlin built-in numeric values retain their original CLR boxes. Kotlin-written
+          // Number subclasses use this abstract arm of the classified Number carrier instead;
+          // broad logical Number signatures remain object-shaped and dispatch through runtime
+          // helpers that recognize either arm without wrapping.
+          .class public abstract auto ansi beforefieldinit Number
+                 extends ${coreLibraryReference}System.Object
+          {
+            .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              call instance void ${coreLibraryReference}System.Object::.ctor()
+              ret
+            }
+
+            .method public hidebysig newslot abstract virtual instance float64 toDouble() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance float32 toFloat() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int64 toLong() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 toInt() cil managed
+            {
+            }
+
+            .method public hidebysig newslot virtual instance char toChar() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              callvirt instance int32 Kotlin.Number::toInt()
+              conv.u2
+              ret
+            }
+
+            .method public hidebysig newslot abstract virtual instance int16 toShort() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int8 toByte() cil managed
+            {
             }
           }
 

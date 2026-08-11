@@ -1105,6 +1105,29 @@ internal class DotNetIlExpressionCodegen(
                 }
                 return
             }
+            if (expression.typeOperand.isDotNetNumberType()) {
+                if (castType != DotNetIlValueType.Object || expectedType != DotNetIlValueType.Object) {
+                    dotNetUnsupported(
+                        "classified Number cast has inconsistent physical result " +
+                                "${castType.nameInSignature} where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                emitExpression(expression.argument, DotNetIlValueType.Object)
+                if (methodContext.isTerminated) return
+                methodContext.emit(
+                    if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                        DotNetRuntimeLibraryHelpers.safeNumberCastCallInstruction
+                    } else {
+                        DotNetRuntimeLibraryHelpers.checkNumberCastCallInstruction
+                    },
+                    pops = 1,
+                    pushes = 1,
+                )
+                if (expression.operator == IrTypeOperator.CAST && !expression.typeOperand.isNullable()) {
+                    emitReferenceNotNullOrThrowNpe()
+                }
+                return
+            }
             if (castType is DotNetIlValueType.ErasedGenericArray) {
                 if (expectedType != castType) {
                     dotNetUnsupported(
@@ -1349,9 +1372,11 @@ internal class DotNetIlExpressionCodegen(
 
         val exceptionEntry = DotNetMappedExceptions.mappedEntry(expression.typeOperand.classFqName)
         val isClassifiedCharSequence = expression.typeOperand.isDotNetCharSequenceType()
+        val isClassifiedNumber = expression.typeOperand.isDotNetNumberType()
         val classifiedBigFunctionArity = expression.typeOperand.dotNetBigCallableArityOrNull()
         val runtimeTestType = if (castType is DotNetIlValueType.NullableValue) castType.elementType else castType
-        if (exceptionEntry == null && isClassifiedCharSequence.not() && classifiedBigFunctionArity == null &&
+        if (exceptionEntry == null && !isClassifiedCharSequence && !isClassifiedNumber &&
+            classifiedBigFunctionArity == null &&
             !expression.typeOperand.isNullableNothing()
         ) {
             when (runtimeTestType) {
@@ -1441,6 +1466,19 @@ internal class DotNetIlExpressionCodegen(
         if (isClassifiedCharSequence) {
             methodContext.emit(
                 DotNetRuntimeLibraryHelpers.isCharSequenceCallInstruction,
+                pops = 1,
+                pushes = 1,
+            )
+            if (!positive) {
+                methodContext.emit("ldc.i4.0", pushes = 1)
+                methodContext.emit("ceq", pops = 2, pushes = 1)
+            }
+            nullableJoinLabel?.let(methodContext::emitLabel)
+            return
+        }
+        if (isClassifiedNumber) {
+            methodContext.emit(
+                DotNetRuntimeLibraryHelpers.isNumberCallInstruction,
                 pops = 1,
                 pushes = 1,
             )
