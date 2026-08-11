@@ -634,16 +634,23 @@ See the
   their complete authority path is selected. Mapped and Stdlib classifiers use
   one generated catalog physically owned by `Kotlin.Stdlib.dll`: the first
   selected entries are the built-ins declaration for `kotlin.String` and the
-  actualized Kotlin class scope for `kotlin.collections.ArrayList`. Never scan
-  their host CLR carrier or publish a partial scope. The optional reflection
-  product asks that catalog before the ordinary producer-factory path; Runtime
-  neither references Stdlib nor interprets the catalog. If a selected Stdlib
-  member exposes a runtime-retained annotation, compile its authoritative
-  shared declaration source rather than filtering the annotation. A fake
+  actualized Kotlin class scopes for the current collection implementation
+  family: the four read-only abstract bases, their four mutable counterparts,
+  `ArrayList`, `HashMap`, and `HashSet`. `LinkedHashMap` and `LinkedHashSet`
+  remain actual typealiases with the same catalog identity as their hash
+  implementations. Never scan a host CLR carrier or publish a partial scope. The
+  optional reflection product asks that catalog before the ordinary
+  producer-factory path; Runtime neither references Stdlib nor interprets the
+  catalog. If a selected Stdlib member exposes a runtime-retained annotation,
+  compile its authoritative shared declaration source rather than filtering the
+  annotation. A fake
   override remains reflection identity while its resolved real override is
   only the execution target; do not let physical owner selection rewrite the
-  logical member signature or equality. A private
-  factory must be found by exact parameter and return signature, never name
+  logical member signature or equality. Conversely, never make an abstract
+  skeletal-class member accept a receiver that only implements the same
+  collection interface: Native/Wasm-shaped `HashMap` is not an
+  `AbstractMutableMap`, and reflection may not invent that inheritance. A
+  private factory must be found by exact parameter and return signature, never name
   alone. Cross-module callable identity may use an upstream `IdSignature` only
   when `visibleCrossFile` is true; file-scoped identities must be normalized
   without absolute checkout or temporary resource paths so ordinary-source and
