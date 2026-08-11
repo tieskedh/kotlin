@@ -62,9 +62,9 @@ fun dotNetLoweringsOfTheFirstPhase(
         if (languageVersionSettings.supportsFeature(LanguageFeature.IrRichCallableReferencesInKlibs)) {
             add(::createUpgradeCallableReferences)
         }
-        // `lateinit` remains a separately parked .NET feature: its Common lowering requires the
-        // target throw-helper contract that DotNetBackendContext deliberately does not expose yet.
-        addAll(loweringsOfTheFirstPhase(languageVersionSettings, includeLateinitLowering = false))
+        // Match the other KLIB targets exactly: Common owns `lateinit` before shared-variable and
+        // closure conversion, including serializable inline bodies and `isInitialized` literals.
+        addAll(loweringsOfTheFirstPhase(languageVersionSettings))
     }
     return createModulePhases(*lowerings.toTypedArray())
 }

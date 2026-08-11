@@ -15384,6 +15384,154 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testLateinitPropertiesAcrossKotlinAndCSharpBoundaries() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val producerDirectory = File(tmpdir, "lateinit-producer")
+        val producerSource = File(tmpdir, "LateinitBoundary.kt").apply {
+            writeText(
+                """
+                package lateinit.boundary
+
+                public class Holder {
+                    public lateinit var value: String
+
+                    public fun isInitialized(): Boolean = this::value.isInitialized
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Lateinit.Boundary",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val producerAssembly = producerDirectory.resolve("Lateinit.Boundary.dll")
+        val producerIl = producerDirectory.resolve("Lateinit.Boundary.il").readText()
+        val holderIl = producerIl
+            .substringAfter(".class public auto ansi sealed beforefieldinit 'lateinit.boundary.Holder'")
+            .substringBefore("\n.class ")
+        assertTrue(".field private string 'value'" in holderIl) { holderIl }
+        assertEquals(1, Regex("(?m)^\\s*\\.field ").findAll(holderIl).count()) {
+            "A legal reference-valued lateinit property needs exactly one storage field:\n$holderIl"
+        }
+        assertTrue("instance string 'get_value'()" in holderIl) { holderIl }
+        assertTrue("instance void 'set_value'(string" in holderIl) { holderIl }
+        assertTrue("throwUninitializedPropertyAccessException" in holderIl) { holderIl }
+
+        val kotlinDirectory = File(tmpdir, "lateinit-kotlin-consumer").apply { mkdirs() }
+        val kotlinSource = kotlinDirectory.resolve("main.kt").apply {
+            writeText(
+                """
+                import lateinit.boundary.Holder
+
+                fun main() {
+                    val holder = Holder()
+                    if (holder.isInitialized()) throw Error("initial state")
+                    val message = try {
+                        holder.value
+                        "no exception"
+                    } catch (exception: UninitializedPropertyAccessException) {
+                        exception.message
+                    }
+                    if (message != "lateinit property value has not been initialized") {
+                        throw Error("failure contract: ${'$'}message")
+                    }
+                    holder.value = "OK"
+                    if (!holder.isInitialized() || holder.value != "OK") throw Error("initialized state")
+                }
+                """.trimIndent()
+            )
+        }
+        val kotlinAssembly = kotlinDirectory.resolve("LateinitKotlinConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            kotlinSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, producerAssembly.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "LateinitKotlinConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, kotlinAssembly.path,
+        )
+        runDotNet(
+            dotnetHost,
+            kotlinAssembly,
+            kotlinDirectory,
+            "Kotlin lateinit consumer failed across a portable library boundary",
+        )
+
+        val csharpDirectory = File(tmpdir, "lateinit-csharp-consumer").apply { mkdirs() }
+        val csharpSource = csharpDirectory.resolve("Program.cs").apply {
+            writeText(
+                """
+                public static class Program
+                {
+                    public static int Main()
+                    {
+                        var holder = new lateinit.boundary.Holder();
+                        if (holder.isInitialized()) return 1;
+                        try
+                        {
+                            string ignored = holder.value;
+                            return 2;
+                        }
+                        catch (Kotlin.UninitializedPropertyAccessException exception)
+                        {
+                            if (exception.Message != "lateinit property value has not been initialized")
+                                return 3;
+                        }
+                        holder.value = "OK";
+                        if (!holder.isInitialized() || holder.value != "OK") return 4;
+                        holder.value = null;
+                        if (holder.isInitialized()) return 5;
+                        try
+                        {
+                            string ignored = holder.value;
+                            return 6;
+                        }
+                        catch (Kotlin.UninitializedPropertyAccessException)
+                        {
+                        }
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = csharpDirectory.resolve("LateinitCSharpConsumer.dll")
+        val runtimeAssembly = kotlinDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+        val stdlibAssembly = kotlinDirectory.resolve("Kotlin.Stdlib.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            checkNotNull(csharpToolchain),
+            csharpSource,
+            csharpAssembly,
+            producerAssembly,
+            runtimeAssembly,
+            stdlibAssembly,
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        producerAssembly.copyTo(csharpDirectory.resolve(producerAssembly.name), overwrite = true)
+        runtimeAssembly.copyTo(csharpDirectory.resolve(runtimeAssembly.name), overwrite = true)
+        stdlibAssembly.copyTo(csharpDirectory.resolve(stdlibAssembly.name), overwrite = true)
+        csharpDirectory.resolve("LateinitCSharpConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            checkNotNull(csharpToolchain).dotNetHost,
+            csharpAssembly,
+            csharpDirectory,
+            "C# lateinit property consumer failed",
+        )
+    }
+
+    @Test
     fun testKTypeGraphAcrossLibraryBoundary() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
@@ -34143,6 +34291,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             File("libraries/stdlib/src/kotlin/internal/throwNoWhenBranchMatchedException.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/util/Tuples.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/util/HashCode.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/util/Lateinit.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/util/Result.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/Continuation.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/coroutines/ContinuationInterceptor.kt").absoluteFile

@@ -337,8 +337,17 @@ internal class DotNetSymbols(
             createThisReceiverParameter()
         }.symbol
     }
-    override val throwUninitializedPropertyAccessException: IrSimpleFunctionSymbol
-        get() = unsupportedSymbol("throwUninitializedPropertyAccessException")
+    // Common LateinitLowering keeps this as an ordinary Stdlib ABI edge, just like the other
+    // KLIB targets. The declaration owns the exact Kotlin exception identity and message.
+    override val throwUninitializedPropertyAccessException: IrSimpleFunctionSymbol by with(irBuiltIns) {
+        CallableId(
+            StandardNames.KOTLIN_INTERNAL_FQ_NAME,
+            Name.identifier("throwUninitializedPropertyAccessException"),
+        ).functionSymbol { function ->
+            function.hasShape(regularParameters = 1) &&
+                    function.parameters.single().type == irBuiltIns.stringType
+        }
+    }
     // Unlike compiler-only throw intrinsics, reified physical stubs must call the selected
     // Common runtime declaration so separately emitted libraries retain one ordinary ABI edge.
     override val throwUnsupportedOperationException: IrSimpleFunctionSymbol by with(irBuiltIns) {

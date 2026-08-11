@@ -216,10 +216,11 @@ path, so bound receivers, virtual dispatch, mutation, exception identity, and
 separate libraries cannot diverge. KLIB/importer IR owns `isConst`,
 `isLateinit`, accessor signatures, annotations, visibility, modality, and
 function flags. Runtime CLR reflection owns none of them. Runtime surface and
-library ABI 29 publish this closure. Positive `isLateinit` observation waits
-for the independently parked language feature; `getDelegate` remains a
-separate tranche. Type-use annotations were selected later under their own
-declaration-owned ADR.
+library ABI 29 publish this closure. The later Common-owned `lateinit`
+foundation makes the already published positive declaration bit observable
+without changing that callable ABI; `getDelegate` remains a separate tranche.
+Type-use annotations were selected later under their own declaration-owned
+ADR.
 
 JVM-shaped `KClass.members` is now executable for Kotlin-produced user/library
 classifiers whose producer explicitly opts in with `-Xdotnet-reflection`,
@@ -650,7 +651,6 @@ Parking means “fail clearly and do not constrain a future ABI,” not “appro
 - coroutine scheduling, `kotlinx.coroutines`, sequence builders, debugger
   metadata, broad suspend-callable reflection, and `Task`/`ValueTask` exports;
 - concurrency, volatility, synchronization, and atomics;
-- `lateinit`;
 - collection/stdlib families outside admitted Common dependency closures; and
 - broad Gradle/KMP distribution integration beyond the current target model.
 

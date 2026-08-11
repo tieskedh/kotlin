@@ -269,6 +269,10 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "common-non-jvm/src/kotlin/internal/ThrowHelpers.kt",
     ),
     DotNetStdlibSourceResource(
+        "Lateinit.kt",
+        "src/kotlin/util/Lateinit.kt",
+    ),
+    DotNetStdlibSourceResource(
         "ExceptionsH.kt",
         "common/src/kotlin/ExceptionsH.kt",
         isCommon = true,

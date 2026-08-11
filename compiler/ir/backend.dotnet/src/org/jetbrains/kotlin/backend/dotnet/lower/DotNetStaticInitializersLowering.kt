@@ -70,7 +70,8 @@ internal val DOTNET_STATIC_INITIALIZER: IrDeclarationOrigin = IrDeclarationOrigi
  *   analogue — with no `.cctor` entry.
  * - delegated properties: rejected by the emitter's property pre-pass; their delegate
  *   initializer must not end up in a `.cctor` that outlives the rejection.
- * - `lateinit` (rejected by the emitter too) never has an initializer to move.
+ * - `lateinit` has already been transformed by Common and has no initializer to move; the CLR
+ *   default `null` is its selected uninitialized sentinel.
  */
 internal class DotNetStaticInitializersLowering(private val context: DotNetBackendContext) : FileLoweringPass {
     override fun lower(irFile: IrFile) {

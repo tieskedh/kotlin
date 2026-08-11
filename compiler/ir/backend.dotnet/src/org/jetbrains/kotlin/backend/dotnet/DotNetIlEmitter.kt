@@ -691,8 +691,9 @@ internal class DotNetIlEmitter(
                 }
             }
         }
-        // Top-level property pre-pass. Delegated and lateinit properties are rejected with
-        // specific reasons (out of scope). `const val` renders as a CLR `literal` field — the
+        // Top-level property pre-pass. Delegated properties are rejected with a specific reason
+        // (out of scope). Common has already transformed `lateinit` into a nullable private
+        // carrier plus ordinary throwing accessors. `const val` renders as a CLR `literal` field — the
         // ConstantValue-attribute analogue of the JVM backend's `constantValue()` exclusion in
         // StaticInitializersLowering — with no accessors and no `.cctor` entry; every read is
         // inlined by the frontend, so an exotic surviving accessor call fails loudly via the
@@ -711,7 +712,6 @@ internal class DotNetIlEmitter(
                 val accessors = listOfNotNull(property.getter, property.setter)
                 when {
                     property.isDelegated -> propertySkipReasons[property] = "delegated property '$name' is not supported"
-                    property.isLateinit -> propertySkipReasons[property] = "lateinit property '$name' is not supported"
                     property.isConst -> try {
                         constFieldLines[property] = renderConstField(property, typeMapper)
                     } catch (e: DotNetIlUnsupportedException) {
