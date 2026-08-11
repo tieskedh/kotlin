@@ -41,6 +41,11 @@ boxed equality, total ordering, hashing, conversion, and rendering are different
 must not be inherited accidentally from `System.Single`. The table is the selected physical
 direction; each row freezes only after its adversarial gate passes.
 
+These exact carriers are also the built-in arm of logical `Number`; they do
+not physically inherit a wrapper base. Broad `Number` values, user subclasses,
+casts, operations, and reflection follow the separate
+[classified `Number` carrier ADR](number-carrier.md).
+
 Fields, parameters, returns, generic arguments, generic-array elements, overloads, locals, and
 nullable instantiations retain the exact carrier. `Byte?` and `Short?` are
 `System.Nullable<int8>` and `System.Nullable<int16>` in typed positions and boxed scalar-or-null at

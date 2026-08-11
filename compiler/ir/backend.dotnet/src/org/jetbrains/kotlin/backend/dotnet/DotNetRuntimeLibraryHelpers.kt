@@ -3586,6 +3586,421 @@ $propertyAccessorSupportTypesIl
             |         extends ${coreLibraryReference}System.Object
             |  {
             |    $compilerAbiTypeAttributesIl
+            |    .method public hidebysig static bool 'IsNumber'(object 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.SByte
+            |      brtrue.s IL_numberTrue
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int16
+            |      brtrue.s IL_numberTrue
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int32
+            |      brtrue.s IL_numberTrue
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int64
+            |      brtrue.s IL_numberTrue
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Single
+            |      brtrue.s IL_numberTrue
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Double
+            |      brtrue.s IL_numberTrue
+            |      ldarg.0
+            |      isinst Kotlin.Number
+            |      brtrue.s IL_numberTrue
+            |      ldc.i4.0
+            |      ret
+            |IL_numberTrue:
+            |      ldc.i4.1
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static object 'CheckNumberCast'(object 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brfalse.s IL_numberCastValid
+            |      ldarg.0
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'IsNumber'(object)
+            |      brtrue.s IL_numberCastValid
+            |      newobj instance void ${coreLibraryReference}System.InvalidCastException::.ctor()
+            |      throw
+            |IL_numberCastValid:
+            |      ldarg.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static object 'SafeNumberCast'(object 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'IsNumber'(object)
+            |      brfalse.s IL_numberSafeCastNull
+            |      ldarg.0
+            |      ret
+            |IL_numberSafeCastNull:
+            |      ldnull
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static int32 'SaturatingDoubleToInt32'(float64 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.0
+            |      bne.un.s IL_numberDoubleToIntNaN
+            |      ldarg.0
+            |      ldc.r8 2147483647.0
+            |      cgt
+            |      brtrue.s IL_numberDoubleToIntMax
+            |      ldarg.0
+            |      ldc.r8 -2147483648.0
+            |      clt
+            |      brtrue.s IL_numberDoubleToIntMin
+            |      ldarg.0
+            |      conv.i4
+            |      ret
+            |IL_numberDoubleToIntNaN:
+            |      ldc.i4.0
+            |      ret
+            |IL_numberDoubleToIntMax:
+            |      ldc.i4 2147483647
+            |      ret
+            |IL_numberDoubleToIntMin:
+            |      ldc.i4 -2147483648
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static int64 'SaturatingDoubleToInt64'(float64 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.0
+            |      bne.un.s IL_numberDoubleToLongNaN
+            |      ldarg.0
+            |      ldc.r8 float64(0x43E0000000000000)
+            |      clt
+            |      brfalse.s IL_numberDoubleToLongMax
+            |      ldarg.0
+            |      ldc.r8 float64(0xC3E0000000000000)
+            |      clt
+            |      brtrue.s IL_numberDoubleToLongMin
+            |      ldarg.0
+            |      conv.i8
+            |      ret
+            |IL_numberDoubleToLongNaN:
+            |      ldc.i4.0
+            |      conv.i8
+            |      ret
+            |IL_numberDoubleToLongMax:
+            |      ldc.i8 9223372036854775807
+            |      ret
+            |IL_numberDoubleToLongMin:
+            |      ldc.i8 -9223372036854775808
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int32 'NumberToInt'(object 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.SByte
+            |      dup
+            |      brfalse.s IL_numberIntShort
+            |      unbox.any ${coreLibraryReference}System.SByte
+            |      ret
+            |IL_numberIntShort:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int16
+            |      dup
+            |      brfalse.s IL_numberIntInt
+            |      unbox.any ${coreLibraryReference}System.Int16
+            |      ret
+            |IL_numberIntInt:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int32
+            |      dup
+            |      brfalse.s IL_numberIntLong
+            |      unbox.any ${coreLibraryReference}System.Int32
+            |      ret
+            |IL_numberIntLong:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int64
+            |      dup
+            |      brfalse.s IL_numberIntFloat
+            |      unbox.any ${coreLibraryReference}System.Int64
+            |      conv.i4
+            |      ret
+            |IL_numberIntFloat:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Single
+            |      dup
+            |      brfalse.s IL_numberIntDouble
+            |      unbox.any ${coreLibraryReference}System.Single
+            |      conv.r8
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'SaturatingDoubleToInt32'(float64)
+            |      ret
+            |IL_numberIntDouble:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Double
+            |      dup
+            |      brfalse.s IL_numberIntImplementation
+            |      unbox.any ${coreLibraryReference}System.Double
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'SaturatingDoubleToInt32'(float64)
+            |      ret
+            |IL_numberIntImplementation:
+            |      pop
+            |      ldarg.0
+            |      castclass Kotlin.Number
+            |      callvirt instance int32 Kotlin.Number::toInt()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int8 'NumberToByte'(object 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst Kotlin.Number
+            |      dup
+            |      brfalse.s IL_numberByteBuiltIn
+            |      callvirt instance int8 Kotlin.Number::toByte()
+            |      ret
+            |IL_numberByteBuiltIn:
+            |      pop
+            |      ldarg.0
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'NumberToInt'(object)
+            |      conv.i1
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int16 'NumberToShort'(object 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst Kotlin.Number
+            |      dup
+            |      brfalse.s IL_numberShortBuiltIn
+            |      callvirt instance int16 Kotlin.Number::toShort()
+            |      ret
+            |IL_numberShortBuiltIn:
+            |      pop
+            |      ldarg.0
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'NumberToInt'(object)
+            |      conv.i2
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int64 'NumberToLong'(object 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.SByte
+            |      dup
+            |      brfalse.s IL_numberLongShort
+            |      unbox.any ${coreLibraryReference}System.SByte
+            |      conv.i8
+            |      ret
+            |IL_numberLongShort:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int16
+            |      dup
+            |      brfalse.s IL_numberLongInt
+            |      unbox.any ${coreLibraryReference}System.Int16
+            |      conv.i8
+            |      ret
+            |IL_numberLongInt:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int32
+            |      dup
+            |      brfalse.s IL_numberLongLong
+            |      unbox.any ${coreLibraryReference}System.Int32
+            |      conv.i8
+            |      ret
+            |IL_numberLongLong:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int64
+            |      dup
+            |      brfalse.s IL_numberLongFloat
+            |      unbox.any ${coreLibraryReference}System.Int64
+            |      ret
+            |IL_numberLongFloat:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Single
+            |      dup
+            |      brfalse.s IL_numberLongDouble
+            |      unbox.any ${coreLibraryReference}System.Single
+            |      conv.r8
+            |      call int64 'Kotlin.Runtime.Internal.Intrinsics'::'SaturatingDoubleToInt64'(float64)
+            |      ret
+            |IL_numberLongDouble:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Double
+            |      dup
+            |      brfalse.s IL_numberLongImplementation
+            |      unbox.any ${coreLibraryReference}System.Double
+            |      call int64 'Kotlin.Runtime.Internal.Intrinsics'::'SaturatingDoubleToInt64'(float64)
+            |      ret
+            |IL_numberLongImplementation:
+            |      pop
+            |      ldarg.0
+            |      castclass Kotlin.Number
+            |      callvirt instance int64 Kotlin.Number::toLong()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static float32 'NumberToFloat'(object 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.SByte
+            |      dup
+            |      brfalse.s IL_numberFloatShort
+            |      unbox.any ${coreLibraryReference}System.SByte
+            |      conv.r4
+            |      ret
+            |IL_numberFloatShort:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int16
+            |      dup
+            |      brfalse.s IL_numberFloatInt
+            |      unbox.any ${coreLibraryReference}System.Int16
+            |      conv.r4
+            |      ret
+            |IL_numberFloatInt:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int32
+            |      dup
+            |      brfalse.s IL_numberFloatLong
+            |      unbox.any ${coreLibraryReference}System.Int32
+            |      conv.r4
+            |      ret
+            |IL_numberFloatLong:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int64
+            |      dup
+            |      brfalse.s IL_numberFloatFloat
+            |      unbox.any ${coreLibraryReference}System.Int64
+            |      conv.r4
+            |      ret
+            |IL_numberFloatFloat:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Single
+            |      dup
+            |      brfalse.s IL_numberFloatDouble
+            |      unbox.any ${coreLibraryReference}System.Single
+            |      ret
+            |IL_numberFloatDouble:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Double
+            |      dup
+            |      brfalse.s IL_numberFloatImplementation
+            |      unbox.any ${coreLibraryReference}System.Double
+            |      conv.r4
+            |      ret
+            |IL_numberFloatImplementation:
+            |      pop
+            |      ldarg.0
+            |      castclass Kotlin.Number
+            |      callvirt instance float32 Kotlin.Number::toFloat()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static float64 'NumberToDouble'(object 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.SByte
+            |      dup
+            |      brfalse.s IL_numberDoubleShort
+            |      unbox.any ${coreLibraryReference}System.SByte
+            |      conv.r8
+            |      ret
+            |IL_numberDoubleShort:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int16
+            |      dup
+            |      brfalse.s IL_numberDoubleInt
+            |      unbox.any ${coreLibraryReference}System.Int16
+            |      conv.r8
+            |      ret
+            |IL_numberDoubleInt:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int32
+            |      dup
+            |      brfalse.s IL_numberDoubleLong
+            |      unbox.any ${coreLibraryReference}System.Int32
+            |      conv.r8
+            |      ret
+            |IL_numberDoubleLong:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Int64
+            |      dup
+            |      brfalse.s IL_numberDoubleFloat
+            |      unbox.any ${coreLibraryReference}System.Int64
+            |      conv.r8
+            |      ret
+            |IL_numberDoubleFloat:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Single
+            |      dup
+            |      brfalse.s IL_numberDoubleDouble
+            |      unbox.any ${coreLibraryReference}System.Single
+            |      conv.r8
+            |      ret
+            |IL_numberDoubleDouble:
+            |      pop
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.Double
+            |      dup
+            |      brfalse.s IL_numberDoubleImplementation
+            |      unbox.any ${coreLibraryReference}System.Double
+            |      ret
+            |IL_numberDoubleImplementation:
+            |      pop
+            |      ldarg.0
+            |      castclass Kotlin.Number
+            |      callvirt instance float64 Kotlin.Number::toDouble()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static char 'NumberToChar'(object 'value') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      isinst Kotlin.Number
+            |      dup
+            |      brfalse.s IL_numberCharBuiltIn
+            |      callvirt instance char Kotlin.Number::toChar()
+            |      ret
+            |IL_numberCharBuiltIn:
+            |      pop
+            |      ldarg.0
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'NumberToInt'(object)
+            |      conv.u2
+            |      ret
+            |    }
+            |
             |    .method public hidebysig static bool 'IsCharSequence'(object 'value') cil managed
             |    {
             |      .maxstack 1
@@ -5746,6 +6161,26 @@ $factoryCases
         "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"ComparableCompareTo".toIlIdentifier()}(object, object)"
+
+    val isNumberCallInstruction: String =
+        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"IsNumber".toIlIdentifier()}(object)"
+
+    val checkNumberCastCallInstruction: String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"CheckNumberCast".toIlIdentifier()}(object)"
+
+    val safeNumberCastCallInstruction: String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"SafeNumberCast".toIlIdentifier()}(object)"
+
+    fun numberConversionCallInstruction(methodName: String, returnType: DotNetIlValueType): String =
+        "call ${returnType.nameInSignature} [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${methodName.toIlIdentifier()}(object)"
 
     /** The cross-assembly call emitted by compiled Kotlin code; one float64 in, one string out. */
     val doubleToStringCallInstruction: String =

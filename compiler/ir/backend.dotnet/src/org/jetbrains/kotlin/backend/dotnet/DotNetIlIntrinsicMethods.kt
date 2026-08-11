@@ -846,6 +846,12 @@ internal class DotNetIlIntrinsicMethods(
         }
         if (registered != null) return registered
 
+        // Common Number is an abstract class, but CLR has no physical base shared by its six
+        // built-in boxes and Kotlin-written subclasses. Calls whose declaration is the Common
+        // slot therefore cross the one classified object boundary. Calls to a user override are
+        // deliberately left to ordinary CLR virtual dispatch.
+        (function as? IrSimpleFunction)?.dotNetNumberIntrinsicOrNull()?.let { return it }
+
         // Comparable is physically backed by the BCL interfaces, but CLR String and floating
         // comparison do not uniformly implement Kotlin ordering. Calls through the logical
         // interface (including a type-parameter fake override) therefore share one semantic
@@ -885,6 +891,21 @@ internal class DotNetIlIntrinsicMethods(
         val name: String,
         val valueParameterTypeNames: List<FqName?>,
     )
+}
+
+private fun IrSimpleFunction.dotNetNumberIntrinsicOrNull(): DotNetIlIntrinsicMethod? {
+    val owner = parent as? IrClass ?: return null
+    if (!owner.isDotNetNumberClass()) return null
+    return when (name.asString()) {
+        "toByte" -> DotNetIlNumberCarrierConversionIntrinsic("NumberToByte", DotNetIlValueType.Int8)
+        "toShort" -> DotNetIlNumberCarrierConversionIntrinsic("NumberToShort", DotNetIlValueType.Int16)
+        "toInt" -> DotNetIlNumberCarrierConversionIntrinsic("NumberToInt", DotNetIlValueType.Int32)
+        "toLong" -> DotNetIlNumberCarrierConversionIntrinsic("NumberToLong", DotNetIlValueType.Int64)
+        "toFloat" -> DotNetIlNumberCarrierConversionIntrinsic("NumberToFloat", DotNetIlValueType.Float32)
+        "toDouble" -> DotNetIlNumberCarrierConversionIntrinsic("NumberToDouble", DotNetIlValueType.Float64)
+        "toChar" -> DotNetIlNumberCarrierConversionIntrinsic("NumberToChar", DotNetIlValueType.Char)
+        else -> null
+    }
 }
 
 private fun IrSimpleFunction.dotNetInheritedExceptionMemberIntrinsicOrNull(): DotNetIlIntrinsicMethod? {
@@ -3507,6 +3528,41 @@ private class DotNetIlNumberConversionIntrinsic(
         for (instruction in instructions) {
             codegen.emit(instruction, pops = 1, pushes = 1)
         }
+        return true
+    }
+}
+
+/** One Common `Number` virtual conversion through the classified object carrier. */
+private class DotNetIlNumberCarrierConversionIntrinsic(
+    private val runtimeMethodName: String,
+    private val resultType: DotNetIlValueType,
+) : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != resultType || call.arguments.size != 1) return false
+        val receiver = call.arguments.single()
+            ?: dotNetUnsupported("missing receiver of a Common Number conversion")
+        if (call.superQualifierSymbol?.owner?.isDotNetNumberClass() == true) {
+            if (runtimeMethodName != "NumberToChar" || resultType != DotNetIlValueType.Char) {
+                dotNetUnsupported("abstract Common Number conversion cannot be called through super")
+            }
+            codegen.emitExpression(receiver, DotNetRuntimeTypes.numberImplementationType)
+            codegen.emit(
+                "call instance char ${DotNetRuntimeTypes.numberImplementationType.ilTypeRef}::toChar()",
+                pops = 1,
+                pushes = 1,
+            )
+            return true
+        }
+        codegen.emitExpression(receiver, DotNetIlValueType.Object)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.numberConversionCallInstruction(runtimeMethodName, resultType),
+            pops = 1,
+            pushes = 1,
+        )
         return true
     }
 }

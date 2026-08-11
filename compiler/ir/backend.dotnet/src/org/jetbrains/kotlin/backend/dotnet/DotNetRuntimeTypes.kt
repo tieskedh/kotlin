@@ -90,6 +90,12 @@ internal object DotNetRuntimeTypes {
     )
     val charSequenceImplementationType = DotNetIlValueType.UserClass(charSequenceClass)
 
+    private val numberClass = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Number",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+    val numberImplementationType = DotNetIlValueType.UserClass(numberClass)
+
     private val functionBase = DotNetIlClassInfo(
         ilClassName = "Kotlin.Function",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
@@ -613,6 +619,7 @@ internal object DotNetRuntimeTypes {
             ?.let { return it }
         return when {
             classifierInfo.isCharSequence -> charSequenceClass
+            classifierInfo.builtinKind == DotNetBuiltinClassifierKind.NUMBER -> numberClass
             irClass.isDotNetMutableRefStub == true -> mutableRefClass
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.ENUM -> enumClass
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.ENUM_COMPANION -> enumCompanionClass
