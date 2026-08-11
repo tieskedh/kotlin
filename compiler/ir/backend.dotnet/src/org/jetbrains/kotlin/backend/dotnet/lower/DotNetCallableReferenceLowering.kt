@@ -6,11 +6,13 @@
 package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.FileLoweringPass
+import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.AbstractFunctionReferenceLowering
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.common.lower.UpgradeCallableReferences
 import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
+import org.jetbrains.kotlin.backend.common.serialization.signature.PublicIdSignatureComputer
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetClassifierInfo
 import org.jetbrains.kotlin.backend.dotnet.dotNetCallableDeclarationFlags
@@ -22,6 +24,8 @@ import org.jetbrains.kotlin.builtins.functions.BuiltInFunctionArity
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrStatement
+import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.declarations.addFunction
 import org.jetbrains.kotlin.ir.builders.declarations.addGetter
@@ -49,6 +53,7 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrFunction
+import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
@@ -79,6 +84,7 @@ import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.functions
 import org.jetbrains.kotlin.ir.util.hasShape
+import org.jetbrains.kotlin.ir.util.IdSignatureRenderer
 import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.isLambda
@@ -86,7 +92,11 @@ import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.util.properties
 import org.jetbrains.kotlin.ir.util.removeProjectionsToMakeValidSuperType
+import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
+import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
+import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
+import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.name.Name
 import java.util.IdentityHashMap
@@ -104,6 +114,29 @@ internal val IrClass.isDotNetCallableObject: Boolean
 internal class DotNetUpgradeCallableReferences(context: DotNetBackendContext) :
     UpgradeCallableReferences(context, upgradeSamConversions = false)
 
+/** Captures KLIB callable identity before binding, inlining, or later lowerings replace targets. */
+internal class DotNetCallableReferenceIdentityLowering(
+    private val context: DotNetBackendContext,
+) : ModuleLoweringPass {
+    private val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
+
+    override fun lower(irModule: IrModuleFragment) {
+        irModule.acceptVoid(object : IrVisitorVoid() {
+            override fun visitElement(element: IrElement) {
+                element.acceptChildrenVoid(this)
+            }
+
+            override fun visitRichFunctionReference(expression: IrRichFunctionReference) {
+                if (expression.reflectionTargetSymbol != null && expression.dotNetCallableIdentity == null) {
+                    expression.dotNetCallableIdentity =
+                        computeStableReferenceId(context, signatureComputer, expression)
+                }
+                expression.acceptChildrenVoid(this)
+            }
+        })
+    }
+}
+
 /**
  * Turns a rich callable into the same local-class shape used by the common JS lowering: an Any
  * subclass implementing its fixed-arity function interface with one invoke override. Direct
@@ -114,6 +147,7 @@ internal class DotNetUpgradeCallableReferences(context: DotNetBackendContext) :
 internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     AbstractFunctionReferenceLowering<DotNetBackendContext>(context) {
     private val kTypeBuilder = DotNetKTypeIrBuilder(context, operation = "callable signature")
+    internal val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
     private val executionInvokeByReference = IdentityHashMap<IrRichFunctionReference, IrSimpleFunction>()
 
     private val IrRichFunctionReference.isStateMachineSuspendLambda: Boolean
@@ -148,7 +182,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         }
         val baseConstructor = this@DotNetCallableReferenceLowering.context.functionReferenceSymbols.constructor
         return irDelegatingConstructorCall(baseConstructor).apply {
-            arguments[0] = irString(functionReference.stableReferenceId())
+            arguments[0] = irString(stableReferenceId(functionReference))
             arguments[1] = irInt(functionReference.referenceArity())
             arguments[2] = irInt(functionReference.referenceFlags())
             arguments[3] = irInt(functionReference.boundValues.size)
@@ -885,14 +919,31 @@ private fun IrRichFunctionReference.reflectedName(): String {
 }
 
 /**
- * Declarations with a serialized Kotlin signature use it, matching Wasm's identity source. When
- * the current IR has no signature, the containing logical file and declaration offsets
- * disambiguate otherwise identical full Kotlin mangles without embedding a machine-local path.
+ * Cross-module declarations use the KLIB identity captured before lowerings, so a reference
+ * materialized in its producer compares equal to the same declaration deserialized by a consumer.
+ * Private/local declarations fall back to logical file-relative coordinates and a Kotlin mangle.
  */
-private fun IrRichFunctionReference.stableReferenceId(): String {
-    val target = reflectionTargetSymbol?.owner
+private fun DotNetCallableReferenceLowering.stableReferenceId(reference: IrRichFunctionReference): String =
+    reference.dotNetCallableIdentity ?: computeStableReferenceId(context, signatureComputer, reference)
+
+private fun computeStableReferenceId(
+    context: DotNetBackendContext,
+    signatureComputer: PublicIdSignatureComputer,
+    reference: IrRichFunctionReference,
+): String {
+    val target = reference.reflectionTargetSymbol?.owner
         ?: error("Internal .NET backend error: callable identity requested without a reflection target")
-    target.symbol.signature?.let { return "signature:$it" }
+    if (with(DotNetIrMangler) { target.isExported(compatibleMode = false) }) {
+        val signature = target.symbol.signature ?: signatureComputer.inFile(target.fileOrNull?.symbol) {
+            signatureComputer.computePublicIdSignature(target, compatibleMode = false)
+        }
+        if (signature.visibleCrossFile) {
+            context.preLoweringDeclarationKeys[target]?.let { key ->
+                return "signature:${key.substringAfter(':')}"
+            }
+            return "signature:${signature.render(IdSignatureRenderer.LEGACY)}"
+        }
+    }
     val fileName = target.fileOrNull?.fileEntry?.name
         ?.substringAfterLast('/')
         ?.substringAfterLast('\\')
@@ -900,6 +951,10 @@ private fun IrRichFunctionReference.stableReferenceId(): String {
     val mangle = with(DotNetIrMangler) { target.mangleString(compatibleMode = false) }
     return "local:$fileName:${target.startOffset}:${target.endOffset}:$mangle"
 }
+
+/** Stable logical identity retained when a rich reference is copied by shared lowerings. */
+internal var IrRichFunctionReference.dotNetCallableIdentity: String?
+    by irAttribute(copyByDefault = true)
 
 private fun IrRichFunctionReference.referenceArity(): Int =
     invokeFunction.parameters.size - boundValues.size + if (invokeFunction.isSuspend) 1 else 0
@@ -956,6 +1011,8 @@ internal class DotNetStaticCallableReferenceLowering(private val context: DotNet
 
     private fun isCacheable(irClass: IrClass): Boolean =
         irClass.isDotNetCallableObject &&
+                (irClass.parent as? IrClass)?.name?.asString() !=
+                    org.jetbrains.kotlin.backend.dotnet.DotNetKClassRuntime.MEMBER_FACTORY_HOLDER_NAME &&
                 irClass.dotNetLocalCaptureRejectionReason == null &&
                 irClass.primaryConstructor?.parameters?.isEmpty() == true
 

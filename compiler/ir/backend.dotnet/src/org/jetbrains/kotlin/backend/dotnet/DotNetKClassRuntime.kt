@@ -28,8 +28,13 @@ internal object DotNetKClassRuntime {
     private const val KCLASS_IMPL_TYPE_NAME = "Kotlin.KClassImpl"
     private const val FACTORY_TYPE_NAME = "Kotlin.Runtime.Internal.KClassFactory"
     internal const val ANNOTATION_FACTORY_HOLDER_NAME = "<AnnotationFactory>"
+    internal const val MEMBER_FACTORY_HOLDER_NAME = "<MemberFactory>"
     internal const val COMPANION_STATICS_HOLDER_NAME = "<CompanionStatics>"
     internal const val ANNOTATION_FACTORY_METHOD_NAME = "<GetKotlinAnnotations>"
+    internal const val MEMBER_FACTORY_METHOD_NAME = "<GetKotlinMembers-v1>"
+    private const val REFLECTION_PROVIDER_TYPE_NAME =
+        "kotlin.reflect.dotnet.internal.ReflectionFactoryImplKt, Kotlin.Reflection"
+    private const val REFLECTION_PROVIDER_METHOD_NAME = "getMembersV1"
     internal const val PRODUCED_ASSEMBLY_MARKER_TYPE_NAME =
         "Kotlin.Runtime.Internal.<KotlinProducedAssembly>"
     private const val LOCAL_NAME_ATTRIBUTE_TYPE_NAME =
@@ -41,6 +46,10 @@ internal object DotNetKClassRuntime {
     )
     val kAnnotatedElementClassInfo = DotNetIlClassInfo(
         ilClassName = "Kotlin.KAnnotatedElement",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+    val kDeclarationContainerClassInfo = DotNetIlClassInfo(
+        ilClassName = "Kotlin.KDeclarationContainer",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
     val kClassClassInfo = DotNetIlClassInfo(
@@ -101,6 +110,18 @@ internal object DotNetKClassRuntime {
             }
           }
 
+          .class interface public abstract auto ansi KDeclarationContainer
+          {
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.Collection 'get_members'() cil managed
+            {
+            }
+
+            .property instance class Kotlin.Collections.Collection members()
+            {
+              .get instance class Kotlin.Collections.Collection Kotlin.KDeclarationContainer::'get_members'()
+            }
+          }
+
           // KCallable is runtime-owned, so its typed returnType slot needs the minimal KType
           // identity in this assembly as well. Common/Stdlib still owns the graph behavior and
           // Kotlin.Stdlib owns KTypeImpl; this interface is only the cycle-free physical floor.
@@ -135,8 +156,9 @@ internal object DotNetKClassRuntime {
           }
 
           .class interface public abstract auto ansi KClass
-                 implements Kotlin.KClassifier,
-                            Kotlin.KAnnotatedElement
+                 implements Kotlin.KDeclarationContainer,
+                            Kotlin.KAnnotatedElement,
+                            Kotlin.KClassifier
           {
             .method public hidebysig specialname newslot abstract virtual instance string 'get_simpleName'() cil managed
             {
@@ -150,6 +172,10 @@ internal object DotNetKClassRuntime {
             {
             }
 
+            .method public hidebysig specialname newslot abstract virtual instance class Kotlin.Collections.Collection 'get_members'() cil managed
+            {
+            }
+
             .property instance string simpleName()
             {
               .get instance string Kotlin.KClass::'get_simpleName'()
@@ -158,6 +184,11 @@ internal object DotNetKClassRuntime {
             .property instance string qualifiedName()
             {
               .get instance string Kotlin.KClass::'get_qualifiedName'()
+            }
+
+            .property instance class Kotlin.Collections.Collection members()
+            {
+              .get instance class Kotlin.Collections.Collection Kotlin.KClass::'get_members'()
             }
 
           }
@@ -173,6 +204,7 @@ internal object DotNetKClassRuntime {
             .field private initonly int32 '_classifierId'
             .field private initonly string '_logicalKey'
             .field private class Kotlin.Collections.List '_annotations'
+            .field private class Kotlin.Collections.Collection '_members'
 
             .method assembly hidebysig specialname rtspecialname instance void .ctor(
                 class ${coreLibraryReference}System.Type 'clrType',
@@ -205,6 +237,9 @@ internal object DotNetKClassRuntime {
               ldarg.0
               ldnull
               stfld class Kotlin.Collections.List Kotlin.KClassImpl::'_annotations'
+              ldarg.0
+              ldnull
+              stfld class Kotlin.Collections.Collection Kotlin.KClassImpl::'_members'
               ret
             }
 
@@ -282,6 +317,29 @@ internal object DotNetKClassRuntime {
               ldloc.0
               stfld class Kotlin.Collections.List Kotlin.KClassImpl::'_annotations'
             KC_AnnotationsReady:
+              ldloc.0
+              ret
+            }
+
+            .method public hidebysig specialname newslot virtual final instance class Kotlin.Collections.Collection 'get_members'() cil managed
+            {
+              .override method instance class Kotlin.Collections.Collection Kotlin.KDeclarationContainer::'get_members'()
+              .override method instance class Kotlin.Collections.Collection Kotlin.KClass::'get_members'()
+              .maxstack 3
+              .locals init ([0] class Kotlin.Collections.Collection 'members')
+              ldarg.0
+              ldfld class Kotlin.Collections.Collection Kotlin.KClassImpl::'_members'
+              stloc.0
+              ldloc.0
+              brtrue.s KC_MembersReady
+              ldarg.0
+              call class Kotlin.Collections.Collection Kotlin.Runtime.Internal.KClassFactory::'GetMembers'(
+                  class Kotlin.KClass)
+              stloc.0
+              ldarg.0
+              ldloc.0
+              stfld class Kotlin.Collections.Collection Kotlin.KClassImpl::'_members'
+            KC_MembersReady:
               ldloc.0
               ret
             }
@@ -406,6 +464,11 @@ internal object DotNetKClassRuntime {
             .property instance class Kotlin.Collections.List annotations()
             {
               .get instance class Kotlin.Collections.List Kotlin.KClassImpl::'get_annotations'()
+            }
+
+            .property instance class Kotlin.Collections.Collection members()
+            {
+              .get instance class Kotlin.Collections.Collection Kotlin.KClassImpl::'get_members'()
             }
           }
     """.trimIndent().prependIndent("          ").trimStart()
@@ -600,6 +663,158 @@ $callableAnnotationFactoryIl
       ret
     KCF_AnnotationsEmpty:
       call class Kotlin.Collections.List Kotlin.Runtime.Internal.ReflectionAnnotationList::'Empty'()
+      ret
+    }
+
+    // Lightweight Runtime owns only the physical delegation point. Type.GetType performs the
+    // same optional-product role as the JVM ReflectionFactory bootstrap: absence or protocol
+    // mismatch is stable failure, while the provider owns whether one classifier is supported.
+    .method assembly hidebysig static class Kotlin.Collections.Collection 'GetMembers'(
+        class Kotlin.KClass 'kClass') cil managed
+    {
+      .maxstack 8
+      .locals init (
+        [0] class ${coreLibraryReference}System.Type 'providerType',
+        [1] class ${coreLibraryReference}System.Reflection.MethodInfo 'providerMethod',
+        [2] object[] 'arguments',
+        [3] class Kotlin.Collections.Collection 'members'
+      )
+      ldstr "$REFLECTION_PROVIDER_TYPE_NAME"
+      ldc.i4.0
+      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetType(string, bool)
+      stloc.0
+      ldloc.0
+      brfalse.s KCF_MembersUnsupported
+      ldloc.0
+      ldstr "$REFLECTION_PROVIDER_METHOD_NAME"
+      ldc.i4.s 24
+      ldnull
+      ldc.i4.1
+      newarr ${coreLibraryReference}System.Type
+      dup
+      ldc.i4.0
+      ldtoken Kotlin.KClass
+      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+      stelem.ref
+      ldnull
+      callvirt instance class ${coreLibraryReference}System.Reflection.MethodInfo ${coreLibraryReference}System.Type::GetMethod(
+          string,
+          valuetype ${coreLibraryReference}System.Reflection.BindingFlags,
+          class ${coreLibraryReference}System.Reflection.Binder,
+          class ${coreLibraryReference}System.Type[],
+          valuetype ${coreLibraryReference}System.Reflection.ParameterModifier[])
+      stloc.1
+      ldloc.1
+      brfalse.s KCF_MembersUnsupported
+      ldloc.1
+      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Reflection.MethodInfo::get_ReturnType()
+      ldtoken Kotlin.Collections.Collection
+      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+      call bool ${coreLibraryReference}System.Type::op_Inequality(
+          class ${coreLibraryReference}System.Type, class ${coreLibraryReference}System.Type)
+      brtrue.s KCF_MembersUnsupported
+      ldc.i4.1
+      newarr ${coreLibraryReference}System.Object
+      dup
+      ldc.i4.0
+      ldarg.0
+      stelem.ref
+      stloc.2
+      ldloc.1
+      ldnull
+      ldloc.2
+      callvirt instance object ${coreLibraryReference}System.Reflection.MethodBase::Invoke(object, object[])
+      isinst Kotlin.Collections.Collection
+      stloc.3
+      ldloc.3
+      brfalse.s KCF_MembersUnsupported
+      ldloc.3
+      ret
+    KCF_MembersUnsupported:
+      ldstr "Kotlin class-member reflection implementation is not available"
+      newobj instance void ${coreLibraryReference}System.NotSupportedException::.ctor(string)
+      throw
+    }
+
+    // Public only as the versioned Runtime/provider ABI. This does no member inference: it accepts
+    // only the exact produced-assembly marker and reserved producer-owned factory, then wraps its
+    // already materialized callable array in the established read-only collection implementation.
+    .method public hidebysig static class Kotlin.Collections.Collection 'GetGeneratedMembersV1'(
+        class Kotlin.KClass 'kClass') cil managed
+    {
+      .maxstack 6
+      .locals init (
+        [0] class Kotlin.KClassImpl 'implementation',
+        [1] class ${coreLibraryReference}System.Type 'clrType',
+        [2] class ${coreLibraryReference}System.Reflection.Assembly 'assembly',
+        [3] class ${coreLibraryReference}System.Type 'holder',
+        [4] class ${coreLibraryReference}System.Reflection.MethodInfo 'factory',
+        [5] object[] 'values'
+      )
+      ldarg.0
+      isinst Kotlin.KClassImpl
+      stloc.0
+      ldloc.0
+      brfalse.s KCF_GeneratedMembersMissing
+      ldloc.0
+      ldfld class ${coreLibraryReference}System.Type Kotlin.KClassImpl::'_clrType'
+      stloc.1
+      ldloc.1
+      brfalse.s KCF_GeneratedMembersMissing
+      ldloc.1
+      callvirt instance class ${coreLibraryReference}System.Reflection.Assembly ${coreLibraryReference}System.Type::get_Assembly()
+      stloc.2
+      ldloc.2
+      ldstr "$PRODUCED_ASSEMBLY_MARKER_TYPE_NAME"
+      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Reflection.Assembly::GetType(string)
+      brfalse.s KCF_GeneratedMembersMissing
+      ldloc.1
+      ldstr "$MEMBER_FACTORY_HOLDER_NAME"
+      ldc.i4.s 48
+      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetNestedType(
+          string, valuetype ${coreLibraryReference}System.Reflection.BindingFlags)
+      stloc.3
+      ldloc.3
+      brfalse.s KCF_GeneratedMembersMissing
+      ldloc.3
+      ldstr "$MEMBER_FACTORY_METHOD_NAME"
+      ldc.i4.s 56
+      ldnull
+      ldc.i4.0
+      newarr ${coreLibraryReference}System.Type
+      ldnull
+      callvirt instance class ${coreLibraryReference}System.Reflection.MethodInfo ${coreLibraryReference}System.Type::GetMethod(
+          string,
+          valuetype ${coreLibraryReference}System.Reflection.BindingFlags,
+          class ${coreLibraryReference}System.Reflection.Binder,
+          class ${coreLibraryReference}System.Type[],
+          valuetype ${coreLibraryReference}System.Reflection.ParameterModifier[])
+      stloc.s 4
+      ldloc.s 4
+      brfalse.s KCF_GeneratedMembersMissing
+      ldloc.s 4
+      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Reflection.MethodInfo::get_ReturnType()
+      ldtoken class Kotlin.KCallable[]
+      call class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Type::GetTypeFromHandle(
+          valuetype ${coreLibraryReference}System.RuntimeTypeHandle)
+      call bool ${coreLibraryReference}System.Type::op_Inequality(
+          class ${coreLibraryReference}System.Type, class ${coreLibraryReference}System.Type)
+      brtrue.s KCF_GeneratedMembersMissing
+      ldloc.s 4
+      ldnull
+      ldnull
+      callvirt instance object ${coreLibraryReference}System.Reflection.MethodBase::Invoke(object, object[])
+      isinst object[]
+      stloc.s 5
+      ldloc.s 5
+      brfalse.s KCF_GeneratedMembersMissing
+      ldloc.s 5
+      newobj instance void Kotlin.Runtime.Internal.ReflectionAnnotationList::.ctor(object[])
+      ret
+    KCF_GeneratedMembersMissing:
+      ldnull
       ret
     }
 

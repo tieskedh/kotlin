@@ -5,11 +5,20 @@
 
 package kotlin.reflect
 
-/** The Common KClass contract plus truthful class-annotation discovery on CLR. */
-public actual interface KClass<T : Any> : KClassifier, KAnnotatedElement {
+/**
+ * The Common KClass contract plus the optional JVM-shaped .NET reflection
+ * surface. Full member discovery requires the separate reflection product.
+ */
+public actual interface KClass<T : Any> : KDeclarationContainer, KAnnotatedElement, KClassifier {
     public actual val simpleName: String?
 
     public actual val qualifiedName: String?
+
+    /**
+     * All functions and properties accessible in this class, including those
+     * declared in this class and its superclasses. Does not include constructors.
+     */
+    override val members: Collection<KCallable<*>>
 
     @SinceKotlin("1.1")
     public actual fun isInstance(value: Any?): Boolean
