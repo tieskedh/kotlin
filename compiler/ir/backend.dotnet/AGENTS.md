@@ -629,11 +629,14 @@ See the
   signatures, annotations, visibility, modality, and declaration flags come
   from their exact accessor IR, never from a CLR accessor MethodDef or runtime
   lookup. A `const` reference's private getter reads the retained literal
-  directly without adding a public CLR accessor. The positive `isLateinit`
-  case remains locked by the separate `lateinit` language feature, and
+  directly without adding a public CLR accessor. Executable `lateinit` uses
+  Common's nullable-carrier lowering; its exact IR bit supplies positive
+  `isLateinit`, while `isInitialized` tests the transformed carrier and never
+  becomes runtime CLR reflection. See
+  [the `lateinit` decision](docs/decisions/lateinit-properties.md).
   `getDelegate` remains absent until delegate discovery has its own complete
   semantic closure. Do not infer `KClass.members`, declared-member lookup, or
-  a runtime KLIB decoder from this direct-reference surface. See
+  a runtime KLIB decoder from this direct-reference surface. See also
   [the property-accessor decision](docs/decisions/property-accessor-reflection.md).
   `KClass.members` is a JVM-shaped platform extension owned by the optional
   `Kotlin.Reflection.dll` product. Runtime owns only the physical

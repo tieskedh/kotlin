@@ -16,7 +16,27 @@ verification, and work state.
   reverse-dependency/architecture audit, and post-rebase checks are
   recorded in
   [`docs/archive/upstream-impact-2026-08-07.md`](docs/archive/upstream-impact-2026-08-07.md)
-- Last completed foundation: JVM-shaped declaration-owned type-use reflection
+- Last completed foundation: Common-owned `lateinit` now uses the repository's
+  ordinary nullable-carrier lowering for member, top-level, local, captured,
+  inherited, generic-reference, and separately compiled declarations. KLIB
+  retains the non-null Kotlin property and exact `isLateinit` fact; executable
+  storage alone becomes nullable and uses CLR `null` as the one uninitialized
+  sentinel. Every Kotlin read follows Common's generated check and exact
+  `UninitializedPropertyAccessException` message, while `isInitialized` tests
+  the same carrier directly. There is no Boolean state field, emitter-owned
+  check, CLR-reflection inference, or second representation. The lowering runs
+  before shared-variable/closure conversion in both KLIB stages, matching
+  JS/Wasm/Native and JVM's Common semantic owner. Property references reuse the
+  checked accessor; the previously published exact reflection bit now produces
+  positive observations. The CLR property remains the truthful C# boundary:
+  its setter initializes the same state and its getter throws the physical
+  Kotlin exception before initialization. Shared PSI/LightTree tests, both CLR
+  profiles, separate Kotlin libraries, physical IL assertions, and a Roslyn
+  consumer cover the boundary. No runtime-surface or library-codec version bump
+  is needed because the exception/helper, property payload, and manifest schema
+  already existed; this tranche enables producer lowering and adds the Common
+  Stdlib intrinsic source.
+  The preceding foundation: JVM-shaped declaration-owned type-use reflection
   now extends the .NET `KType` actual with `KAnnotatedElement` while retaining
   the existing Common structural graph. Return, parameter, extension-receiver,
   nested projected argument, and callable upper-bound nodes receive only the
@@ -155,8 +175,9 @@ verification, and work state.
   CLR reflection owns none of them. A private callable-reference getter reads
   retained `const` literals without changing their ordinary field-only CLR
   ABI. Library ABI and runtime surface 29 own the payload, nested interfaces,
-  and implementation classes. `getDelegate` and the positive `isLateinit`
-  path remain separate programmes; type-use annotations were selected later.
+  and implementation classes. The later Common `lateinit` foundation completes
+  the positive `isLateinit` path without changing that ABI. `getDelegate`
+  remains a separate programme; type-use annotations were selected later.
   The preceding
   feature completed exact nominal constrained constructions and
   constructed-interface bounds for admitted foreign generic interfaces and
@@ -291,16 +312,16 @@ remains:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 158 XML files and 1928 tests:
+The audited full-aggregate evidence covers 174 XML files and 2073 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1806 FIR, IL-text, and box tests
+- 1950 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 95 library-integration tests
+- 96 library-integration tests
 - zero failures, errors, or skips
 
 The aggregate exited successfully. Direct audit of its three final roots reports
-the 158 files and 1,928 tests above with zero failures, errors, or skips. No
+the 174 files and 2,073 tests above with zero failures, errors, or skips. No
 duration or performance comparison is retained because another compiler session
 shared the machine throughout verification.
 
@@ -503,8 +524,9 @@ pipeline now runs the same shared pre-serialization KLIB lowerings as the CLI;
 Common `SharedVariableBox` therefore replaces the obsolete test-only mutable
 capture cell, and Common non-JVM `ThrowHelpers.kt` is a real stdlib compiler-ABI
 dependency. Direct and installed stdlib products, including a separate local-
-delegate consumer, prove that source closure without enabling the separately
-parked `lateinit` lowering.
+delegate consumer, originally proved that source closure without enabling
+`lateinit`; the later language-feature tranche now enables the Common lowering
+at the same pre-closure phase boundary.
 
 Source-defined exception subclasses now inherit standard `Throwable.message`
 and `cause` through the universal `System.Exception` virtual slots. The
@@ -1144,9 +1166,10 @@ bound-receiver handling, virtual dispatch, mutation, exception identity, or
 separate libraries. A `const` reference reads its retained literal in the
 private reference body and does not add a public CLR accessor MethodDef.
 Runtime surface and library ABI 29 pin the new interfaces and factory payload.
-Positive `isLateinit` behavior remains unavailable until the parked language
-feature admits such declarations; broad member discovery and `getDelegate`
-remain independent. Declaration-owned type-use discovery was selected later.
+The later Common-owned `lateinit` foundation makes the positive declaration
+fact observable without changing that payload; broad member discovery and
+`getDelegate` remain independent. Declaration-owned type-use discovery was
+selected later.
 
 Library ABI version 23 also retains the version-22 static ordinary-class
 default-dispatch shape; runtime surface level 24 includes the version-23
@@ -1279,14 +1302,13 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Select `lateinit` as the next language foundation, following Common/JVM
-   declaration and failure semantics before enabling its already published
-   positive reflection flag. Specify storage sentinels for nullable-capable
-   reference carriers, initialization checks on every read path, inheritance,
-   top-level/member/local ownership, callable/property references, exact
-   `UninitializedPropertyAccessException` identity and message, separate
-   libraries, and CLR interop visibility. Do not infer initialization from a
-   CLR field default or let reflection bypass the Kotlin read check.
+1. Select the next language foundation by its ability to unlock broad shared
+   compiler/stdlib coverage, not by the number of declarations it adds. Audit
+   Common plus JVM, JS, Wasm, and Native phase ownership first; keep a feature
+   parked when its representation requires a material ABI choice. The completed
+   `lateinit` tranche is the model: one Common semantic lowering, exact KLIB
+   authority, target-only physical mapping, adversarial cross-language and
+   separate-compilation evidence.
 2. Continue the generated catalog only by complete classifier families, not by
    handwritten members. The concrete Common scalars, classified `Number`,
    built-in collection interfaces, and Kotlin-owned collection implementations

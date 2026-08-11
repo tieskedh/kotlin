@@ -180,12 +180,11 @@ Run the shared first-stage phases before target lowering/serialization. Start th
 pipeline with the mature-target common prefix before callable-reference, returnable-block, local
 declaration, and other .NET-specific transformations when the first stage did not already run that
 prefix on the same IR. The inliner may introduce returnable blocks, captures, array constructors,
-and accessors, so target lowerings must consume its output rather than precede it. Both stages
-deliberately omit `LateinitLowering`. Publishing Common `ThrowHelpers.kt` for shared lowering does
-not enable `lateinit`: its complete target lowering, field/state representation, diagnostics, and
-adversarial product gate remain a separate parked feature. The shared first-stage builder keeps
-that lowering enabled by default for every existing mature target and exposes only this narrow
-target-capability switch.
+and accessors, so target lowerings must consume its output rather than precede it. The completed
+`lateinit` foundation now uses the shared prefix's ordinary `LateinitLowering` in both stages,
+after documenting and testing its nullable CLR storage carrier, Common throw-helper edge, and
+property-reference behavior. See
+[`lateinit-properties.md`](../decisions/lateinit-properties.md).
 
 Support the CLI's existing `-Xklib-ir-inliner=disabled`, `intra-module`, and `full` modes. Prepared
 inlinable IR serves the modern intra/full paths. The disabled/legacy path requires the binary-stage
@@ -251,8 +250,9 @@ The completed slice proves:
 - continued explicit rejection of suspend-inline declarations outside this slice.
 
 This ordinary-inline matrix is green. Reified substitution subsequently entered through the
-separate completed tranche below; coroutine lowering, `lateinit`, and broad reflection remain
-outside it. Selected Common inline families may enter the stdlib product through their exact
+separate completed tranche below. Common `lateinit` lowering is now also enabled through the
+phase boundary described above; coroutine lowering and broad reflection remain outside this
+programme. Selected Common inline families may enter the stdlib product through their exact
 dependency closures.
 
 ## Return control transfer from an expression operand
