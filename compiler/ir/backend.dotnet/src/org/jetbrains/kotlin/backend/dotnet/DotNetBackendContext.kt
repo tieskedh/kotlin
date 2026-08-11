@@ -128,6 +128,8 @@ internal class DotNetBackendContext(
         DotNetFunctionReferenceSymbols(irBuiltIns, irFactory, irModuleFragment)
     val propertyReferenceSymbols: DotNetPropertyReferenceSymbols =
         DotNetPropertyReferenceSymbols(irBuiltIns, irFactory, irModuleFragment)
+    val memberReferenceSymbols: DotNetMemberReferenceSymbols =
+        DotNetMemberReferenceSymbols(irBuiltIns, irFactory, irModuleFragment)
     val callableAnnotationSymbols: DotNetCallableAnnotationSymbols =
         DotNetCallableAnnotationSymbols(irBuiltIns, irFactory, irModuleFragment)
     /** Source interface member to its profile-selected compiler-ABI helper and body placement. */

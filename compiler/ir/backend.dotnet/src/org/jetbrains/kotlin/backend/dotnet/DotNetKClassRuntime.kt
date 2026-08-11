@@ -31,7 +31,8 @@ internal object DotNetKClassRuntime {
     internal const val MEMBER_FACTORY_HOLDER_NAME = "<MemberFactory>"
     internal const val COMPANION_STATICS_HOLDER_NAME = "<CompanionStatics>"
     internal const val ANNOTATION_FACTORY_METHOD_NAME = "<GetKotlinAnnotations>"
-    internal const val MEMBER_FACTORY_METHOD_NAME = "<GetKotlinMembers-v1>"
+    internal const val MEMBER_FACTORY_METHOD_NAME = "<GetKotlinMembers-v2>"
+    internal const val MEMBER_DISPATCHER_CLASS_NAME = "<MemberDispatcher-v2>"
     private const val REFLECTION_PROVIDER_TYPE_NAME =
         "kotlin.reflect.dotnet.internal.ReflectionFactoryImplKt, Kotlin.Reflection"
     private const val REFLECTION_PROVIDER_METHOD_NAME = "getMembersV1"
