@@ -347,6 +347,89 @@ fun box(): String {
     ) {
         return "fail 32r: abstract collection dispatch"
     }
+
+    val collectionInterfaceClasses = listOf<KClass<*>>(
+        Iterable::class,
+        MutableIterable::class,
+        Iterator::class,
+        MutableIterator::class,
+        ListIterator::class,
+        MutableListIterator::class,
+        Collection::class,
+        MutableCollection::class,
+        List::class,
+        MutableList::class,
+        Set::class,
+        MutableSet::class,
+        Map::class,
+        Map.Entry::class,
+        MutableMap::class,
+        MutableMap.MutableEntry::class,
+    )
+    if (collectionInterfaceClasses.any { it.members !== it.members }) {
+        return "fail 32s: collection interface cache"
+    }
+
+    val reflectedIterator = Iterable::class.members.named("iterator").single().call(reflectedList)
+    if (Iterator::class.members.named("next").single().call(reflectedIterator) != "value") {
+        return "fail 32t: iterable and iterator dispatch"
+    }
+    val mutableIterator = MutableIterable::class.members.named("iterator").single().call(reflectedList)
+    if (MutableIterator::class.members.named("next").single().call(mutableIterator) != "value") {
+        return "fail 32u: mutable iterable and iterator dispatch"
+    }
+    MutableIterator::class.members.named("remove").single().call(mutableIterator)
+    if (reflectedList.isNotEmpty()) return "fail 32v: mutable iterator remove"
+
+    MutableCollection::class.members.named("add").single().call(reflectedList, "list")
+    if (Collection::class.members.named("contains").single().call(reflectedList, "list") != true) {
+        return "fail 32w: collection interface dispatch"
+    }
+    if (List::class.members.named("get").single().call(reflectedList, 0) != "list") {
+        return "fail 32x: list interface dispatch"
+    }
+    if (MutableList::class.members.named("set").single().call(reflectedList, 0, "changed") != "list") {
+        return "fail 32y: mutable list interface dispatch"
+    }
+    val reflectedListIterator = reflectedList.listIterator(reflectedList.size)
+    if (ListIterator::class.members.named("previous").single().call(reflectedListIterator) != "changed") {
+        return "fail 32z: list iterator dispatch"
+    }
+    MutableListIterator::class.members.named("add").single().call(reflectedListIterator, "tail")
+    if (reflectedList.first() != "tail") return "fail 32aa: mutable list iterator dispatch"
+
+    if (Set::class.members.named("contains").single().call(reflectedSet, "set") != true) {
+        return "fail 32ab: set interface dispatch"
+    }
+    if (MutableSet::class.members.named("add").single().call(reflectedSet, "second") != true) {
+        return "fail 32ac: mutable set interface dispatch"
+    }
+
+    val mapGet = Map::class.members.named("get").single()
+    if (mapGet.call(reflectedMap, "one") != 1) return "fail 32ad: map interface dispatch"
+    val mutableMapMembers = MutableMap::class.members
+    val mutableMapPut = mutableMapMembers.named("put").single()
+    if (mutableMapPut.annotations.none { it is IgnorableReturnValue } ||
+        mutableMapPut.call(reflectedMap, "three", 3) != null
+    ) {
+        return "fail 32ae: mutable map interface dispatch and annotation"
+    }
+    val mutableMapGet = mutableMapMembers.named("get").single()
+    if (mutableMapGet.returnType.classifier != mutableMapPut.parameters.last().type.classifier) {
+        return "fail 32af: mutable map owner-parameter declaration identity"
+    }
+
+    val reflectedEntry = reflectedMap.entries.first { it.key == "one" }
+    if (Map.Entry::class.members.named("key").single().call(reflectedEntry) != "one") {
+        return "fail 32ag: map entry property"
+    }
+    val setValue = MutableMap.MutableEntry::class.members.named("setValue").single()
+    if (setValue.returnType.classifier != setValue.parameters.last().type.classifier ||
+        setValue.call(reflectedEntry, 4) != 1 || reflectedMap["one"] != 4
+    ) {
+        return "fail 32ah: mutable map entry execution and type identity"
+    }
+
     class Local
     if (!hasStableUnsupportedMembers(Local::class)) return "fail 33: local class did not fail closed"
     if (!hasStableUnsupportedMembers(object {}::class)) return "fail 34: anonymous class did not fail closed"
