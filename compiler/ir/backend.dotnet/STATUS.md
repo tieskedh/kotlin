@@ -122,7 +122,7 @@ verification, and work state.
   complete facade owner; `KProperty.getDelegate` remains a separate reflection
   closure. No runtime-surface or library-codec version changes because this
   tranche only admits existing logical and physical contracts.
-  The preceding foundation: Common-owned `lateinit` uses the repository's
+  The earlier foundation: Common-owned `lateinit` uses the repository's
   ordinary nullable-carrier lowering for member, top-level, local, captured,
   inherited, generic-reference, and separately compiled declarations. KLIB
   retains the non-null Kotlin property and exact `isLateinit` fact; executable
@@ -403,38 +403,252 @@ mapped/Stdlib and foreign member reflection, constructors and declared-member
 APIs, the remaining
 coroutine programme beyond its executable continuation/state-machine
 foundation, multi-field value classes, Sequence and Grouping families,
-sorting/random, and Gradle/KMP product integration remain substantial open
+random/remaining sorting families, and Gradle/KMP product integration remain substantial open
 programmes.
 
 ## Current green gate
 
-The top-level delegated-property head plus the compiler-distribution module-
-closure correction passed every constituent of the strict target gate. The
-correction registers the extracted `.NET` FIR-to-IR and IR-serialization
-modules with the same central fat-compiler owner used by the other backends;
-project dependencies alone had left the installed `kotlinc-dotnet` launcher
-without those classes. Both installed launcher cases execute and the two module
-entry classes are physically present in `kotlin-compiler.jar`. Because another
-development session shared the machine, this checkpoint records correctness
-only and makes no duration or performance claim. The normal aggregate command
-remains:
+The generic-owner schema-version-2 architecture head over semantic base
+`ed80e65036` passed every constituent of the strict target gate. The normal
+aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The audited full-aggregate evidence covers 182 XML files and 2098 tests:
+The latest fresh `--rerun-tasks` aggregate, build
+`a71561d8-73bc-453d-94c1-ebd836726575`, completed on 2026-08-12 in 2,865.0
+seconds. The duration is recorded only to identify this coherent run, not as a
+performance comparison. Direct audit of all three final result roots covers
+190 XML files and 2,204 tests:
 
 - 6 policy-free physical CLI model/serializer tests
-- 1974 FIR, IL-text, and box tests
+- 2,073 FIR, IL-text, and box tests
 - 21 generated CLI tests
-- 97 library-integration tests
+- 104 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate exited successfully. Direct audit of its three final roots reports
-the 182 files and 2,098 tests above with zero failures, errors, or skips. No
-duration or performance comparison is retained because another compiler session
-shared the machine throughout verification.
+The aggregate exited successfully. This is exactly eight additional executions
+over the open-nullable checkpoint: the same- and separate-compilation generic-
+owner hostile oracle files execute through PSI and LightTree on Framework CLR
+and CoreCLR. All report zero failures, errors, or skips. The existing generic-
+class Kotlin/C# integration test is additionally strengthened, without adding
+a test-method count, for a C# user-defined struct subclass, virtual star reads,
+candidate rejection without premature narrowing, same-state mutation, and
+Kotlin `<T> nullableBox(T?)` with value and reference substitutions. The
+unchanged negative IL-text case continues to reject method-owned invariant/
+input open generic arrays.
+
+This aggregate includes the first production-inert owner-admission analysis,
+immediately before erased generic-interface bridge construction. It
+records a plan for every local Kotlin-owned generic class, classifies direct
+member inputs as strict, shared type-safe barriers, or authoritative semantic
+bodies, detects explicit owner-parameter `T?` in metadata-fixed supertypes,
+and records direct semantic writes to owner-dependent fields plus open typed
+outputs. Its result vocabulary contains only blockers and outstanding proof
+obligations—there is deliberately no admitted/reified result—and the emitter
+does not consume it. The following erased bridge lowering rejects any generic
+class which bypassed planning, then still registers every planned class under
+the accepted erased ABI. The open unsafe-store oracle now makes both mutation
+and output virtual so the hardest state/output family passes through this
+analysis. Backend compilation and all eight hostile PSI/LightTree,
+Framework/CoreCLR, same/separate lanes pass with zero failures or skips.
+
+Focused work after that aggregate extends the plan into compiler-produced but
+detached prototype member IR. Each logical member now has an explicit typed
+entry, semantic hook, and/or capability-dispatcher role; direct semantic field
+writes select a required one-object state carrier, and open owner-dependent
+outputs require a paired semantic hook. Detached signatures preserve the real
+generic-owner receiver and typed explicit inputs/results while erasing only
+the semantic explicit domain. They also retain selected masked-default
+dispatchers, actual direct-`super` call counts, and pre-lowering owner/member
+logical keys. A hard invariant proves no prototype member enters the owner's
+declaration list. The backend returns only immutable, IR-free in-memory
+snapshots; codegen ignores them and no DLL/KLIB schema or compiler option is
+changed. The hostile test fixture validates the exact nullable-inheritance and
+unsafe-store snapshots in all eight parser/profile/module lanes. One initial
+assertion correctly failed because it counted the typed generic `this`
+receiver as a semantic argument; the observation was fixed to erase only
+explicit inputs, and the full focused matrix then passed. The test-owned CLR
+physicalizer now also validates GenericParam, InterfaceImpl/MethodImpl,
+typed/protected semantic virtual slots, one object field, and paired override
+base definitions on CLR 4 and CoreCLR. These focused additions are newer than
+the 2,204-test aggregate above; normal production emission remains erased.
+
+The latest focused tranche replaces the direct-write approximation with one
+shared module-wide producer graph. It indexes ordinary functions, constructors,
+all function-access edges, field initializers, and anonymous initializers once,
+then projects each generic owner's fields without rescanning the module. Private
+helpers remain strict nodes and acquire semantic reachability only through an
+exposed semantic entry. The hostile store now routes `writeUnsafe` through
+`installUnchecked(Any?)`, the lowered private setter, and finally `stored`; the
+snapshot proves that full chain, its declaration initializer, and the exact
+semantic writer. The read-only unsafe producer independently proves typed
+private storage because its sole write is a direct owner-typed declaration
+initializer. An ordinary function-written field with no semantic-reachable
+writer now remains `TYPED_WRITE_VALUE_PROVENANCE_REQUIRED`; absence of a broad
+entry cannot prove a private `Any? as T` helper safe. Externally accessible
+fields remain incomplete. No field result admits an owner.
+
+The hostile test facade now consumes those exact immutable snapshots. It emits
+a temporary CLR-generic producer from the recorded state carrier and
+typed/hook/dispatcher roles, compiles a separate C# subclass/consumer assembly,
+and executes delayed typed-read failure, compatible typed overrides,
+incompatible semantic overrides, paired output overrides, GenericParam, one
+object state, and explicit InterfaceImpl/MethodImpl behavior on CLR 4 and
+CoreCLR. This is test-owned physicalization only: the production emitter,
+structured CLI model, DLL/KLIB schemas, and compiler options remain unchanged.
+Backend/fixture compilation and one modern snapshot/semantic lane pass after
+the complete initializer-aware graph. The final combined snapshot physicalizer
+and semantic oracle then passed all eight PSI/LightTree, Framework/CoreCLR,
+same/separate-compilation lanes: four XML suites, eight tests, and zero
+failures, errors, or skips. A fresh full aggregate is still required for this
+newer tranche.
+
+The first fresh aggregate after the producer-graph tranche correctly rejected one planner
+invariant in `genericClasses` across four parser/profile lanes. The cause was
+an owner-projection bug: `WidenedProbe.inspects` writes owner-independent
+`lastPacket: Any?`, but the invariant compared that field with the carrier map
+which intentionally contains only owner-dependent state. Restricting field
+effects to `expected: T` fixed the planner. A following test assertion was also
+tightened from the incorrect “no state” expectation to exactly one typed
+`expected` state and no `lastPacket`. The focused generic-classes matrix now
+passes with zero failures. The following coherent fresh aggregate, build
+`82c6d9d9-ad1a-4ab0-88a3-b6223fb21ac6`, was a clean 2,332.2-second run.
+
+The next completed architecture slice adds fail-closed typed-write value
+provenance to that graph. Every actual owner-dependent field write is now
+classified as `PHYSICALLY_TYPED`, `SEMANTIC_OBJECT`, or `UNRESOLVED`. Boundary
+seeds propagate through call arguments, local definitions/assignments,
+returns, and type operators; a cast to logical `T` preserves its input domain
+and cannot manufacture typed evidence. The new invariant hostile store routes
+exact `T` through a private `Any?` helper and `as T`, proving both its
+initializer and lowered setter typed. The covariant hostile store uses the same
+final cast shape but remains object-backed because its exposed input is
+widened. Mixed semantic writes select the one object carrier, unresolved paths
+retain an explicit proof obligation, externally accessible state remains
+cross-assembly incomplete, and no result admits an owner or affects emission.
+Backend/CLI/fixture compilation, the eight hostile lanes, and the six broader
+generic-class lanes passed before the fresh aggregate above; its final strict
+audit is 190 XML files, 2,204 tests, and zero failures, errors, or skips.
+
+Focused work after that aggregate extends detached families through local
+Kotlin-produced generic subclasses. A derived typed entry now overrides only
+the ancestor typed prototype; an inherited semantic-hook obligation adds a
+derived semantic prototype and links it only to the ancestor semantic
+prototype. Private final capability dispatchers remain outside the override
+graph. For an external generic base, the consumer records the producer’s
+logical member key and receives
+`REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA` instead of guessing a physical
+MethodDef or silently dropping a semantic obligation. The hostile oracle adds
+local `HostileUnsafeDerived<T>`/`HostileUnsafeMid<T>` chains and an external
+`ConsumerUnsafeLeaf<T>` chain. Backend/CLI/fixture compilation, all eight
+hostile lanes, and all six broader generic-class lanes pass with zero failures,
+errors, or skips. The following fresh aggregate, build
+`ce6a7dcb-8b33-4c68-9cd6-073dea4657b4`, completed in 2,409.5 seconds; its strict
+audit covers 190 XML files, 2,204 tests, and zero failures, errors, or skips.
+Production emission and serialized schemas remain unchanged.
+
+The next production-inert slice supplies the missing first cross-assembly
+family record without changing that production boundary. A deterministic
+version-1 artifact is tied to the exact temporary producer DLL by SHA-256 and
+records logical owner/member keys, physical implementation and semantic-
+capability paths, arity, candidate disposition, state-carrier requirements,
+complete member roles and semantic reasons, selected MethodDef names, and
+final/virtual/abstract dispatch. Decoding constructs and validates the complete
+artifact before returning it. The hostile fixture rejects stale, truncated,
+wrong-producer, duplicate-owner, incomplete-role, and missing-member records.
+The separate Kotlin consumer's external logical obligations then resolve to
+the producer-selected typed and semantic names, while the final capability
+dispatcher stays outside the override set. A separately compiled C# subclass
+uses only those resolved paths/names and executes compatible typed overrides,
+incompatible semantic overrides, delayed typed-read failure, and one inherited
+state on CLR 4 and CoreCLR. Backend and fixture compilation, all eight hostile
+lanes, and all six broader generic-class lanes pass with zero failures, errors,
+or skips. The following fresh aggregate, build
+`e2478b09-9969-47e3-b928-68025e4be5a9`, completed in 2,420.5 seconds; its strict
+audit covers 190 XML files, 2,204 tests, and zero failures, errors, or skips.
+The artifact is not emitted into the erased production DLL/KLIB, consumed by the
+normal planner/emitter, or represented in `dotnet.ir`; the complete production
+binding still needs slot-domain, direct-super/default, construction/profile,
+reflection, and physical-signature records plus the atomic owner migration.
+
+Focused work after that clean aggregate advances the architecture artifact to
+schema version 2. An external override binding now retains the exact producer
+owner path as well as method name/dispatch. Each member records a sorted set of
+root logical keys rather than collapsing Kotlin intersections to one invented
+family ID. Exact source-level `super` calls are retained as logical callee plus
+super qualifier and serialized into distinct typed/semantic physical owner+
+method targets; capability dispatchers are rejected as super targets. Masked
+default dispatch is recorded separately as a static helper owner/method, never
+as an override role. The hostile store adds defaulted `label`; the temporary
+producer supplies `LabelDefault`, and the separately compiled C# consumer
+proves that this recorded static helper still reaches its derived virtual
+`Label` override. Schema version 1, invalid root sets, and dispatcher-as-super
+records fail closed. Backend/fixture compilation and all eight hostile lanes
+pass with zero failures, errors, or skips. The following fresh aggregate,
+build `a71561d8-73bc-453d-94c1-ebd836726575`, completed in 2,865.0 seconds;
+its strict audit covers 190 XML files, 2,204 tests, and zero failures, errors,
+or skips. Production emission remains erased and the remaining architecture
+record still needs complete slot-domain/physical-signature,
+construction/profile, state-access, and reflection-normalization identities
+before any atomic migration can be considered.
+
+Focused evidence additionally produced and consumed the self-describing net10
+Stdlib, executed the eight hostile open-nullable cases and continued negative
+case, and ran the Roslyn authoring case independently before the aggregate.
+The emitted Stdlib exposes projected filtering through `System.Array` and the
+nullable generic Set vararg through `object[]`; the latter contains no `T[]`
+signature or cast. C# passes a `string[]`, `Nullable<int>[]`, and `object[]`
+directly into those APIs. The separate source-inventory product and C#
+physical boundary each passed once with no skip.
+
+Focused generic-owner evidence also executed the eight hostile oracle lanes
+and the strengthened portable Kotlin/C# boundary independently before this
+aggregate. The oracle composes open mutable invariant state, widened
+`Collection<Any?>` candidate operations, star/output/input projections, open
+nullable value/reference construction, metadata-fixed `D<T> : C<T?>`
+inheritance for value and reference substitutions, arbitrary widened
+`@UnsafeVariance` bodies, owner-relative methods, generic interfaces,
+multi-level overrides, defaults, arrays, classifier normalization, and
+  separate modules. The expanded oracle passed all eight PSI/LightTree and
+  Framework/CoreCLR lanes in the aggregate. The historical typed-owner audit identifies the removed
+model's exact failure—erased arguments were narrowed to physical `T` before
+the Common semantic body. The draft replacement now classifies member-slot
+domains: strict inputs/outputs may use natural typed virtuals, while broad
+candidates use distinct typed, semantic-hook, and capability-dispatcher roles.
+No production CLR-generic Kotlin owner is emitted by this checkpoint.
+
+Two direct CLR integration probes in this aggregate establish additional
+architecture evidence on CLR 4 and CoreCLR. A guarded statically emitted
+`Nullable<!!T>` construction still fails at execution, while runtime closure
+creates exact `Owner<Nullable<int>>`/`Owner<string>` instances that retain null
+and mutation through one semantic capability. A second probe validates strict
+typed read/write, broad incompatible candidates, nullable/reference/user-struct
+state, typed C# overrides, Kotlin-like semantic overrides, and multi-level
+dispatch on one generic owner. Separate focused evidence from a bounded .NET
+10 application also passed
+ReadyToRun and full-trimming execution. NativeAOT analysis reported IL3050 for
+runtime `MakeGenericType`, and native linking could not run because this
+machine lacks the platform linker, so NativeAOT remains explicitly unproven.
+The three CLR integration methods are included in the 2,204-test aggregate count
+above; the external publish analysis is evidence rather than another test.
+
+The dispatch probe now also exercises the metadata-fixed
+`D<T> : C<T?>` fallback directly. A single `C<object>` base preserves one
+state, virtual/`super` behavior, and nullable value/reference mutation on CLR
+4 and CoreCLR, but reflection and C# necessarily see only `C<object>` and no
+assignability to the logical closed base. The programme therefore classifies
+this as an honest erased/fallback declaration, not a successfully reified
+owner shape.
+
+A focused separate-assembly C# producer/consumer probe also passes on CLR 4
+and CoreCLR. It preserves typed overrides for compatible values, semantic-hook
+dispatch for general incompatible widened values, shared fixed-result barriers
+which do not enter that hook, multi-level state identity, and the explicit
+abstract broad-member obligation. Both C# compilers reject a deliberately
+typed-only abstract subclass. Kotlin IR has not yet produced these member
+families, so this closes physical feasibility rather than the compiler gate.
 
 Focused delegated-property evidence additionally reports 24 Common/hostile
 semantic executions across PSI, LightTree, Framework CLR, and CoreCLR plus one
@@ -1041,7 +1255,15 @@ CodeAnalysis row was stripped. KLIB remains the independent authority.
 
 ## Active state
 
-No implementation slice is half-landed. The complete Common signed-selector
+No implementation slice is half-landed. The exact Common `Comparator<T>` fun
+interface, complete Common comparison combinators, six comparator scalar
+selection functions, eight Iterable comparator selection functions, and five
+Iterable sortedness traversals are published from their authoritative sources.
+They reuse the existing erased generic-interface/SAM/Comparable boundaries and
+add no Runtime capability or library schema. Stable mutation and sorted
+snapshots remain outside this completed non-mutating foundation.
+
+The complete Common signed-selector
 `sumOf` family is published under its generated logical declarations and the
 pinned `sumOfInt`, `sumOfLong`, and `sumOfDouble` physical spellings. Its exact
 type-inference markers are present as Kotlin declaration TypeDefs while their
@@ -1381,14 +1603,23 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 ## Open architectural blockers
 
 - A true CLR-generic Kotlin-owned class owner with a complete erased Kotlin
-  capability ABI and early failure of physically incompatible unchecked casts
-  is explicitly on hold. Early failure may remove the incompatible-mutation
-  storage contradiction, but the route still changes ABI, runtime identity,
-  cast timing, reflection, inheritance, and dispatch. The current erased owner
-  remains binding. This blocks only reintroducing or freezing CLR `C<T>` as the
-  Kotlin implementation owner; it does not block current stdlib, reflection,
-  CLI-IR, foreign-generics, generic-method, export-facade, or private
-  optimization work. See
+  capability ABI is now the intended destination wherever the complete Kotlin
+  contract can be represented truthfully. Production emission is blocked on
+  the hardest-model-first semantic spike and an atomic migration plan: open
+  mutable invariant state, value/reference/nullable substitutions, stars and
+  both projections, candidate-accepting erased methods, Kotlin/C# inheritance,
+  casts, reflection, nested carriers, and separate assemblies must work with
+  one owner and one state before any easy owner lands. The current erased owner
+  remains binding meanwhile. The hostile erased oracle, deterministic
+  carrier/slot matrix, direct C# surface, migration/rollback plan, and the
+  first CLR construction/dispatch probes now exist. Runtime construction is
+  explicitly insufficient for metadata-fixed shapes such as
+  `D<T> : C<T?>`; their fixed fallback must preserve override, `super`, state,
+  casts, reflection, and honest C# ancestry or the declaration remains erased.
+  Compiler-produced Kotlin member families, physical bindings, reflection,
+  separate-assembly C# inheritance, and NativeAOT remain open. This design gate does not block current stdlib,
+  reflection, CLI-IR, imported CLR generics, generic methods, explicit exports,
+  or removable specialization. See
   [`docs/programmes/generic-class-owner-reopening.md`](docs/programmes/generic-class-owner-reopening.md).
 - Typed .NET export for Kotlin-owned generics remains a separate product
   programme. It may publish a facade, read-only interface, adapter, or
@@ -1397,15 +1628,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
   ABI. Arbitrary existing instances require an adapter. The concrete export
   surface and identity policy remain open; the erased Kotlin runtime ABI does
   not.
-- Private generic specialization remains on hold until core feature coverage,
-  representative boxing/allocation/JIT/AOT measurements, and the concurrency
-  and memory model can justify it. Scalar replacement and immutable/private
-  shapes precede any escaped mutable typed-storage/deoptimization system.
-- Open nullable projected arrays remain unsupported. This blocks the exact
-  `Array<out T?>` signatures used by `setOfNotNull(vararg T?)` and the
-  object-array `filterNotNullTo` variant; the singleton Set overload is
-  published. This is a bounded compiler-representation closure, not an open
-  product-design decision, and must not be approximated with `object[]`.
+- Private generic specialization and devirtualization may be prototyped as
+  non-production evidence for the hostile owner model, but production policy
+  still requires representative boxing/allocation/JIT/AOT measurements and
+  the concurrency/memory model. The erased call remains the semantic fallback
+  at open assembly boundaries.
 - KLIB-in-DLL and physical ABI codecs still need neutral serialization owners
   as those additional compiler/tooling consumers appear.
 - Broad CLR property/member-state enhancement, `ref`/`out`, events, and
@@ -1421,17 +1648,32 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
 
 ## Next bounded work
 
-1. Select the next language foundation by its ability to unlock broad shared
-   compiler/stdlib coverage, not by the number of declarations it adds. Audit
-   Common plus JVM, JS, Wasm, and Native phase ownership first; keep a feature
-   parked when its representation requires a material ABI choice. The completed
-   delegated-property tranche is the current model: accept the authoritative
-   Common/FIR IR, add only the missing physical-owner integration, reuse the
-   existing initialization and reflection foundations, and prove the result
-   with unchanged Common tests plus hostile cross-language and separate-
-   compilation evidence. The preceding `lateinit` tranche remains the model
-   where Common supplies a semantic lowering rather than an already-expanded
-   declaration shape.
+1. Continue the hardest-model-first generic-owner architecture spike while
+   keeping production emission erased. The erased hostile oracle, historical
+   failure audit, deterministic carrier/slot admission matrix, one-owner
+   dispatch probe, direct C# surface, and atomic migration/rollback boundary
+   are now recorded. The first fail-closed IR planner is also active in the
+   production pipeline but cannot admit an owner or affect emission; direct
+   writes are evidence only, never a substitute for the complete access graph.
+   The bounded compiler prototype now generates detached typed/semantic/
+   dispatcher IR families and validates its state, signature, default,
+   `super`, logical-binding, cast/reflection, and CLR metadata roles. The
+   complete local producer graph, typed-write value provenance, snapshot-
+   driven separate C# physicalizer, and versioned cross-assembly family
+   artifact now exist. Version 2 retains exact external owners, override-root
+   sets, typed/semantic direct-`super` targets, and the separate static masked-
+   default helper. Next, add the complete slot-domain vector and neutral
+   physical type-expression/signature record, including the exact capability
+   slot identity and nested carriers, and validate it at both producer and
+   consumer without inference. Follow with construction/profile and state-
+   access identities, then reflection normalization and a Kotlin-produced
+   subclass physicalizer. Compare runtime exact open-nullable construction
+   with semantic fallback on a complete NativeAOT toolchain; ReadyToRun/
+   trimming success alone is insufficient. Kotlin/Native VTA and Swift SIL
+   remain optional proof engines for private/direct paths and never replace
+   the open-world capability. Do not emit a production `C<T>` TypeDef or roll
+   out an easy owner before the hostile prototype and real-app measurement
+   checkpoint select the one atomic cutover.
 2. Continue the generated catalog only by complete classifier families, not by
    handwritten members. The concrete Common scalars, classified `Number`,
    built-in collection interfaces, and Kotlin-owned collection implementations

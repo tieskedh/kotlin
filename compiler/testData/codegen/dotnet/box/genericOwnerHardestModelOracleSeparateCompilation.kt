@@ -1,0 +1,258 @@
+// MODULE: lib
+// FILE: lib.kt
+
+package generic.owner.oracle
+
+public interface HostileContract<T> {
+    public fun read(): T
+
+    public fun write(next: T): T
+
+    public fun accepts(candidate: Any?): Boolean
+}
+
+public open class HostileCell<T>(initial: T) : AbstractMutableCollection<T>(), HostileContract<T> {
+    private val values = ArrayList<T>()
+
+    init {
+        values.add(initial)
+    }
+
+    override val size: Int
+        get() = values.size
+
+    override fun iterator(): MutableIterator<T> = values.iterator()
+
+    override fun add(element: T): Boolean = values.add(element)
+
+    override fun read(): T = values[0]
+
+    override fun write(next: T): T {
+        val previous = values[0]
+        values[0] = next
+        return previous
+    }
+
+    override fun accepts(candidate: Any?): Boolean {
+        for (value in values) {
+            if (value == candidate) return true
+        }
+        return false
+    }
+
+    public open fun <R : T> relative(value: R): R = value
+
+    public open fun readOr(default: T = read()): T = default
+}
+
+public open class HostileMid<T>(initial: T) : HostileCell<T>(initial)
+
+public class LibraryIntLeaf(initial: Int) : HostileMid<Int>(initial) {
+    override fun read(): Int = super.read() + 100
+}
+
+// This open TypeDef edge is deliberately producer-owned so both producer and consumer subclasses
+// exercise the metadata-fixed D<T> : C<T?> problem across the binary boundary.
+public open class HostileNullableDerived<T>(initial: T?) : HostileCell<T?>(initial) {
+    override fun read(): T? = super.read()
+
+    override fun write(next: T?): T? = super.write(next)
+
+    public fun readDirectFromBase(): T? = super.read()
+}
+
+public class LibraryNullableIntLeaf(initial: Int?) : HostileNullableDerived<Int>(initial) {
+    override fun read(): Int? = super.read()?.plus(1000)
+}
+
+public open class HostileUnsafeProducer<out T>(private val expected: T) {
+    public open fun probe(candidate: @UnsafeVariance T): String =
+        if (candidate == expected) "match" else "candidate:$candidate"
+}
+
+public open class HostileUnsafeStore<out T>(initial: T) {
+    private var stored: T = initial
+
+    @Suppress("UNCHECKED_CAST")
+    private fun installUnchecked(candidate: Any?) {
+        stored = candidate as T
+    }
+
+    public open fun writeUnsafe(next: @UnsafeVariance T) {
+        installUnchecked(next)
+    }
+
+    public open fun read(): T = stored
+
+    public open fun label(prefix: String = "default"): String = prefix
+}
+
+public open class HostileTypedStore<T>(initial: T) {
+    private var stored: T = initial
+
+    @Suppress("UNCHECKED_CAST")
+    private fun installBoxed(candidate: Any?) {
+        stored = candidate as T
+    }
+
+    public open fun write(next: T) {
+        installBoxed(next)
+    }
+
+    public open fun read(): T = stored
+}
+
+public open class HostileUnsafeMid<T>(initial: T) : HostileUnsafeStore<T>(initial) {
+    override fun writeUnsafe(next: T) {
+        super.writeUnsafe(next)
+    }
+
+    override fun read(): T = super.read()
+}
+
+public fun <T> openNullableCell(value: T?): HostileCell<T?> = HostileCell(value)
+
+public fun widenedContains(cell: HostileCell<Int>, candidate: Any?): Boolean {
+    val widened: Collection<Any?> = cell
+    return widened.contains(candidate)
+}
+
+// MODULE: main(lib)
+// FILE: main.kt
+
+import generic.owner.oracle.*
+
+private open class ConsumerUnsafeLeaf<T>(initial: T) : HostileUnsafeMid<T>(initial) {
+    override fun writeUnsafe(next: T) {
+        super.writeUnsafe(next)
+    }
+
+    override fun read(): T = super.read()
+}
+
+private class ConsumerStringLeaf(initial: String) : HostileMid<String>(initial) {
+    override fun write(next: String): String = super.write("$next!")
+}
+
+private class ConsumerNullableStringLeaf(initial: String?) : HostileNullableDerived<String>(initial) {
+    override fun write(next: String?): String? =
+        super.write(if (next == null) null else "$next!")
+}
+
+private fun fail(message: String): String = "fail: $message"
+
+fun box(): String {
+    val ints = HostileCell(1)
+    ints.add(2)
+    val widened: Collection<Any?> = ints
+    if (!widened.containsAll(listOf<Any?>(1, 2)) ||
+        widened.containsAll(listOf<Any?>(1, "wrong")) ||
+        widened.containsAll(listOf<Any?>(1, null)) ||
+        widenedContains(ints, "wrong")
+    ) {
+        return fail("cross-library widened candidates")
+    }
+
+    val output: HostileCell<out Any?> = ints
+    val star: HostileCell<*> = ints
+    if (output.read() != 1 || star !== ints || star.accepts("wrong")) {
+        return fail("cross-library projections")
+    }
+
+    val anyCell = HostileCell<Any?>("seed")
+    val input: HostileCell<in Int> = anyCell
+    if (input.write(7) != "seed" || anyCell.read() != 7) {
+        return fail("cross-library input projection")
+    }
+
+    val nullableInt = openNullableCell<Int>(null)
+    val nullableString = openNullableCell<String>(null)
+    nullableInt.write(8)
+    nullableString.write("text")
+    if (nullableInt.read() != 8 || nullableString.read() != "text") {
+        return fail("cross-library open nullable constructions")
+    }
+
+    val libraryNullableLeaf = LibraryNullableIntLeaf(null)
+    val libraryNullableBase: HostileCell<Int?> = libraryNullableLeaf
+    if (libraryNullableBase.write(5) != null ||
+        libraryNullableBase.read() != 1005 ||
+        libraryNullableLeaf.readDirectFromBase() != 5
+    ) {
+        return fail("producer metadata-fixed nullable inheritance")
+    }
+
+    val consumerNullableLeaf = ConsumerNullableStringLeaf(null)
+    val consumerNullableBase: HostileCell<String?> = consumerNullableLeaf
+    if (consumerNullableBase.write("derived") != null ||
+        consumerNullableBase.read() != "derived!" ||
+        consumerNullableLeaf.readDirectFromBase() != "derived!"
+    ) {
+        return fail("consumer metadata-fixed nullable inheritance")
+    }
+
+    val unsafeProducer: HostileUnsafeProducer<Any?> = HostileUnsafeProducer(1)
+    if (unsafeProducer.probe(1) != "match" ||
+        unsafeProducer.probe("wrong") != "candidate:wrong" ||
+        unsafeProducer.probe(null) != "candidate:null"
+    ) {
+        return fail("cross-library general widened semantic body")
+    }
+
+    val exactUnsafeStore = HostileUnsafeStore(1)
+    val widenedUnsafeStore: HostileUnsafeStore<Any?> = exactUnsafeStore
+    widenedUnsafeStore.writeUnsafe("wrong")
+    if (widenedUnsafeStore.read() != "wrong") {
+        return fail("cross-library widened semantic state read")
+    }
+    try {
+        val impossible = exactUnsafeStore.read() + 1
+        return fail("cross-library exact use accepted incompatible state: $impossible")
+    } catch (_: ClassCastException) {
+        // The legal widened write remains producer-erased and the exact consumer fails on use.
+    }
+    widenedUnsafeStore.writeUnsafe(2)
+    if (exactUnsafeStore.read() != 2) {
+        return fail("cross-library semantic state recovery")
+    }
+
+    val typedStore = HostileTypedStore("before")
+    typedStore.write("after")
+    if (typedStore.read() != "after") {
+        return fail("cross-library typed write provenance through boxed helper")
+    }
+    val consumerUnsafeLeaf = ConsumerUnsafeLeaf("derived")
+    consumerUnsafeLeaf.writeUnsafe("changed")
+    if (consumerUnsafeLeaf.read() != "changed") {
+        return fail("cross-library generic subclass family")
+    }
+    if (consumerUnsafeLeaf.label() != "default" || consumerUnsafeLeaf.label("exact") != "exact") {
+        return fail("cross-library generic owner default helper family")
+    }
+
+    val libraryLeaf = LibraryIntLeaf(10)
+    val libraryBase: HostileCell<Int> = libraryLeaf
+    if (libraryBase.read() != 110) return fail("producer override dispatch")
+
+    val consumerLeaf = ConsumerStringLeaf("before")
+    val consumerBase: HostileCell<String> = consumerLeaf
+    val consumerContract: HostileContract<String> = consumerLeaf
+    if (consumerBase.write("after") != "before" ||
+        consumerBase.read() != "after!" ||
+        consumerContract.read() != "after!" ||
+        consumerBase !== consumerContract
+    ) {
+        return fail("consumer override dispatch and identity")
+    }
+
+    if (!HostileCell::class.isInstance(libraryLeaf) ||
+        !HostileCell::class.isInstance(consumerLeaf) ||
+        !HostileCell::class.isInstance(libraryNullableLeaf) ||
+        !HostileNullableDerived::class.isInstance(consumerNullableLeaf) ||
+        HostileCell::class.isInstance("wrong")
+    ) {
+        return fail("cross-library classifier normalization")
+    }
+
+    return "OK"
+}

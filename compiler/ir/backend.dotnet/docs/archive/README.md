@@ -38,6 +38,13 @@ Archived snapshots:
   completed programme whose durable rules now live in the runtime/stdlib ADR.
 - [`superseded-hybrid-exception-identity.md`](superseded-hybrid-exception-identity.md)
   preserves the exception design replaced by the classified-carrier model.
+- [`generic-owner-history-audit-2026-08-12.md`](generic-owner-history-audit-2026-08-12.md)
+  audits the removed typed-owner/canonical-capability implementation, its exact
+  widened-candidate bridge failure, reusable infrastructure, and the new
+  hardest-model-first constraints.
+- [`generic-owner-runtime-compilation-probe-2026-08-12.md`](generic-owner-runtime-compilation-probe-2026-08-12.md)
+  records the bounded JIT/ReadyToRun/trimming success and the explicitly
+  incomplete NativeAOT open-nullable construction probe.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots

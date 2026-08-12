@@ -44,10 +44,17 @@ remain compatible supersets of the portable product needed by `netstandard2.0` l
 - Common declarations and stdlib generators own Kotlin source semantics.
 - Kotlin-produced libraries are self-describing DLLs whose embedded KLIB owns logical identity.
 - CLR metadata owns executable shape and the useful foreign-language view.
+- Prefer the native CLR/BCL identity or operation whenever the complete Kotlin
+  contract is observationally equivalent. A compatible user `actual` should
+  bind an imported CLR type directly, including through `actual typealias`,
+  rather than require a wrapper merely because its declaration originated in
+  C#.
 - Standard CLR attributes are consumed or emitted where they express an exact interoperable fact.
 - Compiler-only physical members are marked as such and do not become an idiomatic C# API merely
   because linkage requires public metadata.
-- C# exports are deliberate facades; they do not redefine ordinary Kotlin ABI.
+- C# exports are deliberate facades for Kotlin-owned or shape-mismatched APIs;
+  they do not redefine ordinary Kotlin ABI or displace an exact direct CLR
+  binding.
 
 ### Pre-publication correction policy
 
@@ -356,7 +363,6 @@ binary search, and random ordering remain separate. The stable algorithm,
 failure timing, arbitrary-list, physical, and C# boundaries are owned by
 [`../decisions/stable-list-and-array-sorting.md`](../decisions/stable-list-and-array-sorting.md).
 
-
 ### 4. Expand Common collections by exact dependency closure
 
 Use [`common-collections.md`](common-collections.md). Its builder and Common abstract-base
@@ -396,17 +402,112 @@ future optimization work rather than forbidden representations. Defer them until
 language/stdlib coverage, the concurrency/memory model, and representative benchmarks can justify
 their permanent complexity.
 
+Swift-style devirtualization and Kotlin/Native Variable Type Analysis may later supply a
+closed-world proof for direct calls or private CLR/BCL specialization. The analysis must treat
+public and cross-assembly entry points conservatively and retain the canonical erased fallback.
+It cannot supply missing CLR `!T` identity for a public Kotlin-owned owner; changing that TypeDef,
+its casts, reflection, inheritance, or C# signature remains the coherent ABI reopening below.
+
 A materially different true CLR-generic owner with a complete erased Kotlin
 capability ABI and early failure of physically incompatible unchecked casts is
-now explicitly on hold in
+now the explicit long-term direction in
 [`generic-class-owner-reopening.md`](generic-class-owner-reopening.md). It is
 not the rejected primary-typed/rare-fallback design, but neither is it an
 optimization: it changes observable ABI and cast timing. Current work continues
-against the accepted erased owner. The parked question blocks only
-reintroduction or freeze of a Kotlin-owned generic class TypeDef as CLR
-`C<T>`; it does not block Common stdlib, callables/reflection, CLI IR, imported
-CLR generics, generic methods, separate explicit exports, or removable private
-specialization.
+against the accepted erased owner while the hostile semantic model and atomic
+migration plan are designed. That gate blocks only reintroduction or freeze of
+a Kotlin-owned generic class TypeDef as CLR `C<T>`; it does not block Common
+stdlib, callables/reflection, CLI IR, imported CLR generics, generic methods,
+separate explicit exports, or removable private specialization. The first
+spike must combine open mutable invariant state, stars/projections, value and
+nullable substitutions, candidate-accepting erased methods, Kotlin/C#
+inheritance, casts, reflection, nested carriers, and separate assemblies. Do
+not publish easy final/read-only owners first and switch the representation as
+harder cases arrive.
+
+The spike must distinguish construction-time choice from metadata-fixed
+TypeDef edges. Runtime construction can close standalone `C<T?>` objects, but
+it cannot make one `D<T> : C<T?>` TypeDef alternate its base between
+`C<Nullable<T>>` and `C<T>`. That inheritance shape requires one tested,
+C#-honest fixed fallback or deterministic exclusion from reified admission;
+factory success is not a substitute for the override, `super`, state, cast,
+reflection, and ancestry proof.
+
+The first fail-closed analysis seam now runs over normal lowered Kotlin IR
+before erased generic-interface bridge construction. It records every local
+generic class, member authority (strict typed, shared Kotlin barrier, or
+general semantic body), explicit `T?` metadata-fixed supertype edges, direct
+semantic writes to owner-dependent fields, and open owner-dependent outputs.
+It has no admitted/reified state, is not consumed by physical emission, and
+requires the following erased lowering to account for every planned class.
+This is architecture evidence gathered now, not a partial owner migration:
+absence of a directly observed write still means that a complete cross-body
+and cross-assembly field-access graph is required.
+
+The seam now constructs detached typed/semantic/capability member IR and
+returns immutable test snapshots of explicit signature domains, state-carrier
+requirements, selected defaults, direct `super` calls, and producer logical
+keys. The hostile Kotlin fixture validates those snapshots in every lane, and
+a test-owned CLR physicalizer validates corresponding GenericParam,
+InterfaceImpl/MethodImpl, field, virtual-slot, and override facts. Prototype
+members remain outside every class declaration, codegen ignores the snapshots,
+and the structured CLI model remains unchanged until a real production slice
+is authorized.
+
+The field proof now uses one module-wide graph rather than a direct-body scan.
+It includes functions, constructors, general function-access edges, field and
+anonymous initializers, and lifted/nested producer helpers; each generic owner
+projects its fields from that shared graph. Private helpers are strict nodes,
+but an exposed semantic entry propagates semantic reachability through them.
+The hostile write therefore records `writeUnsafe -> installUnchecked ->
+<set-stored> -> stored`. Write values are now traced through typed/semantic
+callable boundaries, call arguments, local definitions and assignments,
+returns, and casts. A cast preserves its producer domain: exact `T -> Any? ->
+T` through a private helper proves typed, while widened `T -> Any? -> T`
+remains semantic. Any unsupported or source-free path remains unresolved and
+cannot select typed storage. Non-private state remains cross-assembly
+incomplete. Those are carrier facts, never owner admission.
+
+The hostile test facade also now materializes the exact snapshot into a
+temporary generic producer assembly, compiles a separate C# subclass/consumer,
+and executes its typed, semantic, paired-output, one-state, GenericParam, and
+MethodImpl contract on both supported runtimes. This closes the snapshot-to-CLR
+test seam without making the production emitter or structured CLI consume the
+prototype. The following architecture slice is Kotlin-produced subclass
+override families and their producer/consumer binding identities—not an easy-
+owner production rollout. The local subclass half is detached and explicit:
+typed entries override typed entries, inherited semantic hooks remain separate
+semantic overrides, and private dispatchers never override. External bases
+initially remain blocked behind a producer logical-key requirement. A first
+versioned, deterministic, producer-fingerprinted physical-family artifact now
+resolves that exact obligation in the architecture test channel. It records
+implementation/capability paths, arity, disposition, state requirements,
+complete roles/reasons, selected MethodDef names, and slot dispatch; the whole
+artifact must validate before typed and semantic bindings are exposed. Stale,
+truncated, wrong-producer, duplicate, incomplete, and missing-member inputs are
+rejected, and separately compiled C# subclasses execute the resolved family on
+both runtimes. Production artifacts remain erased and contain no such record.
+Version 2 further retains the exact external producer owner path, a sorted set
+of override-root logical keys, typed/semantic direct-super owner+method targets,
+and the static masked-default helper as an adjacent non-override identity. The
+hostile separate consumer proves the helper preserves virtual dispatch into a
+C# override. The next schema/design slice must add complete slot-domain and
+physical-signature expressions, construction/profile modes, state-access
+paths, and reflection normalization, then use the resulting record to
+physicalize a Kotlin-produced subclass family without consumer inference.
+
+Supporting evidence for that reopening may land incrementally: exact imported
+generic actuals, method generics, closed constructed interface capabilities,
+typed exports, classifier normalization, shared non-generic static-state
+holders, and removable private reification are independently useful. They
+must identify which open Kotlin-owner cases still require an adapter. They may
+not introduce competing Kotlin object identities or silently alternate a
+public class between erased and reified forms. If the target later selects a
+canonical CLR `C<T>` owner, that public ABI change is one explicit pre-ABI
+migration with complete cast, reflection, dispatch, state, value-type, and
+separate-compilation evidence—not a per-class rollout. Maximizing direct,
+idiomatic .NET interop is an acceptance criterion for that reopening, not
+merely a performance optimization.
 
 The source-level builder/contracts bootstrap cycle is complete. Common `Appendable`, the complete
 `StringBuilder` file including both `buildString` declarations, generated
