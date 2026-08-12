@@ -376,12 +376,14 @@ stdlib-helper binding, and unchanged upstream test path.
 
 Further work remains foundation-first rather than allowlist-count-first. Recompute the remaining
 Common generator/source dependency graph around the actual missing substrates: Sequence,
-Grouping aggregates, sorting/comparators/random, dependency-blocked reified variants, and open nullable projected
-arrays. Select and document one substrate with the largest coherent release before admitting its
-generated family. The narrow `Array<out T?>` boundary may land
-independently because it restores authoritative `setOfNotNull(vararg T?)` and object-array nullable
-filtering without changing collection identity. Loose one-function growth and implicit BCL
-collection identity remain excluded.
+Grouping aggregates, primitive/unsigned/range sorting and random operations, and
+dependency-blocked reified variants. The narrow open-nullable-array foundation is now complete:
+`Array<out T?>` uses an identity-preserving `System.Array` read view, Kotlin-owned
+`vararg T?` uses a fresh declaration-stable `object[]`, and the bounded release restores
+authoritative `setOfNotNull(vararg T?)` plus object-array nullable filtering. Invariant/input
+method-owned open nullable arrays remain excluded. Select and document one remaining substrate
+with the largest coherent release before admitting its generated family. Loose one-function
+growth and implicit BCL collection identity remain excluded.
 
 The semantically erased generic-class route is selected in
 [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md).

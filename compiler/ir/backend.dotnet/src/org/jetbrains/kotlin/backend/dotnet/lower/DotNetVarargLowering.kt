@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.backend.common.lower.IrBuildingTransformer
 import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.irBlock as irBlockFromExpression
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.dotNetImportedClrSourceOrNull
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericArray
 import org.jetbrains.kotlin.backend.dotnet.isSupportedDotNetPrimitiveArray
 import org.jetbrains.kotlin.builtins.StandardNames
@@ -19,6 +20,7 @@ import org.jetbrains.kotlin.ir.builders.IrBlockBuilder
 import org.jetbrains.kotlin.ir.builders.irBlock as irBuilderBlock
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irGet
+import org.jetbrains.kotlin.ir.builders.irImplicitCast
 import org.jetbrains.kotlin.ir.builders.irInt
 import org.jetbrains.kotlin.ir.builders.irSet
 import org.jetbrains.kotlin.ir.builders.irTemporary
@@ -45,8 +47,10 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.isInt
+import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.util.constructors
+import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.functions
 import org.jetbrains.kotlin.ir.util.getPackageFragment
 import org.jetbrains.kotlin.ir.util.getPropertyGetter
@@ -70,8 +74,10 @@ import org.jetbrains.kotlin.util.OperatorNameConventions
  * receives a fresh array. Spread copies use the existing array `size`/`get`/`set` surface rather
  * than adding a second codegen-only copying path. An open `vararg T` uses the CLR's native `T[]`
  * method-generic vector: `newarr !!T`, `ldelem !!T`, and `stelem !!T` are valid for reference- and
- * value-type substitutions. This is method-owned capability, not CLR-generic identity for a
- * Kotlin-owned class.
+ * value-type substitutions. An open nullable Kotlin `vararg T?` instead uses one fresh `object[]`
+ * for every substitution, because each slot must hold a boxed value, reference, or null. Imported
+ * CLR varargs retain their exact foreign vector. These are method-owned capabilities, not
+ * CLR-generic identity for a Kotlin-owned class.
  */
 internal class DotNetVarargLowering(
     context: DotNetBackendContext,
@@ -83,15 +89,28 @@ internal class DotNetVarargLowering(
     }
     private val intLess = irBuiltIns.lessFunByOperandType.getValue(irBuiltIns.intClass)
     private val normalizedVarargTypes = mutableMapOf<IrValueSymbol, IrType>()
+    private val erasedNullableVarargParameters = mutableSetOf<IrValueSymbol>()
+    private val currentModuleFiles = mutableSetOf<IrFile>()
 
     override fun lower(irFile: IrFile) {
+        currentModuleFiles += irFile
         irFile.transformChildrenVoid(this)
     }
 
     override fun visitFunction(declaration: IrFunction): IrStatement {
         declaration.parameters.forEach { parameter ->
+            val usesErasedNullableCarrier = parameter.usesErasedNullableVarargCarrier()
+            if (usesErasedNullableCarrier) {
+                erasedNullableVarargParameters += parameter.symbol
+            }
             parameter.concreteVarargArrayTypeOrNull()?.let { arrayType ->
                 parameter.type = arrayType
+                if (usesErasedNullableCarrier) {
+                    // KLIB and callable reflection have already retained the logical T? element.
+                    // The final executable IR must describe the object[] it actually creates and
+                    // accepts, including to the shared vararg-type validator.
+                    parameter.varargElementType = irBuiltIns.anyNType
+                }
                 normalizedVarargTypes[parameter.symbol] = arrayType
             }
         }
@@ -122,6 +141,19 @@ internal class DotNetVarargLowering(
 
     override fun visitFunctionAccess(expression: IrFunctionAccessExpression): IrExpression {
         val callee = expression.symbol.owner
+        val externalLogicalNullableVarargTypes = mutableMapOf<Int, IrType>()
+        callee.parameters.forEachIndexed { index, parameter ->
+            if (!parameter.usesErasedNullableVarargCarrier()) return@forEachIndexed
+            if (callee.fileOrNull in currentModuleFiles) {
+                normalizeErasedNullableVarargParameter(parameter)
+            } else {
+                // Keep a deserialized producer declaration logical so its KLIB ABI key remains
+                // identical to the producer's pre-lowering key. Only this call's freshly created
+                // argument receives the object[] physical carrier below.
+                externalLogicalNullableVarargTypes[index] =
+                    parameter.type.substitute(expression.typeSubstitutionMap)
+            }
+        }
         val builtinVararg = expression.arguments.singleOrNull() as? IrVararg
         if (callee.isOptimizedDotNetArrayOf() && expression.arguments.size == 1 &&
             expression.arguments[0] == null
@@ -147,17 +179,39 @@ internal class DotNetVarargLowering(
             val elementType = parameter.varargElementType ?: continue
             if (parameter.hasDefaultValue()) continue
             val substitutedElementType = elementType.substitute(expression.typeSubstitutionMap)
+            val usesErasedNullableCarrier = parameter.usesErasedNullableVarargCarrier()
+            val physicalElementType = if (usesErasedNullableCarrier) {
+                irBuiltIns.anyNType
+            } else {
+                substitutedElementType
+            }
             expression.arguments[index] = IrVarargImpl(
                 UNDEFINED_OFFSET,
                 UNDEFINED_OFFSET,
                 parameter.type
                     .substitute(expression.typeSubstitutionMap)
-                    .concreteVarargArrayTypeOrNull(substitutedElementType)
+                    .concreteVarargArrayTypeOrNull(physicalElementType)
                     ?: parameter.type.substitute(expression.typeSubstitutionMap),
-                substitutedElementType,
+                physicalElementType,
             )
         }
+        expression.arguments.forEachIndexed { index, argument ->
+            val parameter = callee.parameters[index]
+            if (!parameter.usesErasedNullableVarargCarrier()) return@forEachIndexed
+            val vararg = argument as? IrVararg ?: return@forEachIndexed
+            vararg.type = irBuiltIns.arrayClass.typeWith(irBuiltIns.anyNType)
+            vararg.varargElementType = irBuiltIns.anyNType
+        }
         expression.transformChildrenVoid(this)
+        if (externalLogicalNullableVarargTypes.isNotEmpty()) {
+            builder.at(expression)
+            externalLogicalNullableVarargTypes.entries.forEach { entry ->
+                val index = entry.key
+                val logicalType = entry.value
+                val argument = expression.arguments[index] ?: return@forEach
+                expression.arguments[index] = builder.irImplicitCast(argument, logicalType)
+            }
+        }
         return expression
     }
 
@@ -310,7 +364,19 @@ internal class DotNetVarargLowering(
         }
 
     private fun IrValueParameter.concreteVarargArrayTypeOrNull(): IrType? =
-        varargElementType?.let { elementType -> type.concreteVarargArrayTypeOrNull(elementType) }
+        varargElementType?.let { elementType ->
+            type.concreteVarargArrayTypeOrNull(
+                if (usesErasedNullableVarargCarrier()) irBuiltIns.anyNType else elementType
+            )
+        }
+
+    private fun normalizeErasedNullableVarargParameter(parameter: IrValueParameter) {
+        erasedNullableVarargParameters += parameter.symbol
+        val arrayType = irBuiltIns.arrayClass.typeWith(irBuiltIns.anyNType)
+        parameter.type = arrayType
+        parameter.varargElementType = irBuiltIns.anyNType
+        normalizedVarargTypes[parameter.symbol] = arrayType
+    }
 
     private fun IrVararg.concreteVarargArrayTypeOrNull(): IrType? =
         type.concreteVarargArrayTypeOrNull(varargElementType)
@@ -336,6 +402,17 @@ internal class DotNetVarargLowering(
         return simpleType.arguments.any { argument ->
             (argument as? IrTypeProjection)?.type?.containsTypeParameter() != false
         }
+    }
+
+    private fun IrValueParameter.usesErasedNullableVarargCarrier(): Boolean {
+        if (symbol in erasedNullableVarargParameters) return true
+        val elementType = varargElementType as? IrSimpleType ?: return false
+        if (!elementType.isMarkedNullable() || elementType.classifier !is IrTypeParameterSymbol) {
+            return false
+        }
+        val function = parent as? IrFunction ?: return false
+        val ownerClass = function.parent as? IrClass
+        return ownerClass?.dotNetImportedClrSourceOrNull() == null
     }
 
     private data class EvaluatedElement(

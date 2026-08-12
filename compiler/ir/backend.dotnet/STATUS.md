@@ -17,7 +17,27 @@ verification, and work state.
   nine shared paths, architectural directions, stat-cache-only IL false
   positives, and post-rebase verification are recorded in
   [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
-- Last completed foundation: stable whole-list and generic-array sorting now
+- Last completed foundation: open-nullable projected array reads and
+  Kotlin-owned nullable generic varargs now use two distinct truthful CLR
+  carriers. Ordinary `Array<out T?>` retains the original exact vector through
+  the classified `System.Array` read view, so reference and nullable-value
+  vectors keep identity, component type, aliasing, and mutation visibility.
+  Every expanded `vararg T?`, including omitted and spread calls, instead
+  creates one fresh declaration-stable `object[]`, independent of reference or
+  value substitution; KLIB retains the logical `Array<out T?>` contract.
+  Deserialized producer declarations keep their logical ABI key while consumer
+  call arguments carry the exact physical vector, and imported CLR varargs
+  retain their selected foreign metadata. The bounded release restores the
+  authoritative object-array `filterNotNull`/`filterNotNullTo` pair and
+  `setOfNotNull(vararg T?)`. Same- and separate-module hostile tests cover
+  reference/value/null/widened/spread/empty/evaluation-order/freshness and
+  destination-identity behavior on both parsers and CLR profiles. Roslyn calls
+  the emitted `System.Array` and `object[]` signatures directly; no wrapper,
+  unchecked `T[]` cast, or placeholder helper was added. Method-owned
+  invariant/input open nullable arrays remain rejected, while closed exact and
+  declaration-erased owner-array rules are unchanged. See
+  [`docs/decisions/open-nullable-array-views-and-varargs.md`](docs/decisions/open-nullable-array-views-and-varargs.md).
+  The preceding foundation: stable whole-list and generic-array sorting now
   actualize the exact Common `MutableList.sort`/`sortWith` and generated
   object-array `sort`/`sortWith` contracts, then release the dependency-closed
   eager `sort*`/`sorted*` consumers. The generator retains the authoritative
