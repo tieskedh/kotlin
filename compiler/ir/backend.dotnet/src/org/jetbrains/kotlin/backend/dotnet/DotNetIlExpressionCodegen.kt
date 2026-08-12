@@ -898,6 +898,9 @@ internal class DotNetIlExpressionCodegen(
      * stays rejected loudly until its own audited model exists.
      */
     private fun emitTypeOperatorCall(expression: IrTypeOperatorCall, expectedType: DotNetIlValueType) {
+        if (expression.operator == IrTypeOperator.SAM_CONVERSION) {
+            dotNetUnsupported("SAM conversion survived .NET single-abstract-method lowering")
+        }
         if (expression.operator == IrTypeOperator.IMPLICIT_COERCION_TO_UNIT) {
             if (!DotNetRuntimeTypes.unitType.isDotNetAssignableTo(expectedType)) {
                 dotNetUnsupported(

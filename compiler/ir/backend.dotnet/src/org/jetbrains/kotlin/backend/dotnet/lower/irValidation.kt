@@ -17,6 +17,8 @@ import org.jetbrains.kotlin.ir.expressions.IrRawFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrSuspendableExpression
 import org.jetbrains.kotlin.ir.expressions.IrSuspensionPoint
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.util.isSuspend
 import org.jetbrains.kotlin.ir.util.isTopLevelInPackage
 import org.jetbrains.kotlin.ir.validation.IrValidatorConfig
@@ -44,7 +46,16 @@ internal class DotNetIrValidationAfterLoweringPhase(
             NoResidualSuspensionPointChecker,
             NoResidualSuspendableExpressionChecker,
             NoCoroutineCompilerIntrinsicCallChecker,
+            NoResidualSamConversionChecker,
         )
+}
+
+private object NoResidualSamConversionChecker : IrElementChecker<IrTypeOperatorCall>(IrTypeOperatorCall::class) {
+    override fun check(element: IrTypeOperatorCall, context: CheckerContext) {
+        if (element.operator == IrTypeOperator.SAM_CONVERSION) {
+            context.error(element, "SAM conversions must be wrapper-lowered before .NET CIL generation")
+        }
+    }
 }
 
 private object NoResidualSuspendDeclarationChecker : IrElementChecker<IrSimpleFunction>(IrSimpleFunction::class) {

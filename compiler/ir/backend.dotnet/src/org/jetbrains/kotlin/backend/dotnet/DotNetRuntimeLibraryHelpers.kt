@@ -156,6 +156,14 @@ $kClassSupportTypesIl
             |    }
             |  }
             |
+            |  .class interface public abstract auto ansi FunctionAdapter
+            |  {
+            |    $compilerAbiTypeAttributesIl
+            |    .method public hidebysig newslot abstract virtual instance class Kotlin.Function getFunctionDelegate() cil managed
+            |    {
+            |    }
+            |  }
+            |
             |  .class private abstract sealed auto ansi beforefieldinit CallableDeclarationFacts
             |         extends ${coreLibraryReference}System.Object
             |  {

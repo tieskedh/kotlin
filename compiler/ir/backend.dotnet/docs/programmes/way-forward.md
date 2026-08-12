@@ -330,6 +330,15 @@ metadata, suspend callable reflection/export, and explicit C# async adapters
 remain consumers of this foundation. None may change its continuation/sentinel
 ABI or introduce a second state-machine representation.
 
+The completed language foundation selected after delegated properties is Kotlin
+fun-interface/SAM conversion. Common `SingleAbstractMethodLowering` owns the
+wrapper semantics, as on JVM, JS, Wasm, and Native; .NET retains an ordinary
+Kotlin interface and an ordinary generated implementation class rather than a
+CLR delegate identity. This selection precedes the next collection tranche
+because Common `Comparator<T>` is itself a fun interface and therefore blocks
+the sorting/comparator substrate. The complete representation, equality,
+runtime capability, interop boundary, and evidence gate are owned by
+[`../decisions/fun-interfaces.md`](../decisions/fun-interfaces.md).
 ### 4. Expand Common collections by exact dependency closure
 
 Use [`common-collections.md`](common-collections.md). Its builder and Common abstract-base

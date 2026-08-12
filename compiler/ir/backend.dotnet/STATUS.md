@@ -17,7 +17,27 @@ verification, and work state.
   nine shared paths, architectural directions, stat-cache-only IL false
   positives, and post-rebase verification are recorded in
   [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
-- Last completed foundation: top-level delegated properties now reuse the
+- Last completed foundation: Kotlin `fun interface` declarations now use the
+  repository's Common `SingleAbstractMethodLowering`, after callable-reference
+  materialization and before local-class, interface, generic, and continuation
+  lowering. The declaration remains one ordinary Kotlin-owned CLR interface;
+  each conversion becomes an assembly-private ordinary implementation class
+  over the established `FunctionN` object, never a CLR delegate or second
+  interface identity. Common owns nullable conversion, exactly-once
+  evaluation, forwarding, and stored-function/reference equality. Runtime
+  surface 36 adds the metadata-public compiler-ABI
+  `Kotlin.Runtime.Internal.FunctionAdapter` capability used by that equality
+  protocol; the KLIB/library codec remains version 35. Generic owner variance,
+  inherited abstract slots, receiver/primitive adaptation, suspend forwarding,
+  public inline bodies, and three-module consumption all reuse existing
+  foundations. The multimodule producer test also corrected the .NET test
+  fixture to supply and stage transitive binary dependencies, matching the
+  other KLIB environments instead of weakening non-linking symbol resolution.
+  Roslyn proves that C# can implement and call the ordinary interface and can
+  consume a Kotlin-produced wrapper; direct C# lambda conversion remains
+  deliberately unsupported until an explicit delegate export exists. No
+  erased Kotlin generic-class owner was reopened.
+  The preceding foundation: top-level delegated properties now reuse the
   exact operator calls and property-reference identity already produced by
   FIR/Common, matching the established member and local paths. One private
   static delegate field lives on the file facade; the existing static-
