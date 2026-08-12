@@ -339,6 +339,15 @@ because Common `Comparator<T>` is itself a fun interface and therefore blocks
 the sorting/comparator substrate. The complete representation, equality,
 runtime capability, interop boundary, and evidence gate are owned by
 [`../decisions/fun-interfaces.md`](../decisions/fun-interfaces.md).
+
+The completed first consumer after that foundation is the dependency-closed
+Comparator and non-mutating order-selection tranche. It publishes the exact
+Common ordinary fun interface, complete Common comparison combinators,
+comparator min/max selection, and Iterable sortedness traversal without
+claiming a stable platform sort. The semantic/physical/C# boundary and the
+separate stable-sort prerequisite are owned by
+[`../decisions/comparator-and-selection-foundation.md`](../decisions/comparator-and-selection-foundation.md).
+
 ### 4. Expand Common collections by exact dependency closure
 
 Use [`common-collections.md`](common-collections.md). Its builder and Common abstract-base
