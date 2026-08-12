@@ -71,6 +71,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassAutoboxingLower
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassImplementationSignatureLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetValueClassBoxingHelpersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericOwnerArchitecturePlanningLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetAllFunctionInlining
 import org.jetbrains.kotlin.backend.dotnet.lower.inline.DotNetPrivateFunctionInlining
 import org.jetbrains.kotlin.backend.dotnet.lower.coroutines.DotNetAddContinuationToFunctionCallsLowering
@@ -258,6 +259,9 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // capability, such as IComparable<T>, may receive an additional bridge without changing
     // Kotlin object identity.
     // Imported CLR interfaces never enter this lowering and retain their native variance rules.
+    // First record fail-closed candidate evidence for the eventual CLR-generic class-owner ABI.
+    // This analysis has no admitted/reified result and is not consumed by physical emission.
+    ::DotNetGenericOwnerArchitecturePlanningLowering,
     ::DotNetGenericInterfaceBridgeLowering,
     // CLR method-slot identity includes the return type on every supported profile. Preserve
     // Kotlin covariant overrides with one exact virtual implementation plus private final

@@ -26795,6 +26795,994 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testOpenNullableGenericOwnerRuntimeConstructionOptions() {
+        val frameworkIlasm = DotNetIlAssembler.findFrameworkIlasm()
+        val modernIlasm = DotNetIlAssembler.findModernIlasm()
+        requireOrAssumeToolchain(frameworkIlasm != null, ".NET Framework ILAsm is not available")
+        requireOrAssumeToolchain(modernIlasm != null, "Modern ILAsm is not available")
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(frameworkCSharp != null, ".NET Framework C# compiler is not available")
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(modernCSharp != null, "Modern C# compiler is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val directory = File(tmpdir, "open-nullable-generic-owner-probe").apply { mkdirs() }
+        val ilFile = directory.resolve("OpenNullableGenericOwnerProbe.il").apply {
+            writeText(
+                """
+                .assembly extern mscorlib {}
+                .assembly OpenNullableGenericOwnerProbe {}
+                .module OpenNullableGenericOwnerProbe.exe
+
+                .class public auto ansi beforefieldinit 'ProbeBox`1'<'T'>
+                       extends [mscorlib]System.Object
+                {
+                  .field public !0 'Value'
+
+                  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+                  {
+                    .maxstack 2
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ldarg.0
+                    ldarg.1
+                    stfld !0 class 'ProbeBox`1'<!0>::'Value'
+                    ret
+                  }
+                }
+
+                .class public abstract sealed auto ansi beforefieldinit 'OpenNullableGenericOwnerProbe'
+                       extends [mscorlib]System.Object
+                {
+                  .method private hidebysig static object 'MakeNullable'<'T'>(!!0 'value') cil managed
+                  {
+                    .maxstack 2
+                    ldtoken !!0
+                    call class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(
+                        valuetype [mscorlib]System.RuntimeTypeHandle)
+                    callvirt instance bool [mscorlib]System.Type::get_IsValueType()
+                    brfalse.s IL_reference
+
+                    ldarg.0
+                    newobj instance void valuetype [mscorlib]System.Nullable`1<!!0>::.ctor(!0)
+                    newobj instance void class 'ProbeBox`1'<
+                        valuetype [mscorlib]System.Nullable`1<!!0>>::.ctor(!0)
+                    ret
+
+                  IL_reference:
+                    ldarg.0
+                    newobj instance void class 'ProbeBox`1'<!!0>::.ctor(!0)
+                    ret
+                  }
+
+                  .method public hidebysig static int32 Main() cil managed
+                  {
+                    .entrypoint
+                    .maxstack 1
+                    ldc.i4.7
+                    call object 'OpenNullableGenericOwnerProbe'::'MakeNullable'<int32>(!!0)
+                    isinst class 'ProbeBox`1'<valuetype [mscorlib]System.Nullable`1<int32>>
+                    brfalse.s IL_failure
+
+                    ldnull
+                    call object 'OpenNullableGenericOwnerProbe'::'MakeNullable'<string>(!!0)
+                    isinst class 'ProbeBox`1'<string>
+                    brfalse.s IL_failure
+
+                    ldc.i4.0
+                    ret
+
+                  IL_failure:
+                    ldc.i4.1
+                    ret
+                  }
+                }
+                """.trimIndent()
+            )
+        }
+        val frameworkExecutable = directory.resolve("OpenNullableGenericOwnerProbe-framework.exe")
+        assertTrue(
+            DotNetIlAssembler.assembleWithExplicitIlasm(
+                checkNotNull(frameworkIlasm),
+                ilFile,
+                frameworkExecutable,
+                dll = false,
+                messageCollector = MessageCollector.NONE,
+            )
+        )
+        val modernExecutable = directory.resolve("OpenNullableGenericOwnerProbe-modern.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleWithExplicitIlasm(
+                checkNotNull(modernIlasm),
+                ilFile,
+                modernExecutable,
+                dll = false,
+                messageCollector = MessageCollector.NONE,
+            )
+        )
+
+        val frameworkProcess = ProcessBuilder(
+            frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkExecutable)
+        )
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val frameworkOutput = frameworkProcess.inputStream.bufferedReader().use { it.readText() }
+        assertNotEquals(0, frameworkProcess.waitFor()) {
+            "Framework CLR unexpectedly accepted an unconstrained guarded Nullable<T> construction:\n$frameworkOutput"
+        }
+
+        directory.resolve("OpenNullableGenericOwnerProbe-modern.runtimeconfig.json")
+            .writeText(net10RuntimeConfig())
+        val modernProcess = ProcessBuilder(dotnetHost.path, "exec", modernExecutable.path)
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val modernOutput = modernProcess.inputStream.bufferedReader().use { it.readText() }
+        assertNotEquals(0, modernProcess.waitFor()) {
+            "CoreCLR unexpectedly accepted an unconstrained guarded Nullable<T> construction:\n$modernOutput"
+        }
+
+        val dynamicSource = directory.resolve("OpenNullableDynamicProbe.cs").apply {
+            writeText(
+                """
+                using System;
+
+                public interface SemanticBox
+                {
+                    object Read();
+                    void Write(object value);
+                    Type PhysicalArgument();
+                }
+
+                public sealed class DynamicProbeBox<T> : SemanticBox
+                {
+                    private T value;
+
+                    public DynamicProbeBox(T value)
+                    {
+                        this.value = value;
+                    }
+
+                    public object Read()
+                    {
+                        return value;
+                    }
+
+                    public void Write(object next)
+                    {
+                        value = (T)next;
+                    }
+
+                    public Type PhysicalArgument()
+                    {
+                        return typeof(T);
+                    }
+                }
+
+                public static class OpenNullableDynamicProbe
+                {
+                    private static SemanticBox MakeNullable<T>(object value)
+                    {
+                        Type argument = typeof(T).IsValueType
+                            ? typeof(Nullable<>).MakeGenericType(typeof(T))
+                            : typeof(T);
+                        Type owner = typeof(DynamicProbeBox<>).MakeGenericType(argument);
+                        return (SemanticBox)Activator.CreateInstance(owner, new object[] { value });
+                    }
+
+                    public static int Main()
+                    {
+                        SemanticBox value = MakeNullable<int>(null);
+                        if (value.PhysicalArgument() != typeof(int?) || value.Read() != null) return 1;
+                        value.Write(7);
+                        if (!object.Equals(value.Read(), 7)) return 2;
+                        value.Write(null);
+                        if (value.Read() != null) return 3;
+
+                        SemanticBox reference = MakeNullable<string>(null);
+                        if (reference.PhysicalArgument() != typeof(string) || reference.Read() != null) return 4;
+                        reference.Write("text");
+                        if (!object.Equals(reference.Read(), "text")) return 5;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val frameworkDynamicExecutable = directory.resolve("OpenNullableDynamicProbe-framework.exe")
+        val frameworkDynamicCompile = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            dynamicSource,
+            frameworkDynamicExecutable,
+            target = "exe",
+        )
+        assertEquals(0, frameworkDynamicCompile.exitCode, frameworkDynamicCompile.output)
+        val frameworkDynamicProcess = ProcessBuilder(
+            frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkDynamicExecutable)
+        )
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val frameworkDynamicOutput = frameworkDynamicProcess.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, frameworkDynamicProcess.waitFor(), frameworkDynamicOutput)
+
+        val modernDynamicExecutable = directory.resolve("OpenNullableDynamicProbe-modern.dll")
+        val modernDynamicCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            dynamicSource,
+            modernDynamicExecutable,
+            target = "exe",
+        )
+        assertEquals(0, modernDynamicCompile.exitCode, modernDynamicCompile.output)
+        directory.resolve("OpenNullableDynamicProbe-modern.runtimeconfig.json")
+            .writeText(net10RuntimeConfig())
+        runDotNet(
+            dotnetHost,
+            modernDynamicExecutable,
+            directory,
+            "CoreCLR dynamic exact open-nullable owner probe failed",
+        )
+    }
+
+    @Test
+    fun testReifiedGenericOwnerSemanticDispatchShape() {
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(frameworkCSharp != null, ".NET Framework C# compiler is not available")
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(modernCSharp != null, "Modern C# compiler is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val directory = File(tmpdir, "reified-generic-owner-semantic-dispatch-shape").apply { mkdirs() }
+        val source = directory.resolve("ReifiedGenericOwnerSemanticDispatchShape.cs").apply {
+            writeText(
+                """
+                using System;
+
+                public interface IHostileOwnerSemantic
+                {
+                    object ReadSemantic();
+                    void WriteSemantic(object value);
+                    bool ContainsCandidate(object candidate);
+                    Type PhysicalArgument();
+                }
+
+                public class HostileOwner<T> : IHostileOwnerSemantic
+                {
+                    private T value;
+
+                    public HostileOwner(T value)
+                    {
+                        this.value = value;
+                    }
+
+                    public virtual T Read()
+                    {
+                        return value;
+                    }
+
+                    public virtual void Write(T next)
+                    {
+                        value = next;
+                    }
+
+                    public virtual bool Contains(T candidate)
+                    {
+                        return object.Equals(value, candidate);
+                    }
+
+                    protected virtual bool ContainsCandidateCore(object candidate)
+                    {
+                        return object.Equals(value, candidate);
+                    }
+
+                    private static bool IsCompatibleCandidate(object candidate)
+                    {
+                        if (candidate != null) return candidate is T;
+                        return object.ReferenceEquals(default(T), null);
+                    }
+
+                    object IHostileOwnerSemantic.ReadSemantic()
+                    {
+                        return Read();
+                    }
+
+                    void IHostileOwnerSemantic.WriteSemantic(object next)
+                    {
+                        Write((T)next);
+                    }
+
+                    bool IHostileOwnerSemantic.ContainsCandidate(object candidate)
+                    {
+                        if (IsCompatibleCandidate(candidate)) return Contains((T)candidate);
+                        return ContainsCandidateCore(candidate);
+                    }
+
+                    Type IHostileOwnerSemantic.PhysicalArgument()
+                    {
+                        return typeof(T);
+                    }
+                }
+
+                public class TypedOverride : HostileOwner<int>
+                {
+                    public TypedOverride() : base(0) {}
+
+                    public override void Write(int next)
+                    {
+                        base.Write(next + 1);
+                    }
+
+                    public override bool Contains(int candidate)
+                    {
+                        return candidate == 99;
+                    }
+                }
+
+                public sealed class MultiLevelTypedOverride : TypedOverride
+                {
+                    public override bool Contains(int candidate)
+                    {
+                        return candidate == 100;
+                    }
+                }
+
+                public sealed class KotlinLikeBroadOverride : HostileOwner<int>
+                {
+                    public KotlinLikeBroadOverride() : base(7) {}
+
+                    public override bool Contains(int candidate)
+                    {
+                        return ContainsCandidateCore(candidate);
+                    }
+
+                    protected override bool ContainsCandidateCore(object candidate)
+                    {
+                        return object.Equals(candidate, "semantic") || object.Equals(candidate, Read());
+                    }
+                }
+
+                public sealed class ReadOverride : HostileOwner<int>
+                {
+                    public ReadOverride() : base(3) {}
+
+                    public override int Read()
+                    {
+                        return base.Read() + 10;
+                    }
+                }
+
+                // A single open D<T> cannot select HostileOwner<Nullable<T>> for value
+                // substitutions and HostileOwner<T> for reference substitutions. This is the
+                // only honest one-TypeDef fallback under test: one fixed HostileOwner<object>
+                // base and one inherited state, with the logical nullable relation left to the
+                // semantic capability.
+                public class FixedFallbackNullableDerived<T> : HostileOwner<object>
+                {
+                    public FixedFallbackNullableDerived(object value) : base(value) {}
+
+                    public virtual object ReadNullableSemantic()
+                    {
+                        return base.Read();
+                    }
+
+                    public virtual object WriteNullableSemantic(object next)
+                    {
+                        object previous = base.Read();
+                        base.Write(next);
+                        return previous;
+                    }
+
+                    public object ReadDirectFromBase()
+                    {
+                        return base.Read();
+                    }
+                }
+
+                public sealed class FixedFallbackIntLeaf : FixedFallbackNullableDerived<int>
+                {
+                    public FixedFallbackIntLeaf() : base(null) {}
+
+                    public override object ReadNullableSemantic()
+                    {
+                        object value = base.ReadNullableSemantic();
+                        return value == null ? null : (object)(((int)value) + 1000);
+                    }
+                }
+
+                public sealed class FixedFallbackStringLeaf : FixedFallbackNullableDerived<string>
+                {
+                    public FixedFallbackStringLeaf() : base(null) {}
+
+                    public override object WriteNullableSemantic(object next)
+                    {
+                        return base.WriteNullableSemantic(next == null ? null : (object)(((string)next) + "!"));
+                    }
+                }
+
+                public interface IUnsafeStoreSemantic
+                {
+                    object ReadSemantic();
+                    void WriteSemantic(object next);
+                }
+
+                public class UnsafeStore<T> : IUnsafeStoreSemantic
+                {
+                    // A semantic write can install a value incompatible with physical T. One
+                    // object field preserves Kotlin's write-then-fail-on-exact-read timing; the
+                    // natural typed surface remains a wrapper over that same state.
+                    private object state;
+
+                    public UnsafeStore(T initial)
+                    {
+                        state = initial;
+                    }
+
+                    public virtual T Read()
+                    {
+                        return (T)state;
+                    }
+
+                    public virtual void Write(T next)
+                    {
+                        state = next;
+                    }
+
+                    protected virtual object ReadSemanticCore()
+                    {
+                        return state;
+                    }
+
+                    protected virtual void WriteSemanticCore(object next)
+                    {
+                        state = next;
+                    }
+
+                    private static bool IsCompatible(object candidate)
+                    {
+                        if (candidate != null) return candidate is T;
+                        return object.ReferenceEquals(default(T), null);
+                    }
+
+                    object IUnsafeStoreSemantic.ReadSemantic()
+                    {
+                        return ReadSemanticCore();
+                    }
+
+                    void IUnsafeStoreSemantic.WriteSemantic(object next)
+                    {
+                        if (IsCompatible(next)) Write((T)next);
+                        else WriteSemanticCore(next);
+                    }
+                }
+
+                public sealed class TypedOnlyUnsafeReadOverride : UnsafeStore<int>
+                {
+                    public TypedOnlyUnsafeReadOverride() : base(1) {}
+
+                    public override int Read()
+                    {
+                        return 42;
+                    }
+                }
+
+                public sealed class PairedUnsafeReadOverride : UnsafeStore<int>
+                {
+                    public PairedUnsafeReadOverride() : base(1) {}
+
+                    public override int Read()
+                    {
+                        return 43;
+                    }
+
+                    protected override object ReadSemanticCore()
+                    {
+                        return 43;
+                    }
+                }
+
+                public struct UserValue
+                {
+                    public int Id;
+
+                    public UserValue(int id)
+                    {
+                        Id = id;
+                    }
+
+                    public override bool Equals(object other)
+                    {
+                        return other is UserValue && ((UserValue)other).Id == Id;
+                    }
+
+                    public override int GetHashCode()
+                    {
+                        return Id;
+                    }
+                }
+
+                public static class ReifiedGenericOwnerSemanticDispatchShape
+                {
+                    public static int Main()
+                    {
+                        HostileOwner<int> integers = new HostileOwner<int>(7);
+                        IHostileOwnerSemantic semanticIntegers = integers;
+                        if (semanticIntegers.PhysicalArgument() != typeof(int)) return 1;
+                        if (!semanticIntegers.ContainsCandidate(7)) return 2;
+                        if (semanticIntegers.ContainsCandidate("wrong")) return 3;
+                        if (semanticIntegers.ContainsCandidate(null)) return 4;
+                        semanticIntegers.WriteSemantic(9);
+                        if (!object.Equals(semanticIntegers.ReadSemantic(), 9)) return 5;
+
+                        HostileOwner<int?> nullableIntegers = new HostileOwner<int?>(null);
+                        IHostileOwnerSemantic semanticNullableIntegers = nullableIntegers;
+                        if (semanticNullableIntegers.PhysicalArgument() != typeof(int?)) return 6;
+                        if (!semanticNullableIntegers.ContainsCandidate(null)) return 7;
+                        semanticNullableIntegers.WriteSemantic(11);
+                        if (!object.Equals(semanticNullableIntegers.ReadSemantic(), 11)) return 8;
+                        semanticNullableIntegers.WriteSemantic(null);
+                        if (semanticNullableIntegers.ReadSemantic() != null) return 9;
+
+                        HostileOwner<string> references = new HostileOwner<string>(null);
+                        IHostileOwnerSemantic semanticReferences = references;
+                        if (!semanticReferences.ContainsCandidate(null)) return 10;
+                        if (semanticReferences.ContainsCandidate(7)) return 11;
+                        semanticReferences.WriteSemantic("text");
+                        if (!object.Equals(semanticReferences.ReadSemantic(), "text")) return 12;
+
+                        TypedOverride typedOverride = new TypedOverride();
+                        IHostileOwnerSemantic semanticTypedOverride = typedOverride;
+                        semanticTypedOverride.WriteSemantic(4);
+                        if (!object.Equals(semanticTypedOverride.ReadSemantic(), 5)) return 13;
+                        if (!semanticTypedOverride.ContainsCandidate(99)) return 14;
+                        if (semanticTypedOverride.ContainsCandidate("wrong")) return 15;
+
+                        MultiLevelTypedOverride multiLevel = new MultiLevelTypedOverride();
+                        IHostileOwnerSemantic semanticMultiLevel = multiLevel;
+                        if (!semanticMultiLevel.ContainsCandidate(100)) return 16;
+                        if (semanticMultiLevel.ContainsCandidate(99)) return 17;
+
+                        KotlinLikeBroadOverride broadOverride = new KotlinLikeBroadOverride();
+                        IHostileOwnerSemantic semanticBroadOverride = broadOverride;
+                        if (!broadOverride.Contains(7)) return 18;
+                        if (!semanticBroadOverride.ContainsCandidate(7)) return 19;
+                        if (!semanticBroadOverride.ContainsCandidate("semantic")) return 20;
+                        if (semanticBroadOverride.ContainsCandidate("wrong")) return 21;
+
+                        ReadOverride readOverride = new ReadOverride();
+                        if (!object.Equals(((IHostileOwnerSemantic)readOverride).ReadSemantic(), 13)) return 22;
+
+                        UserValue userValue = new UserValue(23);
+                        HostileOwner<UserValue> structs = new HostileOwner<UserValue>(userValue);
+                        IHostileOwnerSemantic semanticStructs = structs;
+                        if (semanticStructs.PhysicalArgument() != typeof(UserValue)) return 23;
+                        if (!semanticStructs.ContainsCandidate(userValue)) return 24;
+                        if (semanticStructs.ContainsCandidate("wrong")) return 25;
+                        semanticStructs.WriteSemantic(new UserValue(24));
+                        if (!object.Equals(semanticStructs.ReadSemantic(), new UserValue(24))) return 26;
+
+                        Type fixedOpenBase = typeof(FixedFallbackNullableDerived<>).BaseType;
+                        if (fixedOpenBase != typeof(HostileOwner<object>)) return 27;
+                        if (typeof(FixedFallbackNullableDerived<int>).BaseType != typeof(HostileOwner<object>)) return 28;
+                        if (typeof(FixedFallbackNullableDerived<string>).BaseType != typeof(HostileOwner<object>)) return 29;
+                        if (typeof(HostileOwner<int?>).IsAssignableFrom(typeof(FixedFallbackNullableDerived<int>))) return 30;
+                        if (typeof(HostileOwner<string>).IsAssignableFrom(typeof(FixedFallbackNullableDerived<string>))) return 31;
+
+                        FixedFallbackIntLeaf fixedInt = new FixedFallbackIntLeaf();
+                        IHostileOwnerSemantic fixedIntSemantic = fixedInt;
+                        if (fixedIntSemantic.PhysicalArgument() != typeof(object)) return 32;
+                        if (fixedInt.WriteNullableSemantic(5) != null) return 33;
+                        if (!object.Equals(fixedInt.ReadNullableSemantic(), 1005)) return 34;
+                        if (!object.Equals(fixedInt.ReadDirectFromBase(), 5)) return 35;
+                        fixedIntSemantic.WriteSemantic(null);
+                        if (fixedInt.ReadNullableSemantic() != null || fixedInt.ReadDirectFromBase() != null) return 36;
+
+                        FixedFallbackStringLeaf fixedString = new FixedFallbackStringLeaf();
+                        IHostileOwnerSemantic fixedStringSemantic = fixedString;
+                        if (fixedString.WriteNullableSemantic("derived") != null) return 37;
+                        if (!object.Equals(fixedString.ReadNullableSemantic(), "derived!")) return 38;
+                        if (!object.Equals(fixedString.ReadDirectFromBase(), "derived!")) return 39;
+                        if (!object.Equals(fixedStringSemantic.ReadSemantic(), "derived!")) return 40;
+
+                        UnsafeStore<int> unsafeStore = new UnsafeStore<int>(1);
+                        IUnsafeStoreSemantic unsafeSemantic = unsafeStore;
+                        unsafeSemantic.WriteSemantic("wrong");
+                        if (!object.Equals(unsafeSemantic.ReadSemantic(), "wrong")) return 41;
+                        try
+                        {
+                            unsafeStore.Read();
+                            return 42;
+                        }
+                        catch (InvalidCastException)
+                        {
+                        }
+                        unsafeSemantic.WriteSemantic(2);
+                        if (unsafeStore.Read() != 2 || !object.Equals(unsafeSemantic.ReadSemantic(), 2)) return 43;
+
+                        System.Reflection.FieldInfo[] unsafeFields = typeof(UnsafeStore<int>).GetFields(
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly
+                        );
+                        if (unsafeFields.Length != 1 || unsafeFields[0].FieldType != typeof(object)) return 44;
+
+                        Type unsafeDefinition = typeof(UnsafeStore<>);
+                        if (!unsafeDefinition.IsGenericTypeDefinition) return 49;
+                        Type[] unsafeParameters = unsafeDefinition.GetGenericArguments();
+                        if (unsafeParameters.Length != 1 ||
+                            unsafeParameters[0].GenericParameterPosition != 0 ||
+                            unsafeParameters[0].GenericParameterAttributes !=
+                                System.Reflection.GenericParameterAttributes.None ||
+                            unsafeParameters[0].GetGenericParameterConstraints().Length != 0) return 50;
+                        Type[] unsafeInterfaces = unsafeDefinition.GetInterfaces();
+                        if (Array.IndexOf(unsafeInterfaces, typeof(IUnsafeStoreSemantic)) < 0) return 51;
+
+                        System.Reflection.MethodInfo typedRead = unsafeDefinition.GetMethod("Read");
+                        System.Reflection.MethodInfo typedWrite = unsafeDefinition.GetMethod("Write");
+                        if (typedRead == null || !typedRead.IsPublic || !typedRead.IsVirtual || typedRead.IsFinal ||
+                            typedRead.ReturnType != unsafeParameters[0]) return 52;
+                        if (typedWrite == null || !typedWrite.IsPublic || !typedWrite.IsVirtual || typedWrite.IsFinal ||
+                            typedWrite.GetParameters().Length != 1 ||
+                            typedWrite.GetParameters()[0].ParameterType != unsafeParameters[0]) return 53;
+
+                        System.Reflection.BindingFlags hookFlags =
+                            System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.NonPublic |
+                            System.Reflection.BindingFlags.DeclaredOnly;
+                        System.Reflection.MethodInfo semanticReadHook =
+                            unsafeDefinition.GetMethod("ReadSemanticCore", hookFlags);
+                        System.Reflection.MethodInfo semanticWriteHook =
+                            unsafeDefinition.GetMethod("WriteSemanticCore", hookFlags);
+                        if (semanticReadHook == null || !semanticReadHook.IsFamily ||
+                            !semanticReadHook.IsVirtual || semanticReadHook.IsFinal ||
+                            semanticReadHook.ReturnType != typeof(object)) return 54;
+                        if (semanticWriteHook == null || !semanticWriteHook.IsFamily ||
+                            !semanticWriteHook.IsVirtual || semanticWriteHook.IsFinal ||
+                            semanticWriteHook.GetParameters().Length != 1 ||
+                            semanticWriteHook.GetParameters()[0].ParameterType != typeof(object)) return 55;
+
+                        System.Reflection.InterfaceMapping unsafeMap =
+                            typeof(UnsafeStore<int>).GetInterfaceMap(typeof(IUnsafeStoreSemantic));
+                        if (unsafeMap.InterfaceMethods.Length != 2 || unsafeMap.TargetMethods.Length != 2) return 56;
+                        for (int i = 0; i < unsafeMap.InterfaceMethods.Length; i++)
+                        {
+                            System.Reflection.MethodInfo target = unsafeMap.TargetMethods[i];
+                            if (!target.IsPrivate || !target.IsVirtual || !target.IsFinal ||
+                                target.DeclaringType != typeof(UnsafeStore<int>)) return 57;
+                            if (unsafeMap.InterfaceMethods[i].Name == "ReadSemantic" &&
+                                target.ReturnType != typeof(object)) return 58;
+                            if (unsafeMap.InterfaceMethods[i].Name == "WriteSemantic" &&
+                                (target.GetParameters().Length != 1 ||
+                                 target.GetParameters()[0].ParameterType != typeof(object))) return 59;
+                        }
+
+                        TypedOnlyUnsafeReadOverride typedOnlyRead = new TypedOnlyUnsafeReadOverride();
+                        if (typedOnlyRead.Read() != 42) return 45;
+                        if (!object.Equals(((IUnsafeStoreSemantic)typedOnlyRead).ReadSemantic(), 1)) return 46;
+                        PairedUnsafeReadOverride pairedRead = new PairedUnsafeReadOverride();
+                        if (pairedRead.Read() != 43) return 47;
+                        if (!object.Equals(((IUnsafeStoreSemantic)pairedRead).ReadSemantic(), 43)) return 48;
+                        System.Reflection.MethodInfo pairedTypedRead =
+                            typeof(PairedUnsafeReadOverride).GetMethod("Read");
+                        System.Reflection.MethodInfo pairedSemanticRead =
+                            typeof(PairedUnsafeReadOverride).GetMethod("ReadSemanticCore", hookFlags);
+                        if (pairedTypedRead == null ||
+                            pairedTypedRead.GetBaseDefinition().DeclaringType != typeof(UnsafeStore<int>)) return 60;
+                        if (pairedSemanticRead == null ||
+                            pairedSemanticRead.GetBaseDefinition().DeclaringType != typeof(UnsafeStore<int>)) return 61;
+
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+
+        val frameworkExecutable = directory.resolve("ReifiedGenericOwnerSemanticDispatchShape-framework.exe")
+        val frameworkCompile = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            source,
+            frameworkExecutable,
+            target = "exe",
+        )
+        assertEquals(0, frameworkCompile.exitCode, frameworkCompile.output)
+        val frameworkProcess = ProcessBuilder(
+            frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkExecutable)
+        )
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val frameworkOutput = frameworkProcess.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, frameworkProcess.waitFor(), frameworkOutput)
+
+        val modernExecutable = directory.resolve("ReifiedGenericOwnerSemanticDispatchShape-modern.dll")
+        val modernCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            source,
+            modernExecutable,
+            target = "exe",
+        )
+        assertEquals(0, modernCompile.exitCode, modernCompile.output)
+        directory.resolve("ReifiedGenericOwnerSemanticDispatchShape-modern.runtimeconfig.json")
+            .writeText(net10RuntimeConfig())
+        runDotNet(
+            dotnetHost,
+            modernExecutable,
+            directory,
+            "CoreCLR reified generic owner semantic dispatch shape failed",
+        )
+    }
+
+    @Test
+    fun testReifiedGenericOwnerSeparateAssemblyDispatchFamilies() {
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(frameworkCSharp != null, ".NET Framework C# compiler is not available")
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(modernCSharp != null, "Modern C# compiler is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        // The legacy Framework compiler truncates long native arguments; keep this complete
+        // producer/negative/consumer matrix beneath the already long JUnit temporary root short.
+        val directory = File(tmpdir, "gosp").apply { mkdirs() }
+        val producerSource = directory.resolve("p.cs").apply {
+            writeText(
+                """
+                using System;
+
+                namespace GenericOwner.Dispatch
+                {
+                    public interface IOwnerSemantic
+                    {
+                        object ReadSemantic();
+                        void WriteSemantic(object value);
+                        bool ContainsCandidate(object candidate);
+                        string ProbeCandidate(object candidate);
+                    }
+
+                    public class Owner<T> : IOwnerSemantic
+                    {
+                        private T value;
+
+                        public Owner(T initial)
+                        {
+                            value = initial;
+                        }
+
+                        public virtual T Read()
+                        {
+                            return value;
+                        }
+
+                        public virtual void Write(T next)
+                        {
+                            value = next;
+                        }
+
+                        public virtual bool Contains(T candidate)
+                        {
+                            return object.Equals(value, candidate);
+                        }
+
+                        public virtual string Probe(T candidate)
+                        {
+                            return object.Equals(value, candidate) ? "typed-match" : "typed-other";
+                        }
+
+                        protected virtual string ProbeSemanticCore(object candidate)
+                        {
+                            return "semantic:" + (candidate == null ? "null" : candidate.ToString());
+                        }
+
+                        private static bool IsCompatible(object candidate)
+                        {
+                            if (candidate != null) return candidate is T;
+                            return object.ReferenceEquals(default(T), null);
+                        }
+
+                        object IOwnerSemantic.ReadSemantic()
+                        {
+                            return Read();
+                        }
+
+                        void IOwnerSemantic.WriteSemantic(object next)
+                        {
+                            Write((T)next);
+                        }
+
+                        bool IOwnerSemantic.ContainsCandidate(object candidate)
+                        {
+                            // Shared special-method policy: incompatible candidates have the
+                            // Kotlin/JVM fixed default and never enter a typed or semantic body.
+                            return IsCompatible(candidate) && Contains((T)candidate);
+                        }
+
+                        string IOwnerSemantic.ProbeCandidate(object candidate)
+                        {
+                            // General @UnsafeVariance policy: compatible candidates retain the
+                            // ordinary typed virtual, while incompatible candidates execute the
+                            // wider semantic body instead of receiving a fabricated default.
+                            return IsCompatible(candidate) ? Probe((T)candidate) : ProbeSemanticCore(candidate);
+                        }
+                    }
+
+                    public abstract class AbstractBroadOwner<T>
+                    {
+                        public abstract bool Contains(T candidate);
+                        protected abstract bool ContainsSemanticCore(object candidate);
+
+                        public bool ContainsCandidate(object candidate)
+                        {
+                            if (candidate != null && candidate is T) return Contains((T)candidate);
+                            if (candidate == null && object.ReferenceEquals(default(T), null)) return Contains((T)candidate);
+                            return ContainsSemanticCore(candidate);
+                        }
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerSource = directory.resolve("c.cs").apply {
+            writeText(
+                """
+                using System;
+                using GenericOwner.Dispatch;
+
+                public class TypedConsumer : Owner<int>
+                {
+                    public TypedConsumer() : base(4) {}
+
+                    public override void Write(int next)
+                    {
+                        base.Write(next + 1);
+                    }
+
+                    public override bool Contains(int candidate)
+                    {
+                        return candidate == 99;
+                    }
+
+                    public override string Probe(int candidate)
+                    {
+                        return "consumer-typed:" + candidate;
+                    }
+                }
+
+                public sealed class BroadConsumer : TypedConsumer
+                {
+                    protected override string ProbeSemanticCore(object candidate)
+                    {
+                        return "consumer-semantic:" + (candidate == null ? "null" : candidate.ToString());
+                    }
+                }
+
+                public sealed class CompleteAbstractConsumer : AbstractBroadOwner<int>
+                {
+                    public override bool Contains(int candidate)
+                    {
+                        return candidate == 7;
+                    }
+
+                    protected override bool ContainsSemanticCore(object candidate)
+                    {
+                        return object.Equals(candidate, "semantic");
+                    }
+                }
+
+                public static class GenericOwnerDispatchConsumer
+                {
+                    public static int Main()
+                    {
+                        TypedConsumer typed = new TypedConsumer();
+                        IOwnerSemantic typedSemantic = typed;
+                        typedSemantic.WriteSemantic(10);
+                        if (!object.Equals(typedSemantic.ReadSemantic(), 11)) return 1;
+                        if (!typedSemantic.ContainsCandidate(99)) return 2;
+                        if (typedSemantic.ContainsCandidate("wrong")) return 3;
+                        if (typedSemantic.ProbeCandidate(12) != "consumer-typed:12") return 4;
+                        if (typedSemantic.ProbeCandidate("wrong") != "semantic:wrong") return 5;
+
+                        BroadConsumer broad = new BroadConsumer();
+                        IOwnerSemantic broadSemantic = broad;
+                        if (broadSemantic.ProbeCandidate(13) != "consumer-typed:13") return 6;
+                        if (broadSemantic.ProbeCandidate("wrong") != "consumer-semantic:wrong") return 7;
+                        if (broadSemantic.ContainsCandidate("wrong")) return 8;
+
+                        CompleteAbstractConsumer complete = new CompleteAbstractConsumer();
+                        if (!complete.ContainsCandidate(7)) return 9;
+                        if (!complete.ContainsCandidate("semantic")) return 10;
+                        if (complete.ContainsCandidate("wrong")) return 11;
+
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val incompleteConsumerSource = directory.resolve("i.cs").apply {
+            writeText(
+                """
+                using GenericOwner.Dispatch;
+
+                public sealed class IncompleteAbstractConsumer : AbstractBroadOwner<int>
+                {
+                    public override bool Contains(int candidate)
+                    {
+                        return candidate == 7;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+
+        val frameworkProducer = directory.resolve("P4.dll")
+        val frameworkProducerCompile = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            producerSource,
+            frameworkProducer,
+        )
+        assertEquals(0, frameworkProducerCompile.exitCode, frameworkProducerCompile.output)
+        val frameworkIncomplete = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            incompleteConsumerSource,
+            directory.resolve("I4.dll"),
+            frameworkProducer,
+        )
+        assertNotEquals(0, frameworkIncomplete.exitCode, frameworkIncomplete.output)
+        val frameworkExecutable = directory.resolve("C4.exe")
+        val frameworkConsumerCompile = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            consumerSource,
+            frameworkExecutable,
+            frameworkProducer,
+            target = "exe",
+        )
+        assertEquals(0, frameworkConsumerCompile.exitCode, frameworkConsumerCompile.output)
+        val frameworkProcess = ProcessBuilder(
+            frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkExecutable)
+        )
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val frameworkOutput = frameworkProcess.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, frameworkProcess.waitFor(), frameworkOutput)
+
+        val modernProducer = directory.resolve("P10.dll")
+        val modernProducerCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            producerSource,
+            modernProducer,
+        )
+        assertEquals(0, modernProducerCompile.exitCode, modernProducerCompile.output)
+        val modernIncomplete = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            incompleteConsumerSource,
+            directory.resolve("I10.dll"),
+            modernProducer,
+        )
+        assertNotEquals(0, modernIncomplete.exitCode, modernIncomplete.output)
+        val modernExecutable = directory.resolve("C10.dll")
+        val modernConsumerCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            consumerSource,
+            modernExecutable,
+            modernProducer,
+            target = "exe",
+        )
+        assertEquals(0, modernConsumerCompile.exitCode, modernConsumerCompile.output)
+        directory.resolve("C10.runtimeconfig.json")
+            .writeText(net10RuntimeConfig())
+        runDotNet(
+            dotnetHost,
+            modernExecutable,
+            directory,
+            "CoreCLR separate-assembly reified generic-owner dispatch failed",
+        )
+    }
+
+    @Test
     fun testNet48AssemblerMatrix() {
         val frameworkIlasm = DotNetIlAssembler.findFrameworkIlasm()
         val modernIlasm = DotNetIlAssembler.findModernIlasm()
@@ -30033,6 +31021,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun readStar(value: Box<*>): Any? = value.read()
                 public fun readString(value: Box<String>): String = value.read()
                 public fun writeString(value: Box<String>, next: String) = value.write(next)
+                public fun accepts(value: Box<*>, candidate: Any?): Boolean = value.read() == candidate
+                public fun <T> nullableBox(value: T?): Box<T?> = Box(value)
                 public fun choose(value: Box<Int>): String = "int:${'$'}{value.read()}"
                 public fun choose(value: Box<String>): String = "string:${'$'}{value.read()}"
 
@@ -30107,6 +31097,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val writeStringFunction = facadeFunctions.single { function ->
             function.methodName.startsWith("writeString__KotlinErased__")
         }
+        val acceptsFunction = facadeFunctions.single { function ->
+            function.methodName.startsWith("accepts__KotlinErased__")
+        }
+        val nullableBoxFunction = facadeFunctions.single { function ->
+            function.methodName.startsWith("nullableBox")
+        }
         val erasedOverloads = declarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.Function>()
             .filter { declaration -> declaration.methodName.startsWith("choose__KotlinErased__") }
@@ -30119,6 +31115,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             writeText(
                 """
                 using System;
+
+                public struct UserValue
+                {
+                    public int Raw;
+
+                    public UserValue(int raw)
+                    {
+                        Raw = raw;
+                    }
+
+                    public override bool Equals(object other)
+                    {
+                        return other is UserValue && ((UserValue)other).Raw == Raw;
+                    }
+
+                    public override int GetHashCode()
+                    {
+                        return Raw;
+                    }
+                }
 
                 public sealed class CSharpBox : genericclassabi.Box
                 {
@@ -30135,6 +31151,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                 }
 
+                public sealed class CSharpValueBox : genericclassabi.Box
+                {
+                    public CSharpValueBox(UserValue value) : base(value) {}
+
+                    public override object read()
+                    {
+                        UserValue value = (UserValue)base.read();
+                        return new UserValue(value.Raw + 100);
+                    }
+
+                    public override void write(object value)
+                    {
+                        base.write((UserValue)value);
+                    }
+                }
+
                 public static class GenericClassConsumer
                 {
                     public static int Main()
@@ -30146,6 +31178,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (genericclassabi.genericClassLibraryKt.${readStringFunction.methodName}(typed) != "changed?!") return 3;
                         if (!Object.ReferenceEquals(typed,
                             genericclassabi.genericClassLibraryKt.checkedBox(typed))) return 4;
+                        CSharpValueBox valueBox = new CSharpValueBox(new UserValue(7));
+                        UserValue first = (UserValue)genericclassabi.genericClassLibraryKt.${readStarFunction.methodName}(valueBox);
+                        if (first.Raw != 107) return 5;
+                        if (!genericclassabi.genericClassLibraryKt.${acceptsFunction.methodName}(valueBox, new UserValue(107))) return 6;
+                        if (genericclassabi.genericClassLibraryKt.${acceptsFunction.methodName}(valueBox, "wrong")) return 7;
+                        valueBox.write(new UserValue(8));
+                        UserValue second = (UserValue)genericclassabi.genericClassLibraryKt.${readStarFunction.methodName}(valueBox);
+                        if (second.Raw != 108) return 8;
+                        genericclassabi.Box nullableValue =
+                            genericclassabi.genericClassLibraryKt.${nullableBoxFunction.methodName}<int>(null);
+                        if (genericclassabi.genericClassLibraryKt.${readStarFunction.methodName}(nullableValue) != null) return 9;
+                        nullableValue.write(11);
+                        if ((int)genericclassabi.genericClassLibraryKt.${readStarFunction.methodName}(nullableValue) != 11) return 10;
                         return 0;
                     }
                 }
@@ -30246,6 +31291,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             throw Error("external nested generic cast identity and members")
                         }
                         if (safeBox("wrong") != null || isBox("wrong")) throw Error("unrelated admission")
+                        if (!accepts(Box(39), 39) || accepts(Box(39), "wrong")) {
+                            throw Error("candidate-accepting erased member")
+                        }
+                        val nullableInt = nullableBox<Int>(null)
+                        val nullableString = nullableBox<String>(null)
+                        nullableInt.write(41)
+                        nullableString.write("nullable")
+                        if (nullableInt.read() != 41 || nullableString.read() != "nullable") {
+                            throw Error("open nullable generic-owner construction")
+                        }
                         @Suppress("UNCHECKED_CAST")
                         val wrong = library as Any as Box<Int>
                         try {
@@ -34128,8 +35183,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "filterIndexed" to 1,
             "filterIndexedTo" to 1,
             "filterNot" to 1,
-            "filterNotNull" to 1,
-            "filterNotNullTo" to 1,
+            "filterNotNull" to 2,
+            "filterNotNullTo" to 2,
             "filterNotTo" to 1,
             "filterTo" to 1,
             "flatMap" to 1,
@@ -34955,6 +36010,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         sourceFiles += File("libraries/stdlib/common/src/kotlin/collections/LinkedHashSet.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/contracts/ContractBuilder.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/src/kotlin/contracts/Effect.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/common/src/kotlin/Comparator.kt").absoluteFile
+        sourceFiles += File("libraries/stdlib/src/kotlin/comparisons/Comparisons.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ExceptionsH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/ioH.kt").absoluteFile
         sourceFiles += File("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt").absoluteFile
