@@ -469,6 +469,7 @@ fun main(args: Array<String>) {
         extractCommonDeclaration(commonSetsFile, "public inline fun <T> linkedSetOf(): LinkedHashSet<T>"),
         extractCommonDeclaration(commonSetsFile, "public fun <T> linkedSetOf(vararg elements: T): LinkedHashSet<T>"),
         extractCommonDeclaration(commonSetsFile, "public fun <T : Any> setOfNotNull(element: T?): Set<T>"),
+        extractCommonDeclaration(commonSetsFile, "public fun <T : Any> setOfNotNull(vararg elements: T?): Set<T>"),
         extractCommonDeclaration(
             commonSetsFile,
             "public inline fun <E> buildSet(builderAction: MutableSet<E>.() -> Unit): Set<E>",
@@ -579,8 +580,8 @@ fun main(args: Array<String>) {
         Filtering.f_filterIsInstance selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         Filtering.f_filterIsInstanceTo selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         Filtering.f_filterNot selectedFor setOf(Family.Iterables),
-        Filtering.f_filterNotNull selectedFor setOf(Family.Iterables),
-        Filtering.f_filterNotNullTo selectedFor setOf(Family.Iterables),
+        Filtering.f_filterNotNull selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
+        Filtering.f_filterNotNullTo selectedFor setOf(Family.Iterables, Family.ArraysOfObjects),
         Filtering.f_filterNotTo selectedFor setOf(Family.Iterables),
         Filtering.f_filterTo selectedFor setOf(Family.Iterables),
         Filtering.f_slice selectedFor setOf(Family.Lists),

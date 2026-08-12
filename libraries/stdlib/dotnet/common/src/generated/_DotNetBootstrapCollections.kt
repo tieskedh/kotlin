@@ -907,12 +907,32 @@ public fun <T : Any> Iterable<T?>.filterNotNull(): List<T> {
 }
 
 /**
+ * Returns a list containing all elements that are not `null`.
+ *
+ * @sample samples.collections.Collections.Filtering.filterNotNull
+ */
+public fun <T : Any> Array<out T?>.filterNotNull(): List<T> {
+    return filterNotNullTo(ArrayList<T>())
+}
+
+/**
  * Appends all elements that are not `null` to the given [destination].
  *
  * @sample samples.collections.Collections.Filtering.filterNotNullTo
  */
 @IgnorableReturnValue
 public fun <C : MutableCollection<in T>, T : Any> Iterable<T?>.filterNotNullTo(destination: C): C {
+    for (element in this) if (element != null) destination.add(element)
+    return destination
+}
+
+/**
+ * Appends all elements that are not `null` to the given [destination].
+ *
+ * @sample samples.collections.Collections.Filtering.filterNotNullTo
+ */
+@IgnorableReturnValue
+public fun <C : MutableCollection<in T>, T : Any> Array<out T?>.filterNotNullTo(destination: C): C {
     for (element in this) if (element != null) destination.add(element)
     return destination
 }
