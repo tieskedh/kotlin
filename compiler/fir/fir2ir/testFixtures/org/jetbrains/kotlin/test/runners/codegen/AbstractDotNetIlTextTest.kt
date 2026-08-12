@@ -89,6 +89,8 @@ import org.jetbrains.kotlin.test.services.moduleStructure
 import org.jetbrains.kotlin.test.services.targetPlatform
 import org.jetbrains.kotlin.test.services.temporaryDirectoryManager
 import org.jetbrains.kotlin.test.services.transitiveDependsOnDependencies
+import org.jetbrains.kotlin.test.services.transitiveFriendDependencies
+import org.jetbrains.kotlin.test.services.transitiveRegularDependencies
 import org.jetbrains.kotlin.test.services.configuration.CommonEnvironmentConfigurator
 import org.jetbrains.kotlin.test.services.configuration.addSourcesForDependsOnClosure
 import org.jetbrains.kotlin.test.services.sourceProviders.CoroutineHelpersSourceFilesProvider
@@ -358,10 +360,14 @@ private class DotNetEnvironmentConfigurator(
             .map(DotNetPropertyExport::parse)
         configuration.dotNetOutput = getConfiguredOutput(module, artifactName)
         configuration.dotNetTarget = target
-        val binaryLibraries = (module.regularDependencies + module.friendDependencies)
-            .filter { dependency -> dependency.kind == DependencyKind.Binary }
-        for (dependency in binaryLibraries) {
-            val dependencyModule = dependency.dependencyModule
+        // Match the KLIB test environments: a selected binary library's regular dependency
+        // closure is part of the compiler classpath. Inline bodies may refer to declarations in
+        // that closure even when the consuming source names only the immediate library.
+        val binaryLibraries = buildList {
+            addAll(module.transitiveRegularDependencies(reverseOrder = true) { it.kind == DependencyKind.Binary })
+            addAll(module.transitiveFriendDependencies(reverseOrder = true) { it.kind == DependencyKind.Binary })
+        }.distinct()
+        for (dependencyModule in binaryLibraries) {
             val dependencyOutput = getProducedAssembly(dependencyModule, getArtifactName(dependencyModule))
             check(dependencyOutput.isFile) { "Missing compiled test dependency: ${dependencyOutput.path}" }
             configuration.addDotNetClasspathRoot(dependencyOutput)
@@ -755,9 +761,11 @@ private abstract class AbstractDotNetBoxRunner(
 
     private fun stageRuntimeDependencies(module: TestModule, executable: File) {
         val outputDirectory = executable.parentFile ?: return
-        for (dependency in module.regularDependencies + module.friendDependencies) {
-            if (dependency.kind != DependencyKind.Binary) continue
-            val dependencyModule = dependency.dependencyModule
+        val binaryLibraries = buildList {
+            addAll(module.transitiveRegularDependencies(reverseOrder = true) { it.kind == DependencyKind.Binary })
+            addAll(module.transitiveFriendDependencies(reverseOrder = true) { it.kind == DependencyKind.Binary })
+        }.distinct()
+        for (dependencyModule in binaryLibraries) {
             val artifactName = dependencyModule.name.takeUnless { it == "main" }
                 ?: dotNetTestServices.moduleStructure.originalTestDataFiles.first().nameWithoutExtension
             val producedAssembly = outputDirectory

@@ -118,6 +118,7 @@ internal class DotNetBackendContext(
     override val irFactory: IrFactory = symbolTable.irFactory
     override val typeSystem: IrTypeSystemContext = IrTypeSystemContextImpl(irBuiltIns)
     override val symbols: DotNetSymbols = DotNetSymbols(irBuiltIns, irFactory, irModuleFragment)
+    val functionAdapterSymbols: DotNetFunctionAdapterSymbols = symbols.functionAdapterSymbols
     val exactCallableSymbols: DotNetExactCallableSymbols =
         DotNetExactCallableSymbols(irBuiltIns, irFactory, irModuleFragment)
     val typedArgumentsCallableSymbols: DotNetTypedArgumentsCallableSymbols =
@@ -201,6 +202,7 @@ internal class DotNetSymbols(
     private val irFactory: IrFactory,
     irModuleFragment: IrModuleFragment,
 ) : BackendSymbols(irBuiltIns) {
+    val functionAdapterSymbols = DotNetFunctionAdapterSymbols(irBuiltIns, irFactory, irModuleFragment)
     private val coroutineImplClassId = ClassId(FqName("kotlin.coroutines"), Name.identifier("DotNetCoroutineImpl"))
     private val dotNetCoroutineInternalPackage = FqName("kotlin.dotnet.internal")
 
@@ -440,7 +442,7 @@ internal class DotNetSymbols(
         coroutineImplMember("exception").setterSymbol()
     }
     override val functionAdapter: IrClassSymbol
-        get() = unsupportedSymbol("functionAdapter")
+        get() = functionAdapterSymbols.irClass.symbol
     override val defaultConstructorMarker: IrClassSymbol = run {
         val fqName = DotNetRuntimeTypes.DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME
         val markerPackage = createEmptyExternalPackageFragment(irModuleFragment, fqName.parent())

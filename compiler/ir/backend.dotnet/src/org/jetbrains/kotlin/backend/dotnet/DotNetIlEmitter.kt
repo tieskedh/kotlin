@@ -86,6 +86,7 @@ internal class DotNetIlEmitter(
     private val moduleFileName: String,
     private val producesExecutable: Boolean,
     private val irBuiltIns: IrBuiltIns,
+    private val functionAdapterSymbols: DotNetFunctionAdapterSymbols,
     private val propertyReferenceFactoryFunctions: List<IrSimpleFunction>,
     private val memberReferenceFactoryFunctions: List<IrSimpleFunction>,
     private val callableAnnotationFactoryFunctions: List<IrSimpleFunction>,
@@ -625,6 +626,7 @@ internal class DotNetIlEmitter(
         val availableFunctions = LinkedHashMap<IrSimpleFunction, DotNetIlFunctionInfo>()
         DotNetRuntimeTypes.registerCallableFunctions(
             irBuiltIns,
+            functionAdapterSymbols,
             propertyReferenceFactoryFunctions,
             memberReferenceFactoryFunctions,
             callableAnnotationFactoryFunctions,
@@ -2056,7 +2058,7 @@ internal class DotNetIlEmitter(
      *
      * Named nested interfaces may appear under supported named classes, interfaces, objects, and
      * companions, and own only their own generic parameters. Remaining whole-interface rejection
-     * edges include `fun interface` until SAM conversion exists, local/anonymous interfaces,
+     * edges include local/anonymous interfaces,
      * unsupported metadata parents, private callable members, overrides of `kotlin.Any` members,
      * and unsupported nested/member shapes unrelated to companion storage.
      */
@@ -2067,9 +2069,6 @@ internal class DotNetIlEmitter(
     ) {
         val name = irClass.diagnosticName()
         val enclosingClass = irClass.parent as? IrClass
-        if (irClass.isFun) {
-            dotNetUnsupported("fun interface '$name' is not supported (no SAM-conversion model)")
-        }
         if (enclosingClass == null && irClass.parent !is IrFile) {
             dotNetUnsupported("interface '$name' is local or anonymous; only named interfaces are supported")
         }
@@ -2732,6 +2731,7 @@ internal class DotNetIlEmitter(
                         DOTNET_STATIC_INITIALIZATION_FAILURE_STATE ->
                             renderedFields += renderField(declaration, physicalTypeMapper)
                         IrDeclarationOrigin.DELEGATE,
+                        IrDeclarationOrigin.SYNTHETIC_GENERATED_SAM_IMPLEMENTATION,
                         IrDeclarationOrigin.FIELD_FOR_OUTER_THIS,
                         LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE,
                         LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CROSSINLINE_CAPTURED_VALUE,
@@ -2743,6 +2743,7 @@ internal class DotNetIlEmitter(
                                         LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE,
                                         LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CROSSINLINE_CAPTURED_VALUE,
                                             -> "captured-value"
+                                        IrDeclarationOrigin.SYNTHETIC_GENERATED_SAM_IMPLEMENTATION -> "SAM-callable"
                                         else -> "interface-delegate"
                                     }
                                 dotNetUnsupported(
@@ -2959,9 +2960,10 @@ internal class DotNetIlEmitter(
 
     /**
      * One `.field` line: the instance backing field of a member property, FIR's loose private
-     * interface-delegate field, the common inner-class lowering's private outer-instance field,
-     * a local class's immutable captured-value field, or a static backing field of a top-level
-     * property on its file facade or a companion-block property on its class.
+     * interface-delegate field, Common SAM lowering's private callable field, the common
+     * inner-class lowering's private outer-instance field, a local class's immutable
+     * captured-value field, or a static backing field of a top-level property on its file facade
+     * or a companion-block property on its class.
      * These fields are always `private` (the JVM `final` analogue `initonly` is deliberately
      * omitted — a pure metadata nicety with no semantic need, and a `var`'s `stsfld` from the
      * static setter must stay legal); the delegation shape is ilasm-probe-verified by

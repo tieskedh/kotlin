@@ -55,6 +55,12 @@ private const val DOT_NET_COROUTINE_INT_LIKE_VAR_SPILLING_PATTERN =
 private const val DOT_NET_TOP_LEVEL_DELEGATED_PROPERTY_PATTERN =
     "^(accessTopLevelDelegatedPropertyInClinit|topLevelVal|topLevelVar)\\.kt$"
 private const val DOT_NET_PROVIDE_DELEGATE_PATTERN = "^(evaluationOrderVar|propertyMetadata)\\.kt$"
+private const val DOT_NET_FUN_INTERFACE_PATTERN =
+    "^(basicFunInterfaceConversion|funInterfaceInheritance|funInterfaceWithReceiver|" +
+            "funInterfaceWithSuspendMethod|inlinedSamWrapper|multimodule|nullableSam|primitiveConversions|" +
+            "receiverEvaluatedOnce|samConstructorExplicitInvocation|samConversionToGenericInterfaceInGenericFun|" +
+            "kt46512_indyFunInterfaceOverCallableReference)\\.kt$"
+private const val DOT_NET_STABLE_SORT_PATTERN = "^(sortListOfStrings)\\.kt$"
 
 fun main(args: Array<String>) {
     val mainClassName = TestGeneratorUtil.getMainClassName()
@@ -103,6 +109,7 @@ fun main(args: Array<String>) {
                             "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
                 )
                 model("box/properties/lateinit", testClassName = "PropertiesLateinit")
+                model("box/funInterface", pattern = DOT_NET_FUN_INTERFACE_PATTERN, recursive = false)
                 model(
                     "box/delegatedProperty",
                     pattern = DOT_NET_TOP_LEVEL_DELEGATED_PROPERTY_PATTERN,
@@ -253,6 +260,7 @@ fun main(args: Array<String>) {
                             "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
                 )
                 model("box/properties/lateinit", testClassName = "PropertiesLateinit")
+                model("box/funInterface", pattern = DOT_NET_FUN_INTERFACE_PATTERN, recursive = false)
                 model(
                     "box/delegatedProperty",
                     pattern = DOT_NET_TOP_LEVEL_DELEGATED_PROPERTY_PATTERN,
@@ -404,6 +412,7 @@ fun main(args: Array<String>) {
                             "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
                 )
                 model("box/properties/lateinit", testClassName = "PropertiesLateinit")
+                model("box/funInterface", pattern = DOT_NET_FUN_INTERFACE_PATTERN, recursive = false)
                 model(
                     "box/delegatedProperty",
                     pattern = DOT_NET_TOP_LEVEL_DELEGATED_PROPERTY_PATTERN,
@@ -555,6 +564,7 @@ fun main(args: Array<String>) {
                             "localCapturedNotInitialized|localInitialized|localNotInitialized|notInitialized)\\.kt$",
                 )
                 model("box/properties/lateinit", testClassName = "PropertiesLateinit")
+                model("box/funInterface", pattern = DOT_NET_FUN_INTERFACE_PATTERN, recursive = false)
                 model(
                     "box/delegatedProperty",
                     pattern = DOT_NET_TOP_LEVEL_DELEGATED_PROPERTY_PATTERN,
@@ -772,7 +782,7 @@ fun main(args: Array<String>) {
             testClass<AbstractFirLightTreeDotNetCrossAssemblerTest> {
                 model(
                     "codegen/dotnet/ilText",
-                    pattern = "^(annotationValues|genericConstraints|genericFunctions|interfaceDefaultBodiesPortable|" +
+                    pattern = "^(annotationValues|funInterfaces|genericConstraints|genericFunctions|interfaceDefaultBodiesPortable|" +
                             "mainOverloads|nestedClasses|printlnEscapedString|propertyReferences)\\.kt$",
                     recursive = false,
                 )
