@@ -1,0 +1,1069 @@
+/*
+ * Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
+
+package org.jetbrains.kotlin.backend.dotnet.lower
+
+import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
+import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
+import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateDisposition
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectSuperCallPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberAccessPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberPolicy
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideBindingPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideTargetKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMember
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierPlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateWriteProvenancePlan
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
+import org.jetbrains.kotlin.backend.dotnet.dotNetLibraryAbiKeyOrNull
+import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
+import org.jetbrains.kotlin.backend.dotnet.isDotNetResolutionOnlyStdlibDeclaration
+import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
+import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.builders.declarations.buildFun
+import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
+import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
+import org.jetbrains.kotlin.ir.declarations.IrField
+import org.jetbrains.kotlin.ir.declarations.IrFunction
+import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
+import org.jetbrains.kotlin.ir.declarations.IrProperty
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
+import org.jetbrains.kotlin.ir.declarations.IrVariable
+import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
+import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.IrSetField
+import org.jetbrains.kotlin.ir.expressions.IrSetValue
+import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.IrGetField
+import org.jetbrains.kotlin.ir.expressions.IrGetValue
+import org.jetbrains.kotlin.ir.expressions.IrFunctionAccessExpression
+import org.jetbrains.kotlin.ir.expressions.IrExpressionBody
+import org.jetbrains.kotlin.ir.expressions.IrReturn
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
+import org.jetbrains.kotlin.ir.expressions.IrWhen
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
+import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
+import org.jetbrains.kotlin.ir.types.SimpleTypeNullability
+import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.util.copyTo
+import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
+import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
+import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
+import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
+import org.jetbrains.kotlin.ir.visitors.acceptVoid
+import org.jetbrains.kotlin.types.Variance
+import org.jetbrains.kotlin.name.Name
+
+private val DOTNET_GENERIC_OWNER_PROTOTYPE_MEMBER: IrDeclarationOrigin =
+    IrDeclarationOriginImpl("DOTNET_GENERIC_OWNER_PROTOTYPE_MEMBER")
+
+/**
+ * Records conservative proof obligations for the eventual CLR-generic Kotlin class-owner ABI.
+ *
+ * This pass is intentionally adjacent to, but independent from, erased generic-interface bridge
+ * construction. It changes no IR and grants no class permission to use a reified physical owner.
+ * Keeping it in the production pipeline makes the analysis run over every supported semantic
+ * corpus without allowing a partial ABI switch.
+ */
+internal class DotNetGenericOwnerArchitecturePlanningLowering(
+    private val context: DotNetBackendContext,
+) : ModuleLoweringPass {
+    private val specialBridgeMethods = SpecialBridgeMethods(context)
+
+    override fun lower(irModule: IrModuleFragment) {
+        check(context.genericOwnerArchitecturePlans.isEmpty()) {
+            "Internal .NET backend error: generic-owner architecture planning ran more than once"
+        }
+
+        val owners = mutableListOf<IrClass>()
+        val producerFunctions = linkedSetOf<IrFunction>()
+        val producerInitializers = mutableListOf<ProducerInitializer>()
+        irModule.acceptVoid(object : IrVisitorVoid() {
+            override fun visitElement(element: IrElement) {
+                element.acceptChildrenVoid(this)
+            }
+
+            override fun visitClass(declaration: IrClass) {
+                if (!declaration.isDotNetResolutionOnlyStdlibDeclaration &&
+                    declaration.isDotNetGenericClassDeclaration
+                ) {
+                    owners += declaration
+                }
+                declaration.acceptChildrenVoid(this)
+            }
+
+            override fun visitFunction(declaration: IrFunction) {
+                producerFunctions += declaration
+                declaration.acceptChildrenVoid(this)
+            }
+
+            override fun visitAnonymousInitializer(declaration: IrAnonymousInitializer) {
+                producerInitializers += ProducerInitializer(
+                    label = "<initializer:${declaration.startOffset}>",
+                    element = declaration.body,
+                )
+                declaration.acceptChildrenVoid(this)
+            }
+
+            override fun visitField(declaration: IrField) {
+                declaration.initializer?.let { initializer ->
+                    producerInitializers += ProducerInitializer(
+                        label = "<field-initializer:${declaration.name.asString()}>",
+                        element = initializer,
+                        implicitWrite = declaration,
+                    )
+                }
+                declaration.acceptChildrenVoid(this)
+            }
+        })
+        val producerAccesses = producerFunctions.associateWithTo(linkedMapOf()) { function ->
+            function.collectDirectAccesses(producerFunctions)
+        }
+        val initializerAccesses = producerInitializers.associateWithTo(linkedMapOf()) { initializer ->
+            initializer.element.collectDirectAccesses(producerFunctions).withImplicitWrite(initializer)
+        }
+
+        for (owner in owners) {
+            context.genericOwnerArchitecturePlans[owner] = plan(owner, producerAccesses, initializerAccesses)
+        }
+        linkDetachedOverrideFamilies()
+    }
+
+    private fun plan(
+        owner: IrClass,
+        producerAccesses: Map<IrFunction, DirectMemberAccesses>,
+        producerInitializerAccesses: Map<ProducerInitializer, DirectMemberAccesses>,
+    ): DotNetGenericOwnerArchitecturePlan {
+        val members = owner.directSimpleFunctions()
+        val fields = owner.directFields()
+        val ownerDependentFields = fields.filterTo(linkedSetOf()) { field ->
+            field.type.referencesTypeParameterOf(owner)
+        }
+        val memberPolicies = members.associateWithTo(linkedMapOf()) { member ->
+            member.policyFor(owner)
+        }
+        val conditionalSupertypes = owner.superTypes.filter { superType ->
+            superType.hasExplicitNullableParameterOf(owner)
+        }
+        val directAccesses = producerAccesses.mapValuesTo(linkedMapOf()) { entry ->
+            entry.value.restrictTo(ownerDependentFields)
+        }
+        val initializerAccesses = producerInitializerAccesses.mapValuesTo(linkedMapOf()) { entry ->
+            entry.value.restrictTo(ownerDependentFields)
+        }
+        val semanticEntries = memberPolicies
+            .filterValues { policy -> policy == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY }
+            .keys
+        val semanticReachableMembers = semanticEntries
+            .flatMapTo(linkedSetOf<IrFunction>()) { member -> member.transitiveCalls(directAccesses) + member }
+        val memberAccesses = members.associateWithTo(linkedMapOf()) { member ->
+            val transitiveCalls = member.transitiveCalls(directAccesses)
+            val reachableBodies = transitiveCalls + member
+            DotNetGenericOwnerMemberAccessPlan(
+                source = member,
+                directCalls = directAccesses.getValue(member).calls,
+                transitiveCalls = transitiveCalls,
+                directReads = directAccesses.getValue(member).reads,
+                directWrites = directAccesses.getValue(member).writes,
+                transitiveReads = reachableBodies.flatMapTo(linkedSetOf()) { reachable ->
+                    directAccesses.getValue(reachable).reads
+                },
+                transitiveWrites = reachableBodies.flatMapTo(linkedSetOf()) { reachable ->
+                    directAccesses.getValue(reachable).writes
+                },
+                reachableFromSemanticEntry = member in semanticReachableMembers,
+            )
+        }
+        val directSemanticWriteFields = semanticEntries.flatMapTo(linkedSetOf()) { member ->
+            directAccesses.getValue(member).writes
+        }
+        val semanticReachableWriteFields = semanticReachableMembers.flatMapTo(linkedSetOf()) { member ->
+            directAccesses.getValue(member).writes
+        }
+        val writeValueProvenances = TypedWriteValueProvenanceAnalyzer(
+            owner = owner,
+            members = members,
+            memberPolicies = memberPolicies,
+            producerAccesses = directAccesses,
+            initializerAccesses = initializerAccesses,
+        ).analyze(ownerDependentFields)
+        val semanticValueWriteFields = writeValueProvenances
+            .filterValues { writes ->
+                writes.any { write ->
+                    write.provenance == DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT
+                }
+            }
+            .keys
+        val semanticStateWriteFields = semanticReachableWriteFields + semanticValueWriteFields
+        val openOutputs = if (owner.modality == Modality.FINAL) {
+            emptySet()
+        } else {
+            members.filterTo(linkedSetOf()) { member ->
+                member.modality != Modality.FINAL && member.returnType.referencesTypeParameterOf(owner)
+            }
+        }
+        val memberFamilies = members.associateWithTo(linkedMapOf()) { member ->
+            val directSuperCalls = mutableListOf<DotNetGenericOwnerDirectSuperCallPlan>()
+            member.body?.acceptVoid(object : IrVisitorVoid() {
+                override fun visitElement(element: IrElement) {
+                    element.acceptChildrenVoid(this)
+                }
+
+                override fun visitCall(expression: IrCall) {
+                    expression.superQualifierSymbol?.let { superQualifier ->
+                        directSuperCalls += DotNetGenericOwnerDirectSuperCallPlan(
+                            target = expression.symbol.owner,
+                            superQualifier = superQualifier.owner,
+                        )
+                    }
+                    expression.acceptChildrenVoid(this)
+                }
+            })
+            val ownerDependentInputs = member.parameters.withIndex().mapNotNull { indexedParameter ->
+                val parameter = indexedParameter.value
+                indexedParameter.index.takeIf {
+                    parameter.kind != IrParameterKind.DispatchReceiver &&
+                            parameter.type.referencesTypeParameterOf(owner)
+                }
+            }
+            val hasOwnerDependentOutput = member.returnType.referencesTypeParameterOf(owner)
+            val semanticHookReasons = buildSet {
+                if (memberPolicies.getValue(member) == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY) {
+                    add(DotNetGenericOwnerSemanticHookReason.GENERAL_WIDENED_BODY)
+                }
+                if (semanticStateWriteFields.isNotEmpty() && member in openOutputs) {
+                    add(DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE)
+                }
+            }
+            val roles = buildSet {
+                add(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+                if (ownerDependentInputs.isNotEmpty() || hasOwnerDependentOutput) {
+                    add(DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
+                }
+                if (semanticHookReasons.isNotEmpty()) {
+                    add(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+                    add(DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
+                }
+            }
+            DotNetGenericOwnerMemberFamilyPlan(
+                source = member,
+                policy = memberPolicies.getValue(member),
+                ownerDependentInputIndices = ownerDependentInputs,
+                hasOwnerDependentOutput = hasOwnerDependentOutput,
+                roles = roles,
+                semanticHookReasons = semanticHookReasons,
+                requiresDirectSuperTargets = member.modality != Modality.FINAL,
+                directSuperCallCount = directSuperCalls.size,
+                directSuperCalls = directSuperCalls,
+                hasMaskedDefaultDispatcher = member in context.defaultArgumentDispatchers,
+                logicalBindingKey = context.preLoweringDeclarationKeys[member],
+            )
+        }
+        val stateCarriers = ownerDependentFields
+            .associateWithTo(linkedMapOf()) { field ->
+                val directReaders = directAccesses
+                    .filterTo(linkedMapOf()) { entry -> field in entry.value.reads }
+                    .keys
+                val directWriters = directAccesses
+                    .filterTo(linkedMapOf()) { entry -> field in entry.value.writes }
+                    .keys
+                val semanticReachableReaders = directReaders.filterTo(linkedSetOf()) { member ->
+                    member in semanticReachableMembers
+                }
+                val semanticReachableWriters = directWriters.filterTo(linkedSetOf()) { member ->
+                    member in semanticReachableMembers
+                }
+                val initializationReaders = initializerAccesses
+                    .filter { entry ->
+                        field in entry.value.reads || entry.value.calls.any { call ->
+                            field in call.transitiveFieldReads(directAccesses)
+                        }
+                    }
+                    .keys
+                    .mapTo(linkedSetOf()) { initializer -> initializer.label }
+                val initializationWriters = initializerAccesses
+                    .filter { entry ->
+                        field in entry.value.writes || entry.value.calls.any { call ->
+                            field in call.transitiveFieldWrites(directAccesses)
+                        }
+                    }
+                    .keys
+                    .mapTo(linkedSetOf()) { initializer -> initializer.label }
+                val writes = writeValueProvenances.getValue(field)
+                val hasOnlyProvenTypedWrites = writes.isNotEmpty() && writes.all { write ->
+                    write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                }
+                val externalAccessGraphRequired = !DescriptorVisibilities.isPrivate(field.visibility)
+                DotNetGenericOwnerStateCarrierPlan(
+                    field = field,
+                    requirement = when {
+                        semanticReachableWriters.isNotEmpty() || field in semanticValueWriteFields ->
+                            DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
+                        externalAccessGraphRequired ->
+                            DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED
+                        hasOnlyProvenTypedWrites ->
+                            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+                        else ->
+                            DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED
+                    },
+                    writes = writes,
+                    directReaders = directReaders,
+                    directWriters = directWriters,
+                    semanticReachableReaders = semanticReachableReaders,
+                    semanticReachableWriters = semanticReachableWriters,
+                    initializationReaderLabels = initializationReaders,
+                    initializationWriterLabels = initializationWriters,
+                    externalAccessGraphRequired = externalAccessGraphRequired,
+                )
+            }
+        val disposition = when {
+            conditionalSupertypes.isNotEmpty() ->
+                DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE
+            semanticStateWriteFields.isNotEmpty() && openOutputs.isNotEmpty() ->
+                DotNetGenericOwnerCandidateDisposition.BLOCKED_OPEN_OUTPUT_STATE_COHERENCE
+            semanticStateWriteFields.isNotEmpty() ->
+                DotNetGenericOwnerCandidateDisposition.REQUIRES_SEMANTIC_STATE_PROOF
+            stateCarriers.values.any { state ->
+                state.requirement == DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED
+            } ->
+                DotNetGenericOwnerCandidateDisposition.REQUIRES_COMPLETE_FIELD_ACCESS_GRAPH
+            stateCarriers.values.any { state ->
+                state.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED
+            } ->
+                DotNetGenericOwnerCandidateDisposition.REQUIRES_TYPED_WRITE_VALUE_PROVENANCE
+            else ->
+                DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF
+        }
+        check(memberFamilies.keys == memberPolicies.keys) {
+            "Internal .NET backend error: generic-owner member-family planning is incomplete"
+        }
+        check(memberAccesses.keys == memberPolicies.keys) {
+            "Internal .NET backend error: generic-owner field/call planning is incomplete"
+        }
+        check(semanticStateWriteFields.all { field ->
+            stateCarriers[field]?.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED
+        }) {
+            "Internal .NET backend error: a widened semantic state write retained typed-only storage"
+        }
+        if (disposition == DotNetGenericOwnerCandidateDisposition.BLOCKED_OPEN_OUTPUT_STATE_COHERENCE) {
+            check(openOutputs.all { output ->
+                DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE in
+                        memberFamilies.getValue(output).semanticHookReasons
+            }) {
+                "Internal .NET backend error: open output/state coherence lacks a paired semantic family"
+            }
+        }
+        val prototypeMembers = memberFamilies.entries.mapIndexed { memberIndex, entry ->
+            val source = entry.key
+            val family = entry.value
+            source to family.roles.associateWithTo(linkedMapOf()) { role ->
+                createDetachedPrototypeMember(owner, source, role, memberIndex)
+            }
+        }.toMap(linkedMapOf())
+        check(owner.declarations.none { declaration -> declaration.origin == DOTNET_GENERIC_OWNER_PROTOTYPE_MEMBER }) {
+            "Internal .NET backend error: a generic-owner prototype member entered production IR"
+        }
+        check(prototypeMembers.all { entry ->
+            val source = entry.key
+            val roles = entry.value
+            roles.keys == memberFamilies.getValue(source).roles &&
+                    roles.values.all { prototype: DotNetGenericOwnerPrototypeMember ->
+                        prototype.function !in owner.declarations
+                    }
+        }) {
+            "Internal .NET backend error: generic-owner detached prototype family is incomplete"
+        }
+        return DotNetGenericOwnerArchitecturePlan(
+            owner = owner,
+            logicalBindingKey = context.preLoweringDeclarationKeys[owner],
+            disposition = disposition,
+            memberPolicies = memberPolicies,
+            memberFamilies = memberFamilies,
+            memberAccesses = memberAccesses,
+            prototypeMembers = prototypeMembers,
+            metadataFixedConditionalSupertypes = conditionalSupertypes,
+            directSemanticWriteFields = directSemanticWriteFields,
+            semanticReachableWriteFields = semanticReachableWriteFields,
+            semanticValueWriteFields = semanticValueWriteFields,
+            overrideBindings = emptyMap(),
+            stateCarriers = stateCarriers,
+            openOwnerOutputs = openOutputs,
+        )
+    }
+
+    /**
+     * Connects detached member families across Kotlin-produced generic subclasses after every
+     * local owner has been planned. Typed entries override typed entries. A semantic hook is
+     * inherited as a family obligation and overrides only the ancestor semantic hook; private
+     * capability dispatchers remain final selectors and never form an override chain.
+     *
+     * An external generic base has no detached prototype in this compilation. Record its stable
+     * logical member key as an explicit future binding-schema requirement instead of guessing a
+     * physical MethodDef. This keeps separate compilation fail-closed while the production ABI is
+     * still erased and no prototype schema is serialized.
+     */
+    private fun linkDetachedOverrideFamilies() {
+        val plans = context.genericOwnerArchitecturePlans
+        var changed: Boolean
+        do {
+            changed = false
+            plans.entries.toList().forEach { planEntry ->
+                val owner = planEntry.key
+                val plan = plans.getValue(owner)
+                val families = plan.memberFamilies.toMutableMap()
+                plan.memberFamilies.forEach { familyEntry ->
+                    val source = familyEntry.key
+                    if (source.isFakeOverride) return@forEach
+                    val inheritsSemanticHook = source.overriddenSymbols.any { overriddenSymbol ->
+                        val overridden = overriddenSymbol.owner
+                        val overriddenOwner = overridden.parent as? IrClass ?: return@any false
+                        val overriddenPlan = plans[overriddenOwner] ?: return@any false
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in
+                                overriddenPlan.memberFamilies[overridden]?.roles.orEmpty()
+                    }
+                    val family = families.getValue(source)
+                    if (inheritsSemanticHook &&
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK !in family.roles
+                    ) {
+                        families[source] = family.copy(
+                            roles = family.roles + setOf(
+                                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+                            ),
+                            semanticHookReasons = family.semanticHookReasons +
+                                    DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE,
+                        )
+                        changed = true
+                    }
+                }
+                if (families != plan.memberFamilies) {
+                    plans[owner] = plan.copy(memberFamilies = families)
+                }
+            }
+        } while (changed)
+
+        plans.entries.toList().forEach { planEntry ->
+            val owner = planEntry.key
+            val plan = plans.getValue(owner)
+            val prototypes = plan.prototypeMembers.mapValuesTo(linkedMapOf()) { entry ->
+                entry.value.toMutableMap()
+            }
+            plan.memberFamilies.entries.forEachIndexed { memberIndex, familyEntry ->
+                val source = familyEntry.key
+                val family = familyEntry.value
+                val roles = prototypes.getOrPut(source) { linkedMapOf() }
+                family.roles.forEach { role ->
+                    roles.getOrPut(role) {
+                        createDetachedPrototypeMember(owner, source, role, memberIndex)
+                    }
+                }
+            }
+            plans[owner] = plan.copy(prototypeMembers = prototypes)
+        }
+
+        plans.entries.toList().forEach { planEntry ->
+            val owner = planEntry.key
+            val plan = plans.getValue(owner)
+            val bindings = linkedMapOf<IrSimpleFunction, MutableList<DotNetGenericOwnerOverrideBindingPlan>>()
+            plan.memberFamilies.forEach { familyEntry ->
+                val source = familyEntry.key
+                if (source.isFakeOverride) return@forEach
+                val family = familyEntry.value
+                source.overriddenSymbols.forEach { overriddenSymbol ->
+                    val overridden = overriddenSymbol.owner
+                    val overriddenOwner = overridden.parent as? IrClass ?: return@forEach
+                    if (!overriddenOwner.isDotNetGenericClassDeclaration) return@forEach
+                    val overriddenPlan = plans[overriddenOwner]
+                    val overriddenFamily = overriddenPlan?.memberFamilies?.get(overridden)
+                    if (overriddenPlan != null && overriddenFamily != null) {
+                        listOf(
+                            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                        ).forEach { role ->
+                            if (role !in family.roles || role !in overriddenFamily.roles) return@forEach
+                            val sourcePrototype = checkNotNull(plan.prototypeMembers[source]?.get(role))
+                            val overriddenPrototype = checkNotNull(overriddenPlan.prototypeMembers[overridden]?.get(role))
+                            sourcePrototype.function.overriddenSymbols =
+                                (sourcePrototype.function.overriddenSymbols + overriddenPrototype.function.symbol).distinct()
+                            bindings.getOrPut(source) { mutableListOf() } += DotNetGenericOwnerOverrideBindingPlan(
+                                source = source,
+                                role = role,
+                                overriddenSource = overridden,
+                                targetKind = DotNetGenericOwnerOverrideTargetKind.LOCAL_DETACHED_PROTOTYPE,
+                                overriddenLogicalBindingKey = overriddenFamily.logicalBindingKey,
+                            )
+                        }
+                    } else {
+                        bindings.getOrPut(source) { mutableListOf() } += DotNetGenericOwnerOverrideBindingPlan(
+                            source = source,
+                            role = DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                            overriddenSource = overridden,
+                            targetKind = DotNetGenericOwnerOverrideTargetKind.EXTERNAL_LOGICAL_BINDING_REQUIRED,
+                            overriddenLogicalBindingKey = overridden.dotNetLibraryAbiKeyOrNull("F"),
+                        )
+                    }
+                }
+            }
+            check(bindings.values.flatten().none { binding ->
+                binding.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+            }) {
+                "Internal .NET backend error: a private generic-owner capability dispatcher entered an override chain"
+            }
+            val needsExternalBindingSchema = bindings.values.flatten().any { binding ->
+                binding.targetKind == DotNetGenericOwnerOverrideTargetKind.EXTERNAL_LOGICAL_BINDING_REQUIRED
+            }
+            plans[owner] = plan.copy(
+                disposition = if (needsExternalBindingSchema &&
+                    plan.disposition == DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF
+                ) {
+                    DotNetGenericOwnerCandidateDisposition.REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA
+                } else {
+                    plan.disposition
+                },
+                overrideBindings = bindings,
+            )
+        }
+    }
+
+    private fun createDetachedPrototypeMember(
+        owner: IrClass,
+        source: IrSimpleFunction,
+        role: DotNetGenericOwnerMemberFamilyRole,
+        memberIndex: Int,
+    ): DotNetGenericOwnerPrototypeMember {
+        val prototype = context.irFactory.buildFun {
+            startOffset = source.startOffset
+            endOffset = source.endOffset
+            origin = DOTNET_GENERIC_OWNER_PROTOTYPE_MEMBER
+            name = Name.special("<GenericOwnerPrototype-${role.name}-$memberIndex>")
+            visibility = when (role) {
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY -> source.visibility
+                DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK -> DescriptorVisibilities.PROTECTED
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER -> DescriptorVisibilities.PRIVATE
+            }
+            modality = when (role) {
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER -> Modality.FINAL
+                else -> source.modality
+            }
+            returnType = context.irBuiltIns.anyNType
+        }
+        prototype.parent = owner
+        prototype.parameters += prototype.createDispatchReceiverParameterWithClassParent()
+        val copiedMethodParameters = prototype.copyTypeParametersFrom(source)
+        val ownerErasure = IrTypeSubstitutor(
+            owner.typeParameters.associate { parameter -> parameter.symbol to context.irBuiltIns.anyNType },
+            allowEmptySubstitution = true,
+        )
+        if (role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) {
+            copiedMethodParameters.forEach { parameter ->
+                parameter.superTypes = parameter.superTypes.map(ownerErasure::substitute)
+            }
+        }
+        val methodSubstitution = source.typeParameters.zip(copiedMethodParameters).associate { pair ->
+            pair.first.symbol to pair.second.symbol.defaultType
+        }
+        val methodSubstitutor = IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
+        fun prototypeType(type: IrType): IrType {
+            val ownerType = if (role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY) {
+                type
+            } else {
+                ownerErasure.substitute(type)
+            }
+            return methodSubstitutor.substitute(ownerType)
+        }
+        prototype.returnType = prototypeType(source.returnType)
+        source.parameters
+            .filter { parameter -> parameter.kind != IrParameterKind.DispatchReceiver }
+            .forEach { parameter ->
+                prototype.parameters += parameter.copyTo(
+                    prototype,
+                    type = prototypeType(parameter.type),
+                    varargElementType = parameter.varargElementType?.let(::prototypeType),
+                    defaultValue = null,
+                )
+            }
+        return DotNetGenericOwnerPrototypeMember(source, role, prototype)
+    }
+
+    private fun IrSimpleFunction.policyFor(owner: IrClass): DotNetGenericOwnerMemberPolicy {
+        // Kotlin excludes private-to-owner declarations from declaration-site variance checks.
+        // Such a helper is not itself callable through a widened receiver; it inherits semantic
+        // reachability only through the producer call graph of an exposed broad entry.
+        if (DescriptorVisibilities.isPrivate(visibility)) {
+            return DotNetGenericOwnerMemberPolicy.STRICT_TYPED
+        }
+        val hasBroadInput = parameters.any { parameter ->
+            parameter.kind != IrParameterKind.DispatchReceiver &&
+                    !parameter.type.isLegalAtOwnerVariance(owner, TypePolarity.IN)
+        }
+        if (!hasBroadInput) return DotNetGenericOwnerMemberPolicy.STRICT_TYPED
+        return if (specialBridgeMethods.findSpecialWithOverride(this, includeSelf = true) != null) {
+            DotNetGenericOwnerMemberPolicy.TYPE_SAFE_BARRIER
+        } else {
+            DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY
+        }
+    }
+
+    private fun IrClass.directSimpleFunctions(): List<IrSimpleFunction> =
+        declarations.flatMap { declaration ->
+            when (declaration) {
+                is IrSimpleFunction -> listOf(declaration)
+                is IrProperty -> listOfNotNull(declaration.getter, declaration.setter)
+                else -> emptyList()
+            }
+        }.distinctBy { function -> function.symbol }
+
+    private fun IrClass.directFields(): Set<IrField> =
+        declarations.flatMapTo(linkedSetOf()) { declaration ->
+            when (declaration) {
+                is IrField -> listOf(declaration)
+                is IrProperty -> listOfNotNull(declaration.backingField)
+                else -> emptyList()
+            }
+        }
+
+    /**
+     * Traces the physical domain of field-write values through parameters, calls, local aliases,
+     * assignments, returns, and casts. This is deliberately context-insensitive and fail-closed:
+     * merging any object-domain producer keeps the write semantic, while an unsupported or
+     * source-free path remains unresolved. In particular, a cast to an owner parameter preserves
+     * its input provenance and can never create typed evidence by itself.
+     */
+    private inner class TypedWriteValueProvenanceAnalyzer(
+        private val owner: IrClass,
+        private val members: List<IrSimpleFunction>,
+        private val memberPolicies: Map<IrSimpleFunction, DotNetGenericOwnerMemberPolicy>,
+        private val producerAccesses: Map<IrFunction, DirectMemberAccesses>,
+        private val initializerAccesses: Map<ProducerInitializer, DirectMemberAccesses>,
+    ) {
+        private val provenances = linkedMapOf<Any, MutableSet<DotNetGenericOwnerWriteValueProvenance>>()
+        private val typedBoundaryParameters = linkedSetOf<IrValueDeclaration>()
+
+        fun analyze(
+            fields: Set<IrField>,
+        ): Map<IrField, List<DotNetGenericOwnerStateWriteProvenancePlan>> {
+            val activeSlice = activeProducerSlice(fields)
+            val activeFunctions = activeSlice.first
+            val activeInitializers = activeSlice.second
+            seedCallableBoundaries(activeFunctions)
+            activeFunctions.forEach { function ->
+                val access = producerAccesses.getValue(function)
+                if (function.body == null) {
+                    addProvenance(function, defaultProvenance(function.returnType))
+                }
+                access.valueDefinitions.keys.forEach { declaration -> node(declaration) }
+                node(function)
+            }
+
+            val allAccesses = activeFunctions.map { function -> producerAccesses.getValue(function) } +
+                    activeInitializers.map { initializer -> initializerAccesses.getValue(initializer) }
+            var changed: Boolean
+            do {
+                changed = false
+                activeFunctions.forEach { function ->
+                    val access = producerAccesses.getValue(function)
+                    access.valueDefinitions.forEach { entry ->
+                        val declaration = entry.key
+                        val definitions = entry.value
+                        changed = addProvenances(declaration, definitions.flatMapTo(linkedSetOf(), ::provenanceOf)) || changed
+                    }
+                    changed = addProvenances(function, access.returns.flatMapTo(linkedSetOf(), ::provenanceOf)) || changed
+                }
+                allAccesses.forEach { access ->
+                    access.callSites.forEach { call ->
+                        val target = call.symbol.owner
+                        target.parameters.forEach { parameter ->
+                            if (parameter.kind == IrParameterKind.DispatchReceiver) return@forEach
+                            if (parameter in typedBoundaryParameters) return@forEach
+                            val argument = call.arguments.getOrNull(parameter.indexInParameters)
+                            val argumentProvenance = if (argument == null) {
+                                setOf(DotNetGenericOwnerWriteValueProvenance.UNRESOLVED)
+                            } else {
+                                provenanceOf(argument)
+                            }
+                            changed = addProvenances(parameter, argumentProvenance) || changed
+                        }
+                    }
+                }
+            } while (changed)
+
+            return fields.associateWithTo(linkedMapOf()) { field ->
+                buildList {
+                    producerAccesses.forEach { entry ->
+                        val function = entry.key
+                        val access = entry.value
+                        val values = access.writeValues[field]
+                            ?: if (field in access.writes) listOf(null) else emptyList()
+                        if (values.isNotEmpty()) {
+                            add(DotNetGenericOwnerStateWriteProvenancePlan(
+                                producerName = function.name.asString(),
+                                provenance = select(values.flatMapTo(linkedSetOf()) { value ->
+                                    provenanceOf(value).ifEmpty {
+                                        setOf(DotNetGenericOwnerWriteValueProvenance.UNRESOLVED)
+                                    }
+                                }),
+                            ))
+                        }
+                    }
+                    initializerAccesses.forEach { entry ->
+                        val initializer = entry.key
+                        val access = entry.value
+                        val values = access.writeValues[field]
+                            ?: if (field in access.writes) listOf(null) else emptyList()
+                        if (values.isNotEmpty()) {
+                            add(DotNetGenericOwnerStateWriteProvenancePlan(
+                                producerName = initializer.label,
+                                provenance = select(values.flatMapTo(linkedSetOf()) { value ->
+                                    provenanceOf(value).ifEmpty {
+                                        setOf(DotNetGenericOwnerWriteValueProvenance.UNRESOLVED)
+                                    }
+                                }),
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+
+        private fun activeProducerSlice(
+            fields: Set<IrField>,
+        ): Pair<Set<IrFunction>, Set<ProducerInitializer>> {
+            val functions = producerAccesses
+                .filterTo(linkedMapOf()) { entry ->
+                    val function = entry.key
+                    val access = entry.value
+                    function in members ||
+                            (function is IrConstructor && function.parent == owner) ||
+                            access.writes.any { field -> field in fields }
+                }
+                .keys
+                .toMutableSet()
+            val initializers = initializerAccesses
+                .filterTo(linkedMapOf()) { entry ->
+                    val access = entry.value
+                    access.writes.any { field -> field in fields }
+                }
+                .keys
+                .toMutableSet()
+            var changed: Boolean
+            do {
+                changed = false
+                val reachableCalls = buildSet {
+                    functions.forEach { function -> addAll(producerAccesses.getValue(function).calls) }
+                    initializers.forEach { initializer -> addAll(initializerAccesses.getValue(initializer).calls) }
+                }
+                if (functions.addAll(reachableCalls)) changed = true
+                initializerAccesses.forEach { entry ->
+                    val initializer = entry.key
+                    val access = entry.value
+                    if (initializer !in initializers && access.calls.any { function -> function in functions }) {
+                        initializers += initializer
+                        changed = true
+                    }
+                }
+            } while (changed)
+            return functions to initializers
+        }
+
+        private fun seedCallableBoundaries(activeFunctions: Set<IrFunction>) {
+            activeFunctions.forEach { function ->
+                val isOwnerConstructor = function is IrConstructor && function.parent == owner
+                if (DescriptorVisibilities.isPrivate(function.visibility) && !isOwnerConstructor) return@forEach
+                val member = (function as? IrSimpleFunction)?.takeIf { candidate -> candidate in members }
+                function.parameters.forEach { parameter ->
+                    if (parameter.kind == IrParameterKind.DispatchReceiver) return@forEach
+                    val isTypedOwnerInput = parameter.type.referencesTypeParameterOf(owner) && when {
+                        isOwnerConstructor -> true
+                        member != null -> parameter.type.isLegalAtOwnerVariance(owner, TypePolarity.IN)
+                        else -> false
+                    }
+                    addProvenance(
+                        parameter,
+                        if (isTypedOwnerInput) {
+                            typedBoundaryParameters += parameter
+                            DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+                        } else {
+                            DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT
+                        },
+                    )
+                }
+            }
+            check(memberPolicies.keys == members.toSet()) {
+                "Internal .NET backend error: typed-write provenance lacks owner member policies"
+            }
+        }
+
+        private fun provenanceOf(expression: IrExpression?): Set<DotNetGenericOwnerWriteValueProvenance> {
+            if (expression == null) return setOf(DotNetGenericOwnerWriteValueProvenance.UNRESOLVED)
+            return when (expression) {
+                is IrGetValue -> provenances[expression.symbol.owner].orEmpty()
+                is IrTypeOperatorCall -> provenanceOf(expression.argument)
+                is IrReturn -> provenanceOf(expression.value)
+                is IrWhen -> expression.branches.flatMapTo(linkedSetOf()) { branch ->
+                    provenanceOf(branch.result)
+                }
+                is IrContainerExpression -> {
+                    val result = expression.statements.lastOrNull() as? IrExpression
+                    provenanceOf(result)
+                }
+                is IrFunctionAccessExpression -> {
+                    val target = expression.symbol.owner
+                    if (target in producerAccesses) {
+                        provenances[target].orEmpty()
+                    } else {
+                        setOf(defaultProvenance(expression.type))
+                    }
+                }
+                is IrGetField -> setOf(defaultProvenance(expression.type))
+                else -> setOf(defaultProvenance(expression.type))
+            }
+        }
+
+        private fun defaultProvenance(type: IrType): DotNetGenericOwnerWriteValueProvenance =
+            if (type.referencesTypeParameterOf(owner)) {
+                DotNetGenericOwnerWriteValueProvenance.UNRESOLVED
+            } else {
+                DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT
+            }
+
+        private fun node(key: Any): MutableSet<DotNetGenericOwnerWriteValueProvenance> =
+            provenances.getOrPut(key) { linkedSetOf() }
+
+        private fun addProvenance(
+            key: Any,
+            provenance: DotNetGenericOwnerWriteValueProvenance,
+        ): Boolean = node(key).add(provenance)
+
+        private fun addProvenances(
+            key: Any,
+            additions: Set<DotNetGenericOwnerWriteValueProvenance>,
+        ): Boolean = node(key).addAll(additions)
+
+        private fun select(
+            candidates: Set<DotNetGenericOwnerWriteValueProvenance>,
+        ): DotNetGenericOwnerWriteValueProvenance = when {
+            DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT in candidates ->
+                DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT
+            DotNetGenericOwnerWriteValueProvenance.UNRESOLVED in candidates ->
+                DotNetGenericOwnerWriteValueProvenance.UNRESOLVED
+            DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED in candidates ->
+                DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+            else -> DotNetGenericOwnerWriteValueProvenance.UNRESOLVED
+        }
+    }
+
+    private data class DirectMemberAccesses(
+        val calls: Set<IrFunction>,
+        val callSites: List<IrFunctionAccessExpression>,
+        val reads: Set<IrField>,
+        val writes: Set<IrField>,
+        val writeValues: Map<IrField, List<IrExpression?>>,
+        val valueDefinitions: Map<IrValueDeclaration, List<IrExpression>>,
+        val returns: List<IrExpression>,
+    ) {
+        fun restrictTo(fields: Set<IrField>): DirectMemberAccesses = copy(
+            reads = reads.filterTo(linkedSetOf()) { field -> field in fields },
+            writes = writes.filterTo(linkedSetOf()) { field -> field in fields },
+            writeValues = writeValues.filterKeys { field -> field in fields },
+        )
+
+        fun withImplicitWrite(initializer: ProducerInitializer): DirectMemberAccesses {
+            val field = initializer.implicitWrite ?: return this
+            val expression = (initializer.element as? IrExpressionBody)?.expression
+            return copy(
+                writes = writes + field,
+                writeValues = writeValues + (field to (writeValues[field].orEmpty() + expression)),
+            )
+        }
+    }
+
+    private data class ProducerInitializer(
+        val label: String,
+        val element: IrElement,
+        val implicitWrite: IrField? = null,
+    )
+
+    private fun IrElement.collectDirectAccesses(
+        producerFunctions: Set<IrFunction>,
+        returnTarget: IrFunction? = null,
+    ): DirectMemberAccesses {
+        val calls = linkedSetOf<IrFunction>()
+        val callSites = mutableListOf<IrFunctionAccessExpression>()
+        val reads = linkedSetOf<IrField>()
+        val writes = linkedSetOf<IrField>()
+        val writeValues = linkedMapOf<IrField, MutableList<IrExpression?>>()
+        val valueDefinitions = linkedMapOf<IrValueDeclaration, MutableList<IrExpression>>()
+        val returns = mutableListOf<IrExpression>()
+        acceptVoid(object : IrVisitorVoid() {
+            override fun visitElement(element: IrElement) {
+                element.acceptChildrenVoid(this)
+            }
+
+            override fun visitClass(declaration: IrClass) {
+                // A nested declaration is an independently indexed producer body, not an effect
+                // of declaring the class while this body executes.
+            }
+
+            override fun visitFunction(declaration: IrFunction) {
+                // Local functions are independently indexed and become reachable only by a call.
+            }
+
+            override fun visitFunctionAccess(expression: IrFunctionAccessExpression) {
+                val target = expression.symbol.owner
+                if (target in producerFunctions) {
+                    calls += target
+                    callSites += expression
+                }
+                expression.acceptChildrenVoid(this)
+            }
+
+            override fun visitVariable(declaration: IrVariable) {
+                declaration.initializer?.let { initializer ->
+                    valueDefinitions.getOrPut(declaration) { mutableListOf() } += initializer
+                }
+                declaration.acceptChildrenVoid(this)
+            }
+
+            override fun visitSetValue(expression: IrSetValue) {
+                valueDefinitions.getOrPut(expression.symbol.owner) { mutableListOf() } += expression.value
+                expression.acceptChildrenVoid(this)
+            }
+
+            override fun visitReturn(expression: IrReturn) {
+                if (expression.returnTargetSymbol.owner == returnTarget) returns += expression.value
+                expression.acceptChildrenVoid(this)
+            }
+
+            override fun visitGetField(expression: IrGetField) {
+                val field = expression.symbol.owner
+                reads += field
+                expression.acceptChildrenVoid(this)
+            }
+
+            override fun visitSetField(expression: IrSetField) {
+                val field = expression.symbol.owner
+                writes += field
+                writeValues.getOrPut(field) { mutableListOf() } += expression.value
+                expression.acceptChildrenVoid(this)
+            }
+        })
+        return DirectMemberAccesses(
+            calls = calls,
+            callSites = callSites,
+            reads = reads,
+            writes = writes,
+            writeValues = writeValues,
+            valueDefinitions = valueDefinitions,
+            returns = returns,
+        )
+    }
+
+    private fun IrFunction.collectDirectAccesses(
+        producerFunctions: Set<IrFunction>,
+    ): DirectMemberAccesses = body?.collectDirectAccesses(producerFunctions, this)?.let { access ->
+        val expressionResult = (body as? IrExpressionBody)?.expression
+        if (expressionResult == null) access else access.copy(returns = access.returns + expressionResult)
+    } ?: DirectMemberAccesses(
+            calls = emptySet(),
+            callSites = emptyList(),
+            reads = emptySet(),
+            writes = emptySet(),
+            writeValues = emptyMap(),
+            valueDefinitions = emptyMap(),
+            returns = emptyList(),
+        )
+
+    private fun IrFunction.transitiveCalls(
+        directAccesses: Map<IrFunction, DirectMemberAccesses>,
+    ): Set<IrFunction> {
+        val result = linkedSetOf<IrFunction>()
+        val worklist = ArrayDeque(directAccesses.getValue(this).calls)
+        while (worklist.isNotEmpty()) {
+            val target = worklist.removeFirst()
+            if (target == this || !result.add(target)) continue
+            worklist.addAll(directAccesses.getValue(target).calls)
+        }
+        return result
+    }
+
+    private fun IrFunction.transitiveFieldReads(
+        directAccesses: Map<IrFunction, DirectMemberAccesses>,
+    ): Set<IrField> = (transitiveCalls(directAccesses) + this)
+        .flatMapTo(linkedSetOf()) { function -> directAccesses.getValue(function).reads }
+
+    private fun IrFunction.transitiveFieldWrites(
+        directAccesses: Map<IrFunction, DirectMemberAccesses>,
+    ): Set<IrField> = (transitiveCalls(directAccesses) + this)
+        .flatMapTo(linkedSetOf()) { function -> directAccesses.getValue(function).writes }
+
+    /** Detects the `D<T> : C<T?>` family whose TypeDef edge cannot vary per closed T. */
+    private fun IrType.hasExplicitNullableParameterOf(owner: IrClass): Boolean {
+        val simpleType = this as? IrSimpleType ?: return false
+        val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
+        if (parameter?.parent == owner && simpleType.nullability == SimpleTypeNullability.MARKED_NULLABLE) {
+            return true
+        }
+        return simpleType.arguments.any { argument ->
+            (argument as? IrTypeProjection)?.type?.hasExplicitNullableParameterOf(owner) == true
+        }
+    }
+
+    private enum class TypePolarity {
+        OUT,
+        IN,
+        BOTH;
+
+        fun through(variance: Variance): TypePolarity = when {
+            this == BOTH || variance == Variance.INVARIANT -> BOTH
+            variance == Variance.OUT_VARIANCE -> this
+            else -> if (this == OUT) IN else OUT
+        }
+    }
+
+    /** Kotlin declaration/use-site variance, including the variance Kotlin permits on classes. */
+    private fun IrType.isLegalAtOwnerVariance(owner: IrClass, polarity: TypePolarity): Boolean {
+        val simpleType = this as? IrSimpleType ?: return true
+        val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
+        if (parameter?.parent == owner) {
+            return when (polarity) {
+                TypePolarity.OUT -> parameter.variance != Variance.IN_VARIANCE
+                TypePolarity.IN -> parameter.variance != Variance.OUT_VARIANCE
+                TypePolarity.BOTH -> parameter.variance == Variance.INVARIANT
+            }
+        }
+
+        val classifier = (simpleType.classifier as? IrClassSymbol)?.owner ?: return true
+        return simpleType.arguments.withIndex().all { indexedArgument ->
+            val index = indexedArgument.index
+            val argument = indexedArgument.value
+            val projection = argument as? IrTypeProjection ?: return@all true
+            val declarationVariance = classifier.typeParameters.getOrNull(index)?.variance
+                ?: Variance.INVARIANT
+            val effectiveVariance = if (projection.variance == Variance.INVARIANT) {
+                declarationVariance
+            } else {
+                projection.variance
+            }
+            projection.type.isLegalAtOwnerVariance(owner, polarity.through(effectiveVariance))
+        }
+    }
+}

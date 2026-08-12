@@ -322,7 +322,7 @@ has shipped, so every producer and consumer moves together.
   erased/projected dispatch is an ordinary correctness path, not an uncommon
   recovery route. The distinct design with a complete erased capability ABI
   and deliberately early failure of physically incompatible unchecked casts is
-  on hold below rather than rejected by this argument.
+  the planned reopening below rather than rejected by this argument.
 - **Wrap, copy, or proxy on casts.** Breaks identity, mutation, dispatch, and
   synchronization.
 - **Maintain two concurrently authoritative typed and erased stores.** Creates
@@ -336,9 +336,10 @@ has shipped, so every producer and consumer moves together.
 - **Special-case `containsAll`.** Other nested carriers, overrides, and
   separate compilation require the general erased rule.
 
-## Explicitly on hold
+## Planned replacement not authorized by this baseline
 
-This decision does not authorize:
+Until the hardest-model-first programme supplies and accepts the complete
+replacement, this current implementation decision does not authorize:
 
 - a true CLR-generic `C<T>` owner plus a complete erased Kotlin capability ABI
   whose physically incompatible unchecked casts fail at the cast boundary;
@@ -351,17 +352,30 @@ This decision does not authorize:
 - changes to the separately selected generic-interface or array ABIs; or
 - public reified-inline support.
 
-These may be considered after the semantic ABI, core language/stdlib features,
-the concurrency and memory model, and representative target programs provide
-measurements. Prefer scalar replacement and immutable/private shapes before a
-mutable escaped-object deoptimization system. An optimization may not change
-the supported public or cross-module observations listed in the decision
-above.
+The public-owner replacement is now an active architecture programme, starting
+with the complete hostile semantic model rather than an easy production
+subset. The separate private-optimization items still require representative
+target measurements and the relevant concurrency/memory model. Prefer scalar
+replacement and immutable/private shapes before a mutable escaped-object
+deoptimization system. An optimization may not change the supported public or
+cross-module observations listed in the decision above.
 
-The first on-hold item is not an optimization. It would change TypeDefs, DLL
+Swift-style devirtualization and Kotlin/Native's Variable Type Analysis are
+admissible future proof engines for that private optimization work. A finite
+receiver set may justify a direct call, a private specialized helper, or an
+exact BCL operation only while the canonical erased call remains the semantic
+fallback at every open module/assembly boundary. Such analysis consumes type
+and reachability facts; it does not recreate a discarded CLR owner generic
+parameter and therefore cannot make the exported non-generic owner equivalent
+to `C<T>`. Using devirtualization to change public TypeDefs, casts, reflection,
+inheritance, or C# signatures would be the planned ABI reopening below, not an
+optimization.
+
+The first planned item is not an optimization. It would change TypeDefs, DLL
 signatures, runtime identities, cast timing, reflection normalization, and
-cross-module ABI, so it can land only by reopening this ADR and replacing the
-current baseline atomically. Kotlin already diagnoses the uncheckable generic
+cross-module ABI, so it can land only by replacing this ADR and the current
+baseline atomically after the hostile semantic model succeeds. Kotlin already
+diagnoses the uncheckable generic
 argument portion of casts such as `value as Box<Int>`; the language permits a
 platform to fail that cast earlier when the physical runtime can inspect it.
 That observation removes the former requirement that an incompatible value be
