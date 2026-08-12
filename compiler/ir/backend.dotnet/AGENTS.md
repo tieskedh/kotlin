@@ -55,6 +55,21 @@ interface ABI. C# may implement the ordinary interface with a class; implicit
 lambda/delegate conversion requires a future explicit export adapter and must
 not be claimed by this internal contract. See
 [`docs/decisions/fun-interfaces.md`](docs/decisions/fun-interfaces.md).
+
+Kotlin `Comparator<T>` remains the invariant Common Kotlin-owned fun
+interface, with consumer flexibility expressed as `Comparator<in T>`. Compile
+the authoritative Common comparison combinators and generated selection
+algorithms; do not alias the declaration to `IComparer<T>`, a CLR delegate, or
+`Comparer<T>.Default`, and do not replace Kotlin String/Float/Double ordering
+with host comparison wholesale. The current C# export route may use an
+`IComparer<T>` projection/adapter while the Kotlin ABI retains one identity;
+the generic-owner reopening must separately test whether a complete direct
+foreign actual becomes truthful. Do not turn today's limitation into a
+permanent prohibition or introduce a Comparator-only owner exception.
+Stable mutation and sorted snapshots require their separately accepted
+platform sort boundary. See
+[`docs/decisions/comparator-and-selection-foundation.md`](docs/decisions/comparator-and-selection-foundation.md).
+
 Kotlin-owned enums are reference classes. Their one erased `Kotlin.Enum` base
 is physically owned by `Kotlin.Runtime`; concrete enum classes and Common
 `EnumEntries` behavior remain in their declaring Stdlib/user assembly. The

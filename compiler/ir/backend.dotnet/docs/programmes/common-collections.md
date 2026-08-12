@@ -817,8 +817,12 @@ The audit deliberately excludes the rest of the nearby generator frontier:
   scalar/runtime and generated-stdlib product;
 - mapping, filtering, snapshot, running-fold, and running-reduce families construct collection
   implementations that do not yet exist;
-- min/max families require truthful `Comparable`/`Comparator` representation plus their own
-  erased physical overload audit;
+- the completed Comparator/selection foundation owns Common comparison
+  combinators, comparator `minOf`/`maxOf`, Iterable comparator selection, and
+  non-mutating `isSorted*`; stable mutation/sorted snapshots remain a separate
+  platform-actual tranche, while primitive/unsigned arrays, ranges, and
+  Sequences remain separate. See
+  [`../decisions/comparator-and-selection-foundation.md`](../decisions/comparator-and-selection-foundation.md);
 - `allEqual` publishes the now-admitted parameterless `ExperimentalStdlibApi` marker and can be
   audited independently, while `allDistinct` additionally constructs `HashSet`;
 - `onEach` reaches `apply` and the public contracts DSL; and

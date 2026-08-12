@@ -86,6 +86,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Common `lateinit` lowering over nullable CLR storage](decisions/lateinit-properties.md)
 - [Common delegated-property semantics over ordinary CLR state](decisions/delegated-properties.md)
 - [Kotlin fun interfaces use Common SAM wrappers](decisions/fun-interfaces.md)
+- [Common Comparator and order-selection foundation](decisions/comparator-and-selection-foundation.md)
 - [Dedicated .NET class-member reflection](decisions/class-member-reflection.md)
 - [Semantic erasure and canonical ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
 - [Single-field value classes use one box owner and contextual carriers](decisions/value-classes.md)

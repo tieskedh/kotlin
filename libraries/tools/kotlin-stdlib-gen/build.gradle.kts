@@ -59,6 +59,7 @@ tasks {
                 "_DotNetBootstrapMaps.kt",
                 "_DotNetBootstrapSets.kt",
                 "_DotNetBootstrapRanges.kt",
+                "_DotNetBootstrapComparisons.kt",
             ).map { fileName ->
                 rootProject.file("libraries/stdlib/dotnet/common/src/generated/$fileName")
             } + listOf(

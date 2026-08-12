@@ -59,6 +59,7 @@ internal object DotNetStdlibLibrary {
     const val SERIALIZABLE_IL_NAME = "Kotlin.Io.Serializable"
     const val READ_AFTER_EOF_EXCEPTION_IL_NAME = "Kotlin.Io.ReadAfterEOFException"
     const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
+    const val COMPARISONS_FACADE_IL_NAME = "Kotlin.Comparisons.ComparisonsKt"
     const val MAPS_FACADE_IL_NAME = "Kotlin.Collections.MapsKt"
     const val SETS_FACADE_IL_NAME = "Kotlin.Collections.SetsKt"
     const val RANGES_FACADE_IL_NAME = "Kotlin.Ranges.RangesKt"
@@ -206,6 +207,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.internal.SharedVariableBoxChar" to "Kotlin.Internal.SharedVariableBoxChar",
         "kotlin.internal.SyntheticConstructorMarker" to "Kotlin.Internal.SyntheticConstructorMarker",
         "kotlin.Result" to "Kotlin.Result",
+        "kotlin.Comparator" to "Kotlin.Comparator",
         "kotlin.coroutines.Continuation" to "Kotlin.Coroutines.Continuation",
         "kotlin.coroutines.RestrictsSuspension" to "Kotlin.Coroutines.RestrictsSuspension",
         "kotlin.coroutines.CoroutineContext" to "Kotlin.Coroutines.CoroutineContext",
@@ -872,6 +874,14 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
+        "_DotNetBootstrapComparisons.kt" to ImplementationSource(
+            packageFqName = "kotlin.comparisons",
+            facadeIlName = COMPARISONS_FACADE_IL_NAME,
+        ),
+        "Comparisons.kt" to ImplementationSource(
+            packageFqName = "kotlin.comparisons",
+            facadeIlName = COMPARISONS_FACADE_IL_NAME,
+        ),
         "_DotNetBootstrapMaps.kt" to ImplementationSource(
             packageFqName = "kotlin.collections",
             facadeIlName = MAPS_FACADE_IL_NAME,
@@ -966,6 +976,8 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin",
             facadeIlName = STANDARD_FACADE_IL_NAME,
         ),
+        "DotNetComparator.kt" to ImplementationSource(packageFqName = "kotlin"),
+        "Comparator.kt" to ImplementationSource(packageFqName = "kotlin"),
         "DotNetLibrary.kt" to ImplementationSource(
             packageFqName = "kotlin",
             facadeIlName = LIBRARY_FACADE_IL_NAME,
