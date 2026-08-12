@@ -41,6 +41,20 @@ boundary. Do not replace that boundary with host `CompareTo` wholesale or
 publish an enum-only comparison substitute. See
 [`docs/decisions/comparable-clr-views.md`](docs/decisions/comparable-clr-views.md).
 
+Kotlin `fun interface` conversion uses Common
+`SingleAbstractMethodLowering`. The declaration remains the ordinary
+Kotlin-owned CLR interface selected by the existing interface/generic ABI, and
+each conversion creates an assembly-private ordinary implementation class over
+the established Kotlin `FunctionN` object. Do not replace that identity with a
+CLR delegate, infer SAM eligibility from emitted CLR members, or reconstruct a
+conversion in the emitter. Runtime surface 36 owns the metadata-public
+compiler-ABI `Kotlin.Runtime.Internal.FunctionAdapter` equality capability;
+residual `SAM_CONVERSION` IR must fail before CIL emission. Consumers lower
+serialized inline conversions locally against the producer's self-describing
+interface ABI. C# may implement the ordinary interface with a class; implicit
+lambda/delegate conversion requires a future explicit export adapter and must
+not be claimed by this internal contract. See
+[`docs/decisions/fun-interfaces.md`](docs/decisions/fun-interfaces.md).
 Kotlin-owned enums are reference classes. Their one erased `Kotlin.Enum` base
 is physically owned by `Kotlin.Runtime`; concrete enum classes and Common
 `EnumEntries` behavior remain in their declaring Stdlib/user assembly. The

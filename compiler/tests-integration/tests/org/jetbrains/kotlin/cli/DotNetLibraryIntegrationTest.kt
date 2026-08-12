@@ -12386,6 +12386,163 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testFunInterfacesAcrossKotlinAndCSharpBoundaries() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(csharpToolchain != null, "Modern C# compiler is not available")
+        val modernCSharp = checkNotNull(csharpToolchain)
+        val dotnetHost = modernDotNetHostOrSkip()
+        val platformDirectory = File(tmpdir, "fun-interface-platform")
+        compileInProcess(
+            K2DotNetCompiler(),
+            K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::destination.cliArgument, platformDirectory.path,
+        )
+        val librarySource = File(tmpdir, "api.kt").apply {
+            writeText(
+                """
+                package sam.interop
+
+                fun interface Greeter {
+                    fun greet(value: String): String
+                }
+
+                fun useGreeter(greeter: Greeter, value: String): String = greeter.greet(value)
+
+                fun makeGreeter(prefix: String): Greeter = Greeter { prefix + it }
+                """.trimIndent()
+            )
+        }
+        val libraryDirectory = File(tmpdir, "fun-interface-library")
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Sam.Interop",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val libraryAssembly = libraryDirectory.resolve("Sam.Interop.dll")
+        val runtimeAssembly = platformDirectory.resolve("Kotlin.Runtime.dll")
+        val stdlibAssembly = platformDirectory.resolve("Kotlin.Stdlib.dll")
+        val libraryIl = libraryDirectory.resolve("Sam.Interop.il").readText()
+        assertTrue(".class interface public abstract auto ansi 'sam.interop.Greeter'" in libraryIl)
+        assertFalse("MulticastDelegate" in libraryIl)
+        assertTrue(
+            ".class private auto ansi sealed beforefieldinit 'sam.interop.sam\$sam_interop_Greeter\$0'" in libraryIl
+        )
+        assertTrue("Kotlin.Runtime.Internal.FunctionAdapter" in libraryIl)
+        assertFalse(
+            ".class public auto ansi sealed beforefieldinit 'sam.interop.sam\$sam_interop_Greeter\$0'" in libraryIl
+        )
+
+        val csharpSource = libraryDirectory.resolve("consumer.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Reflection;
+                using sam.interop;
+
+                public sealed class CSharpGreeter : Greeter
+                {
+                    public string greet(string value)
+                    {
+                        return "C#:" + value;
+                    }
+                }
+
+                public static class Program
+                {
+                    public static int Main()
+                    {
+                        Greeter authored = new CSharpGreeter();
+                        if (apiKt.useGreeter(authored, "OK") != "C#:OK")
+                            throw new Exception("C# implementation did not satisfy the Kotlin interface");
+
+                        Greeter produced = apiKt.makeGreeter("K:");
+                        if (produced.greet("OK") != "K:OK")
+                            throw new Exception("Kotlin-produced SAM wrapper was not callable from C#");
+
+                        Type greeterType = typeof(Greeter);
+                        if (!greeterType.IsInterface || typeof(MulticastDelegate).IsAssignableFrom(greeterType))
+                            throw new Exception("Kotlin fun interface acquired delegate identity");
+                        foreach (Type type in greeterType.Assembly.GetTypes())
+                        {
+                            if (type.Name.StartsWith("sam${'$'}", StringComparison.Ordinal) &&
+                                (type.IsPublic || type.IsNestedPublic))
+                                throw new Exception("SAM wrapper became public API: " + type.FullName);
+                        }
+
+                        Type adapter = typeof(Kotlin.Function).Assembly.GetType(
+                            "Kotlin.Runtime.Internal.FunctionAdapter",
+                            throwOnError: true);
+                        MethodInfo method = adapter.GetMethod("getFunctionDelegate");
+                        if (!adapter.IsInterface || !adapter.IsPublic || method == null ||
+                            method.ReturnType != typeof(Kotlin.Function))
+                            throw new Exception("FunctionAdapter compiler ABI has the wrong shape");
+                        bool compilerAbi = false;
+                        foreach (CustomAttributeData attribute in adapter.GetCustomAttributesData())
+                        {
+                            if (attribute.AttributeType.FullName ==
+                                "Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute")
+                                compilerAbi = true;
+                        }
+                        if (!compilerAbi)
+                            throw new Exception("FunctionAdapter lacks the compiler-ABI marker");
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = libraryDirectory.resolve("SamConsumer.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            modernCSharp,
+            csharpSource,
+            csharpAssembly,
+            libraryAssembly,
+            runtimeAssembly,
+            stdlibAssembly,
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        runtimeAssembly.copyTo(libraryDirectory.resolve(runtimeAssembly.name), overwrite = true)
+        stdlibAssembly.copyTo(libraryDirectory.resolve(stdlibAssembly.name), overwrite = true)
+        libraryDirectory.resolve("SamConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            dotnetHost,
+            csharpAssembly,
+            libraryDirectory,
+            "C# fun-interface consumer failed",
+        )
+
+        val lambdaSource = libraryDirectory.resolve("lambda-consumer.cs").apply {
+            writeText(
+                """
+                using sam.interop;
+
+                public static class InvalidLambdaConsumer
+                {
+                    public static Greeter Create() => value => value;
+                }
+                """.trimIndent()
+            )
+        }
+        val lambdaCompile = runModernCSharpCompiler(
+            modernCSharp,
+            lambdaSource,
+            libraryDirectory.resolve("InvalidLambdaConsumer.dll"),
+            libraryAssembly,
+            runtimeAssembly,
+            stdlibAssembly,
+        )
+        assertNotEquals(0, lambdaCompile.exitCode, "C# lambda unexpectedly converted to a Kotlin interface")
+        assertTrue("CS1660" in lambdaCompile.output, lambdaCompile.output)
+    }
+
+    @Test
     fun testGenericInterfacesAcrossLibraryBoundary() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val dotnetHost = modernDotNetHostOrSkip()
