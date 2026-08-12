@@ -1147,7 +1147,14 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
 
     private fun IrSimpleFunction.inheritedInterfaceSlots(): List<IrSimpleFunctionSymbol> =
         allOverridden()
-            .filter { overridden -> (overridden.parent as? IrClass)?.isInterface == true }
+            // Intermediate inherited fake overrides describe Kotlin lookup views, not CLR
+            // MethodDef slots. Recording one on a MethodImpl bridge makes emission look for a
+            // method which correctly does not exist on that intermediate interface. Keep only
+            // declarations that own physical interface slots; allOverridden() still supplies
+            // the transitive declared ancestor (for example Base.doStuff through I).
+            .filter { overridden ->
+                !overridden.isFakeOverride && (overridden.parent as? IrClass)?.isInterface == true
+            }
             .sortedWith(
                 compareBy<IrSimpleFunction>(
                     { (it.parent as IrClass).fqNameWhenAvailable?.asString() ?: (it.parent as IrClass).name.asString() },

@@ -1,0 +1,373 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'funInterfaces' {}
+.module 'main-funInterfaces.il'
+
+.namespace Kotlin.Runtime.Internal
+{
+  .class private abstract sealed auto ansi beforefieldinit '<KotlinProducedAssembly>'
+         extends [mscorlib]System.Object
+  {
+  }
+}
+.class interface public abstract auto ansi 'IntTransform'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'transform'(int32 'value') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'GenericTransform'
+{
+  .method public hidebysig newslot abstract virtual instance object 'transform__KotlinErased__e9d39a2dc837baa7500da612537f36ce'(object 'value') cil managed
+  {
+  }
+}
+.class private auto ansi sealed beforefieldinit 'sam$IntTransform$0'
+       extends [mscorlib]System.Object
+       implements 'IntTransform', [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'
+{
+  .field private class [Kotlin.Runtime]'Kotlin.Function1' 'function'
+  .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Function1' 'function') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class [Kotlin.Runtime]'Kotlin.Function1' 'sam$IntTransform$0'::'function'
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'transform'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Function1' 'sam$IntTransform$0'::'function'
+    ldarg.1
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Function' 'getFunctionDelegate'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Function1' 'sam$IntTransform$0'::'function'
+    ret
+  }
+  .method public hidebysig virtual final instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    isinst class 'IntTransform'
+    ldnull
+    cgt.un
+    brfalse IL_whenNext_1
+    ldarg.1
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'
+    ldnull
+    cgt.un
+    brfalse IL_whenNext_3
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Function' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'::'getFunctionDelegate'()
+    ldarg.1
+    castclass class [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Function' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'::'getFunctionDelegate'()
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldc.i4.0
+IL_whenEnd_2:
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.i4.0
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig virtual final instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Function' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'::'getFunctionDelegate'()
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'sam$GenericTransform$0'
+       extends [mscorlib]System.Object
+       implements 'GenericTransform', [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'
+{
+  .field private class [Kotlin.Runtime]'Kotlin.Function1' 'function'
+  .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Function1' 'function') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class [Kotlin.Runtime]'Kotlin.Function1' 'sam$GenericTransform$0'::'function'
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'transform'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Function1' 'sam$GenericTransform$0'::'function'
+    ldarg.1
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    ret
+  }
+  .method public hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Function' 'getFunctionDelegate'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Function1' 'sam$GenericTransform$0'::'function'
+    ret
+  }
+  .method public hidebysig virtual final instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    isinst class 'GenericTransform'
+    ldnull
+    cgt.un
+    brfalse IL_whenNext_1
+    ldarg.1
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'
+    ldnull
+    cgt.un
+    brfalse IL_whenNext_3
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Function' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'::'getFunctionDelegate'()
+    ldarg.1
+    castclass class [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Function' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'::'getFunctionDelegate'()
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldc.i4.0
+IL_whenEnd_2:
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.i4.0
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig virtual final instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Function' [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionAdapter'::'getFunctionDelegate'()
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-GenericTransform-transform-e9d39a2dc837baa7500da612537f36ce>'(object 'value') cil managed
+  {
+    .override method instance object 'GenericTransform'::'transform__KotlinErased__e9d39a2dc837baa7500da612537f36ce'(object)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance object 'sam$GenericTransform$0'::'transform'(object)
+    ret
+  }
+}
+.class private auto ansi sealed 'funInterfacesKt$createGenericTransform$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string>
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
+  .field assembly static initonly class 'funInterfacesKt$createGenericTransform$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'funInterfacesKt$createGenericTransform$1'::.ctor()
+      stsfld class 'funInterfacesKt$createGenericTransform$1' 'funInterfacesKt$createGenericTransform$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'funInterfacesKt$createGenericTransform$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'funInterfacesKt$createGenericTransform$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'funInterfacesKt$createGenericTransform$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    call void 'funInterfacesKt$createGenericTransform$1'::'<EnsureInitialized>'()
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance string 'InvokeExact'(string 'it') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    castclass [mscorlib]System.String
+    callvirt instance string 'funInterfacesKt$createGenericTransform$1'::'InvokeExact'(string)
+    ret
+  }
+}
+.class private auto ansi sealed 'funInterfacesKt$main$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinLocalClassNameAttribute'::.ctor(string) = (01 00 ff 00 00)
+  .field assembly static initonly class 'funInterfacesKt$main$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'funInterfacesKt$main$1'::.ctor()
+      stsfld class 'funInterfacesKt$main$1' 'funInterfacesKt$main$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'funInterfacesKt$main$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'funInterfacesKt$main$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'funInterfacesKt$main$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    call void 'funInterfacesKt$main$1'::'<EnsureInitialized>'()
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 1
+    add
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'funInterfacesKt$main$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 'funInterfacesKt$main$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'funInterfacesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class 'IntTransform' 'createTransform'(class [Kotlin.Runtime]'Kotlin.Function1' 'function') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void 'sam$IntTransform$0'::.ctor(class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+  .method public hidebysig static class 'GenericTransform' 'createGenericTransform'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'funInterfacesKt$createGenericTransform$1' 'tmp'
+    )
+    call void 'funInterfacesKt$createGenericTransform$1'::'<EnsureInitialized>'()
+    ldsfld class 'funInterfacesKt$createGenericTransform$1' 'funInterfacesKt$createGenericTransform$1'::'INSTANCE'
+    stloc.0
+    ldloc.0
+    newobj instance void 'sam$GenericTransform$0'::.ctor(class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    call void 'funInterfacesKt$main$1'::'<EnsureInitialized>'()
+    ldsfld class 'funInterfacesKt$main$1' 'funInterfacesKt$main$1'::'INSTANCE'
+    call class 'IntTransform' 'funInterfacesKt'::'createTransform'(class [Kotlin.Runtime]'Kotlin.Function1')
+    ldc.i4 41
+    callvirt instance int32 'IntTransform'::'transform'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    call class 'GenericTransform' 'funInterfacesKt'::'createGenericTransform'()
+    ldstr "OK"
+    callvirt instance object 'GenericTransform'::'transform__KotlinErased__e9d39a2dc837baa7500da612537f36ce'(object)
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

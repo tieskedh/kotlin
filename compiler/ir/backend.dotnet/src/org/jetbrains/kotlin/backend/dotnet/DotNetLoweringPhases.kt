@@ -59,6 +59,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetRenameFieldsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReifiedFunctionLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReturnableBlockLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSharedVariablesLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSingleAbstractMethodLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticCallableReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLowering
@@ -202,6 +203,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInventNamesForLocalClasses,
     ::DotNetAnonymousObjectSuperConstructorLowering,
     ::DotNetCallableReferenceLowering,
+    // JVM/Native ownership: callable references first become the established Kotlin FunctionN
+    // object, then Common replaces the preserved SAM_CONVERSION with an ordinary wrapper class.
+    // Kotlin fun interfaces remain Kotlin interfaces; CLR delegates are an explicit export concern.
+    ::DotNetSingleAbstractMethodLowering,
     // The ordinary reference pipeline above owns semantic construction. Fold only producer-owned
     // KClass member values into one class-local dispatcher and shared arity-correct Runtime
     // carriers; ordinary user references retain their established per-expression representation.

@@ -18,7 +18,9 @@ import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrRawFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.impl.IrTypeOperatorCallImpl
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.typeWith
@@ -29,6 +31,7 @@ import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.isSuspend
 import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.isSuspendFunction
+import org.jetbrains.kotlin.ir.util.nonDispatchArguments
 import org.jetbrains.kotlin.ir.util.overrides
 import org.jetbrains.kotlin.ir.util.simpleFunctions
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
@@ -181,10 +184,34 @@ internal class DotNetSuspendFunctionInvokeLowering(
                             (candidate.isSuspendFunction() || candidate.isKSuspendFunction())
                 }
         }
-        val logicalTypes = suspendView?.arguments?.map { argument ->
+        val receiverLogicalTypes = suspendView?.arguments?.map { argument ->
             (argument as? IrTypeProjection)?.type
         }?.takeIf { types -> types.none { it == null } }
             ?.filterNotNull()
+        val containsRawOwnerParameter = receiverLogicalTypes?.any { type ->
+            val parameter = (type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+            parameter?.owner?.parent == logicalOwner
+        } == true
+        val callSiteLogicalTypes: List<IrType>? = if (containsRawOwnerParameter) {
+            val arguments = expression.nonDispatchArguments
+            val parameterTypes = arguments.take(sourceArity).map { argument -> argument?.type }
+            val continuationType = arguments.getOrNull(sourceArity)?.type as? IrSimpleType
+            val resultType = continuationType
+                ?.takeIf { it.classOrNull?.owner == context.symbols.continuationClass.owner }
+                ?.arguments
+                ?.singleOrNull()
+                ?.let { it as? IrTypeProjection }
+                ?.type
+            if (parameterTypes.size == sourceArity && parameterTypes.none { it == null } && resultType != null) {
+                parameterTypes.filterNotNull() + resultType
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+        val logicalTypes = callSiteLogicalTypes
+            ?: receiverLogicalTypes
             ?: List(sourceArity + 1) { context.irBuiltIns.anyNType }
 
         val functionClass = context.irBuiltIns.functionN(physicalArity)

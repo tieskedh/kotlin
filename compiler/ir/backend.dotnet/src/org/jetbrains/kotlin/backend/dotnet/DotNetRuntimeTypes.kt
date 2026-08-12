@@ -49,6 +49,7 @@ import org.jetbrains.kotlin.types.Variance
 internal object DotNetRuntimeTypes {
     val DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME = FqName("kotlin.runtime.internal.DefaultConstructorMarker")
     val SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME = FqName("kotlin.runtime.internal.SyntheticConstructorMarker")
+    val FUNCTION_ADAPTER_FQ_NAME = FqName("kotlin.runtime.internal.FunctionAdapter")
     private val KFUNCTION_DECLARATION_PROPERTIES =
         setOf("isInline", "isExternal", "isOperator", "isInfix", "isSuspend")
     private val KFUNCTION_DECLARATION_GETTERS =
@@ -98,6 +99,10 @@ internal object DotNetRuntimeTypes {
 
     private val functionBase = DotNetIlClassInfo(
         ilClassName = "Kotlin.Function",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+    private val functionAdapterClass = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Runtime.Internal.FunctionAdapter",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
@@ -626,6 +631,7 @@ internal object DotNetRuntimeTypes {
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.ENUM_COMPANION -> enumCompanionClass
             classifierInfo.runtimeKind == DotNetRuntimeClassifierKind.ENUM_COMPANION_STATICS -> enumCompanionStaticsClass
             irClass.isDotNetFunctionReferenceBase == true -> functionReferenceBase
+            irClass.isDotNetFunctionAdapter == true -> functionAdapterClass
             irClass.dotNetExactFunctionArity != null -> exactFunctionClasses[irClass.dotNetExactFunctionArity!!]
             irClass.dotNetTypedArgumentsFunctionArity != null ->
                 typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
@@ -966,6 +972,12 @@ internal object DotNetRuntimeTypes {
         if (info.fqName == SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(syntheticConstructorMarkerClass)
         }
+        if (
+            (irClass.isDotNetFunctionAdapter == true || info.fqName == FUNCTION_ADAPTER_FQ_NAME) &&
+            simpleType.arguments.isEmpty()
+        ) {
+            return DotNetIlValueType.UserClass(functionAdapterClass)
+        }
         if (type.isSuspendFunction()) {
             // Match AbstractTypeMapper's JVM ABI: SuspendFunctionN<P..., R> is physically the
             // executable FunctionN+1<P..., Continuation<R>, Any?> view. Function interfaces are
@@ -988,12 +1000,17 @@ internal object DotNetRuntimeTypes {
 
     fun registerCallableFunctions(
         irBuiltIns: IrBuiltIns,
+        functionAdapter: DotNetFunctionAdapterSymbols,
         propertyReferenceFactoryFunctions: List<IrSimpleFunction>,
         memberReferenceFactoryFunctions: List<IrSimpleFunction>,
         callableAnnotationFactoryFunctions: List<IrSimpleFunction>,
         typeMapper: DotNetIlTypeMapper,
         availableFunctions: MutableMap<IrSimpleFunction, DotNetIlFunctionInfo>,
     ) {
+        availableFunctions[functionAdapter.getFunctionDelegate] = DotNetIlFunctionInfo(
+            functionAdapterClass,
+            functionAdapter.getFunctionDelegate.dotNetSignature(typeMapper),
+        )
         val enumBase = irBuiltIns.enumClass.owner
         val enumMembers = buildList {
             enumBase.properties.mapNotNullTo(this) { property -> property.getter }
