@@ -2,7 +2,10 @@
 
 - Status: Accepted (pre-ABI)
 - Scope: Kotlin `Array<out E>` in signatures, locals, calls, and reads
-- Does not admit: `Array<in E>`, open `Array<T?>`, or a second generic-array identity
+- Does not admit: `Array<in E>`, invariant open `Array<T?>`, or a second
+  generic-array identity. Open nullable output views and nullable generic
+  varargs follow the distinct accepted carrier rules in
+  [`open-nullable-array-views-and-varargs.md`](open-nullable-array-views-and-varargs.md).
 
 ## Common authority
 
@@ -53,12 +56,13 @@ projected view of that value widens without an instruction to `System.Array`. `A
 its separately selected erased read result `Any?` and runtime-classification rules.
 
 Although Kotlin IR initially types a reference `vararg E` parameter as source-level
-`Array<out E>`, the vararg marker selects a distinct physical declaration rule: the parameter and
-every materialized argument use the exact invariant `E[]` storage vector. Signature mapping reads
-that marker both before and after vararg lowering. It must not depend on the lowering having
-mutated the parameter type already, because a separate consumer reconstructs the producer's
-physical call signature from the logical KLIB declaration. Ordinary non-vararg `Array<out E>`
-parameters remain `System.Array`.
+`Array<out E>`, the vararg marker selects a distinct physical declaration rule. A non-null open
+`vararg E` uses exact invariant `E[]` storage. An open nullable `vararg E?` instead uses the
+declaration-stable boxed-or-null `object[]` rule accepted in
+[`open-nullable-array-views-and-varargs.md`](open-nullable-array-views-and-varargs.md). Signature
+mapping reads that marker before target lowering, because a separate consumer reconstructs the
+producer's physical call signature from the logical KLIB declaration. Ordinary non-vararg
+`Array<out E>` parameters remain `System.Array`, including an open nullable element.
 
 The shared inliner may introduce immutable argument temporaries whose substituted logical type is
 wider than the exact vector supplied at the call site. Common's InlineOnly
@@ -108,10 +112,11 @@ suppressing an adapter, and its final slot validation consumes the same retained
 
 ## Scope boundary
 
-Input projections need a different write-safe carrier and remain unsupported. Open nullable
-nested carriers remain governed by their existing decision. This change does not add array
-copying, value-vector covariance as an exact CLR vector type, specialized primitive-array
-identity, reified public APIs, or BCL collection interfaces.
+Input projections and invariant open nullable arrays need a different write-safe carrier and
+remain unsupported. The accepted open-nullable output and vararg cases are governed by
+[`open-nullable-array-views-and-varargs.md`](open-nullable-array-views-and-varargs.md). This change
+does not add array copying, value-vector covariance as an exact CLR vector type, specialized
+primitive-array identity, reified public APIs, or BCL collection interfaces.
 
 ## Verification
 

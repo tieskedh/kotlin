@@ -470,6 +470,14 @@ See the
   pre- and post-lowering signatures, so producer CIL, embedded physical binding,
   and separate consumer calls agree. Do not generalize this exception to an
   ordinary bounded-output array parameter; that remains `System.Array`.
+- A Kotlin-owned method-generic nullable `vararg T?` has source type
+  `Array<out T?>` but one declaration-stable physical `object[]` carrier. Every
+  expanded call, including omitted and spread forms, creates a fresh
+  `object[]` independent of the call-site substitution; KLIB retains the
+  logical nullable projection. Imported CLR varargs keep their exact selected
+  vector, and closed invariant arrays keep their existing exact carrier. Do
+  not infer support for invariant/input open `Array<T?>`. See
+  [the open-nullable array/vararg ADR](docs/decisions/open-nullable-array-views-and-varargs.md).
 - Every Kotlin-owned ordinary generic class has one canonical non-generic CLR
   owner, one authoritative declaration-erased runtime classifier/virtual ABI,
   and one authoritative mutable state. Erasure is authoritative semantics and

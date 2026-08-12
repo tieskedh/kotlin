@@ -1073,8 +1073,9 @@ internal class DotNetIlTypeMapper private constructor(
      * library metadata is also collected from pre-lowering declarations, so signature mapping
      * must recognize the vararg marker itself instead of depending on that mutation having
      * happened already. This keeps a separately compiled call to `vararg T` on the same `T[]`
-     * signature the producer emits, while an ordinary `Array<out T>` parameter continues to use
-     * its read-only `System.Array` view.
+     * signature the producer emits. An open nullable `vararg T?` instead has one stable
+     * boxed-or-null `object[]` signature for every substitution. An ordinary `Array<out T>`
+     * parameter continues to use its read-only `System.Array` view.
      */
     fun toDotNetIlParameterType(parameter: IrValueParameter): DotNetIlValueType? {
         val varargElementType = parameter.varargElementType
@@ -1082,11 +1083,7 @@ internal class DotNetIlTypeMapper private constructor(
             return toDotNetIlValueType(parameter.type)
         }
         if (varargElementType.isOpenNullableTypeParameter()) {
-            dotNetUnsupported(
-                "vararg parameter '${parameter.name.asString()}' contains open nullable type parameter " +
-                        "'${varargElementType.render()}'; the boxed-or-null carrier is supported only " +
-                        "as a direct value slot until nested invariant-carrier adapters are defined"
-            )
+            return DotNetIlValueType.GenericArray(DotNetIlValueType.Object)
         }
         val elementType = toDotNetIlGenericArgumentType(varargElementType) ?: return null
         return DotNetIlValueType.GenericArray(elementType)
@@ -1249,8 +1246,9 @@ internal class DotNetIlTypeMapper private constructor(
      * retain the natural CLR vector (`Array<Int>` -> `int32[]`) because specialized primitive
      * arrays now have distinct Kotlin.Runtime wrapper types. A Kotlin value class is nominal at
      * this reified boundary (`Array<V>` -> `V[]`), rather than exposing its exact carrier as the
-     * CLR element identity. An OPEN type parameter remains valid (`!n[]`/`!!n[]`) and substitutes
-     * reified CLR element types. A Kotlin `out` projection uses
+     * CLR element identity. An OPEN non-null type parameter remains valid (`!n[]`/`!!n[]`) and
+     * substitutes reified CLR element types. A Kotlin `out` projection, including
+     * `Array<out T?>`, uses
      * the classified [DotNetIlValueType.ErasedGenericArray] `System.Array` view because CLR
      * vector covariance cannot represent value-element or arbitrary method-generic widenings;
      * KLIB retains its stronger bounded read type. A star projection uses the same physical view
@@ -1270,16 +1268,16 @@ internal class DotNetIlTypeMapper private constructor(
                         "a CLR vector cannot represent its read-as-Any/write-as-element contract"
             )
         }
+        if (projection.variance == Variance.OUT_VARIANCE) {
+            return DotNetIlValueType.ErasedGenericArray(coreLibrary.reference)
+        }
         val elementIrType = projection.type
         if (elementIrType.isOpenNullableTypeParameter()) {
             dotNetUnsupported(
                 "generic array type ${type.render()} contains open nullable type parameter " +
-                        "'${elementIrType.render()}'; the boxed-or-null carrier is supported only " +
-                        "as a direct value slot until nested invariant-carrier adapters are defined"
+                        "'${elementIrType.render()}'; only a read-only output projection or a " +
+                        "Kotlin-owned nullable generic vararg has a declaration-stable CLR carrier"
             )
-        }
-        if (projection.variance == Variance.OUT_VARIANCE) {
-            return DotNetIlValueType.ErasedGenericArray(coreLibrary.reference)
         }
         val elementType = toDotNetIlGenericArgumentType(elementIrType) ?: return null
         return DotNetIlValueType.GenericArray(elementType)

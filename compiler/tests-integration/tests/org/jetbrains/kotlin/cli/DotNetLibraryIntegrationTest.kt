@@ -12767,6 +12767,96 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testOpenNullableArrayViewsAndVarargsAcrossKotlinAndCSharpBoundaries() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(csharpToolchain != null, "Modern C# compiler is not available")
+        val modernCSharp = checkNotNull(csharpToolchain)
+        val dotnetHost = modernDotNetHostOrSkip()
+        val platformDirectory = File(tmpdir, "open-nullable-array-platform")
+        compileInProcess(
+            K2DotNetCompiler(),
+            K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::destination.cliArgument, platformDirectory.path,
+        )
+
+        val runtimeAssembly = platformDirectory.resolve("Kotlin.Runtime.dll")
+        val stdlibAssembly = platformDirectory.resolve("Kotlin.Stdlib.dll")
+        val stdlibIl = platformDirectory.resolve("Kotlin.Stdlib.il").readText()
+        assertTrue(
+            Regex(
+                """\.method public hidebysig static class \[Kotlin\.Runtime]'Kotlin\.Collections\.Set' """ +
+                        """'setOfNotNull'<'T'>\(object\[] 'elements'\)"""
+            ).containsMatchIn(stdlibIl)
+        ) {
+            "Nullable generic Kotlin varargs must expose one declaration-stable object[] carrier"
+        }
+        assertTrue(
+            Regex(
+                """\.method public hidebysig static class \[Kotlin\.Runtime]'Kotlin\.Collections\.List' """ +
+                        """'filterNotNull'<'T'>\(class \[[^]]+]System\.Array '<this>'\)"""
+            ).containsMatchIn(stdlibIl)
+        ) {
+            "Open-nullable output arrays must expose the identity-preserving System.Array view"
+        }
+        val nullableSetMethod = stdlibIl.substringAfter(
+            ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Set' " +
+                    "'setOfNotNull'<'T'>(object[] 'elements')"
+        ).substringBefore("  .method ")
+        assertFalse("!!0[]" in nullableSetMethod)
+        assertFalse("castclass !!0[]" in nullableSetMethod)
+
+        val csharpSource = platformDirectory.resolve("open-nullable-array-consumer.cs").apply {
+            writeText(
+                """
+                using System;
+
+                public static class Program
+                {
+                    public static int Main()
+                    {
+                        System.Array strings = new string[] { "a", null, "b" };
+                        var filteredStrings =
+                            Kotlin.Collections.CollectionsKt.filterNotNull<string>(strings);
+                        if (filteredStrings.ToString() != "[a, b]")
+                            throw new Exception("C# reference System.Array filtering failed: " + filteredStrings);
+
+                        System.Array ints = new int?[] { 1, null, 2 };
+                        var filteredInts = Kotlin.Collections.CollectionsKt.filterNotNull<int>(ints);
+                        if (filteredInts.ToString() != "[1, 2]")
+                            throw new Exception("C# nullable-value System.Array filtering failed: " + filteredInts);
+
+                        object[] values = { 2, null, 1, 2 };
+                        var set = Kotlin.Collections.SetsKt.setOfNotNull<int>(values);
+                        if (set.ToString() != "[2, 1]")
+                            throw new Exception("C# object[] nullable vararg call failed: " + set);
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = platformDirectory.resolve("OpenNullableArrayConsumer.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            modernCSharp,
+            csharpSource,
+            csharpAssembly,
+            runtimeAssembly,
+            stdlibAssembly,
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        platformDirectory.resolve("OpenNullableArrayConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            dotnetHost,
+            csharpAssembly,
+            platformDirectory,
+            "C# open-nullable array/vararg consumer failed",
+        )
+    }
+
+    @Test
     fun testGenericInterfacesAcrossLibraryBoundary() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val dotnetHost = modernDotNetHostOrSkip()

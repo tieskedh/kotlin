@@ -1,6 +1,6 @@
 # Common collections programme
 
-- Status: **Active — erased Set/Map/hash foundation and its dependency-closed Common batch complete**
+- Status: **Active — open-nullable array/vararg filtering and Set closure complete**
 - ABI foundation: [`../decisions/generic-interface-erased-identity.md`](../decisions/generic-interface-erased-identity.md)
 
 ## Purpose
@@ -124,14 +124,18 @@ Kotlin collection interfaces are non-generic CLR TypeDefs, while Roslyn executes
 `HashMap` and `HashSet` calls without observing `Dictionary<K,V>`, `HashSet<T>`, or another BCL
 generic interface as Kotlin identity.
 
-Sequence overloads, sorting/min/max/comparator families not yet admitted for ordinary Iterables,
-`Grouping` and its aggregate product, dependency-blocked reified variants, concurrency, and BCL adapters remain
-separate closures. The vararg `setOfNotNull(vararg T?)` and object-array
-`filterNotNullTo` variants are also held at one explicit compiler boundary: their authoritative
-signatures require an open nullable projected array (`Array<out T?>`), which the current array
-representation rejects rather than approximating with `object[]`. The singleton
-`setOfNotNull(T?)` is admitted. A source member that reaches any excluded boundary must fail
-closed rather than receive a .NET-specific body.
+Sequence overloads, primitive/unsigned/range sorting, `Grouping` and its
+aggregate product, dependency-blocked reified variants, concurrency, and BCL
+adapters remain separate closures. The formerly parked open-nullable boundary
+is complete under
+[`../decisions/open-nullable-array-views-and-varargs.md`](../decisions/open-nullable-array-views-and-varargs.md):
+ordinary `Array<out T?>` reads retain the original vector through
+`System.Array`, Kotlin-owned `vararg T?` expansions use a fresh declaration-
+stable `object[]`, and the authoritative object-array `filterNotNull`/
+`filterNotNullTo` plus both `setOfNotNull` overloads are admitted. Invariant or
+input-projected method-owned `Array<T?>` remains excluded. A source member that
+reaches any excluded boundary must fail closed rather than receive a .NET-
+specific body.
 
 The gate proves null keys and values, primitive/reference/widened keys, hash collisions,
 replacement without reordering, resize and upstream compaction, entry `setValue`, live
@@ -231,7 +235,8 @@ The bootstrap generator now admits every Common collection-template
 variant whose dependency closure consists only of the already published read-only foundation,
 this mutable-list foundation, arrays, fixed function arities, and existing exceptions/helpers.
 The exact inventory is generator-owned and fail-closed and now includes the completed Set/Map
-closure above. Ranges as public values, sequences, random/sorting, dependency-blocked reified variants, reflection,
+closure above. Ranges as public values, sequences, random and the remaining
+primitive/range sorting families, dependency-blocked reified variants, reflection,
 and unsigned families remain excluded when they introduce an independent dependency rather than
 being approximated or copied.
 
@@ -284,7 +289,8 @@ method-owned CLR generics, relative constraints, projected arrays, nullable type
 recovery, inline non-local control flow, data classes, anonymous generic classes, and
 cross-library inlining. That first batch did not silently bundle array-receiver overloads. The
 later Set/Map tranche admits only the object-array association, grouping, snapshot, and Set-op
-variants whose array carriers are already exact. Sequence, sorting/random, range-signature,
+variants whose array carriers are already exact. Sequence, random, remaining
+primitive/range sorting, range-signature,
 reflection, unsigned, and still dependency-blocked reified variants fail closed outside the
 admitted batches.
 

@@ -108,6 +108,17 @@ public fun <T> linkedSetOf(vararg elements: T): LinkedHashSet<T> = elements.toCo
 public fun <T : Any> setOfNotNull(element: T?): Set<T> = if (element != null) setOf(element) else emptySet()
 
 /**
+ * Returns a new read-only set only with those given elements, that are not null.
+ * Elements of the set are iterated in the order they were specified.
+ * The returned set is serializable (JVM).
+ * @sample samples.collections.Collections.Sets.setOfNotNull
+ */
+@SinceKotlin("1.4")
+public fun <T : Any> setOfNotNull(vararg elements: T?): Set<T> {
+    return elements.filterNotNullTo(LinkedHashSet())
+}
+
+/**
  * Builds a new read-only [Set] by populating a [MutableSet] using the given [builderAction]
  * and returning a read-only set with the same elements.
  *
