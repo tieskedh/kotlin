@@ -819,9 +819,12 @@ The audit deliberately excludes the rest of the nearby generator frontier:
   implementations that do not yet exist;
 - the completed Comparator/selection foundation owns Common comparison
   combinators, comparator `minOf`/`maxOf`, Iterable comparator selection, and
-  non-mutating `isSorted*`; stable mutation/sorted snapshots remain a separate
-  platform-actual tranche, while primitive/unsigned arrays, ranges, and
-  Sequences remain separate. See
+  non-mutating `isSorted*`; the completed stable sorting closure reuses the
+  Native/Wasm stable list/generic-array implementation lineage and admits only its eager
+  dependency-closed ordering consumers, as recorded in
+  [`../decisions/stable-list-and-array-sorting.md`](../decisions/stable-list-and-array-sorting.md),
+  while primitive/unsigned arrays, ranges, and Sequences remain separate;
+  the Comparator foundation itself is recorded in
   [`../decisions/comparator-and-selection-foundation.md`](../decisions/comparator-and-selection-foundation.md);
 - `allEqual` publishes the now-admitted parameterless `ExperimentalStdlibApi` marker and can be
   audited independently, while `allDistinct` additionally constructs `HashSet`;

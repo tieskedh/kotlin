@@ -250,6 +250,12 @@ fun main(args: Array<String>) {
                     pattern = DOT_NET_COROUTINE_MULTI_MODULE_PATTERN,
                     recursive = false,
                 )
+                model(
+                    "box/callableReference/function",
+                    pattern = DOT_NET_STABLE_SORT_PATTERN,
+                    recursive = false,
+                    testClassName = "CallableReferenceFunction",
+                )
                 model("dotnet/box")
             }
 
@@ -401,6 +407,12 @@ fun main(args: Array<String>) {
                     "box/coroutines/multiModule",
                     pattern = DOT_NET_COROUTINE_MULTI_MODULE_PATTERN,
                     recursive = false,
+                )
+                model(
+                    "box/callableReference/function",
+                    pattern = DOT_NET_STABLE_SORT_PATTERN,
+                    recursive = false,
+                    testClassName = "CallableReferenceFunction",
                 )
                 model("dotnet/box")
             }
@@ -554,6 +566,12 @@ fun main(args: Array<String>) {
                     pattern = DOT_NET_COROUTINE_MULTI_MODULE_PATTERN,
                     recursive = false,
                 )
+                model(
+                    "box/callableReference/function",
+                    pattern = DOT_NET_STABLE_SORT_PATTERN,
+                    recursive = false,
+                    testClassName = "CallableReferenceFunction",
+                )
                 model("dotnet/box")
             }
 
@@ -705,6 +723,12 @@ fun main(args: Array<String>) {
                     "box/coroutines/multiModule",
                     pattern = DOT_NET_COROUTINE_MULTI_MODULE_PATTERN,
                     recursive = false,
+                )
+                model(
+                    "box/callableReference/function",
+                    pattern = DOT_NET_STABLE_SORT_PATTERN,
+                    recursive = false,
+                    testClassName = "CallableReferenceFunction",
                 )
                 model("dotnet/box")
             }

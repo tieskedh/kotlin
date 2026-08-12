@@ -874,6 +874,18 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
         ),
+        "_DotNetBootstrapSorting.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = COLLECTIONS_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapSortingActuals.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = COLLECTIONS_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapStableSortSupport.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = COLLECTIONS_FACADE_IL_NAME,
+        ),
         "_DotNetBootstrapComparisons.kt" to ImplementationSource(
             packageFqName = "kotlin.comparisons",
             facadeIlName = COMPARISONS_FACADE_IL_NAME,

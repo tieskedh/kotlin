@@ -66,9 +66,16 @@ with host comparison wholesale. The current C# export route may use an
 the generic-owner reopening must separately test whether a complete direct
 foreign actual becomes truthful. Do not turn today's limitation into a
 permanent prohibition or introduce a Comparator-only owner exception.
-Stable mutation and sorted snapshots require their separately accepted
-platform sort boundary. See
-[`docs/decisions/comparator-and-selection-foundation.md`](docs/decisions/comparator-and-selection-foundation.md).
+Stable mutation/sorted snapshots require their separately accepted platform
+sort boundary. That boundary keeps private list/eager snapshots in erased
+`Array<Any?>` storage, but generic Kotlin array sorting retains the original
+classified `System.Array`, allocates its merge buffer from the input vector's
+runtime element type, and reads/writes through `GetValue`/`SetValue`. Never
+cast a projected array to `object[]` or open `T[]`; both CLR reference and
+value vectors must preserve identity. See
+[`docs/decisions/comparator-and-selection-foundation.md`](docs/decisions/comparator-and-selection-foundation.md)
+and
+[`docs/decisions/stable-list-and-array-sorting.md`](docs/decisions/stable-list-and-array-sorting.md).
 
 Kotlin-owned enums are reference classes. Their one erased `Kotlin.Enum` base
 is physically owned by `Kotlin.Runtime`; concrete enum classes and Common

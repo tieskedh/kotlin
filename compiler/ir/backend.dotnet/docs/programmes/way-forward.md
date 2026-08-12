@@ -348,6 +348,15 @@ claiming a stable platform sort. The semantic/physical/C# boundary and the
 separate stable-sort prerequisite are owned by
 [`../decisions/comparator-and-selection-foundation.md`](../decisions/comparator-and-selection-foundation.md).
 
+The completed next consumer is the stable MutableList and generic-array
+sorting closure. It reuses the exact Native/Wasm snapshot and stable merge-sort
+lineage, then admits only the dependency-closed eager Iterable/MutableList
+`sorted*`/`sort*` consumers. Primitive and unsigned arrays, ranges, Sequences,
+binary search, and random ordering remain separate. The stable algorithm,
+failure timing, arbitrary-list, physical, and C# boundaries are owned by
+[`../decisions/stable-list-and-array-sorting.md`](../decisions/stable-list-and-array-sorting.md).
+
+
 ### 4. Expand Common collections by exact dependency closure
 
 Use [`common-collections.md`](common-collections.md). Its builder and Common abstract-base
