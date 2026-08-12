@@ -12636,6 +12636,137 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testStableSortingFoundationAcrossKotlinAndCSharpBoundaries() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(csharpToolchain != null, "Modern C# compiler is not available")
+        val modernCSharp = checkNotNull(csharpToolchain)
+        val dotnetHost = modernDotNetHostOrSkip()
+        val platformDirectory = File(tmpdir, "stable-sorting-platform")
+        compileInProcess(
+            K2DotNetCompiler(),
+            K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::destination.cliArgument, platformDirectory.path,
+        )
+
+        val runtimeAssembly = platformDirectory.resolve("Kotlin.Runtime.dll")
+        val stdlibAssembly = platformDirectory.resolve("Kotlin.Stdlib.dll")
+        val stdlibIl = platformDirectory.resolve("Kotlin.Stdlib.il").readText()
+        val comparatorSlot = Regex(
+            """\.method public hidebysig newslot abstract virtual instance int32 '([^']+)'\(object 'a', object 'b'\)"""
+        ).find(stdlibIl.substringAfter(".class interface public abstract auto ansi 'Kotlin.Comparator'"))
+            ?.groupValues
+            ?.get(1)
+            ?: fail("Kotlin.Comparator lacks one public erased canonical slot")
+        assertTrue(
+            Regex(
+                """\.method public hidebysig static void 'sortWith'<'T'>\(""" +
+                        """class \[[^]]+]System\.Array '<this>', class 'Kotlin\.Comparator' 'comparator'\)"""
+            ).containsMatchIn(stdlibIl)
+        )
+        assertTrue(
+            ".method public hidebysig static void 'sortWith'<'T'>(" +
+                    "class [Kotlin.Runtime]'Kotlin.Collections.MutableList' '<this>', " +
+                    "class 'Kotlin.Comparator' 'comparator')" in stdlibIl
+        )
+        assertFalse("dotNetErasedArrayOfNulls" in stdlibIl)
+        assertFalse("dotNetErasedArraySet" in stdlibIl)
+        val stableSortStart = Regex(
+            """\.method public hidebysig static void 'mergeSortErased'\(class \[[^]]+]System\.Array"""
+        ).find(stdlibIl)?.range?.first ?: -1
+        assertTrue(stableSortStart >= 0, "The erased stable-sort implementation is absent")
+        val stableSortEnd = stdlibIl.indexOf("'orEmpty'", stableSortStart)
+            .takeIf { index -> index >= 0 } ?: stdlibIl.length
+        val stableSortIl = stdlibIl.substring(stableSortStart, stableSortEnd)
+        assertTrue("System.Array::CreateInstance" in stableSortIl)
+        assertTrue("System.Array::GetValue" in stableSortIl)
+        assertTrue("System.Array::SetValue" in stableSortIl)
+        assertFalse("!!0[]" in stableSortIl)
+        assertFalse("System.Array::Sort" in stableSortIl)
+
+        val csharpSource = platformDirectory.resolve("stable-sorting-consumer.cs").apply {
+            writeText(
+                """
+                using System;
+
+                public sealed class SortItem
+                {
+                    public readonly int Key;
+                    public readonly string Name;
+
+                    public SortItem(int key, string name)
+                    {
+                        Key = key;
+                        Name = name;
+                    }
+                }
+
+                public sealed class CSharpIntComparator : Kotlin.Comparator
+                {
+                    public int $comparatorSlot(object left, object right) =>
+                        ((int)left).CompareTo((int)right);
+                }
+
+                public sealed class CSharpSortItemComparator : Kotlin.Comparator
+                {
+                    public int $comparatorSlot(object left, object right) =>
+                        ((SortItem)left).Key.CompareTo(((SortItem)right).Key);
+                }
+
+                public static class Program
+                {
+                    public static int Main()
+                    {
+                        int[] values = { 4, 1, 3, 2 };
+                        Kotlin.Collections.CollectionsKt.sortWith<int>(values, new CSharpIntComparator());
+                        if (values[0] != 1 || values[1] != 2 || values[2] != 3 || values[3] != 4)
+                            throw new Exception("C# int[] sort failed");
+
+                        SortItem[] items = {
+                            new SortItem(2, "a"),
+                            new SortItem(1, "b"),
+                            new SortItem(2, "c"),
+                            new SortItem(1, "d"),
+                        };
+                        Kotlin.Collections.CollectionsKt.sortWith<SortItem>(items, new CSharpSortItemComparator());
+                        if (items[0].Name != "b" || items[1].Name != "d" ||
+                            items[2].Name != "a" || items[3].Name != "c")
+                            throw new Exception("C# reference-array sort was not stable");
+
+                        var list = new Kotlin.Collections.ArrayList();
+                        list.add(3);
+                        list.add(1);
+                        list.add(2);
+                        Kotlin.Collections.CollectionsKt.sortWith<int>(list, new CSharpIntComparator());
+                        if ((int)list.get(0) != 1 || (int)list.get(1) != 2 || (int)list.get(2) != 3)
+                            throw new Exception("C# Kotlin MutableList sort failed");
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = platformDirectory.resolve("StableSortingConsumer.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            modernCSharp,
+            csharpSource,
+            csharpAssembly,
+            runtimeAssembly,
+            stdlibAssembly,
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        platformDirectory.resolve("StableSortingConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            dotnetHost,
+            csharpAssembly,
+            platformDirectory,
+            "C# stable-sorting consumer failed",
+        )
+    }
+
+    @Test
     fun testGenericInterfacesAcrossLibraryBoundary() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val dotnetHost = modernDotNetHostOrSkip()

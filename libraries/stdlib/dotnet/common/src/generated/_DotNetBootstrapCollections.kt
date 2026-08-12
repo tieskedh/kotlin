@@ -2901,6 +2901,106 @@ public fun <T> List<T>.slice(indices: Iterable<Int>): List<T> {
 }
 
 /**
+ * Sorts elements in the list in-place according to natural sort order of the value returned by specified [selector] function.
+ *
+ * The sort is _stable_. It means that elements for which [selector] returned equal values preserve their order
+ * relative to each other after sorting.
+ *
+ * @sample samples.collections.Collections.Sorting.sortBy
+ */
+public inline fun <T, R : Comparable<R>> MutableList<T>.sortBy(crossinline selector: (T) -> R?): Unit {
+    if (size > 1) sortWith(compareBy(selector))
+}
+
+/**
+ * Sorts elements in the list in-place descending according to natural sort order of the value returned by specified [selector] function.
+ *
+ * The sort is _stable_. It means that elements for which [selector] returned equal values preserve their order
+ * relative to each other after sorting.
+ *
+ * @sample samples.collections.Collections.Sorting.sortByDescending
+ */
+public inline fun <T, R : Comparable<R>> MutableList<T>.sortByDescending(crossinline selector: (T) -> R?): Unit {
+    if (size > 1) sortWith(compareByDescending(selector))
+}
+
+/**
+ * Sorts elements in the list in-place descending according to their natural sort order.
+ *
+ * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
+ */
+public fun <T : Comparable<T>> MutableList<T>.sortDescending(): Unit {
+    sortWith(reverseOrder())
+}
+
+/**
+ * Returns a list of all elements sorted according to their natural sort order.
+ *
+ * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
+ */
+public fun <T : Comparable<T>> Iterable<T>.sorted(): List<T> {
+    if (this is Collection) {
+        if (size <= 1) return this.toList()
+        @Suppress("UNCHECKED_CAST")
+        val erasedComparator = naturalOrder<T>() as Comparator<in Any?>
+        @Suppress("UNCHECKED_CAST")
+        val sorted = toTypedArray<Any?>().apply { sortWith(erasedComparator) }.asList() as List<T>
+        return sorted
+    }
+    return toMutableList().apply { sort() }
+}
+
+/**
+ * Returns a list of all elements sorted according to natural sort order of the value returned by specified [selector] function.
+ *
+ * The sort is _stable_. It means that elements for which [selector] returned equal values preserve their order
+ * relative to each other after sorting.
+ *
+ * @sample samples.collections.Collections.Sorting.sortedBy
+ */
+public inline fun <T, R : Comparable<R>> Iterable<T>.sortedBy(crossinline selector: (T) -> R?): List<T> {
+    return sortedWith(compareBy(selector))
+}
+
+/**
+ * Returns a list of all elements sorted descending according to natural sort order of the value returned by specified [selector] function.
+ *
+ * The sort is _stable_. It means that elements for which [selector] returned equal values preserve their order
+ * relative to each other after sorting.
+ *
+ * @sample samples.collections.Collections.Sorting.sortedByDescending
+ */
+public inline fun <T, R : Comparable<R>> Iterable<T>.sortedByDescending(crossinline selector: (T) -> R?): List<T> {
+    return sortedWith(compareByDescending(selector))
+}
+
+/**
+ * Returns a list of all elements sorted descending according to their natural sort order.
+ *
+ * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
+ */
+public fun <T : Comparable<T>> Iterable<T>.sortedDescending(): List<T> {
+    return sortedWith(reverseOrder())
+}
+
+/**
+ * Returns a list of all elements sorted according to the specified [comparator].
+ *
+ * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
+ */
+public fun <T> Iterable<T>.sortedWith(comparator: Comparator<in T>): List<T> {
+    if (this is Collection) {
+       if (size <= 1) return this.toList()
+       @Suppress("UNCHECKED_CAST")
+       val erasedComparator = comparator as Comparator<in Any?>
+       @Suppress("UNCHECKED_CAST")
+       val sorted = toTypedArray<Any?>().apply { sortWith(erasedComparator) }.asList() as List<T>
+       return sorted
+    }
+    return toMutableList().apply { sortWith(comparator) }
+}
+
+/**
  * Returns a set containing all elements that are contained by this collection and not contained by the specified collection.
  *
  * The returned set preserves the element iteration order of the original collection.
