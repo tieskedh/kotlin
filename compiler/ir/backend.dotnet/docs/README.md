@@ -66,6 +66,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Kotlin-owned primitive-array wrappers](decisions/primitive-arrays.md)
 - [Classified `Array<*>` erased view](decisions/star-projected-arrays.md)
 - [Bounded `Array<out E>` read-only CLR view](decisions/bounded-output-projected-arrays.md)
+- [Open-nullable projected arrays and Kotlin varargs use distinct CLR carriers](decisions/open-nullable-array-views-and-varargs.md)
 - [Reified array operations reuse ordinary substituted carriers](decisions/reified-array-operations.md)
 - [Reified inline functions use complete call-site substitution](decisions/reified-inline-functions.md)
 - [`KType` and `typeOf` retain the logical Kotlin type graph](decisions/ktype-and-typeof.md)
