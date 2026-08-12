@@ -60,11 +60,14 @@ tasks {
                 "_DotNetBootstrapSets.kt",
                 "_DotNetBootstrapRanges.kt",
                 "_DotNetBootstrapComparisons.kt",
+                "_DotNetBootstrapSorting.kt",
             ).map { fileName ->
                 rootProject.file("libraries/stdlib/dotnet/common/src/generated/$fileName")
             } + listOf(
                 rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapMapsActuals.kt"),
                 rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapSetsActuals.kt"),
+                rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapSortingActuals.kt"),
+                rootProject.file("libraries/stdlib/dotnet/src/generated/_DotNetBootstrapStableSortSupport.kt"),
             )
         )
         inputs.file(
@@ -94,6 +97,8 @@ tasks {
             rootProject.file("libraries/stdlib/src/kotlin/collections/Sets.kt"),
             rootProject.file("libraries/stdlib/native-wasm/src/kotlin/collections/Maps.kt"),
             rootProject.file("libraries/stdlib/native-wasm/src/kotlin/collections/Sets.kt"),
+            rootProject.file("libraries/stdlib/native-wasm/src/kotlin/collections/MutableCollections.kt"),
+            rootProject.file("libraries/stdlib/native-wasm/src/kotlin/collections/ArraySorting.kt"),
             rootProject.file("libraries/stdlib/src/kotlin/util/Preconditions.kt"),
             rootProject.file("libraries/stdlib/native-wasm/src/kotlin/Exceptions.kt"),
         )

@@ -54,6 +54,14 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/generated/_DotNetBootstrapSetsActuals.kt",
     ),
     DotNetStdlibSourceResource(
+        "_DotNetBootstrapSortingActuals.kt",
+        "dotnet/src/generated/_DotNetBootstrapSortingActuals.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapStableSortSupport.kt",
+        "dotnet/src/generated/_DotNetBootstrapStableSortSupport.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetStringBuilder.kt",
         "dotnet/src/kotlin/text/DotNetStringBuilder.kt",
     ),
@@ -174,6 +182,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "_DotNetBootstrapComparisons.kt",
         "dotnet/common/src/generated/_DotNetBootstrapComparisons.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "_DotNetBootstrapSorting.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapSorting.kt",
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
