@@ -379,6 +379,10 @@ internal class DotNetIlIntrinsicMethods(
             Key(kotlinFqn, null, "arrayOfNulls", listOf(intFqn)) to DotNetIlGenericArrayOfNullsIntrinsic,
             Key(kotlinCollectionsFqn, null, "dotNetArrayOfNulls", listOf(arrayFqn, intFqn)) to
                     DotNetIlArrayOfNullsLikeIntrinsic,
+            Key(kotlinCollectionsFqn, null, "dotNetErasedArrayOfNulls", listOf(arrayFqn, intFqn)) to
+                    DotNetIlArrayOfNullsLikeIntrinsic,
+            Key(kotlinCollectionsFqn, null, "dotNetErasedArraySet", listOf(arrayFqn, intFqn, anyFqn)) to
+                    DotNetIlErasedArraySetIntrinsic,
             Key(arrayFqn, null, "iterator", emptyList()) to
                     DotNetIlArrayIteratorIntrinsic(fixedArrayType = null),
             Key(arrayFqn, null, "clone", emptyList()) to
@@ -1395,14 +1399,18 @@ private object DotNetIlArrayOfNullsLikeIntrinsic : DotNetIlIntrinsicMethod() {
         codegen: DotNetIlExpressionCodegen,
         expectedType: DotNetIlValueType,
     ): Boolean {
-        val resultType = expectedType as? DotNetIlValueType.GenericArray ?: return false
+        if (expectedType !is DotNetIlValueType.GenericArray &&
+            expectedType !is DotNetIlValueType.ErasedGenericArray
+        ) return false
         if (call.arguments.size != 2) return false
         val reference = call.arguments[0]
             ?: dotNetUnsupported("missing reference array for 'dotNetArrayOfNulls'")
-        val referenceType = codegen.toDotNetIlValueType(reference.type) as? DotNetIlValueType.GenericArray
-            ?: dotNetUnsupported(
-                "'dotNetArrayOfNulls' has unsupported reference type ${reference.type.render()}"
-            )
+        val referenceType = codegen.toDotNetIlValueType(reference.type)
+        if (referenceType !is DotNetIlValueType.GenericArray &&
+            referenceType !is DotNetIlValueType.ErasedGenericArray
+        ) {
+            dotNetUnsupported("array-of-nulls-like reference has unsupported type ${reference.type.render()}")
+        }
         val size = call.arguments[1]
             ?: dotNetUnsupported("missing size for 'dotNetArrayOfNulls'")
 
@@ -1443,7 +1451,52 @@ private object DotNetIlArrayOfNullsLikeIntrinsic : DotNetIlIntrinsicMethod() {
             pops = 2,
             pushes = 1,
         )
-        codegen.emit("castclass ${resultType.nameInSignature}", pops = 1, pushes = 1)
+        if (expectedType is DotNetIlValueType.GenericArray) {
+            codegen.emit("castclass ${expectedType.nameInSignature}", pops = 1, pushes = 1)
+        }
+        return true
+    }
+}
+
+/**
+ * Writes one value through a projected `System.Array` carrier. Kotlin source correctly projects
+ * `Array<*>` writes out, while this target-private stable-sort primitive has already retained each
+ * value from that same array. `SetValue` preserves the runtime vector's component-type check for
+ * both reference and value vectors without manufacturing an `object[]` or open `T[]` cast.
+ */
+private object DotNetIlErasedArraySetIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsStatement(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+    ): Boolean {
+        if (call.arguments.size != 3) return false
+        val array = call.arguments[0]
+            ?: dotNetUnsupported("missing array for 'dotNetErasedArraySet'")
+        val index = call.arguments[1]
+            ?: dotNetUnsupported("missing index for 'dotNetErasedArraySet'")
+        val value = call.arguments[2]
+            ?: dotNetUnsupported("missing value for 'dotNetErasedArraySet'")
+        val arrayType = codegen.toDotNetIlValueType(array.type) as? DotNetIlValueType.ErasedGenericArray
+            ?: dotNetUnsupported(
+                "'dotNetErasedArraySet' has unsupported array type ${array.type.render()}"
+            )
+
+        codegen.emitExpression(array, arrayType)
+        val arraySlot = codegen.spillToSyntheticLocal(arrayType, "<erasedArraySet>")
+        codegen.emitExpression(index, DotNetIlValueType.Int32)
+        val indexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<erasedArrayIndex>")
+        codegen.emitExpression(value, DotNetIlValueType.Object)
+        val valueSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Object, "<erasedArrayValue>")
+
+        codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+        codegen.emit(
+            "callvirt instance void ${codegen.coreLibraryReference}System.Array::SetValue(object, int32)",
+            pops = 3,
+        )
         return true
     }
 }

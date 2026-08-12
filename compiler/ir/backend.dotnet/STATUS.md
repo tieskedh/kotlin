@@ -17,7 +17,32 @@ verification, and work state.
   nine shared paths, architectural directions, stat-cache-only IL false
   positives, and post-rebase verification are recorded in
   [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
-- Last completed foundation: Common `Comparator<T>` is published as the
+- Last completed foundation: stable whole-list and generic-array sorting now
+  actualize the exact Common `MutableList.sort`/`sortWith` and generated
+  object-array `sort`/`sortWith` contracts, then release the dependency-closed
+  eager `sort*`/`sorted*` consumers. The generator retains the authoritative
+  Native/Wasm stable merge lineage but applies three exact CLR carrier
+  corrections: list and eager Iterable snapshots remain private
+  `Array<Any?>` storage; array merge buffers retain the input vector's runtime
+  element type; and array traversal uses the classified `System.Array`
+  `GetValue`/`SetValue` path. This preserves both CLR reference vectors such as
+  `Entry[]` and the target's value vectors such as `Array<Int>`/`int[]` without
+  the invalid `object[] -> T[]`, `IComparable[] -> T[]`, or `int[] -> object[]`
+  casts exposed by the first exact source transplant. Sorting is stable,
+  arbitrary MutableLists write back through their iterator, a comparator
+  failure occurs before list mutation, Kotlin String/Float/Double ordering is
+  retained, and direct/separate consumers agree. C# directly sorts `int[]`, a
+  C# reference array stably, and Kotlin `ArrayList` through the current public
+  facade and Comparator ABI. No BCL unstable sort, `IComparer<T>` identity,
+  emitted placeholder intrinsic, open `T[]` merge carrier, runtime-surface
+  change, or library-codec change was introduced. The direct-native interop
+  direction is now explicit: compatible user actuals should retain imported
+  CLR identity, while adapters/exports are for real shape or semantic
+  mismatches. Infrastructure for greater CLR-owner reification may land
+  incrementally, but a canonical public owner migration remains one coherent
+  pre-ABI decision rather than a per-class identity split. See
+  [`docs/decisions/stable-list-and-array-sorting.md`](docs/decisions/stable-list-and-array-sorting.md).
+  The preceding foundation: Common `Comparator<T>` is published as the
   exact invariant Kotlin-owned fun interface, backed by the already accepted
   erased generic-interface and SAM-wrapper ABIs rather than a BCL comparer or
   CLR delegate identity. The complete authoritative Common
