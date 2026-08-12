@@ -24,6 +24,25 @@ import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSourceLocation
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetBackendPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelineArtifact
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateDisposition
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberPolicy
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideTargetKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalFamilyArtifact
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalFamilyCodec
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalFamilyRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDefaultDispatcherRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDirectSuperTargetRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberDispatch
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberFamilyRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberSlotRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMemberSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
+import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilies
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelinePhase
@@ -306,6 +325,12 @@ private class BackendCliDotNetFacade(
         } else {
             backendOutput
         }
+        validateGenericOwnerHardestModelPrototype(completedOutput.genericOwnerPrototypes)
+        physicalizeGenericOwnerHardestModelPrototype(
+            completedOutput.genericOwnerPrototypes,
+            loweredInput.configuration.dotNetTarget,
+            testServices.getOrCreateTempDirectory("generic-owner-snapshot-physicalizer"),
+        )
         check(completedOutput.output.isFile) {
             val messages = (input.configuration.messageCollector as? MessageCollectorForCompilerTests)
                 ?.nonSourceMessages
@@ -314,6 +339,985 @@ private class BackendCliDotNetFacade(
             "The .NET backend produced no file at ${completedOutput.output.path}:\n$messages"
         }
         return BinaryArtifacts.DotNet(completedOutput.output)
+    }
+}
+
+private fun validateGenericOwnerHardestModelPrototype(
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+) {
+    fun DotNetGenericOwnerPrototypeSnapshot.hasSimpleName(name: String): Boolean =
+        ownerName == name || ownerName.endsWith(".$name")
+
+    prototypes.singleOrNull { prototype -> prototype.hasSimpleName("WidenedProbe") }?.let { probe ->
+        check(probe.states.singleOrNull()?.let { state ->
+            state.fieldName == "expected" &&
+                    state.requirement == DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN
+        } == true) {
+            "Only owner-dependent expected:T, not lastPacket:Any?, may enter the generic-owner carrier proof: ${probe.states}"
+        }
+    }
+
+    prototypes.singleOrNull { prototype -> prototype.hasSimpleName("ConsumerUnsafeLeaf") }?.let { consumer ->
+        check(consumer.disposition ==
+                DotNetGenericOwnerCandidateDisposition.REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA) {
+            "A generic consumer subclass must remain blocked until the producer family binding schema is available: $consumer"
+        }
+        listOf("writeUnsafe", "read").forEach { memberName ->
+            val member = consumer.members.single { candidate -> candidate.sourceName == memberName }
+            check(member.overrideBindings.singleOrNull()?.let { binding ->
+                binding.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+                        binding.targetKind == DotNetGenericOwnerOverrideTargetKind.EXTERNAL_LOGICAL_BINDING_REQUIRED &&
+                        binding.overriddenLogicalBindingKey != null
+            } == true) {
+                "ConsumerUnsafeLeaf.$memberName must retain an external logical family requirement: $member"
+            }
+        }
+    }
+
+    // This is a test-fixture assertion, not a compiler selector. The normal backend constructs
+    // snapshots for every generic class and always emits the erased production ABI. When the
+    // hostile oracle is present, require its exact detached prototype before discarding snapshots.
+    if (prototypes.none { prototype -> prototype.hasSimpleName("HostileUnsafeProducer") }) return
+
+    val unsafeProducer = prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileUnsafeProducer")
+    }
+    val producerState = unsafeProducer.states.single()
+    check(producerState.requirement ==
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+            producerState.initializationWriterLabels == listOf("<field-initializer:expected>") &&
+            producerState.writes.singleOrNull()?.let { write ->
+                write.producerName == "<field-initializer:expected>" &&
+                        write.provenance == DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED
+            } == true &&
+            !producerState.externalAccessGraphRequired) {
+        "HostileUnsafeProducer's private read-only state must remain typed after complete producer analysis: $producerState"
+    }
+
+    val nullableDerived = prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileNullableDerived")
+    }
+    check(nullableDerived.disposition ==
+            DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE) {
+        "HostileNullableDerived must remain blocked by its metadata-fixed T? supertype"
+    }
+    check(nullableDerived.metadataFixedConditionalSupertypeCount == 1) {
+        "HostileNullableDerived must record exactly one metadata-fixed conditional supertype"
+    }
+    val directBaseRead = nullableDerived.members.single { member ->
+        member.sourceName == "readDirectFromBase"
+    }
+    check(directBaseRead.directSuperCallCount == 1) {
+        "HostileNullableDerived.readDirectFromBase must retain one exact direct-super target"
+    }
+
+    val unsafeStore = prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileUnsafeStore")
+    }
+    check(unsafeStore.disposition ==
+            DotNetGenericOwnerCandidateDisposition.BLOCKED_OPEN_OUTPUT_STATE_COHERENCE) {
+        "HostileUnsafeStore must remain blocked until typed/semantic output overrides are coherent"
+    }
+    val unsafeState = unsafeStore.states.single()
+    check(unsafeState.requirement == DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED) {
+        "HostileUnsafeStore's one state field must accept widened semantic writes"
+    }
+    check(unsafeState.fieldName == "stored" &&
+            unsafeState.directWriterNames == listOf("<set-stored>") &&
+            unsafeState.semanticReachableWriterNames == listOf("<set-stored>") &&
+            unsafeState.initializationWriterLabels == listOf("<field-initializer:stored>") &&
+            unsafeState.writes.associate { write -> write.producerName to write.provenance } == mapOf(
+                "<set-stored>" to DotNetGenericOwnerWriteValueProvenance.SEMANTIC_OBJECT,
+                "<field-initializer:stored>" to DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED,
+            ) &&
+            !unsafeState.externalAccessGraphRequired) {
+        "HostileUnsafeStore's private state write must be found through its lowered setter call graph: $unsafeState"
+    }
+
+    val write = unsafeStore.members.single { member -> member.sourceName == "writeUnsafe" }
+    check(write.policy == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY)
+    check(write.roles == setOf(
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    ))
+    check(write.semanticHookReasons ==
+            setOf(DotNetGenericOwnerSemanticHookReason.GENERAL_WIDENED_BODY))
+    check(write.typedRetainsOwnerDependentInput && write.semanticErasesOwnerDependentInput)
+    check(write.requiresDirectSuperTargets)
+    check(write.directStateWriteNames.isEmpty() &&
+            write.directProducerCallNames == listOf("installUnchecked") &&
+            write.transitiveStateWriteNames == listOf("stored")) {
+        "HostileUnsafeStore.writeUnsafe must reach, but not directly contain, its semantic state write: $write"
+    }
+
+    val installer = unsafeStore.members.single { member -> member.sourceName == "installUnchecked" }
+    check(installer.policy == DotNetGenericOwnerMemberPolicy.STRICT_TYPED &&
+            installer.directStateWriteNames.isEmpty() &&
+            installer.directProducerCallNames == listOf("<set-stored>") &&
+            installer.transitiveStateWriteNames == listOf("stored") &&
+            installer.reachableFromSemanticEntry) {
+        "HostileUnsafeStore.installUnchecked must be tainted by the widened entry call closure: $installer"
+    }
+    val storedSetter = unsafeStore.members.single { member -> member.sourceName == "<set-stored>" }
+    check(storedSetter.policy == DotNetGenericOwnerMemberPolicy.STRICT_TYPED &&
+            storedSetter.directStateWriteNames == listOf("stored") &&
+            storedSetter.reachableFromSemanticEntry) {
+        "The private lowered setter must be a strict helper reached from, not itself classified as, a semantic entry: $storedSetter"
+    }
+
+    val typedStore = prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileTypedStore")
+    }
+    val typedState = typedStore.states.single()
+    check(typedState.requirement ==
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN &&
+            typedState.writes.associate { write -> write.producerName to write.provenance } == mapOf(
+                "<set-stored>" to DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED,
+                "<field-initializer:stored>" to DotNetGenericOwnerWriteValueProvenance.PHYSICALLY_TYPED,
+            )) {
+        "HostileTypedStore must prove both initializer and function writes physically typed: $typedState"
+    }
+    val typedWrite = typedStore.members.single { member -> member.sourceName == "write" }
+    check(typedWrite.directProducerCallNames == listOf("installBoxed") &&
+            typedWrite.transitiveStateWriteNames == listOf("stored")) {
+        "HostileTypedStore.write must retain its boxed helper write chain: $typedWrite"
+    }
+
+    val unsafeDerived = prototypes.singleOrNull { prototype ->
+        prototype.hasSimpleName("HostileUnsafeDerived")
+    } ?: prototypes.single { prototype ->
+        prototype.hasSimpleName("HostileUnsafeMid")
+    }
+    listOf("writeUnsafe", "read").forEach { memberName ->
+        val member = unsafeDerived.members.single { candidate -> candidate.sourceName == memberName }
+        check(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles &&
+                DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE in member.semanticHookReasons &&
+                member.overrideBindings.map { binding -> binding.role }.toSet() == setOf(
+                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                ) &&
+                member.overrideBindings.all { binding ->
+                    binding.targetKind == DotNetGenericOwnerOverrideTargetKind.LOCAL_DETACHED_PROTOTYPE
+                } && member.directSuperCalls.size == member.directSuperCallCount &&
+                member.directSuperCalls.singleOrNull()?.let { call ->
+                    call.logicalOwnerName.endsWith("HostileUnsafeStore") &&
+                            call.superQualifierName.endsWith("HostileUnsafeStore")
+                } == true) {
+            "${unsafeDerived.ownerName}.$memberName must bind typed and inherited semantic families independently: $member"
+        }
+    }
+
+    val read = unsafeStore.members.single { member -> member.sourceName == "read" }
+    check(read.policy == DotNetGenericOwnerMemberPolicy.STRICT_TYPED)
+    check(read.roles == setOf(
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+    ))
+    check(read.semanticHookReasons ==
+            setOf(DotNetGenericOwnerSemanticHookReason.PAIRED_OPEN_OUTPUT_STATE))
+    check(read.typedRetainsOwnerDependentOutput && read.semanticErasesOwnerDependentOutput)
+    check(read.requiresDirectSuperTargets)
+
+    val hostileCell = prototypes.single { prototype -> prototype.hasSimpleName("HostileCell") }
+    val readOr = hostileCell.members.single { member -> member.sourceName == "readOr" }
+    check(readOr.hasMaskedDefaultDispatcher) {
+        "HostileCell.readOr must retain its selected masked default dispatcher"
+    }
+
+    if (unsafeStore.ownerName.contains('.')) {
+        check(unsafeStore.logicalBindingKey != null &&
+                write.logicalBindingKey != null && read.logicalBindingKey != null) {
+            "The separate hostile producer must retain owner/member KLIB binding identities"
+        }
+    }
+}
+
+private const val GENERIC_OWNER_PHYSICAL_FAMILY_FILE = "SnapshotProducer.generic-owner-families"
+
+private fun genericOwnerPrototypePhysicalMethodName(
+    member: DotNetGenericOwnerPrototypeMemberSnapshot,
+    role: DotNetGenericOwnerMemberFamilyRole,
+): String {
+    val typedName = when (member.sourceName) {
+        "writeUnsafe" -> "WriteUnsafe"
+        "read" -> "Read"
+        "label" -> "Label"
+        else -> error("The hostile physicalizer has no selected MethodDef name for '${member.sourceName}'")
+    }
+    return when (role) {
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY -> typedName
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK -> "${typedName}SemanticCore"
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER -> when (member.sourceName) {
+            "writeUnsafe" -> "WriteSemantic"
+            "read" -> "ReadSemantic"
+            else -> error("The hostile physicalizer has no capability slot for '${member.sourceName}'")
+        }
+    }
+}
+
+private fun createGenericOwnerPhysicalFamilyArtifact(
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    producerFingerprint: String,
+): DotNetGenericOwnerPhysicalFamilyArtifact {
+    fun DotNetGenericOwnerPrototypeSnapshot.hasSimpleName(name: String): Boolean =
+        ownerName == name || ownerName.endsWith(".$name")
+
+    val membersByLogicalKey = prototypes.flatMap { prototype -> prototype.members }
+        .mapNotNull { member -> member.logicalBindingKey?.let { key -> key to member } }
+        .toMap()
+    fun overrideRoots(
+        member: DotNetGenericOwnerPrototypeMemberSnapshot,
+        visiting: Set<String> = emptySet(),
+    ): Set<String> {
+        val logicalKey = checkNotNull(member.logicalBindingKey)
+        check(logicalKey !in visiting) { "Generic-owner override-family roots contain a cycle at '$logicalKey'" }
+        val overriddenKeys = member.overrideBindings.mapNotNull { binding -> binding.overriddenLogicalBindingKey }
+        if (overriddenKeys.isEmpty()) return setOf(logicalKey)
+        return overriddenKeys.flatMapTo(linkedSetOf()) { overriddenKey ->
+            membersByLogicalKey[overriddenKey]
+                ?.let { overridden -> overrideRoots(overridden, visiting + logicalKey) }
+                ?: setOf(overriddenKey)
+        }
+    }
+
+    val owners = listOf("HostileUnsafeStore", "HostileUnsafeMid").map { simpleName ->
+        val prototype = prototypes.single { candidate -> candidate.hasSimpleName(simpleName) }
+        val members = prototype.members.mapNotNull { member ->
+            val logicalMemberKey = member.logicalBindingKey ?: return@mapNotNull null
+            DotNetGenericOwnerPhysicalMemberFamilyRecord(
+                logicalMemberKey = logicalMemberKey,
+                overrideRootLogicalMemberKeys = overrideRoots(member).sorted(),
+                policy = member.policy,
+                roles = member.roles,
+                semanticHookReasons = member.semanticHookReasons,
+                slots = member.roles.map { role ->
+                    DotNetGenericOwnerPhysicalMemberSlotRecord(
+                        role = role,
+                        physicalMethodName = genericOwnerPrototypePhysicalMethodName(member, role),
+                        dispatch = when {
+                            role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER ->
+                                DotNetGenericOwnerPhysicalMemberDispatch.FINAL
+                            member.isAbstract -> DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT
+                            member.isOverridable -> DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE
+                            else -> DotNetGenericOwnerPhysicalMemberDispatch.FINAL
+                        },
+                    )
+                },
+                directSuperTargets = member.directSuperCalls.flatMap { call ->
+                    val logicalTargetKey = checkNotNull(call.logicalMemberKey) {
+                        "The separate hostile producer requires logical direct-super targets"
+                    }
+                    member.roles.filter { role ->
+                        role != DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+                    }.map { role ->
+                        DotNetGenericOwnerPhysicalDirectSuperTargetRecord(
+                            role = role,
+                            logicalTargetMemberKey = logicalTargetKey,
+                            physicalOwnerPath = listOf(
+                                "KotlinSnapshotPrototype",
+                                call.superQualifierName.substringAfterLast('.'),
+                            ),
+                            physicalMethodName = genericOwnerPrototypePhysicalMethodName(member, role),
+                        )
+                    }
+                },
+                defaultDispatcher = if (member.hasMaskedDefaultDispatcher) {
+                    DotNetGenericOwnerPhysicalDefaultDispatcherRecord(
+                        physicalOwnerPath = listOf("KotlinSnapshotPrototype", simpleName),
+                        physicalMethodName = "${genericOwnerPrototypePhysicalMethodName(member, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)}Default",
+                    )
+                } else {
+                    null
+                },
+            )
+        }
+        check(members.map { member -> member.logicalMemberKey }.toSet() ==
+                prototype.members.mapNotNull { member -> member.logicalBindingKey }.toSet()) {
+            "The hostile producer physical-family record omitted a bindable logical member"
+        }
+        DotNetGenericOwnerPhysicalFamilyRecord(
+            logicalOwnerKey = checkNotNull(prototype.logicalBindingKey) {
+                "The separate hostile producer requires a logical owner binding"
+            },
+            physicalOwnerPath = listOf("KotlinSnapshotPrototype", simpleName),
+            physicalCapabilityOwnerPath = listOf(
+                "KotlinSnapshotPrototype",
+                "IHostileUnsafeStoreSemantic",
+            ),
+            genericArity = prototype.genericArity,
+            disposition = prototype.disposition,
+            members = members,
+            states = prototype.states.map { state ->
+                DotNetGenericOwnerPhysicalStateRecord(
+                    logicalFieldName = state.fieldName,
+                    physicalFieldName = state.fieldName,
+                    requirement = state.requirement,
+                )
+            },
+        )
+    }
+    return DotNetGenericOwnerPhysicalFamilyArtifact(producerFingerprint, owners)
+}
+
+private fun validateGenericOwnerPhysicalFamilyCodec(
+    artifact: DotNetGenericOwnerPhysicalFamilyArtifact,
+    encoded: String,
+) {
+    fun expectRejected(label: String, operation: () -> Unit) {
+        check(runCatching(operation).isFailure) {
+            "The generic-owner family codec accepted $label"
+        }
+    }
+
+    val decoded = DotNetGenericOwnerPhysicalFamilyCodec.decode(encoded, artifact.producerFingerprint)
+    check(DotNetGenericOwnerPhysicalFamilyCodec.encode(decoded) == encoded &&
+            DotNetGenericOwnerPhysicalFamilyCodec.encode(artifact) == encoded) {
+        "The generic-owner physical family artifact has nondeterministic serialization"
+    }
+    expectRejected("a stale schema") {
+        DotNetGenericOwnerPhysicalFamilyCodec.decode(
+            encoded.replaceFirst(
+                "\t${DotNetGenericOwnerPhysicalFamilyCodec.SCHEMA_VERSION}\n",
+                "\t${DotNetGenericOwnerPhysicalFamilyCodec.SCHEMA_VERSION - 1}\n",
+            )
+        )
+    }
+    expectRejected("a truncated owner family") {
+        DotNetGenericOwnerPhysicalFamilyCodec.decode(
+            encoded.trimEnd('\r', '\n').lines().dropLast(1).joinToString("\n", postfix = "\n")
+        )
+    }
+    expectRejected("a record for another producer") {
+        DotNetGenericOwnerPhysicalFamilyCodec.decode(encoded, "0".repeat(64))
+    }
+    expectRejected("a duplicate logical owner") {
+        DotNetGenericOwnerPhysicalFamilyArtifact(
+            artifact.producerFingerprint,
+            artifact.owners + artifact.owners.first(),
+        )
+    }
+    val member = artifact.owners.first().members.first { candidate ->
+        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in candidate.roles
+    }
+    expectRejected("an incomplete member role family") {
+        member.copy(slots = member.slots.filterNot { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+        })
+    }
+    expectRejected("an unsorted duplicate override-root family") {
+        member.copy(overrideRootLogicalMemberKeys = listOf(member.logicalMemberKey, member.logicalMemberKey))
+    }
+    expectRejected("a capability dispatcher direct-super target") {
+        DotNetGenericOwnerPhysicalDirectSuperTargetRecord(
+            role = DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
+            logicalTargetMemberKey = member.logicalMemberKey,
+            physicalOwnerPath = listOf("KotlinSnapshotPrototype", "HostileUnsafeStore"),
+            physicalMethodName = "WriteSemantic",
+        )
+    }
+    check(artifact.owners.flatMap { owner -> owner.members }.mapNotNull { candidate ->
+        candidate.defaultDispatcher
+    }.singleOrNull()?.physicalMethodName == "LabelDefault") {
+        "The generic-owner artifact lacks the selected physical default dispatcher"
+    }
+}
+
+/**
+ * Test-owned physicalization of the compiler snapshot. This deliberately does not reuse the
+ * production emitter: it turns the recorded role/state decisions into a temporary CLR-generic
+ * producer, then proves that a separately compiled C# subclass observes those decisions.
+ */
+private fun physicalizeGenericOwnerHardestModelPrototype(
+    prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    target: DotNetTarget,
+    directory: File,
+) {
+    fun DotNetGenericOwnerPrototypeSnapshot.hasSimpleName(name: String): Boolean =
+        ownerName == name || ownerName.endsWith(".$name")
+
+    prototypes.singleOrNull { prototype -> prototype.hasSimpleName("ConsumerUnsafeLeaf") }?.let { consumer ->
+        consumeGenericOwnerPhysicalFamilyArtifact(consumer, target, directory)
+        return
+    }
+    if (prototypes.none { prototype -> prototype.hasSimpleName("HostileUnsafeProducer") }) return
+    val owner = prototypes.single { prototype -> prototype.hasSimpleName("HostileUnsafeStore") }
+    val write = owner.members.single { member -> member.sourceName == "writeUnsafe" }
+    val read = owner.members.single { member -> member.sourceName == "read" }
+    val state = owner.states.single()
+    fun hasRole(
+        member: DotNetGenericOwnerPrototypeMemberSnapshot,
+        role: DotNetGenericOwnerMemberFamilyRole,
+    ): Boolean = role in member.roles
+
+    val stateType = when (state.requirement) {
+        DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> "object"
+        DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> "T"
+        DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED ->
+            error("The hostile physicalizer cannot select storage while the access graph is incomplete")
+        DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED ->
+            error("The hostile physicalizer cannot select storage while typed write provenance is incomplete")
+    }
+    val typedWrite = if (hasRole(write, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)) {
+        """
+        public virtual void WriteUnsafe(T next)
+        {
+            stored = next;
+        }
+        """.trimIndent()
+    } else ""
+    val semanticWrite = if (hasRole(write, DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)) {
+        """
+        protected virtual void WriteUnsafeSemanticCore(object next)
+        {
+            stored = next;
+        }
+        """.trimIndent()
+    } else ""
+    val writeDispatcher = if (hasRole(write, DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)) {
+        """
+        void IHostileUnsafeStoreSemantic.WriteSemantic(object next)
+        {
+            if (IsCompatible(next)) WriteUnsafe((T)next);
+            else WriteUnsafeSemanticCore(next);
+        }
+        """.trimIndent()
+    } else ""
+    val typedRead = if (hasRole(read, DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)) {
+        """
+        public virtual T Read()
+        {
+            return (T)stored;
+        }
+        """.trimIndent()
+    } else ""
+    val semanticRead = if (hasRole(read, DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)) {
+        """
+        protected virtual object ReadSemanticCore()
+        {
+            return stored;
+        }
+        """.trimIndent()
+    } else ""
+    val readDispatcher = if (hasRole(read, DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)) {
+        """
+        object IHostileUnsafeStoreSemantic.ReadSemantic()
+        {
+            return ReadSemanticCore();
+        }
+        """.trimIndent()
+    } else ""
+
+    directory.mkdirs()
+    val producerSource = directory.resolve("SnapshotProducer.cs").apply {
+        writeText(
+            """
+            using System;
+
+            namespace KotlinSnapshotPrototype
+            {
+                public interface IHostileUnsafeStoreSemantic
+                {
+                    object ReadSemantic();
+                    void WriteSemantic(object next);
+                }
+
+                public class HostileUnsafeStore<T> : IHostileUnsafeStoreSemantic
+                {
+                    private $stateType stored;
+
+                    public HostileUnsafeStore(T initial)
+                    {
+                        stored = initial;
+                    }
+
+                    public virtual string Label(string prefix)
+                    {
+                        return prefix;
+                    }
+
+                    public static string LabelDefault(HostileUnsafeStore<T> receiver, string prefix, int mask)
+                    {
+                        if ((mask & 1) != 0) prefix = "default";
+                        return receiver.Label(prefix);
+                    }
+
+                    $typedWrite
+
+                    $semanticWrite
+
+                    $typedRead
+
+                    $semanticRead
+
+                    private static bool IsCompatible(object candidate)
+                    {
+                        if (candidate != null) return candidate is T;
+                        return object.ReferenceEquals(default(T), null);
+                    }
+
+                    $writeDispatcher
+
+                    $readDispatcher
+                }
+
+                public class HostileUnsafeMid<T> : HostileUnsafeStore<T>
+                {
+                    public HostileUnsafeMid(T initial) : base(initial) {}
+
+                    public override void WriteUnsafe(T next)
+                    {
+                        base.WriteUnsafe(next);
+                    }
+
+                    protected override void WriteUnsafeSemanticCore(object next)
+                    {
+                        base.WriteUnsafeSemanticCore(next);
+                    }
+
+                    public override T Read()
+                    {
+                        return base.Read();
+                    }
+
+                    protected override object ReadSemanticCore()
+                    {
+                        return base.ReadSemanticCore();
+                    }
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val consumerSource = directory.resolve("SnapshotConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+            using KotlinSnapshotPrototype;
+
+            public sealed class TypedWriteConsumer : HostileUnsafeStore<int>
+            {
+                public TypedWriteConsumer() : base(1) {}
+
+                public override void WriteUnsafe(int next)
+                {
+                    base.WriteUnsafe(next + 1);
+                }
+            }
+
+            public sealed class SemanticWriteConsumer : HostileUnsafeStore<int>
+            {
+                public SemanticWriteConsumer() : base(1) {}
+
+                protected override void WriteUnsafeSemanticCore(object next)
+                {
+                    base.WriteUnsafeSemanticCore("semantic:" + next);
+                }
+            }
+
+            public sealed class PairedReadConsumer : HostileUnsafeStore<int>
+            {
+                public PairedReadConsumer() : base(1) {}
+
+                public override int Read()
+                {
+                    return 43;
+                }
+
+                protected override object ReadSemanticCore()
+                {
+                    return 43;
+                }
+            }
+
+            public static class SnapshotConsumer
+            {
+                public static int Main()
+                {
+                    HostileUnsafeStore<int> value = new HostileUnsafeStore<int>(1);
+                    IHostileUnsafeStoreSemantic semantic = value;
+                    semantic.WriteSemantic("wrong");
+                    if (!object.Equals(semantic.ReadSemantic(), "wrong")) return 1;
+                    try
+                    {
+                        value.Read();
+                        return 2;
+                    }
+                    catch (InvalidCastException)
+                    {
+                    }
+                    semantic.WriteSemantic(2);
+                    if (value.Read() != 2) return 3;
+
+                    TypedWriteConsumer typed = new TypedWriteConsumer();
+                    ((IHostileUnsafeStoreSemantic)typed).WriteSemantic(4);
+                    if (typed.Read() != 5) return 4;
+
+                    SemanticWriteConsumer broad = new SemanticWriteConsumer();
+                    IHostileUnsafeStoreSemantic broadSemantic = broad;
+                    broadSemantic.WriteSemantic("wrong");
+                    if (!object.Equals(broadSemantic.ReadSemantic(), "semantic:wrong")) return 5;
+
+                    PairedReadConsumer paired = new PairedReadConsumer();
+                    if (paired.Read() != 43 ||
+                        !object.Equals(((IHostileUnsafeStoreSemantic)paired).ReadSemantic(), 43)) return 6;
+
+                    Type definition = typeof(HostileUnsafeStore<>);
+                    if (!definition.IsGenericTypeDefinition || definition.GetGenericArguments().Length != 1) return 7;
+                    System.Reflection.FieldInfo[] fields = definition.GetFields(
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic |
+                        System.Reflection.BindingFlags.DeclaredOnly
+                    );
+                    if (fields.Length != 1 || fields[0].FieldType != typeof(object)) return 8;
+                    System.Reflection.InterfaceMapping map =
+                        typeof(HostileUnsafeStore<int>).GetInterfaceMap(typeof(IHostileUnsafeStoreSemantic));
+                    if (map.TargetMethods.Length != 2) return 9;
+                    for (int index = 0; index < map.TargetMethods.Length; index++)
+                    {
+                        System.Reflection.MethodInfo method = map.TargetMethods[index];
+                        if (!method.IsPrivate || !method.IsVirtual || !method.IsFinal) return 10;
+                    }
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+
+    val producer = directory.resolve("SnapshotProducer.dll")
+    val consumer = directory.resolve(if (target == DotNetTarget.NET48) "SnapshotConsumer.exe" else "SnapshotConsumer.dll")
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> {
+            val compiler = checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for the generic-owner snapshot physicalizer"
+            }
+            compileFrameworkSnapshotCSharp(compiler, producerSource, producer, references = emptyList(), executable = false)
+                .also { result -> check(result.exitCode == 0) { result.output } }
+            compileFrameworkSnapshotCSharp(compiler, consumerSource, consumer, references = listOf(producer), executable = true)
+        }
+        DotNetTarget.NET10_0 -> {
+            val toolchain = checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern C# compiler is required for the generic-owner snapshot physicalizer"
+            }
+            compileModernSnapshotCSharp(toolchain, producerSource, producer, references = emptyList(), executable = false)
+                .also { result -> check(result.exitCode == 0) { result.output } }
+            compileModernSnapshotCSharp(toolchain, consumerSource, consumer, references = listOf(producer), executable = true)
+        }
+        DotNetTarget.NETSTANDARD_2_0 -> error("The hostile box oracle cannot target netstandard2.0")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    if (owner.logicalBindingKey != null) {
+        val fingerprint = DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(producer.readBytes())
+        val artifact = createGenericOwnerPhysicalFamilyArtifact(prototypes, fingerprint)
+        val encoded = DotNetGenericOwnerPhysicalFamilyCodec.encode(artifact)
+        validateGenericOwnerPhysicalFamilyCodec(artifact, encoded)
+        directory.resolve(GENERIC_OWNER_PHYSICAL_FAMILY_FILE).writeText(encoded)
+    }
+    executeSnapshotConsumer(target, consumer, directory)
+}
+
+private fun consumeGenericOwnerPhysicalFamilyArtifact(
+    consumer: DotNetGenericOwnerPrototypeSnapshot,
+    target: DotNetTarget,
+    directory: File,
+) {
+    val producer = directory.resolve("SnapshotProducer.dll")
+    val recordFile = directory.resolve(GENERIC_OWNER_PHYSICAL_FAMILY_FILE)
+    check(producer.isFile && recordFile.isFile) {
+        "The separate generic-owner consumer lacks its producer or physical family artifact"
+    }
+    val fingerprint = DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(producer.readBytes())
+    val artifact = DotNetGenericOwnerPhysicalFamilyCodec.decode(recordFile.readText(), fingerprint)
+    val unresolvedKeys = consumer.members.flatMap { member -> member.overrideBindings }
+        .filter { binding ->
+            binding.targetKind == DotNetGenericOwnerOverrideTargetKind.EXTERNAL_LOGICAL_BINDING_REQUIRED
+        }
+        .map { binding -> checkNotNull(binding.overriddenLogicalBindingKey) }
+        .toSet()
+    check(unresolvedKeys.isNotEmpty()) {
+        "ConsumerUnsafeLeaf must enter family resolution with external logical obligations"
+    }
+    val missingMemberArtifact = artifact.copy(
+        owners = artifact.owners.map { owner ->
+            owner.copy(members = owner.members.filterNot { member -> member.logicalMemberKey in unresolvedKeys })
+        }
+    )
+    check(runCatching { consumer.resolveExternalPhysicalFamilies(missingMemberArtifact) }.isFailure) {
+        "Generic-owner family resolution accepted a producer with missing logical members"
+    }
+
+    val resolved = consumer.resolveExternalPhysicalFamilies(artifact)
+    check(resolved.disposition == DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF) {
+        "A completely bound external family must advance only to member physicalization proof: $resolved"
+    }
+    val write = resolved.members.single { member -> member.sourceName == "writeUnsafe" }
+    val read = resolved.members.single { member -> member.sourceName == "read" }
+    listOf(write, read).forEach { member ->
+        check(member.overrideBindings.map { binding -> binding.role }.toSet() == setOf(
+            DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+            DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+        ) && member.overrideBindings.all { binding ->
+            binding.targetKind == DotNetGenericOwnerOverrideTargetKind.EXTERNAL_PHYSICAL_FAMILY_RECORD &&
+                    binding.overriddenLogicalBindingKey != null &&
+                    binding.overriddenPhysicalMethodName != null &&
+                    binding.overriddenPhysicalOwnerPath == artifact.owners.single { owner ->
+                        owner.members.any { candidate ->
+                            candidate.logicalMemberKey == binding.overriddenLogicalBindingKey
+                        }
+                    }.physicalOwnerPath &&
+                    binding.overriddenPhysicalDispatch == DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE
+        } && DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE in member.semanticHookReasons) {
+            "${resolved.ownerName}.${member.sourceName} did not resolve a complete typed/semantic producer family: $member"
+        }
+    }
+
+    fun DotNetGenericOwnerPrototypeMemberSnapshot.methodName(
+        role: DotNetGenericOwnerMemberFamilyRole,
+    ): String = checkNotNull(overrideBindings.single { binding -> binding.role == role }.overriddenPhysicalMethodName)
+
+    val ownerRecord = artifact.owners.single { owner ->
+        owner.members.any { member -> member.logicalMemberKey in unresolvedKeys }
+    }
+    ownerRecord.members.filter { member -> member.logicalMemberKey in unresolvedKeys }.forEach { member ->
+        check(member.overrideRootLogicalMemberKeys.size == 1 &&
+                member.directSuperTargets.map { target -> target.role }.toSet() == setOf(
+                    DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                    DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
+                ) && member.directSuperTargets.all { target ->
+                    target.logicalTargetMemberKey in member.overrideRootLogicalMemberKeys &&
+                            target.physicalOwnerPath.last() == "HostileUnsafeStore"
+                }) {
+            "The external producer family lacks exact root/direct-super identities: $member"
+        }
+    }
+    val baseTypeName = ownerRecord.physicalOwnerPath.joinToString(".")
+    val capabilityTypeName = checkNotNull(ownerRecord.physicalCapabilityOwnerPath).joinToString(".")
+    val defaultEntry = artifact.owners.flatMap { owner ->
+        owner.members.mapNotNull { member -> member.defaultDispatcher?.let { owner to member } }
+    }.single()
+    val defaultOwner = defaultEntry.first
+    val defaultMember = defaultEntry.second
+    val defaultDispatcher = checkNotNull(defaultMember.defaultDispatcher)
+    val defaultOwnerTypeName = defaultDispatcher.physicalOwnerPath.joinToString(".")
+    val defaultTypedMethodName = defaultMember.slots.single { slot ->
+        slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+    }.physicalMethodName
+    check(defaultOwner.logicalOwnerKey != ownerRecord.logicalOwnerKey ||
+            defaultOwner.physicalOwnerPath != ownerRecord.physicalOwnerPath) {
+        "The default dispatcher must retain its own producer owner rather than the overridden base owner"
+    }
+    fun capabilityMethodName(
+        member: DotNetGenericOwnerPrototypeMemberSnapshot,
+    ): String {
+        val logicalKey = member.overrideBindings.first().overriddenLogicalBindingKey
+        val producerMember = ownerRecord.members.single { candidate -> candidate.logicalMemberKey == logicalKey }
+        return producerMember.slots.single { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+        }.physicalMethodName
+    }
+
+    val writeTyped = write.methodName(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+    val writeSemantic = write.methodName(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+    val readTyped = read.methodName(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+    val readSemantic = read.methodName(DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK)
+    val writeCapability = capabilityMethodName(write)
+    val readCapability = capabilityMethodName(read)
+    val source = directory.resolve("RecordedFamilyConsumer.cs").apply {
+        writeText(
+            """
+            using System;
+
+            public sealed class RecordedFamilyConsumer : $baseTypeName<int>
+            {
+                public RecordedFamilyConsumer() : base(1) {}
+
+                public override void $writeTyped(int next)
+                {
+                    base.$writeTyped(next + 1);
+                }
+
+                protected override void $writeSemantic(object next)
+                {
+                    base.$writeSemantic("recorded:" + next);
+                }
+
+                public override int $readTyped()
+                {
+                    return base.$readTyped();
+                }
+
+                protected override object $readSemantic()
+                {
+                    return base.$readSemantic();
+                }
+
+                public override string $defaultTypedMethodName(string prefix)
+                {
+                    return "consumer:" + prefix;
+                }
+            }
+
+            public static class RecordedFamilyEntry
+            {
+                public static int Main()
+                {
+                    RecordedFamilyConsumer value = new RecordedFamilyConsumer();
+                    $capabilityTypeName semantic = value;
+                    semantic.$writeCapability("wrong");
+                    if (!object.Equals(semantic.$readCapability(), "recorded:wrong")) return 1;
+                    try
+                    {
+                        value.$readTyped();
+                        return 2;
+                    }
+                    catch (InvalidCastException)
+                    {
+                    }
+                    semantic.$writeCapability(4);
+                    if (value.$readTyped() != 5 || !object.Equals(semantic.$readCapability(), 5)) return 3;
+                    if ($defaultOwnerTypeName<int>.${defaultDispatcher.physicalMethodName}(value, null, 1) !=
+                        "consumer:default") return 4;
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val output = directory.resolve(
+        if (target == DotNetTarget.NET48) "RecordedFamilyConsumer.exe" else "RecordedFamilyConsumer.dll"
+    )
+    val compilation = when (target) {
+        DotNetTarget.NET48 -> {
+            val compiler = checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                ".NET Framework C# compiler is required for generic-owner family-record consumption"
+            }
+            compileFrameworkSnapshotCSharp(compiler, source, output, listOf(producer), executable = true)
+        }
+        DotNetTarget.NET10_0 -> {
+            val toolchain = checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern C# compiler is required for generic-owner family-record consumption"
+            }
+            compileModernSnapshotCSharp(toolchain, source, output, listOf(producer), executable = true)
+        }
+        DotNetTarget.NETSTANDARD_2_0 -> error("netstandard2.0 has no executable family-record consumer")
+    }
+    check(compilation.exitCode == 0) { compilation.output }
+    executeSnapshotConsumer(target, output, directory)
+}
+
+private data class SnapshotCSharpCompilation(
+    val exitCode: Int,
+    val output: String,
+)
+
+private fun compileFrameworkSnapshotCSharp(
+    compiler: File,
+    source: File,
+    output: File,
+    references: List<File>,
+    executable: Boolean,
+): SnapshotCSharpCompilation {
+    output.delete()
+    return runSnapshotCompiler(buildList {
+        add(compiler.path)
+        add("/nologo")
+        add("/target:${if (executable) "exe" else "library"}")
+        add("/out:${output.path}")
+        references.forEach { reference -> add("/reference:${reference.path}") }
+        add(source.path)
+    }, output.parentFile)
+}
+
+private fun compileModernSnapshotCSharp(
+    toolchain: org.jetbrains.kotlin.backend.dotnet.DotNetModernCSharpToolchain,
+    source: File,
+    output: File,
+    references: List<File>,
+    executable: Boolean,
+): SnapshotCSharpCompilation {
+    output.delete()
+    val frameworkReferences = toolchain.referenceDirectory.listFiles { file ->
+        file.isFile && file.extension.equals("dll", ignoreCase = true)
+    }?.sortedBy(File::getName) ?: error("Unreadable modern reference pack: ${toolchain.referenceDirectory}")
+    return runSnapshotCompiler(buildList {
+        add(toolchain.dotNetHost.path)
+        add(toolchain.compiler.path)
+        add("/nologo")
+        add("/noconfig")
+        add("/nostdlib+")
+        add("/deterministic+")
+        add("/target:${if (executable) "exe" else "library"}")
+        add("/out:${output.path}")
+        frameworkReferences.forEach { reference -> add("/reference:${reference.path}") }
+        references.forEach { reference -> add("/reference:${reference.path}") }
+        add(source.path)
+    }, output.parentFile)
+}
+
+private fun runSnapshotCompiler(arguments: List<String>, directory: File): SnapshotCSharpCompilation {
+    val process = ProcessBuilder(arguments)
+        .directory(directory)
+        .redirectErrorStream(true)
+        .start()
+    check(process.waitFor(3, TimeUnit.MINUTES)) {
+        process.destroyForcibly()
+        "C# snapshot physicalizer timed out"
+    }
+    val output = process.inputStream.bufferedReader().use { it.readText() }
+    return SnapshotCSharpCompilation(process.exitValue(), output)
+}
+
+private fun executeSnapshotConsumer(target: DotNetTarget, assembly: File, directory: File) {
+    val command = when (target) {
+        DotNetTarget.NET48 -> {
+            val host = checkNotNull(DotNetIlAssembler.findFrameworkPowerShellHost())
+            val escapedAssembly = assembly.absolutePath.replace("'", "''")
+            val script = """
+                ${'$'}ErrorActionPreference = 'Stop'
+                try {
+                    ${'$'}assembly = [Reflection.Assembly]::LoadFrom('$escapedAssembly')
+                    ${'$'}result = ${'$'}assembly.EntryPoint.Invoke(${'$'}null, ${'$'}null)
+                    if ([int]${'$'}result -ne 0) { exit [int]${'$'}result }
+                } catch {
+                    [Console]::Error.WriteLine(${'$'}_.Exception.ToString())
+                    exit 1
+                }
+            """.trimIndent()
+            listOf(host.path, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script)
+        }
+        DotNetTarget.NET10_0 -> {
+            assembly.resolveSibling("${assembly.nameWithoutExtension}.runtimeconfig.json").writeText(
+                """
+                {
+                  "runtimeOptions": {
+                    "tfm": "net10.0",
+                    "framework": {
+                      "name": "Microsoft.NETCore.App",
+                      "version": "10.0.0"
+                    },
+                    "rollForward": "LatestMinor"
+                  }
+                }
+                """.trimIndent()
+            )
+            val host = checkNotNull(DotNetIlAssembler.findModernDotNetHost())
+            listOf(host.path, "exec", assembly.path)
+        }
+        DotNetTarget.NETSTANDARD_2_0 -> error("netstandard2.0 has no executable snapshot consumer")
+    }
+    val process = ProcessBuilder(command)
+        .directory(directory)
+        .redirectErrorStream(true)
+        .start()
+    check(process.waitFor(3, TimeUnit.MINUTES)) {
+        process.destroyForcibly()
+        "Generic-owner snapshot consumer timed out"
+    }
+    val output = process.inputStream.bufferedReader().use { it.readText() }
+    check(process.exitValue() == 0) {
+        "Generic-owner snapshot consumer failed with ${process.exitValue()}: $output"
     }
 }
 

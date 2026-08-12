@@ -1,7 +1,7 @@
 # Draft ADR: Explicit C# export surface
 
 - Status: **Accepted architectural direction; concrete surface and DSL remain draft**
-- Dates: 2026-07-15 through 2026-07-16
+- Dates: 2026-07-15 through 2026-08-12
 - Scope: explicit function/property aliases, delegate adaptation, nullability,
   defaults, naming, and collision policy
 
@@ -16,6 +16,13 @@ KLIB.
 Mature targets preserve the Kotlin declaration and add an explicit host-facing
 shape. Kotlin/.NET likewise needs a deliberate facade rather than automatically
 exporting every public declaration or teaching canonical ABI to mimic C#.
+
+That rule applies to Kotlin-owned declarations whose identity or contract does
+not already match .NET. It does not require a facade for a compatible platform
+`actual`: imported CLR types and methods should retain their native identity,
+and an exact expected class/interface should be able to actualize directly to
+that foreign declaration. Export is the additive answer to a real ownership,
+shape, or semantic mismatch, not a mandatory wrapper around all interop.
 
 The current CLI selectors are provisional control-plane machinery used to
 evaluate representation before a source annotation or typed Gradle DSL is
@@ -79,6 +86,32 @@ A future generic-class export may select one of four explicit categories:
 - a read-only facade where mutation or identity is not promised; or
 - unsupported when no truthful CLR contract exists.
 
+CLR declaration-site variance is an export capability, not a reason to reopen
+the canonical Kotlin owner. Kotlin `out` and `in` parameters may be projected
+as CLR covariant and contravariant parameters only on exported generic
+interfaces and delegates, because those are the only variant generic owners
+permitted by ECMA-335. Admission checks the complete inherited member surface,
+substituted bounds, properties, nested callable positions, and unsafe-variance
+uses before publishing the variant TypeDef. A shape whose use is not valid for
+the requested CLR variance is invariant or unsupported; the exporter never
+weakens a member signature to preserve the annotation.
+
+Generic CLR classes remain invariant. A Kotlin class with producer and/or
+consumer capabilities may instead export an invariant typed class facade plus
+separate covariant read and contravariant write interfaces. Kotlin use-site
+projections and stars do not acquire a fictitious C# wildcard spelling: each
+receives a truthful capability interface, an explicitly reduced safe surface,
+an adapter, or an unsupported diagnostic. Variance conversions are promised
+only where CLR reference conversions exist; value-type arguments do not gain
+reference-type variance through boxing.
+
+This differs intentionally from treating bridge direction as declaration
+variance. Swift export's covariant and contravariant bridge positions decide
+how values cross the foreign boundary, while its current general generic
+parameters erase to upper bounds. The .NET exporter may use the CLR's stronger
+native interface/delegate metadata where exact, but retains the same one-way
+dependency from Kotlin semantics to a fail-closed host surface.
+
 An existing erased implementation object cannot acquire a CLR generic subtype
 retroactively. A same-object export-created instance must still execute the
 complete erased Kotlin ABI, retain one authoritative state, and satisfy the
@@ -108,6 +141,15 @@ complete logical Kotlin identity, including package and owner. Simple names
 are presentation only and may not select or bind a cross-module export.
 
 ### Export is explicit and additive
+
+Before generating an export, admission checks whether the declaration is an
+exact foreign actual/import binding. If so, the native CLR surface is already
+the host API and another facade is neither needed nor permitted merely for
+uniformity. Direct binding still requires the complete contract to agree:
+members and names, nullability, variance, constraints, SAM construction,
+casts, reflection, implementation by open Kotlin generic owners, and separate
+compilation. A partially compatible identity fails closed and may then request
+an explicit supported adapter/export.
 
 One export request selects exactly one supported public declaration and an
 explicit CLR name. The original Kotlin declaration, metadata, physical method,
@@ -294,6 +336,8 @@ Before promotion, decide and validate:
 
 - source annotation versus typed Gradle/export DSL and stable naming rules;
 - member, constructor, class, extension, generic, and suspend exports;
+- complete CLR variance admission for exported interfaces/delegates and
+  capability-interface projection for invariant generic classes;
 - same-object export-created, adapter, read-only, and unsupported class
   categories, including their construction and reference-identity rules;
 - delegate reuse, callback registration/removal, and both projection

@@ -168,6 +168,11 @@ internal class DotNetBackendContext(
     /** Kotlin-owned generic classifiers whose authoritative member ABI erases owner parameters. */
     val erasedGenericInterfaces: MutableSet<IrClass> = hashSetOf()
     val erasedGenericClasses: MutableSet<IrClass> = hashSetOf()
+    /**
+     * Fail-closed evidence for a future CLR-generic class-owner ABI. The emitter does not consume
+     * these plans; every planned class continues to enter [erasedGenericClasses].
+     */
+    val genericOwnerArchitecturePlans: MutableMap<IrClass, DotNetGenericOwnerArchitecturePlan> = linkedMapOf()
     /** Logical classifier to its stable, producer-recorded static-initialization entry. */
     val staticInitializations:
         MutableMap<IrClass, DotNetLoweredStaticInitialization> = linkedMapOf()

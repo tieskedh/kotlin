@@ -44,8 +44,17 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
   governs the incremental migration from backend-owned text fragments to the
   policy-free physical CLI model and its serializers.
 - [`programmes/generic-class-owner-reopening.md`](programmes/generic-class-owner-reopening.md)
-  parks the true-CLR-generic-owner/early-unchecked-cast alternative and records
-  what it locks and what evidence would be required to reopen the accepted ABI.
+  drives the hardest-model-first true-CLR-generic-owner architecture work while
+  the accepted erased implementation remains the production baseline.
+  Its [`carrier and admission matrix`](programmes/generic-class-owner-carrier-matrix.md)
+  makes the experimental construction, carrier, slot-domain, cast, and
+  override rules deterministic without authorizing a production ABI change.
+  The [`migration plan`](programmes/generic-class-owner-migration-plan.md)
+  separates architecture work now from one later production cutover and
+  records the exact rollback boundary.
+  The [`direct C# surface`](programmes/generic-class-owner-csharp-surface.md)
+  distinguishes wrapper-free truthful owner interop from optional export
+  conveniences and real semantic adapters.
 - [`programmes/inline-functions.md`](programmes/inline-functions.md)
   owns the selected ordinary inline/KLIB IR infrastructure programme while
   keeping reified and suspend inline support separate.
@@ -91,6 +100,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 - [Stable list and object-array sorting](decisions/stable-list-and-array-sorting.md)
 - [Dedicated .NET class-member reflection](decisions/class-member-reflection.md)
 - [Semantic erasure and canonical ABI for Kotlin-owned generic classes](decisions/generic-class-erased-identity.md)
+- [Draft one-owner CLR-generic class model with semantic capabilities](decisions/draft-adr-reified-generic-class-owner.md)
 - [Single-field value classes use one box owner and contextual carriers](decisions/value-classes.md)
 - [Kotlin coroutines use the Common continuation ABI and an explicit CIL state machine](decisions/kotlin-coroutines.md)
 - [Runtime-typed collection-to-array allocation](decisions/collection-to-array.md)

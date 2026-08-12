@@ -40,6 +40,7 @@ object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, 
             input.libraryMetadata,
             input.libraryIr,
             output.declarations,
+            output.genericOwnerPrototypes,
         )
     }
 }

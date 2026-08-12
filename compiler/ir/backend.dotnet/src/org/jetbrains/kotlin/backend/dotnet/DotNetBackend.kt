@@ -69,8 +69,9 @@ object DotNetBackend {
             else -> collectPreLoweringDeclarationKeys(DotNetIlEmissionScope.STDLIB)
         }
         val expectedMetadataLinkageKeys = preLoweringDeclarationKeys.values.toSet()
+        var genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot> = emptyList()
         fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
-            DotNetBackendOutput(file, declarations)
+            DotNetBackendOutput(file, declarations, genericOwnerPrototypes)
         fun validateMetadataLinkage(declarations: Map<String, DotNetPhysicalDeclaration>): Boolean {
             val missing = expectedMetadataLinkageKeys - declarations.keys
             if (missing.isEmpty()) return true
@@ -177,6 +178,9 @@ object DotNetBackend {
             ilTarget.delete()
             return result(ilTarget)
         }
+        genericOwnerPrototypes = context.genericOwnerArchitecturePlans.values
+            .map(DotNetGenericOwnerArchitecturePlan::toPrototypeSnapshot)
+            .sortedBy(DotNetGenericOwnerPrototypeSnapshot::ownerName)
 
         return configuration.perfManager.tryMeasurePhaseTime(PhaseType.Backend) {
             val stdlibEmission = if (hasBootstrapStdlib) {
@@ -512,4 +516,5 @@ object DotNetBackend {
 data class DotNetBackendOutput(
     val file: File,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
+    val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
 )

@@ -459,8 +459,9 @@ See the
   Runtime tests/casts must use the one runtime SZ-array classifier so
   rectangular and non-zero-based arrays are not silently admitted. Do not use
   `object[]`, wrap or copy value vectors, infer star identity from a bare CLR
-  signature, or generalize this rule to input projections, open `Array<T?>`,
-  or other Kotlin generic classes. A bounded `Array<out E>` separately uses
+  signature, or generalize this rule to input projections, invariant open
+  `Array<T?>`, or other Kotlin generic classes. A bounded `Array<out E>`
+  separately uses
   the same `System.Array` carrier but recovers its stronger KLIB-declared read
   type at each use; it never permits writes. See
   [the star-projected-array ADR](docs/decisions/star-projected-arrays.md) and
@@ -518,14 +519,66 @@ See the
   consumes only explicitly exported, safe .NET APIs. See
   [the generic-class ADR](docs/decisions/generic-class-erased-identity.md).
   A distinct true CLR-generic owner plus complete erased Kotlin capability and
-  early failure of physically incompatible unchecked casts is explicitly on
-  hold, not silently rejected or authorized. Until the generic-class ADR is
-  reopened, do not emit Kotlin-owned `C<T>` owners, change cast timing, weaken
-  delayed-use tests, or build ABI on that alternative. The parked question
-  locks only that owner/ABI choice; continue Common stdlib, CLI IR,
+  early failure of physically incompatible unchecked casts is the explicit
+  final direction where the complete Kotlin contract permits it, but it is not
+  yet authorized as production ABI. Its architecture programme starts with the
+  hardest open mutable/inheritance/projection/reflection/separate-assembly
+  model, not easy final owners. Until that model succeeds and the generic-class
+  ADR is replaced atomically, do not emit Kotlin-owned `C<T>` owners, change
+  cast timing, weaken delayed-use tests, or build ABI on that alternative. The
+  current architecture planner is production-inert: its dispositions contain
+  only blockers and unfinished proof obligations, the emitter must not consume
+  them, every detached prototype member must remain outside
+  `IrClass.declarations`, and every planned class must still enter the erased
+  owner set. The ordinary backend pipeline may return immutable prototype
+  snapshots for tests, but must not serialize them into DLL/KLIB artifacts or
+  make them a compiler-option-selected ABI. Absence of a directly observed
+  semantic field write is not proof of typed storage. The architecture planner
+  must build one module-wide producer graph over functions, constructors,
+  delegating/function calls, field initializers, and anonymous initializers,
+  then project every owner-dependent field from it. Private helpers are strict
+  implementation nodes, not independent widened entries; reachability from an
+  exposed semantic body taints their writes. A private field may be marked
+  producer-typed only after that complete graph, while any externally
+  accessible field retains an explicit cross-assembly obligation. Absence of
+  semantic reachability is still not typed-value proof. Trace every actual
+  write value through callable boundaries, call arguments, local definitions/
+  assignments, returns, and type operators. An `Any? as T` cast preserves its
+  input provenance and never manufactures typed evidence. All producers must
+  be physically typed to select typed storage; any object-domain producer
+  selects semantic state, and an unsupported or source-free path remains fail-
+  closed. Neither conclusion admits its owner. The hostile test-owned physicalizer may consume
+  immutable snapshots to generate temporary CLR/C# assemblies, but production
+  codegen still must not consume them. Detached Kotlin generic subclass families
+  link typed entry to typed entry and semantic hook to semantic hook; inheriting
+  a semantic hook is itself a family obligation. Private final capability
+  dispatchers never enter an override chain. An external generic base must
+  retain a producer logical-member binding requirement and block admission
+  until a versioned physical family record exists; consumers must not infer its
+  slots from names or today’s erased production MethodDefs. The architecture
+  channel now has a version-2, producer-fingerprinted physical-family artifact
+  which records logical owner/member joins, implementation/capability paths,
+  arity, disposition, state requirements, complete member roles, selected
+  method names, and final/virtual/abstract dispatch. Decode and validate the
+  entire artifact before resolving any consumer obligation; reject stale,
+  truncated, duplicate, incomplete, missing-member, or wrong-producer input.
+  Typed entries may override typed entries and semantic hooks may override
+  semantic hooks; a recorded final capability dispatcher is never an override
+  target. This artifact remains test/architecture-only while production owners
+  are erased. Do not serialize it into today's DLL/KLIB, add a speculative
+  `dotnet.ir` node, advance production admission, or claim that the still-
+  missing complete slot-domain/physical-signature, construction/profile,
+  state-access, and reflection-normalization records are complete. Version 2
+  additionally records the exact producer owner on an external binding,
+  sorted override-root logical keys, role-specific direct-super owner/method
+  targets, and a separate static masked-default helper. A default helper is
+  never an override role and must retain virtual dispatch into the selected
+  typed family.
+  The design gate locks only that owner/ABI choice; continue Common stdlib, CLI IR,
   callable/reflection, imported CLR generics, generic methods, explicit export,
   and removable private optimization work. See
-  [the reopening programme](docs/programmes/generic-class-owner-reopening.md).
+  [the reopening programme](docs/programmes/generic-class-owner-reopening.md)
+  and [the draft candidate ADR](docs/decisions/draft-adr-reified-generic-class-owner.md).
 - Every Kotlin-owned single-field value class has one non-generic nominal CLR
   box owner. Exact, statically known non-null uses may use the recursively
   substituted underlying carrier; erased, interface, nullable-collision,

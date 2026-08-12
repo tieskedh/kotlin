@@ -1,17 +1,27 @@
-# On-hold question: true CLR-generic Kotlin class owners
+# Programme: true CLR-generic Kotlin class owners where semantically sound
 
-- Status: **On hold — do not implement**
+- Status: **Reopened for architecture design — current erased implementation remains binding**
 - Current authority: [`../decisions/generic-class-erased-identity.md`](../decisions/generic-class-erased-identity.md)
+- Candidate model: [`../decisions/draft-adr-reified-generic-class-owner.md`](../decisions/draft-adr-reified-generic-class-owner.md)
+- Carrier and member admission matrix:
+  [`generic-class-owner-carrier-matrix.md`](generic-class-owner-carrier-matrix.md)
+- Atomic timing, migration, and rollback plan:
+  [`generic-class-owner-migration-plan.md`](generic-class-owner-migration-plan.md)
+- Direct C# construction, inheritance, override, and export boundary:
+  [`generic-class-owner-csharp-surface.md`](generic-class-owner-csharp-surface.md)
+- Historical implementation audit: [`../archive/generic-owner-history-audit-2026-08-12.md`](../archive/generic-owner-history-audit-2026-08-12.md)
 - Related export boundary: [`../decisions/draft-adr-explicit-csharp-export-surface.md`](../decisions/draft-adr-explicit-csharp-export-surface.md)
 
-## Exact question
+## Objective
 
-Is a true CLR-generic owner for a Kotlin-owned generic class worth its permanent
-ABI and compiler complexity when Kotlin/.NET deliberately allows the
-physically checkable generic-argument part of an otherwise unchecked cast to
-fail at the cast boundary?
+The intended final target uses a true CLR-generic owner for every Kotlin-owned
+generic class whose complete Kotlin contract can be represented truthfully.
+This is an interop and target-quality goal, not merely a local performance
+optimization. C# should see and use native `C<T>` identity where Kotlin casts,
+projections, mutation, inheritance, reflection, and separate compilation can
+all remain correct.
 
-The alternative under consideration is not the removed design in which typed
+The candidate is not the removed design in which typed
 dispatch was normal and an erased canonical route was an exceptional fallback.
 It would require both paths to be complete:
 
@@ -25,6 +35,12 @@ Exact, unprojected operations could use `Box<string>` or `Box<int>`. Stars,
 projections, variance, widened operations, and declaration-erased runtime
 classification would use the complete erased capability ABI. The same object
 would implement both views and retain one authoritative state.
+
+For one Kotlin declaration, admission and migration are atomic: it must never
+mean an erased owner in one use/module and a CLR-generic owner in another.
+Unsupported declaration shapes remain on the explicit erased mapping until a
+complete representation is designed; they never receive a partly truthful
+`C<T>` surface.
 
 ## Why the question became credible
 
@@ -91,12 +107,97 @@ normal correctness path. A typed member may optimize a compatible candidate,
 but its erased bridge must test compatibility and preserve Common behavior; it
 may not narrow `object` to `int` before deciding that a `String` is absent.
 
-## Questions whose answers select the outcome
+## Hardest-model-first rule
+
+Do not begin with final, immutable, reference-only, or otherwise convenient
+owners and then change representation as harder Kotlin features arrive. The
+first architecture spike uses one deliberately hostile open mutable invariant
+owner and composes value, reference, nullable-value, and user-struct
+substitutions; star, `out`, and `in` views; candidate-accepting erased methods;
+generic interfaces; multi-level Kotlin and C# inheritance/overrides; checked
+and safe casts; reflection normalization; arrays and nested constructions; and
+separate producer/consumer assemblies.
+
+That spike must produce the general one-owner/one-state/capability model.
+Simpler declaration families may later be admitted as reductions of that same
+model, but they must not select a different canonical representation. No
+production CLR-generic owner lands before the hostile matrix works and the
+single physical ABI cutover is specified.
+
+Run that hostile architecture spike now, while the target is pre-ABI and the
+stdlib/runtime have not accumulated more erased-owner assumptions. Keep its
+typed implementation experimental and non-production. Perform the actual
+owner cutover later, after the ordinary language surface, concurrency/memory
+semantics, and representative real applications can measure interop, boxing,
+JIT/AOT, code size, reflection, and maintenance behavior. This separates early
+architectural discovery from premature ABI publication.
+
+The first executable step respects that boundary. A production-inert lowering
+now creates a fail-closed architecture plan for each local Kotlin generic
+class, including member authority, explicit nullable metadata-fixed supertype
+edges, direct semantic state writes, and open owner-dependent outputs. Every
+outcome is either a blocker or an unfinished proof obligation; no outcome can
+select reified emission. The existing lowering then verifies planning coverage
+and still puts every Kotlin generic class on the erased ABI. The hostile oracle
+runs this analysis on both parsers, both CLR profiles, and across a producer/
+consumer boundary.
+
+That plan now constructs detached compiler IR for the typed entry, semantic
+hook, and capability dispatcher roles, plus immutable snapshots of state,
+explicit typed/erased domains, defaults, direct `super` calls, and logical
+producer keys. The hostile test fixture asserts those snapshots in every lane;
+a test-owned CLR physicalizer asserts the corresponding GenericParam,
+InterfaceImpl/MethodImpl, field, virtual-slot, and override metadata. The
+members are never inserted into the class IR and the emitter never consumes
+them, so this is a bounded architecture prototype rather than the cutover.
+
+State selection now follows one shared producer graph covering functions,
+constructors, all function-access edges, field initializers, and anonymous
+initializers. The graph is built once per module and projected per owner.
+Private helpers do not become widened entry points merely because their
+signature uses an owner parameter; semantic reachability propagates to them
+from an exposed broad body. The owner projection now traces each field-write
+value through callable boundaries, call arguments, local definitions and
+assignments, returns, and casts. Casts preserve the input domain rather than
+upgrading a logical `T` result: an exact value boxed to `Any?` and cast back
+remains typed, while the same shape reached from a widened input remains
+semantic. Unsupported or source-free paths retain an explicit unresolved
+provenance obligation; a semantic producer selects the one object state, and
+a non-private field retains a cross-assembly obligation.
+Every result is still production-inert.
+
+For the hostile store, the test facade consumes the immutable compiler
+snapshot to generate a temporary CLR-generic producer and a separately
+compiled C# subclass/consumer. Both CLR profiles execute compatible typed
+override dispatch, incompatible semantic mutation, delayed typed-read failure,
+paired semantic output overrides, one object field, and explicit interface
+dispatch. The next missing link is compiler-produced Kotlin subclass override
+families and producer/consumer binding records—not the base owner shape. Local
+generic subclasses now have detached typed-to-typed and semantic-to-semantic
+links; inherited semantic hooks are propagated as obligations and private
+dispatchers remain final selectors. A generic consumer subclass of an external
+producer records the overridden logical key. A production-inert version-2
+family artifact now proves the first cross-assembly link: it is fingerprinted
+to the exact temporary producer, wholly decoded before use, and supplies the
+producer-selected typed and semantic slot names/dispatch for that key. Hostile
+tests reject stale, truncated, wrong-producer, duplicate, incomplete, and
+missing-member artifacts, then compile and run the resolved C# subclass on both
+runtimes. The normal compiler still emits/consumes only erased artifacts. The
+Version 2 additionally retains exact external owner paths, sorted root logical-
+key sets, separate typed/semantic direct-super targets, and a static masked-
+default helper which demonstrably dispatches into a derived C# typed override.
+The remaining cross-assembly design work is the complete slot-domain/physical-
+signature, construction/profile, state-access, and reflection record plus
+physicalization of a Kotlin-produced subclass family.
+
+## Engineering gates
 
 ### 1. Does the complete semantic matrix work with one object and one state?
 
-If no, retain the accepted erased owner. Wrappers, copying, two authoritative
-stores, or visibility-dependent runtime identity are not acceptable repairs.
+If no for a declaration shape, keep that shape on the accepted erased owner
+until the missing semantic mechanism exists. Wrappers, copying, two
+authoritative stores, or visibility-dependent runtime identity are not
+acceptable repairs.
 
 If yes, continue to the ABI and product questions; semantic possibility alone
 does not justify the route.
@@ -124,7 +225,7 @@ IntelliSense. Half-typed surfaces, surprising erased members, or CLR casts that
 look stronger than the supported contract count against the design. Explicit
 export remains an independent alternative.
 
-### 5. Do measured benefits justify the permanent cost?
+### 5. Is the permanent cost controlled and measured?
 
 Use representative applications, not one microbenchmark. Compare at least:
 
@@ -138,8 +239,21 @@ Use representative applications, not one microbenchmark. Compare at least:
   and
 - compiler, runtime, reflection, importer/exporter, and maintenance complexity.
 
-If improvement is small or confined to shapes handled by removable private
-specialization, retain the erased owner and optimize behind it.
+Measurements select representation details, specialization policy, and
+implementation priorities. They do not reduce native CLR generic identity and
+direct interop to a micro-optimization. A shape that cannot yet satisfy the
+complete semantic and maintenance cost remains explicitly erased rather than
+receiving a misleading partial generic owner.
+
+### 6. Can devirtualization safely accelerate the final model?
+
+Swift-style closed-world devirtualization and Kotlin/Native Variable Type
+Analysis may prove exact receivers and substitutions for direct calls, private
+generic helpers, and BCL operations while the erased call remains a fallback.
+This is useful incremental infrastructure and supplies comparison evidence.
+It cannot recreate a discarded public CLR `!T`, change a TypeDef, or prove
+open-world C# inheritance. Public owner migration still passes every gate
+above and uses the one model established by the hostile spike.
 
 ## Shared adversarial comparison matrix
 
@@ -160,14 +274,15 @@ owner against the same sources and assertions:
 10. both FIR parsers and every compatible target profile; and
 11. C# compilation and execution against the supported public surface.
 
-The matrix may be designed and committed while this question is on hold, but
+The matrix may be designed and committed during this architecture phase, but
 production typed-owner infrastructure must not be implemented merely to make
-one side pass. A later explicitly authorized architecture spike must remain
+one side pass. Each explicitly selected implementation spike must remain
 bounded and must not publish a third ABI.
 
-## What this question locks
+## What the design phase locks
 
-Until explicitly reopened, do not:
+Until the hostile model, admission rules, and atomic migration plan are
+accepted, do not:
 
 - emit a CLR-generic TypeDef as the implementation owner of an ordinary
   Kotlin-owned generic class;
@@ -178,7 +293,7 @@ Until explicitly reopened, do not:
   CLR `C<T>`; or
 - describe CLI generic capability as authorization for that representation.
 
-This question does **not** block:
+This design phase does **not** block:
 
 - Common stdlib and language-feature foundations using the accepted erased
   owner;
@@ -190,10 +305,16 @@ This question does **not** block:
 - removable private specialization whose disablement changes no supported ABI
   or behavior.
 
-## Reopening condition
+## Reopened direction and next design artifacts
 
-Reopen only on an explicit request after the semantic matrix, architecture
-spike plan, and measurement corpus exist. The decision must then either retain
-the erased owner or amend its ADR atomically across compiler, runtime, stdlib,
-KLIB/physical metadata, reflection, export/import tooling, tests, and
-documentation. There is no mixed compatibility period on this pre-ABI branch.
+The programme is explicitly reopened with truthful CLR reification as the
+destination wherever the complete Kotlin contract permits it. Before the first
+production owner migration, record: the hostile executable matrix,
+deterministic declaration admission model, complete erased-capability ABI,
+cast policy, reflection normalization, inheritance/override model, physical
+binding schema, C# surface, rollback boundary, and measurement corpus. Then
+amend the erased-owner ADR and migrate the canonical owner model atomically
+across compiler, runtime, stdlib, KLIB/physical metadata, reflection,
+export/import tooling, tests, and documentation. There is no easy-owner pilot
+ABI and no mixed compatibility period for one logical owner on this pre-ABI
+branch.

@@ -144,6 +144,9 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 declaration.acceptChildrenVoid(this)
             }
         })
+        check(genericClasses.all(context.genericOwnerArchitecturePlans::containsKey)) {
+            "Internal .NET backend error: a Kotlin-owned generic class bypassed architecture planning"
+        }
         context.erasedGenericInterfaces += genericInterfaces
         context.erasedGenericClasses += genericClasses
         fun isMappedKotlinGenericInterface(irClass: IrClass): Boolean =
