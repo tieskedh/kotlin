@@ -1594,6 +1594,165 @@ public inline fun <T> Array<out T>.isNotEmpty(): Boolean {
 }
 
 /**
+ * Returns `true` if each element in the collection is less than or equal
+ * to the following element according to their natural sort order.
+ *
+ * Returns `true` if the collection has fewer than two elements.
+ *
+ * The elements are compared sequentially using [Comparable.compareTo],
+ * and the collection is considered sorted if for each pair of adjacent elements
+ * the preceding element is not greater than the following one.
+ *
+ * Note that the result depends on the iteration order of the collection.
+ * The iteration order of some [Iterable] implementations may be unstable
+ * (change from one invocation to the next),
+ * in which case this function may return inconsistent results.
+ *
+ * For elements of floating-point types (`Double`, `Float`), `NaN` is considered greater
+ * than any other value (including positive infinity), and `-0.0` is considered less than `0.0`,
+ * consistent with [Double.compareTo] and [Float.compareTo].
+ *
+ * @sample samples.generated.issorted.IsSortedIterablesSamples.isSorted
+ */
+@SinceKotlin("2.4")
+public fun <T : Comparable<T>> Iterable<T>.isSorted(): Boolean {
+    return isSortedWith(naturalOrder())
+}
+
+/**
+ * Returns `true` if each element in the collection yields a [selector] value
+ * that is less than or equal to the [selector] value of the following element
+ * according to the natural sort order of the selector values.
+ *
+ * Returns `true` if the collection has fewer than two elements.
+ *
+ * The [selector] values of adjacent elements are compared sequentially using [compareValues],
+ * and the collection is considered sorted if for each pair of adjacent elements
+ * the [selector] value of the preceding element is not greater than that of the following one.
+ *
+ * If the [selector] returns `null` for an element, the `null` value is treated as less than any non-null value.
+ *
+ * Note that the result depends on the iteration order of the collection.
+ * The iteration order of some [Iterable] implementations may be unstable
+ * (change from one invocation to the next),
+ * in which case this function may return inconsistent results.
+ *
+ * @sample samples.generated.issorted.IsSortedIterablesSamples.isSortedBy
+ */
+@SinceKotlin("2.4")
+public inline fun <T, R : Comparable<R>> Iterable<T>.isSortedBy(selector: (T) -> R?): Boolean {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return true
+    var element = iterator.next()
+    if (!iterator.hasNext()) return true
+    var previousValue: R? = null
+    while (true) {
+        val currentValue = selector(element)
+        if (compareValues(previousValue, currentValue) > 0) return false
+        previousValue = currentValue
+        if (!iterator.hasNext()) break
+        element = iterator.next()
+    }
+    return true
+}
+
+/**
+ * Returns `true` if each element in the collection yields a [selector] value
+ * that is greater than or equal to the [selector] value of the following element
+ * according to the natural sort order of the selector values.
+ *
+ * Returns `true` if the collection has fewer than two elements.
+ *
+ * The [selector] values of adjacent elements are compared sequentially using [compareValues],
+ * and the collection is considered sorted in descending order if for each pair
+ * of adjacent elements the [selector] value of the preceding element is not less
+ * than that of the following one.
+ *
+ * If the [selector] returns `null` for an element, the `null` value is treated as less than any non-null value.
+ *
+ * Note that the result depends on the iteration order of the collection.
+ * The iteration order of some [Iterable] implementations may be unstable
+ * (change from one invocation to the next),
+ * in which case this function may return inconsistent results.
+ *
+ * @sample samples.generated.issorted.IsSortedIterablesSamples.isSortedByDescending
+ */
+@SinceKotlin("2.4")
+public inline fun <T, R : Comparable<R>> Iterable<T>.isSortedByDescending(selector: (T) -> R?): Boolean {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return true
+    var element = iterator.next()
+    if (!iterator.hasNext()) return true
+    var previousValue: R? = null
+    var isFirst = true
+    while (true) {
+        val currentValue = selector(element)
+        if (!isFirst && compareValues(previousValue, currentValue) < 0) return false
+        previousValue = currentValue
+        isFirst = false
+        if (!iterator.hasNext()) break
+        element = iterator.next()
+    }
+    return true
+}
+
+/**
+ * Returns `true` if each element in the collection is greater than or equal
+ * to the following element according to their natural sort order.
+ *
+ * Returns `true` if the collection has fewer than two elements.
+ *
+ * The elements are compared sequentially using [Comparable.compareTo],
+ * and the collection is considered sorted in descending order if for each
+ * pair of adjacent elements the preceding element is not less than the following one.
+ *
+ * Note that the result depends on the iteration order of the collection.
+ * The iteration order of some [Iterable] implementations may be unstable
+ * (change from one invocation to the next),
+ * in which case this function may return inconsistent results.
+ *
+ * For elements of floating-point types (`Double`, `Float`), `NaN` is considered greater
+ * than any other value (including positive infinity), and `-0.0` is considered less than `0.0`,
+ * consistent with [Double.compareTo] and [Float.compareTo].
+ *
+ * @sample samples.generated.issorted.IsSortedIterablesSamples.isSortedDescending
+ */
+@SinceKotlin("2.4")
+public fun <T : Comparable<T>> Iterable<T>.isSortedDescending(): Boolean {
+    return isSortedWith(reverseOrder())
+}
+
+/**
+ * Returns `true` if each element in the collection is less than or equal
+ * to the following element according to the specified [comparator].
+ *
+ * Returns `true` if the collection has fewer than two elements.
+ *
+ * The elements are compared sequentially using [Comparator.compare],
+ * and the collection is considered sorted if for each pair of adjacent elements
+ * the preceding element is not greater than the following one.
+ *
+ * Note that the result depends on the iteration order of the collection.
+ * The iteration order of some [Iterable] implementations may be unstable
+ * (change from one invocation to the next),
+ * in which case this function may return inconsistent results.
+ *
+ * @sample samples.generated.issorted.IsSortedIterablesSamples.isSortedWith
+ */
+@SinceKotlin("2.4")
+public fun <T> Iterable<T>.isSortedWith(comparator: Comparator<in T>): Boolean {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return true
+    var current = iterator.next()
+    while (iterator.hasNext()) {
+        val next = iterator.next()
+        if (comparator.compare(current, next) > 0) return false
+        current = next
+    }
+    return true
+}
+
+/**
  * Appends the string from all the elements separated using [separator] and using the given [prefix] and [postfix] if supplied.
  *
  * If the collection has no elements, the function appends only [prefix] followed by [postfix] to [buffer] (both are empty by default).
@@ -1927,6 +2086,178 @@ public inline fun <T, R, C : MutableCollection<in R>> Iterable<T>.mapTo(destinat
     for (item in this)
         destination.add(transform(item))
     return destination
+}
+
+/**
+ * Returns the largest value according to the provided [comparator]
+ * among all values produced by [selector] function applied to each element in the collection.
+ *
+ * If multiple elements produce the maximal value, this function returns the first of those values.
+ *
+ * @throws NoSuchElementException if the collection is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxOfWithMinOfWithGeneric
+ */
+@SinceKotlin("1.4")
+@OptIn(kotlin.experimental.ExperimentalTypeInference::class)
+@OverloadResolutionByLambdaReturnType
+@kotlin.internal.InlineOnly
+public inline fun <T, R> Iterable<T>.maxOfWith(comparator: Comparator<in R>, selector: (T) -> R): R {
+    val iterator = iterator()
+    if (!iterator.hasNext()) throw NoSuchElementException()
+    var maxValue = selector(iterator.next())
+    while (iterator.hasNext()) {
+        val v = selector(iterator.next())
+        if (comparator.compare(maxValue, v) < 0) {
+            maxValue = v
+        }
+    }
+    return maxValue
+}
+
+/**
+ * Returns the largest value according to the provided [comparator]
+ * among all values produced by [selector] function applied to each element in the collection or `null` if the collection is empty.
+ *
+ * If multiple elements produce the maximal value, this function returns the first of those values.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxOfWithMinOfWithGeneric
+ */
+@SinceKotlin("1.4")
+@OptIn(kotlin.experimental.ExperimentalTypeInference::class)
+@OverloadResolutionByLambdaReturnType
+@kotlin.internal.InlineOnly
+public inline fun <T, R> Iterable<T>.maxOfWithOrNull(comparator: Comparator<in R>, selector: (T) -> R): R? {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return null
+    var maxValue = selector(iterator.next())
+    while (iterator.hasNext()) {
+        val v = selector(iterator.next())
+        if (comparator.compare(maxValue, v) < 0) {
+            maxValue = v
+        }
+    }
+    return maxValue
+}
+
+/**
+ * Returns the first element having the largest value according to the provided [comparator].
+ *
+ * @throws NoSuchElementException if the collection is empty.
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("maxWithOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun <T> Iterable<T>.maxWith(comparator: Comparator<in T>): T {
+    val iterator = iterator()
+    if (!iterator.hasNext()) throw NoSuchElementException()
+    var max = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        if (comparator.compare(max, e) < 0) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the first element having the largest value according to the provided [comparator] or `null` if there are no elements.
+ */
+@SinceKotlin("1.4")
+public fun <T> Iterable<T>.maxWithOrNull(comparator: Comparator<in T>): T? {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return null
+    var max = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        if (comparator.compare(max, e) < 0) max = e
+    }
+    return max
+}
+
+/**
+ * Returns the smallest value according to the provided [comparator]
+ * among all values produced by [selector] function applied to each element in the collection.
+ *
+ * If multiple elements produce the minimal value, this function returns the first of those values.
+ *
+ * @throws NoSuchElementException if the collection is empty.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxOfWithMinOfWithGeneric
+ */
+@SinceKotlin("1.4")
+@OptIn(kotlin.experimental.ExperimentalTypeInference::class)
+@OverloadResolutionByLambdaReturnType
+@kotlin.internal.InlineOnly
+public inline fun <T, R> Iterable<T>.minOfWith(comparator: Comparator<in R>, selector: (T) -> R): R {
+    val iterator = iterator()
+    if (!iterator.hasNext()) throw NoSuchElementException()
+    var minValue = selector(iterator.next())
+    while (iterator.hasNext()) {
+        val v = selector(iterator.next())
+        if (comparator.compare(minValue, v) > 0) {
+            minValue = v
+        }
+    }
+    return minValue
+}
+
+/**
+ * Returns the smallest value according to the provided [comparator]
+ * among all values produced by [selector] function applied to each element in the collection or `null` if the collection is empty.
+ *
+ * If multiple elements produce the minimal value, this function returns the first of those values.
+ *
+ * @sample samples.collections.Collections.Aggregates.maxOfWithMinOfWithGeneric
+ */
+@SinceKotlin("1.4")
+@OptIn(kotlin.experimental.ExperimentalTypeInference::class)
+@OverloadResolutionByLambdaReturnType
+@kotlin.internal.InlineOnly
+public inline fun <T, R> Iterable<T>.minOfWithOrNull(comparator: Comparator<in R>, selector: (T) -> R): R? {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return null
+    var minValue = selector(iterator.next())
+    while (iterator.hasNext()) {
+        val v = selector(iterator.next())
+        if (comparator.compare(minValue, v) > 0) {
+            minValue = v
+        }
+    }
+    return minValue
+}
+
+/**
+ * Returns the first element having the smallest value according to the provided [comparator].
+ *
+ * @throws NoSuchElementException if the collection is empty.
+ */
+@SinceKotlin("1.7")
+@kotlin.jvm.JvmName("minWithOrThrow")
+@Suppress("CONFLICTING_OVERLOADS")
+public fun <T> Iterable<T>.minWith(comparator: Comparator<in T>): T {
+    val iterator = iterator()
+    if (!iterator.hasNext()) throw NoSuchElementException()
+    var min = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        if (comparator.compare(min, e) > 0) min = e
+    }
+    return min
+}
+
+/**
+ * Returns the first element having the smallest value according to the provided [comparator] or `null` if there are no elements.
+ */
+@SinceKotlin("1.4")
+public fun <T> Iterable<T>.minWithOrNull(comparator: Comparator<in T>): T? {
+    val iterator = iterator()
+    if (!iterator.hasNext()) return null
+    var min = iterator.next()
+    while (iterator.hasNext()) {
+        val e = iterator.next()
+        if (comparator.compare(min, e) > 0) min = e
+    }
+    return min
 }
 
 /**

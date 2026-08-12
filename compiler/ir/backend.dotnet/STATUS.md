@@ -17,7 +17,25 @@ verification, and work state.
   nine shared paths, architectural directions, stat-cache-only IL false
   positives, and post-rebase verification are recorded in
   [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
-- Last completed foundation: Kotlin `fun interface` declarations now use the
+- Last completed foundation: Common `Comparator<T>` is published as the
+  exact invariant Kotlin-owned fun interface, backed by the already accepted
+  erased generic-interface and SAM-wrapper ABIs rather than a BCL comparer or
+  CLR delegate identity. The complete authoritative Common
+  `Comparisons.kt` source owns comparison combinators, nullable/natural/reverse
+  order, comparator chaining, and reversal. The Common generator now also
+  owns comparator `minOf`/`maxOf`, Iterable `minWith`/`maxWith` and selector
+  variants, plus non-mutating `isSorted*`; the .NET allowlist contains no
+  algorithm body. Kotlin Float/Double total order, String ordinal order,
+  first-element tie retention, traversal/short-circuit timing, failure
+  identity, use-site `Comparator<in T>`, and separate KLIB consumption execute
+  through the ordinary erased canonical slot. Roslyn proves that C# can
+  implement and call that exact interface and drive the Kotlin scalar
+  functions, while also proving why its hashed erased slot is compiler ABI
+  rather than an ergonomic export. A future explicit C# projection should use
+  `IComparer<T>` adapters without replacing Kotlin identity. Runtime surface
+  36 and library codec 35 remain unchanged. Stable mutation/sorted snapshots
+  remain a separate platform-actual tranche.
+  The preceding foundation: Kotlin `fun interface` declarations now use the
   repository's Common `SingleAbstractMethodLowering`, after callable-reference
   materialization and before local-class, interface, generic, and continuation
   lowering. The declaration remains one ordinary Kotlin-owned CLR interface;

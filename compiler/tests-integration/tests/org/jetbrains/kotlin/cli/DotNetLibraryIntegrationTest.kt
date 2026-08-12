@@ -235,6 +235,7 @@ import org.jetbrains.kotlin.test.TestCaseWithTmpdir
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
@@ -12540,6 +12541,98 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertNotEquals(0, lambdaCompile.exitCode, "C# lambda unexpectedly converted to a Kotlin interface")
         assertTrue("CS1660" in lambdaCompile.output, lambdaCompile.output)
+    }
+
+    @Test
+    fun testComparatorFoundationAcrossKotlinAndCSharpBoundaries() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(csharpToolchain != null, "Modern C# compiler is not available")
+        val modernCSharp = checkNotNull(csharpToolchain)
+        val dotnetHost = modernDotNetHostOrSkip()
+        val platformDirectory = File(tmpdir, "comparator-platform")
+        compileInProcess(
+            K2DotNetCompiler(),
+            K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::destination.cliArgument, platformDirectory.path,
+        )
+
+        val runtimeAssembly = platformDirectory.resolve("Kotlin.Runtime.dll")
+        val stdlibAssembly = platformDirectory.resolve("Kotlin.Stdlib.dll")
+        val stdlibIl = platformDirectory.resolve("Kotlin.Stdlib.il").readText()
+        assertTrue(".class interface public abstract auto ansi 'Kotlin.Comparator'" in stdlibIl)
+        assertFalse("Kotlin.Comparator`1" in stdlibIl)
+        assertFalse("System.Collections.Generic.IComparer" in stdlibIl)
+        val comparatorSlot = Regex(
+            """\.method public hidebysig newslot abstract virtual instance int32 '([^']+)'\(object 'a', object 'b'\)"""
+        ).find(stdlibIl.substringAfter(".class interface public abstract auto ansi 'Kotlin.Comparator'"))
+            ?.groupValues
+            ?.get(1)
+            ?: fail("Kotlin.Comparator lacks one public erased canonical slot")
+        assertEquals(
+            "compare__KotlinErased__11bab90d79e4fdd4bf4a39a622a8b81a",
+            comparatorSlot,
+        )
+        assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Comparisons.ComparisonsKt'" in stdlibIl)
+        assertTrue("callvirt instance int32 'Kotlin.Comparator'::'$comparatorSlot'(object, object)" in stdlibIl)
+        assertFalse(".class public auto ansi sealed beforefieldinit 'kotlin.comparisons.NaturalOrderComparator'" in stdlibIl)
+
+        val csharpSource = platformDirectory.resolve("comparator-consumer.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Collections.Generic;
+
+                public sealed class CSharpIntComparator : Kotlin.Comparator
+                {
+                    public int $comparatorSlot(object left, object right)
+                    {
+                        return ((int)left).CompareTo((int)right);
+                    }
+                }
+
+                public static class Program
+                {
+                    public static int Main()
+                    {
+                        Kotlin.Comparator comparator = new CSharpIntComparator();
+                        if (comparator.$comparatorSlot(1, 2) >= 0)
+                            throw new Exception("C# comparator slot call failed");
+                        if (Kotlin.Comparisons.ComparisonsKt.minOf<int>(2, 1, comparator) != 1)
+                            throw new Exception("C# comparator did not drive Kotlin minOf");
+                        if (Kotlin.Comparisons.ComparisonsKt.maxOf<int>(2, 1, comparator) != 2)
+                            throw new Exception("C# comparator did not drive Kotlin maxOf");
+
+                        Type type = typeof(Kotlin.Comparator);
+                        if (!type.IsInterface || type.IsGenericType ||
+                            typeof(MulticastDelegate).IsAssignableFrom(type))
+                            throw new Exception("Kotlin Comparator acquired the wrong CLR identity");
+                        if (typeof(IComparer<object>).IsAssignableFrom(type))
+                            throw new Exception("Kotlin Comparator was silently aliased to IComparer<T>");
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = platformDirectory.resolve("ComparatorConsumer.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            modernCSharp,
+            csharpSource,
+            csharpAssembly,
+            runtimeAssembly,
+            stdlibAssembly,
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        platformDirectory.resolve("ComparatorConsumer.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            dotnetHost,
+            csharpAssembly,
+            platformDirectory,
+            "C# comparator consumer failed",
+        )
     }
 
     @Test

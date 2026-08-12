@@ -62,6 +62,9 @@ tasks.named<ProcessResources>("processResources") {
     from(rootProject.file("libraries/stdlib/src/kotlin/util/Result.kt")) {
         into("kotlin-dotnet-stdlib/src/kotlin/util")
     }
+    from(rootProject.file("libraries/stdlib/src/kotlin/comparisons/Comparisons.kt")) {
+        into("kotlin-dotnet-stdlib/src/kotlin/comparisons")
+    }
     from(files(
         rootProject.file("libraries/stdlib/src/kotlin/coroutines/Continuation.kt"),
         rootProject.file("libraries/stdlib/src/kotlin/coroutines/ContinuationInterceptor.kt"),
@@ -157,6 +160,7 @@ tasks.named<ProcessResources>("processResources") {
         into("kotlin-dotnet-stdlib/src/kotlin/contextParameters")
     }
     from(files(
+        rootProject.file("libraries/stdlib/common/src/kotlin/Comparator.kt"),
         rootProject.file("libraries/stdlib/common/src/kotlin/ExceptionsH.kt"),
         rootProject.file("libraries/stdlib/common/src/kotlin/JvmAnnotationsH.kt"),
     )) {
