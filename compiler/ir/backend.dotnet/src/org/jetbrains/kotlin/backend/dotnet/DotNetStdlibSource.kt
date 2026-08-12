@@ -62,6 +62,10 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         "dotnet/src/kotlin/DotNetStdlibKotlin.kt",
     ),
     DotNetStdlibSourceResource(
+        "DotNetComparator.kt",
+        "dotnet/src/kotlin/DotNetComparator.kt",
+    ),
+    DotNetStdlibSourceResource(
         "DotNetLibrary.kt",
         "dotnet/src/kotlin/DotNetLibrary.kt",
     ),
@@ -168,6 +172,11 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
         isCommon = true,
     ),
     DotNetStdlibSourceResource(
+        "_DotNetBootstrapComparisons.kt",
+        "dotnet/common/src/generated/_DotNetBootstrapComparisons.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
         "_DotNetBootstrapMaps.kt",
         "dotnet/common/src/generated/_DotNetBootstrapMaps.kt",
         isCommon = true,
@@ -271,6 +280,16 @@ private val DOTNET_STDLIB_SOURCE_RESOURCES = listOf(
     DotNetStdlibSourceResource(
         "Lateinit.kt",
         "src/kotlin/util/Lateinit.kt",
+    ),
+    DotNetStdlibSourceResource(
+        "Comparisons.kt",
+        "src/kotlin/comparisons/Comparisons.kt",
+        isCommon = true,
+    ),
+    DotNetStdlibSourceResource(
+        "Comparator.kt",
+        "common/src/kotlin/Comparator.kt",
+        isCommon = true,
     ),
     DotNetStdlibSourceResource(
         "ExceptionsH.kt",
