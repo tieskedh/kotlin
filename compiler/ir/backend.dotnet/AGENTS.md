@@ -556,7 +556,7 @@ See the
   retain a producer logical-member binding requirement and block admission
   until a versioned physical family record exists; consumers must not infer its
   slots from names or today’s erased production MethodDefs. The architecture
-  channel now has a version-4, producer-fingerprinted physical-family artifact
+  channel now has a version-5, producer-fingerprinted physical-family artifact
   which records logical owner/member joins, implementation/capability paths,
   arity, disposition, state requirements, complete member roles, selected
   MethodDef owners/names, final/virtual/abstract dispatch, a slot-domain vector,
@@ -571,11 +571,11 @@ See the
   target. This artifact remains test/architecture-only while production owners
   are erased. Do not serialize it into today's DLL/KLIB, add a speculative
   `dotnet.ir` node, advance production admission, or claim that the still-
-  missing runtime-selected/fallback construction and reflection-normalization
-  records are complete. Version 3 additionally records exact signatures for
-  role-specific direct-super targets and the separate static masked-default
-  helper. A default helper is never an override role and must retain virtual
-  dispatch into the selected typed family. Consumers may render the neutral
+  missing runtime-selected/fallback construction or Kotlin-subclass
+  physicalization is complete. Version 3 additionally records exact
+  signatures for role-specific direct-super targets and the separate static
+  masked-default helper. A default helper is never an override role and must
+  retain virtual dispatch into the selected typed family. Consumers may render the neutral
   type expression for their profile, but must not infer a signature, slot
   domain, capability identity, or nested carrier from source names or their
   own lowering or current substitution. Version 4 records the exact target
@@ -588,7 +588,18 @@ See the
   cast/unbox conversion at that one state boundary. A profile mismatch,
   incomplete constructor set, malformed local delegation, unpaired state
   path, or state access outside the recorded member family rejects the whole
-  artifact.
+  artifact. Version 5 adds the reflection join without duplicating Kotlin
+  semantic metadata: each producer open implementation TypeDef maps exactly
+  to its existing KLIB logical classifier key, while logical type arguments,
+  variance, projections, nullability, names, and bounds remain KLIB-only.
+  Exact classifier normalization uses only the recorded open TypeDef; logical
+  instance classification walks objective open-TypeDef ancestry. Capability
+  interfaces are hidden compiler ABI and must never normalize as Kotlin
+  classifiers. Every source callable collapses its typed, semantic,
+  capability, and default-helper MethodDefs to one logical key and records the
+  one typed or semantic-dispatcher invocation entry. Do not enumerate those
+  MethodDefs as Kotlin members, derive logical arguments from closed CLR type
+  arguments, or reconstruct a logical declaration from CLR names.
   A broad candidate input is semantic override-family
   authority: propagate it to a fixed point across local roots and inherit it
   from an external producer record; never narrow it from the local override's

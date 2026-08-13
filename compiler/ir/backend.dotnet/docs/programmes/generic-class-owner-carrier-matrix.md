@@ -478,7 +478,7 @@ The binding codec is not changed during this architecture phase. A production
 migration would require a new schema epoch whose logical class record carries
 one `GenericOwnerBinding` equivalent with at least:
 
-The architecture-only version-4 artifact proves the logical-key join,
+The architecture-only version-5 artifact proves the logical-key join,
 producer fingerprint, owner/capability paths, arity, disposition, basic state
 requirement, complete role set, selected MethodDef owner/name and dispatch,
 slot-domain vector, and neutral structural signature. It is deliberately not
@@ -493,8 +493,15 @@ subset of admitted construction modes, each constructor MethodDef/visibility/
 constructed owner and exact `this`/`base` edge, plus the selected field's
 visibility/type and exact typed/semantic read/write paths and conversions. The
 current subset is only `STATIC_EXACT`; runtime-selected exact and semantic
-fallback construction remain unproven. Reflection normalization is not yet
-claimed.
+fallback construction remain unproven. Version 5 maps the producer's exact
+open implementation TypeDef to the existing KLIB classifier key, declares the
+KLIB logical graph authoritative for type arguments, hides the capability from
+Kotlin classifier/member identity, and collapses every typed, semantic,
+capability, and default-helper MethodDef family to one logical callable with an
+exact invocation entry. Exact closed/open classifier normalization is separate
+from ancestry-based logical instance classification. No Kotlin name, variance,
+projection, nullability, bound, or logical type argument is reconstructed from
+CLR metadata.
 
 | Field | Meaning |
 | --- | --- |
