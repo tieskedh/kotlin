@@ -459,6 +459,29 @@ members remain outside every class declaration, codegen ignores the snapshots,
 and the structured CLI model remains unchanged until a real production slice
 is authorized.
 
+Producer physical-family construction now consumes those compiler facts
+without a fixture-name ABI table. Fixture names remain scenario/body labels.
+Lowered IR is mapped through a bounded structural carrier
+grammar for built-ins, owner and method parameters, and arrays; owner-dependent
+semantic array positions deliberately become `System.Array`. Exact constructor
+records include independent primitive slots, and the real lowered static
+default helper supplies its receiver-independent signature tail and masks.
+Anything outside that grammar remains without a physical proof; `Unit` in a
+parameter, a star/unsupported projection or classifier/carrier, or an unexpected
+default-helper shape cannot be repaired by guessing `object`. Uniform role
+suffixes extend the compiler-selected base MethodDef name. State routes are
+joined through recorded transitive field reads/writes, not source member names.
+The artifact rejects any physical MethodDef collision, including a user name
+which occupies a generated role identity; a later name allocator may improve
+that rejection but may never publish ambiguous metadata.
+When external binding changes a consumer's roles or domains, its pre-binding
+local signatures are invalidated and the producer artifact remains sole
+physical authority. A hostile regression sentinel rewrites every diagnostic
+producer source label in-memory and requires the resulting artifact to be
+identical. Captured inner parameters whose pre-normalization slot domain does
+not match the structural carrier remain without an exact proof. This is
+still production-inert evidence, not authority to emit `C<T>`.
+
 The field proof now uses one module-wide graph rather than a direct-body scan.
 It includes functions, constructors, general function-access edges, field and
 anonymous initializers, and lifted/nested producer helpers; each generic owner

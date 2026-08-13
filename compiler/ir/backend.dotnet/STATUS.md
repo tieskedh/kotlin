@@ -27,7 +27,35 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the production-inert generic-owner schema-version-6
+- Last completed foundation: generic-owner physical-family ABI construction no
+  longer reconstructs CLR members from the hostile fixture's declaration
+  names. The
+  production planner now derives an exact, profile-neutral signature family
+  from lowered IR for every selected typed, semantic, and capability role; the
+  bounded carrier grammar covers `Unit` returns, Boolean, Int, String, Any,
+  owner/method parameters, and recursively exact arrays, with `System.Array`
+  retained for owner-dependent semantic array routes. Constructors likewise
+  record exact owner and independent Int slots, while the actual lowered static
+  default dispatcher supplies its method arity, return, ordinary parameters,
+  and mask tail. Star/unsupported projection shapes, unknown classifiers,
+  nullable value types, nested carriers, Unit parameters, and dispatcher shapes return no proof
+  instead of guessing `object` or crashing. Physical base names come from the
+  compiler naming rule and role suffixes are uniform. State read/write MethodDefs
+  are selected from the recorded transitive field-access graph, not from
+  `writeUnsafe` or `read`. A user declaration which occupies the same name and
+  signature as a generated role rejects the whole artifact; two logical
+  members can never claim one physical MethodDef identity. After external
+  producer binding widens a consumer's domains or roles, its stale local exact
+  signatures are explicitly invalidated and producer records remain
+  authoritative. The hostile oracle rewrites every producer member's
+  diagnostic source label in-memory and requires the complete physical
+  artifact to remain equal. Metadata-captured inner parameters whose pre-normalization
+  slot domain disagrees with the structural carrier now retain no exact proof
+  instead of reaching an invalid record constructor. The oracle then executes
+  PSI/LightTree × Framework/CoreCLR × same/separate
+  compilation: four suites, eight tests, zero failures, errors, or skips.
+  Production emission remains erased and does not consume these snapshots.
+- The preceding foundation: the production-inert generic-owner schema-version-6
   artifact now feeds a compiler-derived external Kotlin subclass physicalizer.
   Every typed entry, semantic hook,
   capability dispatcher, direct-`super` target, and static masked-default helper
@@ -502,23 +530,24 @@ programmes.
 
 ## Current green gate
 
-The generic-owner schema-version-6 external-subclass physicalizer plus finite
-consumer construction-plan head passed every constituent of the strict target
-gate. The normal
-aggregate command remains:
+The name-independent, compiler-derived generic-owner physical-family head
+passed every constituent of the strict target gate. Production generic-owner
+emission remains erased; this checkpoint strengthens the exact evidence and
+temporary physicalization path only. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed on 2026-08-13 in 2,156.3 seconds. The six policy-
+The latest aggregate, build `b445429f-c142-4134-b32e-beb399234ed5`,
+completed on 2026-08-13 in 1,700.4 seconds. The six policy-
 free physical CLI model/serializer tests were Gradle-up-to-date in that
 aggregate, so their
 constituent was explicitly refreshed with `--rerun-tasks` on the same final
 source head immediately beforehand; the daemon returned success. The duration
 is recorded only to identify this coherent checkpoint, not as a performance
 comparison. Direct audit of all three result roots covers 190 XML files and
-2,204 tests, all written after the final construction-plan source change:
+2,204 tests, all written after the final physical-family source change:
 
 - 6 policy-free physical CLI model/serializer tests
 - 2,073 FIR, IL-text, and box tests
@@ -551,6 +580,16 @@ test retains its user-defined struct subclass, virtual star reads, candidate
 rejection without premature narrowing, same-state mutation, and Kotlin `<T>
 nullableBox(T?)` value/reference substitutions. The unchanged negative IL-text
 case continues to reject method-owned invariant/input open generic arrays.
+
+This aggregate also includes compiler-derived exact constructor, member-role,
+and masked-default signatures for the temporary generic-owner physicalizer.
+Diagnostic source labels no longer select carriers, role signatures, state
+routes, or physical targets; hostile in-memory relabeling must preserve the
+complete artifact. Unsupported carrier shapes and captured inner parameters
+whose pre-normalization slot domain disagrees with their structural carrier
+return no exact proof. Duplicate physical MethodDef identities reject the
+artifact. The focused generic-inner and hostile matrix passed 14 tests before
+the aggregate, with zero failures, errors, or skips.
 
 This aggregate includes the first production-inert owner-admission analysis,
 immediately before erased generic-interface bridge construction. It
