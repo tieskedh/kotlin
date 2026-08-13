@@ -405,6 +405,76 @@ data class DotNetGenericOwnerPhysicalConstructorRecord(
     }
 }
 
+/** Producer-scoped open TypeDef identity used for logical classifier normalization. */
+data class DotNetGenericOwnerPhysicalOpenTypeDefinitionRecord(
+    val physicalTypePath: List<String>,
+    val genericArity: Int,
+) {
+    init {
+        require(physicalTypePath.isNotEmpty() && physicalTypePath.all(String::isNotEmpty)) {
+            "a generic-owner open TypeDef requires a complete physical path"
+        }
+        require(genericArity > 0) { "a generic-owner open TypeDef requires positive arity" }
+    }
+}
+
+enum class DotNetGenericOwnerReflectionClassifierNormalizationMode {
+    EXACT_OPEN_TYPEDEF,
+}
+
+enum class DotNetGenericOwnerReflectionTypeArgumentAuthority {
+    KLIB_LOGICAL_GRAPH,
+}
+
+enum class DotNetGenericOwnerReflectionCapabilityExposure {
+    HIDDEN_COMPILER_ABI,
+}
+
+enum class DotNetGenericOwnerReflectionCallableExposure {
+    SINGLE_LOGICAL_DECLARATION,
+}
+
+/** One logical callable and every physical MethodDef collapsed into that declaration. */
+data class DotNetGenericOwnerPhysicalCallableReflectionRecord(
+    val logicalMemberKey: String,
+    val exposure: DotNetGenericOwnerReflectionCallableExposure,
+    val invocationRole: DotNetGenericOwnerMemberFamilyRole,
+    val invocationMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+    val physicalMethods: List<DotNetGenericOwnerPhysicalMethodIdentityRecord>,
+) {
+    init {
+        require(logicalMemberKey.isNotEmpty()) { "a generic-owner reflected callable requires a logical key" }
+        require(invocationRole == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY ||
+                invocationRole == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER) {
+            "a generic-owner reflected callable requires a typed or semantic dispatcher invocation entry"
+        }
+        require(physicalMethods.isNotEmpty() && physicalMethods.toSet().size == physicalMethods.size &&
+                invocationMethod in physicalMethods) {
+            "a generic-owner reflected callable requires one complete physical MethodDef family"
+        }
+    }
+}
+
+/** Producer-selected normalization from physical CLR evidence to one logical Kotlin classifier. */
+data class DotNetGenericOwnerPhysicalReflectionRecord(
+    val logicalClassifierKey: String,
+    val physicalOpenTypeDefinition: DotNetGenericOwnerPhysicalOpenTypeDefinitionRecord,
+    val classifierNormalizationMode: DotNetGenericOwnerReflectionClassifierNormalizationMode,
+    val instanceClassificationMode: DotNetGenericOwnerRuntimeClassificationMode,
+    val typeArgumentAuthority: DotNetGenericOwnerReflectionTypeArgumentAuthority,
+    val capabilityExposure: DotNetGenericOwnerReflectionCapabilityExposure,
+    val callables: List<DotNetGenericOwnerPhysicalCallableReflectionRecord>,
+) {
+    init {
+        require(logicalClassifierKey.isNotEmpty()) {
+            "a generic-owner reflection record requires a logical classifier key"
+        }
+        require(callables.map { callable -> callable.logicalMemberKey }.toSet().size == callables.size) {
+            "a generic-owner reflection record has duplicate logical callables"
+        }
+    }
+}
+
 enum class DotNetGenericOwnerPhysicalStateAccessDomain {
     TYPED,
     SEMANTIC,
@@ -836,6 +906,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
     val runtimeClassificationMode: DotNetGenericOwnerRuntimeClassificationMode,
     val constructionModes: Set<DotNetGenericOwnerConstructionMode>,
     val constructors: List<DotNetGenericOwnerPhysicalConstructorRecord>,
+    val reflection: DotNetGenericOwnerPhysicalReflectionRecord,
     val members: List<DotNetGenericOwnerPhysicalMemberFamilyRecord>,
     val states: List<DotNetGenericOwnerPhysicalStateRecord>,
 ) {
@@ -870,8 +941,53 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         }) {
             "generic-owner physical family '$logicalOwnerKey' has an invalid constructed owner"
         }
+        require(reflection.logicalClassifierKey == logicalOwnerKey &&
+                reflection.physicalOpenTypeDefinition.physicalTypePath == physicalOwnerPath &&
+                reflection.physicalOpenTypeDefinition.genericArity == genericArity &&
+                reflection.instanceClassificationMode == runtimeClassificationMode) {
+            "generic-owner physical family '$logicalOwnerKey' has an inconsistent reflection classifier"
+        }
         require(members.map { member -> member.logicalMemberKey }.toSet().size == members.size) {
             "generic-owner physical family '$logicalOwnerKey' has duplicate logical members"
+        }
+        val membersByLogicalKey = members.associateBy { member -> member.logicalMemberKey }
+        require(reflection.callables.map { callable -> callable.logicalMemberKey }.toSet() ==
+                membersByLogicalKey.keys) {
+            "generic-owner physical family '$logicalOwnerKey' has incomplete reflected callables"
+        }
+        require(reflection.callables.all { callable ->
+            val member = membersByLogicalKey.getValue(callable.logicalMemberKey)
+            val expectedInvocationRole = if (DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles) {
+                DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+            } else {
+                DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+            }
+            val invocationSlot = member.slots.singleOrNull { slot -> slot.role == callable.invocationRole }
+            val expectedPhysicalMethods = buildSet {
+                member.slots.forEach { slot ->
+                    add(DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                        slot.physicalOwnerPath,
+                        slot.physicalMethodName,
+                        slot.signature,
+                    ))
+                    slot.capabilitySlot?.let(::add)
+                }
+                member.defaultDispatcher?.let { dispatcher ->
+                    add(DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                        dispatcher.physicalOwnerPath,
+                        dispatcher.physicalMethodName,
+                        dispatcher.signature,
+                    ))
+                }
+            }
+            callable.invocationRole == expectedInvocationRole && invocationSlot != null &&
+                    callable.invocationMethod == DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                        invocationSlot.physicalOwnerPath,
+                        invocationSlot.physicalMethodName,
+                        invocationSlot.signature,
+                    ) && callable.physicalMethods.toSet() == expectedPhysicalMethods
+        }) {
+            "generic-owner physical family '$logicalOwnerKey' has a reflected callable outside its physical family"
         }
         require(states.map { state -> state.logicalFieldName }.toSet().size == states.size) {
             "generic-owner physical family '$logicalOwnerKey' has duplicate logical state"
@@ -944,6 +1060,15 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
         require(owners.map { owner -> owner.logicalOwnerKey }.toSet().size == owners.size) {
             "a generic-owner family artifact has duplicate logical owners"
         }
+        require(owners.map { owner -> owner.physicalOwnerPath }.toSet().size == owners.size) {
+            "a generic-owner family artifact has duplicate physical owner TypeDefs"
+        }
+        val capabilityPaths = owners.mapNotNull { owner -> owner.physicalCapabilityOwnerPath }
+        require(capabilityPaths.none { capabilityPath ->
+            owners.any { owner -> owner.physicalOwnerPath == capabilityPath }
+        }) {
+            "a generic-owner family artifact confuses a capability TypeDef with a classifier TypeDef"
+        }
         require(owners.flatMap { owner -> owner.members }.map { member -> member.logicalMemberKey }.toSet().size ==
                 owners.sumOf { owner -> owner.members.size }) {
             "a generic-owner family artifact has duplicate logical members across owners"
@@ -989,6 +1114,23 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
     }
 }
 
+/** Finds only an exact recorded producer open TypeDef; capability and foreign types return null. */
+fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
+    physicalOpenTypeDefinition: DotNetGenericOwnerPhysicalOpenTypeDefinitionRecord,
+): DotNetGenericOwnerPhysicalReflectionRecord? = owners.singleOrNull { owner ->
+    owner.reflection.physicalOpenTypeDefinition == physicalOpenTypeDefinition
+}?.reflection
+
+/** Tests a logical classifier against objective runtime ancestry already normalized to open TypeDefs. */
+fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionClassifierMatchesAncestry(
+    logicalClassifierKey: String,
+    physicalOpenTypeDefinitionAncestry: List<DotNetGenericOwnerPhysicalOpenTypeDefinitionRecord>,
+): Boolean {
+    val reflection = owners.singleOrNull { owner -> owner.logicalOwnerKey == logicalClassifierKey }?.reflection
+        ?: return false
+    return reflection.physicalOpenTypeDefinition in physicalOpenTypeDefinitionAncestry
+}
+
 /**
  * Deterministic codec for the production-inert generic-owner family artifact.
  *
@@ -997,7 +1139,7 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 4
+    const val SCHEMA_VERSION = 5
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -1053,6 +1195,50 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         delegation.signature.serialized().encoded(),
                     ).joinToString("\t")
                 )
+            }
+            val reflection = owner.reflection
+            appendLine(
+                listOf(
+                    "F",
+                    reflection.logicalClassifierKey.encoded(),
+                    reflection.physicalOpenTypeDefinition.physicalTypePath.joinToString("\u0000").encoded(),
+                    reflection.physicalOpenTypeDefinition.genericArity.toString(),
+                    reflection.classifierNormalizationMode.name,
+                    reflection.instanceClassificationMode.name,
+                    reflection.typeArgumentAuthority.name,
+                    reflection.capabilityExposure.name,
+                    reflection.callables.size.toString(),
+                ).joinToString("\t")
+            )
+            reflection.callables.sortedBy { callable -> callable.logicalMemberKey }.forEach { callable ->
+                appendLine(
+                    listOf(
+                        "Y",
+                        callable.logicalMemberKey.encoded(),
+                        callable.exposure.name,
+                        callable.invocationRole.name,
+                        callable.invocationMethod.physicalOwnerPath.joinToString("\u0000").encoded(),
+                        callable.invocationMethod.physicalMethodName.encoded(),
+                        callable.invocationMethod.signature.serialized().encoded(),
+                        callable.physicalMethods.size.toString(),
+                    ).joinToString("\t")
+                )
+                callable.physicalMethods.sortedWith(
+                    compareBy(
+                        { method -> method.physicalOwnerPath.joinToString("\u0000") },
+                        { method -> method.physicalMethodName },
+                        { method -> method.signature.serialized() },
+                    )
+                ).forEach { method ->
+                    appendLine(
+                        listOf(
+                            "Z",
+                            method.physicalOwnerPath.joinToString("\u0000").encoded(),
+                            method.physicalMethodName.encoded(),
+                            method.signature.serialized().encoded(),
+                        ).joinToString("\t")
+                    )
+                }
             }
             members.forEach { member ->
                 val roles = member.roles.sortedBy { role -> role.name }
@@ -1266,6 +1452,66 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     ),
                 )
             }
+            val reflectionFields = read("F", 9)
+            val reflectedCallableCount = count(reflectionFields[8], "reflected callable")
+            val reflection = DotNetGenericOwnerPhysicalReflectionRecord(
+                logicalClassifierKey = reflectionFields[1].decoded(),
+                physicalOpenTypeDefinition = DotNetGenericOwnerPhysicalOpenTypeDefinitionRecord(
+                    physicalTypePath = reflectionFields[2].decoded().split('\u0000'),
+                    genericArity = count(reflectionFields[3], "reflected open-TypeDef arity"),
+                ),
+                classifierNormalizationMode = enumValue(
+                    reflectionFields[4],
+                    DotNetGenericOwnerReflectionClassifierNormalizationMode.entries.toTypedArray(),
+                    "classifier normalization mode",
+                ),
+                instanceClassificationMode = enumValue(
+                    reflectionFields[5],
+                    DotNetGenericOwnerRuntimeClassificationMode.entries.toTypedArray(),
+                    "reflected instance classification mode",
+                ),
+                typeArgumentAuthority = enumValue(
+                    reflectionFields[6],
+                    DotNetGenericOwnerReflectionTypeArgumentAuthority.entries.toTypedArray(),
+                    "reflection type-argument authority",
+                ),
+                capabilityExposure = enumValue(
+                    reflectionFields[7],
+                    DotNetGenericOwnerReflectionCapabilityExposure.entries.toTypedArray(),
+                    "reflection capability exposure",
+                ),
+                callables = List(reflectedCallableCount) {
+                    val callableFields = read("Y", 8)
+                    val physicalMethodCount = count(callableFields[7], "reflected physical method")
+                    val invocationMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                        physicalOwnerPath = callableFields[4].decoded().split('\u0000'),
+                        physicalMethodName = callableFields[5].decoded(),
+                        signature = callableFields[6].decoded().deserializedSignature(),
+                    )
+                    DotNetGenericOwnerPhysicalCallableReflectionRecord(
+                        logicalMemberKey = callableFields[1].decoded(),
+                        exposure = enumValue(
+                            callableFields[2],
+                            DotNetGenericOwnerReflectionCallableExposure.entries.toTypedArray(),
+                            "reflected callable exposure",
+                        ),
+                        invocationRole = enumValue(
+                            callableFields[3],
+                            DotNetGenericOwnerMemberFamilyRole.entries.toTypedArray(),
+                            "reflected callable invocation role",
+                        ),
+                        invocationMethod = invocationMethod,
+                        physicalMethods = List(physicalMethodCount) {
+                            val methodFields = read("Z", 4)
+                            DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                                physicalOwnerPath = methodFields[1].decoded().split('\u0000'),
+                                physicalMethodName = methodFields[2].decoded(),
+                                signature = methodFields[3].decoded().deserializedSignature(),
+                            )
+                        },
+                    )
+                },
+            )
             val members = List(memberCount) {
                 val memberFields = read("M", 9)
                 val logicalMemberKey = memberFields[1].decoded()
@@ -1424,6 +1670,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 runtimeClassificationMode = runtimeClassificationMode,
                 constructionModes = constructionModes,
                 constructors = constructors,
+                reflection = reflection,
                 members = members,
                 states = states,
             )
