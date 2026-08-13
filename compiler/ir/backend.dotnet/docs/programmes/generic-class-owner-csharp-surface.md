@@ -286,6 +286,18 @@ factory contains no `MakeGenericType` or `Activator` closure. This is an AOT-
 analyzer-clean internal construction mechanism, not permission to present a
 fallback object as an exact typed C# return.
 
+A paired application corpus now runs the current production-erased surface
+beside that candidate on both CLR profiles and FIR parsers. C# directly
+constructs and subclasses the actual Kotlin assembly with framework and user
+structs, nullable/mixed state, arrays, a method generic, and two override
+levels. Reflection records the present tradeoff without an adapter: the owner
+has arity zero and `object`/`System.Array` member positions, while the
+owner-independent `relay<R>` is a normal CLR method generic. The candidate
+products remain record-driven and separate. This supplies a stable correctness
+input for the following ergonomic and performance comparison; it does not yet
+satisfy all acceptance cases below. See
+[`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
+
 Before this surface is accepted, Roslyn must compile and execute:
 
 - direct construction and typed property/method calls for reference, primitive,

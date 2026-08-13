@@ -130,6 +130,18 @@ removes the need for a second handwritten AOT/performance model, but condition
 bounded NativeAOT execution. See
 [`../archive/generic-owner-native-aot-measurement-2026-08-13.md`](../archive/generic-owner-native-aot-measurement-2026-08-13.md).
 
+One paired application input for condition 8 is now reproducible on both
+profiles. It contains the exact hostile Kotlin source, actual erased Kotlin
+producer/consumer, direct C# erased consumer/subclass, and record-driven
+candidate products. Arbitrary framework/user structs, nullable state, arrays,
+method generics, reflection, and multi-level dispatch execute under PSI and
+LightTree. Every file is fingerprinted; cross-frontend comparison requires
+identical executable CLR content, non-body KLIB content, binding records, and
+downstream products. It explicitly records the current erased C# surface. This
+is a bounded hostile application corpus, not yet the representative real-app
+breadth or reviewed measurements required by conditions 8 and 9. See
+[`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
+
 Schema 6 also records each producer GenericParam's ordered index, CLR special
 constraints, and structural type constraints. The current child physicalizer
 admits only compiler-derived constraints in its exact supported grammar and

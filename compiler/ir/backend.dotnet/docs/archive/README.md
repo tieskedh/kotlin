@@ -54,6 +54,10 @@ Archived snapshots:
 - [`generic-owner-native-aot-measurement-2026-08-13.md`](generic-owner-native-aot-measurement-2026-08-13.md)
   records workload version 2's race-free working-set handshake, explicit
   signed MSVC provenance, and the successful four-mode NativeAOT link/run.
+- [`generic-owner-application-corpus-2026-08-13.md`](generic-owner-application-corpus-2026-08-13.md)
+  records the closed paired production-erased/candidate application products,
+  direct C# erased-owner surface, two-profile execution, and strict
+  cross-frontend reproducibility boundary.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots

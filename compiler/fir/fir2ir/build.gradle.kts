@@ -188,6 +188,9 @@ projectTests {
             providers.gradleProperty("kotlin.dotnet.genericOwnerMeasurementDir").orNull?.let { exportDirectory ->
                 systemProperty("kotlin.dotnet.genericOwnerMeasurementDir", exportDirectory)
             }
+            providers.gradleProperty("kotlin.dotnet.genericOwnerApplicationDir").orNull?.let { exportDirectory ->
+                systemProperty("kotlin.dotnet.genericOwnerApplicationDir", exportDirectory)
+            }
         }
     }
 

@@ -27,7 +27,32 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the exact schema-7 generic-owner measurement
+- Last completed foundation: the generic-owner reopening now has one closed
+  paired application corpus containing the exact hostile Kotlin source, actual
+  production-erased producer and separately compiled Kotlin consumer, a direct
+  C# consumer/two-level subclass of that erased producer, and the
+  compiler-record-driven candidate producer/consumer. `Guid`, `DateTime`,
+  `decimal`, enum, tuple, user struct, nullable, mixed-state, array-identity,
+  method-generic, and override paths execute on PSI/LightTree × Framework
+  CLR/CoreCLR. Reflection pins the honest current C# cost: the erased owner is
+  arity zero with `object` state/member positions and `System.Array`, while
+  independent `relay<R>` remains a real CLR method generic. Every profile
+  bundle is closed and fully fingerprinted. Relative KLIB path bases remove
+  random test-directory leakage; repeated same-frontend products are byte
+  stable. The frontend comparison requires exact CLR metadata/method bodies,
+  non-KLIB resources, every KLIB item outside parser-owned IR body locations,
+  and all downstream products; raw manifests retain the distinct body hash,
+  and the verifier does not claim cross-parser body-blob identity. Framework
+  C# artifacts use deterministic modern Roslyn against explicit CLR 4
+  references and run on the real CLR 4.
+  The four-test matrix and all final candidate/erased Kotlin/erased C#
+  executions pass. The following full target aggregate completed in 791.8
+  seconds; its strict three-directory audit covers 190 XML files, 2,204 tests,
+  and zero failures, errors, or skips. This closes paired correctness/product
+  preparation, not representative performance evidence or production `C<T>`
+  admission. See
+  [`docs/archive/generic-owner-application-corpus-2026-08-13.md`](docs/archive/generic-owner-application-corpus-2026-08-13.md).
+- The preceding foundation: the exact schema-7 generic-owner measurement
   bundle now links and runs as a real Windows x64 NativeAOT executable. A
   workload-version-2 stdin handshake holds every child only after its protocol
   line, allowing a live `PeakWorkingSet64` sample without adding the hold to
