@@ -630,6 +630,22 @@ See the
   A current-compilation type expression is forbidden in the producer artifact.
   This record may drive only the hostile temporary C# oracle; production
   emission remains erased.
+  Open-nullable runtime construction is consumer/application knowledge, not a
+  property of a producer constructor MethodDef. Keep final-compilation roots
+  out of the version-6 producer artifact. A separate production-inert
+  construction plan may accept a finite, duplicate-free set of concrete
+  runtime types and derive exact `C<P(T?)>` routes only from the decoded
+  unconstrained one-parameter producer owner, capability, and public
+  static-exact strict `!T` constructor. It must normalize an
+  already-nullable value argument idempotently, use a finite runtime-type-token
+  table whose branches contain statically visible constructions, return the
+  semantic capability, and contain exactly one default `C<object>` fallback.
+  No route vocabulary may represent `MakeGenericType`, `Activator` closure, an
+  owner/method parameter root, a second object/store, or recovery of an exact
+  carrier from the fallback. Invalid or nested `Nullable` roots and constrained
+  owners fail closed. An unlisted value or reference type selects the fallback
+  honestly. NativeAOT analyzer success does not replace native link and
+  execution on a complete toolchain.
   A broad candidate input is semantic override-family
   authority: propagate it to a fixed point across local roots and inherit it
   from an external producer record; never narrow it from the local override's

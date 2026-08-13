@@ -36,6 +36,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalGenericPara
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructionMode
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorArgumentMapping
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorDelegationKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructionRouteKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalConstructorRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDelegatingConstructorRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalConstructorVisibility
@@ -80,6 +81,7 @@ import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilies
 import org.jetbrains.kotlin.backend.dotnet.reflectionClassifierForExactOpenTypeDefinitionOrNull
 import org.jetbrains.kotlin.backend.dotnet.reflectionClassifierMatchesAncestry
 import org.jetbrains.kotlin.backend.dotnet.physicalizeExternalSubclass
+import org.jetbrains.kotlin.backend.dotnet.planFiniteOpenNullableConstruction
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelinePhase
@@ -2268,6 +2270,121 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         constructor.physicalConstructor.signature.parameterSlots.size == 2
     }
     val immediateBaseConstructor = ownerRecord.constructors.single()
+    val intRuntimeType = DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type()
+    val nullableIntRuntimeType = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+        typePath = listOf("System", "Nullable"),
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+        arguments = listOf(intRuntimeType),
+    )
+    val knownStructRuntimeType = DotNetGenericOwnerPhysicalTypeExpressionRecord.currentCompilationType(
+        typePath = listOf("RecordedKnownStruct"),
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+    )
+    val unknownStructRuntimeType = DotNetGenericOwnerPhysicalTypeExpressionRecord.currentCompilationType(
+        typePath = listOf("RecordedUnknownStruct"),
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+    )
+    val unknownReferenceRuntimeType = DotNetGenericOwnerPhysicalTypeExpressionRecord.currentCompilationType(
+        typePath = listOf("RecordedUnknownReference"),
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+    )
+    val nullableKnownStructRuntimeType = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+        typePath = listOf("System", "Nullable"),
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+        arguments = listOf(knownStructRuntimeType),
+    )
+    val constructionPlan = artifact.planFiniteOpenNullableConstruction(
+        logicalConstructionKey = "${consumer.ownerName}#openNullableConstruction",
+        logicalOwnerKey = stateOwnerRecord.logicalOwnerKey,
+        logicalConstructorKey = primaryConstructor.logicalConstructorKey,
+        exactRuntimeArgumentTypes = listOf(
+            intRuntimeType,
+            nullableIntRuntimeType,
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType(),
+            knownStructRuntimeType,
+        ),
+    )
+    val constructionFallback = constructionPlan.routes.single { route ->
+        route.kind == DotNetGenericOwnerConstructionRouteKind.SEMANTIC_FALLBACK
+    }
+    check(constructionPlan.producerFingerprint == artifact.producerFingerprint &&
+            constructionPlan.targetProfile == artifact.targetProfile &&
+            constructionPlan.physicalCapabilityOwnerPath == stateOwnerRecord.physicalCapabilityOwnerPath &&
+            constructionPlan.routes.count { route ->
+                route.kind == DotNetGenericOwnerConstructionRouteKind.RUNTIME_EXACT
+            } == 4 &&
+            constructionPlan.selectRoute(intRuntimeType).constructedOwnerType.arguments.single() ==
+            nullableIntRuntimeType &&
+            constructionPlan.selectRoute(nullableIntRuntimeType).constructedOwnerType.arguments.single() ==
+            nullableIntRuntimeType &&
+            constructionPlan.selectRoute(DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType())
+                .constructedOwnerType.arguments.single() ==
+            DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType() &&
+            constructionPlan.selectRoute(knownStructRuntimeType).constructedOwnerType.arguments.single() ==
+            nullableKnownStructRuntimeType &&
+            constructionPlan.selectRoute(unknownStructRuntimeType) == constructionFallback &&
+            constructionPlan.selectRoute(unknownReferenceRuntimeType) == constructionFallback) {
+        "The finite open-nullable construction plan lost exact or fallback routes: $constructionPlan"
+    }
+    check(runCatching {
+        artifact.planFiniteOpenNullableConstruction(
+            logicalConstructionKey = "duplicate",
+            logicalOwnerKey = stateOwnerRecord.logicalOwnerKey,
+            logicalConstructorKey = primaryConstructor.logicalConstructorKey,
+            exactRuntimeArgumentTypes = listOf(intRuntimeType, intRuntimeType),
+        )
+    }.isFailure && runCatching {
+        artifact.planFiniteOpenNullableConstruction(
+            logicalConstructionKey = "open",
+            logicalOwnerKey = stateOwnerRecord.logicalOwnerKey,
+            logicalConstructorKey = primaryConstructor.logicalConstructorKey,
+            exactRuntimeArgumentTypes = listOf(
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.methodParameter(0),
+            ),
+        )
+    }.isFailure && runCatching {
+        val invalidNullableReference = DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+            typePath = listOf("System", "Nullable"),
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+            arguments = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()),
+        )
+        artifact.planFiniteOpenNullableConstruction(
+            logicalConstructionKey = "invalid-nullable",
+            logicalOwnerKey = stateOwnerRecord.logicalOwnerKey,
+            logicalConstructorKey = primaryConstructor.logicalConstructorKey,
+            exactRuntimeArgumentTypes = listOf(invalidNullableReference),
+        )
+    }.isFailure && runCatching {
+        val constrainedArtifact = artifact.copy(
+            owners = artifact.owners.map { candidate ->
+                candidate.copy(
+                    physicalGenericParameters = listOf(
+                        DotNetGenericOwnerPhysicalGenericParameterRecord(
+                            index = 0,
+                            specialConstraints = setOf(
+                                DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.REFERENCE_TYPE,
+                            ),
+                            typeConstraints = emptyList(),
+                        ),
+                    ),
+                )
+            },
+        )
+        constrainedArtifact.planFiniteOpenNullableConstruction(
+            logicalConstructionKey = "constrained",
+            logicalOwnerKey = stateOwnerRecord.logicalOwnerKey,
+            logicalConstructorKey = primaryConstructor.logicalConstructorKey,
+            exactRuntimeArgumentTypes = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()),
+        )
+    }.isFailure && runCatching {
+        constructionPlan.copy(
+            routes = constructionPlan.routes.filterNot { route ->
+                route.kind == DotNetGenericOwnerConstructionRouteKind.SEMANTIC_FALLBACK
+            },
+        )
+    }.isFailure) {
+        "The finite construction proof admitted duplicate/open/invalid/constrained roots or no fallback"
+    }
     check(stateOwnerRecord.runtimeClassificationMode ==
             DotNetGenericOwnerRuntimeClassificationMode.OPEN_TYPEDEF_ANCESTRY &&
             stateOwnerRecord.constructionModes == setOf(DotNetGenericOwnerConstructionMode.STATIC_EXACT) &&
@@ -2494,6 +2611,28 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         "if (logicalKey == ${reflection.logicalClassifierKey.asSnapshotCSharpStringLiteral()}) " +
                 "return typeof(${reflection.physicalOpenTypeDefinition.renderSnapshotCSharpUnboundType()});"
     }
+    val exactConstructionBranches = constructionPlan.routes.filter { route ->
+        route.kind == DotNetGenericOwnerConstructionRouteKind.RUNTIME_EXACT
+    }.joinToString("\n") { route ->
+        val runtimeType = checkNotNull(route.runtimeArgumentType).renderSnapshotCSharpType(emptyList())
+        val ownerType = route.constructedOwnerType.renderSnapshotCSharpType(emptyList())
+        val argumentType = route.constructedOwnerType.arguments.single().renderSnapshotCSharpType(emptyList())
+        "if (runtimeArgument == typeof($runtimeType)) return new $ownerType(($argumentType)initial);"
+    }
+    val fallbackOwnerType = constructionFallback.constructedOwnerType.renderSnapshotCSharpType(emptyList())
+    val fallbackArgumentType = constructionFallback.constructedOwnerType.arguments.single()
+        .renderSnapshotCSharpType(emptyList())
+    val constructionFactory = """
+        public static class RecordedOpenNullableFactory
+        {
+            public static $capabilityTypeName Create(Type runtimeArgument, object initial)
+            {
+                if (runtimeArgument == null) throw new ArgumentNullException("runtimeArgument");
+                $exactConstructionBranches
+                return new $fallbackOwnerType(($fallbackArgumentType)initial);
+            }
+        }
+    """.trimIndent()
     val stateLogicalClassifierKey = stateReflection.logicalClassifierKey.asSnapshotCSharpStringLiteral()
     val immediateLogicalClassifierKey = immediateReflection.logicalClassifierKey.asSnapshotCSharpStringLiteral()
     val stateOpenTypeName = stateReflection.physicalOpenTypeDefinition.renderSnapshotCSharpUnboundType()
@@ -2508,6 +2647,23 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
         writeText(
             """
             using System;
+
+            public struct RecordedKnownStruct
+            {
+                public int Value;
+            }
+
+            public struct RecordedUnknownStruct
+            {
+                public int Value;
+            }
+
+            public sealed class RecordedUnknownReference
+            {
+                public string Value;
+            }
+
+            $constructionFactory
 
             public static class RecordedReflectionRegistry
             {
@@ -2621,6 +2777,50 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
             {
                 public static int Main()
                 {
+                    $capabilityTypeName exactValue = RecordedOpenNullableFactory.Create(typeof(int), null);
+                    if (exactValue.GetType().GetGenericArguments()[0] != typeof(int?) ||
+                        RecordedReflectionRegistry.NormalizeExact(exactValue.GetType()) !=
+                            $stateLogicalClassifierKey) return 19;
+                    exactValue.$writeCapability(7);
+                    if (!object.Equals(exactValue.$readCapability(), 7)) return 20;
+
+                    $capabilityTypeName exactNullable =
+                        RecordedOpenNullableFactory.Create(typeof(int?), null);
+                    if (exactNullable.GetType().GetGenericArguments()[0] != typeof(int?)) return 21;
+                    exactNullable.$writeCapability(9);
+                    if (!object.Equals(exactNullable.$readCapability(), 9)) return 22;
+
+                    $capabilityTypeName exactReference =
+                        RecordedOpenNullableFactory.Create(typeof(string), null);
+                    if (exactReference.GetType().GetGenericArguments()[0] != typeof(string)) return 23;
+                    exactReference.$writeCapability("reference");
+                    if (!object.Equals(exactReference.$readCapability(), "reference")) return 24;
+
+                    RecordedKnownStruct known = new RecordedKnownStruct { Value = 31 };
+                    $capabilityTypeName exactStruct =
+                        RecordedOpenNullableFactory.Create(typeof(RecordedKnownStruct), null);
+                    if (exactStruct.GetType().GetGenericArguments()[0] != typeof(RecordedKnownStruct?)) return 25;
+                    exactStruct.$writeCapability(known);
+                    if (!object.Equals(exactStruct.$readCapability(), known)) return 26;
+
+                    RecordedUnknownStruct unknown = new RecordedUnknownStruct { Value = 37 };
+                    $capabilityTypeName fallbackStruct =
+                        RecordedOpenNullableFactory.Create(typeof(RecordedUnknownStruct), null);
+                    if (fallbackStruct.GetType().GetGenericArguments()[0] != typeof(object) ||
+                        RecordedReflectionRegistry.NormalizeExact(fallbackStruct.GetType()) !=
+                            $stateLogicalClassifierKey) return 27;
+                    fallbackStruct.$writeCapability(unknown);
+                    if (!object.Equals(fallbackStruct.$readCapability(), unknown)) return 28;
+
+                    RecordedUnknownReference unknownReference = new RecordedUnknownReference { Value = "fallback" };
+                    $capabilityTypeName fallbackReference =
+                        RecordedOpenNullableFactory.Create(typeof(RecordedUnknownReference), null);
+                    if (fallbackReference.GetType().GetGenericArguments()[0] != typeof(object) ||
+                        RecordedReflectionRegistry.NormalizeExact(fallbackReference.GetType()) !=
+                            $stateLogicalClassifierKey) return 29;
+                    fallbackReference.$writeCapability(unknownReference);
+                    if (!object.ReferenceEquals(fallbackReference.$readCapability(), unknownReference)) return 30;
+
                     $physicalizedClosedTypeName physicalizedValue = new $physicalizedClosedTypeName(1);
                     RecordedFamilyGrandchild<int> value = new RecordedFamilyGrandchild<int>(1);
                     Type physicalizedDefinition = typeof($physicalizedOpenTypeName);
@@ -2716,6 +2916,9 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
             }
             """.trimIndent()
         )
+    }
+    check("MakeGenericType" !in source.readText() && "Activator.CreateInstance" !in source.readText()) {
+        "The finite generic-owner construction renderer reintroduced an unbounded dynamic-code path"
     }
     val output = directory.resolve(
         if (target == DotNetTarget.NET48) "RecordedFamilyConsumer.exe" else "RecordedFamilyConsumer.dll"

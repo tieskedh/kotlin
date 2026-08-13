@@ -67,3 +67,29 @@ assemblies, finite rooting, and truly open generic producers. If that cannot
 avoid an unbounded dynamic-code requirement, the candidate must use a
 semantic fallback for those positions or constrain admission; it may not
 silently drop NativeAOT or claim exact construction everywhere.
+
+## Follow-up finite factory analysis — 2026-08-13
+
+The next architecture slice removes unbounded reflection from the candidate
+mechanism. A consumer-side record now derives a finite runtime-type-token table
+from the decoded producer owner, capability, and strict one-`!T` constructor.
+Each listed branch contains a statically visible exact construction; unlisted
+value and reference types select one explicit `C<object>` semantic fallback.
+The producer artifact does not contain application roots, and the generated
+factory contains neither `MakeGenericType` nor `Activator.CreateInstance`.
+
+The hostile record-driven C# consumer executes exact `int`, already-nullable
+`int?`, `string`, and consumer-struct routes plus unlisted struct/reference
+fallbacks on Framework CLR and CoreCLR. Exact value routes use
+`C<Nullable<V>>`, exact references use `C<R>`, and both fallbacks report
+`C<object>` through reflection while retaining one object, state, capability,
+and Kotlin classifier normalization.
+
+A standalone .NET 10 `win-x64` NativeAOT control used the same pinned SDK and
+promoted IL2026 and IL3050 to errors. The old `MakeGenericType` version failed
+at IL3050. The finite static factory restored, compiled, and passed managed AOT
+analysis without either warning, then stopped only because the host still has
+no Visual C++ platform linker. This is evidence that the finite mechanism
+removes the known dynamic-code blocker; it is not NativeAOT execution evidence.
+Native link/run, external-assembly roots, size, startup, and throughput remain
+required on a complete toolchain.

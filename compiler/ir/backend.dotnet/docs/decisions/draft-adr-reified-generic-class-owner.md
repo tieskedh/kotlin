@@ -243,6 +243,16 @@ available machine lacked the native platform linker, so no NativeAOT execution
 claim is made. Arbitrary structs, external assemblies, finite rooting, and a
 complete native toolchain remain acceptance gates.
 
+A follow-up removes that unbounded reflection mechanism from the candidate
+vocabulary. A consumer-side plan accepts only finite concrete runtime roots,
+derives statically visible exact constructions from the decoded producer, and
+adds one mandatory `C<object>` semantic fallback for unlisted types. Exact
+value, already-nullable value, reference, and consumer-struct roots plus
+unlisted struct/reference fallbacks execute on both CLRs with one state and
+capability. Under IL3050/IL2026-as-error NativeAOT analysis, the old control
+fails at `MakeGenericType`; the finite table reaches only the missing platform
+linker. Native execution and product measurements remain open.
+
 A second direct CLR probe validates the proposed strict-versus-candidate
 dispatch split on CLR 4 and CoreCLR. A single generic owner/state can expose
 typed virtual read/write/candidate members and an explicit non-generic
@@ -362,9 +372,17 @@ matching arity is not proof. The current proof further requires a public open
 non-inner child with one direct base/constructor and no added interface, field,
 initializer, nested type, state, or non-fake member. Inherited fake overrides
 remain inherited. The result drives only the hostile temporary C# oracle and
-does not change production emission. A
-complete migration record still needs the separately evaluated runtime/fallback
-construction modes.
+does not change production emission.
+
+Runtime roots remain outside producer schema 6. A separate consumer-side
+record now derives finite runtime-exact `C<P(T?)>` routes from the producer's
+open unconstrained owner, capability, and public strict one-`!T` constructor.
+It normalizes an already-nullable value idempotently, returns the semantic
+capability, and
+contains exactly one default `C<object>` fallback. No unbounded dynamic-code
+route is representable; invalid nullable roots and constrained owners reject
+the plan. This is executable JIT/analyzer evidence; native
+link/run is still required before the construction modes can be admitted.
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
