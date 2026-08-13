@@ -17,9 +17,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberAccessPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberPolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideBindingPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideTargetKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMember
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierPlan
+import org.jetbrains.kotlin.backend.dotnet.mergeDotNetGenericOwnerParameterSlotDomains
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateWriteProvenancePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
@@ -246,6 +248,30 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 }
             }
             val hasOwnerDependentOutput = member.returnType.referencesTypeParameterOf(owner)
+            val explicitParameters = member.parameters.filter { parameter ->
+                parameter.kind != IrParameterKind.DispatchReceiver
+            }
+            val specialArgumentsToCheck = specialBridgeMethods
+                .findSpecialWithOverride(member, includeSelf = true)
+                ?.second
+                ?.argumentsToCheck
+                ?: 0
+            val parameterSlotDomains = explicitParameters.mapIndexed { index, parameter ->
+                when {
+                    !parameter.type.referencesTypeParameterOf(owner) ->
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                    !DescriptorVisibilities.isPrivate(member.visibility) &&
+                            (index < specialArgumentsToCheck ||
+                                    !parameter.type.isLegalAtOwnerVariance(owner, TypePolarity.IN)) ->
+                        DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
+                    else -> DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+                }
+            }
+            val returnSlotDomain = if (hasOwnerDependentOutput) {
+                DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT
+            } else {
+                DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+            }
             val semanticHookReasons = buildSet {
                 if (memberPolicies.getValue(member) == DotNetGenericOwnerMemberPolicy.SEMANTIC_BODY) {
                     add(DotNetGenericOwnerSemanticHookReason.GENERAL_WIDENED_BODY)
@@ -269,6 +295,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 policy = memberPolicies.getValue(member),
                 ownerDependentInputIndices = ownerDependentInputs,
                 hasOwnerDependentOutput = hasOwnerDependentOutput,
+                returnSlotDomain = returnSlotDomain,
+                parameterSlotDomains = parameterSlotDomains,
                 roles = roles,
                 semanticHookReasons = semanticHookReasons,
                 requiresDirectSuperTargets = member.modality != Modality.FINAL,
@@ -433,25 +461,41 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 plan.memberFamilies.forEach { familyEntry ->
                     val source = familyEntry.key
                     if (source.isFakeOverride) return@forEach
-                    val inheritsSemanticHook = source.overriddenSymbols.any { overriddenSymbol ->
+                    val overriddenFamilies = source.overriddenSymbols.mapNotNull { overriddenSymbol ->
                         val overridden = overriddenSymbol.owner
-                        val overriddenOwner = overridden.parent as? IrClass ?: return@any false
-                        val overriddenPlan = plans[overriddenOwner] ?: return@any false
-                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in
-                                overriddenPlan.memberFamilies[overridden]?.roles.orEmpty()
+                        val overriddenOwner = overridden.parent as? IrClass ?: return@mapNotNull null
+                        plans[overriddenOwner]?.memberFamilies?.get(overridden)
                     }
                     val family = families.getValue(source)
-                    if (inheritsSemanticHook &&
-                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK !in family.roles
-                    ) {
-                        families[source] = family.copy(
-                            roles = family.roles + setOf(
+                    val inheritsSemanticHook = overriddenFamilies.any { overriddenFamily ->
+                        DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in overriddenFamily.roles
+                    }
+                    val mergedParameterSlotDomains = overriddenFamilies.fold(family.parameterSlotDomains) {
+                            domains, overriddenFamily ->
+                        mergeDotNetGenericOwnerParameterSlotDomains(
+                            domains,
+                            overriddenFamily.parameterSlotDomains,
+                        )
+                    }
+                    val updatedFamily = family.copy(
+                        roles = if (inheritsSemanticHook) {
+                            family.roles + setOf(
                                 DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK,
                                 DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER,
-                            ),
-                            semanticHookReasons = family.semanticHookReasons +
-                                    DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE,
-                        )
+                            )
+                        } else {
+                            family.roles
+                        },
+                        semanticHookReasons = if (inheritsSemanticHook) {
+                            family.semanticHookReasons +
+                                    DotNetGenericOwnerSemanticHookReason.INHERITED_SEMANTIC_OVERRIDE
+                        } else {
+                            family.semanticHookReasons
+                        },
+                        parameterSlotDomains = mergedParameterSlotDomains,
+                    )
+                    if (updatedFamily != family) {
+                        families[source] = updatedFamily
                         changed = true
                     }
                 }

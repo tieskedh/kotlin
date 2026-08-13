@@ -83,6 +83,246 @@ enum class DotNetGenericOwnerPhysicalMemberDispatch {
     ABSTRACT,
 }
 
+/** Logical authority of one value position in a physical generic-owner MethodDef. */
+enum class DotNetGenericOwnerPhysicalSlotDomain {
+    DECLARATION_INDEPENDENT,
+    OWNER_EXACT_RECEIVER,
+    STRICT_OWNER_INPUT,
+    STRICT_OWNER_OUTPUT,
+    BROAD_CANDIDATE_INPUT,
+}
+
+/**
+ * Preserves a widened Kotlin input contract across an override family. Strict and
+ * declaration-independent positions remain properties of the overriding declaration after type
+ * substitution, but a broad candidate is semantic authority inherited from every override root.
+ */
+internal fun mergeDotNetGenericOwnerParameterSlotDomains(
+    local: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    inherited: List<DotNetGenericOwnerPhysicalSlotDomain>,
+): List<DotNetGenericOwnerPhysicalSlotDomain> {
+    require(local.size == inherited.size) {
+        "generic-owner override families disagree on physical parameter count"
+    }
+    val validParameterDomains = setOf(
+        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+        DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
+    )
+    require(local.all { domain -> domain in validParameterDomains } &&
+            inherited.all { domain -> domain in validParameterDomains }) {
+        "generic-owner override families contain a non-parameter slot domain"
+    }
+    return local.zip(inherited) { localDomain, inheritedDomain ->
+        if (localDomain == DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT ||
+            inheritedDomain == DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
+        ) {
+            DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT
+        } else {
+            localDomain
+        }
+    }
+}
+
+/** Structural vocabulary for a profile-neutral CLR signature type. */
+enum class DotNetGenericOwnerPhysicalTypeKind {
+    VOID,
+    BOOLEAN,
+    INT32,
+    STRING,
+    OBJECT,
+    OWNER_TYPE_PARAMETER,
+    METHOD_TYPE_PARAMETER,
+    NAMED,
+    SZ_ARRAY,
+}
+
+/** Resolution scope of a named physical type. */
+enum class DotNetGenericOwnerPhysicalTypeScope {
+    PRODUCER,
+    CORE_LIBRARY,
+    ASSEMBLY,
+}
+
+enum class DotNetGenericOwnerPhysicalNamedTypeCategory {
+    CLASS,
+    VALUE_TYPE,
+}
+
+/**
+ * Neutral physical type expression used by the architecture artifact.
+ *
+ * It deliberately contains no IL spelling. Core-library scope remains stable between mscorlib
+ * and System.Runtime profiles, while producer scope is tied to the artifact fingerprint.
+ */
+data class DotNetGenericOwnerPhysicalTypeExpressionRecord(
+    val kind: DotNetGenericOwnerPhysicalTypeKind,
+    val parameterIndex: Int? = null,
+    val scope: DotNetGenericOwnerPhysicalTypeScope? = null,
+    val assemblyName: String? = null,
+    val typePath: List<String> = emptyList(),
+    val genericArity: Int = 0,
+    val namedTypeCategory: DotNetGenericOwnerPhysicalNamedTypeCategory? = null,
+    val arguments: List<DotNetGenericOwnerPhysicalTypeExpressionRecord> = emptyList(),
+) {
+    init {
+        when (kind) {
+            DotNetGenericOwnerPhysicalTypeKind.VOID,
+            DotNetGenericOwnerPhysicalTypeKind.BOOLEAN,
+            DotNetGenericOwnerPhysicalTypeKind.INT32,
+            DotNetGenericOwnerPhysicalTypeKind.STRING,
+            DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+            -> require(parameterIndex == null && scope == null && assemblyName == null &&
+                    typePath.isEmpty() && genericArity == 0 && namedTypeCategory == null && arguments.isEmpty()) {
+                "a built-in generic-owner physical type cannot carry structural payload"
+            }
+            DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
+            DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER,
+            -> require(parameterIndex != null && parameterIndex >= 0 && scope == null && assemblyName == null &&
+                    typePath.isEmpty() && genericArity == 0 && namedTypeCategory == null && arguments.isEmpty()) {
+                "a generic-owner physical type parameter requires only a non-negative index"
+            }
+            DotNetGenericOwnerPhysicalTypeKind.NAMED -> {
+                require(parameterIndex == null && scope != null &&
+                        typePath.isNotEmpty() && typePath.all(String::isNotEmpty) &&
+                        genericArity >= 0 && arguments.size == genericArity && namedTypeCategory != null &&
+                        arguments.none { argument -> argument.kind == DotNetGenericOwnerPhysicalTypeKind.VOID }) {
+                    "a named generic-owner physical type requires scope, path, category, arity, and exact arguments"
+                }
+                require((scope == DotNetGenericOwnerPhysicalTypeScope.ASSEMBLY) == !assemblyName.isNullOrEmpty()) {
+                    "only an assembly-scoped generic-owner physical type names an assembly"
+                }
+            }
+            DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY -> require(
+                parameterIndex == null && scope == null && assemblyName == null && typePath.isEmpty() &&
+                        genericArity == 0 && namedTypeCategory == null && arguments.size == 1 &&
+                        arguments.single().kind != DotNetGenericOwnerPhysicalTypeKind.VOID
+            ) {
+                "a generic-owner SZ-array type requires exactly one non-void element type"
+            }
+        }
+    }
+
+    companion object {
+        fun voidType() = DotNetGenericOwnerPhysicalTypeExpressionRecord(DotNetGenericOwnerPhysicalTypeKind.VOID)
+        fun booleanType() = DotNetGenericOwnerPhysicalTypeExpressionRecord(DotNetGenericOwnerPhysicalTypeKind.BOOLEAN)
+        fun int32Type() = DotNetGenericOwnerPhysicalTypeExpressionRecord(DotNetGenericOwnerPhysicalTypeKind.INT32)
+        fun stringType() = DotNetGenericOwnerPhysicalTypeExpressionRecord(DotNetGenericOwnerPhysicalTypeKind.STRING)
+        fun objectType() = DotNetGenericOwnerPhysicalTypeExpressionRecord(DotNetGenericOwnerPhysicalTypeKind.OBJECT)
+        fun ownerParameter(index: Int) = DotNetGenericOwnerPhysicalTypeExpressionRecord(
+            DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
+            parameterIndex = index,
+        )
+        fun methodParameter(index: Int) = DotNetGenericOwnerPhysicalTypeExpressionRecord(
+            DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER,
+            parameterIndex = index,
+        )
+        fun producerType(
+            typePath: List<String>,
+            category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+            arguments: List<DotNetGenericOwnerPhysicalTypeExpressionRecord> = emptyList(),
+        ) = DotNetGenericOwnerPhysicalTypeExpressionRecord(
+            kind = DotNetGenericOwnerPhysicalTypeKind.NAMED,
+            scope = DotNetGenericOwnerPhysicalTypeScope.PRODUCER,
+            typePath = typePath,
+            genericArity = arguments.size,
+            namedTypeCategory = category,
+            arguments = arguments,
+        )
+        fun coreType(
+            typePath: List<String>,
+            category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+            arguments: List<DotNetGenericOwnerPhysicalTypeExpressionRecord> = emptyList(),
+        ) = DotNetGenericOwnerPhysicalTypeExpressionRecord(
+            kind = DotNetGenericOwnerPhysicalTypeKind.NAMED,
+            scope = DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY,
+            typePath = typePath,
+            genericArity = arguments.size,
+            namedTypeCategory = category,
+            arguments = arguments,
+        )
+        fun szArray(elementType: DotNetGenericOwnerPhysicalTypeExpressionRecord) =
+            DotNetGenericOwnerPhysicalTypeExpressionRecord(
+                kind = DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY,
+                arguments = listOf(elementType),
+            )
+    }
+}
+
+data class DotNetGenericOwnerPhysicalValueSlotRecord(
+    val domain: DotNetGenericOwnerPhysicalSlotDomain,
+    val type: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+)
+
+/** Complete physical MethodDef signature plus the logical domain of every value position. */
+data class DotNetGenericOwnerPhysicalMethodSignatureRecord(
+    val isInstance: Boolean,
+    val genericArity: Int,
+    val returnSlot: DotNetGenericOwnerPhysicalValueSlotRecord,
+    val parameterSlots: List<DotNetGenericOwnerPhysicalValueSlotRecord>,
+) {
+    init {
+        require(genericArity >= 0) { "a generic-owner physical method requires non-negative generic arity" }
+        require(returnSlot.domain !in setOf(
+            DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
+            DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT,
+            DotNetGenericOwnerPhysicalSlotDomain.BROAD_CANDIDATE_INPUT,
+        )) { "a generic-owner physical return has an input-only slot domain" }
+        require(returnSlot.type.kind != DotNetGenericOwnerPhysicalTypeKind.VOID ||
+                returnSlot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT) {
+            "a void generic-owner physical return must be declaration-independent"
+        }
+        require(parameterSlots.none { slot ->
+            slot.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_OUTPUT ||
+                    slot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID
+        }) { "a generic-owner physical parameter has an invalid domain or void type" }
+        require(!isInstance || parameterSlots.none { slot ->
+            slot.domain == DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER
+        }) {
+            "an instance generic-owner physical method cannot expose a separate exact receiver"
+        }
+        require(returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID ||
+                returnSlot.domain != DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT ||
+                !returnSlot.type.referencesOwnerParameter()) {
+            "an owner-dependent physical return requires an owner slot domain"
+        }
+        require(parameterSlots.none { slot ->
+            slot.domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                    slot.type.referencesOwnerParameter()
+        }) { "an owner-dependent physical parameter requires an owner slot domain" }
+        require(allTypes().flatMap { type -> type.typeParameterReferences() }.all { reference ->
+            reference.first != DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER || reference.second < genericArity
+        }) { "a generic-owner physical signature references a missing method type parameter" }
+    }
+
+    internal fun allTypes(): List<DotNetGenericOwnerPhysicalTypeExpressionRecord> =
+        listOf(returnSlot.type) + parameterSlots.map { slot -> slot.type }
+}
+
+data class DotNetGenericOwnerPhysicalMethodIdentityRecord(
+    val physicalOwnerPath: List<String>,
+    val physicalMethodName: String,
+    val signature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
+) {
+    init {
+        require(physicalOwnerPath.isNotEmpty() && physicalOwnerPath.all(String::isNotEmpty)) {
+            "a generic-owner physical method identity requires an owner path"
+        }
+        require(physicalMethodName.isNotEmpty()) {
+            "a generic-owner physical method identity requires a method name"
+        }
+    }
+}
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.referencesOwnerParameter(): Boolean =
+    kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER || arguments.any { it.referencesOwnerParameter() }
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.typeParameterReferences(): List<Pair<DotNetGenericOwnerPhysicalTypeKind, Int>> =
+    buildList {
+        parameterIndex?.let { index -> add(kind to index) }
+        arguments.forEach { argument -> addAll(argument.typeParameterReferences()) }
+    }
+
 data class DotNetGenericOwnerPrototypeOverrideBindingSnapshot(
     val role: DotNetGenericOwnerMemberFamilyRole,
     val overriddenOwnerName: String,
@@ -92,6 +332,8 @@ data class DotNetGenericOwnerPrototypeOverrideBindingSnapshot(
     val overriddenPhysicalMethodName: String?,
     val overriddenPhysicalDispatch: DotNetGenericOwnerPhysicalMemberDispatch?,
     val overriddenPhysicalOwnerPath: List<String>?,
+    val overriddenPhysicalSignature: DotNetGenericOwnerPhysicalMethodSignatureRecord?,
+    val overriddenCapabilitySlot: DotNetGenericOwnerPhysicalMethodIdentityRecord?,
 )
 
 /** Exact logical target selected by one source-level `super` call. */
@@ -111,6 +353,8 @@ internal data class DotNetGenericOwnerMemberFamilyPlan(
     val policy: DotNetGenericOwnerMemberPolicy,
     val ownerDependentInputIndices: List<Int>,
     val hasOwnerDependentOutput: Boolean,
+    val returnSlotDomain: DotNetGenericOwnerPhysicalSlotDomain,
+    val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
     val roles: Set<DotNetGenericOwnerMemberFamilyRole>,
     val semanticHookReasons: Set<DotNetGenericOwnerSemanticHookReason>,
     val requiresDirectSuperTargets: Boolean,
@@ -160,6 +404,8 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val semanticErasesOwnerDependentInput: Boolean,
     val typedRetainsOwnerDependentOutput: Boolean,
     val semanticErasesOwnerDependentOutput: Boolean,
+    val returnSlotDomain: DotNetGenericOwnerPhysicalSlotDomain,
+    val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
     val requiresDirectSuperTargets: Boolean,
     val directSuperCallCount: Int,
     val directSuperCalls: List<DotNetGenericOwnerDirectSuperCallSnapshot>,
@@ -211,14 +457,30 @@ data class DotNetGenericOwnerPrototypeSnapshot(
 /** One producer-selected physical MethodDef role in a future CLR-generic member family. */
 data class DotNetGenericOwnerPhysicalMemberSlotRecord(
     val role: DotNetGenericOwnerMemberFamilyRole,
+    val physicalOwnerPath: List<String>,
     val physicalMethodName: String,
     val dispatch: DotNetGenericOwnerPhysicalMemberDispatch,
+    val signature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
+    val capabilitySlot: DotNetGenericOwnerPhysicalMethodIdentityRecord?,
 ) {
     init {
+        require(physicalOwnerPath.isNotEmpty() && physicalOwnerPath.all(String::isNotEmpty)) {
+            "a generic-owner physical member slot requires an owner path"
+        }
         require(physicalMethodName.isNotEmpty()) { "a generic-owner physical member slot requires a method name" }
         if (role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER) {
             require(dispatch == DotNetGenericOwnerPhysicalMemberDispatch.FINAL) {
                 "a generic-owner capability dispatcher must remain a final non-override slot"
+            }
+            require(capabilitySlot != null && capabilitySlot.signature == signature) {
+                "a generic-owner capability dispatcher requires its exact matching capability slot"
+            }
+            require(signature.allTypes().none { type -> type.referencesOwnerParameter() }) {
+                "a non-generic capability slot cannot expose an owner type parameter"
+            }
+        } else {
+            require(capabilitySlot == null) {
+                "only a generic-owner capability dispatcher may implement a capability slot"
             }
         }
     }
@@ -229,6 +491,7 @@ data class DotNetGenericOwnerPhysicalDirectSuperTargetRecord(
     val logicalTargetMemberKey: String,
     val physicalOwnerPath: List<String>,
     val physicalMethodName: String,
+    val signature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
 ) {
     init {
         require(role != DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER) {
@@ -245,6 +508,7 @@ data class DotNetGenericOwnerPhysicalDirectSuperTargetRecord(
 data class DotNetGenericOwnerPhysicalDefaultDispatcherRecord(
     val physicalOwnerPath: List<String>,
     val physicalMethodName: String,
+    val signature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
 ) {
     init {
         require(physicalOwnerPath.isNotEmpty() && physicalOwnerPath.all(String::isNotEmpty)) {
@@ -281,6 +545,12 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
         require(slots.map { slot -> slot.role }.toSet() == roles) {
             "generic-owner physical member family '$logicalMemberKey' has incomplete role slots"
         }
+        require(slots.map { slot ->
+            slot.signature.returnSlot.domain to
+                    slot.signature.parameterSlots.map { parameter -> parameter.domain }
+        }.distinct().size == 1) {
+            "generic-owner physical member family '$logicalMemberKey' has inconsistent role slot-domain vectors"
+        }
         require(
             semanticHookReasons.isEmpty() ==
                     (DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK !in roles)
@@ -298,6 +568,11 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
         require(directSuperTargets.all { target -> target.role in roles }) {
             "generic-owner physical member family '$logicalMemberKey' has a direct-super target outside its role set"
         }
+        require(directSuperTargets.all { target ->
+            slots.single { slot -> slot.role == target.role }.signature == target.signature
+        }) {
+            "generic-owner physical member family '$logicalMemberKey' has a direct-super signature mismatch"
+        }
     }
 }
 
@@ -306,10 +581,14 @@ data class DotNetGenericOwnerPhysicalStateRecord(
     val logicalFieldName: String,
     val physicalFieldName: String,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
+    val physicalType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
 ) {
     init {
         require(logicalFieldName.isNotEmpty() && physicalFieldName.isNotEmpty()) {
             "a generic-owner physical state record requires logical and physical field names"
+        }
+        require(physicalType.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
+            "a generic-owner physical state record cannot use void storage"
         }
     }
 }
@@ -354,6 +633,31 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         } || physicalCapabilityOwnerPath != null) {
             "generic-owner physical family '$logicalOwnerKey' lacks its capability owner"
         }
+        val recordedMethods = buildList {
+            members.forEach { member ->
+                member.slots.forEach { slot ->
+                    add(slot.physicalOwnerPath to slot.signature)
+                    slot.capabilitySlot?.let { capability -> add(capability.physicalOwnerPath to capability.signature) }
+                }
+                member.directSuperTargets.forEach { target -> add(target.physicalOwnerPath to target.signature) }
+                member.defaultDispatcher?.let { dispatcher -> add(dispatcher.physicalOwnerPath to dispatcher.signature) }
+            }
+        }
+        require((recordedMethods.flatMap { recordedMethod -> recordedMethod.second.allTypes() } +
+                states.map { state -> state.physicalType })
+            .flatMap { type -> type.typeParameterReferences() }
+            .all { reference ->
+                reference.first != DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER ||
+                        reference.second < genericArity
+            }) {
+            "generic-owner physical family '$logicalOwnerKey' references a missing owner type parameter"
+        }
+        require(members.flatMap { member -> member.slots }.all { slot ->
+            slot.role != DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER ||
+                    slot.capabilitySlot?.physicalOwnerPath == physicalCapabilityOwnerPath
+        }) {
+            "generic-owner physical family '$logicalOwnerKey' has a dispatcher for another capability owner"
+        }
     }
 }
 
@@ -388,7 +692,7 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 2
+    const val SCHEMA_VERSION = 3
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -440,9 +744,27 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 )
                 slots.forEach { slot ->
                     appendLine(
-                        listOf("R", slot.role.name, slot.dispatch.name, slot.physicalMethodName.encoded())
+                        listOf(
+                            "R",
+                            slot.role.name,
+                            slot.dispatch.name,
+                            slot.physicalOwnerPath.joinToString("\u0000").encoded(),
+                            slot.physicalMethodName.encoded(),
+                            slot.signature.serialized().encoded(),
+                            if (slot.capabilitySlot == null) "0" else "1",
+                        )
                             .joinToString("\t")
                     )
+                    slot.capabilitySlot?.let { capability ->
+                        appendLine(
+                            listOf(
+                                "C",
+                                capability.physicalOwnerPath.joinToString("\u0000").encoded(),
+                                capability.physicalMethodName.encoded(),
+                                capability.signature.serialized().encoded(),
+                            ).joinToString("\t")
+                        )
+                    }
                 }
                 member.directSuperTargets.sortedWith(
                     compareBy<DotNetGenericOwnerPhysicalDirectSuperTargetRecord>(
@@ -457,6 +779,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                             target.logicalTargetMemberKey.encoded(),
                             target.physicalOwnerPath.joinToString("\u0000").encoded(),
                             target.physicalMethodName.encoded(),
+                            target.signature.serialized().encoded(),
                         ).joinToString("\t")
                     )
                 }
@@ -466,6 +789,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                             "A",
                             dispatcher.physicalOwnerPath.joinToString("\u0000").encoded(),
                             dispatcher.physicalMethodName.encoded(),
+                            dispatcher.signature.serialized().encoded(),
                         ).joinToString("\t")
                     )
                 }
@@ -477,6 +801,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         state.logicalFieldName.encoded(),
                         state.physicalFieldName.encoded(),
                         state.requirement.name,
+                        state.physicalType.serialized().encoded(),
                     ).joinToString("\t")
                 )
             }
@@ -568,7 +893,24 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     )
                 }
                 val slots = List(slotCount) {
-                    val slotFields = read("R", 4)
+                    val slotFields = read("R", 7)
+                    val hasCapabilitySlot = when (slotFields[6]) {
+                        "0" -> false
+                        "1" -> true
+                        else -> throw IllegalArgumentException(
+                            "generic-owner family artifact has invalid capability-slot marker '${slotFields[6]}'"
+                        )
+                    }
+                    val capabilitySlot = if (hasCapabilitySlot) {
+                        val capabilityFields = read("C", 4)
+                        DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                            physicalOwnerPath = capabilityFields[1].decoded().split('\u0000'),
+                            physicalMethodName = capabilityFields[2].decoded(),
+                            signature = capabilityFields[3].decoded().deserializedSignature(),
+                        )
+                    } else {
+                        null
+                    }
                     DotNetGenericOwnerPhysicalMemberSlotRecord(
                         role = enumValue(
                             slotFields[1],
@@ -580,11 +922,14 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                             DotNetGenericOwnerPhysicalMemberDispatch.entries.toTypedArray(),
                             "slot dispatch",
                         ),
-                        physicalMethodName = slotFields[3].decoded(),
+                        physicalOwnerPath = slotFields[3].decoded().split('\u0000'),
+                        physicalMethodName = slotFields[4].decoded(),
+                        signature = slotFields[5].decoded().deserializedSignature(),
+                        capabilitySlot = capabilitySlot,
                     )
                 }
                 val directSuperTargets = List(directSuperCount) {
-                    val targetFields = read("D", 5)
+                    val targetFields = read("D", 6)
                     DotNetGenericOwnerPhysicalDirectSuperTargetRecord(
                         role = enumValue(
                             targetFields[1],
@@ -594,13 +939,15 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         logicalTargetMemberKey = targetFields[2].decoded(),
                         physicalOwnerPath = targetFields[3].decoded().split('\u0000'),
                         physicalMethodName = targetFields[4].decoded(),
+                        signature = targetFields[5].decoded().deserializedSignature(),
                     )
                 }
                 val defaultDispatcher = if (hasDefaultDispatcher) {
-                    val dispatcherFields = read("A", 3)
+                    val dispatcherFields = read("A", 4)
                     DotNetGenericOwnerPhysicalDefaultDispatcherRecord(
                         physicalOwnerPath = dispatcherFields[1].decoded().split('\u0000'),
                         physicalMethodName = dispatcherFields[2].decoded(),
+                        signature = dispatcherFields[3].decoded().deserializedSignature(),
                     )
                 } else {
                     null
@@ -617,7 +964,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 )
             }
             val states = List(stateCount) {
-                val stateFields = read("S", 4)
+                val stateFields = read("S", 5)
                 DotNetGenericOwnerPhysicalStateRecord(
                     logicalFieldName = stateFields[1].decoded(),
                     physicalFieldName = stateFields[2].decoded(),
@@ -626,6 +973,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         DotNetGenericOwnerStateCarrierRequirement.entries.toTypedArray(),
                         "state requirement",
                     ),
+                    physicalType = stateFields[4].decoded().deserializedType(),
                 )
             }
             DotNetGenericOwnerPhysicalFamilyRecord(
@@ -640,6 +988,102 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         }
         require(index == lines.size) { "generic-owner family artifact has trailing records" }
         return DotNetGenericOwnerPhysicalFamilyArtifact(producerFingerprint, owners)
+    }
+
+    private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.serialized(): String =
+        buildList {
+            add(kind.name)
+            add(parameterIndex?.toString() ?: "-")
+            add(scope?.name ?: "-")
+            add(assemblyName?.encoded() ?: "-")
+            add(if (typePath.isEmpty()) "-" else typePath.joinToString("\u0000").encoded())
+            add(genericArity.toString())
+            add(namedTypeCategory?.name ?: "-")
+            add(arguments.size.toString())
+            arguments.forEach { argument -> add(argument.serialized().encoded()) }
+        }.joinToString(";")
+
+    private fun String.deserializedType(): DotNetGenericOwnerPhysicalTypeExpressionRecord {
+        val fields = split(';')
+        require(fields.size >= 8) { "generic-owner physical type expression is truncated" }
+        val argumentCount = fields[7].toIntOrNull()?.takeIf { count -> count >= 0 }
+            ?: throw IllegalArgumentException("generic-owner physical type expression has invalid argument count")
+        require(fields.size == 8 + argumentCount) {
+            "generic-owner physical type expression has an inconsistent argument count"
+        }
+        fun <E : Enum<E>> named(value: String, values: Array<E>, role: String): E =
+            values.firstOrNull { candidate -> candidate.name == value }
+                ?: throw IllegalArgumentException("generic-owner physical type expression has unknown $role '$value'")
+        return DotNetGenericOwnerPhysicalTypeExpressionRecord(
+            kind = named(fields[0], DotNetGenericOwnerPhysicalTypeKind.entries.toTypedArray(), "kind"),
+            parameterIndex = if (fields[1] == "-") {
+                null
+            } else {
+                fields[1].toIntOrNull()
+                    ?: throw IllegalArgumentException(
+                        "generic-owner physical type expression has invalid parameter index"
+                    )
+            },
+            scope = fields[2].takeUnless { it == "-" }?.let { value ->
+                named(value, DotNetGenericOwnerPhysicalTypeScope.entries.toTypedArray(), "scope")
+            },
+            assemblyName = fields[3].takeUnless { it == "-" }?.decoded(),
+            typePath = fields[4].takeUnless { it == "-" }?.decoded()?.split('\u0000').orEmpty(),
+            genericArity = fields[5].toIntOrNull()?.takeIf { arity -> arity >= 0 }
+                ?: throw IllegalArgumentException("generic-owner physical type expression has invalid generic arity"),
+            namedTypeCategory = fields[6].takeUnless { it == "-" }?.let { value ->
+                named(
+                    value,
+                    DotNetGenericOwnerPhysicalNamedTypeCategory.entries.toTypedArray(),
+                    "named-type category",
+                )
+            },
+            arguments = fields.drop(8).map { argument -> argument.decoded().deserializedType() },
+        )
+    }
+
+    private fun DotNetGenericOwnerPhysicalValueSlotRecord.serialized(): String =
+        "${domain.name};${type.serialized().encoded()}"
+
+    private fun String.deserializedValueSlot(): DotNetGenericOwnerPhysicalValueSlotRecord {
+        val fields = split(';')
+        require(fields.size == 2) { "generic-owner physical value slot has an invalid field count" }
+        val domain = DotNetGenericOwnerPhysicalSlotDomain.entries.firstOrNull { candidate ->
+            candidate.name == fields[0]
+        } ?: throw IllegalArgumentException("generic-owner physical value slot has unknown domain '${fields[0]}'")
+        return DotNetGenericOwnerPhysicalValueSlotRecord(domain, fields[1].decoded().deserializedType())
+    }
+
+    private fun DotNetGenericOwnerPhysicalMethodSignatureRecord.serialized(): String =
+        buildList {
+            add(if (isInstance) "1" else "0")
+            add(genericArity.toString())
+            add(returnSlot.serialized().encoded())
+            add(parameterSlots.size.toString())
+            parameterSlots.forEach { parameter -> add(parameter.serialized().encoded()) }
+        }.joinToString(";")
+
+    private fun String.deserializedSignature(): DotNetGenericOwnerPhysicalMethodSignatureRecord {
+        val fields = split(';')
+        require(fields.size >= 4) { "generic-owner physical signature is truncated" }
+        val isInstance = when (fields[0]) {
+            "0" -> false
+            "1" -> true
+            else -> throw IllegalArgumentException("generic-owner physical signature has invalid instance marker")
+        }
+        val genericArity = fields[1].toIntOrNull()?.takeIf { arity -> arity >= 0 }
+            ?: throw IllegalArgumentException("generic-owner physical signature has invalid generic arity")
+        val parameterCount = fields[3].toIntOrNull()?.takeIf { count -> count >= 0 }
+            ?: throw IllegalArgumentException("generic-owner physical signature has invalid parameter count")
+        require(fields.size == 4 + parameterCount) {
+            "generic-owner physical signature has an inconsistent parameter count"
+        }
+        return DotNetGenericOwnerPhysicalMethodSignatureRecord(
+            isInstance = isInstance,
+            genericArity = genericArity,
+            returnSlot = fields[2].decoded().deserializedValueSlot(),
+            parameterSlots = fields.drop(4).map { parameter -> parameter.decoded().deserializedValueSlot() },
+        )
     }
 
     private fun String.encoded(): String = encoder.encodeToString(toByteArray(Charsets.UTF_8))
@@ -678,14 +1122,63 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
         if (unresolved.isEmpty()) return@map member
         resolvedAny = true
         val retained = member.overrideBindings - unresolved.toSet()
+        val producerMembers = unresolved.map { binding ->
+            val logicalKey = requireNotNull(binding.overriddenLogicalBindingKey) {
+                "external generic-owner override '${member.sourceName}' lacks a logical member key"
+            }
+            externalMembers[logicalKey]?.second
+                ?: error("producer generic-owner family artifact lacks logical member '$logicalKey'")
+        }
+        val mergedParameterSlotDomains = producerMembers.fold(member.parameterSlotDomains) { domains, producerMember ->
+            val producerDomains = producerMember.slots.single {
+                slot -> slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+            }.signature.parameterSlots.map { parameter -> parameter.domain }
+            mergeDotNetGenericOwnerParameterSlotDomains(domains, producerDomains)
+        }
         val resolved = unresolved.flatMap { binding ->
             val logicalKey = requireNotNull(binding.overriddenLogicalBindingKey) {
                 "external generic-owner override '${member.sourceName}' lacks a logical member key"
             }
             val producerEntry = externalMembers[logicalKey]
                 ?: error("producer generic-owner family artifact lacks logical member '$logicalKey'")
-            val producerOwner = producerEntry.first
             val producerMember = producerEntry.second
+            fun slot(role: DotNetGenericOwnerMemberFamilyRole): DotNetGenericOwnerPhysicalMemberSlotRecord =
+                producerMember.slots.single { slot -> slot.role == role }
+            val typedSlot = slot(DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY)
+            val semanticSlot = producerMember.slots.singleOrNull { slot ->
+                slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+            }
+            require(producerMember.slots.all { slot ->
+                slot.signature.returnSlot.domain == member.returnSlotDomain
+            }) {
+                "consumer override '${member.sourceName}' disagrees with the producer return-slot domain"
+            }
+            require(typedSlot.signature.isInstance &&
+                    typedSlot.signature.parameterSlots.any { parameter ->
+                        parameter.type.referencesOwnerParameter()
+                    } == member.typedRetainsOwnerDependentInput &&
+                    typedSlot.signature.returnSlot.type.referencesOwnerParameter() ==
+                    member.typedRetainsOwnerDependentOutput) {
+                "consumer override '${member.sourceName}' disagrees with the producer typed slot-domain signature"
+            }
+            if (semanticSlot != null) {
+                require(semanticSlot.signature.isInstance &&
+                        semanticSlot.signature.parameterSlots.none { parameter ->
+                            parameter.type.referencesOwnerParameter()
+                        } == member.semanticErasesOwnerDependentInput &&
+                        !semanticSlot.signature.returnSlot.type.referencesOwnerParameter() ==
+                        member.semanticErasesOwnerDependentOutput) {
+                    "consumer override '${member.sourceName}' disagrees with the producer semantic slot-domain signature"
+                }
+            }
+            producerMember.slots.singleOrNull { slot ->
+                slot.role == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+            }?.let { dispatcher ->
+                require(dispatcher.capabilitySlot != null &&
+                        dispatcher.capabilitySlot.signature == dispatcher.signature) {
+                    "consumer override '${member.sourceName}' lacks an exact producer capability-slot identity"
+                }
+            }
             producerMember.slots.filter { slot ->
                 slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY ||
                         slot.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
@@ -698,7 +1191,9 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
                     targetKind = DotNetGenericOwnerOverrideTargetKind.EXTERNAL_PHYSICAL_FAMILY_RECORD,
                     overriddenPhysicalMethodName = slot.physicalMethodName,
                     overriddenPhysicalDispatch = slot.dispatch,
-                    overriddenPhysicalOwnerPath = producerOwner.physicalOwnerPath,
+                    overriddenPhysicalOwnerPath = slot.physicalOwnerPath,
+                    overriddenPhysicalSignature = slot.signature,
+                    overriddenCapabilitySlot = slot.capabilitySlot,
                 )
             }
         }
@@ -721,6 +1216,7 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
                     } else {
                         emptySet()
                     },
+            parameterSlotDomains = mergedParameterSlotDomains,
             overrideBindings = (retained + resolved).distinctBy { binding ->
                 Triple(binding.role, binding.overriddenLogicalBindingKey, binding.overriddenPhysicalMethodName)
             },
@@ -860,6 +1356,8 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
                 typedRetainsOwnerDependentOutput = typed?.returnType?.referencesTypeParameterOf(owner) == true,
                 semanticErasesOwnerDependentOutput =
                     semantic?.returnType?.referencesTypeParameterOf(owner) == false,
+                returnSlotDomain = family.returnSlotDomain,
+                parameterSlotDomains = family.parameterSlotDomains,
                 requiresDirectSuperTargets = family.requiresDirectSuperTargets,
                 directSuperCallCount = family.directSuperCallCount,
                 directSuperCalls = family.directSuperCalls.map { call ->
@@ -886,6 +1384,8 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
                         overriddenPhysicalMethodName = null,
                         overriddenPhysicalDispatch = null,
                         overriddenPhysicalOwnerPath = null,
+                        overriddenPhysicalSignature = null,
+                        overriddenCapabilitySlot = null,
                     )
                 },
                 directProducerCallNames = access.directCalls.map { it.name.asString() }.sorted(),

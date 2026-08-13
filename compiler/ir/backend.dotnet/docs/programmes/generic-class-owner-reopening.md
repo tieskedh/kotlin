@@ -176,19 +176,25 @@ families and producer/consumer binding records—not the base owner shape. Local
 generic subclasses now have detached typed-to-typed and semantic-to-semantic
 links; inherited semantic hooks are propagated as obligations and private
 dispatchers remain final selectors. A generic consumer subclass of an external
-producer records the overridden logical key. A production-inert version-2
+producer records the overridden logical key. A production-inert version-3
 family artifact now proves the first cross-assembly link: it is fingerprinted
 to the exact temporary producer, wholly decoded before use, and supplies the
-producer-selected typed and semantic slot names/dispatch for that key. Hostile
+producer-selected typed and semantic MethodDef owners, names, dispatch,
+slot-domain vectors, and structural signatures for that key. A dispatcher also
+records its exact non-generic capability MethodDef. Hostile
 tests reject stale, truncated, wrong-producer, duplicate, incomplete, and
 missing-member artifacts, then compile and run the resolved C# subclass on both
 runtimes. The normal compiler still emits/consumes only erased artifacts. The
-Version 2 additionally retains exact external owner paths, sorted root logical-
-key sets, separate typed/semantic direct-super targets, and a static masked-
-default helper which demonstrably dispatches into a derived C# typed override.
-The remaining cross-assembly design work is the complete slot-domain/physical-
-signature, construction/profile, state-access, and reflection record plus
-physicalization of a Kotlin-produced subclass family.
+neutral type vocabulary recursively retains `!T`, `!!T`, named instances, and
+SZ arrays; the hostile nested-array family proves producer and consumer agree
+on `!T[]` versus `System.Array` without substitution inference. Direct-super
+targets and the static masked-default helper carry complete signatures too.
+Broad candidate inputs propagate to a fixed point across local override roots
+and are inherited from the external producer record, so a derived declaration
+that looks strict in isolation cannot silently narrow the Kotlin family.
+The remaining cross-assembly design work is construction/profile, state-access,
+and reflection normalization records plus physicalization of a Kotlin-produced
+subclass family.
 
 ## Engineering gates
 

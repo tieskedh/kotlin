@@ -478,15 +478,17 @@ The binding codec is not changed during this architecture phase. A production
 migration would require a new schema epoch whose logical class record carries
 one `GenericOwnerBinding` equivalent with at least:
 
-The architecture-only version-2 artifact proves the logical-key join,
+The architecture-only version-3 artifact proves the logical-key join,
 producer fingerprint, owner/capability paths, arity, disposition, basic state
-requirement, complete role set, selected method names, and slot dispatch. It is
-deliberately not the production codec. Version 2 additionally retains exact
-external owner paths, sorted override-root logical-key sets, role-specific
-direct-super targets, and a distinct static masked-default helper. It does not
-yet claim the remaining fields below, especially full slot-domain/physical
-signatures, construction/profile modes, state access paths, or reflection
-normalization.
+requirement, complete role set, selected MethodDef owner/name and dispatch,
+slot-domain vector, and neutral structural signature. It is deliberately not
+the production codec. Each capability dispatcher separately names the exact
+non-generic interface MethodDef it implements, with an equal signature.
+Role-specific direct-super targets and the distinct static masked-default
+helper carry complete signatures as well. The recursive type vocabulary covers
+built-ins, `!T`, `!!T`, producer/core/assembly named generic instances, and SZ
+arrays without profile-specific IL spelling. It does not yet claim
+construction/profile modes, state access paths, or reflection normalization.
 
 | Field | Meaning |
 | --- | --- |

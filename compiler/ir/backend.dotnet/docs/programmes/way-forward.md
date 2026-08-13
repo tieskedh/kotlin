@@ -487,14 +487,20 @@ artifact must validate before typed and semantic bindings are exposed. Stale,
 truncated, wrong-producer, duplicate, incomplete, and missing-member inputs are
 rejected, and separately compiled C# subclasses execute the resolved family on
 both runtimes. Production artifacts remain erased and contain no such record.
-Version 2 further retains the exact external producer owner path, a sorted set
-of override-root logical keys, typed/semantic direct-super owner+method targets,
-and the static masked-default helper as an adjacent non-override identity. The
-hostile separate consumer proves the helper preserves virtual dispatch into a
-C# override. The next schema/design slice must add complete slot-domain and
-physical-signature expressions, construction/profile modes, state-access
-paths, and reflection normalization, then use the resulting record to
-physicalize a Kotlin-produced subclass family without consumer inference.
+Version 3 further retains the exact implementation MethodDef owner, complete
+slot-domain vector, and neutral structural signature for every typed, semantic,
+dispatcher, direct-super, and masked-default entry. The dispatcher separately
+names the exact non-generic capability MethodDef it implements. Structural
+types preserve owner/method parameters, named generic instances, and nested SZ
+arrays without IL spelling; the hostile `echo(Array<out T>)` family records
+`!T[]` for its typed entry and `System.Array` for its semantic/capability path.
+Producer reflection and a separately compiled record-driven C# consumer verify
+the same identities on both runtimes. Broad candidate inputs reach a fixed
+point across local override roots and are inherited from the producer record by
+a separate consumer; a locally strict declaration cannot narrow that semantic
+authority. Construction/profile modes, state-access
+paths, and reflection normalization remain next, followed by a Kotlin-produced
+subclass physicalizer without consumer inference.
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
