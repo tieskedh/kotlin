@@ -656,6 +656,11 @@ private fun validateGenericOwnerHardestModelPrototype(
 }
 
 private const val GENERIC_OWNER_PHYSICAL_FAMILY_FILE = "SnapshotProducer.generic-owner-families"
+private const val GENERIC_OWNER_MEASUREMENT_PROJECT_FILE = "RecordedFamilyMeasurement.csproj"
+private const val GENERIC_OWNER_MEASUREMENT_MANIFEST_FILE = "generic-owner-measurement.properties"
+private const val GENERIC_OWNER_MEASUREMENT_EXPORT_PROPERTY =
+    "kotlin.dotnet.genericOwnerMeasurementDir"
+private const val GENERIC_OWNER_MEASUREMENT_WORKLOAD_VERSION = 1
 
 private fun genericOwnerPrototypePhysicalMethodName(
     member: DotNetGenericOwnerPrototypeMemberSnapshot,
@@ -2608,6 +2613,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
             $constructionFactory
 
+            #if !GENERIC_OWNER_MEASUREMENT
             public static class RecordedReflectionRegistry
             {
                 public static string NormalizeExact(Type runtimeType)
@@ -2651,6 +2657,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                     return false;
                 }
             }
+            #endif
 
             ${if (physicalized.visibility == DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC) "public" else "internal"}
             ${physicalized.dispatch.renderSnapshotCSharpTypeModifier()}class $physicalizedTypeName<T> : $baseTypeName
@@ -2718,6 +2725,117 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
             public static class RecordedFamilyEntry
             {
+                #if GENERIC_OWNER_MEASUREMENT
+                private static int ExecuteMeasurementWorkload(int iterations)
+                {
+                    int checksum = 17;
+                    int[] typedArray = new int[] { 1, 2, 3 };
+                    string[] semanticArray = new string[] { "semantic", "array" };
+                    $physicalizedClosedTypeName typedOwner = new $physicalizedClosedTypeName(0);
+                    $capabilityTypeName typedCapability = typedOwner;
+                    RecordedFamilyGrandchild<int> hostileOwner = new RecordedFamilyGrandchild<int>(0);
+                    $capabilityTypeName hostileCapability = hostileOwner;
+
+                    for (int index = 0; index < iterations; index++)
+                    {
+                        int next = index & 1023;
+                        $capabilityTypeName exactValue =
+                            RecordedOpenNullableFactory.Create(typeof(int), null);
+                        exactValue.$writeCapability(next);
+                        int exactRead = (int)exactValue.$readCapability();
+                        if (exactRead != next) throw new InvalidOperationException("exact value route");
+
+                        $capabilityTypeName exactNullable =
+                            RecordedOpenNullableFactory.Create(typeof(int?), null);
+                        exactNullable.$writeCapability(next);
+                        if ((int)exactNullable.$readCapability() != next)
+                            throw new InvalidOperationException("already-nullable route");
+
+                        $capabilityTypeName exactReference =
+                            RecordedOpenNullableFactory.Create(typeof(string), null);
+                        exactReference.$writeCapability("reference");
+                        if (!object.Equals(exactReference.$readCapability(), "reference"))
+                            throw new InvalidOperationException("exact reference route");
+
+                        RecordedKnownStruct known = new RecordedKnownStruct { Value = next };
+                        $capabilityTypeName exactStruct =
+                            RecordedOpenNullableFactory.Create(typeof(RecordedKnownStruct), null);
+                        exactStruct.$writeCapability(known);
+                        if (((RecordedKnownStruct)exactStruct.$readCapability()).Value != next)
+                            throw new InvalidOperationException("exact struct route");
+
+                        RecordedUnknownStruct unknown = new RecordedUnknownStruct { Value = next + 1 };
+                        $capabilityTypeName fallbackStruct =
+                            RecordedOpenNullableFactory.Create(typeof(RecordedUnknownStruct), null);
+                        fallbackStruct.$writeCapability(unknown);
+                        if (((RecordedUnknownStruct)fallbackStruct.$readCapability()).Value != next + 1)
+                            throw new InvalidOperationException("fallback struct route");
+
+                        RecordedUnknownReference unknownReference =
+                            new RecordedUnknownReference { Value = "fallback" };
+                        $capabilityTypeName fallbackReference =
+                            RecordedOpenNullableFactory.Create(typeof(RecordedUnknownReference), null);
+                        fallbackReference.$writeCapability(unknownReference);
+                        if (!object.ReferenceEquals(fallbackReference.$readCapability(), unknownReference))
+                            throw new InvalidOperationException("fallback reference route");
+
+                        typedCapability.$writeCapability(next);
+                        int typedRead = typedOwner.${physicalizedReadTyped.physicalMethod.physicalMethodName}();
+                        if (typedRead != next) throw new InvalidOperationException("typed dispatch");
+                        if (!object.ReferenceEquals(
+                                typedOwner.${physicalizedEchoTyped.physicalMethod.physicalMethodName}(typedArray),
+                                typedArray) || !object.ReferenceEquals(
+                                typedCapability.$echoCapability(semanticArray), semanticArray))
+                            throw new InvalidOperationException("array dispatch");
+
+                        if ((index & 63) == 0)
+                        {
+                            hostileCapability.$writeCapability("wrong");
+                            if (!object.Equals(
+                                    hostileCapability.$readCapability(), "grandchild:wrong"))
+                                throw new InvalidOperationException("semantic hostile dispatch");
+                            try
+                            {
+                                hostileOwner.${physicalizedReadTyped.physicalMethod.physicalMethodName}();
+                                throw new InvalidOperationException("delayed typed read did not fail");
+                            }
+                            catch (InvalidCastException)
+                            {
+                                checksum = unchecked(checksum * 31 + 7);
+                            }
+                        }
+                        checksum = unchecked(checksum * 31 + exactRead + typedRead + known.Value + unknown.Value);
+                    }
+                    return checksum;
+                }
+
+                public static int Main(string[] arguments)
+                {
+                    if (arguments.Length != 2 || arguments[0] != "--measurement" ||
+                            !int.TryParse(arguments[1], out int iterations) || iterations < 0)
+                    {
+                        Console.Error.WriteLine("usage: --measurement <non-negative iterations>");
+                        return 64;
+                    }
+                    if (iterations > 0) ExecuteMeasurementWorkload(Math.Min(iterations, 512));
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+                    long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+                    long started = System.Diagnostics.Stopwatch.GetTimestamp();
+                    int checksum = ExecuteMeasurementWorkload(iterations);
+                    long elapsedTicks = System.Diagnostics.Stopwatch.GetTimestamp() - started;
+                    long allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+                    Console.WriteLine(
+                        "GENERIC_OWNER_MEASUREMENT|workloadVersion=$GENERIC_OWNER_MEASUREMENT_WORKLOAD_VERSION" +
+                        "|iterations=" + iterations +
+                        "|checksum=" + checksum +
+                        "|elapsedTicks=" + elapsedTicks +
+                        "|frequency=" + System.Diagnostics.Stopwatch.Frequency +
+                        "|allocatedBytes=" + allocatedBytes);
+                    return 0;
+                }
+                #else
                 public static int Main()
                 {
                     $capabilityTypeName exactValue = RecordedOpenNullableFactory.Create(typeof(int), null);
@@ -2856,6 +2974,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                     if (!object.Equals(directSemantic.$readCapability(), "direct")) return 18;
                     return 0;
                 }
+                #endif
             }
             """.trimIndent()
         )
@@ -2883,6 +3002,119 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     }
     check(compilation.exitCode == 0) { compilation.output }
     executeSnapshotConsumer(target, output, directory)
+    val measurementExportPath = System.getProperty(GENERIC_OWNER_MEASUREMENT_EXPORT_PROPERTY)
+    if (target == DotNetTarget.NET10_0 && measurementExportPath != null) {
+        check(measurementExportPath.isNotBlank()) {
+            "Generic-owner measurement export path must not be blank"
+        }
+        prepareGenericOwnerMeasurementBundle(
+            directory = directory,
+            source = source,
+            producer = producer,
+            physicalFamilyArtifact = recordFile,
+            logicalConstructionKey = constructionPlan.logicalConstructionKey,
+            exportDirectory = File(measurementExportPath),
+        )
+    }
+}
+
+private fun prepareGenericOwnerMeasurementBundle(
+    directory: File,
+    source: File,
+    producer: File,
+    physicalFamilyArtifact: File,
+    logicalConstructionKey: String,
+    exportDirectory: File,
+) {
+    check(source.isFile && producer.isFile && physicalFamilyArtifact.isFile) {
+        "The generic-owner measurement bundle requires its exact source, producer, and family artifact"
+    }
+    val sourceText = source.readText()
+    check("GENERIC_OWNER_MEASUREMENT" in sourceText &&
+            "MakeGenericType" !in sourceText && "Activator.CreateInstance" !in sourceText) {
+        "The generic-owner measurement source lost its finite statically rooted workload"
+    }
+    val project = directory.resolve(GENERIC_OWNER_MEASUREMENT_PROJECT_FILE).apply {
+        writeText(
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+                <AssemblyName>RecordedFamilyMeasurement</AssemblyName>
+                <RootNamespace>RecordedFamilyMeasurement</RootNamespace>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+                <DefineConstants>GENERIC_OWNER_MEASUREMENT</DefineConstants>
+                <ImplicitUsings>disable</ImplicitUsings>
+                <Nullable>disable</Nullable>
+                <Optimize>true</Optimize>
+                <Deterministic>true</Deterministic>
+                <DebugSymbols>false</DebugSymbols>
+                <DebugType>none</DebugType>
+                <InvariantGlobalization>true</InvariantGlobalization>
+                <IsAotCompatible>true</IsAotCompatible>
+                <WarningsAsErrors>IL2026;IL3050</WarningsAsErrors>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="${source.name}" />
+                <Reference Include="SnapshotProducer">
+                  <HintPath>${producer.name}</HintPath>
+                  <Private>true</Private>
+                </Reference>
+              </ItemGroup>
+            </Project>
+            """.trimIndent()
+        )
+    }
+    val globalJson = directory.resolve("global.json").apply {
+        writeText(
+            """
+            {
+              "sdk": {
+                "version": "10.0.100",
+                "rollForward": "disable",
+                "allowPrerelease": false
+              }
+            }
+            """.trimIndent()
+        )
+    }
+    val manifest = directory.resolve(GENERIC_OWNER_MEASUREMENT_MANIFEST_FILE).apply {
+        val sourceFingerprint = DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(source.readBytes())
+        val projectFingerprint = DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(project.readBytes())
+        val globalJsonFingerprint = DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(globalJson.readBytes())
+        val artifactFingerprint =
+            DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(physicalFamilyArtifact.readBytes())
+        check(logicalConstructionKey.none { character -> character == '\n' || character == '\r' })
+        writeText(
+            """
+            schema=1
+            workloadVersion=$GENERIC_OWNER_MEASUREMENT_WORKLOAD_VERSION
+            sdkVersion=10.0.100
+            targetProfile=NET10_0
+            logicalConstructionKey=$logicalConstructionKey
+            producerSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(producer.readBytes())}
+            sourceSha256=$sourceFingerprint
+            projectSha256=$projectFingerprint
+            globalJsonSha256=$globalJsonFingerprint
+            physicalFamilyArtifactSha256=$artifactFingerprint
+            """.trimIndent()
+        )
+    }
+    val bundleFiles = listOf(source, producer, physicalFamilyArtifact, project, globalJson, manifest)
+    check(bundleFiles.map(File::getName).toSet().size == bundleFiles.size && bundleFiles.all(File::isFile)) {
+        "The generic-owner measurement bundle is incomplete or has colliding file names"
+    }
+    check(!exportDirectory.exists() || exportDirectory.isDirectory) {
+        "Generic-owner measurement export path is not a directory: $exportDirectory"
+    }
+    check(exportDirectory.mkdirs() || exportDirectory.isDirectory) {
+        "Cannot create generic-owner measurement export directory: $exportDirectory"
+    }
+    check(exportDirectory.list()?.isEmpty() == true) {
+        "Generic-owner measurement export directory must be empty: $exportDirectory"
+    }
+    bundleFiles.forEach { file -> file.copyTo(exportDirectory.resolve(file.name), overwrite = false) }
 }
 
 private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.renderSnapshotCSharpType(

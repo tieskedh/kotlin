@@ -187,6 +187,9 @@ projectTests {
                     outputDirectory.get().asFile.absolutePath,
                 )
             }
+            providers.gradleProperty("kotlin.dotnet.genericOwnerMeasurementDir").orNull?.let { exportDirectory ->
+                systemProperty("kotlin.dotnet.genericOwnerMeasurementDir", exportDirectory)
+            }
         }
     }
 
