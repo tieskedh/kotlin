@@ -421,6 +421,18 @@ route is representable; invalid nullable roots and constrained owners reject
 the plan. This is executable JIT/analyzer evidence; native
 link/run is still required before the construction modes can be admitted.
 
+The hostile source now exports a paired application corpus containing the
+actual production-erased Kotlin producer/consumer, a direct C# consumer and
+two-level subclass of that erased owner, and the record-driven candidate
+producer/consumer. Both CLR profiles and FIR parsers execute framework/user
+structs, nullable and mixed state, arrays, method generics, reflection, and
+multi-level dispatch. The direct C# oracle records that the production owner
+is arity zero with `object`/`System.Array` positions while independent method
+generics remain native. Strict closed manifests and frontend-equivalence
+checks make this a stable comparison input; no production `C<T>` is emitted
+and representative cost review remains open. See
+[`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override

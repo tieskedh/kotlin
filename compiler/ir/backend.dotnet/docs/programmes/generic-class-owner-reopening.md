@@ -276,6 +276,19 @@ footprint. NativeAOT remains fail-hard; workload version 2 now records a
 successful native executable plus exact signed-linker provenance. See
 [`../archive/generic-owner-native-aot-measurement-2026-08-13.md`](../archive/generic-owner-native-aot-measurement-2026-08-13.md).
 
+The same hostile Kotlin source now also owns a paired application corpus. Each
+profile bundle carries the real production-erased Kotlin producer/consumer, a
+direct C# erased consumer and two-level subclass, and the record-driven
+candidate producer/consumer. Framework and user structs, nullable and mixed
+state, array identity, method generics, reflection, and multi-level dispatch
+execute under both FIR parsers and both CLR profiles. The erased C# reflection
+oracle pins arity-zero owners with `object`/`System.Array` positions while
+retaining real method generics, so the present interop cost is measured rather
+than hidden. Closed manifests and a strict frontend-equivalence audit make the
+pair suitable as the next measurement input. This closes paired correctness
+preparation, not the representative performance gate. See
+[`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
+
 ## Engineering gates
 
 ### 1. Does the complete semantic matrix work with one object and one state?
