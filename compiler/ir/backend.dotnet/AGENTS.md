@@ -547,16 +547,17 @@ See the
   input provenance and never manufactures typed evidence. All producers must
   be physically typed to select typed storage; any object-domain producer
   selects semantic state, and an unsupported or source-free path remains fail-
-  closed. Neither conclusion admits its owner. The hostile test-owned physicalizer may consume
-  immutable snapshots to generate temporary CLR/C# assemblies, but production
-  codegen still must not consume them. Detached Kotlin generic subclass families
-  link typed entry to typed entry and semantic hook to semantic hook; inheriting
-  a semantic hook is itself a family obligation. Private final capability
+  closed. Neither conclusion admits its owner. The hostile test-owned
+  physicalizer may consume immutable snapshots to generate temporary CLR/C#
+  assemblies, but production codegen still must not consume them. Detached
+  Kotlin generic subclass families link typed entry to typed entry and semantic
+  hook to semantic hook; inheriting a semantic hook is itself a family
+  obligation. Private final capability
   dispatchers never enter an override chain. An external generic base must
   retain a producer logical-member binding requirement and block admission
   until a versioned physical family record exists; consumers must not infer its
   slots from names or today’s erased production MethodDefs. The architecture
-  channel now has a version-5, producer-fingerprinted physical-family artifact
+  channel now has a version-6, producer-fingerprinted physical-family artifact
   which records logical owner/member joins, implementation/capability paths,
   arity, disposition, state requirements, complete member roles, selected
   MethodDef owners/names, final/virtual/abstract dispatch, a slot-domain vector,
@@ -571,8 +572,8 @@ See the
   target. This artifact remains test/architecture-only while production owners
   are erased. Do not serialize it into today's DLL/KLIB, add a speculative
   `dotnet.ir` node, advance production admission, or claim that the still-
-  missing runtime-selected/fallback construction or Kotlin-subclass
-  physicalization is complete. Version 3 additionally records exact
+  missing runtime-selected/fallback construction is complete. Version 3
+  additionally records exact
   signatures for role-specific direct-super targets and the separate static
   masked-default helper. A default helper is never an override role and must
   retain virtual dispatch into the selected typed family. Consumers may render the neutral
@@ -600,6 +601,35 @@ See the
   one typed or semantic-dispatcher invocation entry. Do not enumerate those
   MethodDefs as Kotlin members, derive logical arguments from closed CLR type
   arguments, or reconstruct a logical declaration from CLR names.
+  A completely resolved external Kotlin subclass may now become one
+  production-inert physicalization record. The caller supplies only a distinct
+  current-compilation TypeDef path. Compiler evidence supplies owner/member/
+  constructor visibility and modality, while the decoded producer supplies the
+  exact base construction, MethodDef names/signatures/declaring owners, and
+  direct-`super` targets. The child constructor must have a compiler-recorded
+  exact signature in the currently admitted grammar, it must equal the selected
+  producer constructor, and every delegated argument must be the corresponding
+  child parameter; matching slot domains alone is never enough.
+  Select the immediate base from the delegated constructor, not an overridden
+  member's declaring owner. Resolve fake overrides to their real Kotlin/KLIB
+  declaration before joining the producer record. Retain legal final child
+  overrides as sealed CLR overrides, but reject a final producer slot. Semantic
+  hooks remain protected and capability dispatchers never become child slots.
+  Schema 6 records one ordered CLR GenericParam constraint row per producer
+  parameter. The current bounded physicalizer admits only compiler-derived
+  rows in the exact supported grammar and requires equality with the producer;
+  arity alone is never constraint proof. A TypeDef GenericParam constraint must
+  not reference a method parameter, and a producer row must not reference a
+  current-compilation type. Unsupported Kotlin bounds fail closed.
+  The current proof kind admits only a public open non-inner child with one
+  direct external base, one constructor, no added interface, field, initializer,
+  nested type, state, or non-fake local member. Its constructor must contain
+  only the identity delegation and structurally empty initialization scaffolding.
+  Inherited fake overrides and default helpers remain inherited and require no
+  child MethodDef. Every omitted non-fake declaration rejects the whole proof.
+  A current-compilation type expression is forbidden in the producer artifact.
+  This record may drive only the hostile temporary C# oracle; production
+  emission remains erased.
   A broad candidate input is semantic override-family
   authority: propagate it to a fixed point across local roots and inherit it
   from an external producer record; never narrow it from the local override's

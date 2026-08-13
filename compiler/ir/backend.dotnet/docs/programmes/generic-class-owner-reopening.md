@@ -171,12 +171,12 @@ snapshot to generate a temporary CLR-generic producer and a separately
 compiled C# subclass/consumer. Both CLR profiles execute compatible typed
 override dispatch, incompatible semantic mutation, delayed typed-read failure,
 paired semantic output overrides, one object field, and explicit interface
-dispatch. The next missing link is compiler-produced Kotlin subclass override
-families and producer/consumer binding records—not the base owner shape. Local
+dispatch. The next link is compiler-produced Kotlin subclass override families
+and producer/consumer binding records—not the base owner shape. Local
 generic subclasses now have detached typed-to-typed and semantic-to-semantic
 links; inherited semantic hooks are propagated as obligations and private
 dispatchers remain final selectors. A generic consumer subclass of an external
-producer records the overridden logical key. A production-inert version-5
+producer records the overridden logical key. A production-inert version-6
 family artifact now proves the first cross-assembly link: it is fingerprinted
 to the exact temporary producer, wholly decoded before use, and supplies the
 producer-selected typed and semantic MethodDef owners, names, dispatch,
@@ -203,9 +203,27 @@ capability exposure, and one logical callable for each complete physical
 typed/semantic/capability/default-helper family. Closed constructions share
 the producer's logical classifier; exact classifier lookup rejects capability
 and foreign subclass TypeDefs, while logical instance checks use objective
-open-TypeDef ancestry. Runtime-selected/fallback construction is not admitted.
-The remaining cross-assembly design work is physicalization of a
-Kotlin-produced subclass family.
+open-TypeDef ancestry. The bounded cross-assembly subclass link is now complete
+in the architecture channel. A pure compiler physicalizer accepts only the
+unresolved external-subclass snapshot plus a fully decoded producer artifact;
+the caller supplies only a distinct current-compilation TypeDef path. The
+compiler supplies child visibility, modality, exact admitted constructor
+signature, fake-override declaration roots, and source `super` edges. The
+version-6 producer record supplies ordered GenericParam constraints, the exact
+delegated base/constructor, and every typed/semantic MethodDef identity. The
+immediate constructed base is selected
+from constructor delegation even when an inherited fake override's MethodDef is
+declared on an earlier ancestor. Matching domains never replace exact signature
+equality, and every base argument must be the corresponding child parameter;
+producer and child constraint rows must also be identical in the current
+bounded grammar. The accepted child is public, open, non-inner, has one direct
+base and one constructor, and adds no interface, field, initializer, nested
+type, state, or non-fake member; inherited fake overrides remain inherited.
+Final child member overrides remain sealed, final producer slots fail, and
+semantic hooks remain protected. The record-generated C# consumer materializes
+that Kotlin-like open generic subclass and a further C# generic grandchild on both
+runtimes. Production emission remains erased. Runtime-selected/fallback
+construction is not admitted and is the remaining construction design item.
 
 ## Engineering gates
 

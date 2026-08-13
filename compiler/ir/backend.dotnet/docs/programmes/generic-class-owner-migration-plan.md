@@ -56,7 +56,7 @@ cutover, not an incremental vocabulary leak.
 Local detached generic subclass families are now linked role-by-role. An
 inherited semantic hook remains a separate derived obligation, while the
 private dispatcher is never virtualized as an override. Cross-assembly
-consumers retain the overridden producer logical key. A version-5 architecture
+consumers retain the overridden producer logical key. A version-6 architecture
 artifact now binds that key to the exact producer-selected typed/semantic
 MethodDef owner/name, dispatch, slot-domain vector, and neutral structural
 signature after complete producer-fingerprint/schema
@@ -76,9 +76,31 @@ type arguments only in KLIB, hides capability TypeDefs from classifier/member
 reflection, and collapses every physical member family to one logical callable
 with an exact invocation entry. Exact classifier lookup and ancestry-based
 instance classification remain distinct. The artifact is test-owned and is
-not serialized into today's DLL/KLIB. The next migration step consumes this
-complete record in a Kotlin-produced subclass physicalizer—not an emitter
-switch.
+not serialized into today's DLL/KLIB. A bounded Kotlin-produced subclass
+physicalizer now consumes the complete record without switching the emitter.
+It accepts only a caller-selected current-compilation TypeDef path, uses the
+compiler-recorded delegated constructor for the exact immediate base, requires
+an exact admitted child/base constructor signature match plus positional
+identity argument forwarding, and copies every
+typed/semantic override identity and direct-`super` target from the producer.
+Fake overrides join their real declaring KLIB roots; legal final children are
+sealed and final producer slots reject the physicalization. The resulting
+record drives the hostile C# oracle only. Runtime-selected exact and semantic-
+fallback construction remain the next migration proof.
+
+Schema 6 also records each producer GenericParam's ordered index, CLR special
+constraints, and structural type constraints. The current child physicalizer
+admits only compiler-derived constraints in its exact supported grammar and
+requires equality with the producer row. Matching arity never substitutes for
+constraint compatibility. A TypeDef constraint cannot reference a method
+parameter, and producer constraints cannot reference consumer-compilation
+types; unsupported Kotlin bounds retain a fail-closed proof obligation.
+
+This proof kind intentionally admits only the hostile public/open/non-inner
+child with one direct base and one constructor. Additional interfaces, fields,
+initializers, nested types, states, non-fake members, secondary constructors, or
+constructor effects fail. Inherited fake overrides and default helpers remain
+inherited without new MethodDefs.
 
 Broad input positions are semantic override-family authority. They reach a
 fixed point across local roots and are inherited from a decoded external

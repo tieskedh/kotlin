@@ -318,7 +318,7 @@ hooks are propagated and point to ancestor semantic prototypes, and private
 capability dispatchers never form override chains. When the base generic owner
 is external, the consumer records the overridden logical member key and the
 candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
-slot is inferred from the current erased artifact. A production-inert version-5
+slot is inferred from the current erased artifact. A production-inert version-6
 family artifact now makes the first external link objective: it fingerprints
 the exact temporary producer and records logical joins, owner/capability paths,
 arity, disposition, state requirements, complete roles/reasons, selected
@@ -348,9 +348,23 @@ bounds remain exclusively in the KLIB graph. Capability TypeDefs and physical
 hooks/dispatchers/default helpers remain hidden from Kotlin member identity;
 semantic callables select the capability dispatcher and strict callables select
 the typed entry. Constructors continue to use the version-4 construction
-records rather than becoming ordinary members. A complete migration record
-still needs the separately evaluated runtime/fallback construction modes and a
-Kotlin-produced subclass physicalizer.
+records rather than becoming ordinary members. Schema 6 adds ordered physical
+GenericParam constraints. The bounded external Kotlin-subclass physicalizer now
+joins compiler-derived child visibility, modality, exact admitted constructor
+signature, fake-override roots, and direct `super`
+edges to the decoded producer record. Only the child TypeDef path is caller-
+selected. Constructor delegation determines the immediate base independently
+of a MethodDef's declaring ancestor; exact signature equality and positional
+identity forwarding of every child parameter are required, and producer slot
+identities are copied without name inference. Producer and child GenericParam
+constraint rows must be exactly equal in the currently supported grammar;
+matching arity is not proof. The current proof further requires a public open
+non-inner child with one direct base/constructor and no added interface, field,
+initializer, nested type, state, or non-fake member. Inherited fake overrides
+remain inherited. The result drives only the hostile temporary C# oracle and
+does not change production emission. A
+complete migration record still needs the separately evaluated runtime/fallback
+construction modes.
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families

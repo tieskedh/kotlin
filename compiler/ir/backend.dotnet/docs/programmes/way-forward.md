@@ -511,8 +511,26 @@ member-family details from Kotlin reflection, and records one logical callable
 plus its selected typed/semantic-dispatch invocation entry. Exact closed/open
 normalization and ancestry-based instance classification are distinct, and
 capability or foreign subclass TypeDefs cannot normalize to the recorded
-Kotlin classifier. A Kotlin-produced subclass physicalizer without consumer
-inference is next.
+Kotlin classifier. Version 6 adds one ordered CLR GenericParam constraint row
+for every producer parameter. The bounded external Kotlin-subclass physicalizer
+now combines that decoded producer record with compiler-derived consumer
+visibility, modality, exact constructor shape, override roots, and direct
+`super` calls. The caller supplies only a distinct current-compilation TypeDef
+path. The delegated constructor—not a member's declaring owner—selects the
+immediate `Base<!T>` construction, and every child slot retains the exact
+producer MethodDef name/signature/declaring owner. Fake overrides resolve to
+their real KLIB declaration, matching slot domains cannot substitute for an
+exact child constructor signature, delegation must forward every child
+parameter positionally without transformation, and producer artifacts reject
+a current-compilation type reference. Producer and child constraint rows must
+be exactly equal in the bounded grammar; arity alone is insufficient. A public
+open non-inner child with one base/constructor and no extra interface, field,
+initializer, nested type, state, or non-fake member is the only admitted owner
+shape. Inherited fake overrides/default helpers remain inherited. The
+constructor contains only identity delegation and empty initializer
+scaffolding. A record-generated C# grandchild proves multi-level typed/semantic
+dispatch on both runtimes. This remains test-only; runtime exact/fallback
+construction is next.
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
