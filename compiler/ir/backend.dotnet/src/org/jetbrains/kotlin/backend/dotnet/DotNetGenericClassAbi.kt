@@ -413,6 +413,23 @@ enum class DotNetGenericOwnerConstructionMode {
     STATIC_EXACT,
 }
 
+enum class DotNetGenericOwnerConstructionPlanProofKind {
+    FINITE_OPEN_NULLABLE_WITH_SEMANTIC_FALLBACK,
+}
+
+enum class DotNetGenericOwnerConstructionDispatchKind {
+    FINITE_RUNTIME_TYPE_TOKEN_TABLE,
+}
+
+enum class DotNetGenericOwnerConstructionResultCarrierKind {
+    SEMANTIC_CAPABILITY,
+}
+
+enum class DotNetGenericOwnerConstructionRouteKind {
+    RUNTIME_EXACT,
+    SEMANTIC_FALLBACK,
+}
+
 enum class DotNetGenericOwnerConstructorDelegationKind {
     THIS,
     BASE,
@@ -631,6 +648,72 @@ private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.referencesOwnerParame
 private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.referencesScope(
     expectedScope: DotNetGenericOwnerPhysicalTypeScope,
 ): Boolean = scope == expectedScope || arguments.any { argument -> argument.referencesScope(expectedScope) }
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.containsTypeParameter(): Boolean =
+    kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER ||
+            kind == DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER ||
+            arguments.any { argument -> argument.containsTypeParameter() }
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.isCoreNullableTypePath(): Boolean =
+    kind == DotNetGenericOwnerPhysicalTypeKind.NAMED &&
+            scope == DotNetGenericOwnerPhysicalTypeScope.CORE_LIBRARY &&
+            typePath == listOf("System", "Nullable")
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.isCoreNullableValueType(): Boolean =
+    isCoreNullableTypePath() && genericArity == 1 &&
+            namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.isConcreteNonNullableValueType(): Boolean = when (kind) {
+    DotNetGenericOwnerPhysicalTypeKind.BOOLEAN,
+    DotNetGenericOwnerPhysicalTypeKind.INT32,
+    -> true
+    DotNetGenericOwnerPhysicalTypeKind.NAMED ->
+        namedTypeCategory == DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE && !isCoreNullableValueType() &&
+                !containsTypeParameter()
+    DotNetGenericOwnerPhysicalTypeKind.VOID,
+    DotNetGenericOwnerPhysicalTypeKind.STRING,
+    DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+    DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
+    DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER,
+    DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY,
+    -> false
+}
+
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.openNullableRuntimeArgumentOrNull():
+        DotNetGenericOwnerPhysicalTypeExpressionRecord? {
+    if (containsTypeParameter() || kind == DotNetGenericOwnerPhysicalTypeKind.VOID) return null
+    if (isCoreNullableTypePath() && !isCoreNullableValueType()) return null
+    return when (kind) {
+        DotNetGenericOwnerPhysicalTypeKind.BOOLEAN,
+        DotNetGenericOwnerPhysicalTypeKind.INT32,
+        -> DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+            typePath = listOf("System", "Nullable"),
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+            arguments = listOf(this),
+        )
+        DotNetGenericOwnerPhysicalTypeKind.STRING,
+        DotNetGenericOwnerPhysicalTypeKind.OBJECT,
+        DotNetGenericOwnerPhysicalTypeKind.SZ_ARRAY,
+        -> this
+        DotNetGenericOwnerPhysicalTypeKind.NAMED -> when (namedTypeCategory) {
+            DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE -> if (isCoreNullableValueType()) {
+                takeIf { arguments.single().isConcreteNonNullableValueType() }
+            } else {
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+                    typePath = listOf("System", "Nullable"),
+                    category = DotNetGenericOwnerPhysicalNamedTypeCategory.VALUE_TYPE,
+                    arguments = listOf(this),
+                )
+            }
+            DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS -> this
+            null -> null
+        }
+        DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER,
+        DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER,
+        DotNetGenericOwnerPhysicalTypeKind.VOID,
+        -> null
+    }
+}
 
 private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.typeParameterReferences(): List<Pair<DotNetGenericOwnerPhysicalTypeKind, Int>> =
     buildList {
@@ -944,6 +1027,114 @@ data class DotNetGenericOwnerPhysicalizedSubclassRecord(
             slot.physicalMethod.physicalOwnerPath == physicalOwnerPath
         }) {
             "a Kotlin generic subclass physicalized MethodDef belongs to another owner"
+        }
+    }
+}
+
+/** One statically rooted route in a finite open-nullable construction plan. */
+data class DotNetGenericOwnerPhysicalConstructionRouteRecord(
+    val kind: DotNetGenericOwnerConstructionRouteKind,
+    val runtimeArgumentType: DotNetGenericOwnerPhysicalTypeExpressionRecord?,
+    val constructedOwnerType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val logicalConstructorKey: String,
+    val physicalConstructor: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+) {
+    init {
+        require(logicalConstructorKey.isNotEmpty()) {
+            "a generic-owner construction route requires a logical constructor"
+        }
+        require(constructedOwnerType.kind == DotNetGenericOwnerPhysicalTypeKind.NAMED &&
+                constructedOwnerType.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER &&
+                constructedOwnerType.genericArity == 1 &&
+                constructedOwnerType.typePath == physicalConstructor.physicalOwnerPath &&
+                !constructedOwnerType.containsTypeParameter()) {
+            "a generic-owner construction route requires one concrete producer owner"
+        }
+        require(physicalConstructor.physicalMethodName == ".ctor" &&
+                physicalConstructor.signature.isInstance &&
+                physicalConstructor.signature.genericArity == 0 &&
+                physicalConstructor.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID &&
+                physicalConstructor.signature.parameterSlots.singleOrNull()?.let { parameter ->
+                    parameter.domain == DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT &&
+                            parameter.type == DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(0)
+                } == true) {
+            "the finite open-nullable proof requires one exact owner-parameter constructor"
+        }
+        when (kind) {
+            DotNetGenericOwnerConstructionRouteKind.RUNTIME_EXACT -> {
+                val runtimeType = requireNotNull(runtimeArgumentType) {
+                    "a runtime-exact generic-owner route requires its concrete runtime token"
+                }
+                require(runtimeType.openNullableRuntimeArgumentOrNull() == constructedOwnerType.arguments.single()) {
+                    "a runtime-exact generic-owner route has an inexact open-nullable construction"
+                }
+            }
+            DotNetGenericOwnerConstructionRouteKind.SEMANTIC_FALLBACK -> require(
+                runtimeArgumentType == null &&
+                        constructedOwnerType.arguments.single() ==
+                        DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+            ) {
+                "an open-nullable semantic fallback must be the default C<object> route"
+            }
+        }
+    }
+}
+
+/**
+ * Consumer/application construction evidence. It is separate from the producer artifact because
+ * the finite runtime-token roots belong to the final compilation, not the generic TypeDef.
+ */
+data class DotNetGenericOwnerPhysicalConstructionPlanRecord(
+    val proofKind: DotNetGenericOwnerConstructionPlanProofKind,
+    val producerFingerprint: String,
+    val targetProfile: DotNetGenericOwnerPhysicalTargetProfile,
+    val logicalConstructionKey: String,
+    val logicalOwnerKey: String,
+    val dispatchKind: DotNetGenericOwnerConstructionDispatchKind,
+    val resultCarrierKind: DotNetGenericOwnerConstructionResultCarrierKind,
+    val physicalCapabilityOwnerPath: List<String>,
+    val routes: List<DotNetGenericOwnerPhysicalConstructionRouteRecord>,
+) {
+    init {
+        require(producerFingerprint.matches(Regex("[0-9a-f]{64}")) &&
+                logicalConstructionKey.isNotEmpty() && logicalOwnerKey.isNotEmpty()) {
+            "a generic-owner construction plan requires producer and logical identities"
+        }
+        require(physicalCapabilityOwnerPath.isNotEmpty() && physicalCapabilityOwnerPath.all(String::isNotEmpty)) {
+            "a generic-owner construction plan requires its semantic capability"
+        }
+        val exactRoutes = routes.filter { route ->
+            route.kind == DotNetGenericOwnerConstructionRouteKind.RUNTIME_EXACT
+        }
+        val fallbackRoutes = routes.filter { route ->
+            route.kind == DotNetGenericOwnerConstructionRouteKind.SEMANTIC_FALLBACK
+        }
+        require(exactRoutes.isNotEmpty() && fallbackRoutes.size == 1 &&
+                exactRoutes.map { route -> route.runtimeArgumentType }.toSet().size == exactRoutes.size) {
+            "a finite generic-owner construction plan requires unique exact roots and one fallback"
+        }
+        require(routes.map { route -> route.logicalConstructorKey }.toSet().size == 1 &&
+                routes.map { route -> route.physicalConstructor }.toSet().size == 1 &&
+                routes.map { route -> route.constructedOwnerType.typePath }.toSet().size == 1 &&
+                routes.map { route -> route.constructedOwnerType.namedTypeCategory }.toSet().size == 1 &&
+                routes.single { route ->
+                    route.kind == DotNetGenericOwnerConstructionRouteKind.SEMANTIC_FALLBACK
+                }.constructedOwnerType.typePath != physicalCapabilityOwnerPath) {
+            "a generic-owner construction plan cannot mix owners or constructors"
+        }
+    }
+
+    fun selectRoute(
+        runtimeArgumentType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    ): DotNetGenericOwnerPhysicalConstructionRouteRecord {
+        require(runtimeArgumentType.openNullableRuntimeArgumentOrNull() != null) {
+            "a generic-owner construction selector requires one concrete runtime type"
+        }
+        return routes.singleOrNull { route ->
+            route.kind == DotNetGenericOwnerConstructionRouteKind.RUNTIME_EXACT &&
+                    route.runtimeArgumentType == runtimeArgumentType
+        } ?: routes.single { route ->
+            route.kind == DotNetGenericOwnerConstructionRouteKind.SEMANTIC_FALLBACK
         }
     }
 }
@@ -1387,6 +1578,83 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
     private companion object {
         val PRODUCER_FINGERPRINT = Regex("[0-9a-f]{64}")
     }
+}
+
+/**
+ * Builds a finite, statically rootable open-nullable construction table from a decoded producer.
+ * The caller contributes only final-compilation runtime types and a logical construction identity;
+ * the producer record remains authoritative for the owner, capability, and constructor MethodDef.
+ */
+fun DotNetGenericOwnerPhysicalFamilyArtifact.planFiniteOpenNullableConstruction(
+    logicalConstructionKey: String,
+    logicalOwnerKey: String,
+    logicalConstructorKey: String,
+    exactRuntimeArgumentTypes: List<DotNetGenericOwnerPhysicalTypeExpressionRecord>,
+): DotNetGenericOwnerPhysicalConstructionPlanRecord {
+    require(logicalConstructionKey.isNotEmpty()) {
+        "a finite generic-owner construction plan requires a logical construction identity"
+    }
+    val owner = owners.singleOrNull { candidate -> candidate.logicalOwnerKey == logicalOwnerKey }
+        ?: error("generic-owner construction plan lacks producer owner '$logicalOwnerKey'")
+    require(owner.genericArity == 1) {
+        "the finite open-nullable construction proof currently requires one owner parameter"
+    }
+    require(owner.physicalGenericParameters.singleOrNull()?.let { parameter ->
+        parameter.index == 0 && parameter.specialConstraints.isEmpty() && parameter.typeConstraints.isEmpty()
+    } == true) {
+        "the finite C<object> fallback proof currently requires one unconstrained producer parameter"
+    }
+    val capabilityPath = requireNotNull(owner.physicalCapabilityOwnerPath) {
+        "open-nullable construction requires a producer semantic capability"
+    }
+    val constructor = owner.constructors.singleOrNull { candidate ->
+        candidate.logicalConstructorKey == logicalConstructorKey
+    } ?: error("generic-owner construction plan lacks constructor '$logicalConstructorKey'")
+    require(constructor.constructionMode == DotNetGenericOwnerConstructionMode.STATIC_EXACT &&
+            constructor.visibility == DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC) {
+        "the finite construction table requires one public statically exact producer constructor"
+    }
+    require(exactRuntimeArgumentTypes.isNotEmpty() &&
+            exactRuntimeArgumentTypes.toSet().size == exactRuntimeArgumentTypes.size) {
+        "a finite generic-owner construction plan requires unique exact runtime roots"
+    }
+    val routes = exactRuntimeArgumentTypes.map { runtimeType ->
+        val physicalArgument = requireNotNull(runtimeType.openNullableRuntimeArgumentOrNull()) {
+            "generic-owner construction root '$runtimeType' is not one concrete runtime type"
+        }
+        DotNetGenericOwnerPhysicalConstructionRouteRecord(
+            kind = DotNetGenericOwnerConstructionRouteKind.RUNTIME_EXACT,
+            runtimeArgumentType = runtimeType,
+            constructedOwnerType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+                typePath = owner.physicalOwnerPath,
+                category = checkNotNull(constructor.constructedOwnerType.namedTypeCategory),
+                arguments = listOf(physicalArgument),
+            ),
+            logicalConstructorKey = logicalConstructorKey,
+            physicalConstructor = constructor.physicalConstructor,
+        )
+    } + DotNetGenericOwnerPhysicalConstructionRouteRecord(
+        kind = DotNetGenericOwnerConstructionRouteKind.SEMANTIC_FALLBACK,
+        runtimeArgumentType = null,
+        constructedOwnerType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+            typePath = owner.physicalOwnerPath,
+            category = checkNotNull(constructor.constructedOwnerType.namedTypeCategory),
+            arguments = listOf(DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()),
+        ),
+        logicalConstructorKey = logicalConstructorKey,
+        physicalConstructor = constructor.physicalConstructor,
+    )
+    return DotNetGenericOwnerPhysicalConstructionPlanRecord(
+        proofKind = DotNetGenericOwnerConstructionPlanProofKind.FINITE_OPEN_NULLABLE_WITH_SEMANTIC_FALLBACK,
+        producerFingerprint = producerFingerprint,
+        targetProfile = targetProfile,
+        logicalConstructionKey = logicalConstructionKey,
+        logicalOwnerKey = logicalOwnerKey,
+        dispatchKind = DotNetGenericOwnerConstructionDispatchKind.FINITE_RUNTIME_TYPE_TOKEN_TABLE,
+        resultCarrierKind = DotNetGenericOwnerConstructionResultCarrierKind.SEMANTIC_CAPABILITY,
+        physicalCapabilityOwnerPath = capabilityPath,
+        routes = routes,
+    )
 }
 
 /** Finds only an exact recorded producer open TypeDef; capability and foreign types return null. */

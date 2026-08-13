@@ -530,7 +530,17 @@ shape. Inherited fake overrides/default helpers remain inherited. The
 constructor contains only identity delegation and empty initializer
 scaffolding. A record-generated C# grandchild proves multi-level typed/semantic
 dispatch on both runtimes. This remains test-only; runtime exact/fallback
-construction is next.
+construction now has a separate finite consumer-site proof. The final
+compilation supplies concrete runtime roots, while the producer record supplies
+the unconstrained owner, capability, and public strict constructor. Exact
+branches are statically rooted, already-nullable values normalize idempotently,
+and one mandatory
+`C<object>` route handles all unlisted types through the semantic capability.
+Invalid nullable roots and constrained owners fail closed. The generated
+factory contains no `MakeGenericType` or `Activator` closure.
+Both CLRs execute the table; NativeAOT managed analysis is warning-clean but
+native link/run remains blocked on the missing platform linker and is still an
+acceptance gate.
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

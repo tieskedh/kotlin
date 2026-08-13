@@ -87,10 +87,20 @@ verification, and work state.
   further C# generic grandchild, then verifies exact base/constructor metadata,
   typed and semantic multi-level dispatch, direct `super`, delayed typed-read
   failure, reflection ancestry, and classifier non-normalization on Framework
-  CLR and CoreCLR. Normal production generic owners remain erased; this artifact
-  is not emitted in DLL/KLIB, represented in `dotnet.ir`, or consumed by the
-  production emitter. Runtime-selected exact and semantic-fallback construction
-  remain required before an atomic owner migration can be considered.
+  CLR and CoreCLR. A separate consumer-side construction plan now keeps final-
+  compilation roots out of producer schema 6. It derives a finite exact
+  runtime-token table from the decoded unconstrained owner/capability/public
+  strict constructor, normalizes already-nullable values idempotently, and
+  requires one default
+  `C<object>` semantic fallback for every unlisted value/reference type. The
+  generated factory contains no `MakeGenericType` or `Activator` closure.
+  Exact value/reference/consumer-struct routes and unlisted struct/reference
+  fallbacks execute through the same state/capability on both CLRs. NativeAOT
+  managed analysis is clean with IL3050/IL2026 as errors and reaches the absent
+  platform linker; native execution is not claimed. Normal production generic
+  owners remain erased; these records are not emitted in DLL/KLIB, represented
+  in `dotnet.ir`, or consumed by the production emitter. Complete NativeAOT
+  link/run and measurements remain required before an atomic migration.
   The preceding foundation: open-nullable projected array reads and
   Kotlin-owned nullable generic varargs now use two distinct truthful CLR
   carriers. Ordinary `Array<out T?>` retains the original exact vector through
@@ -482,22 +492,23 @@ programmes.
 
 ## Current green gate
 
-The generic-owner schema-version-6 external-subclass physicalizer head passed
-every constituent of the strict target gate. The normal
+The generic-owner schema-version-6 external-subclass physicalizer plus finite
+consumer construction-plan head passed every constituent of the strict target
+gate. The normal
 aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate completed on 2026-08-13 in 2,501.0 seconds. The six policy-
+The latest aggregate completed on 2026-08-13 in 2,156.3 seconds. The six policy-
 free physical CLI model/serializer tests were Gradle-up-to-date in that
 aggregate, so their
 constituent was explicitly refreshed with `--rerun-tasks` on the same final
 source head immediately beforehand; the daemon returned success. The duration
 is recorded only to identify this coherent checkpoint, not as a performance
 comparison. Direct audit of all three result roots covers 190 XML files and
-2,204 tests, all written after the final schema-v6 source change:
+2,204 tests, all written after the final construction-plan source change:
 
 - 6 policy-free physical CLI model/serializer tests
 - 2,073 FIR, IL-text, and box tests
@@ -520,7 +531,11 @@ MethodDefs, visibility, constructed
 owners, and `this`/`base` edges; duplicate/cyclic-constructor rejection; exact
 paired typed/semantic state access and conversions; producer reflection; and a
 record-driven separate C# consumer through PSI and LightTree on Framework CLR
-and CoreCLR. All report zero failures, errors, or skips. The existing
+and CoreCLR. The separate finite construction plan adds four statically rooted
+exact routes, one mandatory semantic fallback, idempotent nullable-value
+normalization, and exact/fallback state and classifier execution in all eight
+hostile lanes without changing the producer artifact or production emitter.
+All report zero failures, errors, or skips. The existing
 generic-class Kotlin/C# integration
 test retains its user-defined struct subclass, virtual star reads, candidate
 rejection without premature narrowing, same-state mutation, and Kotlin `<T>
@@ -776,6 +791,29 @@ fixture compilation and all eight hostile PSI/LightTree, Framework/CoreCLR,
 same/separate-compilation lanes pass in four fresh XML suites with eight tests
 and zero failures, errors, or skips. Production emission remains erased. The
 current fresh 2,204-test aggregate above includes this tranche.
+
+Focused work after the schema-6 subclass physicalizer adds a separate finite
+open-nullable construction plan without changing the producer artifact. The
+caller supplies only a logical construction identity and unique concrete
+final-compilation runtime types. The decoded producer supplies the open
+unconstrained owner, semantic capability, and public strict one-`!T`
+constructor. Listed value types map to
+statically visible `C<Nullable<V>>`, listed references to `C<R>`, and an
+already-nullable value remains idempotently nullable. Exactly one `C<object>`
+fallback handles every unlisted type through the same capability; open roots,
+duplicates, invalid/nested nullable roots, constrained owners, a missing
+fallback, owner/constructor mixing, and dynamic closure are unrepresentable or
+rejected. The record-driven C# factory executes exact
+`int`/`int?`/`string`/consumer-struct routes and unlisted struct/reference
+fallbacks on all eight hostile lanes, preserving mutation and honest physical
+reflection/classifier normalization. A .NET 10 NativeAOT control promotes
+IL3050/IL2026 to errors: the old `MakeGenericType` control fails at IL3050,
+while the finite factory passes managed AOT analysis and stops only at this
+host's missing Visual C++ linker. Native link/run remains required, so this
+tranche has not changed production admission. Backend/fixture compilation, the
+explicit six-test model refresh, all eight focused hostile lanes, and the
+fresh 190-suite/2,204-test aggregate above are green with zero failures,
+errors, or skips.
 
 Focused evidence additionally produced and consumed the self-describing net10
 Stdlib, executed the eight hostile open-nullable cases and continued negative
@@ -1799,8 +1837,10 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
   explicitly insufficient for metadata-fixed shapes such as
   `D<T> : C<T?>`; their fixed fallback must preserve override, `super`, state,
   casts, reflection, and honest C# ancestry or the declaration remains erased.
-  Compiler-produced Kotlin member families, physical bindings, reflection,
-  separate-assembly C# inheritance, and NativeAOT remain open. This design gate does not block current stdlib,
+  Compiler-produced Kotlin member families, physical bindings, reflection, and
+  separate-assembly C# inheritance now have bounded production-inert evidence.
+  Complete NativeAOT link/run and representative product measurements remain
+  open. This design gate does not block current stdlib,
   reflection, CLI-IR, imported CLR generics, generic methods, explicit exports,
   or removable specialization. See
   [`docs/programmes/generic-class-owner-reopening.md`](docs/programmes/generic-class-owner-reopening.md).
@@ -1855,12 +1895,14 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    family. Version 6 additionally records ordered producer GenericParam
    constraints. A compiler-derived external Kotlin subclass physicalizer now
    records its exact current-compilation owner, delegated producer base/
-   constructor,
-   typed/semantic overrides, fake-override declaration roots, modality/
-   visibility, constraints, and role-specific direct-`super` targets without
-   consumer name, signature, or arity-based constraint inference. Next, compare
-   runtime-exact open-nullable construction with semantic fallback on a complete
-   NativeAOT toolchain; ReadyToRun/trimming success alone is insufficient.
+   constructor, typed/semantic overrides, fake-override declaration roots,
+   modality/visibility, constraints, and role-specific direct-`super` targets without
+   consumer name, signature, or arity-based constraint inference. A separate
+   finite construction-site record now selects statically rooted exact open-
+   nullable routes plus one mandatory semantic fallback without unbounded
+   reflection. Next, execute that exact record-driven factory on a complete
+   NativeAOT toolchain and measure size, startup, throughput, and memory;
+   analyzer, ReadyToRun, and trimming success alone are insufficient.
    Kotlin/Native VTA and Swift SIL
    remain optional proof engines for private/direct paths and never replace
    the open-world capability. Do not emit a production `C<T>` TypeDef or roll

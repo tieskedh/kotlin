@@ -85,8 +85,23 @@ identity argument forwarding, and copies every
 typed/semantic override identity and direct-`super` target from the producer.
 Fake overrides join their real declaring KLIB roots; legal final children are
 sealed and final producer slots reject the physicalization. The resulting
-record drives the hostile C# oracle only. Runtime-selected exact and semantic-
-fallback construction remain the next migration proof.
+record drives the hostile C# oracle only.
+
+A separate consumer-side construction record now corrects the earlier
+constructor-owned mode model without changing producer schema 6. The final
+compilation supplies a finite set of concrete runtime types; the decoded
+producer supplies the open owner, semantic capability, and strict public
+one-`!T` constructor. The current fallback proof requires an unconstrained
+owner parameter. Listed value/reference roots select statically visible exact
+`C<P(T?)>` constructions, including idempotent already-nullable values; invalid
+or nested nullable roots reject the plan. One mandatory `C<object>` route
+handles every unlisted type through the same
+capability/state. The plan cannot express `MakeGenericType`, duplicate/open
+roots, a missing fallback, or recovery of an exact carrier from fallback.
+Both CLRs execute the hostile table. NativeAOT managed analysis is clean with
+IL3050/IL2026 as errors, but the missing platform linker still blocks native
+execution; complete-toolchain link/run and product measurements remain the
+next migration proof.
 
 Schema 6 also records each producer GenericParam's ordered index, CLR special
 constraints, and structural type constraints. The current child physicalizer
