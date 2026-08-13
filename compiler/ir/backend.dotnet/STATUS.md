@@ -17,8 +17,9 @@ verification, and work state.
   nine shared paths, architectural directions, stat-cache-only IL false
   positives, and post-rebase verification are recorded in
   [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
-- Last completed foundation: the production-inert generic-owner physical-family
-  artifact is now schema version 5. Every typed entry, semantic hook,
+- Last completed foundation: the production-inert generic-owner schema-version-6
+  artifact now feeds a compiler-derived external Kotlin subclass physicalizer.
+  Every typed entry, semantic hook,
   capability dispatcher, direct-`super` target, and static masked-default helper
   carries an exact MethodDef owner/name, dispatch, complete value-position
   domain vector, and profile-neutral structural signature. The type vocabulary
@@ -63,11 +64,33 @@ verification, and work state.
   C# consumer executes the record-generated normalization registry for open and
   multiple closed owners, ancestry, capability/foreign rejection, and the
   selected private explicit-interface dispatcher on Framework CLR and CoreCLR.
-  Normal production generic owners remain erased; this artifact is
-  not emitted in DLL/KLIB, represented in `dotnet.ir`, or consumed by the
-  production emitter. Runtime-selected construction and Kotlin-produced
-  subclass physicalization remain required before an
-  atomic owner migration can be considered.
+  The physicalizer accepts only a fully resolved external-subclass snapshot and
+  a distinct current-compilation TypeDef path. It selects the immediate generic
+  base from the compiler-recorded delegated constructor, requires the child's
+  exact admitted constructor signature to equal the producer record, requires
+  positional identity forwarding of every delegated argument, and emits
+  typed/semantic child slots only from exact producer MethodDef identities.
+  Fake overrides join their real declaring KLIB member rather than inventing a
+  consumer key; a MethodDef may therefore belong to an ancestor while the
+  constructed immediate base remains the derived producer owner. Source
+  visibility/modality is retained, semantic hooks stay protected, legal final
+  overrides become sealed, and final producer slots fail closed. Producer and
+  child owners also carry an ordered GenericParam constraint row per `!T`; the
+  current bounded grammar admits the hostile unconstrained vector and rejects
+  unsupported Kotlin bounds or any producer/child constraint mismatch. Arity
+  is never used as constraint proof. Producer artifacts cannot contain the new
+  current-compilation type scope. The child must be public, open, non-inner,
+  have one direct external base and one constructor, and add no interface,
+  field, initializer, nested type, state, or non-fake member. Inherited fake
+  overrides/default helpers remain inherited. The hostile record-driven C#
+  oracle materializes the physicalized Kotlin subclass and a
+  further C# generic grandchild, then verifies exact base/constructor metadata,
+  typed and semantic multi-level dispatch, direct `super`, delayed typed-read
+  failure, reflection ancestry, and classifier non-normalization on Framework
+  CLR and CoreCLR. Normal production generic owners remain erased; this artifact
+  is not emitted in DLL/KLIB, represented in `dotnet.ir`, or consumed by the
+  production emitter. Runtime-selected exact and semantic-fallback construction
+  remain required before an atomic owner migration can be considered.
   The preceding foundation: open-nullable projected array reads and
   Kotlin-owned nullable generic varargs now use two distinct truthful CLR
   carriers. Ordinary `Array<out T?>` retains the original exact vector through
@@ -459,22 +482,22 @@ programmes.
 
 ## Current green gate
 
-The generic-owner schema-version-5 architecture head passed every constituent
-of the strict target gate. The normal
+The generic-owner schema-version-6 external-subclass physicalizer head passed
+every constituent of the strict target gate. The normal
 aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate, build `59a0ac2e-d541-4dfc-9df4-934ccdee9320`, completed
-on 2026-08-13 in 2,319.0 seconds. The six policy-free physical CLI
-model/serializer tests were Gradle-up-to-date in that aggregate, so their
+The latest aggregate completed on 2026-08-13 in 2,501.0 seconds. The six policy-
+free physical CLI model/serializer tests were Gradle-up-to-date in that
+aggregate, so their
 constituent was explicitly refreshed with `--rerun-tasks` on the same final
 source head immediately beforehand; the daemon returned success. The duration
 is recorded only to identify this coherent checkpoint, not as a performance
 comparison. Direct audit of all three result roots covers 190 XML files and
-2,204 tests, all written after the final schema-v5 source change:
+2,204 tests, all written after the final schema-v6 source change:
 
 - 6 policy-free physical CLI model/serializer tests
 - 2,073 FIR, IL-text, and box tests
@@ -487,8 +510,13 @@ schema version 4, the same 2,204-test inventory now also executes exact
 producer-open-TypeDef classifier normalization, multiple closed constructions,
 ancestry-based logical instance classification, capability/foreign rejection,
 KLIB-only logical type-argument authority, complete physical-callable-family
-collapse, and selected semantic-dispatch invocation. It retains exact target
-profiles; statically exact constructor MethodDefs, visibility, constructed
+collapse, and selected semantic-dispatch invocation. Schema version 6 adds the
+compiler-derived external Kotlin subclass proof, exact child/base constructor
+and positional-delegation records, ordered GenericParam constraints, fake-
+override declaration-root joins, current-compilation owner scope, inherited
+fake/default omission, sealed child overrides, and the hostile C# generic
+grandchild. It retains exact target profiles; statically exact constructor
+MethodDefs, visibility, constructed
 owners, and `this`/`base` edges; duplicate/cyclic-constructor rejection; exact
 paired typed/semantic state access and conversions; producer reflection; and a
 record-driven separate C# consumer through PSI and LightTree on Framework CLR
@@ -720,6 +748,34 @@ Framework/CoreCLR, same/separate-compilation lanes passed in four fresh XML
 suites with eight tests and zero failures, errors, or skips. Production
 emission remains erased; runtime-selected/fallback construction and a
 Kotlin-produced subclass physicalizer remain outstanding.
+
+Focused work after schema version 5 advances the artifact to schema version 6
+and closes that bounded subclass-physicalizer item without changing production
+ABI. The consumer planner resolves fake overrides to the real declaring
+Kotlin/KLIB root. A pure
+physicalization step then combines the compiler snapshot with the completely
+decoded producer artifact: the caller chooses only a distinct output TypeDef
+path, the delegated constructor selects the immediate `Base<!T>` construction,
+and exact producer records select every typed/semantic override and direct-
+`super` MethodDef. A distinct current-compilation type scope prevents the child
+from masquerading as a producer TypeDef and is rejected inside producer
+artifacts. The bounded constructor grammar records direct owner-parameter
+signatures, ordered GenericParam constraints, and whether the real delegating
+call forwards each child parameter positionally. Matching domains, a mismatched
+signature, transformed arguments, or reordered arguments fail closed. The child
+must be public/open/non-inner, contain one direct base and constructor, and add
+no interface, field, initializer, nested type, state, or non-fake member.
+Inherited fake overrides/default helpers remain inherited. Final child member
+overrides are retained as sealed while final producer slots remain illegal. The
+record-generated C# consumer now contains the physicalized open Kotlin subclass
+and a further C# generic grandchild;
+reflection proves the immediate base differs from the ultimate MethodDef owner,
+and execution covers compatible typed dispatch, incompatible semantic dispatch,
+direct `super`, default dispatch, and delayed typed-read failure. Backend/
+fixture compilation and all eight hostile PSI/LightTree, Framework/CoreCLR,
+same/separate-compilation lanes pass in four fresh XML suites with eight tests
+and zero failures, errors, or skips. Production emission remains erased. The
+current fresh 2,204-test aggregate above includes this tranche.
 
 Focused evidence additionally produced and consumed the self-describing net10
 Stdlib, executed the eight hostile open-nullable cases and continued negative
@@ -1796,10 +1852,16 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    one-state typed/semantic access paths, exact producer-open-TypeDef to KLIB
    classifier normalization, KLIB-only logical type-argument authority, hidden
    capability reflection, and one logical callable per complete MethodDef
-   family. Next, add a Kotlin-produced subclass physicalizer. Compare runtime
-   exact open-nullable construction with semantic fallback on a complete
-   NativeAOT toolchain; ReadyToRun/
-   trimming success alone is insufficient. Kotlin/Native VTA and Swift SIL
+   family. Version 6 additionally records ordered producer GenericParam
+   constraints. A compiler-derived external Kotlin subclass physicalizer now
+   records its exact current-compilation owner, delegated producer base/
+   constructor,
+   typed/semantic overrides, fake-override declaration roots, modality/
+   visibility, constraints, and role-specific direct-`super` targets without
+   consumer name, signature, or arity-based constraint inference. Next, compare
+   runtime-exact open-nullable construction with semantic fallback on a complete
+   NativeAOT toolchain; ReadyToRun/trimming success alone is insufficient.
+   Kotlin/Native VTA and Swift SIL
    remain optional proof engines for private/direct paths and never replace
    the open-world capability. Do not emit a production `C<T>` TypeDef or roll
    out an easy owner before the hostile prototype and real-app measurement
