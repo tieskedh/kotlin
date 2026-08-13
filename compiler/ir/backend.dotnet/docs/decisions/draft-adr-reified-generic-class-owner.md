@@ -355,16 +355,17 @@ hooks are propagated and point to ancestor semantic prototypes, and private
 capability dispatchers never form override chains. When the base generic owner
 is external, the consumer records the overridden logical member key and the
 candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
-slot is inferred from the current erased artifact. A production-inert version-6
-family artifact now makes the first external link objective: it fingerprints
-the exact temporary producer and records logical joins, owner/capability paths,
-arity, disposition, state requirements, complete roles/reasons, selected
+slot is inferred from the current erased artifact. A production-inert family
+artifact, now at schema 7, makes the first external link objective: it
+fingerprints the exact temporary producer and records logical joins,
+owner/capability paths, arity, disposition, state requirements, complete
+roles/reasons, selected
 MethodDef owners/names, slot dispatch, complete slot-domain vectors, and neutral
 structural signatures. A capability dispatcher names the exact interface
-MethodDef it implements; nested owner/method parameters, named generic instances,
-and SZ arrays remain structural records rather than IL strings. Only a fully
-decoded artifact may resolve the
-typed and semantic obligations; stale, truncated, wrong-producer, duplicate,
+MethodDef it implements; nested owner/method parameters, named generic
+instances, and SZ arrays remain structural records rather than IL strings.
+Only a fully decoded artifact may resolve the typed and semantic obligations;
+stale, truncated, wrong-producer, duplicate,
 incomplete, and missing-member artifacts fail. The resolved snapshot advances
 only to member physicalization proof, never admission. Production DLL/KLIB and
 the erased emitter do not consume this artifact. Version 3 gives separate
@@ -386,8 +387,15 @@ hooks/dispatchers/default helpers remain hidden from Kotlin member identity;
 semantic callables select the capability dispatcher and strict callables select
 the typed entry. Constructors continue to use the version-4 construction
 records rather than becoming ordinary members. Schema 6 adds ordered physical
-GenericParam constraints. The bounded external Kotlin-subclass physicalizer now
-joins compiler-derived child visibility, modality, exact admitted constructor
+GenericParam constraints. Schema 7 separately catalogs every logically
+bindable producer candidate by owner key, arity, disposition, and complete
+constructor/member key sets. Physical families form an exact checked subset of
+that catalog. A known candidate without a family therefore reports its producer
+disposition; it can no longer be confused with an omitted, stale, or foreign
+declaration. In particular, metadata-fixed `D<T> : C<T?>` is recorded as
+`BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE` without a dishonest CLR family.
+The bounded external Kotlin-subclass physicalizer now joins compiler-derived
+child visibility, modality, exact admitted constructor
 signature, fake-override roots, and direct `super`
 edges to the decoded producer record. Only the child TypeDef path is caller-
 selected. Constructor delegation determines the immediate base independently
@@ -401,7 +409,7 @@ initializer, nested type, state, or non-fake member. Inherited fake overrides
 remain inherited. The result drives only the hostile temporary C# oracle and
 does not change production emission.
 
-Runtime roots remain outside producer schema 6. A separate consumer-side
+Runtime roots remain outside producer schema 7. A separate consumer-side
 record now derives finite runtime-exact `C<P(T?)>` routes from the producer's
 open unconstrained owner, capability, and public strict one-`!T` constructor.
 It normalizes an already-nullable value idempotently, returns the semantic

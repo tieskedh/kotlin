@@ -48,6 +48,9 @@ Archived snapshots:
 - [`generic-owner-measurement-corpus-2026-08-13.md`](generic-owner-measurement-corpus-2026-08-13.md)
   records the fingerprinted record-driven hostile corpus, its reproducible
   JIT/ReadyToRun/full-trimming baseline, and the still-open NativeAOT link/run.
+- [`generic-owner-producer-classification-catalog-2026-08-13.md`](generic-owner-producer-classification-catalog-2026-08-13.md)
+  records schema 7's complete producer candidate catalog, explicit
+  metadata-fixed erased-only classification, and fail-closed family join.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots

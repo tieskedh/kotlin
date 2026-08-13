@@ -25,6 +25,7 @@ import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetBackendPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelineArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateDisposition
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateClassificationRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberPolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerOverrideTargetKind
@@ -78,6 +79,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
 import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilies
+import org.jetbrains.kotlin.backend.dotnet.requirePhysicalFamily
 import org.jetbrains.kotlin.backend.dotnet.reflectionClassifierForExactOpenTypeDefinitionOrNull
 import org.jetbrains.kotlin.backend.dotnet.reflectionClassifierMatchesAncestry
 import org.jetbrains.kotlin.backend.dotnet.physicalizeExternalSubclass
@@ -725,6 +727,20 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             constructor.logicalBindingKey?.let { key -> key to (prototype to constructor) }
         }
     }.toMap()
+    val classifications = prototypes.mapNotNull { prototype ->
+        val logicalOwnerKey = prototype.logicalBindingKey ?: return@mapNotNull null
+        DotNetGenericOwnerCandidateClassificationRecord(
+            logicalOwnerKey = logicalOwnerKey,
+            genericArity = prototype.genericArity,
+            disposition = prototype.disposition,
+            logicalConstructorKeys = prototype.constructors.mapNotNull { constructor ->
+                constructor.logicalBindingKey
+            }.distinct().sorted(),
+            logicalMemberKeys = prototype.members.mapNotNull { member ->
+                member.logicalBindingKey
+            }.distinct().sorted(),
+        )
+    }.sortedBy { classification -> classification.logicalOwnerKey }
     fun overrideRoots(
         member: DotNetGenericOwnerPrototypeMemberSnapshot,
         visiting: Set<String> = emptySet(),
@@ -1029,6 +1045,7 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             DotNetTarget.NET10_0 -> DotNetGenericOwnerPhysicalTargetProfile.NET10_0
             DotNetTarget.NETSTANDARD_2_0 -> error("The hostile physical family has no netstandard profile")
         },
+        classifications = classifications,
         owners = owners,
     )
 }
@@ -1047,6 +1064,28 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
     check(DotNetGenericOwnerPhysicalFamilyCodec.encode(decoded) == encoded &&
             DotNetGenericOwnerPhysicalFamilyCodec.encode(artifact) == encoded) {
         "The generic-owner physical family artifact has nondeterministic serialization"
+    }
+    val metadataFixedExclusion = decoded.classifications.single { classification ->
+        classification.disposition ==
+                DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE
+    }
+    check(metadataFixedExclusion.logicalConstructorKeys.isNotEmpty() &&
+            metadataFixedExclusion.logicalMemberKeys.isNotEmpty() &&
+            decoded.owners.none { owner -> owner.logicalOwnerKey == metadataFixedExclusion.logicalOwnerKey }) {
+        "The producer catalog did not retain its metadata-fixed erased-only classification"
+    }
+    val metadataFixedFailure = runCatching {
+        decoded.requirePhysicalFamily(metadataFixedExclusion.logicalOwnerKey)
+    }.exceptionOrNull()
+    check(metadataFixedFailure?.message?.contains(
+        DotNetGenericOwnerCandidateDisposition.BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE.name
+    ) == true) {
+        "The producer catalog did not fail with the recorded metadata-fixed disposition: $metadataFixedFailure"
+    }
+    decoded.owners.forEach { owner ->
+        check(decoded.requirePhysicalFamily(owner.logicalOwnerKey) == owner) {
+            "The producer catalog did not resolve its exact published physical family"
+        }
     }
     check(decoded.owners.all { owner ->
         owner.runtimeClassificationMode == DotNetGenericOwnerRuntimeClassificationMode.OPEN_TYPEDEF_ANCESTRY &&
@@ -1127,8 +1166,27 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
         DotNetGenericOwnerPhysicalFamilyArtifact(
             artifact.producerFingerprint,
             artifact.targetProfile,
+            artifact.classifications,
             artifact.owners + artifact.owners.first(),
         )
+    }
+    expectRejected("a duplicate candidate classification") {
+        artifact.copy(classifications = artifact.classifications + artifact.classifications.first())
+    }
+    val classifiedOwner = artifact.owners.first()
+    expectRejected("a physical family without its producer classification") {
+        artifact.copy(classifications = artifact.classifications.filterNot { classification ->
+            classification.logicalOwnerKey == classifiedOwner.logicalOwnerKey
+        })
+    }
+    expectRejected("a physical family whose candidate member catalog disagrees") {
+        artifact.copy(classifications = artifact.classifications.map { classification ->
+            if (classification.logicalOwnerKey != classifiedOwner.logicalOwnerKey) {
+                classification
+            } else {
+                classification.copy(logicalMemberKeys = classification.logicalMemberKeys.dropLast(1))
+            }
+        })
     }
     val member = artifact.owners.first().members.first { candidate ->
         DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in candidate.roles
@@ -1196,6 +1254,7 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
         DotNetGenericOwnerPhysicalFamilyArtifact(
             artifact.producerFingerprint,
             artifact.targetProfile,
+            artifact.classifications,
             artifact.owners.map { owner ->
                 if (owner != constructionOwner) owner else owner.copy(
                     constructors = owner.constructors.map { constructor ->
@@ -1229,6 +1288,7 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
         DotNetGenericOwnerPhysicalFamilyArtifact(
             artifact.producerFingerprint,
             artifact.targetProfile,
+            artifact.classifications,
             artifact.owners.map { owner ->
                 if (owner != constructionOwner) owner else owner.copy(
                     constructors = owner.constructors.map { constructor ->
@@ -1943,19 +2003,70 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     check(unresolvedKeys.isNotEmpty()) {
         "ConsumerUnsafeLeaf must enter family resolution with external logical obligations"
     }
-    val missingMemberArtifact = artifact.copy(
-        owners = artifact.owners.map { owner ->
-            val retainedMembers = owner.members.filterNot { member -> member.logicalMemberKey in unresolvedKeys }
-            owner.copy(
-                members = retainedMembers,
-                reflection = owner.reflection.copy(
-                    callables = genericOwnerPhysicalReflectionCallables(retainedMembers),
-                ),
-            )
-        }
+    check(runCatching {
+        artifact.copy(
+            owners = artifact.owners.map { owner ->
+                val retainedMembers = owner.members.filterNot { member ->
+                    member.logicalMemberKey in unresolvedKeys
+                }
+                owner.copy(
+                    members = retainedMembers,
+                    reflection = owner.reflection.copy(
+                        callables = genericOwnerPhysicalReflectionCallables(retainedMembers),
+                    ),
+                )
+            }
+        )
+    }.isFailure) {
+        "The producer catalog accepted a physical family with missing classified logical members"
+    }
+    val unavailableOwners = artifact.owners.filter { owner ->
+        owner.members.any { member -> member.logicalMemberKey in unresolvedKeys }
+    }
+    check(unavailableOwners.isNotEmpty()) {
+        "The separate consumer's logical obligations have no classified producer owner"
+    }
+    val classifiedButUnavailableArtifact = artifact.copy(
+        owners = artifact.owners - unavailableOwners.toSet(),
     )
-    check(runCatching { consumer.resolveExternalPhysicalFamilies(missingMemberArtifact) }.isFailure) {
-        "Generic-owner family resolution accepted a producer with missing logical members"
+    val unavailableFailure = runCatching {
+        consumer.resolveExternalPhysicalFamilies(classifiedButUnavailableArtifact)
+    }.exceptionOrNull()
+    check(unavailableFailure?.message?.let { message ->
+        "has no physical family" in message && unavailableOwners.any { owner ->
+            owner.logicalOwnerKey in message && owner.disposition.name in message
+        }
+    } == true) {
+        "Generic-owner resolution did not distinguish classified absence from an unknown member: $unavailableFailure"
+    }
+    var replacedUnknownBinding = false
+    val unknownMemberConsumer = consumer.copy(
+        members = consumer.members.map { member ->
+            member.copy(
+                overrideBindings = member.overrideBindings.map { binding ->
+                    if (replacedUnknownBinding ||
+                            binding.targetKind !=
+                            DotNetGenericOwnerOverrideTargetKind.EXTERNAL_LOGICAL_BINDING_REQUIRED) {
+                        binding
+                    } else {
+                        replacedUnknownBinding = true
+                        binding.copy(
+                            overriddenLogicalBindingKey =
+                                "${checkNotNull(binding.overriddenLogicalBindingKey)}#unknown",
+                        )
+                    }
+                },
+            )
+        },
+    )
+    check(replacedUnknownBinding)
+    val unknownFailure = runCatching {
+        unknownMemberConsumer.resolveExternalPhysicalFamilies(artifact)
+    }.exceptionOrNull()
+    check(unknownFailure?.message?.let { message ->
+        "lacks logical member" in message && "has no physical family" !in message
+    } == true) {
+        "Generic-owner resolution confused an unknown logical member with classified absence: $unknownFailure"
     }
     fun DotNetGenericOwnerPhysicalTypeExpressionRecord.eraseOwnerParameterForNegativeTest():
             DotNetGenericOwnerPhysicalTypeExpressionRecord =

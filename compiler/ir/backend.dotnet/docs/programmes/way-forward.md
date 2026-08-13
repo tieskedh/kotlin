@@ -570,6 +570,15 @@ Both CLRs execute the table; NativeAOT managed analysis is warning-clean but
 native link/run remains blocked on the missing platform linker and is still an
 acceptance gate.
 
+Version 7 separates producer candidate classification from optional physical
+family publication. Every logically bindable generic owner records its logical
+owner key, arity, disposition, and complete constructor/member key sets; each
+published family must match that catalog exactly. A metadata-fixed
+`D<T> : C<T?>` candidate is serialized as a deterministic erased-only
+exclusion, so consumers cannot mistake absence for permission to infer a CLR
+family. This closes the architecture-level exclusion-recording proof, not the
+future production DLL/KLIB binding migration.
+
 The exact same compiler-record-driven finite factory now exports a pinned,
 fingerprinted six-file net10 measurement bundle. One versioned hostile
 workload executes exact and fallback construction, shared state, typed and
