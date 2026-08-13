@@ -5,19 +5,29 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.expressions.IrBlockBody
+import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
+import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
+import org.jetbrains.kotlin.ir.expressions.IrInstanceInitializerCall
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.isAny
+import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.resolveFakeOverride
+import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import java.security.MessageDigest
 import java.util.Base64
 
@@ -78,10 +88,34 @@ enum class DotNetGenericOwnerOverrideTargetKind {
     EXTERNAL_PHYSICAL_FAMILY_RECORD,
 }
 
+enum class DotNetGenericOwnerPhysicalizationProofKind {
+    COMPILER_DERIVED_EXTERNAL_SUBCLASS,
+}
+
 enum class DotNetGenericOwnerPhysicalMemberDispatch {
     FINAL,
     OVERRIDABLE,
     ABSTRACT,
+}
+
+enum class DotNetGenericOwnerPhysicalTypeVisibility {
+    PUBLIC,
+    NOT_PUBLIC,
+}
+
+enum class DotNetGenericOwnerPhysicalTypeDispatch {
+    FINAL,
+    OVERRIDABLE,
+    ABSTRACT,
+    SEALED,
+}
+
+enum class DotNetGenericOwnerPhysicalMemberVisibility {
+    PUBLIC,
+    FAMILY,
+    ASSEMBLY,
+    FAMILY_OR_ASSEMBLY,
+    PRIVATE,
 }
 
 /** Logical authority of one value position in a physical generic-owner MethodDef. */
@@ -141,6 +175,7 @@ enum class DotNetGenericOwnerPhysicalTypeKind {
 /** Resolution scope of a named physical type. */
 enum class DotNetGenericOwnerPhysicalTypeScope {
     PRODUCER,
+    CURRENT_COMPILATION,
     CORE_LIBRARY,
     ASSEMBLY,
 }
@@ -148,6 +183,40 @@ enum class DotNetGenericOwnerPhysicalTypeScope {
 enum class DotNetGenericOwnerPhysicalNamedTypeCategory {
     CLASS,
     VALUE_TYPE,
+}
+
+enum class DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint {
+    REFERENCE_TYPE,
+    NON_NULLABLE_VALUE_TYPE,
+    DEFAULT_CONSTRUCTOR,
+}
+
+/** Exact CLR GenericParam constraint row for one physical owner parameter. */
+data class DotNetGenericOwnerPhysicalGenericParameterRecord(
+    val index: Int,
+    val specialConstraints: Set<DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint>,
+    val typeConstraints: List<DotNetGenericOwnerPhysicalTypeExpressionRecord>,
+) {
+    init {
+        require(index >= 0 && typeConstraints.none { constraint ->
+            constraint.kind == DotNetGenericOwnerPhysicalTypeKind.VOID
+        }) {
+            "a generic-owner parameter requires a non-negative index and non-void constraints"
+        }
+        require(
+            DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.REFERENCE_TYPE !in specialConstraints ||
+                    DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.NON_NULLABLE_VALUE_TYPE !in specialConstraints
+        ) {
+            "a generic-owner parameter cannot be both a reference type and a non-nullable value type"
+        }
+        require(typeConstraints.size == typeConstraints.toSet().size) {
+            "a generic-owner parameter has duplicate type constraints"
+        }
+        require(typeConstraints.flatMap { constraint -> constraint.typeParameterReferences() }
+            .none { reference -> reference.first == DotNetGenericOwnerPhysicalTypeKind.METHOD_TYPE_PARAMETER }) {
+            "a TypeDef generic parameter constraint cannot reference a method parameter"
+        }
+    }
 }
 
 /**
@@ -225,6 +294,18 @@ data class DotNetGenericOwnerPhysicalTypeExpressionRecord(
         ) = DotNetGenericOwnerPhysicalTypeExpressionRecord(
             kind = DotNetGenericOwnerPhysicalTypeKind.NAMED,
             scope = DotNetGenericOwnerPhysicalTypeScope.PRODUCER,
+            typePath = typePath,
+            genericArity = arguments.size,
+            namedTypeCategory = category,
+            arguments = arguments,
+        )
+        fun currentCompilationType(
+            typePath: List<String>,
+            category: DotNetGenericOwnerPhysicalNamedTypeCategory,
+            arguments: List<DotNetGenericOwnerPhysicalTypeExpressionRecord> = emptyList(),
+        ) = DotNetGenericOwnerPhysicalTypeExpressionRecord(
+            kind = DotNetGenericOwnerPhysicalTypeKind.NAMED,
+            scope = DotNetGenericOwnerPhysicalTypeScope.CURRENT_COMPILATION,
             typePath = typePath,
             genericArity = arguments.size,
             namedTypeCategory = category,
@@ -335,6 +416,11 @@ enum class DotNetGenericOwnerConstructionMode {
 enum class DotNetGenericOwnerConstructorDelegationKind {
     THIS,
     BASE,
+}
+
+enum class DotNetGenericOwnerConstructorArgumentMapping {
+    POSITIONAL_IDENTITY,
+    UNSUPPORTED,
 }
 
 enum class DotNetGenericOwnerPhysicalConstructorVisibility {
@@ -542,6 +628,10 @@ data class DotNetGenericOwnerPhysicalStateAccessRecord(
 private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.referencesOwnerParameter(): Boolean =
     kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER || arguments.any { it.referencesOwnerParameter() }
 
+private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.referencesScope(
+    expectedScope: DotNetGenericOwnerPhysicalTypeScope,
+): Boolean = scope == expectedScope || arguments.any { argument -> argument.referencesScope(expectedScope) }
+
 private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.typeParameterReferences(): List<Pair<DotNetGenericOwnerPhysicalTypeKind, Int>> =
     buildList {
         parameterIndex?.let { index -> add(kind to index) }
@@ -593,6 +683,7 @@ internal data class DotNetGenericOwnerConstructorPlan(
     val source: IrConstructor,
     val logicalBindingKey: String?,
     val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    val delegationArgumentMapping: DotNetGenericOwnerConstructorArgumentMapping,
     val delegatedConstructorLogicalBindingKey: String?,
     val delegatedOwnerName: String?,
     val delegatesToThis: Boolean,
@@ -629,8 +720,10 @@ internal data class DotNetGenericOwnerPrototypeMember(
 data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val sourceName: String,
     val sourceIndex: Int,
+    val isFakeOverride: Boolean,
     val isAbstract: Boolean,
     val isOverridable: Boolean,
+    val physicalVisibility: DotNetGenericOwnerPhysicalMemberVisibility,
     val policy: DotNetGenericOwnerMemberPolicy,
     val roles: Set<DotNetGenericOwnerMemberFamilyRole>,
     val semanticHookReasons: Set<DotNetGenericOwnerSemanticHookReason>,
@@ -659,7 +752,11 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
 data class DotNetGenericOwnerPrototypeConstructorSnapshot(
     val sourceIndex: Int,
     val logicalBindingKey: String?,
+    val physicalVisibility: DotNetGenericOwnerPhysicalConstructorVisibility,
     val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    val exactPhysicalSignature: DotNetGenericOwnerPhysicalMethodSignatureRecord?,
+    val delegationArgumentMapping: DotNetGenericOwnerConstructorArgumentMapping,
+    val hasOnlyDelegationAndInstanceInitializer: Boolean,
     val delegatedConstructorLogicalBindingKey: String?,
     val delegatedOwnerName: String?,
     val delegatesToThis: Boolean,
@@ -691,6 +788,14 @@ data class DotNetGenericOwnerPrototypeStateWriteSnapshot(
 data class DotNetGenericOwnerPrototypeSnapshot(
     val ownerName: String,
     val genericArity: Int,
+    val physicalGenericParameters: List<DotNetGenericOwnerPhysicalGenericParameterRecord>?,
+    val physicalVisibility: DotNetGenericOwnerPhysicalTypeVisibility,
+    val physicalDispatch: DotNetGenericOwnerPhysicalTypeDispatch,
+    val isInner: Boolean,
+    val directSupertypeCount: Int,
+    val directFieldCount: Int,
+    val anonymousInitializerCount: Int,
+    val directNestedClassCount: Int,
     val disposition: DotNetGenericOwnerCandidateDisposition,
     val logicalBindingKey: String?,
     val constructors: List<DotNetGenericOwnerPrototypeConstructorSnapshot>,
@@ -698,6 +803,150 @@ data class DotNetGenericOwnerPrototypeSnapshot(
     val states: List<DotNetGenericOwnerPrototypeStateSnapshot>,
     val metadataFixedConditionalSupertypeCount: Int,
 )
+
+/** One compiler-derived MethodDef override for a future Kotlin-produced generic subclass. */
+data class DotNetGenericOwnerPhysicalizedOverrideSlotRecord(
+    val role: DotNetGenericOwnerMemberFamilyRole,
+    val physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+    val visibility: DotNetGenericOwnerPhysicalMemberVisibility,
+    val dispatch: DotNetGenericOwnerPhysicalMemberDispatch,
+    val overriddenLogicalMemberKey: String,
+    val overriddenPhysicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+    val overriddenPhysicalDispatch: DotNetGenericOwnerPhysicalMemberDispatch,
+) {
+    init {
+        require(role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY ||
+                role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK) {
+            "a Kotlin generic subclass may physicalize only typed or semantic override slots"
+        }
+        require(role != DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK ||
+                visibility == DotNetGenericOwnerPhysicalMemberVisibility.FAMILY) {
+            "a Kotlin generic subclass semantic hook must retain protected physical visibility"
+        }
+        require(physicalMethod.physicalMethodName == overriddenPhysicalMethod.physicalMethodName &&
+                physicalMethod.signature == overriddenPhysicalMethod.signature) {
+            "a Kotlin generic subclass override must retain the producer-selected MethodDef name and signature"
+        }
+        require(overriddenPhysicalDispatch != DotNetGenericOwnerPhysicalMemberDispatch.FINAL) {
+            "a Kotlin generic subclass cannot override a final producer slot"
+        }
+        require(overriddenLogicalMemberKey.isNotEmpty()) {
+            "a Kotlin generic subclass override requires its producer logical-member join"
+        }
+    }
+}
+
+data class DotNetGenericOwnerPhysicalizedMemberRecord(
+    val sourceIndex: Int,
+    val sourceName: String,
+    val logicalMemberKey: String?,
+    val slots: List<DotNetGenericOwnerPhysicalizedOverrideSlotRecord>,
+    val directSuperTargets: List<DotNetGenericOwnerPhysicalDirectSuperTargetRecord>,
+) {
+    init {
+        require(sourceIndex >= 0 && sourceName.isNotEmpty() && slots.isNotEmpty()) {
+            "a Kotlin generic subclass physical member requires a source identity and override slots"
+        }
+        require(slots.map { slot -> slot.role }.toSet().size == slots.size) {
+            "a Kotlin generic subclass physical member has duplicate role slots"
+        }
+        require(directSuperTargets.map { target -> target.role }.toSet().size == directSuperTargets.size &&
+                directSuperTargets.all { target ->
+                    slots.singleOrNull { slot -> slot.role == target.role }?.let { slot ->
+                        target.logicalTargetMemberKey == slot.overriddenLogicalMemberKey &&
+                                target.physicalOwnerPath == slot.overriddenPhysicalMethod.physicalOwnerPath &&
+                                target.physicalMethodName == slot.overriddenPhysicalMethod.physicalMethodName &&
+                                target.signature == slot.overriddenPhysicalMethod.signature
+                    } == true
+                }) {
+            "a Kotlin generic subclass direct-super target disagrees with its override slot"
+        }
+    }
+}
+
+data class DotNetGenericOwnerPhysicalizedConstructorRecord(
+    val sourceIndex: Int,
+    val logicalConstructorKey: String?,
+    val visibility: DotNetGenericOwnerPhysicalConstructorVisibility,
+    val constructedOwnerType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val physicalConstructor: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+    val delegatedLogicalConstructorKey: String,
+    val constructedBaseOwner: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val delegatedPhysicalConstructor: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+) {
+    init {
+        require(sourceIndex >= 0 && logicalConstructorKey?.isNotEmpty() != false &&
+                delegatedLogicalConstructorKey.isNotEmpty()) {
+            "a Kotlin generic subclass constructor requires complete source and base identities"
+        }
+        require(physicalConstructor.physicalMethodName == ".ctor" &&
+                delegatedPhysicalConstructor.physicalMethodName == ".ctor" &&
+                physicalConstructor.signature == delegatedPhysicalConstructor.signature) {
+            "a Kotlin generic subclass constructor must retain the producer-selected base signature"
+        }
+        require(constructedOwnerType.kind == DotNetGenericOwnerPhysicalTypeKind.NAMED &&
+                constructedOwnerType.scope == DotNetGenericOwnerPhysicalTypeScope.CURRENT_COMPILATION &&
+                constructedOwnerType.typePath == physicalConstructor.physicalOwnerPath &&
+                constructedBaseOwner.kind == DotNetGenericOwnerPhysicalTypeKind.NAMED &&
+                constructedBaseOwner.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER &&
+                constructedBaseOwner.typePath == delegatedPhysicalConstructor.physicalOwnerPath &&
+                constructedOwnerType != constructedBaseOwner) {
+            "a Kotlin generic subclass constructor requires distinct exact owner and base constructions"
+        }
+    }
+}
+
+/** Complete production-inert physicalization proof for one external Kotlin subclass. */
+data class DotNetGenericOwnerPhysicalizedSubclassRecord(
+    val proofKind: DotNetGenericOwnerPhysicalizationProofKind,
+    val logicalOwnerKey: String?,
+    val physicalOwnerPath: List<String>,
+    val genericArity: Int,
+    val physicalGenericParameters: List<DotNetGenericOwnerPhysicalGenericParameterRecord>,
+    val visibility: DotNetGenericOwnerPhysicalTypeVisibility,
+    val dispatch: DotNetGenericOwnerPhysicalTypeDispatch,
+    val constructor: DotNetGenericOwnerPhysicalizedConstructorRecord,
+    val members: List<DotNetGenericOwnerPhysicalizedMemberRecord>,
+) {
+    init {
+        require(physicalOwnerPath.isNotEmpty() && physicalOwnerPath.all(String::isNotEmpty) && genericArity > 0) {
+            "a Kotlin generic subclass physicalization requires an open implementation TypeDef"
+        }
+        require(physicalGenericParameters.map { parameter -> parameter.index } == (0 until genericArity).toList()) {
+            "a Kotlin generic subclass physicalization requires every ordered GenericParam constraint row"
+        }
+        require(visibility == DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC &&
+                dispatch == DotNetGenericOwnerPhysicalTypeDispatch.OVERRIDABLE) {
+            "the current Kotlin generic subclass proof requires a public open TypeDef"
+        }
+        val exactOwnerParameterVector = (0 until genericArity).toList()
+        require(constructor.constructedOwnerType.arguments.map { argument -> argument.parameterIndex } ==
+                exactOwnerParameterVector &&
+                constructor.constructedOwnerType.arguments.all { argument ->
+                    argument.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER
+                } &&
+                constructor.constructedBaseOwner.arguments.map { argument -> argument.parameterIndex } ==
+                exactOwnerParameterVector &&
+                constructor.constructedBaseOwner.arguments.all { argument ->
+                    argument.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER
+                }) {
+            "a Kotlin generic subclass physicalization requires an exact producer base construction"
+        }
+        require(constructor.physicalConstructor.physicalOwnerPath == physicalOwnerPath &&
+                constructor.constructedOwnerType.typePath == physicalOwnerPath &&
+                constructor.constructedBaseOwner.typePath != physicalOwnerPath) {
+            "a Kotlin generic subclass physical constructor disagrees with its exact base construction"
+        }
+        require(members.isNotEmpty() && members.map { member -> member.sourceIndex }.toSet().size == members.size) {
+            "a Kotlin generic subclass physicalization requires unique compiler-derived members"
+        }
+        require(members.flatMap { member -> member.slots }.all { slot ->
+            slot.physicalMethod.physicalOwnerPath == physicalOwnerPath
+        }) {
+            "a Kotlin generic subclass physicalized MethodDef belongs to another owner"
+        }
+    }
+}
 
 /** One producer-selected physical MethodDef role in a future CLR-generic member family. */
 data class DotNetGenericOwnerPhysicalMemberSlotRecord(
@@ -902,6 +1151,7 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
     val physicalOwnerPath: List<String>,
     val physicalCapabilityOwnerPath: List<String>?,
     val genericArity: Int,
+    val physicalGenericParameters: List<DotNetGenericOwnerPhysicalGenericParameterRecord>,
     val disposition: DotNetGenericOwnerCandidateDisposition,
     val runtimeClassificationMode: DotNetGenericOwnerRuntimeClassificationMode,
     val constructionModes: Set<DotNetGenericOwnerConstructionMode>,
@@ -920,6 +1170,9 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
             "generic-owner physical family '$logicalOwnerKey' has an incomplete capability owner path"
         }
         require(genericArity > 0) { "generic-owner physical family '$logicalOwnerKey' requires positive arity" }
+        require(physicalGenericParameters.map { parameter -> parameter.index } == (0 until genericArity).toList()) {
+            "generic-owner physical family '$logicalOwnerKey' requires every ordered GenericParam constraint row"
+        }
         require(constructionModes == constructors.map { constructor -> constructor.constructionMode }.toSet() &&
                 constructors.isNotEmpty()) {
             "generic-owner physical family '$logicalOwnerKey' has incomplete construction modes"
@@ -1011,7 +1264,8 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
             }
         }
         require((recordedMethods.flatMap { recordedMethod -> recordedMethod.second.allTypes() } +
-                states.map { state -> state.physicalType })
+                states.map { state -> state.physicalType } +
+                physicalGenericParameters.flatMap { parameter -> parameter.typeConstraints })
             .flatMap { type -> type.typeParameterReferences() }
             .all { reference ->
                 reference.first != DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER ||
@@ -1036,13 +1290,29 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
             "generic-owner physical family '$logicalOwnerKey' has a state access outside its member slots"
         }
         require((constructors.flatMap { constructor ->
-            constructor.physicalConstructor.signature.allTypes() + constructor.delegation.signature.allTypes() +
-                    constructor.delegation.physicalOwnerType
+            constructor.physicalConstructor.signature.allTypes() + constructor.delegation.signature.allTypes() + listOf(
+                constructor.constructedOwnerType,
+                constructor.delegation.physicalOwnerType,
+            )
         }).flatMap { type -> type.typeParameterReferences() }.all { reference ->
             reference.first != DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER ||
                     reference.second < genericArity
         }) {
             "generic-owner physical family '$logicalOwnerKey' has a construction record with a missing owner parameter"
+        }
+        require((recordedMethods.flatMap { recordedMethod -> recordedMethod.second.allTypes() } +
+                states.map { state -> state.physicalType } +
+                physicalGenericParameters.flatMap { parameter -> parameter.typeConstraints } +
+                constructors.flatMap { constructor ->
+                    constructor.physicalConstructor.signature.allTypes() +
+                            constructor.delegation.signature.allTypes() + listOf(
+                        constructor.constructedOwnerType,
+                        constructor.delegation.physicalOwnerType,
+                    )
+                }).none { type ->
+            type.referencesScope(DotNetGenericOwnerPhysicalTypeScope.CURRENT_COMPILATION)
+        }) {
+            "generic-owner producer artifact cannot reference a consumer compilation TypeDef"
         }
     }
 }
@@ -1078,6 +1348,7 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
             "a generic-owner family artifact has duplicate logical constructors across owners"
         }
         val constructorsByLogicalKey = constructors.associateBy { constructor -> constructor.logicalConstructorKey }
+        val ownersByPhysicalPath = owners.associateBy { owner -> owner.physicalOwnerPath }
         require(constructors.all { constructor ->
             val delegation = constructor.delegation
             val target = delegation.logicalConstructorKey?.let(constructorsByLogicalKey::get)
@@ -1086,6 +1357,10 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
             } else {
                 delegation.physicalOwnerType.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER &&
                         delegation.physicalOwnerType.typePath == target.physicalConstructor.physicalOwnerPath &&
+                        ownersByPhysicalPath.getValue(constructor.physicalConstructor.physicalOwnerPath)
+                            .physicalGenericParameters ==
+                        ownersByPhysicalPath.getValue(target.physicalConstructor.physicalOwnerPath)
+                            .physicalGenericParameters &&
                         delegation.signature == target.physicalConstructor.signature &&
                         (delegation.kind != DotNetGenericOwnerConstructorDelegationKind.THIS ||
                                 constructor.physicalConstructor.physicalOwnerPath ==
@@ -1139,7 +1414,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionClassifierMatchesAncestry
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 5
+    const val SCHEMA_VERSION = 6
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -1168,6 +1443,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         ?.encoded()
                         ?: "-",
                     owner.genericArity.toString(),
+                    owner.physicalGenericParameters.size.toString(),
                     owner.disposition.name,
                     owner.runtimeClassificationMode.name,
                     owner.constructionModes.sortedBy { mode -> mode.name }.joinToString(",") { mode -> mode.name },
@@ -1176,6 +1452,21 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                     states.size.toString(),
                 ).joinToString("\t")
             )
+            owner.physicalGenericParameters.forEach { parameter ->
+                appendLine(
+                    listOf(
+                        "G",
+                        parameter.index.toString(),
+                        parameter.specialConstraints.sortedBy { constraint -> constraint.name }
+                            .joinToString(",") { constraint -> constraint.name }
+                            .ifEmpty { "-" },
+                        parameter.typeConstraints.size.toString(),
+                    ).joinToString("\t")
+                )
+                parameter.typeConstraints.forEach { constraint ->
+                    appendLine("B\t${constraint.serialized().encoded()}")
+                }
+            }
             owner.constructors.sortedBy { constructor -> constructor.logicalConstructorKey }.forEach { constructor ->
                 val delegation = constructor.delegation
                 appendLine(
@@ -1395,29 +1686,45 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         }
         val ownerCount = count(read("N", 2)[1], "owner")
         val owners = List(ownerCount) {
-            val fields = read("O", 11)
+            val fields = read("O", 12)
             val logicalOwnerKey = fields[1].decoded()
             val ownerPath = fields[2].decoded().split('\u0000')
             val capabilityOwnerPath = fields[3].takeUnless { it == "-" }?.decoded()?.split('\u0000')
             val genericArity = count(fields[4], "generic-arity")
+            val physicalGenericParameterCount = count(fields[5], "physical generic parameter")
             val disposition = enumValue(
-                fields[5],
+                fields[6],
                 DotNetGenericOwnerCandidateDisposition.entries.toTypedArray(),
                 "owner disposition",
             )
             val runtimeClassificationMode = enumValue(
-                fields[6],
+                fields[7],
                 DotNetGenericOwnerRuntimeClassificationMode.entries.toTypedArray(),
                 "runtime classification mode",
             )
             val constructionModes = enumSet(
-                fields[7],
+                fields[8],
                 DotNetGenericOwnerConstructionMode.entries.toTypedArray(),
                 "construction mode",
             )
-            val constructorCount = count(fields[8], "constructor")
-            val memberCount = count(fields[9], "member")
-            val stateCount = count(fields[10], "state")
+            val constructorCount = count(fields[9], "constructor")
+            val memberCount = count(fields[10], "member")
+            val stateCount = count(fields[11], "state")
+            val physicalGenericParameters = List(physicalGenericParameterCount) {
+                val parameterFields = read("G", 4)
+                val typeConstraintCount = count(parameterFields[3], "generic parameter type constraint")
+                DotNetGenericOwnerPhysicalGenericParameterRecord(
+                    index = count(parameterFields[1], "generic parameter index"),
+                    specialConstraints = enumSet(
+                        parameterFields[2],
+                        DotNetGenericOwnerPhysicalGenericParameterSpecialConstraint.entries.toTypedArray(),
+                        "generic parameter special constraint",
+                    ),
+                    typeConstraints = List(typeConstraintCount) {
+                        read("B", 2)[1].decoded().deserializedType()
+                    },
+                )
+            }
             val constructors = List(constructorCount) {
                 val constructorFields = read("K", 13)
                 val physicalConstructor = DotNetGenericOwnerPhysicalMethodIdentityRecord(
@@ -1666,6 +1973,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 physicalOwnerPath = ownerPath,
                 physicalCapabilityOwnerPath = capabilityOwnerPath,
                 genericArity = genericArity,
+                physicalGenericParameters = physicalGenericParameters,
                 disposition = disposition,
                 runtimeClassificationMode = runtimeClassificationMode,
                 constructionModes = constructionModes,
@@ -1929,6 +2237,196 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
     )
 }
 
+/**
+ * Turns a completely resolved external-subclass snapshot into an exact physical override record.
+ * The caller selects only the target-owned TypeDef path; every construction, MethodDef,
+ * signature, visibility, role, and direct-super target comes from compiler/KLIB evidence joined
+ * to the decoded producer artifact.
+ */
+fun DotNetGenericOwnerPrototypeSnapshot.physicalizeExternalSubclass(
+    artifact: DotNetGenericOwnerPhysicalFamilyArtifact,
+    physicalOwnerPath: List<String>,
+): DotNetGenericOwnerPhysicalizedSubclassRecord {
+    require(disposition == DotNetGenericOwnerCandidateDisposition.REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA) {
+        "only an unresolved external Kotlin generic subclass may enter physicalization"
+    }
+    require(physicalVisibility == DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC &&
+            physicalDispatch == DotNetGenericOwnerPhysicalTypeDispatch.OVERRIDABLE &&
+            !isInner && directSupertypeCount == 1 &&
+            directFieldCount == 0 && anonymousInitializerCount == 0 && directNestedClassCount == 0 &&
+            metadataFixedConditionalSupertypeCount == 0 && states.isEmpty()) {
+        "the current Kotlin generic subclass proof requires one public external base and no local state or nested types"
+    }
+    require(physicalOwnerPath.isNotEmpty() && physicalOwnerPath.all(String::isNotEmpty) &&
+            artifact.owners.none { owner ->
+                owner.physicalOwnerPath == physicalOwnerPath || owner.physicalCapabilityOwnerPath == physicalOwnerPath
+            }) {
+        "a Kotlin generic subclass physicalization requires a distinct selected TypeDef path"
+    }
+    val resolved = resolveExternalPhysicalFamilies(artifact)
+    require(resolved.disposition == DotNetGenericOwnerCandidateDisposition.REQUIRES_MEMBER_PHYSICALIZATION_PROOF) {
+        "external Kotlin generic subclass resolution did not reach physicalization proof"
+    }
+    val producerMembers = artifact.owners.flatMap { owner ->
+        owner.members.map { member -> member.logicalMemberKey to (owner to member) }
+    }.toMap()
+    val physicalMembers = resolved.members.mapNotNull { member ->
+        val bindings = member.overrideBindings.filter { binding ->
+            binding.targetKind == DotNetGenericOwnerOverrideTargetKind.EXTERNAL_PHYSICAL_FAMILY_RECORD
+        }
+        if (bindings.isEmpty()) return@mapNotNull null
+        val slots = bindings.map { binding ->
+            val logicalKey = requireNotNull(binding.overriddenLogicalBindingKey)
+            val producerEntry = producerMembers[logicalKey]
+                ?: error("producer generic-owner artifact lost logical member '$logicalKey'")
+            val overridden = producerEntry.second.slots.single { slot -> slot.role == binding.role }
+            require(binding.overriddenPhysicalOwnerPath == overridden.physicalOwnerPath &&
+                    binding.overriddenPhysicalMethodName == overridden.physicalMethodName &&
+                    binding.overriddenPhysicalSignature == overridden.signature &&
+                    binding.overriddenPhysicalDispatch == overridden.dispatch) {
+                "resolved Kotlin subclass member '${member.sourceName}' disagrees with its producer MethodDef"
+            }
+            DotNetGenericOwnerPhysicalizedOverrideSlotRecord(
+                role = binding.role,
+                physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                    physicalOwnerPath = physicalOwnerPath,
+                    physicalMethodName = overridden.physicalMethodName,
+                    signature = overridden.signature,
+                ),
+                visibility = if (binding.role == DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK) {
+                    DotNetGenericOwnerPhysicalMemberVisibility.FAMILY
+                } else {
+                    member.physicalVisibility
+                },
+                dispatch = when {
+                    member.isAbstract -> DotNetGenericOwnerPhysicalMemberDispatch.ABSTRACT
+                    member.isOverridable -> DotNetGenericOwnerPhysicalMemberDispatch.OVERRIDABLE
+                    else -> DotNetGenericOwnerPhysicalMemberDispatch.FINAL
+                },
+                overriddenLogicalMemberKey = logicalKey,
+                overriddenPhysicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                    overridden.physicalOwnerPath,
+                    overridden.physicalMethodName,
+                    overridden.signature,
+                ),
+                overriddenPhysicalDispatch = overridden.dispatch,
+            )
+        }
+        require(slots.map { slot -> slot.role }.toSet().size == slots.size) {
+            "external Kotlin subclass member '${member.sourceName}' has duplicate physical override roles"
+        }
+        val directSuperTargets = if (member.directSuperCallCount == 0) {
+            emptyList()
+        } else {
+            require(member.directSuperCallCount == 1 && member.directSuperCalls.size == 1) {
+                "external Kotlin subclass member '${member.sourceName}' has an unsupported direct-super graph"
+            }
+            val call = member.directSuperCalls.single()
+            slots.map { slot ->
+                require(call.logicalMemberKey == slot.overriddenLogicalMemberKey) {
+                    "external Kotlin subclass direct-super logical target disagrees with its override family"
+                }
+                DotNetGenericOwnerPhysicalDirectSuperTargetRecord(
+                    role = slot.role,
+                    logicalTargetMemberKey = slot.overriddenLogicalMemberKey,
+                    physicalOwnerPath = slot.overriddenPhysicalMethod.physicalOwnerPath,
+                    physicalMethodName = slot.overriddenPhysicalMethod.physicalMethodName,
+                    signature = slot.overriddenPhysicalMethod.signature,
+                )
+            }
+        }
+        DotNetGenericOwnerPhysicalizedMemberRecord(
+            sourceIndex = member.sourceIndex,
+            sourceName = member.sourceName,
+            logicalMemberKey = member.logicalBindingKey,
+            slots = slots,
+            directSuperTargets = directSuperTargets,
+        )
+    }
+    val omittedMembers = resolved.members.filter { member ->
+        member.overrideBindings.none { binding ->
+            binding.targetKind == DotNetGenericOwnerOverrideTargetKind.EXTERNAL_PHYSICAL_FAMILY_RECORD
+        }
+    }
+    require(omittedMembers.all { member -> member.isFakeOverride }) {
+        "the current Kotlin generic subclass proof cannot omit members " +
+                omittedMembers.filterNot { member -> member.isFakeOverride }
+                    .joinToString { member -> member.sourceName }
+    }
+    val sourceConstructor = resolved.constructors.singleOrNull { constructor -> !constructor.delegatesToThis }
+        ?: error("a Kotlin generic subclass physicalization requires one primary base-delegating constructor")
+    require(resolved.constructors.size == 1) {
+        "the current Kotlin generic subclass physicalization cannot omit secondary constructors"
+    }
+    val delegatedLogicalKey = requireNotNull(sourceConstructor.delegatedConstructorLogicalBindingKey) {
+        "a Kotlin generic subclass constructor lacks its external logical base constructor"
+    }
+    val delegatedConstructorEntry = artifact.owners.flatMap { owner ->
+        owner.constructors.map { constructor -> owner to constructor }
+    }.singleOrNull { entry -> entry.second.logicalConstructorKey == delegatedLogicalKey }
+        ?: error("producer generic-owner artifact lacks unique delegated constructor '$delegatedLogicalKey'")
+    val producerOwner = delegatedConstructorEntry.first
+    val delegatedConstructor = delegatedConstructorEntry.second
+    require(producerOwner.genericArity == genericArity) {
+        "the current Kotlin generic subclass proof requires an exact owner-parameter base vector"
+    }
+    val sourceGenericParameters = requireNotNull(physicalGenericParameters) {
+        "the Kotlin generic subclass owner is outside the exact CLR GenericParam constraint grammar"
+    }
+    require(sourceGenericParameters == producerOwner.physicalGenericParameters) {
+        "the current Kotlin generic subclass proof requires exact producer GenericParam constraints"
+    }
+    require(physicalMembers.flatMap { member -> member.slots }.all { slot ->
+        artifact.owners.any { owner -> owner.physicalOwnerPath == slot.overriddenPhysicalMethod.physicalOwnerPath }
+    }) {
+        "a Kotlin generic subclass override targets a MethodDef outside its producer artifact"
+    }
+    val sourceConstructorSignature = requireNotNull(sourceConstructor.exactPhysicalSignature) {
+        "the Kotlin generic subclass constructor is outside the exact physical signature grammar"
+    }
+    require(sourceConstructor.delegationArgumentMapping ==
+            DotNetGenericOwnerConstructorArgumentMapping.POSITIONAL_IDENTITY &&
+            sourceConstructor.hasOnlyDelegationAndInstanceInitializer) {
+        "the Kotlin generic subclass constructor has a transformed delegation or additional body effects"
+    }
+    require(sourceConstructorSignature == delegatedConstructor.physicalConstructor.signature) {
+        "a Kotlin generic subclass constructor disagrees with the exact producer signature"
+    }
+    val ownerArguments = List(genericArity) { index ->
+        DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(index)
+    }
+    val constructedOwner = DotNetGenericOwnerPhysicalTypeExpressionRecord.currentCompilationType(
+        typePath = physicalOwnerPath,
+        category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        arguments = ownerArguments,
+    )
+    val constructedBase = delegatedConstructor.constructedOwnerType
+    return DotNetGenericOwnerPhysicalizedSubclassRecord(
+        proofKind = DotNetGenericOwnerPhysicalizationProofKind.COMPILER_DERIVED_EXTERNAL_SUBCLASS,
+        logicalOwnerKey = logicalBindingKey,
+        physicalOwnerPath = physicalOwnerPath,
+        genericArity = genericArity,
+        physicalGenericParameters = sourceGenericParameters,
+        visibility = physicalVisibility,
+        dispatch = physicalDispatch,
+        constructor = DotNetGenericOwnerPhysicalizedConstructorRecord(
+            sourceIndex = sourceConstructor.sourceIndex,
+            logicalConstructorKey = sourceConstructor.logicalBindingKey,
+            visibility = sourceConstructor.physicalVisibility,
+            constructedOwnerType = constructedOwner,
+            physicalConstructor = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                physicalOwnerPath,
+                ".ctor",
+                sourceConstructorSignature,
+            ),
+            delegatedLogicalConstructorKey = delegatedLogicalKey,
+            constructedBaseOwner = constructedBase,
+            delegatedPhysicalConstructor = delegatedConstructor.physicalConstructor,
+        ),
+        members = physicalMembers,
+    )
+}
+
 /** The only safe conclusion currently available for one owner-dependent field. */
 enum class DotNetGenericOwnerStateCarrierRequirement {
     /** A complete field/call/access graph is still required before selecting a physical carrier. */
@@ -2010,6 +2508,70 @@ internal data class DotNetGenericOwnerArchitecturePlan(
     val openOwnerOutputs: Set<IrSimpleFunction>,
 )
 
+private fun IrSimpleFunction.genericOwnerPhysicalVisibility(): DotNetGenericOwnerPhysicalMemberVisibility =
+    when (visibility) {
+        DescriptorVisibilities.PUBLIC -> DotNetGenericOwnerPhysicalMemberVisibility.PUBLIC
+        DescriptorVisibilities.PROTECTED -> DotNetGenericOwnerPhysicalMemberVisibility.FAMILY
+        DescriptorVisibilities.INTERNAL -> DotNetGenericOwnerPhysicalMemberVisibility.ASSEMBLY
+        DescriptorVisibilities.PRIVATE -> DotNetGenericOwnerPhysicalMemberVisibility.PRIVATE
+        else -> error("unsupported generic-owner prototype member visibility '$visibility'")
+    }
+
+private fun IrConstructor.genericOwnerPhysicalVisibility(): DotNetGenericOwnerPhysicalConstructorVisibility =
+    when (visibility) {
+        DescriptorVisibilities.PUBLIC -> DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC
+        DescriptorVisibilities.PROTECTED -> DotNetGenericOwnerPhysicalConstructorVisibility.FAMILY
+        DescriptorVisibilities.INTERNAL -> DotNetGenericOwnerPhysicalConstructorVisibility.ASSEMBLY
+        DescriptorVisibilities.PRIVATE -> DotNetGenericOwnerPhysicalConstructorVisibility.PRIVATE
+        else -> error("unsupported generic-owner prototype constructor visibility '$visibility'")
+    }
+
+private fun IrType.genericOwnerPrototypePhysicalType(owner: IrClass): DotNetGenericOwnerPhysicalTypeExpressionRecord? {
+    val typeParameter = ((this as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner ?: return null
+    if (typeParameter.parent != owner) return null
+    val parameterIndex = owner.typeParameters.indexOf(typeParameter)
+    return parameterIndex.takeIf { index -> index >= 0 }
+        ?.let(DotNetGenericOwnerPhysicalTypeExpressionRecord::ownerParameter)
+}
+
+private fun DotNetGenericOwnerConstructorPlan.exactPrototypePhysicalSignature(
+    owner: IrClass,
+): DotNetGenericOwnerPhysicalMethodSignatureRecord? {
+    if (source.parameters.size != parameterSlotDomains.size) return null
+    val parameterSlots = source.parameters.mapIndexed { index, parameter ->
+        DotNetGenericOwnerPhysicalValueSlotRecord(
+            domain = parameterSlotDomains[index],
+            type = parameter.type.genericOwnerPrototypePhysicalType(owner) ?: return null,
+        )
+    }
+    return DotNetGenericOwnerPhysicalMethodSignatureRecord(
+        isInstance = true,
+        genericArity = 0,
+        returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(
+            domain = DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+            type = DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType(),
+        ),
+        parameterSlots = parameterSlots,
+    )
+}
+
+private fun IrConstructor.hasOnlyPrototypePhysicalizableBody(): Boolean =
+    (body as? IrBlockBody)?.statements?.all { statement ->
+        statement is IrDelegatingConstructorCall || statement is IrInstanceInitializerCall ||
+                statement is IrContainerExpression && statement.statements.isEmpty()
+    } == true
+
+private fun IrClass.genericOwnerPrototypePhysicalGenericParameters():
+        List<DotNetGenericOwnerPhysicalGenericParameterRecord>? = typeParameters.mapIndexed { index, parameter ->
+    val nonTrivialBounds = parameter.superTypes.filterNot { bound -> bound.isAny() || bound.isNullableAny() }
+    if (nonTrivialBounds.isNotEmpty()) return null
+    DotNetGenericOwnerPhysicalGenericParameterRecord(
+        index = index,
+        specialConstraints = emptySet(),
+        typeConstraints = emptyList(),
+    )
+}
+
 internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGenericOwnerPrototypeSnapshot {
     fun prototypeFor(
         source: IrSimpleFunction,
@@ -2024,13 +2586,36 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
     return DotNetGenericOwnerPrototypeSnapshot(
         ownerName = owner.fqNameWhenAvailable?.asString() ?: owner.name.asString(),
         genericArity = owner.typeParameters.size,
+        physicalGenericParameters = owner.genericOwnerPrototypePhysicalGenericParameters(),
+        physicalVisibility = if (owner.visibility == DescriptorVisibilities.PUBLIC) {
+            DotNetGenericOwnerPhysicalTypeVisibility.PUBLIC
+        } else {
+            DotNetGenericOwnerPhysicalTypeVisibility.NOT_PUBLIC
+        },
+        physicalDispatch = when (owner.modality) {
+            Modality.FINAL -> DotNetGenericOwnerPhysicalTypeDispatch.FINAL
+            Modality.OPEN -> DotNetGenericOwnerPhysicalTypeDispatch.OVERRIDABLE
+            Modality.ABSTRACT -> DotNetGenericOwnerPhysicalTypeDispatch.ABSTRACT
+            Modality.SEALED -> DotNetGenericOwnerPhysicalTypeDispatch.SEALED
+        },
+        isInner = owner.isInner,
+        directSupertypeCount = owner.superTypes.size,
+        directFieldCount = owner.declarations.count { declaration -> declaration is IrField },
+        anonymousInitializerCount = owner.declarations.count { declaration ->
+            declaration is IrAnonymousInitializer
+        },
+        directNestedClassCount = owner.declarations.count { declaration -> declaration is IrClass },
         disposition = disposition,
         logicalBindingKey = logicalBindingKey,
         constructors = constructors.mapIndexed { sourceIndex, constructor ->
             DotNetGenericOwnerPrototypeConstructorSnapshot(
                 sourceIndex = sourceIndex,
                 logicalBindingKey = constructor.logicalBindingKey,
+                physicalVisibility = constructor.source.genericOwnerPhysicalVisibility(),
                 parameterSlotDomains = constructor.parameterSlotDomains,
+                exactPhysicalSignature = constructor.exactPrototypePhysicalSignature(owner),
+                delegationArgumentMapping = constructor.delegationArgumentMapping,
+                hasOnlyDelegationAndInstanceInitializer = constructor.source.hasOnlyPrototypePhysicalizableBody(),
                 delegatedConstructorLogicalBindingKey = constructor.delegatedConstructorLogicalBindingKey,
                 delegatedOwnerName = constructor.delegatedOwnerName,
                 delegatesToThis = constructor.delegatesToThis,
@@ -2046,8 +2631,10 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
             DotNetGenericOwnerPrototypeMemberSnapshot(
                 sourceName = source.name.asString(),
                 sourceIndex = sourceIndex,
+                isFakeOverride = source.isFakeOverride,
                 isAbstract = source.modality == Modality.ABSTRACT,
                 isOverridable = source.modality != Modality.FINAL,
+                physicalVisibility = source.genericOwnerPhysicalVisibility(),
                 policy = family.policy,
                 roles = family.roles,
                 semanticHookReasons = family.semanticHookReasons,
@@ -2061,9 +2648,16 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
                 requiresDirectSuperTargets = family.requiresDirectSuperTargets,
                 directSuperCallCount = family.directSuperCallCount,
                 directSuperCalls = family.directSuperCalls.map { call ->
-                    val logicalOwner = call.target.parent as IrClass
+                    val logicalTarget = if (call.target.isFakeOverride) {
+                        call.target.resolveFakeOverride()
+                            ?: call.target.resolveFakeOverrideMaybeAbstract()
+                            ?: error("generic-owner direct-super fake override has no declaring Kotlin root")
+                    } else {
+                        call.target
+                    }
+                    val logicalOwner = logicalTarget.parent as IrClass
                     DotNetGenericOwnerDirectSuperCallSnapshot(
-                        logicalMemberKey = call.target.dotNetLibraryAbiKeyOrNull("F"),
+                        logicalMemberKey = logicalTarget.dotNetLibraryAbiKeyOrNull("F"),
                         logicalOwnerName = logicalOwner.fqNameWhenAvailable?.asString()
                             ?: logicalOwner.name.asString(),
                         superQualifierName = call.superQualifier.fqNameWhenAvailable?.asString()

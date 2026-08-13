@@ -268,6 +268,16 @@ adapters only where they carry real semantics or source ergonomics.”
 
 ## Acceptance tests
 
+The architecture channel now proves one important slice of this surface. A
+compiler-derived, record-driven open Kotlin subclass of an external generic
+producer exposes the exact producer-selected typed/semantic overrides and
+constructor, and a further C# generic grandchild overrides both paths. Roslyn
+and both runtimes verify open generic ancestry, exact constructor shape,
+ultimate MethodDef ownership, compatible typed dispatch, incompatible semantic
+dispatch, direct `super`, and delayed typed-read failure. No member or signature
+is selected by a C# naming convention. This is production-inert evidence, not
+yet the accepted export surface.
+
 Before this surface is accepted, Roslyn must compile and execute:
 
 - direct construction and typed property/method calls for reference, primitive,

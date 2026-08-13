@@ -118,6 +118,8 @@ public open class HostileUnsafeMid<T>(initial: T) : HostileUnsafeStore<T>(initia
     }
 
     override fun read(): T = super.read()
+
+    override fun echo(values: Array<out T>): Array<out T> = super.echo(values)
 }
 
 public fun <T> openNullableCell(value: T?): HostileCell<T?> = HostileCell(value)
@@ -132,12 +134,16 @@ public fun widenedContains(cell: HostileCell<Int>, candidate: Any?): Boolean {
 
 import generic.owner.oracle.*
 
-private open class ConsumerUnsafeLeaf<T>(initial: T) : HostileUnsafeMid<T>(initial) {
+public open class ConsumerUnsafeLeaf<T>(initial: T) : HostileUnsafeMid<T>(initial) {
     override fun writeUnsafe(next: T) {
         super.writeUnsafe(next)
     }
 
     override fun read(): T = super.read()
+
+    override fun echo(values: Array<out T>): Array<out T> = super.echo(values)
+
+    override fun label(prefix: String): String = "consumer:${super.label(prefix)}"
 }
 
 private class ConsumerStringLeaf(initial: String) : HostileMid<String>(initial) {
@@ -252,7 +258,9 @@ fun box(): String {
     if (consumerUnsafeLeaf.read() != "changed") {
         return fail("cross-library generic subclass family")
     }
-    if (consumerUnsafeLeaf.label() != "default" || consumerUnsafeLeaf.label("exact") != "exact") {
+    if (consumerUnsafeLeaf.label() != "consumer:default" ||
+        consumerUnsafeLeaf.label("exact") != "consumer:exact"
+    ) {
         return fail("cross-library generic owner default helper family")
     }
 
