@@ -118,6 +118,17 @@ IL3050/IL2026 as errors, but the missing platform linker still blocks native
 execution; complete-toolchain link/run and product measurements remain the
 next migration proof.
 
+The same exact record-driven finite factory is now exported as a closed,
+fingerprinted net10 measurement bundle. Its JIT, ReadyToRun, and full-trimming
+runs share one versioned workload, verify exact/fallback state and hostile
+dispatch, require a cross-mode checksum, and record startup, workload time,
+allocation, peak working set, publication time, and footprint. NativeAOT is a
+separate opt-in fail-hard mode and remains unproven on this machine. This
+removes the need for a second handwritten AOT/performance model, but condition
+9 still requires successful NativeAOT execution and representative real
+applications. See
+[`../archive/generic-owner-measurement-corpus-2026-08-13.md`](../archive/generic-owner-measurement-corpus-2026-08-13.md).
+
 Schema 6 also records each producer GenericParam's ordered index, CLR special
 constraints, and structural type constraints. The current child physicalizer
 admits only compiler-derived constraints in its exact supported grammar and

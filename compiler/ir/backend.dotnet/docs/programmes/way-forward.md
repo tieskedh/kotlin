@@ -570,6 +570,18 @@ Both CLRs execute the table; NativeAOT managed analysis is warning-clean but
 native link/run remains blocked on the missing platform linker and is still an
 acceptance gate.
 
+The exact same compiler-record-driven finite factory now exports a pinned,
+fingerprinted six-file net10 measurement bundle. One versioned hostile
+workload executes exact and fallback construction, shared state, typed and
+semantic arrays, multi-level dispatch, and delayed typed failure. JIT,
+ReadyToRun, and full trimming agree on its checksum and report startup,
+throughput, allocation, peak working set, publish cost, and footprint. The
+tool's NativeAOT mode cannot be replaced by those results: it requires a real
+native executable and leaves proof false on any link or run failure. This is a
+reproducible bounded-corpus baseline, not representative product evidence or
+authorization for production `C<T>`. See
+[`../archive/generic-owner-measurement-corpus-2026-08-13.md`](../archive/generic-owner-measurement-corpus-2026-08-13.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

@@ -27,7 +27,31 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: generic-owner physical-family ABI construction no
+- Last completed foundation: the exact compiler-record-driven finite generic-
+  owner factory now supplies one reproducible measurement corpus rather than a
+  second handwritten AOT/performance model. The net10 correctness test exports
+  only through an explicit per-test JVM property into a required-empty
+  directory. Its generated source, exact producer DLL, version-6 family
+  record, pinned project, pinned SDK selector, and closed-shape manifest form
+  an exact six-file bundle; five content fingerprints and the exact entry set
+  are verified before and after publication. Build intermediates and results
+  remain outside the bundle. Workload version 1 composes exact `int`, already-
+  nullable, reference, and consumer-struct roots; unlisted struct/reference
+  semantic fallback; paired state; typed and semantic arrays; multi-level
+  hostile dispatch; and an incompatible broad write followed by its delayed
+  typed-read failure. The new tool rejects unbounded reflection, stale or
+  extra files, malformed protocol fields, wrong iterations, unstable or
+  cross-mode checksums, missing counters, and any NativeAOT publish/link/run
+  failure. One hash-identical bundle produced checksum `2027804433` under JIT,
+  ReadyToRun, and full trimming and recorded startup, workload time,
+  allocation, peak working set, publication time, and footprint. These are a
+  bounded local baseline, not directly comparable dependent/self-contained
+  sizes or representative product evidence. NativeAOT was not run because the
+  platform linker remains absent, and `nativeAotProven` is false. The focused
+  separate-compilation correctness test and its strict input audit passed with
+  one test and no failure, error, or skip. See
+  [`docs/archive/generic-owner-measurement-corpus-2026-08-13.md`](docs/archive/generic-owner-measurement-corpus-2026-08-13.md).
+- The preceding foundation: generic-owner physical-family ABI construction no
   longer reconstructs CLR members from the hostile fixture's declaration
   names. The
   production planner now derives an exact, profile-neutral signature family
@@ -530,7 +554,7 @@ programmes.
 
 ## Current green gate
 
-The name-independent, compiler-derived generic-owner physical-family head
+The fingerprinted, record-driven generic-owner measurement-corpus head
 passed every constituent of the strict target gate. Production generic-owner
 emission remains erased; this checkpoint strengthens the exact evidence and
 temporary physicalization path only. The normal aggregate command remains:
@@ -539,15 +563,16 @@ temporary physicalization path only. The normal aggregate command remains:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate, build `b445429f-c142-4134-b32e-beb399234ed5`,
-completed on 2026-08-13 in 1,700.4 seconds. The six policy-
-free physical CLI model/serializer tests were Gradle-up-to-date in that
-aggregate, so their
-constituent was explicitly refreshed with `--rerun-tasks` on the same final
-source head immediately beforehand; the daemon returned success. The duration
-is recorded only to identify this coherent checkpoint, not as a performance
-comparison. Direct audit of all three result roots covers 190 XML files and
-2,204 tests, all written after the final physical-family source change:
+The latest aggregate, build `e368a9b1-bc49-4e29-9540-88400dd7386a`,
+completed on 2026-08-13 in 749.9 seconds. The six policy-free physical CLI
+model/serializer tests and the integration constituent were Gradle-up-to-date
+because this tranche changes neither owner. The model constituent was
+explicitly refreshed afterward on the same final worktree with
+`--rerun-tasks`; build `3e37ae8f-6198-4820-90d7-670228be8cfe` completed in
+322.9 seconds. The FIR/IL/box result root was freshly written by the aggregate,
+and Gradle revalidated the unchanged integration inputs. These durations
+identify the coherent checkpoint; they are not performance comparisons.
+Direct audit of all three result roots covers 190 XML files and 2,204 tests:
 
 - 6 policy-free physical CLI model/serializer tests
 - 2,073 FIR, IL-text, and box tests
@@ -580,6 +605,16 @@ test retains its user-defined struct subclass, virtual star reads, candidate
 rejection without premature narrowing, same-state mutation, and Kotlin `<T>
 nullableBox(T?)` value/reference substitutions. The unchanged negative IL-text
 case continues to reject method-owned invariant/input open generic arrays.
+
+Before that aggregate, the final ordinary hostile matrix was explicitly
+rerun without the measurement property: PSI/LightTree × Framework/CoreCLR ×
+same/separate compilation produced four XML suites, eight tests, and zero
+failures, errors, or skips. The opt-in clean-room export then reran the exact
+net10 separate-compilation lane and passed its strict task-input audit. The
+resulting six-file bundle retained all five hashes after JIT, ReadyToRun, and
+full-trimming publication and execution; all modes produced checksum
+`2027804433`. NativeAOT was not attempted without the required platform linker
+and remained explicitly false in the result protocol.
 
 This aggregate also includes compiler-derived exact constructor, member-role,
 and masked-default signatures for the temporary generic-owner physicalizer.
@@ -1888,8 +1923,9 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
   casts, reflection, and honest C# ancestry or the declaration remains erased.
   Compiler-produced Kotlin member families, physical bindings, reflection, and
   separate-assembly C# inheritance now have bounded production-inert evidence.
-  Complete NativeAOT link/run and representative product measurements remain
-  open. This design gate does not block current stdlib,
+  The record-driven JIT/ReadyToRun/full-trimming measurement baseline now
+  exists, but complete NativeAOT link/run and representative application
+  comparison remain open. This design gate does not block current stdlib,
   reflection, CLI-IR, imported CLR generics, generic methods, explicit exports,
   or removable specialization. See
   [`docs/programmes/generic-class-owner-reopening.md`](docs/programmes/generic-class-owner-reopening.md).
@@ -1949,8 +1985,11 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    consumer name, signature, or arity-based constraint inference. A separate
    finite construction-site record now selects statically rooted exact open-
    nullable routes plus one mandatory semantic fallback without unbounded
-   reflection. Next, execute that exact record-driven factory on a complete
-   NativeAOT toolchain and measure size, startup, throughput, and memory;
+   reflection. Its fingerprinted measurement corpus is now green under JIT,
+   ReadyToRun, and full trimming with one checksum. Next, execute that exact
+   verified bundle on a complete NativeAOT toolchain and record its native
+   size, startup, throughput, allocation, and peak memory, then broaden the
+   comparison to representative erased/candidate applications;
    analyzer, ReadyToRun, and trimming success alone are insufficient.
    Kotlin/Native VTA and Swift SIL
    remain optional proof engines for private/direct paths and never replace
