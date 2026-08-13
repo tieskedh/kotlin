@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
@@ -314,6 +315,160 @@ data class DotNetGenericOwnerPhysicalMethodIdentityRecord(
     }
 }
 
+/** Exact target profile whose reference-assembly contract interprets one artifact. */
+enum class DotNetGenericOwnerPhysicalTargetProfile {
+    NET48,
+    NETSTANDARD_2_0,
+    NET10_0,
+}
+
+/** Runtime classification is rooted in recorded TypeDef ancestry, never name/arity heuristics. */
+enum class DotNetGenericOwnerRuntimeClassificationMode {
+    OPEN_TYPEDEF_ANCESTRY,
+}
+
+/** Construction paths admitted by the current production-inert architecture record. */
+enum class DotNetGenericOwnerConstructionMode {
+    STATIC_EXACT,
+}
+
+enum class DotNetGenericOwnerConstructorDelegationKind {
+    THIS,
+    BASE,
+}
+
+enum class DotNetGenericOwnerPhysicalConstructorVisibility {
+    PUBLIC,
+    FAMILY,
+    ASSEMBLY,
+    FAMILY_OR_ASSEMBLY,
+    PRIVATE,
+}
+
+/** Exact `this`/`base` constructor MemberRef selected by one constructor body. */
+data class DotNetGenericOwnerPhysicalDelegatingConstructorRecord(
+    val kind: DotNetGenericOwnerConstructorDelegationKind,
+    val logicalConstructorKey: String?,
+    val physicalOwnerType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val physicalMethodName: String,
+    val signature: DotNetGenericOwnerPhysicalMethodSignatureRecord,
+) {
+    init {
+        require(logicalConstructorKey == null || logicalConstructorKey.isNotEmpty()) {
+            "a generic-owner delegated constructor has an empty logical key"
+        }
+        require(physicalOwnerType.kind == DotNetGenericOwnerPhysicalTypeKind.NAMED) {
+            "a generic-owner delegated constructor requires a named physical owner type"
+        }
+        require(physicalMethodName == ".ctor" && signature.isInstance &&
+                signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) {
+            "a generic-owner delegated constructor requires an instance .ctor signature"
+        }
+    }
+}
+
+/** Producer-selected physical constructor and its exact first construction edge. */
+data class DotNetGenericOwnerPhysicalConstructorRecord(
+    val logicalConstructorKey: String,
+    val constructionMode: DotNetGenericOwnerConstructionMode,
+    val visibility: DotNetGenericOwnerPhysicalConstructorVisibility,
+    val constructedOwnerType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val physicalConstructor: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+    val delegation: DotNetGenericOwnerPhysicalDelegatingConstructorRecord,
+) {
+    init {
+        require(logicalConstructorKey.isNotEmpty()) {
+            "a generic-owner physical constructor requires a logical key"
+        }
+        require(physicalConstructor.physicalMethodName == ".ctor" &&
+                physicalConstructor.signature.isInstance &&
+                physicalConstructor.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) {
+            "a generic-owner physical constructor requires an instance .ctor MethodDef"
+        }
+        require(constructedOwnerType.kind == DotNetGenericOwnerPhysicalTypeKind.NAMED &&
+                constructedOwnerType.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER &&
+                constructedOwnerType.typePath == physicalConstructor.physicalOwnerPath) {
+            "a generic-owner physical constructor requires its exact constructed producer owner"
+        }
+        when (delegation.kind) {
+            DotNetGenericOwnerConstructorDelegationKind.THIS -> require(
+                delegation.logicalConstructorKey != null && delegation.physicalOwnerType == constructedOwnerType
+            ) {
+                "a generic-owner this-constructor edge requires an exact constructor on the same construction"
+            }
+            DotNetGenericOwnerConstructorDelegationKind.BASE -> require(
+                delegation.physicalOwnerType != constructedOwnerType
+            ) {
+                "a generic-owner base-constructor edge cannot target the constructed owner"
+            }
+        }
+    }
+}
+
+enum class DotNetGenericOwnerPhysicalStateAccessDomain {
+    TYPED,
+    SEMANTIC,
+}
+
+enum class DotNetGenericOwnerPhysicalStateAccessOperation {
+    READ,
+    WRITE,
+}
+
+/** Explicit conversion at the one physical state boundary. */
+enum class DotNetGenericOwnerPhysicalStateAccessConversion {
+    IDENTITY,
+    INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN,
+    STATE_TO_OUTPUT_CHECKED_CAST_OR_UNBOX,
+}
+
+enum class DotNetGenericOwnerPhysicalStateVisibility {
+    PRIVATE,
+}
+
+/** One exact member-family path which reads or writes a producer-owned physical field. */
+data class DotNetGenericOwnerPhysicalStateAccessRecord(
+    val domain: DotNetGenericOwnerPhysicalStateAccessDomain,
+    val operation: DotNetGenericOwnerPhysicalStateAccessOperation,
+    val conversion: DotNetGenericOwnerPhysicalStateAccessConversion,
+    val logicalMemberKey: String,
+    val role: DotNetGenericOwnerMemberFamilyRole,
+    val physicalMethod: DotNetGenericOwnerPhysicalMethodIdentityRecord,
+) {
+    init {
+        require(logicalMemberKey.isNotEmpty()) { "a generic-owner state access requires a logical member key" }
+        require(role == when (domain) {
+            DotNetGenericOwnerPhysicalStateAccessDomain.TYPED -> DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+            DotNetGenericOwnerPhysicalStateAccessDomain.SEMANTIC -> DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK
+        }) { "a generic-owner state access domain disagrees with its member-family role" }
+        require(physicalMethod.signature.isInstance) {
+            "a generic-owner state access requires an instance MethodDef"
+        }
+        when (operation) {
+            DotNetGenericOwnerPhysicalStateAccessOperation.READ -> require(
+                physicalMethod.signature.parameterSlots.isEmpty() &&
+                        physicalMethod.signature.returnSlot.type.kind != DotNetGenericOwnerPhysicalTypeKind.VOID
+            ) { "a generic-owner state read requires a parameterless value-returning MethodDef" }
+            DotNetGenericOwnerPhysicalStateAccessOperation.WRITE -> require(
+                physicalMethod.signature.parameterSlots.size == 1 &&
+                        physicalMethod.signature.returnSlot.type.kind == DotNetGenericOwnerPhysicalTypeKind.VOID
+            ) { "a generic-owner state write requires one parameter and a void MethodDef" }
+        }
+        require(conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY ||
+                domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED) {
+            "a semantic generic-owner state access cannot perform a typed conversion"
+        }
+        require(conversion != DotNetGenericOwnerPhysicalStateAccessConversion.INPUT_TO_STATE_BOX_OR_REFERENCE_WIDEN ||
+                operation == DotNetGenericOwnerPhysicalStateAccessOperation.WRITE) {
+            "a state-input widening conversion belongs only to writes"
+        }
+        require(conversion != DotNetGenericOwnerPhysicalStateAccessConversion.STATE_TO_OUTPUT_CHECKED_CAST_OR_UNBOX ||
+                operation == DotNetGenericOwnerPhysicalStateAccessOperation.READ) {
+            "a checked state-output conversion belongs only to reads"
+        }
+    }
+}
+
 private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.referencesOwnerParameter(): Boolean =
     kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER || arguments.any { it.referencesOwnerParameter() }
 
@@ -362,6 +517,15 @@ internal data class DotNetGenericOwnerMemberFamilyPlan(
     val directSuperCalls: List<DotNetGenericOwnerDirectSuperCallPlan>,
     val hasMaskedDefaultDispatcher: Boolean,
     val logicalBindingKey: String?,
+)
+
+internal data class DotNetGenericOwnerConstructorPlan(
+    val source: IrConstructor,
+    val logicalBindingKey: String?,
+    val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    val delegatedConstructorLogicalBindingKey: String?,
+    val delegatedOwnerName: String?,
+    val delegatesToThis: Boolean,
 )
 
 internal data class DotNetGenericOwnerDirectSuperCallPlan(
@@ -421,6 +585,16 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val reachableFromSemanticEntry: Boolean,
 )
 
+/** Logical construction join retained before any future physical constructor is selected. */
+data class DotNetGenericOwnerPrototypeConstructorSnapshot(
+    val sourceIndex: Int,
+    val logicalBindingKey: String?,
+    val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    val delegatedConstructorLogicalBindingKey: String?,
+    val delegatedOwnerName: String?,
+    val delegatesToThis: Boolean,
+)
+
 data class DotNetGenericOwnerPrototypeStateSnapshot(
     val fieldName: String,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
@@ -449,6 +623,7 @@ data class DotNetGenericOwnerPrototypeSnapshot(
     val genericArity: Int,
     val disposition: DotNetGenericOwnerCandidateDisposition,
     val logicalBindingKey: String?,
+    val constructors: List<DotNetGenericOwnerPrototypeConstructorSnapshot>,
     val members: List<DotNetGenericOwnerPrototypeMemberSnapshot>,
     val states: List<DotNetGenericOwnerPrototypeStateSnapshot>,
     val metadataFixedConditionalSupertypeCount: Int,
@@ -580,8 +755,10 @@ data class DotNetGenericOwnerPhysicalMemberFamilyRecord(
 data class DotNetGenericOwnerPhysicalStateRecord(
     val logicalFieldName: String,
     val physicalFieldName: String,
+    val physicalVisibility: DotNetGenericOwnerPhysicalStateVisibility,
     val requirement: DotNetGenericOwnerStateCarrierRequirement,
     val physicalType: DotNetGenericOwnerPhysicalTypeExpressionRecord,
+    val accessPaths: List<DotNetGenericOwnerPhysicalStateAccessRecord>,
 ) {
     init {
         require(logicalFieldName.isNotEmpty() && physicalFieldName.isNotEmpty()) {
@@ -589,6 +766,56 @@ data class DotNetGenericOwnerPhysicalStateRecord(
         }
         require(physicalType.kind != DotNetGenericOwnerPhysicalTypeKind.VOID) {
             "a generic-owner physical state record cannot use void storage"
+        }
+        require(accessPaths.map { access -> access.domain to access.operation }.toSet().size == accessPaths.size) {
+            "a generic-owner physical state record has duplicate domain/operation access paths"
+        }
+        require(accessPaths.isNotEmpty()) {
+            "a generic-owner physical state record requires exact access paths"
+        }
+        when (requirement) {
+            DotNetGenericOwnerStateCarrierRequirement.SEMANTIC_OBJECT_REQUIRED -> {
+                require(physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()) {
+                    "semantic-object generic-owner state requires object storage"
+                }
+                val pathsByOperation = accessPaths.groupBy { access -> access.operation }
+                require(pathsByOperation.keys == DotNetGenericOwnerPhysicalStateAccessOperation.entries.toSet() &&
+                        pathsByOperation.values.all { operationPaths ->
+                            operationPaths.map { access -> access.domain }.toSet() ==
+                                    DotNetGenericOwnerPhysicalStateAccessDomain.entries.toSet()
+                        }) {
+                    "semantic-object generic-owner state requires paired typed and semantic reads and writes"
+                }
+            }
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_STORAGE_PRODUCER_GRAPH_PROVEN -> require(
+                physicalType.referencesOwnerParameter() &&
+                        accessPaths.map { access -> access.operation }.toSet() ==
+                        DotNetGenericOwnerPhysicalStateAccessOperation.entries.toSet() &&
+                        accessPaths.all { access ->
+                            access.domain == DotNetGenericOwnerPhysicalStateAccessDomain.TYPED &&
+                                    access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY
+                        }
+            ) {
+                "typed generic-owner state requires exact typed identity read and write paths"
+            }
+            DotNetGenericOwnerStateCarrierRequirement.COMPLETE_ACCESS_GRAPH_REQUIRED,
+            DotNetGenericOwnerStateCarrierRequirement.TYPED_WRITE_VALUE_PROVENANCE_REQUIRED,
+            -> error("an unresolved generic-owner state requirement cannot enter a physical family")
+        }
+        accessPaths.forEach { access ->
+            val valueType = when (access.operation) {
+                DotNetGenericOwnerPhysicalStateAccessOperation.READ -> access.physicalMethod.signature.returnSlot.type
+                DotNetGenericOwnerPhysicalStateAccessOperation.WRITE ->
+                    access.physicalMethod.signature.parameterSlots.single().type
+            }
+            require(if (access.conversion == DotNetGenericOwnerPhysicalStateAccessConversion.IDENTITY) {
+                valueType == physicalType
+            } else {
+                physicalType == DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType() &&
+                        valueType.referencesOwnerParameter()
+            }) {
+                "generic-owner state '$logicalFieldName' has an incompatible access conversion"
+            }
         }
     }
 }
@@ -606,6 +833,9 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
     val physicalCapabilityOwnerPath: List<String>?,
     val genericArity: Int,
     val disposition: DotNetGenericOwnerCandidateDisposition,
+    val runtimeClassificationMode: DotNetGenericOwnerRuntimeClassificationMode,
+    val constructionModes: Set<DotNetGenericOwnerConstructionMode>,
+    val constructors: List<DotNetGenericOwnerPhysicalConstructorRecord>,
     val members: List<DotNetGenericOwnerPhysicalMemberFamilyRecord>,
     val states: List<DotNetGenericOwnerPhysicalStateRecord>,
 ) {
@@ -619,6 +849,27 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
             "generic-owner physical family '$logicalOwnerKey' has an incomplete capability owner path"
         }
         require(genericArity > 0) { "generic-owner physical family '$logicalOwnerKey' requires positive arity" }
+        require(constructionModes == constructors.map { constructor -> constructor.constructionMode }.toSet() &&
+                constructors.isNotEmpty()) {
+            "generic-owner physical family '$logicalOwnerKey' has incomplete construction modes"
+        }
+        require(constructors.map { constructor -> constructor.logicalConstructorKey }.toSet().size == constructors.size) {
+            "generic-owner physical family '$logicalOwnerKey' has duplicate logical constructors"
+        }
+        require(constructors.map { constructor -> constructor.physicalConstructor }.toSet().size == constructors.size) {
+            "generic-owner physical family '$logicalOwnerKey' has duplicate physical constructors"
+        }
+        require(constructors.all { constructor ->
+            constructor.physicalConstructor.physicalOwnerPath == physicalOwnerPath &&
+                    constructor.constructedOwnerType.genericArity == genericArity &&
+                    constructor.constructedOwnerType.arguments.map { argument -> argument.parameterIndex } ==
+                    (0 until genericArity).toList() &&
+                    constructor.constructedOwnerType.arguments.all { argument ->
+                        argument.kind == DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER
+                    }
+        }) {
+            "generic-owner physical family '$logicalOwnerKey' has an invalid constructed owner"
+        }
         require(members.map { member -> member.logicalMemberKey }.toSet().size == members.size) {
             "generic-owner physical family '$logicalOwnerKey' has duplicate logical members"
         }
@@ -658,12 +909,32 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         }) {
             "generic-owner physical family '$logicalOwnerKey' has a dispatcher for another capability owner"
         }
+        val memberSlots = members.associate { member -> member.logicalMemberKey to member.slots.associateBy { it.role } }
+        require(states.flatMap { state -> state.accessPaths }.all { access ->
+            memberSlots[access.logicalMemberKey]?.get(access.role)?.let { slot ->
+                slot.physicalOwnerPath == access.physicalMethod.physicalOwnerPath &&
+                        slot.physicalMethodName == access.physicalMethod.physicalMethodName &&
+                        slot.signature == access.physicalMethod.signature
+            } == true
+        }) {
+            "generic-owner physical family '$logicalOwnerKey' has a state access outside its member slots"
+        }
+        require((constructors.flatMap { constructor ->
+            constructor.physicalConstructor.signature.allTypes() + constructor.delegation.signature.allTypes() +
+                    constructor.delegation.physicalOwnerType
+        }).flatMap { type -> type.typeParameterReferences() }.all { reference ->
+            reference.first != DotNetGenericOwnerPhysicalTypeKind.OWNER_TYPE_PARAMETER ||
+                    reference.second < genericArity
+        }) {
+            "generic-owner physical family '$logicalOwnerKey' has a construction record with a missing owner parameter"
+        }
     }
 }
 
 /** One detached, producer-fingerprinted family artifact used only by architecture evidence. */
 data class DotNetGenericOwnerPhysicalFamilyArtifact(
     val producerFingerprint: String,
+    val targetProfile: DotNetGenericOwnerPhysicalTargetProfile,
     val owners: List<DotNetGenericOwnerPhysicalFamilyRecord>,
 ) {
     init {
@@ -676,6 +947,40 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
         require(owners.flatMap { owner -> owner.members }.map { member -> member.logicalMemberKey }.toSet().size ==
                 owners.sumOf { owner -> owner.members.size }) {
             "a generic-owner family artifact has duplicate logical members across owners"
+        }
+        val constructors = owners.flatMap { owner -> owner.constructors }
+        require(constructors.map { constructor -> constructor.logicalConstructorKey }.toSet().size == constructors.size) {
+            "a generic-owner family artifact has duplicate logical constructors across owners"
+        }
+        val constructorsByLogicalKey = constructors.associateBy { constructor -> constructor.logicalConstructorKey }
+        require(constructors.all { constructor ->
+            val delegation = constructor.delegation
+            val target = delegation.logicalConstructorKey?.let(constructorsByLogicalKey::get)
+            if (target == null) {
+                delegation.physicalOwnerType.scope != DotNetGenericOwnerPhysicalTypeScope.PRODUCER
+            } else {
+                delegation.physicalOwnerType.scope == DotNetGenericOwnerPhysicalTypeScope.PRODUCER &&
+                        delegation.physicalOwnerType.typePath == target.physicalConstructor.physicalOwnerPath &&
+                        delegation.signature == target.physicalConstructor.signature &&
+                        (delegation.kind != DotNetGenericOwnerConstructorDelegationKind.THIS ||
+                                constructor.physicalConstructor.physicalOwnerPath ==
+                                target.physicalConstructor.physicalOwnerPath) &&
+                        (delegation.kind != DotNetGenericOwnerConstructorDelegationKind.BASE ||
+                                constructor.physicalConstructor.physicalOwnerPath !=
+                                target.physicalConstructor.physicalOwnerPath)
+            }
+        }) {
+            "a generic-owner family artifact has a delegated construction edge which disagrees with its target"
+        }
+        constructors.forEach { root ->
+            val visited = mutableSetOf<String>()
+            var current: DotNetGenericOwnerPhysicalConstructorRecord? = root
+            while (current != null) {
+                require(visited.add(current.logicalConstructorKey)) {
+                    "a generic-owner family artifact has a cyclic local constructor delegation"
+                }
+                current = current.delegation.logicalConstructorKey?.let(constructorsByLogicalKey::get)
+            }
         }
     }
 
@@ -692,7 +997,7 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 3
+    const val SCHEMA_VERSION = 4
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -705,6 +1010,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
     fun encode(artifact: DotNetGenericOwnerPhysicalFamilyArtifact): String = buildString {
         appendLine("$MAGIC\t$SCHEMA_VERSION")
         appendLine("P\t${artifact.producerFingerprint}")
+        appendLine("Q\t${artifact.targetProfile.name}")
         val owners = artifact.owners.sortedBy { owner -> owner.logicalOwnerKey }
         appendLine("N\t${owners.size}")
         owners.forEach { owner ->
@@ -721,10 +1027,33 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         ?: "-",
                     owner.genericArity.toString(),
                     owner.disposition.name,
+                    owner.runtimeClassificationMode.name,
+                    owner.constructionModes.sortedBy { mode -> mode.name }.joinToString(",") { mode -> mode.name },
+                    owner.constructors.size.toString(),
                     members.size.toString(),
                     states.size.toString(),
                 ).joinToString("\t")
             )
+            owner.constructors.sortedBy { constructor -> constructor.logicalConstructorKey }.forEach { constructor ->
+                val delegation = constructor.delegation
+                appendLine(
+                    listOf(
+                        "K",
+                        constructor.logicalConstructorKey.encoded(),
+                        constructor.constructionMode.name,
+                        constructor.visibility.name,
+                        constructor.constructedOwnerType.serialized().encoded(),
+                        constructor.physicalConstructor.physicalOwnerPath.joinToString("\u0000").encoded(),
+                        constructor.physicalConstructor.physicalMethodName.encoded(),
+                        constructor.physicalConstructor.signature.serialized().encoded(),
+                        delegation.kind.name,
+                        delegation.logicalConstructorKey?.encoded() ?: "-",
+                        delegation.physicalOwnerType.serialized().encoded(),
+                        delegation.physicalMethodName.encoded(),
+                        delegation.signature.serialized().encoded(),
+                    ).joinToString("\t")
+                )
+            }
             members.forEach { member ->
                 val roles = member.roles.sortedBy { role -> role.name }
                 val reasons = member.semanticHookReasons.sortedBy { reason -> reason.name }
@@ -800,10 +1129,27 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                         "S",
                         state.logicalFieldName.encoded(),
                         state.physicalFieldName.encoded(),
+                        state.physicalVisibility.name,
                         state.requirement.name,
                         state.physicalType.serialized().encoded(),
+                        state.accessPaths.size.toString(),
                     ).joinToString("\t")
                 )
+                state.accessPaths.sortedWith(compareBy({ it.domain.name }, { it.operation.name })).forEach { access ->
+                    appendLine(
+                        listOf(
+                            "X",
+                            access.domain.name,
+                            access.operation.name,
+                            access.conversion.name,
+                            access.logicalMemberKey.encoded(),
+                            access.role.name,
+                            access.physicalMethod.physicalOwnerPath.joinToString("\u0000").encoded(),
+                            access.physicalMethod.physicalMethodName.encoded(),
+                            access.physicalMethod.signature.serialized().encoded(),
+                        ).joinToString("\t")
+                    )
+                }
             }
         }
     }
@@ -811,6 +1157,7 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
     fun decode(
         text: String,
         expectedProducerFingerprint: String? = null,
+        expectedTargetProfile: DotNetGenericOwnerPhysicalTargetProfile? = null,
     ): DotNetGenericOwnerPhysicalFamilyArtifact {
         val lines = text.removeSuffix("\n").split('\n').map { line -> line.removeSuffix("\r") }
         var index = 0
@@ -850,9 +1197,19 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 "generic-owner family artifact does not describe the selected producer"
             }
         }
+        val targetProfile = enumValue(
+            read("Q", 2)[1],
+            DotNetGenericOwnerPhysicalTargetProfile.entries.toTypedArray(),
+            "target profile",
+        )
+        if (expectedTargetProfile != null) {
+            require(targetProfile == expectedTargetProfile) {
+                "generic-owner family artifact targets '$targetProfile', not '$expectedTargetProfile'"
+            }
+        }
         val ownerCount = count(read("N", 2)[1], "owner")
         val owners = List(ownerCount) {
-            val fields = read("O", 8)
+            val fields = read("O", 11)
             val logicalOwnerKey = fields[1].decoded()
             val ownerPath = fields[2].decoded().split('\u0000')
             val capabilityOwnerPath = fields[3].takeUnless { it == "-" }?.decoded()?.split('\u0000')
@@ -862,8 +1219,53 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 DotNetGenericOwnerCandidateDisposition.entries.toTypedArray(),
                 "owner disposition",
             )
-            val memberCount = count(fields[6], "member")
-            val stateCount = count(fields[7], "state")
+            val runtimeClassificationMode = enumValue(
+                fields[6],
+                DotNetGenericOwnerRuntimeClassificationMode.entries.toTypedArray(),
+                "runtime classification mode",
+            )
+            val constructionModes = enumSet(
+                fields[7],
+                DotNetGenericOwnerConstructionMode.entries.toTypedArray(),
+                "construction mode",
+            )
+            val constructorCount = count(fields[8], "constructor")
+            val memberCount = count(fields[9], "member")
+            val stateCount = count(fields[10], "state")
+            val constructors = List(constructorCount) {
+                val constructorFields = read("K", 13)
+                val physicalConstructor = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                    physicalOwnerPath = constructorFields[5].decoded().split('\u0000'),
+                    physicalMethodName = constructorFields[6].decoded(),
+                    signature = constructorFields[7].decoded().deserializedSignature(),
+                )
+                DotNetGenericOwnerPhysicalConstructorRecord(
+                    logicalConstructorKey = constructorFields[1].decoded(),
+                    constructionMode = enumValue(
+                        constructorFields[2],
+                        DotNetGenericOwnerConstructionMode.entries.toTypedArray(),
+                        "constructor mode",
+                    ),
+                    visibility = enumValue(
+                        constructorFields[3],
+                        DotNetGenericOwnerPhysicalConstructorVisibility.entries.toTypedArray(),
+                        "constructor visibility",
+                    ),
+                    constructedOwnerType = constructorFields[4].decoded().deserializedType(),
+                    physicalConstructor = physicalConstructor,
+                    delegation = DotNetGenericOwnerPhysicalDelegatingConstructorRecord(
+                        kind = enumValue(
+                            constructorFields[8],
+                            DotNetGenericOwnerConstructorDelegationKind.entries.toTypedArray(),
+                            "constructor delegation kind",
+                        ),
+                        logicalConstructorKey = constructorFields[9].takeUnless { it == "-" }?.decoded(),
+                        physicalOwnerType = constructorFields[10].decoded().deserializedType(),
+                        physicalMethodName = constructorFields[11].decoded(),
+                        signature = constructorFields[12].decoded().deserializedSignature(),
+                    ),
+                )
+            }
             val members = List(memberCount) {
                 val memberFields = read("M", 9)
                 val logicalMemberKey = memberFields[1].decoded()
@@ -964,16 +1366,53 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 )
             }
             val states = List(stateCount) {
-                val stateFields = read("S", 5)
+                val stateFields = read("S", 7)
+                val accessCount = count(stateFields[6], "state access")
                 DotNetGenericOwnerPhysicalStateRecord(
                     logicalFieldName = stateFields[1].decoded(),
                     physicalFieldName = stateFields[2].decoded(),
-                    requirement = enumValue(
+                    physicalVisibility = enumValue(
                         stateFields[3],
+                        DotNetGenericOwnerPhysicalStateVisibility.entries.toTypedArray(),
+                        "state visibility",
+                    ),
+                    requirement = enumValue(
+                        stateFields[4],
                         DotNetGenericOwnerStateCarrierRequirement.entries.toTypedArray(),
                         "state requirement",
                     ),
-                    physicalType = stateFields[4].decoded().deserializedType(),
+                    physicalType = stateFields[5].decoded().deserializedType(),
+                    accessPaths = List(accessCount) {
+                        val accessFields = read("X", 9)
+                        DotNetGenericOwnerPhysicalStateAccessRecord(
+                            domain = enumValue(
+                                accessFields[1],
+                                DotNetGenericOwnerPhysicalStateAccessDomain.entries.toTypedArray(),
+                                "state access domain",
+                            ),
+                            operation = enumValue(
+                                accessFields[2],
+                                DotNetGenericOwnerPhysicalStateAccessOperation.entries.toTypedArray(),
+                                "state access operation",
+                            ),
+                            conversion = enumValue(
+                                accessFields[3],
+                                DotNetGenericOwnerPhysicalStateAccessConversion.entries.toTypedArray(),
+                                "state access conversion",
+                            ),
+                            logicalMemberKey = accessFields[4].decoded(),
+                            role = enumValue(
+                                accessFields[5],
+                                DotNetGenericOwnerMemberFamilyRole.entries.toTypedArray(),
+                                "state access member role",
+                            ),
+                            physicalMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                                physicalOwnerPath = accessFields[6].decoded().split('\u0000'),
+                                physicalMethodName = accessFields[7].decoded(),
+                                signature = accessFields[8].decoded().deserializedSignature(),
+                            ),
+                        )
+                    },
                 )
             }
             DotNetGenericOwnerPhysicalFamilyRecord(
@@ -982,12 +1421,15 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
                 physicalCapabilityOwnerPath = capabilityOwnerPath,
                 genericArity = genericArity,
                 disposition = disposition,
+                runtimeClassificationMode = runtimeClassificationMode,
+                constructionModes = constructionModes,
+                constructors = constructors,
                 members = members,
                 states = states,
             )
         }
         require(index == lines.size) { "generic-owner family artifact has trailing records" }
-        return DotNetGenericOwnerPhysicalFamilyArtifact(producerFingerprint, owners)
+        return DotNetGenericOwnerPhysicalFamilyArtifact(producerFingerprint, targetProfile, owners)
     }
 
     private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.serialized(): String =
@@ -1307,6 +1749,7 @@ internal data class DotNetGenericOwnerArchitecturePlan(
     val owner: IrClass,
     val logicalBindingKey: String?,
     val disposition: DotNetGenericOwnerCandidateDisposition,
+    val constructors: List<DotNetGenericOwnerConstructorPlan>,
     val memberPolicies: Map<IrSimpleFunction, DotNetGenericOwnerMemberPolicy>,
     val memberFamilies: Map<IrSimpleFunction, DotNetGenericOwnerMemberFamilyPlan>,
     val memberAccesses: Map<IrSimpleFunction, DotNetGenericOwnerMemberAccessPlan>,
@@ -1336,6 +1779,16 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
         genericArity = owner.typeParameters.size,
         disposition = disposition,
         logicalBindingKey = logicalBindingKey,
+        constructors = constructors.mapIndexed { sourceIndex, constructor ->
+            DotNetGenericOwnerPrototypeConstructorSnapshot(
+                sourceIndex = sourceIndex,
+                logicalBindingKey = constructor.logicalBindingKey,
+                parameterSlotDomains = constructor.parameterSlotDomains,
+                delegatedConstructorLogicalBindingKey = constructor.delegatedConstructorLogicalBindingKey,
+                delegatedOwnerName = constructor.delegatedOwnerName,
+                delegatesToThis = constructor.delegatesToThis,
+            )
+        },
         members = memberFamilies.entries.mapIndexed { sourceIndex, entry ->
             val source = entry.key
             val family = entry.value

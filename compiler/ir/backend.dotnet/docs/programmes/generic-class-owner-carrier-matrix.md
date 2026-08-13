@@ -478,7 +478,7 @@ The binding codec is not changed during this architecture phase. A production
 migration would require a new schema epoch whose logical class record carries
 one `GenericOwnerBinding` equivalent with at least:
 
-The architecture-only version-3 artifact proves the logical-key join,
+The architecture-only version-4 artifact proves the logical-key join,
 producer fingerprint, owner/capability paths, arity, disposition, basic state
 requirement, complete role set, selected MethodDef owner/name and dispatch,
 slot-domain vector, and neutral structural signature. It is deliberately not
@@ -487,8 +487,14 @@ non-generic interface MethodDef it implements, with an equal signature.
 Role-specific direct-super targets and the distinct static masked-default
 helper carry complete signatures as well. The recursive type vocabulary covers
 built-ins, `!T`, `!!T`, producer/core/assembly named generic instances, and SZ
-arrays without profile-specific IL spelling. It does not yet claim
-construction/profile modes, state access paths, or reflection normalization.
+arrays without profile-specific IL spelling. Version 4 additionally records
+the exact target profile, open-TypeDef runtime-classification mode, the strict
+subset of admitted construction modes, each constructor MethodDef/visibility/
+constructed owner and exact `this`/`base` edge, plus the selected field's
+visibility/type and exact typed/semantic read/write paths and conversions. The
+current subset is only `STATIC_EXACT`; runtime-selected exact and semantic
+fallback construction remain unproven. Reflection normalization is not yet
+claimed.
 
 | Field | Meaning |
 | --- | --- |

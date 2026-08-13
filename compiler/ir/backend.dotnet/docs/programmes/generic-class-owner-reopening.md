@@ -176,7 +176,7 @@ families and producer/consumer binding records—not the base owner shape. Local
 generic subclasses now have detached typed-to-typed and semantic-to-semantic
 links; inherited semantic hooks are propagated as obligations and private
 dispatchers remain final selectors. A generic consumer subclass of an external
-producer records the overridden logical key. A production-inert version-3
+producer records the overridden logical key. A production-inert version-4
 family artifact now proves the first cross-assembly link: it is fingerprinted
 to the exact temporary producer, wholly decoded before use, and supplies the
 producer-selected typed and semantic MethodDef owners, names, dispatch,
@@ -192,9 +192,14 @@ targets and the static masked-default helper carry complete signatures too.
 Broad candidate inputs propagate to a fixed point across local override roots
 and are inherited from the external producer record, so a derived declaration
 that looks strict in isolation cannot silently narrow the Kotlin family.
-The remaining cross-assembly design work is construction/profile, state-access,
-and reflection normalization records plus physicalization of a Kotlin-produced
-subclass family.
+Version 4 also records the exact target profile, open-TypeDef classification,
+statically exact constructor MethodDefs/visibility/constructed owners and
+`this`/`base` edges, and the one state field's paired typed/semantic read/write
+MethodDefs and conversions. The decoded record now drives the separate C#
+consumer's immediate generic base construction, constructor input, and state
+operations without reconstruction. Runtime-selected/fallback construction is
+not admitted. The remaining cross-assembly design work is reflection
+normalization plus physicalization of a Kotlin-produced subclass family.
 
 ## Engineering gates
 

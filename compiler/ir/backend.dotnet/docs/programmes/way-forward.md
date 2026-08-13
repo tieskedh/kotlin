@@ -498,9 +498,15 @@ Producer reflection and a separately compiled record-driven C# consumer verify
 the same identities on both runtimes. Broad candidate inputs reach a fixed
 point across local override roots and are inherited from the producer record by
 a separate consumer; a locally strict declaration cannot narrow that semantic
-authority. Construction/profile modes, state-access
-paths, and reflection normalization remain next, followed by a Kotlin-produced
-subclass physicalizer without consumer inference.
+authority. Version 4 adds the exact target profile and open-TypeDef runtime
+classification, admits only statically exact construction, and records every
+constructor MethodDef/visibility/constructed owner and `this`/`base` edge.
+Each selected state field now has exact paired typed/semantic read/write
+MethodDefs and explicit boundary conversions; the record-driven C# consumer
+uses those identities for its immediate base construction and state paths.
+Runtime-selected/fallback construction remains unproven. Reflection
+normalization is next, followed by a Kotlin-produced subclass physicalizer
+without consumer inference.
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,

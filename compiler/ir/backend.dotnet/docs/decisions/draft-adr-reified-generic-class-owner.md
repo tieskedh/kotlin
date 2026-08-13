@@ -318,7 +318,7 @@ hooks are propagated and point to ancestor semantic prototypes, and private
 capability dispatchers never form override chains. When the base generic owner
 is external, the consumer records the overridden logical member key and the
 candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
-slot is inferred from the current erased artifact. A production-inert version-3
+slot is inferred from the current erased artifact. A production-inert version-4
 family artifact now makes the first external link objective: it fingerprints
 the exact temporary producer and records logical joins, owner/capability paths,
 arity, disposition, state requirements, complete roles/reasons, selected
@@ -333,8 +333,13 @@ only to member physicalization proof, never admission. Production DLL/KLIB and
 the erased emitter do not consume this artifact. Version 3 gives separate
 typed/semantic direct-super targets and the static masked-default helper exact
 signatures as well; the helper remains outside override roles and preserves
-derived typed dispatch. A complete migration record still needs construction/
-profile, state-access, and reflection identities.
+derived typed dispatch. Version 4 records the exact target profile,
+open-TypeDef classification mode, statically exact constructor MethodDefs and
+visibility, constructed owner, exact `this`/`base` edges, and the selected
+field carrier's paired typed/semantic read/write MethodDefs and boundary
+conversions. It admits no runtime-selected or semantic-fallback construction.
+A complete migration record still needs reflection normalization and the
+separately evaluated runtime/fallback construction modes.
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families

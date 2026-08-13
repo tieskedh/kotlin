@@ -77,6 +77,8 @@ public open class HostileMixed<in I, out O> {
 public open class HostileUnsafeStore<out T>(initial: T) {
     private var stored: T = initial
 
+    public constructor(initial: T, marker: Int) : this(initial)
+
     @Suppress("UNCHECKED_CAST")
     private fun installUnchecked(candidate: Any?) {
         stored = candidate as T
