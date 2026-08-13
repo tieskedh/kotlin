@@ -71,11 +71,11 @@ local exact signatures are discarded in favor of the decoded producer record.
 Local detached generic subclass families are now linked role-by-role. An
 inherited semantic hook remains a separate derived obligation, while the
 private dispatcher is never virtualized as an override. Cross-assembly
-consumers retain the overridden producer logical key. A version-6 architecture
-artifact now binds that key to the exact producer-selected typed/semantic
-MethodDef owner/name, dispatch, slot-domain vector, and neutral structural
-signature after complete producer-fingerprint/schema
-validation. Stale, truncated, wrong-producer, duplicate, incomplete, and
+consumers retain the overridden producer logical key. The architecture
+artifact, now at schema 7, binds that key to the exact producer-selected
+typed/semantic MethodDef owner/name, dispatch, slot-domain vector, and neutral
+structural signature after complete producer-fingerprint/schema validation.
+Stale, truncated, wrong-producer, duplicate, incomplete, and
 missing-member records fail before any binding is returned; final capability
 dispatchers never become override targets. Each dispatcher separately records
 the exact non-generic capability MethodDef with the same signature. Recursive
@@ -103,8 +103,9 @@ sealed and final producer slots reject the physicalization. The resulting
 record drives the hostile C# oracle only.
 
 A separate consumer-side construction record now corrects the earlier
-constructor-owned mode model without changing producer schema 6. The final
-compilation supplies a finite set of concrete runtime types; the decoded
+constructor-owned mode model while keeping runtime roots outside producer
+schema 7. The final compilation supplies a finite set of concrete runtime
+types; the decoded
 producer supplies the open owner, semantic capability, and strict public
 one-`!T` constructor. The current fallback proof requires an unconstrained
 owner parameter. Listed value/reference roots select statically visible exact
@@ -136,6 +137,18 @@ requires equality with the producer row. Matching arity never substitutes for
 constraint compatibility. A TypeDef constraint cannot reference a method
 parameter, and producer constraints cannot reference consumer-compilation
 types; unsupported Kotlin bounds retain a fail-closed proof obligation.
+
+Schema 7 adds a complete classification catalog for every logically bindable
+generic owner in the producer snapshot. Each entry records its logical owner,
+arity, disposition, and sorted constructor/member binding keys independently
+of whether a physical family exists. Every published family must match its
+catalog entry exactly. The metadata-fixed `HostileNullableDerived<T>` entry is
+therefore present with
+`BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE` while no CLR-generic family is
+published. Consumer resolution distinguishes that recorded absence from an
+unknown member or malformed producer. This is still test-owned architecture
+evidence; production DLL/KLIB classification remains part of the atomic
+cutover.
 
 This proof kind intentionally admits only the hostile public/open/non-inner
 child with one direct base and one constructor. Additional interfaces, fields,

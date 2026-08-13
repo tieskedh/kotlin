@@ -27,11 +27,27 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the exact compiler-record-driven finite generic-
+- Last completed foundation: generic-owner schema 7 now separates complete
+  producer candidate classification from optional physical-family
+  publication. Every logically bindable producer snapshot records its owner
+  key, arity, disposition, and sorted constructor/member binding keys. A
+  published physical family must match that catalog entry exactly. The
+  metadata-fixed `HostileNullableDerived<T> : HostileCell<T?>` candidate is
+  therefore serialized with
+  `BLOCKED_METADATA_FIXED_CONDITIONAL_SUPERTYPE` but no dishonest CLR-generic
+  family. Exact family lookup and external member resolution distinguish this
+  recorded absence from an unknown or malformed producer and report the
+  authoritative disposition; consumers never infer a family from absence.
+  Duplicate classifications, omitted physical-owner classifications, and
+  catalog/family key disagreement fail before binding. The exact PSI and
+  LightTree separate-compilation lanes pass. Production emission remains
+  erased and neither DLL nor KLIB consumes the architecture artifact. See
+  [`docs/archive/generic-owner-producer-classification-catalog-2026-08-13.md`](docs/archive/generic-owner-producer-classification-catalog-2026-08-13.md).
+- The preceding foundation: the exact compiler-record-driven finite generic-
   owner factory now supplies one reproducible measurement corpus rather than a
   second handwritten AOT/performance model. The net10 correctness test exports
   only through an explicit per-test JVM property into a required-empty
-  directory. Its generated source, exact producer DLL, version-6 family
+  directory. Its generated source, exact producer DLL, version-7 family
   record, pinned project, pinned SDK selector, and closed-shape manifest form
   an exact six-file bundle; five content fingerprints and the exact entry set
   are verified before and after publication. Build intermediates and results
@@ -79,8 +95,8 @@ verification, and work state.
   PSI/LightTree × Framework/CoreCLR × same/separate
   compilation: four suites, eight tests, zero failures, errors, or skips.
   Production emission remains erased and does not consume these snapshots.
-- The preceding foundation: the production-inert generic-owner schema-version-6
-  artifact now feeds a compiler-derived external Kotlin subclass physicalizer.
+- The preceding schema-6 family/constraint foundation, carried forward by
+  schema 7, feeds a compiler-derived external Kotlin subclass physicalizer.
   Every typed entry, semantic hook,
   capability dispatcher, direct-`super` target, and static masked-default helper
   carries an exact MethodDef owner/name, dispatch, complete value-position
@@ -150,7 +166,7 @@ verification, and work state.
   typed and semantic multi-level dispatch, direct `super`, delayed typed-read
   failure, reflection ancestry, and classifier non-normalization on Framework
   CLR and CoreCLR. A separate consumer-side construction plan now keeps final-
-  compilation roots out of producer schema 6. It derives a finite exact
+  compilation roots out of producer schema 7. It derives a finite exact
   runtime-token table from the decoded unconstrained owner/capability/public
   strict constructor, normalizes already-nullable values idempotently, and
   requires one default
@@ -554,23 +570,19 @@ programmes.
 
 ## Current green gate
 
-The fingerprinted, record-driven generic-owner measurement-corpus head
-passed every constituent of the strict target gate. Production generic-owner
-emission remains erased; this checkpoint strengthens the exact evidence and
-temporary physicalization path only. The normal aggregate command remains:
+The producer-classification-catalog head passed every constituent of the
+strict target gate. Production generic-owner emission remains erased; this
+checkpoint strengthens only the architecture artifact and fail-closed
+producer/consumer authority. The normal aggregate command remains:
 
 ```text
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate, build `e368a9b1-bc49-4e29-9540-88400dd7386a`,
-completed on 2026-08-13 in 749.9 seconds. The six policy-free physical CLI
-model/serializer tests and the integration constituent were Gradle-up-to-date
-because this tranche changes neither owner. The model constituent was
-explicitly refreshed afterward on the same final worktree with
-`--rerun-tasks`; build `3e37ae8f-6198-4820-90d7-670228be8cfe` completed in
-322.9 seconds. The FIR/IL/box result root was freshly written by the aggregate,
-and Gradle revalidated the unchanged integration inputs. These durations
+The latest aggregate completed on 2026-08-13 in 1,673.6 seconds. Its FIR/IL/
+box and integration roots were freshly written; the six policy-free physical
+CLI model/serializer tests were Gradle-up-to-date and then explicitly refreshed
+on the same final worktree with `--rerun-tasks` in 36.3 seconds. These durations
 identify the coherent checkpoint; they are not performance comparisons.
 Direct audit of all three result roots covers 190 XML files and 2,204 tests:
 
@@ -606,6 +618,14 @@ rejection without premature narrowing, same-state mutation, and Kotlin `<T>
 nullableBox(T?)` value/reference substitutions. The unchanged negative IL-text
 case continues to reject method-owned invariant/input open generic arrays.
 
+Schema version 7 adds the complete producer candidate-classification catalog
+and requires every optional physical family to match its owner disposition,
+arity, constructor keys, and member keys. The hostile metadata-fixed derived
+owner round-trips as a known erased-only exclusion without a physical family;
+known absence, unknown logical members, and malformed family/catalog joins are
+separate rejected states. Both frontends and both CLR profiles execute that
+record in the eight hostile lanes.
+
 Before that aggregate, the final ordinary hostile matrix was explicitly
 rerun without the measurement property: PSI/LightTree × Framework/CoreCLR ×
 same/separate compilation produced four XML suites, eight tests, and zero
@@ -613,8 +633,11 @@ failures, errors, or skips. The opt-in clean-room export then reran the exact
 net10 separate-compilation lane and passed its strict task-input audit. The
 resulting six-file bundle retained all five hashes after JIT, ReadyToRun, and
 full-trimming publication and execution; all modes produced checksum
-`2027804433`. NativeAOT was not attempted without the required platform linker
-and remained explicitly false in the result protocol.
+`2027804433`. Its schema-7 physical-family artifact hash is
+`765c8bd9d62c81d35eae0cb036c78677de6d5020afb2cd8e9508125eafcf422e`;
+the producer DLL and generated source hashes remain unchanged. NativeAOT was
+not attempted without the required platform linker and remained explicitly
+false in the result protocol.
 
 This aggregate also includes compiler-derived exact constructor, member-role,
 and masked-default signatures for the temporary generic-owner physicalizer.
@@ -1978,11 +2001,14 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    classifier normalization, KLIB-only logical type-argument authority, hidden
    capability reflection, and one logical callable per complete MethodDef
    family. Version 6 additionally records ordered producer GenericParam
-   constraints. A compiler-derived external Kotlin subclass physicalizer now
+   constraints. Version 7 records the complete producer candidate catalog;
+   optional physical families must join it exactly, and metadata-fixed
+   `D<T> : C<T?>` remains a serialized erased-only exclusion rather than an
+   ambiguous omission. A compiler-derived external Kotlin subclass physicalizer now
    records its exact current-compilation owner, delegated producer base/
    constructor, typed/semantic overrides, fake-override declaration roots,
-   modality/visibility, constraints, and role-specific direct-`super` targets without
-   consumer name, signature, or arity-based constraint inference. A separate
+   modality/visibility, constraints, and role-specific direct-`super` targets
+   without consumer name, signature, or arity-based constraint inference. A separate
    finite construction-site record now selects statically rooted exact open-
    nullable routes plus one mandatory semantic fallback without unbounded
    reflection. Its fingerprinted measurement corpus is now green under JIT,

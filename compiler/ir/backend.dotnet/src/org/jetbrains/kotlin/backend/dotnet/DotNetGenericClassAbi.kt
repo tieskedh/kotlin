@@ -1603,15 +1603,56 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
     }
 }
 
+/**
+ * Producer-authoritative classification of one logically bindable generic owner.
+ *
+ * This catalog is deliberately separate from [DotNetGenericOwnerPhysicalFamilyRecord]: a
+ * declaration may be known and deterministically kept erased without publishing a prototype
+ * CLR-generic family. Constructor/member keys make that absence distinguishable from an
+ * incomplete or unrelated producer artifact.
+ */
+data class DotNetGenericOwnerCandidateClassificationRecord(
+    val logicalOwnerKey: String,
+    val genericArity: Int,
+    val disposition: DotNetGenericOwnerCandidateDisposition,
+    val logicalConstructorKeys: List<String>,
+    val logicalMemberKeys: List<String>,
+) {
+    init {
+        require(logicalOwnerKey.isNotEmpty()) {
+            "a generic-owner candidate classification requires a logical owner key"
+        }
+        require(genericArity > 0) {
+            "generic-owner candidate '$logicalOwnerKey' requires positive arity"
+        }
+        require(logicalConstructorKeys.all(String::isNotEmpty) &&
+                logicalConstructorKeys == logicalConstructorKeys.distinct().sorted()) {
+            "generic-owner candidate '$logicalOwnerKey' has unordered or duplicate logical constructors"
+        }
+        require(logicalMemberKeys.all(String::isNotEmpty) &&
+                logicalMemberKeys == logicalMemberKeys.distinct().sorted()) {
+            "generic-owner candidate '$logicalOwnerKey' has unordered or duplicate logical members"
+        }
+    }
+}
+
 /** One detached, producer-fingerprinted family artifact used only by architecture evidence. */
 data class DotNetGenericOwnerPhysicalFamilyArtifact(
     val producerFingerprint: String,
     val targetProfile: DotNetGenericOwnerPhysicalTargetProfile,
+    val classifications: List<DotNetGenericOwnerCandidateClassificationRecord>,
     val owners: List<DotNetGenericOwnerPhysicalFamilyRecord>,
 ) {
     init {
         require(PRODUCER_FINGERPRINT.matches(producerFingerprint)) {
             "a generic-owner family artifact requires a lowercase SHA-256 producer fingerprint"
+        }
+        require(classifications.isNotEmpty()) {
+            "a generic-owner family artifact requires a complete producer classification catalog"
+        }
+        require(classifications.map { classification -> classification.logicalOwnerKey }.toSet().size ==
+                classifications.size) {
+            "a generic-owner family artifact has duplicate candidate classifications"
         }
         require(owners.map { owner -> owner.logicalOwnerKey }.toSet().size == owners.size) {
             "a generic-owner family artifact has duplicate logical owners"
@@ -1628,6 +1669,21 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
         require(owners.flatMap { owner -> owner.members }.map { member -> member.logicalMemberKey }.toSet().size ==
                 owners.sumOf { owner -> owner.members.size }) {
             "a generic-owner family artifact has duplicate logical members across owners"
+        }
+        val classificationsByOwner = classifications.associateBy { classification ->
+            classification.logicalOwnerKey
+        }
+        require(owners.all { owner ->
+            classificationsByOwner[owner.logicalOwnerKey]?.let { classification ->
+                classification.genericArity == owner.genericArity &&
+                        classification.disposition == owner.disposition &&
+                        classification.logicalConstructorKeys ==
+                        owner.constructors.map { constructor -> constructor.logicalConstructorKey }.sorted() &&
+                        classification.logicalMemberKeys ==
+                        owner.members.map { member -> member.logicalMemberKey }.sorted()
+            } == true
+        }) {
+            "a generic-owner physical family disagrees with its producer candidate classification"
         }
         val constructors = owners.flatMap { owner -> owner.constructors }
         require(constructors.map { constructor -> constructor.logicalConstructorKey }.toSet().size == constructors.size) {
@@ -1673,6 +1729,23 @@ data class DotNetGenericOwnerPhysicalFamilyArtifact(
     private companion object {
         val PRODUCER_FINGERPRINT = Regex("[0-9a-f]{64}")
     }
+}
+
+/**
+ * Returns one producer-selected physical family or fails with its recorded candidate
+ * classification. This never treats the absence of a family as permission to reconstruct one.
+ */
+fun DotNetGenericOwnerPhysicalFamilyArtifact.requirePhysicalFamily(
+    logicalOwnerKey: String,
+): DotNetGenericOwnerPhysicalFamilyRecord {
+    val classification = classifications.singleOrNull { candidate ->
+        candidate.logicalOwnerKey == logicalOwnerKey
+    } ?: error("generic-owner family artifact lacks producer classification '$logicalOwnerKey'")
+    return owners.singleOrNull { owner -> owner.logicalOwnerKey == logicalOwnerKey }
+        ?: error(
+            "generic-owner candidate '$logicalOwnerKey' has no physical family " +
+                    "(${classification.disposition})"
+        )
 }
 
 /**
@@ -1777,7 +1850,7 @@ fun DotNetGenericOwnerPhysicalFamilyArtifact.reflectionClassifierMatchesAncestry
  * resolve only a subset of one consumer's override obligations.
  */
 object DotNetGenericOwnerPhysicalFamilyCodec {
-    const val SCHEMA_VERSION = 6
+    const val SCHEMA_VERSION = 7
     private const val MAGIC = "kotlin-dotnet-generic-owner-families"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
@@ -1791,6 +1864,28 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
         appendLine("$MAGIC\t$SCHEMA_VERSION")
         appendLine("P\t${artifact.producerFingerprint}")
         appendLine("Q\t${artifact.targetProfile.name}")
+        val classifications = artifact.classifications.sortedBy { classification ->
+            classification.logicalOwnerKey
+        }
+        appendLine("E\t${classifications.size}")
+        classifications.forEach { classification ->
+            appendLine(
+                listOf(
+                    "L",
+                    classification.logicalOwnerKey.encoded(),
+                    classification.genericArity.toString(),
+                    classification.disposition.name,
+                    classification.logicalConstructorKeys.size.toString(),
+                    classification.logicalMemberKeys.size.toString(),
+                ).joinToString("\t")
+            )
+            classification.logicalConstructorKeys.forEach { logicalConstructorKey ->
+                appendLine("U\t${logicalConstructorKey.encoded()}")
+            }
+            classification.logicalMemberKeys.forEach { logicalMemberKey ->
+                appendLine("V\t${logicalMemberKey.encoded()}")
+            }
+        }
         val owners = artifact.owners.sortedBy { owner -> owner.logicalOwnerKey }
         appendLine("N\t${owners.size}")
         owners.forEach { owner ->
@@ -2046,6 +2141,30 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             require(targetProfile == expectedTargetProfile) {
                 "generic-owner family artifact targets '$targetProfile', not '$expectedTargetProfile'"
             }
+        }
+        val classificationCount = count(read("E", 2)[1], "candidate classification")
+        val classifications = List(classificationCount) {
+            val fields = read("L", 6)
+            val logicalOwnerKey = fields[1].decoded()
+            val genericArity = count(fields[2], "candidate generic-arity")
+            val disposition = enumValue(
+                fields[3],
+                DotNetGenericOwnerCandidateDisposition.entries.toTypedArray(),
+                "candidate disposition",
+            )
+            val logicalConstructorCount = count(fields[4], "candidate logical constructor")
+            val logicalMemberCount = count(fields[5], "candidate logical member")
+            DotNetGenericOwnerCandidateClassificationRecord(
+                logicalOwnerKey = logicalOwnerKey,
+                genericArity = genericArity,
+                disposition = disposition,
+                logicalConstructorKeys = List(logicalConstructorCount) {
+                    read("U", 2)[1].decoded()
+                },
+                logicalMemberKeys = List(logicalMemberCount) {
+                    read("V", 2)[1].decoded()
+                },
+            )
         }
         val ownerCount = count(read("N", 2)[1], "owner")
         val owners = List(ownerCount) {
@@ -2347,7 +2466,12 @@ object DotNetGenericOwnerPhysicalFamilyCodec {
             )
         }
         require(index == lines.size) { "generic-owner family artifact has trailing records" }
-        return DotNetGenericOwnerPhysicalFamilyArtifact(producerFingerprint, targetProfile, owners)
+        return DotNetGenericOwnerPhysicalFamilyArtifact(
+            producerFingerprint,
+            targetProfile,
+            classifications,
+            owners,
+        )
     }
 
     private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.serialized(): String =
@@ -2474,6 +2598,24 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
                 }
             }
         }
+    val classificationsByLogicalMember = artifact.classifications.flatMap { classification ->
+        classification.logicalMemberKeys.map { logicalMemberKey -> logicalMemberKey to classification }
+    }.groupBy({ entry -> entry.first }, { entry -> entry.second })
+    fun externalMember(
+        logicalMemberKey: String,
+    ): Pair<DotNetGenericOwnerPhysicalFamilyRecord, DotNetGenericOwnerPhysicalMemberFamilyRecord> =
+        externalMembers[logicalMemberKey] ?: run {
+            val classifications = classificationsByLogicalMember[logicalMemberKey].orEmpty()
+            if (classifications.isEmpty()) {
+                error("producer generic-owner family artifact lacks logical member '$logicalMemberKey'")
+            }
+            error(
+                "producer generic-owner candidate for logical member '$logicalMemberKey' has no physical family: " +
+                        classifications.joinToString { classification ->
+                            "${classification.logicalOwnerKey} (${classification.disposition})"
+                        }
+            )
+        }
     var resolvedAny = false
     val resolvedMembers = members.map { member ->
         val unresolved = member.overrideBindings.filter { binding ->
@@ -2486,8 +2628,7 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
             val logicalKey = requireNotNull(binding.overriddenLogicalBindingKey) {
                 "external generic-owner override '${member.sourceName}' lacks a logical member key"
             }
-            externalMembers[logicalKey]?.second
-                ?: error("producer generic-owner family artifact lacks logical member '$logicalKey'")
+            externalMember(logicalKey).second
         }
         val mergedParameterSlotDomains = producerMembers.fold(member.parameterSlotDomains) { domains, producerMember ->
             val producerDomains = producerMember.slots.single {
@@ -2499,8 +2640,7 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
             val logicalKey = requireNotNull(binding.overriddenLogicalBindingKey) {
                 "external generic-owner override '${member.sourceName}' lacks a logical member key"
             }
-            val producerEntry = externalMembers[logicalKey]
-                ?: error("producer generic-owner family artifact lacks logical member '$logicalKey'")
+            val producerEntry = externalMember(logicalKey)
             val producerMember = producerEntry.second
             fun slot(role: DotNetGenericOwnerMemberFamilyRole): DotNetGenericOwnerPhysicalMemberSlotRecord =
                 producerMember.slots.single { slot -> slot.role == role }

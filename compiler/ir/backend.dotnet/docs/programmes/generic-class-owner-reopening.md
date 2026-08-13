@@ -198,8 +198,8 @@ and producer/consumer binding records—not the base owner shape. Local
 generic subclasses now have detached typed-to-typed and semantic-to-semantic
 links; inherited semantic hooks are propagated as obligations and private
 dispatchers remain final selectors. A generic consumer subclass of an external
-producer records the overridden logical key. A production-inert version-6
-family artifact now proves the first cross-assembly link: it is fingerprinted
+producer records the overridden logical key. A production-inert family
+artifact, now at schema 7, proves the cross-assembly link: it is fingerprinted
 to the exact temporary producer, wholly decoded before use, and supplies the
 producer-selected typed and semantic MethodDef owners, names, dispatch,
 slot-domain vectors, and structural signatures for that key. A dispatcher also
@@ -245,6 +245,14 @@ Final child member overrides remain sealed, final producer slots fail, and
 semantic hooks remain protected. The record-generated C# consumer materializes
 that Kotlin-like open generic subclass and a further C# generic grandchild on
 both runtimes. Production emission remains erased.
+
+Schema 7 also records a producer-complete candidate classification catalog
+outside the optional physical families. Logical owner, arity, disposition, and
+constructor/member keys survive serialization even when the declaration is
+kept erased. `HostileNullableDerived<T>` is therefore present as a
+metadata-fixed exclusion with no physical family. Catalog/family mismatch,
+unknown declarations, and classified absence are distinct fail-closed cases;
+none authorizes consumer-side family reconstruction.
 
 Open-nullable construction now has a bounded consumer-side record rather than
 new producer-schema claims. It accepts only finite concrete final-compilation
