@@ -77,14 +77,18 @@ that cast.
 
 The eventual design must decide and test at least:
 
-- checked `as`, safe `as?`, and suppressed/unsuppressed unchecked diagnostics;
+- throwing `as`, safe `as?`, and suppressed/unsuppressed unchecked diagnostics;
 - concrete reference, value, nullable-value, and user-defined struct arguments;
 - open method type parameters and nested generic constructions;
 - null receivers and nullable cast targets; and
 - the exact physical exception and logical Kotlin classification.
 
-`as?` must still return `null` rather than leak `InvalidCastException` when the
-ordinary safe-cast contract applies.
+Parameterized `as?` does not inherit the throwing cast's platform freedom:
+generic arguments are not checked with respect to subtyping. It uses the
+logical open-owner/capability classifier, returns the same semantic object when
+that classifier matches, and otherwise returns `null`; it never leaks
+`InvalidCastException` or claims an exact constructed carrier merely because
+the CLR can test one.
 
 ## What must never be rejected
 
@@ -114,7 +118,7 @@ owners and then change representation as harder Kotlin features arrive. The
 first architecture spike uses one deliberately hostile open mutable invariant
 owner and composes value, reference, nullable-value, and user-struct
 substitutions; star, `out`, and `in` views; candidate-accepting erased methods;
-generic interfaces; multi-level Kotlin and C# inheritance/overrides; checked
+generic interfaces; multi-level Kotlin and C# inheritance/overrides; throwing
 and safe casts; reflection normalization; arrays and nested constructions; and
 separate producer/consumer assemblies.
 
@@ -307,7 +311,7 @@ Any reopening must compare the accepted erased owner and the candidate typed
 owner against the same sources and assertions:
 
 1. exact reference/value/nullable/struct construction and member access;
-2. invalid checked and safe casts, including exception timing and identity;
+2. invalid throwing and safe casts, including exception timing and identity;
 3. stars, projections, declaration variance, widened joins, and erased calls;
 4. `contains`/`containsAll` false/null/empty/throwing candidates;
 5. mutable same-object state on every successful view;
