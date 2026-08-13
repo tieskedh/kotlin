@@ -278,6 +278,14 @@ dispatch, direct `super`, and delayed typed-read failure. No member or signature
 is selected by a C# naming convention. This is production-inert evidence, not
 yet the accepted export surface.
 
+The same consumer now renders an open-nullable construction factory from a
+finite compiler record. Listed value/reference types use statically visible
+exact `C<P(T?)>` constructions, while unlisted struct/reference types return
+an honestly observable `C<object>` through the same semantic capability. The
+factory contains no `MakeGenericType` or `Activator` closure. This is an AOT-
+analyzer-clean internal construction mechanism, not permission to present a
+fallback object as an exact typed C# return.
+
 Before this surface is accepted, Roslyn must compile and execute:
 
 - direct construction and typed property/method calls for reference, primitive,

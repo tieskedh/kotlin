@@ -492,8 +492,8 @@ the exact target profile, open-TypeDef runtime-classification mode, the strict
 subset of admitted construction modes, each constructor MethodDef/visibility/
 constructed owner and exact `this`/`base` edge, plus the selected field's
 visibility/type and exact typed/semantic read/write paths and conversions. The
-current subset is only `STATIC_EXACT`; runtime-selected exact and semantic
-fallback construction remain unproven. Version 5 maps the producer's exact
+producer subset is only `STATIC_EXACT`; final-compilation runtime roots belong
+to the separate consumer record below. Version 5 maps the producer's exact
 open implementation TypeDef to the existing KLIB classifier key, declares the
 KLIB logical graph authoritative for type arguments, hides the capability from
 Kotlin classifier/member identity, and collapses every typed, semantic,
@@ -521,6 +521,23 @@ the same compiler-derived row; matching arity with different constraints fails.
 It must also be public, open, non-inner, and contain only one direct base, one
 identity-delegating constructor, and no added interface, field, initializer,
 nested type, state, or non-fake member. Inherited fake overrides stay inherited.
+
+Runtime roots do not belong in that producer artifact. A separate consumer/
+application record now proves one bounded construction-site mechanism. The
+final compilation supplies a finite set of concrete runtime types; the decoded
+producer supplies the exact open owner, semantic capability, and strict public
+one-`!T` constructor. The bounded fallback currently requires an unconstrained
+owner parameter. Value roots map to `C<Nullable<V>>`, reference roots to
+`C<R>`, and an already-nullable value root remains idempotently nullable. Every
+branch is a statically visible construction selected by exact runtime-token
+equality. One mandatory default `C<object>` route carries every unlisted value
+or reference through `S(C)`. The record cannot express unbounded
+`MakeGenericType`, and consumers cannot recover an exact carrier from the
+fallback. Invalid/nested nullable roots and constrained owners reject the whole
+plan. The hostile consumer executes all routes on both CLRs. A NativeAOT
+control passes managed analysis with IL3050/IL2026 as errors and then reaches
+the still-missing platform linker; native execution is therefore still
+unproven.
 
 | Field | Meaning |
 | --- | --- |
@@ -555,8 +572,8 @@ a producer record:
 | --- | --- |
 | exact static | the serialized physical type expression names `C<P(A)>` |
 | semantic | the position is physically `S(C)` despite retaining logical `C<A>` in KLIB |
-| runtime-selected exact behind semantic | the value is carried as `S(C)`, while construction may close the recorded open TypeDef dynamically |
-| semantic fallback construction | the selected fallback closed argument is recorded for validation but is never exposed as logical `A` |
+| runtime-selected exact behind semantic | the value is carried as `S(C)`; the current proof admits only a finite final-compilation token table whose exact constructions are statically rooted |
+| semantic fallback construction | the mandatory default `C<object>` route is recorded for validation but is never exposed as logical `A` or recovered as an exact carrier |
 | state carrier | the one physical field plus exact typed and semantic access paths selected from producer mutation reachability |
 
 The physical type-expression vocabulary belongs with the neutral physical
@@ -599,9 +616,11 @@ For each generic owner declaration and each use:
    storage only when every write is compatible, otherwise select one semantic
    field and prove failure at the first exact consuming conversion plus
    output-override coherence.
-6. Select a construction mechanism for open-nullable arguments and prove it
-   on both runtime profiles plus the AOT gates; separately classify every
-   metadata-fixed occurrence which runtime construction cannot repair.
+6. Select a construction mechanism for open-nullable arguments. Runtime-exact
+   routes require a finite final-compilation root table plus a recorded semantic
+   fallback; unbounded reflection is not a mechanism. Prove the table on both
+   runtime profiles and all AOT gates, then separately classify every metadata-
+   fixed occurrence which runtime construction cannot repair.
 7. Physicalize external Kotlin subclasses only from compiler source evidence
    joined to the completely decoded producer record; never infer a constructor,
    argument mapping, constraint compatibility, immediate base, slot, or direct-
