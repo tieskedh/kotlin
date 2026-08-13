@@ -221,9 +221,20 @@ base and one constructor, and adds no interface, field, initializer, nested
 type, state, or non-fake member; inherited fake overrides remain inherited.
 Final child member overrides remain sealed, final producer slots fail, and
 semantic hooks remain protected. The record-generated C# consumer materializes
-that Kotlin-like open generic subclass and a further C# generic grandchild on both
-runtimes. Production emission remains erased. Runtime-selected/fallback
-construction is not admitted and is the remaining construction design item.
+that Kotlin-like open generic subclass and a further C# generic grandchild on
+both runtimes. Production emission remains erased.
+
+Open-nullable construction now has a bounded consumer-side record rather than
+new producer-schema claims. It accepts only finite concrete final-compilation
+runtime roots, derives every exact owner/constructor from the decoded producer,
+and returns the semantic capability. Exact value roots use
+`C<Nullable<V>>`, exact references use `C<R>`, and already-nullable values do
+not become nested nullable types. One mandatory `C<object>` fallback handles
+unlisted value/reference roots honestly. The record has no unbounded reflection
+mode. Both CLRs execute exact and fallback paths with one state and classifier;
+a NativeAOT control passes managed analysis and reaches the absent Windows
+platform linker. Full native link/run and representative measurements remain
+the construction gate.
 
 ## Engineering gates
 
