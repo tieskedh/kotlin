@@ -478,7 +478,7 @@ The binding codec is not changed during this architecture phase. A production
 migration would require a new schema epoch whose logical class record carries
 one `GenericOwnerBinding` equivalent with at least:
 
-The architecture-only version-5 artifact proves the logical-key join,
+The architecture-only version-6 artifact proves the logical-key join,
 producer fingerprint, owner/capability paths, arity, disposition, basic state
 requirement, complete role set, selected MethodDef owner/name and dispatch,
 slot-domain vector, and neutral structural signature. It is deliberately not
@@ -503,11 +503,31 @@ from ancestry-based logical instance classification. No Kotlin name, variance,
 projection, nullability, bound, or logical type argument is reconstructed from
 CLR metadata.
 
+The architecture-only consumer now derives one external Kotlin-subclass
+physicalization from that complete record. Its own open TypeDef is explicitly
+current-compilation scoped and cannot appear in a producer artifact. The
+delegated constructor selects the immediate producer base, must have the same
+complete admitted signature, and must forward every corresponding child
+parameter unchanged; domain-vector agreement alone fails. Override
+slots retain producer MethodDef names, signatures, declaring owners, and role-
+specific direct-`super` targets while taking child visibility/modality from
+compiler IR. A fake override may therefore call a MethodDef on an ancestor even
+though construction names the immediate derived base. The hostile C# oracle
+also derives a further generic grandchild from these slots and proves sealed/
+virtual metadata and typed/semantic multi-level dispatch. This does not add a
+production binding row or authorize a reified owner. Schema 6 additionally
+records every producer GenericParam constraint row. The bounded child must have
+the same compiler-derived row; matching arity with different constraints fails.
+It must also be public, open, non-inner, and contain only one direct base, one
+identity-delegating constructor, and no added interface, field, initializer,
+nested type, state, or non-fake member. Inherited fake overrides stay inherited.
+
 | Field | Meaning |
 | --- | --- |
 | implementation owner path | the one open generic `C<>` TypeDef that owns state |
 | semantic capability path | the non-generic compiler-ABI `S(C)` interface |
 | CLR parameter arity | validation against the implementation TypeDef |
+| CLR parameter constraints | ordered special/type constraint rows copied only after exact producer/child proof |
 | runtime classification mode | recorded open-TypeDef ancestry, never name/arity guessing |
 | construction modes admitted | static exact, runtime exact, semantic fallback, or a strict subset selected by the accepted ADR |
 | profile/version epoch | fail-closed producer/consumer compatibility |
@@ -582,11 +602,15 @@ For each generic owner declaration and each use:
 6. Select a construction mechanism for open-nullable arguments and prove it
    on both runtime profiles plus the AOT gates; separately classify every
    metadata-fixed occurrence which runtime construction cannot repair.
-7. Select carriers from producer provenance and recorded bindings, not the
+7. Physicalize external Kotlin subclasses only from compiler source evidence
+   joined to the completely decoded producer record; never infer a constructor,
+   argument mapping, constraint compatibility, immediate base, slot, or direct-
+   `super` target from names, arity, or domains alone.
+8. Select carriers from producer provenance and recorded bindings, not the
    consuming expression alone.
-8. Prove casts, reflection normalization, arrays/joins, C# inheritance, and
+9. Prove casts, reflection normalization, arrays/joins, C# inheritance, and
    separate compilation on the hostile matrix.
-9. If any proof fails, retain the accepted erased owner for the whole
+10. If any proof fails, retain the accepted erased owner for the whole
    declaration. Do not publish a partial CLR-generic ABI.
 
 Only after this algorithm is executable and the hostile owner passes may the

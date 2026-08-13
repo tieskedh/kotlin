@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateDisposition
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorArgumentMapping
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectSuperCallPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyPlan
@@ -72,6 +73,8 @@ import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.resolveFakeOverride
+import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
@@ -161,6 +164,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         val members = owner.directSimpleFunctions()
         val constructors = owner.declarations.filterIsInstance<IrConstructor>().map { constructor ->
             var delegatedConstructor: IrConstructor? = null
+            var delegationArgumentMapping = DotNetGenericOwnerConstructorArgumentMapping.UNSUPPORTED
             constructor.body?.acceptVoid(object : IrVisitorVoid() {
                 override fun visitElement(element: IrElement) {
                     element.acceptChildrenVoid(this)
@@ -175,6 +179,15 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                         "Internal .NET backend error: generic-owner constructor has multiple delegation calls"
                     }
                     delegatedConstructor = expression.symbol.owner
+                    delegationArgumentMapping = if (expression.arguments.size == constructor.parameters.size &&
+                        expression.arguments.indices.all { index ->
+                            (expression.arguments[index] as? IrGetValue)?.symbol == constructor.parameters[index].symbol
+                        }
+                    ) {
+                        DotNetGenericOwnerConstructorArgumentMapping.POSITIONAL_IDENTITY
+                    } else {
+                        DotNetGenericOwnerConstructorArgumentMapping.UNSUPPORTED
+                    }
                 }
             })
             val delegated = delegatedConstructor
@@ -190,6 +203,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                         DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
                     }
                 },
+                delegationArgumentMapping = delegationArgumentMapping,
                 delegatedConstructorLogicalBindingKey = delegated?.let { target ->
                     context.preLoweringDeclarationKeys[target] ?: target.dotNetLibraryAbiKeyOrNull("F")
                 },
@@ -600,12 +614,19 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                             )
                         }
                     } else {
+                        val declaringOverride = if (overridden.isFakeOverride) {
+                            overridden.resolveFakeOverride()
+                                ?: overridden.resolveFakeOverrideMaybeAbstract()
+                                ?: error("generic-owner external fake override has no declaring Kotlin root")
+                        } else {
+                            overridden
+                        }
                         bindings.getOrPut(source) { mutableListOf() } += DotNetGenericOwnerOverrideBindingPlan(
                             source = source,
                             role = DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
-                            overriddenSource = overridden,
+                            overriddenSource = declaringOverride,
                             targetKind = DotNetGenericOwnerOverrideTargetKind.EXTERNAL_LOGICAL_BINDING_REQUIRED,
-                            overriddenLogicalBindingKey = overridden.dotNetLibraryAbiKeyOrNull("F"),
+                            overriddenLogicalBindingKey = declaringOverride.dotNetLibraryAbiKeyOrNull("F"),
                         )
                     }
                 }
