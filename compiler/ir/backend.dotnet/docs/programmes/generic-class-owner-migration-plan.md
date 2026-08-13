@@ -56,7 +56,7 @@ cutover, not an incremental vocabulary leak.
 Local detached generic subclass families are now linked role-by-role. An
 inherited semantic hook remains a separate derived obligation, while the
 private dispatcher is never virtualized as an override. Cross-assembly
-consumers retain the overridden producer logical key. A version-3 architecture
+consumers retain the overridden producer logical key. A version-4 architecture
 artifact now binds that key to the exact producer-selected typed/semantic
 MethodDef owner/name, dispatch, slot-domain vector, and neutral structural
 signature after complete producer-fingerprint/schema
@@ -66,10 +66,14 @@ dispatchers never become override targets. Each dispatcher separately records
 the exact non-generic capability MethodDef with the same signature. Recursive
 type expressions retain owner/method parameters, named instances, and SZ arrays;
 direct-super targets and the static masked-default helper also carry complete
-signatures. The artifact is test-owned and is not serialized into today's
-DLL/KLIB. The next migration artifacts add construction/profile, state-access,
-and reflection records and consume them in a Kotlin-produced subclass
-physicalizer—not an emitter switch.
+signatures. Version 4 also binds the exact target profile, open-TypeDef
+classification, statically exact constructor MethodDefs/visibility/constructed
+owners and `this`/`base` edges, plus each selected state field and its exact
+typed/semantic read/write conversions. Runtime-selected and semantic-fallback
+construction remain unadmitted. The artifact is test-owned and is not
+serialized into today's DLL/KLIB. The next migration artifact adds reflection
+normalization and is consumed with the existing record in a Kotlin-produced
+subclass physicalizer—not an emitter switch.
 
 Broad input positions are semantic override-family authority. They reach a
 fixed point across local roots and are inherited from a decoded external

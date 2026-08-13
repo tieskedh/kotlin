@@ -18,7 +18,7 @@ verification, and work state.
   positives, and post-rebase verification are recorded in
   [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
 - Last completed foundation: the production-inert generic-owner physical-family
-  artifact is now schema version 3. Every typed entry, semantic hook,
+  artifact is now schema version 4. Every typed entry, semantic hook,
   capability dispatcher, direct-`super` target, and static masked-default helper
   carries an exact MethodDef owner/name, dispatch, complete value-position
   domain vector, and profile-neutral structural signature. The type vocabulary
@@ -37,11 +37,22 @@ verification, and work state.
   InterfaceImpl mapping on Framework CLR and CoreCLR. A separately compiled C#
   consumer renders its override signatures only from the decoded record, keeps
   array identity, and rejects a producer whose typed signature disagrees with
-  the consumer snapshot. Normal production generic owners remain erased; this
-  artifact is not emitted in DLL/KLIB, represented in `dotnet.ir`, or consumed
-  by the production emitter. Construction/profile, state-access, and
-  reflection-normalization records remain required before an atomic owner
-  migration can be considered.
+  the consumer snapshot. Schema 4 additionally records the exact target
+  profile, open-TypeDef runtime-classification mode, the admitted construction
+  modes, and each constructor's MethodDef, visibility, closed producer owner,
+  and exact `this`/`base` target. Only `STATIC_EXACT` is admitted; runtime exact
+  and semantic fallback construction are not claimed. The one semantic state
+  record now names its private field carrier and exact paired typed/semantic
+  read/write MethodDefs, including the widening/boxing and checked cast/unbox
+  boundary conversions. The record-driven C# consumer obtains its immediate
+  generic base construction, constructor signature, and all four state paths
+  from the decoded artifact. Wrong-profile, incomplete, mismatched-delegation,
+  malformed-construction, unpaired-state, and unrecorded-access artifacts fail
+  atomically. Normal production generic owners remain erased; this artifact is
+  not emitted in DLL/KLIB, represented in `dotnet.ir`, or consumed by the
+  production emitter. Reflection normalization, runtime-selected construction,
+  and Kotlin-produced subclass physicalization remain required before an
+  atomic owner migration can be considered.
   The preceding foundation: open-nullable projected array reads and
   Kotlin-owned nullable generic varargs now use two distinct truthful CLR
   carriers. Ordinary `Array<out T?>` retains the original exact vector through
@@ -433,7 +444,7 @@ programmes.
 
 ## Current green gate
 
-The generic-owner schema-version-3 architecture head passed every constituent
+The generic-owner schema-version-4 architecture head passed every constituent
 of the strict target gate. The normal
 aggregate command remains:
 
@@ -441,11 +452,14 @@ aggregate command remains:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest fresh `--rerun-tasks` aggregate, build
-`9538417a-d668-483c-9963-f9adefd42eda`, completed on 2026-08-13 in 2,737.0
-seconds. The duration is recorded only to identify this coherent run, not as a
-performance comparison. Direct audit of all three final result roots covers
-190 XML files and 2,204 tests:
+The latest aggregate, build `d83b34ea-9163-4e5c-9dec-f4ffbb01b0e7`, completed
+on 2026-08-13 in 2,312.4 seconds. The six policy-free physical CLI
+model/serializer tests were Gradle-up-to-date in that aggregate, so their
+constituent was explicitly refreshed with `--rerun-tasks` on the same final
+source head immediately beforehand; the daemon returned success. The duration
+is recorded only to identify this coherent checkpoint, not as a performance
+comparison. Direct audit of all three result roots covers 190 XML files and
+2,204 tests, all written after the final schema-v4 source change:
 
 - 6 policy-free physical CLI model/serializer tests
 - 2,073 FIR, IL-text, and box tests
@@ -453,12 +467,14 @@ performance comparison. Direct audit of all three final result roots covers
 - 104 library-integration tests
 - zero failures, errors, or skips
 
-The aggregate exited successfully. Relative to schema version 2, the same
-2,204-test inventory now also executes the nested owner/method array carriers,
-schema-version-3 structural signatures and rejection cases, exact capability
-MethodDef mapping, producer reflection, and record-driven separate C# consumer
-through PSI and LightTree on Framework CLR and CoreCLR. All report zero
-failures, errors, or skips. The existing generic-class Kotlin/C# integration
+The aggregate and explicit model constituent exited successfully. Relative to
+schema version 3, the same 2,204-test inventory now also executes exact target
+profiles; statically exact constructor MethodDefs, visibility, constructed
+owners, and `this`/`base` edges; duplicate/cyclic-constructor rejection; exact
+paired typed/semantic state access and conversions; producer reflection; and a
+record-driven separate C# consumer through PSI and LightTree on Framework CLR
+and CoreCLR. All report zero failures, errors, or skips. The existing
+generic-class Kotlin/C# integration
 test retains its user-defined struct subclass, virtual star reads, candidate
 rejection without premature narrowing, same-state mutation, and Kotlin `<T>
 nullableBox(T?)` value/reference substitutions. The unchanged negative IL-text
@@ -640,6 +656,28 @@ compilation and the eight hostile parser/profile/module lanes pass with zero
 failures, errors, or skips. The fresh schema-version-3 aggregate above includes
 this tranche. Production emission remains erased; construction/profile,
 state-access, and reflection-normalization records remain outstanding.
+
+Focused work after the schema-version-3 aggregate advances the architecture
+artifact to schema version 4 and closes the static construction/profile and
+state-access record items. The compiler snapshot retains every source
+constructor's domain vector and exact logical `this`/`base` join. The physical
+record selects one target profile and open-TypeDef classification mode, admits
+only `STATIC_EXACT`, and retains each constructor MethodDef, visibility,
+constructed `C<!T>`, and exact delegated constructor identity. Local
+delegations must resolve to a recorded constructor with the same signature;
+`this` stays on the same construction and `base` targets a different owner.
+The hostile semantic-object state now records one private field and paired
+typed/semantic read/write MethodDefs with explicit identity, widening/boxing,
+and checked cast/unbox conversions. The separate C# consumer derives its
+immediate generic base, constructor input, and four state operations only from
+the decoded record; producer reflection verifies both public constructor
+overloads, the generic base edge, field visibility, and interface maps. Stale,
+wrong-profile, incomplete-constructor, malformed-delegation, wrong-construction,
+unpaired-state, conversion-mismatch, and unrecorded-access inputs fail closed.
+Backend/fixture compilation and all eight hostile parser/profile/module lanes
+pass with zero failures, errors, or skips. Production emission remains erased;
+runtime-selected/fallback construction, reflection normalization, and a
+Kotlin-produced subclass physicalizer remain outstanding.
 
 Focused evidence additionally produced and consumed the self-describing net10
 Stdlib, executed the eight hostile open-nullable cases and continued negative
@@ -1707,13 +1745,14 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    `super`, logical-binding, cast/reflection, and CLR metadata roles. The
    complete local producer graph, typed-write value provenance, snapshot-
    driven separate C# physicalizer, and versioned cross-assembly family
-   artifact now exist. Version 3 retains exact external MethodDef owners,
+   artifact now exist. Version 4 retains exact external MethodDef owners,
    override-root sets, complete typed/semantic/capability slot-domain and
    structural signature records, exact interface slot identity, nested `!T[]`/
    `!!T[]` carriers, typed/semantic direct-`super` targets, and the separate
-   static masked-default helper. Next, add construction/profile and state-
-   access identities. Follow with reflection normalization and a Kotlin-
-   produced subclass physicalizer. Compare runtime exact open-nullable construction
+   static masked-default helper, target-profile/runtime-classification
+   identity, statically exact constructor/delegation records, and exact
+   one-state typed/semantic access paths. Next, add reflection normalization
+   and a Kotlin-produced subclass physicalizer. Compare runtime exact open-nullable construction
    with semantic fallback on a complete NativeAOT toolchain; ReadyToRun/
    trimming success alone is insufficient. Kotlin/Native VTA and Swift SIL
    remain optional proof engines for private/direct paths and never replace

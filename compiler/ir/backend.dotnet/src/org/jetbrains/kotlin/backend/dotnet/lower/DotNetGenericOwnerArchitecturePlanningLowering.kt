@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerArchitecturePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateDisposition
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerDirectSuperCallPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyPlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
@@ -47,6 +48,7 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
+import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
@@ -69,6 +71,7 @@ import org.jetbrains.kotlin.ir.types.defaultType
 import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
+import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
@@ -156,6 +159,45 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
         producerInitializerAccesses: Map<ProducerInitializer, DirectMemberAccesses>,
     ): DotNetGenericOwnerArchitecturePlan {
         val members = owner.directSimpleFunctions()
+        val constructors = owner.declarations.filterIsInstance<IrConstructor>().map { constructor ->
+            var delegatedConstructor: IrConstructor? = null
+            constructor.body?.acceptVoid(object : IrVisitorVoid() {
+                override fun visitElement(element: IrElement) {
+                    element.acceptChildrenVoid(this)
+                }
+
+                override fun visitClass(declaration: IrClass) = Unit
+
+                override fun visitFunction(declaration: IrFunction) = Unit
+
+                override fun visitDelegatingConstructorCall(expression: IrDelegatingConstructorCall) {
+                    check(delegatedConstructor == null) {
+                        "Internal .NET backend error: generic-owner constructor has multiple delegation calls"
+                    }
+                    delegatedConstructor = expression.symbol.owner
+                }
+            })
+            val delegated = delegatedConstructor
+            val delegatedOwner = delegated?.parent as? IrClass
+            DotNetGenericOwnerConstructorPlan(
+                source = constructor,
+                logicalBindingKey = context.preLoweringDeclarationKeys[constructor]
+                    ?: constructor.dotNetLibraryAbiKeyOrNull("F"),
+                parameterSlotDomains = constructor.parameters.map { parameter ->
+                    if (parameter.type.referencesTypeParameterOf(owner)) {
+                        DotNetGenericOwnerPhysicalSlotDomain.STRICT_OWNER_INPUT
+                    } else {
+                        DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT
+                    }
+                },
+                delegatedConstructorLogicalBindingKey = delegated?.let { target ->
+                    context.preLoweringDeclarationKeys[target] ?: target.dotNetLibraryAbiKeyOrNull("F")
+                },
+                delegatedOwnerName = delegatedOwner?.fqNameWhenAvailable?.asString()
+                    ?: delegatedOwner?.name?.asString(),
+                delegatesToThis = delegatedOwner == owner,
+            )
+        }
         val fields = owner.directFields()
         val ownerDependentFields = fields.filterTo(linkedSetOf()) { field ->
             field.type.referencesTypeParameterOf(owner)
@@ -424,6 +466,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             owner = owner,
             logicalBindingKey = context.preLoweringDeclarationKeys[owner],
             disposition = disposition,
+            constructors = constructors,
             memberPolicies = memberPolicies,
             memberFamilies = memberFamilies,
             memberAccesses = memberAccesses,
