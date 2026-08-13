@@ -450,13 +450,16 @@ type-safe-barrier family remains separate evidence.
 | `value as C<*>` | same | same object or ordinary cast failure |
 | `value as? C<*>` | same | same object or null |
 | `value as C<X>` | exact requested construction when the cast attempts to check it | same object or classified `InvalidCastException`/`ClassCastException` |
-| `value as? C<X>` | exact requested construction | same object or null |
+| `value as? C<X>` | recorded open TypeDef ancestry or trusted `S(C)` binding; generic arguments are not a subtyping predicate | same semantic object or null; never an exact-carrier claim |
 | ordinary variance/projection conversion | logical KLIB relation plus `S(C)` | same object; never an exact constructed-owner cast |
 | unchecked incompatible exact cast | physical construction disagrees | may fail at the cast; never create a second view/store |
 
-The prototype must distinguish exact casts which the CLR can test from erased
-generic-argument checks which Kotlin cannot promise at runtime. It may not
-claim stronger runtime checking in diagnostics or reflection than it performs.
+The prototype must distinguish a parameterized throwing cast whose failure
+timing is implementation-defined from a safe cast whose generic arguments are
+not checked with respect to subtyping. It may not generalize one operation's
+platform freedom to another or claim stronger runtime checking in diagnostics
+or reflection than it performs. See the
+[platform-freedom ADR](../decisions/kotlin-semantic-authority-and-platform-freedom.md).
 
 ## Reflection and binding requirements
 

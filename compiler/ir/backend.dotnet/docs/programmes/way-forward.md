@@ -42,6 +42,11 @@ remain compatible supersets of the portable product needed by `netstandard2.0` l
 ### Semantic and artifact authority
 
 - Common declarations and stdlib generators own Kotlin source semantics.
+- Stronger CLR runtime checks are admitted only for the exact operation and
+  observation which the Kotlin specification leaves platform- or
+  implementation-dependent. Warnings and suppression annotations are not
+  semantic waivers; see the
+  [platform-freedom ADR](../decisions/kotlin-semantic-authority-and-platform-freedom.md).
 - Kotlin-produced libraries are self-describing DLLs whose embedded KLIB owns logical identity.
 - CLR metadata owns executable shape and the useful foreign-language view.
 - Prefer the native CLR/BCL identity or operation whenever the complete Kotlin
@@ -912,12 +917,15 @@ accepted reduction.
 Every change answers:
 
 1. Which Kotlin semantic invariant is authoritative?
-2. How do mature targets represent or layer it?
-3. What exact CLR constraint requires target-specific treatment?
-4. Which layer owns the logical fact, physical representation, and validation?
-5. Does the change affect public Kotlin ABI, compiler ABI, C# export, runtime, or tooling only?
-6. How do stale producers, consumers, runtime/stdlib pairs, schemas, and target profiles fail?
-7. Can C# call, implement, reflect, or pass the value without redefining Kotlin semantics?
-8. Does unsupported or malformed input fail at a useful location without shrinking an artifact?
-9. Which semantic, layout, separate-module, foreign-language, and hostile tests prove the claim?
-10. Which ADR owns the lasting decision?
+2. If a stronger CLR check is observable, which exact Kotlin specification
+   clause permits that outcome or failure point, and which negative tests
+   protect ordinary Kotlin behavior?
+3. How do mature targets represent or layer the invariant?
+4. What exact CLR constraint requires target-specific treatment?
+5. Which layer owns the logical fact, physical representation, and validation?
+6. Does the change affect public Kotlin ABI, compiler ABI, C# export, runtime, or tooling only?
+7. How do stale producers, consumers, runtime/stdlib pairs, schemas, and target profiles fail?
+8. Can C# call, implement, reflect, or pass the value without redefining Kotlin semantics?
+9. Does unsupported or malformed input fail at a useful location without shrinking an artifact?
+10. Which semantic, layout, separate-module, foreign-language, and hostile tests prove the claim?
+11. Which ADR owns the lasting decision?

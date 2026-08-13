@@ -4,6 +4,8 @@
 - Date: 2026-08-12
 - Current authority:
   [`generic-class-erased-identity.md`](generic-class-erased-identity.md)
+- Cross-cutting semantic boundary:
+  [`kotlin-semantic-authority-and-platform-freedom.md`](kotlin-semantic-authority-and-platform-freedom.md)
 - Programme:
   [`../programmes/generic-class-owner-reopening.md`](../programmes/generic-class-owner-reopening.md)
 - Design matrix:
@@ -143,8 +145,10 @@ cast instead of admitting a view that later writes an incompatible value. The
 candidate uses that permission:
 
 - `C<string> as C<int>` may throw `InvalidCastException`, logically classified
-  as Kotlin `ClassCastException`, at the checked cast;
-- the matching safe cast returns null;
+  as Kotlin `ClassCastException`, at the throwing cast;
+- `C<string> as? C<int>` checks the logical classifier rather than generic
+  argument subtyping and returns the same semantic object; a classifier
+  mismatch returns null;
 - `is C<*>`, `as C<*>`, star/projection conversions, and ordinary widened
   calls test the open declaration/capability and preserve the same object;
 - every source-legal mutation through an exact or input-projected view updates
@@ -156,6 +160,12 @@ candidate uses that permission:
 Early failure never permits a valid star, projection, variance, widened
 candidate, or separate-module call to fail. The hostile matrix, rather than a
 microbenchmark, decides that boundary.
+
+This asymmetry is deliberate. The Kotlin cast-expression rules make the
+failure point of a parameterized throwing `as` implementation-defined, while
+generic arguments of a parameterized `as?` are not checked with respect to
+subtyping. See the accepted
+[semantic-authority and platform-freedom ADR](kotlin-semantic-authority-and-platform-freedom.md).
 
 ## Physical carrier rule
 
