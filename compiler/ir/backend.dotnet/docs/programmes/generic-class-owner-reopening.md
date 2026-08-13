@@ -258,6 +258,16 @@ a NativeAOT control passes managed analysis and reaches the absent Windows
 platform linker. Full native link/run and representative measurements remain
 the construction gate.
 
+That exact compiler-record-driven factory now also owns the reproducible
+measurement corpus. A pinned and fingerprinted net10 bundle—not a second
+handwritten generic model—runs the same exact/fallback, state, array, and
+multi-level hostile dispatch workload under JIT, ReadyToRun, full trimming,
+and later NativeAOT. The first three modes agree on one checksum and record
+startup, throughput, allocation, peak working set, publish cost, and
+footprint. NativeAOT remains fail-hard and unproven until the missing platform
+linker is available. See
+[`../archive/generic-owner-measurement-corpus-2026-08-13.md`](../archive/generic-owner-measurement-corpus-2026-08-13.md).
+
 ## Engineering gates
 
 ### 1. Does the complete semantic matrix work with one object and one state?

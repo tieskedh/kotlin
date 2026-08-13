@@ -138,6 +138,19 @@ the available machine because its Visual C++ platform linker is absent. This
 is recorded, without upgrading it to a product guarantee, in
 [`../archive/generic-owner-runtime-compilation-probe-2026-08-12.md`](../archive/generic-owner-runtime-compilation-probe-2026-08-12.md).
 
+The later finite factory now has a reproducible measurement corpus derived
+from the exact version-6 producer record rather than a second handwritten
+program. It combines exact `int`, already-nullable, reference, and consumer-
+struct roots with mandatory unlisted struct/reference fallback, paired state,
+typed/semantic arrays, and multi-level hostile dispatch. One hash-identical
+net10 bundle executed with a stable checksum under JIT, ReadyToRun, and full
+trimming. Its project, SDK selector, producer, generated source, and family
+record are fingerprinted and publication cannot mutate the six-file bundle.
+See
+[`../archive/generic-owner-measurement-corpus-2026-08-13.md`](../archive/generic-owner-measurement-corpus-2026-08-13.md).
+This closes the reproducible bounded-corpus baseline, not NativeAOT or the
+representative-application/product comparison.
+
 The competing fallback is a construction such as `C<object>` used only
 through `S(C)`. It is simpler for AOT but is not the exact physical meaning of
 logical `C<Int?>` or `C<String?>`. If admitted, all boundaries must accept that

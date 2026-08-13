@@ -45,6 +45,9 @@ Archived snapshots:
 - [`generic-owner-runtime-compilation-probe-2026-08-12.md`](generic-owner-runtime-compilation-probe-2026-08-12.md)
   records the bounded JIT/ReadyToRun/trimming success and the explicitly
   incomplete NativeAOT open-nullable construction probe.
+- [`generic-owner-measurement-corpus-2026-08-13.md`](generic-owner-measurement-corpus-2026-08-13.md)
+  records the fingerprinted record-driven hostile corpus, its reproducible
+  JIT/ReadyToRun/full-trimming baseline, and the still-open NativeAOT link/run.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots
