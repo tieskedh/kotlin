@@ -662,7 +662,7 @@ private const val GENERIC_OWNER_MEASUREMENT_PROJECT_FILE = "RecordedFamilyMeasur
 private const val GENERIC_OWNER_MEASUREMENT_MANIFEST_FILE = "generic-owner-measurement.properties"
 private const val GENERIC_OWNER_MEASUREMENT_EXPORT_PROPERTY =
     "kotlin.dotnet.genericOwnerMeasurementDir"
-private const val GENERIC_OWNER_MEASUREMENT_WORKLOAD_VERSION = 1
+private const val GENERIC_OWNER_MEASUREMENT_WORKLOAD_VERSION = 2
 
 private fun genericOwnerPrototypePhysicalMethodName(
     member: DotNetGenericOwnerPrototypeMemberSnapshot,
@@ -2922,10 +2922,15 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
 
                 public static int Main(string[] arguments)
                 {
-                    if (arguments.Length != 2 || arguments[0] != "--measurement" ||
+                    bool holdForPeakWorkingSet = arguments.Length == 3 &&
+                        arguments[2] == "--hold-for-peak-working-set";
+                    if ((arguments.Length != 2 && !holdForPeakWorkingSet) ||
+                            arguments[0] != "--measurement" ||
                             !int.TryParse(arguments[1], out int iterations) || iterations < 0)
                     {
-                        Console.Error.WriteLine("usage: --measurement <non-negative iterations>");
+                        Console.Error.WriteLine(
+                            "usage: --measurement <non-negative iterations> " +
+                            "[--hold-for-peak-working-set]");
                         return 64;
                     }
                     if (iterations > 0) ExecuteMeasurementWorkload(Math.Min(iterations, 512));
@@ -2944,6 +2949,15 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                         "|elapsedTicks=" + elapsedTicks +
                         "|frequency=" + System.Diagnostics.Stopwatch.Frequency +
                         "|allocatedBytes=" + allocatedBytes);
+                    if (holdForPeakWorkingSet)
+                    {
+                        Console.Out.Flush();
+                        if (Console.In.ReadLine() != "release")
+                        {
+                            Console.Error.WriteLine("peak-working-set hold was not released");
+                            return 65;
+                        }
+                    }
                     return 0;
                 }
                 #else
@@ -3142,6 +3156,8 @@ private fun prepareGenericOwnerMeasurementBundle(
     }
     val sourceText = source.readText()
     check("GENERIC_OWNER_MEASUREMENT" in sourceText &&
+            "--hold-for-peak-working-set" in sourceText &&
+            "Console.In.ReadLine()" in sourceText &&
             "MakeGenericType" !in sourceText && "Activator.CreateInstance" !in sourceText) {
         "The generic-owner measurement source lost its finite statically rooted workload"
     }

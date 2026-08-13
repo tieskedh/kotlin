@@ -115,20 +115,20 @@ handles every unlisted type through the same
 capability/state. The plan cannot express `MakeGenericType`, duplicate/open
 roots, a missing fallback, or recovery of an exact carrier from fallback.
 Both CLRs execute the hostile table. NativeAOT managed analysis is clean with
-IL3050/IL2026 as errors, but the missing platform linker still blocks native
-execution; complete-toolchain link/run and product measurements remain the
+IL3050/IL2026 as errors, and an explicit signed MSVC toolchain now completes
+native link and execution. Representative product measurements remain the
 next migration proof.
 
 The same exact record-driven finite factory is now exported as a closed,
-fingerprinted net10 measurement bundle. Its JIT, ReadyToRun, and full-trimming
-runs share one versioned workload, verify exact/fallback state and hostile
+fingerprinted net10 measurement bundle. Its JIT, ReadyToRun, full-trimming,
+and NativeAOT runs share one versioned workload, verify exact/fallback state and hostile
 dispatch, require a cross-mode checksum, and record startup, workload time,
 allocation, peak working set, publication time, and footprint. NativeAOT is a
-separate opt-in fail-hard mode and remains unproven on this machine. This
+separate fail-hard mode and now links/runs with recorded MSVC provenance. This
 removes the need for a second handwritten AOT/performance model, but condition
-9 still requires successful NativeAOT execution and representative real
-applications. See
-[`../archive/generic-owner-measurement-corpus-2026-08-13.md`](../archive/generic-owner-measurement-corpus-2026-08-13.md).
+9 still requires representative real applications beyond this successful
+bounded NativeAOT execution. See
+[`../archive/generic-owner-native-aot-measurement-2026-08-13.md`](../archive/generic-owner-native-aot-measurement-2026-08-13.md).
 
 Schema 6 also records each producer GenericParam's ordered index, CLR special
 constraints, and structural type constraints. The current child physicalizer
