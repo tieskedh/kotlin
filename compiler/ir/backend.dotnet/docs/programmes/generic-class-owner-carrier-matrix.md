@@ -139,7 +139,7 @@ is recorded, without upgrading it to a product guarantee, in
 [`../archive/generic-owner-runtime-compilation-probe-2026-08-12.md`](../archive/generic-owner-runtime-compilation-probe-2026-08-12.md).
 
 The later finite factory now has a reproducible measurement corpus derived
-from the exact version-6 producer record rather than a second handwritten
+from the exact version-7 producer record rather than a second handwritten
 program. It combines exact `int`, already-nullable, reference, and consumer-
 struct roots with mandatory unlisted struct/reference fallback, paired state,
 typed/semantic arrays, and multi-level hostile dispatch. One hash-identical
@@ -494,7 +494,7 @@ The binding codec is not changed during this architecture phase. A production
 migration would require a new schema epoch whose logical class record carries
 one `GenericOwnerBinding` equivalent with at least:
 
-The architecture-only version-6 artifact proves the logical-key join,
+The architecture-only version-7 artifact proves the logical-key join,
 producer fingerprint, owner/capability paths, arity, disposition, basic state
 requirement, complete role set, selected MethodDef owner/name and dispatch,
 slot-domain vector, and neutral structural signature. It is deliberately not
@@ -550,6 +550,15 @@ the same compiler-derived row; matching arity with different constraints fails.
 It must also be public, open, non-inner, and contain only one direct base, one
 identity-delegating constructor, and no added interface, field, initializer,
 nested type, state, or non-fake member. Inherited fake overrides stay inherited.
+
+Schema 7 separates candidate classification from physical-family publication.
+The producer catalogs every logically bindable generic owner with its arity,
+disposition, and complete sorted constructor/member key sets. A physical
+family must join that entry exactly, but a catalog entry may deliberately have
+no family. The hostile metadata-fixed derived owner uses that latter state: it
+remains objectively known and deterministically erased, and a consumer asking
+for its physical family receives the recorded blocker rather than permission
+to infer one.
 
 Runtime roots do not belong in that producer artifact. A separate consumer/
 application record now proves one bounded construction-site mechanism. The
