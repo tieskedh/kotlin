@@ -18,7 +18,7 @@ verification, and work state.
   positives, and post-rebase verification are recorded in
   [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
 - Last completed foundation: the production-inert generic-owner physical-family
-  artifact is now schema version 4. Every typed entry, semantic hook,
+  artifact is now schema version 5. Every typed entry, semantic hook,
   capability dispatcher, direct-`super` target, and static masked-default helper
   carries an exact MethodDef owner/name, dispatch, complete value-position
   domain vector, and profile-neutral structural signature. The type vocabulary
@@ -48,10 +48,25 @@ verification, and work state.
   generic base construction, constructor signature, and all four state paths
   from the decoded artifact. Wrong-profile, incomplete, mismatched-delegation,
   malformed-construction, unpaired-state, and unrecorded-access artifacts fail
-  atomically. Normal production generic owners remain erased; this artifact is
+  atomically. Schema 5 maps each exact producer open implementation TypeDef to
+  its existing KLIB logical classifier key without copying Kotlin names or
+  logical type arguments into the physical record. Closed constructions of the
+  same open owner normalize to one classifier; exact classifier lookup rejects
+  capability and foreign subclass TypeDefs, while logical instance checks use
+  objective open-TypeDef ancestry. KLIB remains the sole authority for type
+  arguments, variance, projections, nullability, and bounds. Capability
+  interfaces remain hidden compiler ABI. Each source callable collapses every
+  typed, semantic, capability, and default-helper MethodDef in its family into
+  one logical declaration and selects the semantic dispatcher for broad
+  families or the typed entry for strict families. Constructor reflection
+  continues through the schema-4 construction records. The separately compiled
+  C# consumer executes the record-generated normalization registry for open and
+  multiple closed owners, ancestry, capability/foreign rejection, and the
+  selected private explicit-interface dispatcher on Framework CLR and CoreCLR.
+  Normal production generic owners remain erased; this artifact is
   not emitted in DLL/KLIB, represented in `dotnet.ir`, or consumed by the
-  production emitter. Reflection normalization, runtime-selected construction,
-  and Kotlin-produced subclass physicalization remain required before an
+  production emitter. Runtime-selected construction and Kotlin-produced
+  subclass physicalization remain required before an
   atomic owner migration can be considered.
   The preceding foundation: open-nullable projected array reads and
   Kotlin-owned nullable generic varargs now use two distinct truthful CLR
@@ -444,7 +459,7 @@ programmes.
 
 ## Current green gate
 
-The generic-owner schema-version-4 architecture head passed every constituent
+The generic-owner schema-version-5 architecture head passed every constituent
 of the strict target gate. The normal
 aggregate command remains:
 
@@ -452,14 +467,14 @@ aggregate command remains:
 .\gradlew.bat :compiler:backend.dotnet:dotNetTest -q
 ```
 
-The latest aggregate, build `d83b34ea-9163-4e5c-9dec-f4ffbb01b0e7`, completed
-on 2026-08-13 in 2,312.4 seconds. The six policy-free physical CLI
+The latest aggregate, build `59a0ac2e-d541-4dfc-9df4-934ccdee9320`, completed
+on 2026-08-13 in 2,319.0 seconds. The six policy-free physical CLI
 model/serializer tests were Gradle-up-to-date in that aggregate, so their
 constituent was explicitly refreshed with `--rerun-tasks` on the same final
 source head immediately beforehand; the daemon returned success. The duration
 is recorded only to identify this coherent checkpoint, not as a performance
 comparison. Direct audit of all three result roots covers 190 XML files and
-2,204 tests, all written after the final schema-v4 source change:
+2,204 tests, all written after the final schema-v5 source change:
 
 - 6 policy-free physical CLI model/serializer tests
 - 2,073 FIR, IL-text, and box tests
@@ -468,7 +483,11 @@ comparison. Direct audit of all three result roots covers 190 XML files and
 - zero failures, errors, or skips
 
 The aggregate and explicit model constituent exited successfully. Relative to
-schema version 3, the same 2,204-test inventory now also executes exact target
+schema version 4, the same 2,204-test inventory now also executes exact
+producer-open-TypeDef classifier normalization, multiple closed constructions,
+ancestry-based logical instance classification, capability/foreign rejection,
+KLIB-only logical type-argument authority, complete physical-callable-family
+collapse, and selected semantic-dispatch invocation. It retains exact target
 profiles; statically exact constructor MethodDefs, visibility, constructed
 owners, and `this`/`base` edges; duplicate/cyclic-constructor rejection; exact
 paired typed/semantic state access and conversions; producer reflection; and a
@@ -677,6 +696,29 @@ unpaired-state, conversion-mismatch, and unrecorded-access inputs fail closed.
 Backend/fixture compilation and all eight hostile parser/profile/module lanes
 pass with zero failures, errors, or skips. Production emission remains erased;
 runtime-selected/fallback construction, reflection normalization, and a
+Kotlin-produced subclass physicalizer remain outstanding.
+
+Focused work after schema version 4 advances the architecture artifact to
+schema version 5 and closes the reflection-normalization record item. Each
+producer open implementation TypeDef maps to the pre-existing KLIB logical
+classifier key; the physical artifact intentionally carries no copied Kotlin
+name or logical type-argument graph. Exact open/closed classifier lookup and
+ancestry-based logical instance classification are separate operations.
+Capability interfaces and foreign subclasses cannot normalize as Kotlin
+classifiers, while two different closed constructions of the same open owner
+normalize identically. KLIB remains authoritative for logical type arguments,
+variance, projections, nullability, and bounds. Every logical source callable
+records its complete typed/semantic/capability/default-helper MethodDef family
+as one declaration and selects either the semantic dispatcher or strict typed
+entry for invocation; constructors retain their distinct schema-4 construction
+records. Malformed physical/logical classifier joins, omitted callables,
+typed invocation of semantic families, and incomplete MethodDef families fail
+atomically. The record-generated separate C# registry executes exact and
+ancestry normalization, capability/foreign rejection, and private explicit-
+interface dispatcher discovery. All eight hostile PSI/LightTree,
+Framework/CoreCLR, same/separate-compilation lanes passed in four fresh XML
+suites with eight tests and zero failures, errors, or skips. Production
+emission remains erased; runtime-selected/fallback construction and a
 Kotlin-produced subclass physicalizer remain outstanding.
 
 Focused evidence additionally produced and consumed the self-describing net10
@@ -1745,15 +1787,18 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    `super`, logical-binding, cast/reflection, and CLR metadata roles. The
    complete local producer graph, typed-write value provenance, snapshot-
    driven separate C# physicalizer, and versioned cross-assembly family
-   artifact now exist. Version 4 retains exact external MethodDef owners,
+   artifact now exist. Version 5 retains exact external MethodDef owners,
    override-root sets, complete typed/semantic/capability slot-domain and
    structural signature records, exact interface slot identity, nested `!T[]`/
    `!!T[]` carriers, typed/semantic direct-`super` targets, and the separate
    static masked-default helper, target-profile/runtime-classification
    identity, statically exact constructor/delegation records, and exact
-   one-state typed/semantic access paths. Next, add reflection normalization
-   and a Kotlin-produced subclass physicalizer. Compare runtime exact open-nullable construction
-   with semantic fallback on a complete NativeAOT toolchain; ReadyToRun/
+   one-state typed/semantic access paths, exact producer-open-TypeDef to KLIB
+   classifier normalization, KLIB-only logical type-argument authority, hidden
+   capability reflection, and one logical callable per complete MethodDef
+   family. Next, add a Kotlin-produced subclass physicalizer. Compare runtime
+   exact open-nullable construction with semantic fallback on a complete
+   NativeAOT toolchain; ReadyToRun/
    trimming success alone is insufficient. Kotlin/Native VTA and Swift SIL
    remain optional proof engines for private/direct paths and never replace
    the open-world capability. Do not emit a production `C<T>` TypeDef or roll

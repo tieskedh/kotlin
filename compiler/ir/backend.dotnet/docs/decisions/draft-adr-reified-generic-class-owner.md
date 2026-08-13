@@ -318,7 +318,7 @@ hooks are propagated and point to ancestor semantic prototypes, and private
 capability dispatchers never form override chains. When the base generic owner
 is external, the consumer records the overridden logical member key and the
 candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
-slot is inferred from the current erased artifact. A production-inert version-4
+slot is inferred from the current erased artifact. A production-inert version-5
 family artifact now makes the first external link objective: it fingerprints
 the exact temporary producer and records logical joins, owner/capability paths,
 arity, disposition, state requirements, complete roles/reasons, selected
@@ -338,8 +338,19 @@ open-TypeDef classification mode, statically exact constructor MethodDefs and
 visibility, constructed owner, exact `this`/`base` edges, and the selected
 field carrier's paired typed/semantic read/write MethodDefs and boundary
 conversions. It admits no runtime-selected or semantic-fallback construction.
-A complete migration record still needs reflection normalization and the
-separately evaluated runtime/fallback construction modes.
+Version 5 adds an exact producer-open-TypeDef-to-KLIB-classifier join and one
+logical callable record for each complete physical MethodDef family. Exact
+classifier lookup never accepts the semantic capability or a foreign subclass;
+logical instance classification separately follows recorded open-TypeDef
+ancestry. Multiple closed constructions normalize to the same classifier,
+while names, logical type arguments, variance, projections, nullability, and
+bounds remain exclusively in the KLIB graph. Capability TypeDefs and physical
+hooks/dispatchers/default helpers remain hidden from Kotlin member identity;
+semantic callables select the capability dispatcher and strict callables select
+the typed entry. Constructors continue to use the version-4 construction
+records rather than becoming ordinary members. A complete migration record
+still needs the separately evaluated runtime/fallback construction modes and a
+Kotlin-produced subclass physicalizer.
 
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families

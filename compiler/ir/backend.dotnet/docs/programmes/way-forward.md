@@ -504,9 +504,15 @@ constructor MethodDef/visibility/constructed owner and `this`/`base` edge.
 Each selected state field now has exact paired typed/semantic read/write
 MethodDefs and explicit boundary conversions; the record-driven C# consumer
 uses those identities for its immediate base construction and state paths.
-Runtime-selected/fallback construction remains unproven. Reflection
-normalization is next, followed by a Kotlin-produced subclass physicalizer
-without consumer inference.
+Runtime-selected/fallback construction remains unproven. Version 5 now maps
+each exact producer open TypeDef to its existing KLIB classifier key, retains
+logical type arguments only in KLIB, hides capability TypeDefs and physical
+member-family details from Kotlin reflection, and records one logical callable
+plus its selected typed/semantic-dispatch invocation entry. Exact closed/open
+normalization and ancestry-based instance classification are distinct, and
+capability or foreign subclass TypeDefs cannot normalize to the recorded
+Kotlin classifier. A Kotlin-produced subclass physicalizer without consumer
+inference is next.
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
