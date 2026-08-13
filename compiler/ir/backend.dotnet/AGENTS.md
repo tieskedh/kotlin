@@ -556,10 +556,14 @@ See the
   retain a producer logical-member binding requirement and block admission
   until a versioned physical family record exists; consumers must not infer its
   slots from names or today’s erased production MethodDefs. The architecture
-  channel now has a version-2, producer-fingerprinted physical-family artifact
+  channel now has a version-3, producer-fingerprinted physical-family artifact
   which records logical owner/member joins, implementation/capability paths,
   arity, disposition, state requirements, complete member roles, selected
-  method names, and final/virtual/abstract dispatch. Decode and validate the
+  MethodDef owners/names, final/virtual/abstract dispatch, a slot-domain vector,
+  and neutral structural method/type expressions. A capability dispatcher must
+  name the exact non-generic interface MethodDef it implements and carry the
+  same signature; nested `!T`/`!!T`, named generic instances, and SZ arrays are
+  recursive records, never emitter strings. Decode and validate the
   entire artifact before resolving any consumer obligation; reject stale,
   truncated, duplicate, incomplete, missing-member, or wrong-producer input.
   Typed entries may override typed entries and semantic hooks may override
@@ -567,13 +571,17 @@ See the
   target. This artifact remains test/architecture-only while production owners
   are erased. Do not serialize it into today's DLL/KLIB, add a speculative
   `dotnet.ir` node, advance production admission, or claim that the still-
-  missing complete slot-domain/physical-signature, construction/profile,
-  state-access, and reflection-normalization records are complete. Version 2
-  additionally records the exact producer owner on an external binding,
-  sorted override-root logical keys, role-specific direct-super owner/method
-  targets, and a separate static masked-default helper. A default helper is
-  never an override role and must retain virtual dispatch into the selected
-  typed family.
+  missing construction/profile, state-access, and reflection-normalization
+  records are complete. Version 3 additionally records exact signatures for
+  role-specific direct-super targets and the separate static masked-default
+  helper. A default helper is never an override role and must retain virtual
+  dispatch into the selected typed family. Consumers may render the neutral
+  type expression for their profile, but must not infer a signature, slot
+  domain, capability identity, or nested carrier from source names or their
+  current substitution. A broad candidate input is semantic override-family
+  authority: propagate it to a fixed point across local roots and inherit it
+  from an external producer record; never narrow it from the local override's
+  apparently strict declaration.
   The design gate locks only that owner/ABI choice; continue Common stdlib, CLI IR,
   callable/reflection, imported CLR generics, generic methods, explicit export,
   and removable private optimization work. See

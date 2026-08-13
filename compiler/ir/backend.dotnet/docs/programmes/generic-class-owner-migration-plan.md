@@ -56,19 +56,26 @@ cutover, not an incremental vocabulary leak.
 Local detached generic subclass families are now linked role-by-role. An
 inherited semantic hook remains a separate derived obligation, while the
 private dispatcher is never virtualized as an override. Cross-assembly
-consumers retain the overridden producer logical key. A version-2 architecture
+consumers retain the overridden producer logical key. A version-3 architecture
 artifact now binds that key to the exact producer-selected typed/semantic
-method names and dispatch after complete producer-fingerprint/schema
+MethodDef owner/name, dispatch, slot-domain vector, and neutral structural
+signature after complete producer-fingerprint/schema
 validation. Stale, truncated, wrong-producer, duplicate, incomplete, and
 missing-member records fail before any binding is returned; final capability
-dispatchers never become override targets. Version 2 also records exact
-external owner paths, sorted override-root logical-key sets, separate typed/
-semantic direct-super targets, and a static masked-default helper that retains
-virtual typed dispatch. The artifact is test-owned and is not serialized into
-today's DLL/KLIB. The next migration artifacts add complete slot-domain/
-physical-signature, construction/profile, state-access, and reflection records
-and consume them in a Kotlin-produced subclass physicalizer—not an emitter
-switch.
+dispatchers never become override targets. Each dispatcher separately records
+the exact non-generic capability MethodDef with the same signature. Recursive
+type expressions retain owner/method parameters, named instances, and SZ arrays;
+direct-super targets and the static masked-default helper also carry complete
+signatures. The artifact is test-owned and is not serialized into today's
+DLL/KLIB. The next migration artifacts add construction/profile, state-access,
+and reflection records and consume them in a Kotlin-produced subclass
+physicalizer—not an emitter switch.
+
+Broad input positions are semantic override-family authority. They reach a
+fixed point across local roots and are inherited from a decoded external
+producer record; an apparently strict overriding declaration cannot narrow the
+family. Strict and declaration-independent positions remain local physical
+shape after substitution.
 
 The local graph does not equate “no semantic-reachable writer” with typed
 value provenance. It now traces write values from typed/semantic callable
