@@ -53,6 +53,21 @@ nor prototype metadata are serialized. Promoting these shapes into
 `dotnet.ir` or normal TypeDefs remains part of the one atomic production
 cutover, not an incremental vocabulary leak.
 
+The temporary producer now derives exact constructor, member-role, and lowered
+default-helper signatures from those compiler snapshots. Its bounded carrier
+grammar fails closed for unsupported types/shapes; it never substitutes an
+unproven `object`. The ordinary compiler MethodDef base name receives uniform
+role suffixes, and transitive state-access evidence selects read/write routes.
+No hostile source member name selects a carrier, role signature, MethodDef
+identity, or recorded state path. Names remain test-scenario/body labels.
+Rewriting every diagnostic producer source label in-memory must produce an
+equal artifact. Captured inner parameters with a pre-normalization slot-domain
+mismatch remain without exact proof. Any generated/user MethodDef identity
+collision rejects the artifact before it can become cross-assembly binding
+evidence.
+If later external binding changes a consumer's role/domain family, its stale
+local exact signatures are discarded in favor of the decoded producer record.
+
 Local detached generic subclass families are now linked role-by-role. An
 inherited semantic hook remains a separate derived obligation, while the
 private dispatcher is never virtualized as an override. Cross-assembly

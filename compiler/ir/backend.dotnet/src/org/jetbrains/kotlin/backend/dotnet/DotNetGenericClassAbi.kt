@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
@@ -18,12 +19,18 @@ import org.jetbrains.kotlin.ir.expressions.IrBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrInstanceInitializerCall
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.isAny
+import org.jetbrains.kotlin.ir.types.isBoolean
+import org.jetbrains.kotlin.ir.types.isInt
 import org.jetbrains.kotlin.ir.types.isNullableAny
+import org.jetbrains.kotlin.ir.types.isNullableString
+import org.jetbrains.kotlin.ir.types.isString
+import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
@@ -758,7 +765,7 @@ internal data class DotNetGenericOwnerMemberFamilyPlan(
     val requiresDirectSuperTargets: Boolean,
     val directSuperCallCount: Int,
     val directSuperCalls: List<DotNetGenericOwnerDirectSuperCallPlan>,
-    val hasMaskedDefaultDispatcher: Boolean,
+    val maskedDefaultDispatcher: IrSimpleFunction?,
     val logicalBindingKey: String?,
 )
 
@@ -802,6 +809,7 @@ internal data class DotNetGenericOwnerPrototypeMember(
 /** Immutable, IR-free observation of one detached prototype member for compiler tests. */
 data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val sourceName: String,
+    val physicalBaseName: String,
     val sourceIndex: Int,
     val isFakeOverride: Boolean,
     val isAbstract: Boolean,
@@ -816,10 +824,13 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val semanticErasesOwnerDependentOutput: Boolean,
     val returnSlotDomain: DotNetGenericOwnerPhysicalSlotDomain,
     val parameterSlotDomains: List<DotNetGenericOwnerPhysicalSlotDomain>,
+    val exactPhysicalSignatures:
+            Map<DotNetGenericOwnerMemberFamilyRole, DotNetGenericOwnerPhysicalMethodSignatureRecord>?,
     val requiresDirectSuperTargets: Boolean,
     val directSuperCallCount: Int,
     val directSuperCalls: List<DotNetGenericOwnerDirectSuperCallSnapshot>,
     val hasMaskedDefaultDispatcher: Boolean,
+    val exactMaskedDefaultDispatcher: DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot?,
     val logicalBindingKey: String?,
     val overrideBindings: List<DotNetGenericOwnerPrototypeOverrideBindingSnapshot>,
     val directProducerCallNames: List<String>,
@@ -829,7 +840,69 @@ data class DotNetGenericOwnerPrototypeMemberSnapshot(
     val transitiveStateReadNames: List<String>,
     val transitiveStateWriteNames: List<String>,
     val reachableFromSemanticEntry: Boolean,
-)
+) {
+    init {
+        exactPhysicalSignatures?.let { signatures ->
+            require(signatures.keys == roles) {
+                "an exact generic-owner prototype signature family must cover every selected role"
+            }
+            require(signatures.values.all { signature ->
+                signature.returnSlot.domain == returnSlotDomain &&
+                        signature.parameterSlots.map { slot -> slot.domain } == parameterSlotDomains
+            }) {
+                "an exact generic-owner prototype signature family disagrees with its slot-domain vector"
+            }
+            require(signatures[DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER]
+                ?.allTypes()
+                ?.none { type -> type.referencesOwnerParameter() } != false
+            ) {
+                "an exact generic-owner capability signature cannot reference an owner parameter"
+            }
+        }
+        require(exactMaskedDefaultDispatcher == null || hasMaskedDefaultDispatcher) {
+            "an exact generic-owner masked dispatcher requires a lowered source dispatcher"
+        }
+    }
+}
+
+/** Compiler-derived static default helper shape before the producer TypeDef path is selected. */
+data class DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot(
+    val genericArity: Int,
+    val returnSlot: DotNetGenericOwnerPhysicalValueSlotRecord,
+    val parameterSlotsAfterReceiver: List<DotNetGenericOwnerPhysicalValueSlotRecord>,
+) {
+    init {
+        require(genericArity >= 0) { "a generic-owner default helper requires non-negative generic arity" }
+        require(parameterSlotsAfterReceiver.none { slot ->
+            slot.domain == DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER
+        }) { "a generic-owner default helper tail cannot contain another owner receiver" }
+    }
+
+    fun physicalSignature(
+        physicalOwnerPath: List<String>,
+        ownerGenericArity: Int,
+    ): DotNetGenericOwnerPhysicalMethodSignatureRecord {
+        require(physicalOwnerPath.isNotEmpty() && ownerGenericArity > 0) {
+            "a generic-owner default helper requires an exact generic producer owner"
+        }
+        val receiverType = DotNetGenericOwnerPhysicalTypeExpressionRecord.producerType(
+            typePath = physicalOwnerPath,
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+            arguments = List(ownerGenericArity) { index ->
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(index)
+            },
+        )
+        return DotNetGenericOwnerPhysicalMethodSignatureRecord(
+            isInstance = false,
+            genericArity = genericArity,
+            returnSlot = returnSlot,
+            parameterSlots = listOf(DotNetGenericOwnerPhysicalValueSlotRecord(
+                domain = DotNetGenericOwnerPhysicalSlotDomain.OWNER_EXACT_RECEIVER,
+                type = receiverType,
+            )) + parameterSlotsAfterReceiver,
+        )
+    }
+}
 
 /** Logical construction join retained before any future physical constructor is selected. */
 data class DotNetGenericOwnerPrototypeConstructorSnapshot(
@@ -1393,6 +1466,28 @@ data class DotNetGenericOwnerPhysicalFamilyRecord(
         }
         require(members.map { member -> member.logicalMemberKey }.toSet().size == members.size) {
             "generic-owner physical family '$logicalOwnerKey' has duplicate logical members"
+        }
+        val physicalMethodDefinitions = members.flatMap { member ->
+            buildList {
+                member.slots.forEach { slot ->
+                    add(DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                        slot.physicalOwnerPath,
+                        slot.physicalMethodName,
+                        slot.signature,
+                    ))
+                    slot.capabilitySlot?.let(::add)
+                }
+                member.defaultDispatcher?.let { dispatcher ->
+                    add(DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                        dispatcher.physicalOwnerPath,
+                        dispatcher.physicalMethodName,
+                        dispatcher.signature,
+                    ))
+                }
+            }
+        }
+        require(physicalMethodDefinitions.toSet().size == physicalMethodDefinitions.size) {
+            "generic-owner physical family '$logicalOwnerKey' has colliding physical MethodDefs"
         }
         val membersByLogicalKey = members.associateBy { member -> member.logicalMemberKey }
         require(reflection.callables.map { callable -> callable.logicalMemberKey }.toSet() ==
@@ -2482,6 +2577,10 @@ fun DotNetGenericOwnerPrototypeSnapshot.resolveExternalPhysicalFamilies(
                         emptySet()
                     },
             parameterSlotDomains = mergedParameterSlotDomains,
+            // The local detached signatures predate producer-family binding and are no longer
+            // authoritative after inherited broad domains and semantic roles are merged.
+            exactPhysicalSignatures = null,
+            exactMaskedDefaultDispatcher = null,
             overrideBindings = (retained + resolved).distinctBy { binding ->
                 Triple(binding.role, binding.overriddenLogicalBindingKey, binding.overriddenPhysicalMethodName)
             },
@@ -2794,12 +2893,56 @@ private fun IrConstructor.genericOwnerPhysicalVisibility(): DotNetGenericOwnerPh
         else -> error("unsupported generic-owner prototype constructor visibility '$visibility'")
     }
 
-private fun IrType.genericOwnerPrototypePhysicalType(owner: IrClass): DotNetGenericOwnerPhysicalTypeExpressionRecord? {
-    val typeParameter = ((this as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner ?: return null
-    if (typeParameter.parent != owner) return null
-    val parameterIndex = owner.typeParameters.indexOf(typeParameter)
-    return parameterIndex.takeIf { index -> index >= 0 }
-        ?.let(DotNetGenericOwnerPhysicalTypeExpressionRecord::ownerParameter)
+/**
+ * Maps only the deliberately bounded carrier grammar proven by the generic-owner prototype.
+ * Unknown classifiers, projections, nested carriers, and nullable value types remain unavailable;
+ * physicalization must never invent an object fallback which changes Kotlin semantics.
+ */
+private fun IrType.genericOwnerPrototypePhysicalType(
+    owner: IrClass,
+    method: IrSimpleFunction? = null,
+    eraseOwnerDependentCarrier: Boolean = false,
+): DotNetGenericOwnerPhysicalTypeExpressionRecord? {
+    if (isUnit()) return DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType()
+    if (isBoolean()) return DotNetGenericOwnerPhysicalTypeExpressionRecord.booleanType()
+    if (isInt()) return DotNetGenericOwnerPhysicalTypeExpressionRecord.int32Type()
+    if (isString() || isNullableString()) return DotNetGenericOwnerPhysicalTypeExpressionRecord.stringType()
+    if (isAny() || isNullableAny()) return DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+
+    val simpleType = this as? IrSimpleType ?: return null
+    val typeParameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
+    if (typeParameter != null) {
+        val ownerParameterIndex = owner.typeParameters.indexOf(typeParameter)
+        if (ownerParameterIndex >= 0) {
+            return if (eraseOwnerDependentCarrier) {
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.objectType()
+            } else {
+                DotNetGenericOwnerPhysicalTypeExpressionRecord.ownerParameter(ownerParameterIndex)
+            }
+        }
+        val methodParameterIndex = method?.typeParameters?.indexOf(typeParameter) ?: -1
+        return methodParameterIndex.takeIf { index -> index >= 0 }
+            ?.let(DotNetGenericOwnerPhysicalTypeExpressionRecord::methodParameter)
+    }
+
+    val classifier = (simpleType.classifier as? IrClassSymbol)?.owner ?: return null
+    if (classifier.fqNameWhenAvailable?.asString() != "kotlin.Array") return null
+    val elementProjection = simpleType.arguments.singleOrNull() as? IrTypeProjection ?: return null
+    if (eraseOwnerDependentCarrier && referencesTypeParameterOf(owner)) {
+        val elementParameter = ((elementProjection.type as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner
+        if (elementParameter !in owner.typeParameters) return null
+        return DotNetGenericOwnerPhysicalTypeExpressionRecord.coreType(
+            typePath = listOf("System", "Array"),
+            category = DotNetGenericOwnerPhysicalNamedTypeCategory.CLASS,
+        )
+    }
+    val elementType = elementProjection.type.genericOwnerPrototypePhysicalType(
+        owner = owner,
+        method = method,
+        eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
+    ) ?: return null
+    if (elementType.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) return null
+    return DotNetGenericOwnerPhysicalTypeExpressionRecord.szArray(elementType)
 }
 
 private fun DotNetGenericOwnerConstructorPlan.exactPrototypePhysicalSignature(
@@ -2807,9 +2950,15 @@ private fun DotNetGenericOwnerConstructorPlan.exactPrototypePhysicalSignature(
 ): DotNetGenericOwnerPhysicalMethodSignatureRecord? {
     if (source.parameters.size != parameterSlotDomains.size) return null
     val parameterSlots = source.parameters.mapIndexed { index, parameter ->
+        val physicalType = parameter.type.genericOwnerPrototypePhysicalType(owner) ?: return null
+        val domain = parameterSlotDomains[index]
+        if (physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.VOID ||
+                domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                physicalType.referencesOwnerParameter()
+        ) return null
         DotNetGenericOwnerPhysicalValueSlotRecord(
-            domain = parameterSlotDomains[index],
-            type = parameter.type.genericOwnerPrototypePhysicalType(owner) ?: return null,
+            domain = domain,
+            type = physicalType,
         )
     }
     return DotNetGenericOwnerPhysicalMethodSignatureRecord(
@@ -2820,6 +2969,112 @@ private fun DotNetGenericOwnerConstructorPlan.exactPrototypePhysicalSignature(
             type = DotNetGenericOwnerPhysicalTypeExpressionRecord.voidType(),
         ),
         parameterSlots = parameterSlots,
+    )
+}
+
+private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypePhysicalSignatures(
+    owner: IrClass,
+): Map<DotNetGenericOwnerMemberFamilyRole, DotNetGenericOwnerPhysicalMethodSignatureRecord>? {
+    val explicitParameters = source.parameters.filter { parameter ->
+        parameter.kind != IrParameterKind.DispatchReceiver
+    }
+    if (explicitParameters.size != parameterSlotDomains.size) return null
+    return roles.associateWith { role ->
+        val eraseOwnerDependentCarrier = role != DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+        val returnType = source.returnType.genericOwnerPrototypePhysicalType(
+            owner = owner,
+            method = source,
+            eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
+        ) ?: return null
+        if (returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                returnType.referencesOwnerParameter()
+        ) return null
+        val parameterSlots = explicitParameters.mapIndexed { index, parameter ->
+            val physicalType = parameter.type.genericOwnerPrototypePhysicalType(
+                owner = owner,
+                method = source,
+                eraseOwnerDependentCarrier = eraseOwnerDependentCarrier,
+            ) ?: return null
+            val domain = parameterSlotDomains[index]
+            if (physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.VOID ||
+                    domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                    physicalType.referencesOwnerParameter()
+            ) return null
+            DotNetGenericOwnerPhysicalValueSlotRecord(
+                domain = domain,
+                type = physicalType,
+            )
+        }
+        DotNetGenericOwnerPhysicalMethodSignatureRecord(
+            isInstance = true,
+            genericArity = source.typeParameters.size,
+            returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(returnSlotDomain, returnType),
+            parameterSlots = parameterSlots,
+        )
+    }
+}
+
+private fun DotNetGenericOwnerMemberFamilyPlan.exactPrototypeDefaultDispatcher(
+    owner: IrClass,
+): DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot? {
+    val dispatcher = maskedDefaultDispatcher ?: return null
+    if (dispatcher.dispatchReceiverParameter != null || dispatcher.typeParameters.size != source.typeParameters.size) return null
+    val sourceParameters = source.parameters.filter { parameter ->
+        parameter.kind != IrParameterKind.DispatchReceiver
+    }
+    if (sourceParameters.size != parameterSlotDomains.size) return null
+    val dispatcherParameters = dispatcher.parameters
+    if (dispatcherParameters.size <= sourceParameters.size) return null
+    val receiver = dispatcherParameters.first()
+    val receiverClassifier = ((receiver.type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+    if (receiverClassifier != owner) return null
+    val sourceDispatcherParameters = dispatcherParameters.drop(1).take(sourceParameters.size)
+    val maskParameters = dispatcherParameters.drop(1 + sourceParameters.size)
+    if (maskParameters.isEmpty() || maskParameters.any { parameter ->
+            parameter.origin != IrDeclarationOrigin.MASK_FOR_DEFAULT_FUNCTION
+        }
+    ) return null
+    if (sourceDispatcherParameters.any { parameter ->
+            parameter.origin == IrDeclarationOrigin.MASK_FOR_DEFAULT_FUNCTION
+        }) return null
+
+    val returnType = dispatcher.returnType.genericOwnerPrototypePhysicalType(
+        owner = owner,
+        method = dispatcher,
+    ) ?: return null
+    if (returnSlotDomain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+            returnType.referencesOwnerParameter()
+    ) return null
+    val sourceSlots = sourceDispatcherParameters.mapIndexed { index, parameter ->
+        val physicalType = parameter.type.genericOwnerPrototypePhysicalType(
+            owner = owner,
+            method = dispatcher,
+        ) ?: return null
+        val domain = parameterSlotDomains[index]
+        if (physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.VOID ||
+                domain == DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT &&
+                physicalType.referencesOwnerParameter()
+        ) return null
+        DotNetGenericOwnerPhysicalValueSlotRecord(
+            domain = domain,
+            type = physicalType,
+        )
+    }
+    val maskSlots = maskParameters.map { parameter ->
+        val physicalType = parameter.type.genericOwnerPrototypePhysicalType(
+            owner = owner,
+            method = dispatcher,
+        ) ?: return null
+        if (physicalType.kind == DotNetGenericOwnerPhysicalTypeKind.VOID) return null
+        DotNetGenericOwnerPhysicalValueSlotRecord(
+            domain = DotNetGenericOwnerPhysicalSlotDomain.DECLARATION_INDEPENDENT,
+            type = physicalType,
+        )
+    }
+    return DotNetGenericOwnerPrototypeDefaultDispatcherSnapshot(
+        genericArity = dispatcher.typeParameters.size,
+        returnSlot = DotNetGenericOwnerPhysicalValueSlotRecord(returnSlotDomain, returnType),
+        parameterSlotsAfterReceiver = sourceSlots + maskSlots,
     )
 }
 
@@ -2898,6 +3153,7 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
                 ?: prototypeFor(source, DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER)
             DotNetGenericOwnerPrototypeMemberSnapshot(
                 sourceName = source.name.asString(),
+                physicalBaseName = source.dotNetIlMethodName(),
                 sourceIndex = sourceIndex,
                 isFakeOverride = source.isFakeOverride,
                 isAbstract = source.modality == Modality.ABSTRACT,
@@ -2913,6 +3169,7 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
                     semantic?.returnType?.referencesTypeParameterOf(owner) == false,
                 returnSlotDomain = family.returnSlotDomain,
                 parameterSlotDomains = family.parameterSlotDomains,
+                exactPhysicalSignatures = family.exactPrototypePhysicalSignatures(owner),
                 requiresDirectSuperTargets = family.requiresDirectSuperTargets,
                 directSuperCallCount = family.directSuperCallCount,
                 directSuperCalls = family.directSuperCalls.map { call ->
@@ -2932,7 +3189,8 @@ internal fun DotNetGenericOwnerArchitecturePlan.toPrototypeSnapshot(): DotNetGen
                             ?: call.superQualifier.name.asString(),
                     )
                 },
-                hasMaskedDefaultDispatcher = family.hasMaskedDefaultDispatcher,
+                hasMaskedDefaultDispatcher = family.maskedDefaultDispatcher != null,
+                exactMaskedDefaultDispatcher = family.exactPrototypeDefaultDispatcher(owner),
                 logicalBindingKey = family.logicalBindingKey,
                 overrideBindings = overrideBindings[source].orEmpty().map { binding ->
                     val overriddenOwner = binding.overriddenSource.parent as IrClass

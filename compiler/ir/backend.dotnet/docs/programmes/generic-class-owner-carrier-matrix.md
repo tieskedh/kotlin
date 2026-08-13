@@ -506,6 +506,19 @@ from ancestry-based logical instance classification. No Kotlin name, variance,
 projection, nullability, bound, or logical type argument is reconstructed from
 CLR metadata.
 
+The producer-side signature source is now the compiler snapshot rather than a
+hostile-name map. Exact constructor and member records are derived from lowered
+IR through the admitted structural carrier grammar; the actual static default
+dispatcher provides its parameter/mask tail. Semantic owner-dependent array
+positions select `System.Array`, while an unsupported type or shape yields no
+proof and can never be silently widened to `object`. Physical base names use
+the ordinary compiler name plus uniform role suffixes. State access families
+are selected by transitive field-read/write evidence. Rewriting all hostile
+diagnostic source labels leaves the complete artifact equal, which pins
+`sourceName` as diagnostic rather than carrier or binding authority. Physical
+MethodDef identities must also be unique across logical families;
+generated/user name collisions remain fail-closed.
+
 The architecture-only consumer now derives one external Kotlin-subclass
 physicalization from that complete record. Its own open TypeDef is explicitly
 current-compilation scoped and cannot appear in a producer artifact. The

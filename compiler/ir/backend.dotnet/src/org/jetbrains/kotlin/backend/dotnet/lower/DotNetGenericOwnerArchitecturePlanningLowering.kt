@@ -358,7 +358,7 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
                 requiresDirectSuperTargets = member.modality != Modality.FINAL,
                 directSuperCallCount = directSuperCalls.size,
                 directSuperCalls = directSuperCalls,
-                hasMaskedDefaultDispatcher = member in context.defaultArgumentDispatchers,
+                maskedDefaultDispatcher = context.defaultArgumentDispatchers[member],
                 logicalBindingKey = context.preLoweringDeclarationKeys[member],
             )
         }

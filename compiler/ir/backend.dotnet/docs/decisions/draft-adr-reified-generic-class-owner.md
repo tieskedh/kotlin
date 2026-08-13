@@ -332,6 +332,23 @@ override behavior on both runtimes. This closes the base snapshot-to-CLR seam,
 not Kotlin-produced subclass families or the production TypeDef/emitter/
 binding-schema gate.
 
+The test-owned producer ABI is no longer reconstructed by switching on hostile
+member names. Those names remain fixture-scenario/body labels only. Lowered IR
+supplies exact constructor and typed/semantic/
+capability signatures through a deliberately bounded structural type grammar;
+the actual lowered default helper supplies its static tail and mask slots, and
+the producer access graph supplies state read/write families. Uniform role
+suffixes extend the compiler-selected ordinary MethodDef name. Unsupported
+types and helper shapes leave the whole exact proof unavailable rather than
+falling back to `object`. Pre-normalization inner metadata whose captured
+parameter disagrees with its recorded slot domain is likewise unavailable. A
+regression copy rewrites only diagnostic source labels and must yield an equal
+artifact. A generated role identity which collides with another logical member
+rejects the artifact atomically. Local exact signatures are discarded after
+an external producer merge changes a consumer role or domain, preserving the
+decoded producer record as the sole cross-assembly physical authority. This
+generalizes the architecture proof; it does not change production emission.
+
 The detached graph now covers local Kotlin-produced generic subclasses as
 well. Typed entries point to ancestor typed prototypes, inherited semantic
 hooks are propagated and point to ancestor semantic prototypes, and private
