@@ -4,7 +4,9 @@
 - Date: 2026-08-04
 - Amended: 2026-08-05 to distinguish canonical erasure from private
   implementation reification; 2026-08-07 to park the materially different
-  true-CLR-generic-owner/early-cast alternative without authorizing it
+  true-CLR-generic-owner/early-cast alternative without authorizing it;
+  2026-08-13 to bind that alternative to the operation-specific platform-
+  freedom rule and preserve parameterized safe-cast semantics
 - Scope: Kotlin-owned ordinary generic classes, including their storage,
   member ABI, inheritance, casts, runtime identity, separate compilation, and
   default CLR surface
@@ -155,6 +157,13 @@ The Kotlin language permits a platform to fail a not-fully-checkable cast
 earlier. This target nevertheless chooses the familiar erased, delayed-use
 behavior because the CLR does not force an earlier failure and mature Kotlin
 targets establish that user expectation.
+
+That choice and the planned replacement are constrained by the accepted
+[semantic-authority and platform-freedom ADR](kotlin-semantic-authority-and-platform-freedom.md).
+Only the implementation-defined failure point of a parameterized throwing
+`as` may move earlier. Parameterized `as?` continues to ignore generic
+arguments for subtyping and therefore uses the logical classifier rather than
+an exact constructed-owner predicate.
 
 The Common `containsAll` case is stronger: it is ordinary source-legal
 behavior, not an unchecked-cast preference. The target must execute the Common

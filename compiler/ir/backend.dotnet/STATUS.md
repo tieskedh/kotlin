@@ -17,6 +17,16 @@ verification, and work state.
   nine shared paths, architectural directions, stat-cache-only IL false
   positives, and post-rebase verification are recorded in
   [`docs/archive/upstream-impact-2026-08-11.md`](docs/archive/upstream-impact-2026-08-11.md).
+- Cross-cutting semantic boundary: Kotlin remains authoritative when CLR RTTI
+  is stronger. A stronger CLR check now requires an operation-specific Kotlin
+  specification permission; warnings, suppression, `@UnsafeVariance`, and
+  physical reification are not semantic waivers. Parameterized throwing `as`
+  may use its implementation-defined failure point, while parameterized `as?`
+  ignores generic arguments for subtyping and stays on the logical classifier/
+  capability path. The unchanged generic-class/interface cast oracles were
+  refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
+  eight tests, and zero failures, errors, or skips. See
+  [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
 - Last completed foundation: the production-inert generic-owner schema-version-6
   artifact now feeds a compiler-derived external Kotlin subclass physicalizer.
   Every typed entry, semantic hook,

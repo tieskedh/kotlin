@@ -34,6 +34,19 @@ Kotlin behavior. A .NET source file supplies narrow `actual` declarations and
 irreducible host operations; it does not fork a Common algorithm merely
 because a BCL equivalent exists.
 
+Kotlin semantics remain authoritative when CLR runtime information is
+stronger. Use a stronger CLR check only where the Kotlin specification makes
+the exact runtime outcome or failure point platform- or implementation-
+dependent, and record that permission in the owning ADR. An unchecked warning,
+`@Suppress`, `@UnsafeVariance`, a reified carrier, or convenient `isinst` is
+not permission by itself. Parameterized throwing `as` may use its explicitly
+implementation-defined failure timing; parameterized `as?` must not
+mechanically inherit that rule because its generic arguments are not checked
+with respect to subtyping. Ordinary variance, projections, override families,
+broad candidate inputs, identity, and dispatch remain exact Kotlin contracts.
+See
+[`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
+
 Common `Comparable<T>` uses the profile-selected CLR `System.IComparable` and
 `System.IComparable<T>` views on one object, but Kotlin interface calls retain
 ordinal String and Kotlin floating ordering through the runtime semantic

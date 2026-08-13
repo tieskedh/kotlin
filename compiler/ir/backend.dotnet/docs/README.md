@@ -61,6 +61,7 @@ behavior, amend the owning ADR, and only then implement an ABI-bearing choice.
 
 ## Foundational decisions
 
+- [Kotlin semantic authority and bounded CLR platform freedom](decisions/kotlin-semantic-authority-and-platform-freedom.md)
 - [Self-describing Kotlin/.NET library DLL](decisions/adr-self-describing-dotnet-library-dll.md)
 - [CLR importer boundary](decisions/draft-adr-clr-importer-boundary.md)
 - [`System.Object` as the physical `Any` foundation](decisions/system-object-any.md)
