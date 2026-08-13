@@ -77,6 +77,10 @@ private open class HostileUnsafeProducer<out T>(private val expected: T) {
         if (candidate == expected) "match" else "candidate:$candidate"
 }
 
+private open class HostileMixed<in I, out O> {
+    open fun describe(input: I, candidate: @UnsafeVariance O): String = "$input:$candidate"
+}
+
 private open class HostileUnsafeStore<out T>(initial: T) {
     private var stored: T = initial
 
@@ -90,6 +94,10 @@ private open class HostileUnsafeStore<out T>(initial: T) {
     }
 
     open fun read(): T = stored
+
+    open fun echo(values: Array<out @UnsafeVariance T>): Array<out T> = values
+
+    open fun <R> relay(values: Array<R>): Array<R> = values
 
     open fun label(prefix: String = "default"): String = prefix
 }
@@ -193,6 +201,11 @@ fun box(): String {
     ) {
         return fail("general widened semantic body")
     }
+    val exactMixed: HostileMixed<Number, Int> = HostileMixed()
+    val widenedMixed: HostileMixed<Int, Any?> = exactMixed
+    if (widenedMixed.describe(7, "wrong") != "7:wrong") {
+        return fail("mixed strict and broad input domains")
+    }
 
     val exactUnsafeStore = HostileUnsafeStore(1)
     val widenedUnsafeStore: HostileUnsafeStore<Any?> = exactUnsafeStore
@@ -209,6 +222,17 @@ fun box(): String {
     widenedUnsafeStore.writeUnsafe(2)
     if (exactUnsafeStore.read() != 2) {
         return fail("semantic state recovery")
+    }
+    val exactNested = arrayOf(2, 3)
+    val semanticNested = arrayOf<Any?>("nested", null)
+    if (exactUnsafeStore.echo(exactNested) !== exactNested ||
+        widenedUnsafeStore.echo(semanticNested) !== semanticNested
+    ) {
+        return fail("nested typed and semantic array carriers")
+    }
+    val methodNested = arrayOf("method")
+    if (exactUnsafeStore.relay(methodNested) !== methodNested) {
+        return fail("nested method-generic array carrier")
     }
 
     val typedStore = HostileTypedStore("before")

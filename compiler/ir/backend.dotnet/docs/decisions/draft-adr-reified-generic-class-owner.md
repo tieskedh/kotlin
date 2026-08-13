@@ -318,21 +318,29 @@ hooks are propagated and point to ancestor semantic prototypes, and private
 capability dispatchers never form override chains. When the base generic owner
 is external, the consumer records the overridden logical member key and the
 candidate remains `REQUIRES_EXTERNAL_OVERRIDE_BINDING_SCHEMA`; no physical
-slot is inferred from the current erased artifact. A production-inert version-2
+slot is inferred from the current erased artifact. A production-inert version-3
 family artifact now makes the first external link objective: it fingerprints
 the exact temporary producer and records logical joins, owner/capability paths,
 arity, disposition, state requirements, complete roles/reasons, selected
-method names, and slot dispatch. Only a fully decoded artifact may resolve the
+MethodDef owners/names, slot dispatch, complete slot-domain vectors, and neutral
+structural signatures. A capability dispatcher names the exact interface
+MethodDef it implements; nested owner/method parameters, named generic instances,
+and SZ arrays remain structural records rather than IL strings. Only a fully
+decoded artifact may resolve the
 typed and semantic obligations; stale, truncated, wrong-producer, duplicate,
 incomplete, and missing-member artifacts fail. The resolved snapshot advances
 only to member physicalization proof, never admission. Production DLL/KLIB and
-the erased emitter do not consume this artifact. A complete migration record
-Version 2 adds exact external owner paths, sorted override-root logical-key
-sets, separate typed/semantic direct-super physical targets, and a static
-masked-default helper which remains outside the override roles and preserves
-derived typed dispatch. A complete migration record still needs slot-domain/
-physical-signature, construction/profile, state-access, and reflection
-identities.
+the erased emitter do not consume this artifact. Version 3 gives separate
+typed/semantic direct-super targets and the static masked-default helper exact
+signatures as well; the helper remains outside override roles and preserves
+derived typed dispatch. A complete migration record still needs construction/
+profile, state-access, and reflection identities.
+
+A broad candidate input is inherited semantic authority, not a property that
+may be narrowed by re-reading only the overriding declaration. Local families
+therefore propagate broad positions to a fixed point across their override
+roots. A separate consumer merges the producer record's broad positions into
+its own snapshot before any physical binding is returned.
 
 ## Inheritance, interfaces, and reflection
 
