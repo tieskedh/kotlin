@@ -36,6 +36,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerConstructorDelegati
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalConstructorRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDelegatingConstructorRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalConstructorVisibility
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalCallableReflectionRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDefaultDispatcherRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalDirectSuperTargetRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberDispatch
@@ -44,6 +45,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMemberSlotR
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodIdentityRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalMethodSignatureRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalNamedTypeCategory
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalOpenTypeDefinitionRecord
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalReflectionRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalSlotDomain
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalStateVisibility
@@ -59,10 +62,16 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPhysicalValueSlotRe
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeMemberSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerRuntimeClassificationMode
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerReflectionCallableExposure
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerReflectionCapabilityExposure
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerReflectionClassifierNormalizationMode
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerReflectionTypeArgumentAuthority
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerSemanticHookReason
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
 import org.jetbrains.kotlin.backend.dotnet.resolveExternalPhysicalFamilies
+import org.jetbrains.kotlin.backend.dotnet.reflectionClassifierForExactOpenTypeDefinitionOrNull
+import org.jetbrains.kotlin.backend.dotnet.reflectionClassifierMatchesAncestry
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelinePhase
@@ -782,6 +791,44 @@ private fun DotNetGenericOwnerPrototypeSnapshot.constructorSignature(
     },
 )
 
+private fun genericOwnerPhysicalReflectionCallables(
+    members: List<DotNetGenericOwnerPhysicalMemberFamilyRecord>,
+): List<DotNetGenericOwnerPhysicalCallableReflectionRecord> = members.map { member ->
+    val invocationRole = if (DotNetGenericOwnerMemberFamilyRole.SEMANTIC_HOOK in member.roles) {
+        DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+    } else {
+        DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+    }
+    val invocationSlot = member.slots.single { slot -> slot.role == invocationRole }
+    DotNetGenericOwnerPhysicalCallableReflectionRecord(
+        logicalMemberKey = member.logicalMemberKey,
+        exposure = DotNetGenericOwnerReflectionCallableExposure.SINGLE_LOGICAL_DECLARATION,
+        invocationRole = invocationRole,
+        invocationMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+            invocationSlot.physicalOwnerPath,
+            invocationSlot.physicalMethodName,
+            invocationSlot.signature,
+        ),
+        physicalMethods = buildList {
+            member.slots.forEach { slot ->
+                add(DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                    slot.physicalOwnerPath,
+                    slot.physicalMethodName,
+                    slot.signature,
+                ))
+                slot.capabilitySlot?.let(::add)
+            }
+            member.defaultDispatcher?.let { dispatcher ->
+                add(DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                    dispatcher.physicalOwnerPath,
+                    dispatcher.physicalMethodName,
+                    dispatcher.signature,
+                ))
+            }
+        },
+    )
+}
+
 private fun createGenericOwnerPhysicalFamilyArtifact(
     prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     producerFingerprint: String,
@@ -971,6 +1018,19 @@ private fun createGenericOwnerPhysicalFamilyArtifact(
             runtimeClassificationMode = DotNetGenericOwnerRuntimeClassificationMode.OPEN_TYPEDEF_ANCESTRY,
             constructionModes = setOf(DotNetGenericOwnerConstructionMode.STATIC_EXACT),
             constructors = constructors,
+            reflection = DotNetGenericOwnerPhysicalReflectionRecord(
+                logicalClassifierKey = checkNotNull(prototype.logicalBindingKey),
+                physicalOpenTypeDefinition = DotNetGenericOwnerPhysicalOpenTypeDefinitionRecord(
+                    physicalTypePath = ownerPath,
+                    genericArity = prototype.genericArity,
+                ),
+                classifierNormalizationMode =
+                    DotNetGenericOwnerReflectionClassifierNormalizationMode.EXACT_OPEN_TYPEDEF,
+                instanceClassificationMode = DotNetGenericOwnerRuntimeClassificationMode.OPEN_TYPEDEF_ANCESTRY,
+                typeArgumentAuthority = DotNetGenericOwnerReflectionTypeArgumentAuthority.KLIB_LOGICAL_GRAPH,
+                capabilityExposure = DotNetGenericOwnerReflectionCapabilityExposure.HIDDEN_COMPILER_ABI,
+                callables = genericOwnerPhysicalReflectionCallables(members),
+            ),
             members = members,
             states = prototype.states.map { state ->
                 fun access(
@@ -1084,9 +1144,21 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
                 owner.constructors.isNotEmpty() && owner.constructors.all { constructor ->
                     constructor.visibility == DotNetGenericOwnerPhysicalConstructorVisibility.PUBLIC &&
                             constructor.constructedOwnerType.typePath == owner.physicalOwnerPath
+                } && owner.reflection.let { reflection ->
+                    reflection.logicalClassifierKey == owner.logicalOwnerKey &&
+                            reflection.physicalOpenTypeDefinition.physicalTypePath == owner.physicalOwnerPath &&
+                            reflection.classifierNormalizationMode ==
+                            DotNetGenericOwnerReflectionClassifierNormalizationMode.EXACT_OPEN_TYPEDEF &&
+                            reflection.instanceClassificationMode == owner.runtimeClassificationMode &&
+                            reflection.typeArgumentAuthority ==
+                            DotNetGenericOwnerReflectionTypeArgumentAuthority.KLIB_LOGICAL_GRAPH &&
+                            reflection.capabilityExposure ==
+                            DotNetGenericOwnerReflectionCapabilityExposure.HIDDEN_COMPILER_ABI &&
+                            reflection.callables.map { callable -> callable.logicalMemberKey }.toSet() ==
+                            owner.members.map { candidate -> candidate.logicalMemberKey }.toSet()
                 }
     }) {
-        "The generic-owner artifact lacks its exact static construction/profile record"
+        "The generic-owner artifact lacks its exact construction/profile/reflection record"
     }
     expectRejected("a stale schema") {
         DotNetGenericOwnerPhysicalFamilyCodec.decode(
@@ -1227,6 +1299,83 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
                 )
             },
         )
+    }
+    expectRejected("a reflection classifier for another physical TypeDef") {
+        constructionOwner.copy(
+            reflection = constructionOwner.reflection.copy(
+                physicalOpenTypeDefinition = constructionOwner.reflection.physicalOpenTypeDefinition.copy(
+                    physicalTypePath = listOf("Wrong", "Classifier"),
+                ),
+            ),
+        )
+    }
+    expectRejected("a reflection classifier with a different logical owner") {
+        constructionOwner.copy(
+            reflection = constructionOwner.reflection.copy(logicalClassifierKey = "wrong-logical-owner"),
+        )
+    }
+    val reflectedCallable = constructionOwner.reflection.callables.first { callable ->
+        callable.invocationRole == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER
+    }
+    expectRejected("an omitted logical reflected callable") {
+        constructionOwner.copy(
+            reflection = constructionOwner.reflection.copy(
+                callables = constructionOwner.reflection.callables - reflectedCallable,
+            ),
+        )
+    }
+    expectRejected("a reflected semantic family invoked through its typed entry") {
+        val reflectedMember = constructionOwner.members.single { candidate ->
+            candidate.logicalMemberKey == reflectedCallable.logicalMemberKey
+        }
+        val typedSlot = reflectedMember.slots.single { slot ->
+            slot.role == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY
+        }
+        constructionOwner.copy(
+            reflection = constructionOwner.reflection.copy(
+                callables = constructionOwner.reflection.callables.map { callable ->
+                    if (callable != reflectedCallable) callable else callable.copy(
+                        invocationRole = DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY,
+                        invocationMethod = DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                            typedSlot.physicalOwnerPath,
+                            typedSlot.physicalMethodName,
+                            typedSlot.signature,
+                        ),
+                    )
+                },
+            ),
+        )
+    }
+    expectRejected("a reflected callable with an incomplete physical MethodDef family") {
+        constructionOwner.copy(
+            reflection = constructionOwner.reflection.copy(
+                callables = constructionOwner.reflection.callables.map { callable ->
+                    if (callable != reflectedCallable) callable else callable.copy(
+                        physicalMethods = callable.physicalMethods.filter { method ->
+                            method == callable.invocationMethod
+                        },
+                    )
+                },
+            ),
+        )
+    }
+    val exactReflection = artifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
+        constructionOwner.reflection.physicalOpenTypeDefinition,
+    )
+    check(artifact.owners.mapNotNull { owner -> owner.physicalCapabilityOwnerPath }.distinct().size == 1 &&
+            exactReflection == constructionOwner.reflection &&
+            artifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
+                constructionOwner.reflection.physicalOpenTypeDefinition.copy(
+                    physicalTypePath = checkNotNull(constructionOwner.physicalCapabilityOwnerPath),
+                )
+            ) == null) {
+        "Generic-owner reflection normalization confused the implementation and capability TypeDefs"
+    }
+    val reflectionAncestry = artifact.owners.map { owner -> owner.reflection.physicalOpenTypeDefinition }
+    check(artifact.owners.all { owner ->
+        artifact.reflectionClassifierMatchesAncestry(owner.logicalOwnerKey, reflectionAncestry)
+    } && !artifact.reflectionClassifierMatchesAncestry("missing-logical-classifier", reflectionAncestry)) {
+        "Generic-owner reflection ancestry did not use exact recorded open TypeDefs"
     }
     expectRejected("an out-of-range owner parameter in a delegated construction type") {
         constructionOwner.copy(constructors = constructionOwner.constructors.map { constructor ->
@@ -1800,7 +1949,13 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     }
     val missingMemberArtifact = artifact.copy(
         owners = artifact.owners.map { owner ->
-            owner.copy(members = owner.members.filterNot { member -> member.logicalMemberKey in unresolvedKeys })
+            val retainedMembers = owner.members.filterNot { member -> member.logicalMemberKey in unresolvedKeys }
+            owner.copy(
+                members = retainedMembers,
+                reflection = owner.reflection.copy(
+                    callables = genericOwnerPhysicalReflectionCallables(retainedMembers),
+                ),
+            )
         }
     )
     check(runCatching { consumer.resolveExternalPhysicalFamilies(missingMemberArtifact) }.isFailure) {
@@ -1822,7 +1977,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     )
     val mismatchedSignatureArtifact = artifact.copy(
         owners = artifact.owners.map { owner ->
-            owner.copy(members = owner.members.map { member ->
+            val changedMembers = owner.members.map { member ->
                 if (member.logicalMemberKey !in unresolvedKeys) {
                     member
                 } else {
@@ -1840,7 +1995,13 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                         },
                     )
                 }
-            })
+            }
+            owner.copy(
+                members = changedMembers,
+                reflection = owner.reflection.copy(
+                    callables = genericOwnerPhysicalReflectionCallables(changedMembers),
+                ),
+            )
         }
     )
     check(runCatching { consumer.resolveExternalPhysicalFamilies(mismatchedSignatureArtifact) }.isFailure) {
@@ -1919,6 +2080,43 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
             }) {
         "The external producer family lacks complete typed/semantic state access paths: $stateRecord"
     }
+    val stateReflection = stateOwnerRecord.reflection
+    val immediateReflection = ownerRecord.reflection
+    check(stateReflection.logicalClassifierKey == stateOwnerRecord.logicalOwnerKey &&
+            stateReflection.logicalClassifierKey.contains("generic.owner.oracle") &&
+            !stateReflection.logicalClassifierKey.contains(
+                stateReflection.physicalOpenTypeDefinition.physicalTypePath.joinToString(".")
+            ) && immediateReflection.logicalClassifierKey.contains("generic.owner.oracle") &&
+            stateReflection.typeArgumentAuthority ==
+            DotNetGenericOwnerReflectionTypeArgumentAuthority.KLIB_LOGICAL_GRAPH &&
+            stateReflection.capabilityExposure ==
+            DotNetGenericOwnerReflectionCapabilityExposure.HIDDEN_COMPILER_ABI) {
+        "The external producer reflection record lost logical Kotlin classifier authority"
+    }
+    check(artifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
+        stateReflection.physicalOpenTypeDefinition,
+    ) == stateReflection && artifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
+        immediateReflection.physicalOpenTypeDefinition,
+    ) == immediateReflection && artifact.reflectionClassifierForExactOpenTypeDefinitionOrNull(
+        stateReflection.physicalOpenTypeDefinition.copy(
+            physicalTypePath = checkNotNull(stateOwnerRecord.physicalCapabilityOwnerPath),
+        ),
+    ) == null) {
+        "The external producer reflection record normalized a capability or missed an exact owner"
+    }
+    val physicalAncestry = listOf(
+        immediateReflection.physicalOpenTypeDefinition,
+        stateReflection.physicalOpenTypeDefinition,
+    )
+    check(artifact.reflectionClassifierMatchesAncestry(
+        immediateReflection.logicalClassifierKey,
+        physicalAncestry,
+    ) && artifact.reflectionClassifierMatchesAncestry(
+        stateReflection.logicalClassifierKey,
+        physicalAncestry,
+    )) {
+        "The external producer reflection record lost an exact generic-owner ancestry edge"
+    }
     ownerRecord.members.filter { member -> member.logicalMemberKey in unresolvedKeys }.forEach { member ->
         check(member.overrideRootLogicalMemberKeys.size == 1 &&
                 member.directSuperTargets.map { target -> target.role }.toSet() == setOf(
@@ -1991,6 +2189,33 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     val readSemantic = readSemanticAccess.physicalMethod.physicalMethodName
     val writeCapability = capabilityMethodName(write)
     val readCapability = capabilityMethodName(read)
+    fun reflectedCallable(
+        member: DotNetGenericOwnerPrototypeMemberSnapshot,
+    ): DotNetGenericOwnerPhysicalCallableReflectionRecord {
+        val logicalKey = checkNotNull(member.overrideBindings.first().overriddenLogicalBindingKey)
+        return artifact.owners.flatMap { owner -> owner.reflection.callables }
+            .single { callable -> callable.logicalMemberKey == logicalKey }
+    }
+    val writeReflection = reflectedCallable(write)
+    val readReflection = reflectedCallable(read)
+    check(writeReflection.invocationRole == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER &&
+            readReflection.invocationRole == DotNetGenericOwnerMemberFamilyRole.CAPABILITY_DISPATCHER &&
+            writeReflection.invocationMethod.physicalMethodName.endsWith(".$writeCapability") &&
+            readReflection.invocationMethod.physicalMethodName.endsWith(".$readCapability") &&
+            stateReflection.callables.single { callable -> callable.physicalMethods.any { method ->
+                method.physicalMethodName == "Relay"
+            } }.invocationRole == DotNetGenericOwnerMemberFamilyRole.TYPED_ENTRY &&
+            stateReflection.callables.single { callable -> callable.physicalMethods.any { method ->
+                method.physicalMethodName == defaultDispatcher.physicalMethodName
+            } }.physicalMethods.any { method -> method == defaultDispatcher.let { dispatcher ->
+                DotNetGenericOwnerPhysicalMethodIdentityRecord(
+                    dispatcher.physicalOwnerPath,
+                    dispatcher.physicalMethodName,
+                    dispatcher.signature,
+                )
+            } }) {
+        "The external producer reflection record did not collapse each physical family into one callable"
+    }
     val echoEntry = artifact.owners.flatMap { owner -> owner.members }.single { member ->
         member.slots.any { slot -> slot.physicalMethodName == "Echo" }
     }
@@ -2024,10 +2249,77 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     val echoSemanticParameterType = echoSemanticSlot.signature.parameterSlots.single().type
         .renderSnapshotCSharpType(ownerArguments)
     val echoCapability = checkNotNull(echoDispatcherSlot.capabilitySlot).physicalMethodName
+    fun String.asSnapshotCSharpStringLiteral(): String = "\"" +
+            replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "\\r").replace("\n", "\\n") + "\""
+    fun DotNetGenericOwnerPhysicalOpenTypeDefinitionRecord.renderSnapshotCSharpUnboundType(): String =
+        physicalTypePath.joinToString(".") + "<" + ",".repeat(genericArity - 1) + ">"
+    val reflectionRecords = artifact.owners.map { owner -> owner.reflection }
+    val exactNormalizationBranches = reflectionRecords.joinToString("\n") { reflection ->
+        "if (definition == typeof(${reflection.physicalOpenTypeDefinition.renderSnapshotCSharpUnboundType()})) " +
+                "return ${reflection.logicalClassifierKey.asSnapshotCSharpStringLiteral()};"
+    }
+    val logicalTargetBranches = reflectionRecords.joinToString("\n") { reflection ->
+        "if (logicalKey == ${reflection.logicalClassifierKey.asSnapshotCSharpStringLiteral()}) " +
+                "return typeof(${reflection.physicalOpenTypeDefinition.renderSnapshotCSharpUnboundType()});"
+    }
+    val stateLogicalClassifierKey = stateReflection.logicalClassifierKey.asSnapshotCSharpStringLiteral()
+    val immediateLogicalClassifierKey = immediateReflection.logicalClassifierKey.asSnapshotCSharpStringLiteral()
+    val stateOpenTypeName = stateReflection.physicalOpenTypeDefinition.renderSnapshotCSharpUnboundType()
+    val immediateOpenTypeName = immediateReflection.physicalOpenTypeDefinition.renderSnapshotCSharpUnboundType()
+    val stateClosedTypeName = primaryConstructor.constructedOwnerType.renderSnapshotCSharpType(ownerArguments)
+    val stateAlternativeClosedTypeName = primaryConstructor.constructedOwnerType
+        .renderSnapshotCSharpType(listOf("string"))
+    val immediateClosedTypeName = immediateBaseConstructor.constructedOwnerType.renderSnapshotCSharpType(ownerArguments)
+    val writeInvocationMethodName = writeReflection.invocationMethod.physicalMethodName
+        .asSnapshotCSharpStringLiteral()
     val source = directory.resolve("RecordedFamilyConsumer.cs").apply {
         writeText(
             """
             using System;
+
+            public static class RecordedReflectionRegistry
+            {
+                public static string NormalizeExact(Type runtimeType)
+                {
+                    if (runtimeType == null || !runtimeType.IsGenericType) return null;
+                    Type definition = runtimeType.IsGenericTypeDefinition
+                        ? runtimeType
+                        : runtimeType.GetGenericTypeDefinition();
+                    $exactNormalizationBranches
+                    return null;
+                }
+
+                private static Type OpenDefinition(string logicalKey)
+                {
+                    $logicalTargetBranches
+                    return null;
+                }
+
+                private static bool Matches(Type candidate, Type target)
+                {
+                    return candidate != null && candidate.IsGenericType &&
+                        candidate.GetGenericTypeDefinition() == target;
+                }
+
+                public static bool IsLogicalInstance(object value, string logicalKey)
+                {
+                    if (value == null) return false;
+                    Type target = OpenDefinition(logicalKey);
+                    if (target == null) return false;
+                    Type current = value.GetType();
+                    while (current != null)
+                    {
+                        if (Matches(current, target)) return true;
+                        Type[] interfaces = current.GetInterfaces();
+                        for (int index = 0; index < interfaces.Length; index++)
+                        {
+                            if (Matches(interfaces[index], target)) return true;
+                        }
+                        current = current.BaseType;
+                    }
+                    return false;
+                }
+            }
 
             public sealed class RecordedFamilyConsumer : $baseTypeName
             {
@@ -2077,6 +2369,26 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
                     if (typeof($baseTypeName).GetConstructor(new Type[] {
                         typeof($constructorParameterType)
                     }) == null) return 7;
+                    if (RecordedReflectionRegistry.NormalizeExact(typeof($stateClosedTypeName)) !=
+                        $stateLogicalClassifierKey) return 8;
+                    if (RecordedReflectionRegistry.NormalizeExact(typeof($stateOpenTypeName)) !=
+                        $stateLogicalClassifierKey) return 9;
+                    if (RecordedReflectionRegistry.NormalizeExact(typeof($stateAlternativeClosedTypeName)) !=
+                        $stateLogicalClassifierKey) return 15;
+                    if (RecordedReflectionRegistry.NormalizeExact(typeof($immediateOpenTypeName)) !=
+                        $immediateLogicalClassifierKey) return 10;
+                    if (RecordedReflectionRegistry.NormalizeExact(typeof($immediateClosedTypeName)) !=
+                        $immediateLogicalClassifierKey) return 16;
+                    if (RecordedReflectionRegistry.NormalizeExact(typeof($capabilityTypeName)) != null) return 11;
+                    if (RecordedReflectionRegistry.NormalizeExact(typeof(RecordedFamilyConsumer)) != null) return 12;
+                    if (!RecordedReflectionRegistry.IsLogicalInstance(value, $stateLogicalClassifierKey) ||
+                        !RecordedReflectionRegistry.IsLogicalInstance(value, $immediateLogicalClassifierKey)) return 13;
+                    System.Reflection.MethodInfo reflectedWrite = typeof($stateClosedTypeName).GetMethod(
+                        $writeInvocationMethodName,
+                        System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.NonPublic);
+                    if (reflectedWrite == null || !reflectedWrite.IsPrivate) return 14;
                     $capabilityTypeName semantic = value;
                     semantic.$writeCapability("wrong");
                     if (!object.Equals(semantic.$readCapability(), "recorded:wrong")) return 1;
