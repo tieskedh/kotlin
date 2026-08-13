@@ -51,6 +51,9 @@ Archived snapshots:
 - [`generic-owner-producer-classification-catalog-2026-08-13.md`](generic-owner-producer-classification-catalog-2026-08-13.md)
   records schema 7's complete producer candidate catalog, explicit
   metadata-fixed erased-only classification, and fail-closed family join.
+- [`generic-owner-native-aot-measurement-2026-08-13.md`](generic-owner-native-aot-measurement-2026-08-13.md)
+  records workload version 2's race-free working-set handshake, explicit
+  signed MSVC provenance, and the successful four-mode NativeAOT link/run.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots
