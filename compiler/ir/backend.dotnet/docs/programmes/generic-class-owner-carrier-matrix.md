@@ -142,13 +142,14 @@ The later finite factory now has a reproducible measurement corpus derived
 from the exact version-7 producer record rather than a second handwritten
 program. It combines exact `int`, already-nullable, reference, and consumer-
 struct roots with mandatory unlisted struct/reference fallback, paired state,
-typed/semantic arrays, and multi-level hostile dispatch. One hash-identical
-net10 bundle executed with a stable checksum under JIT, ReadyToRun, and full
-trimming. Its project, SDK selector, producer, generated source, and family
-record are fingerprinted and publication cannot mutate the six-file bundle.
+typed/semantic arrays, and multi-level hostile dispatch. One fingerprinted
+net10 bundle executed with a stable checksum under JIT, ReadyToRun, full
+trimming, and NativeAOT. Its project, SDK selector, producer, generated source,
+and family record are fingerprinted and publication cannot mutate the six-file
+bundle.
 See
-[`../archive/generic-owner-measurement-corpus-2026-08-13.md`](../archive/generic-owner-measurement-corpus-2026-08-13.md).
-This closes the reproducible bounded-corpus baseline, not NativeAOT or the
+[`../archive/generic-owner-native-aot-measurement-2026-08-13.md`](../archive/generic-owner-native-aot-measurement-2026-08-13.md).
+This closes the reproducible bounded-corpus NativeAOT baseline, not the
 representative-application/product comparison.
 
 The competing fallback is a construction such as `C<object>` used only
@@ -572,10 +573,9 @@ equality. One mandatory default `C<object>` route carries every unlisted value
 or reference through `S(C)`. The record cannot express unbounded
 `MakeGenericType`, and consumers cannot recover an exact carrier from the
 fallback. Invalid/nested nullable roots and constrained owners reject the whole
-plan. The hostile consumer executes all routes on both CLRs. A NativeAOT
-control passes managed analysis with IL3050/IL2026 as errors and then reaches
-the still-missing platform linker; native execution is therefore still
-unproven.
+plan. The hostile consumer executes all routes on both CLRs. The exact finite
+corpus passes managed analysis with IL3050/IL2026 as errors and completes
+signed-MSVC native link and execution. This remains bounded-corpus evidence.
 
 | Field | Meaning |
 | --- | --- |

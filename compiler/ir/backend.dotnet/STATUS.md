@@ -27,7 +27,22 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: generic-owner schema 7 now separates complete
+- Last completed foundation: the exact schema-7 generic-owner measurement
+  bundle now links and runs as a real Windows x64 NativeAOT executable. A
+  workload-version-2 stdin handshake holds every child only after its protocol
+  line, allowing a live `PeakWorkingSet64` sample without adding the hold to
+  workload or wall time; version-1 bundles now fail closed. Explicit native
+  toolchains record and validate the Microsoft linker signature, version,
+  SHA-256, three distinct library roots, and every required CRT/SDK import
+  library. The result also records the measurement-tool hash and repository
+  dirty state. JIT, ReadyToRun, full trimming, and NativeAOT all produced
+  checksum `2027804433`; the native mode published one 971,264-byte executable,
+  with 11.900-ms startup, 14.440-ms workload, 19,431,608 allocated bytes, and
+  14,368,768-byte peak-working-set medians. All publish logs were warning-free.
+  This closes bounded-corpus NativeAOT proof, not representative product
+  comparison or production `C<T>` admission. See
+  [`docs/archive/generic-owner-native-aot-measurement-2026-08-13.md`](docs/archive/generic-owner-native-aot-measurement-2026-08-13.md).
+- The preceding foundation: generic-owner schema 7 now separates complete
   producer candidate classification from optional physical-family
   publication. Every logically bindable producer snapshot records its owner
   key, arity, disposition, and sorted constructor/member binding keys. A
@@ -62,8 +77,9 @@ verification, and work state.
   ReadyToRun, and full trimming and recorded startup, workload time,
   allocation, peak working set, publication time, and footprint. These are a
   bounded local baseline, not directly comparable dependent/self-contained
-  sizes or representative product evidence. NativeAOT was not run because the
-  platform linker remains absent, and `nativeAotProven` is false. The focused
+  sizes or representative product evidence. At that version-1 checkpoint,
+  NativeAOT was not run and `nativeAotProven` was false; workload version 2
+  closes that gate above. The focused
   separate-compilation correctness test and its strict input audit passed with
   one test and no failure, error, or skip. See
   [`docs/archive/generic-owner-measurement-corpus-2026-08-13.md`](docs/archive/generic-owner-measurement-corpus-2026-08-13.md).
@@ -173,12 +189,13 @@ verification, and work state.
   `C<object>` semantic fallback for every unlisted value/reference type. The
   generated factory contains no `MakeGenericType` or `Activator` closure.
   Exact value/reference/consumer-struct routes and unlisted struct/reference
-  fallbacks execute through the same state/capability on both CLRs. NativeAOT
-  managed analysis is clean with IL3050/IL2026 as errors and reaches the absent
-  platform linker; native execution is not claimed. Normal production generic
-  owners remain erased; these records are not emitted in DLL/KLIB, represented
-  in `dotnet.ir`, or consumed by the production emitter. Complete NativeAOT
-  link/run and measurements remain required before an atomic migration.
+  fallbacks execute through the same state/capability on both CLRs. The later
+  workload-version-2 bounded corpus is warning-clean with IL3050/IL2026 as
+  errors and completes NativeAOT native link and execution. Normal production
+  generic owners remain erased; these records are not emitted in DLL/KLIB, represented
+  in `dotnet.ir`, or consumed by the production emitter. Representative
+  erased-versus-candidate application measurements remain required before an
+  atomic migration.
   The preceding foundation: open-nullable projected array reads and
   Kotlin-owned nullable generic varargs now use two distinct truthful CLR
   carriers. Ordinary `Array<out T?>` retains the original exact vector through
@@ -635,9 +652,11 @@ resulting six-file bundle retained all five hashes after JIT, ReadyToRun, and
 full-trimming publication and execution; all modes produced checksum
 `2027804433`. Its schema-7 physical-family artifact hash is
 `765c8bd9d62c81d35eae0cb036c78677de6d5020afb2cd8e9508125eafcf422e`;
-the producer DLL and generated source hashes remain unchanged. NativeAOT was
-not attempted without the required platform linker and remained explicitly
-false in the result protocol.
+the producer DLL remained unchanged. That version-1 result left NativeAOT
+false. Workload version 2 changes only the generated source for a post-protocol
+working-set handshake and subsequently completes the four-mode native link/run
+recorded in
+[`docs/archive/generic-owner-native-aot-measurement-2026-08-13.md`](docs/archive/generic-owner-native-aot-measurement-2026-08-13.md).
 
 This aggregate also includes compiler-derived exact constructor, member-role,
 and masked-default signatures for the temporary generic-owner physicalizer.
@@ -915,9 +934,10 @@ rejected. The record-driven C# factory executes exact
 fallbacks on all eight hostile lanes, preserving mutation and honest physical
 reflection/classifier normalization. A .NET 10 NativeAOT control promotes
 IL3050/IL2026 to errors: the old `MakeGenericType` control fails at IL3050,
-while the finite factory passes managed AOT analysis and stops only at this
-host's missing Visual C++ linker. Native link/run remains required, so this
-tranche has not changed production admission. Backend/fixture compilation, the
+while the finite factory passes managed AOT analysis. A later explicit signed
+MSVC toolchain run links and executes that bounded factory; representative
+applications remain required, so this tranche has not changed production
+admission. Backend/fixture compilation, the
 explicit six-test model refresh, all eight focused hostile lanes, and the
 fresh 190-suite/2,204-test aggregate above are green with zero failures,
 errors, or skips.
@@ -957,8 +977,9 @@ state, typed C# overrides, Kotlin-like semantic overrides, and multi-level
 dispatch on one generic owner. Separate focused evidence from a bounded .NET
 10 application also passed
 ReadyToRun and full-trimming execution. NativeAOT analysis reported IL3050 for
-runtime `MakeGenericType`, and native linking could not run because this
-machine lacks the platform linker, so NativeAOT remains explicitly unproven.
+runtime `MakeGenericType`; at that checkpoint native linking was unavailable.
+That unbounded dynamic route remains invalid for NativeAOT even though the
+later statically rooted finite factory now links and runs natively.
 The three CLR integration methods are included in the 2,204-test aggregate count
 above; the external publish analysis is evidence rather than another test.
 
@@ -1946,9 +1967,9 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
   casts, reflection, and honest C# ancestry or the declaration remains erased.
   Compiler-produced Kotlin member families, physical bindings, reflection, and
   separate-assembly C# inheritance now have bounded production-inert evidence.
-  The record-driven JIT/ReadyToRun/full-trimming measurement baseline now
-  exists, but complete NativeAOT link/run and representative application
-  comparison remain open. This design gate does not block current stdlib,
+  The record-driven JIT/ReadyToRun/full-trimming/NativeAOT measurement baseline
+  now exists, but representative erased-versus-candidate application
+  comparison remains open. This design gate does not block current stdlib,
   reflection, CLI-IR, imported CLR generics, generic methods, explicit exports,
   or removable specialization. See
   [`docs/programmes/generic-class-owner-reopening.md`](docs/programmes/generic-class-owner-reopening.md).
@@ -2012,11 +2033,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    finite construction-site record now selects statically rooted exact open-
    nullable routes plus one mandatory semantic fallback without unbounded
    reflection. Its fingerprinted measurement corpus is now green under JIT,
-   ReadyToRun, and full trimming with one checksum. Next, execute that exact
-   verified bundle on a complete NativeAOT toolchain and record its native
-   size, startup, throughput, allocation, and peak memory, then broaden the
-   comparison to representative erased/candidate applications;
-   analyzer, ReadyToRun, and trimming success alone are insufficient.
+   ReadyToRun, full trimming, and real NativeAOT link/run with one checksum.
+   Next, broaden the comparison to representative erased/candidate Kotlin
+   applications and C# consumers/subclasses, including arbitrary structs,
+   native/managed size, compile cost, startup, throughput, allocation, peak
+   memory, and bridge crossings; the bounded hostile corpus alone is
+   insufficient.
    Kotlin/Native VTA and Swift SIL
    remain optional proof engines for private/direct paths and never replace
    the open-world capability. Do not emit a production `C<T>` TypeDef or roll

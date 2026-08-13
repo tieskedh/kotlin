@@ -566,9 +566,9 @@ and one mandatory
 `C<object>` route handles all unlisted types through the semantic capability.
 Invalid nullable roots and constrained owners fail closed. The generated
 factory contains no `MakeGenericType` or `Activator` closure.
-Both CLRs execute the table; NativeAOT managed analysis is warning-clean but
-native link/run remains blocked on the missing platform linker and is still an
-acceptance gate.
+Both CLRs execute the table. A later explicit, signed MSVC toolchain run is
+warning-clean and completes the finite table's native link and execution.
+Representative application comparison remains an acceptance gate.
 
 Version 7 separates producer candidate classification from optional physical
 family publication. Every logically bindable generic owner records its logical
@@ -583,13 +583,15 @@ The exact same compiler-record-driven finite factory now exports a pinned,
 fingerprinted six-file net10 measurement bundle. One versioned hostile
 workload executes exact and fallback construction, shared state, typed and
 semantic arrays, multi-level dispatch, and delayed typed failure. JIT,
-ReadyToRun, and full trimming agree on its checksum and report startup,
-throughput, allocation, peak working set, publish cost, and footprint. The
-tool's NativeAOT mode cannot be replaced by those results: it requires a real
-native executable and leaves proof false on any link or run failure. This is a
-reproducible bounded-corpus baseline, not representative product evidence or
-authorization for production `C<T>`. See
-[`../archive/generic-owner-measurement-corpus-2026-08-13.md`](../archive/generic-owner-measurement-corpus-2026-08-13.md).
+ReadyToRun, full trimming, and NativeAOT agree on its checksum and report
+startup, throughput, allocation, peak working set, publish cost, and footprint.
+Workload version 2 holds the child only after its protocol so even the fast
+native process yields a live working-set sample. The explicit native route
+validates and records a signed Microsoft linker and its CRT/SDK libraries; any
+link or run failure leaves proof false. This is a reproducible bounded-corpus
+baseline, not representative product evidence or authorization for production
+`C<T>`. See
+[`../archive/generic-owner-native-aot-measurement-2026-08-13.md`](../archive/generic-owner-native-aot-measurement-2026-08-13.md).
 
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
