@@ -106,6 +106,7 @@ import org.jetbrains.kotlin.config.dotNetOutput
 import org.jetbrains.kotlin.config.dotNetProducesLibrary
 import org.jetbrains.kotlin.config.dotNetTarget
 import org.jetbrains.kotlin.config.languageVersionSettings
+import org.jetbrains.kotlin.config.klibRelativePathBases
 import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.config.targetPlatform
 import org.jetbrains.kotlin.diagnostics.impl.DiagnosticsCollectorImpl
@@ -146,6 +147,7 @@ import org.jetbrains.kotlin.test.services.TestModuleStructure
 import org.jetbrains.kotlin.test.services.TestServices
 import org.jetbrains.kotlin.test.services.getOrCreateTempDirectory
 import org.jetbrains.kotlin.test.services.moduleStructure
+import org.jetbrains.kotlin.test.services.sourceFileProvider
 import org.jetbrains.kotlin.test.services.targetPlatform
 import org.jetbrains.kotlin.test.services.temporaryDirectoryManager
 import org.jetbrains.kotlin.test.services.transitiveDependsOnDependencies
@@ -366,12 +368,6 @@ private class BackendCliDotNetFacade(
         } else {
             backendOutput
         }
-        validateGenericOwnerHardestModelPrototype(completedOutput.genericOwnerPrototypes)
-        physicalizeGenericOwnerHardestModelPrototype(
-            completedOutput.genericOwnerPrototypes,
-            loweredInput.configuration.dotNetTarget,
-            testServices.getOrCreateTempDirectory("generic-owner-snapshot-physicalizer"),
-        )
         check(completedOutput.output.isFile) {
             val messages = (input.configuration.messageCollector as? MessageCollectorForCompilerTests)
                 ?.nonSourceMessages
@@ -379,6 +375,14 @@ private class BackendCliDotNetFacade(
                 .orEmpty()
             "The .NET backend produced no file at ${completedOutput.output.path}:\n$messages"
         }
+        validateGenericOwnerHardestModelPrototype(completedOutput.genericOwnerPrototypes)
+        physicalizeGenericOwnerHardestModelPrototype(
+            completedOutput.genericOwnerPrototypes,
+            loweredInput.configuration.dotNetTarget,
+            completedOutput.output,
+            testServices.moduleStructure.originalTestDataFiles.single(),
+            testServices.getOrCreateTempDirectory("generic-owner-snapshot-physicalizer"),
+        )
         return BinaryArtifacts.DotNet(completedOutput.output)
     }
 }
@@ -662,7 +666,19 @@ private const val GENERIC_OWNER_MEASUREMENT_PROJECT_FILE = "RecordedFamilyMeasur
 private const val GENERIC_OWNER_MEASUREMENT_MANIFEST_FILE = "generic-owner-measurement.properties"
 private const val GENERIC_OWNER_MEASUREMENT_EXPORT_PROPERTY =
     "kotlin.dotnet.genericOwnerMeasurementDir"
+private const val GENERIC_OWNER_APPLICATION_EXPORT_PROPERTY =
+    "kotlin.dotnet.genericOwnerApplicationDir"
 private const val GENERIC_OWNER_MEASUREMENT_WORKLOAD_VERSION = 2
+private const val GENERIC_OWNER_ERASED_PRODUCER_FILE = "lib.dll"
+private const val GENERIC_OWNER_ERASED_CSHARP_SOURCE_FILE = "ErasedCSharpConsumer.cs"
+private const val GENERIC_OWNER_APPLICATION_SOURCE_FILE = "genericOwnerHardestModelOracle.kt"
+private const val GENERIC_OWNER_APPLICATION_MANIFEST_FILE = "generic-owner-application.properties"
+
+private fun genericOwnerErasedConsumerFile(target: DotNetTarget): String =
+    if (target == DotNetTarget.NET48) "ErasedConsumer.exe" else "ErasedConsumer.dll"
+
+private fun genericOwnerErasedCSharpAssemblyFile(target: DotNetTarget): String =
+    if (target == DotNetTarget.NET48) "ErasedCSharpConsumer.exe" else "ErasedCSharpConsumer.dll"
 
 private fun genericOwnerPrototypePhysicalMethodName(
     member: DotNetGenericOwnerPrototypeMemberSnapshot,
@@ -1557,19 +1573,42 @@ private fun validateGenericOwnerPhysicalFamilyCodec(
  * production emitter: it turns the recorded role/state decisions into a temporary CLR-generic
  * producer, then proves that a separately compiled C# subclass observes those decisions.
  */
+private fun copyGenericOwnerErasedArtifact(source: File, destination: File) {
+    check(source.isFile) { "The generic-owner application corpus lacks erased output: ${source.path}" }
+    check(!destination.exists()) {
+        "The generic-owner application corpus attempted to overwrite erased output: ${destination.path}"
+    }
+    source.copyTo(destination)
+}
+
 private fun physicalizeGenericOwnerHardestModelPrototype(
     prototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
     target: DotNetTarget,
+    erasedOutput: File,
+    applicationSource: File,
     directory: File,
 ) {
     fun DotNetGenericOwnerPrototypeSnapshot.hasSimpleName(name: String): Boolean =
         ownerName == name || ownerName.endsWith(".$name")
 
+    directory.mkdirs()
     prototypes.singleOrNull { prototype -> prototype.hasSimpleName("ConsumerUnsafeLeaf") }?.let { consumer ->
+        copyGenericOwnerErasedArtifact(
+            erasedOutput,
+            directory.resolve(genericOwnerErasedConsumerFile(target)),
+        )
         consumeGenericOwnerPhysicalFamilyArtifact(consumer, target, directory)
         return
     }
     if (prototypes.none { prototype -> prototype.hasSimpleName("HostileUnsafeProducer") }) return
+    copyGenericOwnerErasedArtifact(
+        applicationSource,
+        directory.resolve(GENERIC_OWNER_APPLICATION_SOURCE_FILE),
+    )
+    copyGenericOwnerErasedArtifact(
+        erasedOutput,
+        directory.resolve(GENERIC_OWNER_ERASED_PRODUCER_FILE),
+    )
     val owner = prototypes.single { prototype -> prototype.hasSimpleName("HostileUnsafeStore") }
     val write = owner.members.single { member -> member.sourceName == "writeUnsafe" }
     val read = owner.members.single { member -> member.sourceName == "read" }
@@ -1689,7 +1728,6 @@ private fun physicalizeGenericOwnerHardestModelPrototype(
         """.trimIndent()
     } else ""
 
-    directory.mkdirs()
     val producerSource = directory.resolve("SnapshotProducer.cs").apply {
         writeText(
             """
@@ -3141,6 +3179,21 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
             exportDirectory = File(measurementExportPath),
         )
     }
+    val applicationExportPath = System.getProperty(GENERIC_OWNER_APPLICATION_EXPORT_PROPERTY)
+    if (applicationExportPath != null) {
+        check(applicationExportPath.isNotBlank()) {
+            "Generic-owner application export path must not be blank"
+        }
+        prepareGenericOwnerApplicationBundle(
+            directory = directory,
+            target = target,
+            source = source,
+            candidateProducer = producer,
+            candidateConsumer = output,
+            physicalFamilyArtifact = recordFile,
+            exportDirectory = File(applicationExportPath),
+        )
+    }
 }
 
 private fun prepareGenericOwnerMeasurementBundle(
@@ -3244,6 +3297,283 @@ private fun prepareGenericOwnerMeasurementBundle(
     bundleFiles.forEach { file -> file.copyTo(exportDirectory.resolve(file.name), overwrite = false) }
 }
 
+private fun prepareGenericOwnerApplicationBundle(
+    directory: File,
+    target: DotNetTarget,
+    source: File,
+    candidateProducer: File,
+    candidateConsumer: File,
+    physicalFamilyArtifact: File,
+    exportDirectory: File,
+) {
+    val applicationSource = directory.resolve(GENERIC_OWNER_APPLICATION_SOURCE_FILE)
+    val erasedProducer = directory.resolve(GENERIC_OWNER_ERASED_PRODUCER_FILE)
+    val erasedConsumer = directory.resolve(genericOwnerErasedConsumerFile(target))
+    val candidateRuntimeConfig = if (target == DotNetTarget.NET10_0) {
+        directory.resolve("${candidateConsumer.nameWithoutExtension}.runtimeconfig.json")
+    } else {
+        null
+    }
+    val platformProperty = "kotlin.dotnet.test.platform.${target.description}.path"
+    val platformDirectory = System.getProperty(platformProperty)?.let(::File)
+        ?: error("Missing reusable Kotlin/.NET test platform property '$platformProperty'")
+    val runtime = platformDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME)
+    val stdlib = platformDirectory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    check(listOf(
+        source,
+        candidateProducer,
+        candidateConsumer,
+        physicalFamilyArtifact,
+        applicationSource,
+        erasedProducer,
+        erasedConsumer,
+        runtime,
+        stdlib,
+    ).all(File::isFile) && candidateRuntimeConfig?.isFile != false) {
+        "The generic-owner application bundle requires candidate, erased, runtime, and stdlib artifacts"
+    }
+    val stagedRuntime = directory.resolve(runtime.name).also { destination ->
+        if (!destination.exists()) runtime.copyTo(destination)
+    }
+    val stagedStdlib = directory.resolve(stdlib.name).also { destination ->
+        if (!destination.exists()) stdlib.copyTo(destination)
+    }
+    check(stagedRuntime.isFile && stagedStdlib.isFile &&
+            stagedRuntime.readBytes().contentEquals(runtime.readBytes()) &&
+            stagedStdlib.readBytes().contentEquals(stdlib.readBytes())) {
+        "The generic-owner application bundle staged stale runtime or stdlib artifacts"
+    }
+    executeSnapshotConsumer(target, erasedConsumer, directory)
+    val erasedConsumerRuntimeConfig = if (target == DotNetTarget.NET10_0) {
+        directory.resolve("${erasedConsumer.nameWithoutExtension}.runtimeconfig.json")
+    } else {
+        null
+    }
+    check(erasedConsumerRuntimeConfig?.isFile != false) {
+        "The erased Kotlin generic-owner application lacks its runtime config"
+    }
+    val erasedCSharpSource = directory.resolve(GENERIC_OWNER_ERASED_CSHARP_SOURCE_FILE).apply {
+        writeText(
+            """
+            using System;
+            using ErasedStore = global::generic.owner.oracle.HostileUnsafeStore;
+            using ErasedMid = global::generic.owner.oracle.HostileUnsafeMid;
+
+            public enum ApplicationEnum
+            {
+                First = 1,
+                Second = 2,
+            }
+
+            public struct ApplicationStruct
+            {
+                public int Count;
+                public Guid Id;
+            }
+
+            public class ErasedCSharpLeaf : ErasedMid
+            {
+                public ErasedCSharpLeaf(object initial) : base(initial) {}
+
+                public override void writeUnsafe(object next)
+                {
+                    base.writeUnsafe(next is string ? "csharp:" + next : next);
+                }
+
+                public override object read()
+                {
+                    return base.read();
+                }
+
+                public override Array echo(Array values)
+                {
+                    return base.echo(values);
+                }
+            }
+
+            public sealed class ErasedCSharpGrandchild : ErasedCSharpLeaf
+            {
+                public ErasedCSharpGrandchild(object initial) : base(initial) {}
+
+                public override void writeUnsafe(object next)
+                {
+                    base.writeUnsafe(next is string ? "grandchild:" + next : next);
+                }
+            }
+
+            public static class ErasedApplicationEntry
+            {
+                private static bool RoundTrips(object value)
+                {
+                    ErasedStore owner = new ErasedStore(value);
+                    if (!object.Equals(owner.read(), value)) return false;
+                    owner.writeUnsafe(value);
+                    return object.Equals(owner.read(), value);
+                }
+
+                public static int Main()
+                {
+                    Guid guid = new Guid("00112233-4455-6677-8899-aabbccddeeff");
+                    DateTime date = new DateTime(638900000000000000L, DateTimeKind.Utc);
+                    decimal amount = 1234567.8901m;
+                    ValueTuple<int, string> tuple = new ValueTuple<int, string>(7, "tuple");
+                    ApplicationStruct user = new ApplicationStruct { Count = 11, Id = guid };
+                    if (!RoundTrips(guid) || !RoundTrips(date) || !RoundTrips(amount) ||
+                            !RoundTrips(ApplicationEnum.Second) || !RoundTrips(tuple) ||
+                            !RoundTrips(user) || !RoundTrips(null)) return 1;
+
+                    ErasedStore mixed = new ErasedStore(guid);
+                    mixed.writeUnsafe(date);
+                    if (!object.Equals(mixed.read(), date)) return 2;
+                    mixed.writeUnsafe(amount);
+                    if (!object.Equals(mixed.read(), amount)) return 3;
+                    mixed.writeUnsafe(user);
+                    if (!object.Equals(mixed.read(), user)) return 4;
+
+                    Guid?[] nullableGuids = new Guid?[] { guid, null };
+                    string[] strings = new string[] { "array" };
+                    if (!object.ReferenceEquals(mixed.echo(nullableGuids), nullableGuids) ||
+                            !object.ReferenceEquals(mixed.echo(strings), strings)) return 5;
+                    ApplicationStruct[] users = new ApplicationStruct[] { user };
+                    if (!object.ReferenceEquals(mixed.relay<ApplicationStruct>(users), users)) return 6;
+
+                    ErasedCSharpGrandchild child = new ErasedCSharpGrandchild("initial");
+                    child.writeUnsafe("value");
+                    if (!object.Equals(child.read(), "csharp:grandchild:value")) return 7;
+                    if (!object.ReferenceEquals(child.echo(strings), strings)) return 8;
+
+                    Type ownerType = typeof(ErasedStore);
+                    System.Reflection.MethodInfo read = ownerType.GetMethod("read");
+                    System.Reflection.MethodInfo write = ownerType.GetMethod("writeUnsafe");
+                    System.Reflection.MethodInfo echo = ownerType.GetMethod("echo");
+                    System.Reflection.MethodInfo relay = ownerType.GetMethod("relay");
+                    if (ownerType.IsGenericType || ownerType.GetGenericArguments().Length != 0 ||
+                            ownerType.GetConstructor(new Type[] { typeof(object) }) == null ||
+                            read == null || read.ReturnType != typeof(object) ||
+                            write == null || write.GetParameters()[0].ParameterType != typeof(object) ||
+                            echo == null || echo.ReturnType != typeof(Array) ||
+                            echo.GetParameters()[0].ParameterType != typeof(Array) ||
+                            relay == null || !relay.IsGenericMethodDefinition ||
+                            relay.GetGenericArguments().Length != 1) return 9;
+                    return 0;
+                }
+            }
+            """.trimIndent()
+        )
+    }
+    val erasedCSharpAssembly = directory.resolve(genericOwnerErasedCSharpAssemblyFile(target))
+    val erasedCSharpCompilation = when (target) {
+        DotNetTarget.NET48 -> compileFrameworkSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findFrameworkCSharpCompiler()) {
+                "Framework C# compiler is required for the erased generic-owner application corpus"
+            },
+            erasedCSharpSource,
+            erasedCSharpAssembly,
+            references = listOf(erasedProducer, stagedRuntime, stagedStdlib),
+            executable = true,
+        )
+        DotNetTarget.NET10_0 -> compileModernSnapshotCSharp(
+            checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+                "Modern C# compiler is required for the erased generic-owner application corpus"
+            },
+            erasedCSharpSource,
+            erasedCSharpAssembly,
+            references = listOf(erasedProducer, stagedRuntime, stagedStdlib),
+            executable = true,
+        )
+        DotNetTarget.NETSTANDARD_2_0 -> error("netstandard2.0 has no executable application corpus")
+    }
+    check(erasedCSharpCompilation.exitCode == 0) { erasedCSharpCompilation.output }
+    executeSnapshotConsumer(target, erasedCSharpAssembly, directory)
+    val erasedCSharpRuntimeConfig = if (target == DotNetTarget.NET10_0) {
+        directory.resolve("${erasedCSharpAssembly.nameWithoutExtension}.runtimeconfig.json")
+    } else {
+        null
+    }
+    check(erasedCSharpRuntimeConfig?.isFile != false) {
+        "The erased generic-owner C# application lacks its runtime config"
+    }
+    val globalJson = if (target == DotNetTarget.NET10_0) {
+        directory.resolve("global.json").apply {
+            writeText(
+            """
+            {
+              "sdk": {
+                "version": "10.0.100",
+                "rollForward": "disable",
+                "allowPrerelease": false
+              }
+            }
+            """.trimIndent()
+            )
+        }
+    } else {
+        null
+    }
+    val manifest = directory.resolve(GENERIC_OWNER_APPLICATION_MANIFEST_FILE).apply {
+        writeText(buildString {
+            appendLine("schema=1")
+            appendLine("sdkVersion=${if (target == DotNetTarget.NET10_0) "10.0.100" else "framework-clr"}")
+            appendLine("targetProfile=${target.name}")
+            appendLine("applicationSourceSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(applicationSource.readBytes())}")
+            appendLine("candidateProducerSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(candidateProducer.readBytes())}")
+            appendLine("candidateConsumerSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(candidateConsumer.readBytes())}")
+            candidateRuntimeConfig?.let { file ->
+                appendLine("candidateRuntimeConfigSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(file.readBytes())}")
+            }
+            appendLine("candidateSourceSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(source.readBytes())}")
+            appendLine("physicalFamilyArtifactSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(physicalFamilyArtifact.readBytes())}")
+            appendLine("erasedProducerSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(erasedProducer.readBytes())}")
+            appendLine("erasedConsumerSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(erasedConsumer.readBytes())}")
+            erasedConsumerRuntimeConfig?.let { file ->
+                appendLine("erasedConsumerRuntimeConfigSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(file.readBytes())}")
+            }
+            appendLine("erasedCSharpSourceSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(erasedCSharpSource.readBytes())}")
+            appendLine("erasedCSharpAssemblySha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(erasedCSharpAssembly.readBytes())}")
+            erasedCSharpRuntimeConfig?.let { file ->
+                appendLine("erasedCSharpRuntimeConfigSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(file.readBytes())}")
+            }
+            appendLine("runtimeSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(runtime.readBytes())}")
+            appendLine("stdlibSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(stdlib.readBytes())}")
+            globalJson?.let { file ->
+                append("globalJsonSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(file.readBytes())}")
+            }
+        })
+    }
+    val bundleFiles = listOf(
+        source,
+        candidateProducer,
+        candidateConsumer,
+        physicalFamilyArtifact,
+        applicationSource,
+        erasedProducer,
+        erasedConsumer,
+        erasedCSharpSource,
+        erasedCSharpAssembly,
+        stagedRuntime,
+        stagedStdlib,
+        manifest,
+    ) + listOfNotNull(
+        candidateRuntimeConfig,
+        erasedConsumerRuntimeConfig,
+        erasedCSharpRuntimeConfig,
+        globalJson,
+    )
+    check(bundleFiles.map(File::getName).toSet().size == bundleFiles.size && bundleFiles.all(File::isFile)) {
+        "The generic-owner application bundle is incomplete or has colliding file names"
+    }
+    check(!exportDirectory.exists() || exportDirectory.isDirectory) {
+        "Generic-owner application export path is not a directory: $exportDirectory"
+    }
+    check(exportDirectory.mkdirs() || exportDirectory.isDirectory) {
+        "Cannot create generic-owner application export directory: $exportDirectory"
+    }
+    check(exportDirectory.list()?.isEmpty() == true) {
+        "Generic-owner application export directory must be empty: $exportDirectory"
+    }
+    bundleFiles.forEach { file -> file.copyTo(exportDirectory.resolve(file.name), overwrite = false) }
+}
+
 private fun DotNetGenericOwnerPhysicalTypeExpressionRecord.renderSnapshotCSharpType(
     ownerArguments: List<String>,
     methodArguments: List<String> = emptyList(),
@@ -3282,18 +3612,31 @@ private data class SnapshotCSharpCompilation(
 )
 
 private fun compileFrameworkSnapshotCSharp(
-    compiler: File,
+    frameworkCompiler: File,
     source: File,
     output: File,
     references: List<File>,
     executable: Boolean,
 ): SnapshotCSharpCompilation {
     output.delete()
+    val toolchain = checkNotNull(DotNetIlAssembler.findModernCSharpCompiler()) {
+        "Modern Roslyn is required for deterministic Framework snapshot compilation"
+    }
+    val frameworkReferences = listOf("mscorlib.dll", "System.dll", "System.Core.dll").map { name ->
+        frameworkCompiler.parentFile.resolve(name).also { reference ->
+            check(reference.isFile) { "Framework reference assembly is missing: ${reference.path}" }
+        }
+    }
     return runSnapshotCompiler(buildList {
-        add(compiler.path)
+        add(toolchain.dotNetHost.path)
+        add(toolchain.compiler.path)
         add("/nologo")
+        add("/noconfig")
+        add("/nostdlib+")
+        add("/deterministic+")
         add("/target:${if (executable) "exe" else "library"}")
         add("/out:${output.path}")
+        frameworkReferences.forEach { reference -> add("/reference:${reference.path}") }
         references.forEach { reference -> add("/reference:${reference.path}") }
         add(source.path)
     }, output.parentFile)
@@ -3433,6 +3776,12 @@ private class DotNetEnvironmentConfigurator(
             .map(DotNetPropertyExport::parse)
         configuration.dotNetOutput = getConfiguredOutput(module, artifactName)
         configuration.dotNetTarget = target
+        // KLIB source identities must not retain the test framework's random temporary root.
+        // Besides making embedded library metadata reproducible, this matches the public
+        // -Xklib-relative-path-base contract used by the other KLIB-producing backends.
+        configuration.klibRelativePathBases = listOf(
+            testServices.sourceFileProvider.getKotlinSourceDirectoryForModule(module).canonicalPath,
+        )
         // Match the KLIB test environments: a selected binary library's regular dependency
         // closure is part of the compiler classpath. Inline bodies may refer to declarations in
         // that closure even when the consuming source names only the immediate library.

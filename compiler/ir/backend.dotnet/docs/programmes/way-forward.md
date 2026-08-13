@@ -593,6 +593,26 @@ baseline, not representative product evidence or authorization for production
 `C<T>`. See
 [`../archive/generic-owner-native-aot-measurement-2026-08-13.md`](../archive/generic-owner-native-aot-measurement-2026-08-13.md).
 
+The next product prerequisite is now closed by one paired application corpus,
+not by another handwritten benchmark. It captures the exact hostile Kotlin
+multi-module source, the actual production-erased producer and Kotlin
+consumer, a direct C# consumer/two-level subclass of that erased assembly, and
+the snapshot-derived candidate producer/consumer. Arbitrary framework and user
+structs, nullable and mixed state, arrays, method generics, and multi-level
+dispatch execute on PSI/LightTree and both CLR profiles. The current direct C#
+surface is recorded honestly: owner generics are erased to arity zero and
+`object`/`System.Array`, while owner-independent method generics remain native.
+Closed manifests fingerprint every product. Relative KLIB paths remove random
+test-root leakage, and the cross-frontend audit requires exact CLR code/ABI,
+non-KLIB resources, non-body KLIB content, binding records, and all downstream
+products. Raw manifests retain the parser-specific IR body hash; the verifier
+does not claim body-blob equality or replace a future semantic KLIB-body
+canonicalizer. Framework products use deterministic Roslyn with explicit CLR
+4 references and execute on CLR 4. This supplies the paired inputs for the
+representative measurement gate; it is not itself representative performance
+evidence or migration authority. See
+[`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state
