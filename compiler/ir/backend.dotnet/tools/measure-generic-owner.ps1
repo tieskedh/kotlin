@@ -15,6 +15,12 @@
 .EXAMPLE
     pwsh compiler/ir/backend.dotnet/tools/measure-generic-owner.ps1 `
         -Modes native-aot -ExistingBundle C:\path\to\bundle
+
+.EXAMPLE
+    pwsh compiler/ir/backend.dotnet/tools/measure-generic-owner.ps1 `
+        -Modes native-aot -ExistingBundle C:\path\to\bundle `
+        -NativeLinker C:\path\to\link.exe `
+        -NativeLibraryDirectories C:\path\to\msvc-lib,C:\path\to\sdk-um,C:\path\to\sdk-ucrt
 #>
 [CmdletBinding()]
 param(
@@ -28,6 +34,8 @@ param(
     [int]$ThroughputRuns = 3,
     [string]$OutputDirectory,
     [string]$ExistingBundle,
+    [string]$NativeLinker,
+    [string[]]$NativeLibraryDirectories,
     [switch]$PrepareOnly
 )
 
@@ -38,6 +46,12 @@ if (-not $PrepareOnly -and $Modes.Count -eq 0) {
 }
 if (@($Modes | Select-Object -Unique).Count -ne $Modes.Count) {
     throw 'Measurement modes must be unique'
+}
+if ([string]::IsNullOrWhiteSpace($NativeLinker) -ne ($null -eq $NativeLibraryDirectories)) {
+    throw 'NativeLinker and NativeLibraryDirectories must be supplied together'
+}
+if (-not [string]::IsNullOrWhiteSpace($NativeLinker) -and 'native-aot' -notin $Modes) {
+    throw 'An explicit native toolchain is only valid when native-aot mode is selected'
 }
 
 $backendDirectory = Split-Path -Parent $PSScriptRoot
@@ -83,6 +97,64 @@ function Assert-Hash([string]$Path, [string]$Expected, [string]$Label) {
     }
 }
 
+$nativeToolchainInfo = $null
+if (-not [string]::IsNullOrWhiteSpace($NativeLinker)) {
+    $NativeLinker = [IO.Path]::GetFullPath($NativeLinker)
+    if (-not (Test-Path -LiteralPath $NativeLinker -PathType Leaf)) {
+        throw "The explicit NativeAOT linker does not exist: $NativeLinker"
+    }
+    $resolvedNativeLibraryDirectories = @($NativeLibraryDirectories | ForEach-Object {
+        if ([string]::IsNullOrWhiteSpace($_)) { throw 'Native library directories must not be blank' }
+        $directory = [IO.Path]::GetFullPath($_)
+        if (-not (Test-Path -LiteralPath $directory -PathType Container)) {
+            throw "The explicit NativeAOT library directory does not exist: $directory"
+        }
+        $directory
+    })
+    if ($resolvedNativeLibraryDirectories.Count -ne 3 -or
+            @($resolvedNativeLibraryDirectories | Select-Object -Unique).Count -ne 3) {
+        throw 'The explicit NativeAOT toolchain requires three unique MSVC, SDK um, and SDK ucrt library directories'
+    }
+    $requiredNativeLibraries = @(
+        'advapi32.lib', 'bcrypt.lib', 'crypt32.lib', 'iphlpapi.lib', 'kernel32.lib',
+        'mswsock.lib', 'ncrypt.lib', 'normaliz.lib', 'ntdll.lib', 'ole32.lib',
+        'oleaut32.lib', 'secur32.lib', 'user32.lib', 'version.lib', 'ws2_32.lib',
+        'libcmt.lib', 'libvcruntime.lib', 'oldnames.lib', 'ucrt.lib'
+    )
+    foreach ($library in $requiredNativeLibraries) {
+        if (-not ($resolvedNativeLibraryDirectories | Where-Object {
+            Test-Path -LiteralPath (Join-Path $_ $library) -PathType Leaf
+        })) {
+            throw "The explicit NativeAOT toolchain lacks required library $library"
+        }
+    }
+    $linkerSignature = Get-AuthenticodeSignature -LiteralPath $NativeLinker
+    if ($linkerSignature.Status -ne [Management.Automation.SignatureStatus]::Valid -or
+            $linkerSignature.SignerCertificate.Subject -notmatch '(^|, )O=Microsoft Corporation(,|$)') {
+        throw "The explicit NativeAOT linker is not validly signed by Microsoft: $NativeLinker"
+    }
+    $linkerVersion = (Get-Item -LiteralPath $NativeLinker).VersionInfo.FileVersion
+    if ([string]::IsNullOrWhiteSpace($linkerVersion)) {
+        throw "The explicit NativeAOT linker has no file version: $NativeLinker"
+    }
+    $env:PATH = "$(Split-Path -Parent $NativeLinker)$([IO.Path]::PathSeparator)$env:PATH"
+    $env:LIB = $resolvedNativeLibraryDirectories -join [IO.Path]::PathSeparator
+    $env:IlcUseEnvironmentalTools = 'true'
+    $nativeToolchainInfo = [ordered]@{
+        discovery = 'explicit-msvc'
+        linker = $NativeLinker
+        linkerVersion = $linkerVersion
+        linkerSha256 = Get-Sha256 $NativeLinker
+        linkerSigner = $linkerSignature.SignerCertificate.Subject
+        libraryDirectories = $resolvedNativeLibraryDirectories
+        requiredLibraries = $requiredNativeLibraries
+    }
+} elseif ('native-aot' -in $Modes) {
+    $nativeToolchainInfo = [ordered]@{
+        discovery = 'dotnet-sdk-auto-discovery'
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($ExistingBundle)) {
     $bundleDirectory = Join-Path $runDirectory 'bundle'
     New-Item -ItemType Directory -Force -Path $bundleDirectory | Out-Null
@@ -116,7 +188,7 @@ $requiredManifestKeys = @(
 if (@(Compare-Object @($manifest.Keys) $requiredManifestKeys).Count -ne 0) {
     throw "The generic-owner measurement manifest has an unexpected shape: $($manifest | ConvertTo-Json -Compress)"
 }
-if ($manifest.schema -ne '1' -or $manifest.workloadVersion -ne '1' -or
+if ($manifest.schema -ne '1' -or $manifest.workloadVersion -ne '2' -or
         $manifest.targetProfile -ne 'NET10_0' -or $manifest.sdkVersion -ne '10.0.100') {
     throw "Unsupported generic-owner measurement manifest: $($manifest | ConvertTo-Json -Compress)"
 }
@@ -168,6 +240,8 @@ if ($LASTEXITCODE -ne 0 -or $sdkVersion -ne $manifest.sdkVersion) {
 
 $repositoryHead = (& git -C $repositoryRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the repository HEAD for measurement provenance' }
+$repositoryStatus = @(& git -C $repositoryRoot status --porcelain --untracked-files=no)
+if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve repository status for measurement provenance' }
 $environmentInfo = [ordered]@{
     os = [Environment]::OSVersion.VersionString
     architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
@@ -175,6 +249,9 @@ $environmentInfo = [ordered]@{
     dotnet = $dotnet
     sdkVersion = $sdkVersion
     repositoryHead = $repositoryHead
+    repositoryDirty = $repositoryStatus.Count -gt 0
+    measurementToolSha256 = Get-Sha256 $PSCommandPath
+    nativeToolchain = $nativeToolchainInfo
 }
 
 $bundleInfo = [ordered]@{
@@ -216,24 +293,48 @@ function Invoke-MeasuredProcess(
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+    $startInfo.RedirectStandardInput = $true
     foreach ($argument in $Arguments) { $startInfo.ArgumentList.Add($argument) }
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
     $process = [Diagnostics.Process]::Start($startInfo)
-    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()
+    $stdoutLines = [Collections.Generic.List[string]]::new()
+    $measurementLine = $null
     $peakWorkingSet = 0L
-    while ($true) {
-        try {
-            $process.Refresh()
-            $currentPeak = [long]$process.PeakWorkingSet64
-            if ($currentPeak -gt $peakWorkingSet) { $peakWorkingSet = $currentPeak }
-        } catch [InvalidOperationException] {
-            # The process may exit between Refresh and reading the counter.
+    try {
+        while ($true) {
+            $line = $process.StandardOutput.ReadLine()
+            if ($null -eq $line) { break }
+            $stdoutLines.Add($line)
+            if ($line.StartsWith('GENERIC_OWNER_MEASUREMENT|')) {
+                $measurementLine = $line
+                break
+            }
         }
-        if ($process.WaitForExit(2)) { break }
+        $stopwatch.Stop()
+        if ($null -ne $measurementLine) {
+            $process.Refresh()
+            $peakWorkingSet = [long]$process.PeakWorkingSet64
+        }
+    } finally {
+        if ($stopwatch.IsRunning) { $stopwatch.Stop() }
+        try {
+            if (-not $process.HasExited) {
+                $process.StandardInput.WriteLine('release')
+                $process.StandardInput.Close()
+            }
+        } catch [InvalidOperationException], [IO.IOException], [ObjectDisposedException] {
+            # A failed process may exit before the release is written.
+        }
     }
-    $stopwatch.Stop()
-    $stdout = $stdoutTask.GetAwaiter().GetResult().Trim()
+    $remainingStdout = $process.StandardOutput.ReadToEnd()
+    if (-not [string]::IsNullOrEmpty($remainingStdout)) {
+        foreach ($line in $remainingStdout -split "`r?`n") {
+            if (-not [string]::IsNullOrEmpty($line)) { $stdoutLines.Add($line) }
+        }
+    }
+    $process.WaitForExit()
+    $stdout = ($stdoutLines -join [Environment]::NewLine).Trim()
     $stderr = $stderrTask.GetAwaiter().GetResult().Trim()
     if ($process.ExitCode -ne 0) {
         throw "Measured process failed with $($process.ExitCode): $stderr`n$stdout"
@@ -241,9 +342,6 @@ function Invoke-MeasuredProcess(
     if ($peakWorkingSet -le 0) {
         throw 'Measured process did not expose a positive peak working-set counter'
     }
-    $measurementLine = $stdout -split "`r?`n" |
-        Where-Object { $_.StartsWith('GENERIC_OWNER_MEASUREMENT|') } |
-        Select-Object -Last 1
     if ($null -eq $measurementLine) {
         throw "Measured process did not report the generic-owner protocol: $stdout"
     }
@@ -361,12 +459,15 @@ foreach ($mode in $Modes) {
     $startup = @()
     for ($index = 0; $index -lt $StartupRuns; $index++) {
         $startup += Invoke-MeasuredProcess `
-            $runFile ($runPrefix + @('--measurement', '0')) $publishDirectory 0
+            $runFile ($runPrefix + @('--measurement', '0', '--hold-for-peak-working-set')) `
+            $publishDirectory 0
     }
     $throughput = @()
     for ($index = 0; $index -lt $ThroughputRuns; $index++) {
         $throughput += Invoke-MeasuredProcess `
-            $runFile ($runPrefix + @('--measurement', $Iterations.ToString())) $publishDirectory $Iterations
+            $runFile ($runPrefix + @(
+                '--measurement', $Iterations.ToString(), '--hold-for-peak-working-set'
+            )) $publishDirectory $Iterations
     }
     $checksums = @($throughput | ForEach-Object { $_.checksum } | Select-Object -Unique)
     if ($checksums.Count -ne 1) { throw "Mode '$mode' produced unstable workload checksums" }

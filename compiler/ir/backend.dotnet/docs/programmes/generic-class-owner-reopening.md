@@ -262,19 +262,19 @@ and returns the semantic capability. Exact value roots use
 not become nested nullable types. One mandatory `C<object>` fallback handles
 unlisted value/reference roots honestly. The record has no unbounded reflection
 mode. Both CLRs execute exact and fallback paths with one state and classifier;
-a NativeAOT control passes managed analysis and reaches the absent Windows
-platform linker. Full native link/run and representative measurements remain
-the construction gate.
+a NativeAOT control passes managed analysis. A later explicit signed-MSVC run
+completes native link/execution; representative measurements remain the
+construction gate.
 
 That exact compiler-record-driven factory now also owns the reproducible
 measurement corpus. A pinned and fingerprinted net10 bundle—not a second
 handwritten generic model—runs the same exact/fallback, state, array, and
 multi-level hostile dispatch workload under JIT, ReadyToRun, full trimming,
-and later NativeAOT. The first three modes agree on one checksum and record
+and NativeAOT. All four modes agree on one checksum and record
 startup, throughput, allocation, peak working set, publish cost, and
-footprint. NativeAOT remains fail-hard and unproven until the missing platform
-linker is available. See
-[`../archive/generic-owner-measurement-corpus-2026-08-13.md`](../archive/generic-owner-measurement-corpus-2026-08-13.md).
+footprint. NativeAOT remains fail-hard; workload version 2 now records a
+successful native executable plus exact signed-linker provenance. See
+[`../archive/generic-owner-native-aot-measurement-2026-08-13.md`](../archive/generic-owner-native-aot-measurement-2026-08-13.md).
 
 ## Engineering gates
 

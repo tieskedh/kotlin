@@ -260,8 +260,10 @@ adds one mandatory `C<object>` semantic fallback for unlisted types. Exact
 value, already-nullable value, reference, and consumer-struct roots plus
 unlisted struct/reference fallbacks execute on both CLRs with one state and
 capability. Under IL3050/IL2026-as-error NativeAOT analysis, the old control
-fails at `MakeGenericType`; the finite table reaches only the missing platform
-linker. Native execution and product measurements remain open.
+fails at `MakeGenericType`; the finite table is warning-clean. A later explicit
+signed-MSVC run completes its native link and execution with the same checksum
+as JIT, ReadyToRun, and full trimming. Representative product measurements
+remain open; bounded NativeAOT success does not authorize production emission.
 
 A second direct CLR probe validates the proposed strict-versus-candidate
 dispatch split on CLR 4 and CoreCLR. A single generic owner/state can expose
