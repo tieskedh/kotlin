@@ -155,6 +155,24 @@ InterfaceImpl/MethodImpl, field, virtual-slot, and override metadata. The
 members are never inserted into the class IR and the emitter never consumes
 them, so this is a bounded architecture prototype rather than the cutover.
 
+The next physical-family ABI step is now declaration-name independent. Fixture
+names still label test scenarios and bodies. The compiler snapshot contains
+the ordinary compiler MethodDef base name and exact role signatures derived
+from lowered IR. Its fail-closed grammar admits only
+the currently proven built-ins, owner/method parameters, and arrays; semantic
+owner-dependent arrays use `System.Array`, while unknown classifiers,
+star/unsupported projection shapes, nullable value carriers, `Unit` parameters,
+and unexpected default helper shapes produce no exact proof. Constructors preserve independent Int
+parameters. Static default helpers are described from the actual lowered
+dispatcher and mask parameters rather than a hand-built hostile signature.
+Recorded transitive state reads/writes select the paired access families. An
+exact MethodDef identity may belong to only one logical member; a collision
+with a user declaration therefore fails the whole artifact rather than relying
+on declaration order. An in-memory rewrite of every diagnostic producer source
+label must therefore leave the complete family artifact equal. External
+role/domain merging invalidates the consumer's older local signatures so
+decoded producer MethodDefs remain the only physical authority.
+
 State selection now follows one shared producer graph covering functions,
 constructors, all function-access edges, field initializers, and anonymous
 initializers. The graph is built once per module and projected per owner.
