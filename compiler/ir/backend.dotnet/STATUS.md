@@ -27,7 +27,26 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: the schema-7 hostile generic-owner family now
+- Last completed foundation: a production-inert Kotlin IR census now derives
+  generic-owner receiver routes instead of assigning benchmark weights by
+  hand. Exact construction provenance propagates through definitions,
+  assignments, closed-call arguments, returns, fields, branches, casts, and
+  lowered default helpers; casts preserve evidence and never create it. Closed
+  invariant public signatures remain exact, while star/projected/variant and
+  unresolved views require a capability. External calls resolve only through
+  exact logical member keys claimed by the decoded producer catalog;
+  unrelated producer artifacts leave them pending, classified absent families
+  remain producer-erased, and diagnostic names have no authority. The hostile
+  separate corpus records 40 producer-owned static sites: 24 producer-erased,
+  11 exact typed-entry candidates, four semantic-capability routes, and one
+  missing capability. These are structural sites, not runtime frequency or
+  migration authority. PSI/LightTree direct and separate oracles pass on
+  Framework CLR 4 and .NET 10: eight tests and zero failures, errors, or skips.
+  The strict aggregate completed in 2,935.6 seconds and its direct audit covers
+  190 XML files, 2,216 tests, and zero failures, errors, or skips. Production
+  generic owners and emission remain unchanged. See
+  [`docs/archive/generic-owner-call-route-census-2026-08-14.md`](docs/archive/generic-owner-call-route-census-2026-08-14.md).
+- The preceding foundation: the schema-7 hostile generic-owner family now
   physicalizes the compiler's existing `TYPED_STORAGE_PRODUCER_GRAPH_PROVEN`
   outcome. `HostileTypedStore<T>` has one actual owner-GenericParam `!T` field;
   exact typed reads/writes use identity access and never cross its non-generic
