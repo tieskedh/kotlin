@@ -612,7 +612,7 @@ See the
   retain a producer logical-member binding requirement and block admission
   until a versioned physical family record exists; consumers must not infer its
   slots from names or today’s erased production MethodDefs. The architecture
-  channel now has a version-6, producer-fingerprinted physical-family artifact
+  channel now has a version-7, producer-fingerprinted physical-family artifact
   which records logical owner/member joins, implementation/capability paths,
   arity, disposition, state requirements, complete member roles, selected
   MethodDef owners/names, final/virtual/abstract dispatch, a slot-domain vector,
@@ -673,7 +673,15 @@ See the
   heuristic. Static
   call-site counts are not execution frequencies, this census must not affect
   emission, and any later VTA/devirtualization must remain removable without
-  changing behavior or DLL signatures. Version 5 adds the reflection join
+  changing behavior or DLL signatures. Export a producer-owned application
+  census only after exact logical-member resolution. Its stable record contains
+  the original compilation-wide call-site index, optional caller logical key,
+  required callee logical key, provenance, and route outcome; it contains no
+  diagnostic or physical names. Preserve sparse indices after producer
+  filtering, reject unresolved external routes, and require byte identity
+  across frontends and target profiles. The surrounding closed bundle owns the
+  content fingerprint. Such a manifest is a later instrumentation join, not an
+  execution weight or emitter input. Version 5 adds the reflection join
   without duplicating Kotlin
   semantic metadata: each producer open implementation TypeDef maps exactly
   to its existing KLIB logical classifier key, while logical type arguments,
@@ -717,7 +725,7 @@ See the
   emission remains erased.
   Open-nullable runtime construction is consumer/application knowledge, not a
   property of a producer constructor MethodDef. Keep final-compilation roots
-  out of the version-6 producer artifact. A separate production-inert
+  out of the version-7 producer artifact. A separate production-inert
   construction plan may accept a finite, duplicate-free set of concrete
   runtime types and derive exact `C<P(T?)>` routes only from the decoded
   unconstrained one-parameter producer owner, capability, and public
