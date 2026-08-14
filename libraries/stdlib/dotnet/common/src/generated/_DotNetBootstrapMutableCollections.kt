@@ -195,6 +195,18 @@ private fun <T> MutableIterable<T>.filterInPlace(predicate: (T) -> Boolean, pred
 }
 
 /**
+ * Adds all elements of the given [elements] sequence to this [MutableCollection].
+ */
+@IgnorableReturnValue
+public fun <T> MutableCollection<in T>.addAll(elements: Sequence<T>): Boolean {
+    var result: Boolean = false
+    for (item in elements) {
+        if (add(item)) result = true
+    }
+    return result
+}
+
+/**
  * Removes the element at the specified [index] from this list.
  * In Kotlin one should use the [MutableList.removeAt] function instead.
  */

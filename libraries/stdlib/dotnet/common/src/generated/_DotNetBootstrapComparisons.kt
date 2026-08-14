@@ -13,6 +13,38 @@ package kotlin.comparisons
 // See: https://github.com/JetBrains/kotlin/tree/master/libraries/stdlib
 //
 /**
+ * Returns the greater of two values.
+ *
+ * If either value is `NaN`, returns `NaN`.
+ */
+@SinceKotlin("1.1")
+public expect inline fun maxOf(a: Float, b: Float): Float
+
+/**
+ * Returns the greater of two values.
+ *
+ * If either value is `NaN`, returns `NaN`.
+ */
+@SinceKotlin("1.1")
+public expect inline fun maxOf(a: Double, b: Double): Double
+
+/**
+ * Returns the smaller of two values.
+ *
+ * If either value is `NaN`, returns `NaN`.
+ */
+@SinceKotlin("1.1")
+public expect inline fun minOf(a: Float, b: Float): Float
+
+/**
+ * Returns the smaller of two values.
+ *
+ * If either value is `NaN`, returns `NaN`.
+ */
+@SinceKotlin("1.1")
+public expect inline fun minOf(a: Double, b: Double): Double
+
+/**
  * Returns the greater of three values according to the order specified by the given [comparator].
  *
  * If there are multiple equal maximal values, returns the first of them.
