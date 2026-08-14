@@ -35,7 +35,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateCarrierRequire
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerStateWriteProvenancePlan
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerWriteValueProvenance
 import org.jetbrains.kotlin.backend.dotnet.dotNetLibraryAbiKeyOrNull
-import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceRecorder
+import org.jetbrains.kotlin.backend.dotnet.dotNetGenericOwnerCallRouteTraceHooks
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericClassDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetResolutionOnlyStdlibDeclaration
 import org.jetbrains.kotlin.backend.dotnet.referencesTypeParameterOf
@@ -188,8 +188,8 @@ internal class DotNetGenericOwnerArchitecturePlanningLowering(
             initializerAccesses = initializerAccesses,
         ).analyze()
         context.genericOwnerCallRoutes += callRoutes
-        context.configuration.dotNetGenericOwnerCallRouteTraceRecorder?.let { recorder ->
-            instrumentCallRoutes(irModule, callRoutes, recorder)
+        context.configuration.dotNetGenericOwnerCallRouteTraceHooks?.let { hooks ->
+            instrumentCallRoutes(irModule, callRoutes, hooks.recorder)
         }
     }
 

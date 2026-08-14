@@ -30,9 +30,19 @@ object DotNetBackendConfigurationKeys {
         CompilerConfigurationKey.create("Kotlin/.NET friend assembly paths")
     val FRIEND_ASSEMBLIES: CompilerConfigurationKey<List<DotNetFriendAssemblyIdentity>> =
         CompilerConfigurationKey.create("producer-authorized CLR friend assembly identities")
-    /** Test-owned IR declaration invoked by explicit generic-owner route tracing. No CLI option exposes this hook. */
-    val GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER: CompilerConfigurationKey<IrSimpleFunction> =
-        CompilerConfigurationKey.create("test-only generic-owner call-route trace recorder")
+    /** Test-owned IR declarations invoked by explicit generic-owner route tracing. No CLI option exposes these hooks. */
+    val GENERIC_OWNER_CALL_ROUTE_TRACE_HOOKS: CompilerConfigurationKey<DotNetGenericOwnerCallRouteTraceHooks> =
+        CompilerConfigurationKey.create("test-only generic-owner call-route trace hooks")
+}
+
+data class DotNetGenericOwnerCallRouteTraceHooks(
+    val recorder: IrSimpleFunction,
+    val flusher: IrSimpleFunction,
+)
+
+internal enum class DotNetGenericOwnerCallRouteTraceHook {
+    RECORD,
+    FLUSH,
 }
 
 /** Canonical names of compiler-owned CLR assemblies; CLR assembly-name matching is case-insensitive. */
@@ -279,10 +289,10 @@ var CompilerConfiguration.dotNetFriendAssemblies: List<DotNetFriendAssemblyIdent
 
 /**
  * Explicit architecture-test hook. Ordinary CLI/Gradle compilations never set it, and the
- * recorder declaration belongs to this exact IR module rather than to Runtime or a published ABI.
+ * hook declarations belong to this exact IR module rather than to Runtime or a published ABI.
  */
-var CompilerConfiguration.dotNetGenericOwnerCallRouteTraceRecorder: IrSimpleFunction?
-    get() = get(DotNetBackendConfigurationKeys.GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER)
+var CompilerConfiguration.dotNetGenericOwnerCallRouteTraceHooks: DotNetGenericOwnerCallRouteTraceHooks?
+    get() = get(DotNetBackendConfigurationKeys.GENERIC_OWNER_CALL_ROUTE_TRACE_HOOKS)
     set(value) {
-        if (value != null) put(DotNetBackendConfigurationKeys.GENERIC_OWNER_CALL_ROUTE_TRACE_RECORDER, value)
+        if (value != null) put(DotNetBackendConfigurationKeys.GENERIC_OWNER_CALL_ROUTE_TRACE_HOOKS, value)
     }
