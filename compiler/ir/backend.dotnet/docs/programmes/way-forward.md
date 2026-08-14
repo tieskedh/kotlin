@@ -689,6 +689,19 @@ and collect execution weights on Framework 4.8 and all .NET 10 deployment
 lanes. See
 [`../archive/generic-owner-call-route-census-2026-08-14.md`](../archive/generic-owner-call-route-census-2026-08-14.md).
 
+That census now crosses the compiler/tool boundary without handwritten route
+selection. Application bundle schema 2 fingerprints a canonical route artifact
+whose records retain the original compilation site index and KLIB logical
+member identity but omit diagnostic/physical names. PSI, LightTree, Framework
+4.8, and net10 produce byte-identical route bytes. The hostile artifact has 40
+records over indices 0 through 48; the nine gaps are unrelated external owners,
+not renumbered producer sites. This creates the exact join for later dynamic
+counters, but supplies no execution weights and does not make the hostile
+application representative. Next instrument complete application compilations
+by those indices and measure their weighted route/state distribution separately
+on Framework 4.8 and every .NET 10 deployment lane. See
+[`../archive/generic-owner-call-route-manifest-2026-08-14.md`](../archive/generic-owner-call-route-manifest-2026-08-14.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

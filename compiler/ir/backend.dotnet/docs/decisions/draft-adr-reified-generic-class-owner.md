@@ -518,6 +518,17 @@ dynamic weights and do not validate the earlier handwritten three-typed/
 24-semantic benchmark mix. See
 [`../archive/generic-owner-call-route-census-2026-08-14.md`](../archive/generic-owner-call-route-census-2026-08-14.md).
 
+Application evidence must carry that census as a versioned, profile-neutral
+artifact before execution weights can be attached. Each producer-owned record
+retains the original compilation-wide site index, optional caller logical key,
+required callee logical key, provenance, and resolved requirement. It excludes
+diagnostic and physical names; filtered indices remain sparse and unresolved
+external routes cannot enter the artifact. The closed application bundle
+fingerprints it and requires byte identity across PSI, LightTree, Framework
+4.8, and net10. The index is a join to instrumentation from the same
+compilation, not a source-stable identity after program/compiler changes. See
+[`../archive/generic-owner-call-route-manifest-2026-08-14.md`](../archive/generic-owner-call-route-manifest-2026-08-14.md).
+
 A broad candidate input is inherited semantic authority, not a property that
 may be narrowed by re-reading only the overriding declaration. Local families
 therefore propagate broad positions to a fixed point across their override

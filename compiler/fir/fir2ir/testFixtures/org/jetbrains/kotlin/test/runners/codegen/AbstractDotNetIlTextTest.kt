@@ -27,6 +27,8 @@ import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelineArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateDisposition
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCandidateClassificationRecord
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallReceiverProvenance
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteManifest
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteManifestCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteRequirement
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteSnapshot
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerMemberFamilyRole
@@ -770,6 +772,7 @@ private const val GENERIC_OWNER_ERASED_PRODUCER_FILE = "lib.dll"
 private const val GENERIC_OWNER_ERASED_CSHARP_SOURCE_FILE = "ErasedCSharpConsumer.cs"
 private const val GENERIC_OWNER_APPLICATION_SOURCE_FILE = "genericOwnerHardestModelOracle.kt"
 private const val GENERIC_OWNER_APPLICATION_MANIFEST_FILE = "generic-owner-application.properties"
+private const val GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE = "generic-owner-call-routes.tsv"
 
 private fun genericOwnerErasedConsumerFile(target: DotNetTarget): String =
     if (target == DotNetTarget.NET48) "ErasedConsumer.exe" else "ErasedConsumer.dll"
@@ -2364,6 +2367,55 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
     ).resolveExternalPhysicalFamilyRoute(artifact).routeRequirement ==
             DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED) {
         "External generic-owner call resolution inferred an unknown logical member from source names"
+    }
+    val callRouteManifest = DotNetGenericOwnerCallRouteManifest.fromResolvedCallRoutes(resolvedCallRoutes)
+    val encodedCallRouteManifest = DotNetGenericOwnerCallRouteManifestCodec.encode(callRouteManifest)
+    check(DotNetGenericOwnerCallRouteManifestCodec.decode(encodedCallRouteManifest) == callRouteManifest) {
+        "The compiler-derived generic-owner call-route manifest did not round-trip"
+    }
+    check(DotNetGenericOwnerCallRouteManifestCodec.encode(
+        DotNetGenericOwnerCallRouteManifest.fromResolvedCallRoutes(
+            resolvedCallRoutes.map { route ->
+                route.copy(
+                    callerName = "diagnostic-caller",
+                    calleeOwnerName = "diagnostic-owner",
+                    calleeName = "diagnostic-member",
+                )
+            },
+        ),
+    ) == encodedCallRouteManifest) {
+        "Diagnostic source or CLR names entered the generic-owner call-route manifest"
+    }
+    check(runCatching {
+        DotNetGenericOwnerCallRouteManifest.fromResolvedCallRoutes(
+            resolvedCallRoutes + resolvedCallRoutes.first(),
+        )
+    }.isFailure) {
+        "The generic-owner call-route manifest accepted a duplicate compiler call-site identity"
+    }
+    check(runCatching {
+        DotNetGenericOwnerCallRouteManifest.fromResolvedCallRoutes(
+            listOf(resolvedCallRoutes.first().copy(
+                routeRequirement = DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED,
+            )),
+        )
+    }.isFailure) {
+        "The generic-owner call-route manifest accepted an unresolved external route"
+    }
+    check(runCatching {
+        DotNetGenericOwnerCallRouteManifestCodec.decode(
+            encodedCallRouteManifest.replaceFirst(
+                "kotlin-dotnet-generic-owner-call-routes\t${DotNetGenericOwnerCallRouteManifestCodec.SCHEMA_VERSION}",
+                "kotlin-dotnet-generic-owner-call-routes\t0",
+            ),
+        )
+    }.isFailure && runCatching {
+        DotNetGenericOwnerCallRouteManifestCodec.decode(encodedCallRouteManifest.substringBeforeLast("R\t"))
+    }.isFailure) {
+        "The generic-owner call-route codec accepted stale or truncated evidence"
+    }
+    val callRouteManifestFile = directory.resolve(GENERIC_OWNER_CALL_ROUTE_MANIFEST_FILE).apply {
+        writeText(encodedCallRouteManifest)
     }
     val unresolvedKeys = consumer.members.flatMap { member -> member.overrideBindings }
         .filter { binding ->
@@ -4236,6 +4288,7 @@ private fun consumeGenericOwnerPhysicalFamilyArtifact(
             candidateProducer = producer,
             candidateConsumer = output,
             physicalFamilyArtifact = recordFile,
+            callRouteManifest = callRouteManifestFile,
             exportDirectory = File(applicationExportPath),
         )
     }
@@ -4349,6 +4402,7 @@ private fun prepareGenericOwnerApplicationBundle(
     candidateProducer: File,
     candidateConsumer: File,
     physicalFamilyArtifact: File,
+    callRouteManifest: File,
     exportDirectory: File,
 ) {
     val applicationSource = directory.resolve(GENERIC_OWNER_APPLICATION_SOURCE_FILE)
@@ -4369,6 +4423,7 @@ private fun prepareGenericOwnerApplicationBundle(
         candidateProducer,
         candidateConsumer,
         physicalFamilyArtifact,
+        callRouteManifest,
         applicationSource,
         erasedProducer,
         erasedConsumer,
@@ -5186,7 +5241,7 @@ private fun prepareGenericOwnerApplicationBundle(
     }
     val manifest = directory.resolve(GENERIC_OWNER_APPLICATION_MANIFEST_FILE).apply {
         writeText(buildString {
-            appendLine("schema=1")
+            appendLine("schema=2")
             appendLine("sdkVersion=${if (target == DotNetTarget.NET10_0) "10.0.100" else "framework-clr"}")
             appendLine("targetProfile=${target.name}")
             appendLine("applicationSourceSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(applicationSource.readBytes())}")
@@ -5197,6 +5252,7 @@ private fun prepareGenericOwnerApplicationBundle(
             }
             appendLine("candidateSourceSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(source.readBytes())}")
             appendLine("physicalFamilyArtifactSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(physicalFamilyArtifact.readBytes())}")
+            appendLine("callRouteManifestSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(callRouteManifest.readBytes())}")
             appendLine("erasedProducerSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(erasedProducer.readBytes())}")
             appendLine("erasedConsumerSha256=${DotNetGenericOwnerPhysicalFamilyCodec.producerFingerprint(erasedConsumer.readBytes())}")
             erasedConsumerRuntimeConfig?.let { file ->
@@ -5219,6 +5275,7 @@ private fun prepareGenericOwnerApplicationBundle(
         candidateProducer,
         candidateConsumer,
         physicalFamilyArtifact,
+        callRouteManifest,
         applicationSource,
         erasedProducer,
         erasedConsumer,

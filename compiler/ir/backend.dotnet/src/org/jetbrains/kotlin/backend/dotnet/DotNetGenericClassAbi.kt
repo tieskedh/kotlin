@@ -980,6 +980,175 @@ data class DotNetGenericOwnerCallRouteSnapshot(
     }
 }
 
+/** Stable, diagnostic-name-free identity and outcome for one producer-owned application call site. */
+data class DotNetGenericOwnerCallRouteManifestRecord(
+    val compilationCallSiteIndex: Int,
+    val callerLogicalBindingKey: String?,
+    val calleeLogicalBindingKey: String,
+    val receiverProvenance: DotNetGenericOwnerCallReceiverProvenance,
+    val routeRequirement: DotNetGenericOwnerCallRouteRequirement,
+) {
+    init {
+        require(compilationCallSiteIndex >= 0 && callerLogicalBindingKey?.isNotEmpty() != false &&
+                calleeLogicalBindingKey.isNotEmpty()) {
+            "a generic-owner application route requires valid compiler and logical identities"
+        }
+        require(routeRequirement != DotNetGenericOwnerCallRouteRequirement.EXTERNAL_FAMILY_RECORD_REQUIRED) {
+            "an unresolved external generic-owner route cannot enter an application manifest"
+        }
+        require(
+            routeRequirement != DotNetGenericOwnerCallRouteRequirement.EXACT_TYPED_ENTRY ||
+                    receiverProvenance == DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
+        ) { "an exact generic-owner application route requires exact construction provenance" }
+        require(
+            routeRequirement != DotNetGenericOwnerCallRouteRequirement.SEMANTIC_CAPABILITY ||
+                    receiverProvenance != DotNetGenericOwnerCallReceiverProvenance.EXACT_CONSTRUCTION
+        ) { "a semantic application route cannot replace a proven exact typed entry" }
+    }
+}
+
+/**
+ * Profile-neutral application census derived from one complete compiler call-route graph.
+ *
+ * [compilationCallSiteIndex][DotNetGenericOwnerCallRouteManifestRecord.compilationCallSiteIndex]
+ * deliberately retains its possibly sparse index in the unfiltered compilation census. This is
+ * the join key for later execution weights. Logical keys identify declarations; source names and
+ * physical CLR names are excluded because neither is binding authority.
+ */
+data class DotNetGenericOwnerCallRouteManifest(
+    val routes: List<DotNetGenericOwnerCallRouteManifestRecord>,
+) {
+    init {
+        require(routes.isNotEmpty()) { "a generic-owner application route manifest cannot be empty" }
+        require(routes == routes.sortedBy { route -> route.compilationCallSiteIndex } &&
+                routes.map { route -> route.compilationCallSiteIndex }.toSet().size == routes.size) {
+            "generic-owner application routes require unique compiler-ordered call-site indices"
+        }
+    }
+
+    companion object {
+        fun fromResolvedCallRoutes(
+            routes: List<DotNetGenericOwnerCallRouteSnapshot>,
+        ): DotNetGenericOwnerCallRouteManifest = DotNetGenericOwnerCallRouteManifest(
+            routes.sortedBy { route -> route.callSiteIndex }.map { route ->
+                DotNetGenericOwnerCallRouteManifestRecord(
+                    compilationCallSiteIndex = route.callSiteIndex,
+                    callerLogicalBindingKey = route.callerLogicalBindingKey,
+                    calleeLogicalBindingKey = requireNotNull(route.calleeLogicalBindingKey) {
+                        "a resolved generic-owner application route lacks its logical member binding"
+                    },
+                    receiverProvenance = route.receiverProvenance,
+                    routeRequirement = route.routeRequirement,
+                )
+            },
+        )
+    }
+}
+
+/** Deterministic, profile-neutral codec for compiler-derived application call-route censuses. */
+object DotNetGenericOwnerCallRouteManifestCodec {
+    const val SCHEMA_VERSION = 1
+    private const val MAGIC = "kotlin-dotnet-generic-owner-call-routes"
+    private val encoder = Base64.getUrlEncoder().withoutPadding()
+    private val decoder = Base64.getUrlDecoder()
+
+    fun encode(manifest: DotNetGenericOwnerCallRouteManifest): String = buildString {
+        appendLine("$MAGIC\t$SCHEMA_VERSION")
+        appendLine("N\t${manifest.routes.size}")
+        manifest.routes.forEach { route ->
+            appendLine(
+                listOf(
+                    "R",
+                    route.compilationCallSiteIndex.toString(),
+                    if (route.callerLogicalBindingKey == null) "0" else "1",
+                    route.callerLogicalBindingKey?.encodedRouteText() ?: "-",
+                    route.calleeLogicalBindingKey.encodedRouteText(),
+                    route.receiverProvenance.name,
+                    route.routeRequirement.name,
+                ).joinToString("\t")
+            )
+        }
+    }
+
+    fun decode(text: String): DotNetGenericOwnerCallRouteManifest {
+        val lines = text.removeSuffix("\n").split('\n')
+        var index = 0
+
+        fun read(kind: String, fieldCount: Int): List<String> {
+            require(index < lines.size) { "generic-owner application route manifest is truncated before '$kind'" }
+            val fields = lines[index++].split('\t')
+            require(fields.size == fieldCount && fields.firstOrNull() == kind) {
+                "generic-owner application route manifest expected '$kind' with $fieldCount fields"
+            }
+            return fields
+        }
+
+        fun <E : Enum<E>> enumValue(value: String, values: Array<E>, role: String): E =
+            values.singleOrNull { candidate -> candidate.name == value }
+                ?: throw IllegalArgumentException(
+                    "generic-owner application route manifest has unknown $role '$value'"
+                )
+
+        val header = read(MAGIC, 2)
+        require(header[1] == SCHEMA_VERSION.toString()) {
+            "stale generic-owner application route schema '${header[1]}'; expected '$SCHEMA_VERSION'"
+        }
+        val routeCount = read("N", 2)[1].toIntOrNull()?.takeIf { count -> count >= 0 }
+            ?: throw IllegalArgumentException("generic-owner application route manifest has an invalid route count")
+        val manifest = DotNetGenericOwnerCallRouteManifest(
+            List(routeCount) {
+                val fields = read("R", 7)
+                val callerLogicalBindingKey = when (fields[2]) {
+                    "0" -> {
+                        require(fields[3] == "-") {
+                            "a generic-owner application route has text for an absent caller binding"
+                        }
+                        null
+                    }
+                    "1" -> fields[3].decodedRouteText()
+                    else -> throw IllegalArgumentException(
+                        "generic-owner application route manifest has invalid caller-binding presence '${fields[2]}'"
+                    )
+                }
+                DotNetGenericOwnerCallRouteManifestRecord(
+                    compilationCallSiteIndex = fields[1].toIntOrNull()?.takeIf { callSiteIndex ->
+                        callSiteIndex >= 0
+                    } ?: throw IllegalArgumentException(
+                        "generic-owner application route manifest has an invalid call-site index"
+                    ),
+                    callerLogicalBindingKey = callerLogicalBindingKey,
+                    calleeLogicalBindingKey = fields[4].decodedRouteText(),
+                    receiverProvenance = enumValue(
+                        fields[5],
+                        DotNetGenericOwnerCallReceiverProvenance.entries.toTypedArray(),
+                        "receiver provenance",
+                    ),
+                    routeRequirement = enumValue(
+                        fields[6],
+                        DotNetGenericOwnerCallRouteRequirement.entries.toTypedArray(),
+                        "route requirement",
+                    ),
+                )
+            },
+        )
+        require(index == lines.size) { "generic-owner application route manifest has trailing records" }
+        require(encode(manifest) == text) { "generic-owner application route manifest is not canonical" }
+        return manifest
+    }
+
+    private fun String.encodedRouteText(): String = encoder.encodeToString(toByteArray(Charsets.UTF_8))
+
+    private fun String.decodedRouteText(): String = try {
+        decoder.decode(this).toString(Charsets.UTF_8).also { decoded ->
+            require(decoded.encodedRouteText() == this) {
+                "generic-owner application route manifest contains non-canonical encoded text"
+            }
+        }
+    } catch (_: IllegalArgumentException) {
+        throw IllegalArgumentException("generic-owner application route manifest contains invalid encoded text")
+    }
+}
+
 /**
  * In-memory evidence returned by the backend pipeline for tests and architecture tooling. It is
  * not serialized into the DLL/KLIB, consumed by codegen, or selected by a compiler option.

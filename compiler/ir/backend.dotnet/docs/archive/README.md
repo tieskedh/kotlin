@@ -70,6 +70,12 @@ Archived snapshots:
   proves one compiler-derived `!T` field and exact identity access, retains the
   strict one-state capability boundary, and attributes scalar, struct, and
   nullable costs across Framework 4.8 and all four .NET 10 deployment modes.
+- [`generic-owner-call-route-census-2026-08-14.md`](generic-owner-call-route-census-2026-08-14.md)
+  records the production-inert fixed-point receiver provenance analysis and
+  its 40-site hostile producer census.
+- [`generic-owner-call-route-manifest-2026-08-14.md`](generic-owner-call-route-manifest-2026-08-14.md)
+  records the versioned diagnostic-name-free application route artifact,
+  closed bundle schema 2, and cross-frontend/profile reproducibility proof.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots

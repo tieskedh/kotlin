@@ -27,7 +27,26 @@ verification, and work state.
   refreshed across PSI/LightTree and Framework CLR/CoreCLR: four suites,
   eight tests, and zero failures, errors, or skips. See
   [`docs/decisions/kotlin-semantic-authority-and-platform-freedom.md`](docs/decisions/kotlin-semantic-authority-and-platform-freedom.md).
-- Last completed foundation: a production-inert Kotlin IR census now derives
+- Last completed foundation: the compiler-derived generic-owner census now
+  crosses into the closed paired application bundle as a canonical schema-1
+  route artifact. Its 40 producer-owned records retain original compilation
+  indices 0 through 48 (nine unrelated-owner gaps), optional caller KLIB keys,
+  required producer-member KLIB keys, provenance, and resolved requirements;
+  diagnostic/physical names, unresolved routes, target profile, and temporary
+  paths cannot enter. Application manifest schema 2 fingerprints the file.
+  Its independent verifier decodes canonical grammar, pins 24 producer-erased,
+  11 exact, four capability, and one missing-capability site, and requires byte
+  identity across PSI/LightTree and Framework 4.8/net10. All current caller
+  bindings are honestly absent rather than reconstructed from source labels;
+  the compiler index is the same-compilation instrumentation join and the
+  callee key is semantic aggregation identity. Exact separate application
+  lanes and all candidate/erased/direct-C# executions pass on both CLR
+  profiles. The strict aggregate completed in 2,819.9 seconds; direct audit
+  covers 190 XML files and 2,216 tests with zero failures, errors, or skips.
+  This exports static evidence, not dynamic frequency or representative-app
+  authority. See
+  [`docs/archive/generic-owner-call-route-manifest-2026-08-14.md`](docs/archive/generic-owner-call-route-manifest-2026-08-14.md).
+- The preceding foundation: a production-inert Kotlin IR census now derives
   generic-owner receiver routes instead of assigning benchmark weights by
   hand. Exact construction provenance propagates through definitions,
   assignments, closed-call arguments, returns, fields, branches, casts, and
@@ -2243,9 +2262,12 @@ foundation. See [`docs/decisions/value-classes.md`](docs/decisions/value-classes
    reflection. Its fingerprinted measurement corpus is green under Framework
    CLR 4, JIT, ReadyToRun, full trimming, and real NativeAOT link/run. The same
    corpus now physicalizes compiler-proven `!T` state and attributes exact and
-   capability routes for Int, non-trivial struct, and nullable values. Next,
-   broaden the comparison to representative complete erased/candidate Kotlin
-   applications and C# consumers/subclasses, including actual call mixes,
+   capability routes for Int, non-trivial struct, and nullable values. The
+   compiler-derived static route census now enters closed application bundle
+   schema 2 through original call-site indices and KLIB member keys, with exact
+   frontend/profile byte equality. Next, instrument those indices in
+   representative complete erased/candidate Kotlin applications and C#
+   consumers/subclasses, including actual call mixes,
    native/managed size, compile cost, startup, throughput, allocation, peak
    memory, and bridge crossings; the bounded hostile corpus alone is
    insufficient.

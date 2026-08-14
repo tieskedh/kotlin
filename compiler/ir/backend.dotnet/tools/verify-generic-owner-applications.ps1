@@ -4,10 +4,11 @@
 
 .DESCRIPTION
     Builds the hostile separate-compilation application through PSI and
-    LightTree on Framework CLR and CoreCLR, verifies the closed bundles and
-    every SHA-256 fingerprint, compares exact executable CLR content and all
-    KLIB entries outside the parser-owned body stream, and runs the candidate,
-    erased Kotlin, and direct erased C# applications.
+    LightTree on Framework CLR and CoreCLR, verifies the closed bundles,
+    compiler-derived call-route manifests, and every SHA-256 fingerprint,
+    compares exact executable CLR content and all KLIB entries outside the
+    parser-owned body stream, and runs the candidate, erased Kotlin, and direct
+    erased C# applications.
 #>
 [CmdletBinding()]
 param(
@@ -49,6 +50,106 @@ function Read-ApplicationManifest([string]$Path) {
     return $values
 }
 
+function ConvertFrom-RouteText([string]$Value) {
+    if ([string]::IsNullOrEmpty($Value)) {
+        throw 'A generic-owner route contains empty encoded text'
+    }
+    $standard = $Value.Replace('-', '+').Replace('_', '/')
+    switch ($standard.Length % 4) {
+        0 { }
+        2 { $standard += '==' }
+        3 { $standard += '=' }
+        default { throw "A generic-owner route contains invalid base64url text '$Value'" }
+    }
+    try {
+        $bytes = [Convert]::FromBase64String($standard)
+        $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+        $decoded = $utf8.GetString($bytes)
+    } catch {
+        throw "A generic-owner route contains invalid encoded text '$Value'"
+    }
+    $canonical = [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+    if ($canonical -cne $Value) {
+        throw "A generic-owner route contains non-canonical encoded text '$Value'"
+    }
+    return $decoded
+}
+
+function Read-CallRouteManifest([string]$Path) {
+    $lines = @(Get-Content -LiteralPath $Path)
+    if ($lines.Count -lt 2) { throw 'The generic-owner call-route manifest is truncated' }
+    $header = @($lines[0].Split("`t", [StringSplitOptions]::None))
+    if ($header.Count -ne 2 -or
+            $header[0] -cne 'kotlin-dotnet-generic-owner-call-routes' -or $header[1] -cne '1') {
+        throw "Unsupported generic-owner call-route manifest header '$($lines[0])'"
+    }
+    $countRecord = @($lines[1].Split("`t", [StringSplitOptions]::None))
+    [int]$routeCount = 0
+    if ($countRecord.Count -ne 2 -or $countRecord[0] -cne 'N' -or
+            -not [int]::TryParse($countRecord[1], [ref]$routeCount) -or $routeCount -le 0 -or
+            $lines.Count -ne 2 + $routeCount) {
+        throw 'The generic-owner call-route manifest has an invalid route count'
+    }
+    $provenances = @('EXACT_CONSTRUCTION', 'SEMANTIC_VIEW', 'UNRESOLVED')
+    $requirements = @(
+        'EXACT_TYPED_ENTRY',
+        'SEMANTIC_CAPABILITY',
+        'MISSING_CAPABILITY',
+        'PRODUCER_ERASED_OWNER'
+    )
+    $records = @()
+    $previousIndex = -1
+    for ($lineIndex = 2; $lineIndex -lt $lines.Count; $lineIndex++) {
+        $fields = @($lines[$lineIndex].Split("`t", [StringSplitOptions]::None))
+        [int]$callSiteIndex = -1
+        if ($fields.Count -ne 7 -or $fields[0] -cne 'R' -or
+                -not [int]::TryParse($fields[1], [ref]$callSiteIndex) -or
+                $callSiteIndex -le $previousIndex) {
+            throw "The generic-owner call-route manifest has an invalid ordered call-site at line $($lineIndex + 1)"
+        }
+        $previousIndex = $callSiteIndex
+        if ($fields[2] -cnotin @('0', '1') -or
+                ($fields[2] -ceq '0' -and $fields[3] -cne '-')) {
+            throw "The generic-owner call-route manifest has an invalid caller binding at line $($lineIndex + 1)"
+        }
+        $callerKey = if ($fields[2] -ceq '1') { ConvertFrom-RouteText $fields[3] } else { $null }
+        $calleeKey = ConvertFrom-RouteText $fields[4]
+        if ([string]::IsNullOrEmpty($callerKey) -and $null -ne $callerKey -or
+                [string]::IsNullOrEmpty($calleeKey) -or
+                $callerKey -match '[A-Za-z]:[\\/]' -or $calleeKey -match '[A-Za-z]:[\\/]') {
+            throw "The generic-owner call-route manifest contains an empty or absolute logical binding"
+        }
+        if ($fields[5] -cnotin $provenances -or $fields[6] -cnotin $requirements -or
+                ($fields[6] -ceq 'EXACT_TYPED_ENTRY' -and $fields[5] -cne 'EXACT_CONSTRUCTION') -or
+                ($fields[6] -ceq 'SEMANTIC_CAPABILITY' -and $fields[5] -ceq 'EXACT_CONSTRUCTION')) {
+            throw "The generic-owner call-route manifest has an invalid route at line $($lineIndex + 1)"
+        }
+        $records += [pscustomobject]@{
+            CompilationCallSiteIndex = $callSiteIndex
+            CallerLogicalBindingKey = $callerKey
+            CalleeLogicalBindingKey = $calleeKey
+            ReceiverProvenance = $fields[5]
+            RouteRequirement = $fields[6]
+        }
+    }
+    $expectedCounts = [ordered]@{
+        PRODUCER_ERASED_OWNER = 24
+        EXACT_TYPED_ENTRY = 11
+        SEMANTIC_CAPABILITY = 4
+        MISSING_CAPABILITY = 1
+    }
+    foreach ($requirement in $expectedCounts.Keys) {
+        $actualCount = @($records | Where-Object { $_.RouteRequirement -ceq $requirement }).Count
+        if ($actualCount -ne $expectedCounts[$requirement]) {
+            throw "The hostile compiler-derived route count for $requirement is $actualCount, expected $($expectedCounts[$requirement])"
+        }
+    }
+    if ($records.Count -ne 40) {
+        throw "The hostile compiler-derived route manifest has $($records.Count) sites, expected 40"
+    }
+    return $records
+}
+
 function Get-FileByHashKey([string]$TargetProfile) {
     $executableExtension = if ($TargetProfile -eq 'NET48') { 'exe' } else { 'dll' }
     $files = [ordered]@{
@@ -57,6 +158,7 @@ function Get-FileByHashKey([string]$TargetProfile) {
         candidateConsumerSha256 = "RecordedFamilyConsumer.$executableExtension"
         candidateSourceSha256 = 'RecordedFamilyConsumer.cs'
         physicalFamilyArtifactSha256 = 'SnapshotProducer.generic-owner-families'
+        callRouteManifestSha256 = 'generic-owner-call-routes.tsv'
         erasedProducerSha256 = 'lib.dll'
         erasedConsumerSha256 = "ErasedConsumer.$executableExtension"
         erasedCSharpSourceSha256 = 'ErasedCSharpConsumer.cs'
@@ -88,7 +190,7 @@ function Assert-ApplicationBundle([string]$Directory) {
         throw "The application manifest has an unexpected shape: $($manifest | ConvertTo-Json -Compress)"
     }
     $expectedSdk = if ($manifest.targetProfile -eq 'NET10_0') { '10.0.100' } else { 'framework-clr' }
-    if ($manifest.schema -ne '1' -or $manifest.sdkVersion -ne $expectedSdk) {
+    if ($manifest.schema -ne '2' -or $manifest.sdkVersion -ne $expectedSdk) {
         throw "Unsupported generic-owner application manifest: $($manifest | ConvertTo-Json -Compress)"
     }
 
@@ -105,6 +207,7 @@ function Assert-ApplicationBundle([string]$Directory) {
             throw "Stale $($fileByHashKey[$hashKey]): expected $($manifest[$hashKey]), found $actual"
         }
     }
+    $callRoutes = @(Read-CallRouteManifest (Join-Path $Directory $fileByHashKey.callRouteManifestSha256))
     $kotlinSource = Get-Content -LiteralPath (Join-Path $Directory $fileByHashKey.applicationSourceSha256) -Raw
     if ($kotlinSource -notmatch 'MODULE:\s+lib' -or
             $kotlinSource -notmatch 'MODULE:\s+main\(lib\)') {
@@ -140,6 +243,7 @@ function Assert-ApplicationBundle([string]$Directory) {
         Directory = $Directory
         Manifest = $manifest
         Files = $fileByHashKey
+        CallRoutes = $callRoutes
     }
 }
 
@@ -393,6 +497,11 @@ if (-not [string]::IsNullOrWhiteSpace($ExistingBundle)) {
         $lightTreeBundle = Assert-ApplicationBundle $lightTreeDirectory
         Assert-FrontendEquivalent $psiBundle $lightTreeBundle
         $verifiedBundles += $psiBundle
+    }
+    if ($verifiedBundles.Count -eq 2 -and
+            $verifiedBundles[0].Manifest.callRouteManifestSha256 -cne
+            $verifiedBundles[1].Manifest.callRouteManifestSha256) {
+        throw 'Framework CLR and CoreCLR bundles disagree on the profile-neutral compiler call-route census'
     }
 }
 
