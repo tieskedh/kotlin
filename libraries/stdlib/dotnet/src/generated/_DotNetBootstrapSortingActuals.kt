@@ -10,6 +10,69 @@ package kotlin.collections
 // See: https://github.com/JetBrains/kotlin/tree/master/libraries/stdlib
 //
 /**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public actual fun IntArray.sort(): Unit {
+    if (size > 1) sortArray(this, 0, size)
+}
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public actual fun LongArray.sort(): Unit {
+    if (size > 1) sortArray(this, 0, size)
+}
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public actual fun ByteArray.sort(): Unit {
+    if (size > 1) sortArray(this, 0, size)
+}
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public actual fun ShortArray.sort(): Unit {
+    if (size > 1) sortArray(this, 0, size)
+}
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public actual fun DoubleArray.sort(): Unit {
+    if (size > 1) sortArray(this, 0, size)
+}
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public actual fun FloatArray.sort(): Unit {
+    if (size > 1) sortArray(this, 0, size)
+}
+
+/**
+ * Sorts the array in-place.
+ *
+ * @sample samples.collections.Arrays.Sorting.sortArray
+ */
+public actual fun CharArray.sort(): Unit {
+    if (size > 1) sortArray(this, 0, size)
+}
+
+/**
  * Sorts the array in-place according to the natural order of its elements.
  *
  * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
@@ -21,10 +84,229 @@ public actual fun <T : Comparable<T>> Array<out T>.sort(): Unit {
 }
 
 /**
+ * Sorts a range in the array in-place.
+ *
+ * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArrayOfComparable
+ */
+@SinceKotlin("1.4")
+@Suppress("ACTUAL_FUNCTION_WITH_DEFAULT_ARGUMENTS")
+public actual fun <T : Comparable<T>> Array<out T>.sort(fromIndex: Int = 0, toIndex: Int = size): Unit {
+    AbstractList.checkRangeIndexes(fromIndex, toIndex, size)
+    if (fromIndex < toIndex - 1) sortArray(this, fromIndex, toIndex)
+}
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+@Suppress("ACTUAL_FUNCTION_WITH_DEFAULT_ARGUMENTS")
+public actual fun ByteArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit {
+    AbstractList.checkRangeIndexes(fromIndex, toIndex, size)
+    if (fromIndex < toIndex - 1) sortArray(this, fromIndex, toIndex)
+}
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+@Suppress("ACTUAL_FUNCTION_WITH_DEFAULT_ARGUMENTS")
+public actual fun ShortArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit {
+    AbstractList.checkRangeIndexes(fromIndex, toIndex, size)
+    if (fromIndex < toIndex - 1) sortArray(this, fromIndex, toIndex)
+}
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+@Suppress("ACTUAL_FUNCTION_WITH_DEFAULT_ARGUMENTS")
+public actual fun IntArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit {
+    AbstractList.checkRangeIndexes(fromIndex, toIndex, size)
+    if (fromIndex < toIndex - 1) sortArray(this, fromIndex, toIndex)
+}
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+@Suppress("ACTUAL_FUNCTION_WITH_DEFAULT_ARGUMENTS")
+public actual fun LongArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit {
+    AbstractList.checkRangeIndexes(fromIndex, toIndex, size)
+    if (fromIndex < toIndex - 1) sortArray(this, fromIndex, toIndex)
+}
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+@Suppress("ACTUAL_FUNCTION_WITH_DEFAULT_ARGUMENTS")
+public actual fun FloatArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit {
+    AbstractList.checkRangeIndexes(fromIndex, toIndex, size)
+    if (fromIndex < toIndex - 1) sortArray(this, fromIndex, toIndex)
+}
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+@Suppress("ACTUAL_FUNCTION_WITH_DEFAULT_ARGUMENTS")
+public actual fun DoubleArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit {
+    AbstractList.checkRangeIndexes(fromIndex, toIndex, size)
+    if (fromIndex < toIndex - 1) sortArray(this, fromIndex, toIndex)
+}
+
+/**
+ * Sorts a range in the array in-place.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ *
+ * @sample samples.collections.Arrays.Sorting.sortRangeOfArray
+ */
+@SinceKotlin("1.4")
+@Suppress("ACTUAL_FUNCTION_WITH_DEFAULT_ARGUMENTS")
+public actual fun CharArray.sort(fromIndex: Int = 0, toIndex: Int = size): Unit {
+    AbstractList.checkRangeIndexes(fromIndex, toIndex, size)
+    if (fromIndex < toIndex - 1) sortArray(this, fromIndex, toIndex)
+}
+
+/**
  * Sorts the array in-place according to the order specified by the given [comparator].
  *
  * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
  */
 public actual fun <T> Array<out T>.sortWith(comparator: Comparator<in T>): Unit {
     if (size > 1) sortArrayWith(this, 0, size, comparator)
+}
+
+/**
+ * Sorts a range in the array in-place with the given [comparator].
+ *
+ * The sort is _stable_. It means that equal elements preserve their order relative to each other after sorting.
+ *
+ * @param fromIndex the start of the range (inclusive) to sort, 0 by default.
+ * @param toIndex the end of the range (exclusive) to sort, size of this array by default.
+ *
+ * @throws IndexOutOfBoundsException if [fromIndex] is less than zero or [toIndex] is greater than the size of this array.
+ * @throws IllegalArgumentException if [fromIndex] is greater than [toIndex].
+ */
+@Suppress("ACTUAL_FUNCTION_WITH_DEFAULT_ARGUMENTS")
+public actual fun <T> Array<out T>.sortWith(comparator: Comparator<in T>, fromIndex: Int = 0, toIndex: Int = size): Unit {
+    AbstractList.checkRangeIndexes(fromIndex, toIndex, size)
+    sortArrayWith(this, fromIndex, toIndex, comparator)
+}
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public actual fun ByteArray.toTypedArray(): Array<Byte> {
+    return Array(size) { index -> this[index] }
+}
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public actual fun ShortArray.toTypedArray(): Array<Short> {
+    return Array(size) { index -> this[index] }
+}
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public actual fun IntArray.toTypedArray(): Array<Int> {
+    return Array(size) { index -> this[index] }
+}
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public actual fun LongArray.toTypedArray(): Array<Long> {
+    return Array(size) { index -> this[index] }
+}
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public actual fun FloatArray.toTypedArray(): Array<Float> {
+    return Array(size) { index -> this[index] }
+}
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public actual fun DoubleArray.toTypedArray(): Array<Double> {
+    return Array(size) { index -> this[index] }
+}
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public actual fun BooleanArray.toTypedArray(): Array<Boolean> {
+    return Array(size) { index -> this[index] }
+}
+
+/**
+ * Returns a *typed* object array containing all of the elements of this primitive array.
+ */
+public actual fun CharArray.toTypedArray(): Array<Char> {
+    return Array(size) { index -> this[index] }
 }

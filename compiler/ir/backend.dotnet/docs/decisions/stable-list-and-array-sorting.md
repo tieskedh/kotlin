@@ -1,21 +1,24 @@
-# ADR: Stable list and object-array sorting
+# ADR: List and signed-array sorting
 
 - Status: **Accepted pre-ABI**
-- Date: 2026-08-12
-- Scope: whole-list `MutableList.sort`/`sortWith`, whole generic object-array
-  `sort`/`sortWith`, and their dependency-closed eager Iterable/MutableList
-  ordering consumers
-- Does not enable: primitive or unsigned-array sorting, range sorting,
-  Sequence ordering, binary search, random/shuffle, or a BCL collection or
-  comparer identity
+- Date: 2026-08-14
+- Scope: whole-list `MutableList.sort`/`sortWith`; whole and range generic
+  object-array sorting; whole and range sorting for the seven naturally
+  ordered signed primitive-array wrappers; and the dependency-closed signed
+  array/Iterable/MutableList ordering consumers
+- Does not enable: unsigned-array sorting, Boolean natural sorting, Sequence
+  ordering, binary search, random/shuffle, or a BCL collection or comparer
+  identity
 
 ## Decision
 
 Kotlin/.NET compiles the exact Common `expect` declarations for
 `MutableList<T>.sort` and `sortWith`, and the Common-generator `expect`
-declarations for whole generic object-array `sort` and `sortWith`. Their
-platform actuals reuse the shared Native/Wasm implementation and algorithm
-lineage with fail-closed CLR carrier adaptations:
+declarations for whole and range generic object-array sorting plus whole and
+range natural sorting of `ByteArray`, `ShortArray`, `IntArray`, `LongArray`,
+`FloatArray`, `DoubleArray`, and `CharArray`. Their platform actuals reuse the
+shared Native/Wasm implementation and algorithm lineage with fail-closed CLR
+carrier adaptations:
 
 - `MutableList` sorting snapshots through the list iterator into an
   `Array<Any?>`, invokes the same object-array sort through the already erased
@@ -28,7 +31,12 @@ lineage with fail-closed CLR carrier adaptations:
 - generic Kotlin arrays use the Native/Wasm stable merge sort, whose merge
   selects the left element when comparison is equal, but allocate each merge
   buffer from the input vector's runtime element type and traverse both input
-  and buffer through the already classified `System.Array` read/write path.
+  and buffer through the already classified `System.Array` read/write path;
+  and
+- the seven naturally ordered primitive wrappers execute the exact
+  Native/Wasm per-wrapper partition and quicksort bodies over their existing
+  private CLR vectors. `FloatArray` and `DoubleArray` retain explicit Kotlin
+  `compareTo` partitioning, including NaN and signed-zero total order.
 
 The sources remain fail-closed projections of authoritative repository
 sources or the same generator templates used by mature targets. The .NET
@@ -39,7 +47,14 @@ This admits the dependency-closed Common generated consumers:
 
 - `MutableList.sortDescending`, `sortBy`, and `sortByDescending`; and
 - `Iterable.sorted`, `sortedDescending`, `sortedWith`, `sortedBy`, and
-  `sortedByDescending`.
+  `sortedByDescending`; and
+- applicable object/signed-primitive array `reverse`, range `reverse`,
+  `reversed`, `reversedArray`, `sorted`, `sortedArray`, `sortDescending`,
+  range `sortDescending`, `sortedDescending`, `sortedArrayDescending`,
+  `sortedWith`, `sortedArrayWith`, selector ordering, and `isSorted*`
+  variants. Boolean arrays participate only in operations whose authoritative
+  template accepts an explicit comparator/selector or performs reversal; no
+  natural Boolean sorting declaration is invented.
 
 ## Semantic contract
 
@@ -58,6 +73,15 @@ partial-mutation behavior of that iterator and is not rolled back.
 Generic-array sorting is in-place. As on the selected Native/Wasm algorithm, a
 comparator failure may leave an array partially rearranged; the exception
 identity is preserved.
+
+Every range operation first executes Common's
+`AbstractList.checkRangeIndexes(fromIndex, toIndex, size)`. Invalid bounds
+therefore fail before mutation. An empty or singleton valid range remains
+unchanged. Object-array range sorting is stable inside the selected range and
+does not touch values outside it. Primitive sorting uses the upstream
+non-stable quicksort contract; returned `sorted*` snapshots are independent,
+while in-place operations preserve the original wrapper and backing-vector
+identity.
 
 ## CLR array constraint
 
@@ -80,6 +104,16 @@ reference vector such as `Entry[]` and the target's exact value vector for
 `Array<Int>` without a whole-vector `object[]` or open `T[]` cast. No
 adaptation changes a public signature or introduces a second object identity.
 
+The Common `sortedArray*` snapshot path likewise calls the authoritative
+`copyOf`. For a generic CLR vector whose element parameter may still be open
+in the producer, the backend evaluates the source once, obtains its exact
+runtime component type, allocates with `System.Array.CreateInstance`, and
+copies with `System.Array.Copy` before narrowing only to the frontend-proven
+array result. It never emits `newarr !T` or substitutes `object[]`. A primitive
+array snapshot instead allocates the wrapper's fixed private vector and returns
+one new wrapper over that vector. Empty `sortedArray*`/`reversedArray` paths
+retain the Common same-instance fast path.
+
 ## Cross-target alignment
 
 JVM delegates list ordering to Java's stable collection sort. JS copies a list
@@ -90,7 +124,10 @@ evaluation structure; the CLR's reified vector element identity requires only
 the two private-carrier adaptations above.
 
 The BCL's in-place `List<T>.Sort` and `Array.Sort` contracts do not guarantee a
-stable result. They therefore cannot implement this Kotlin API directly.
+stable result. They therefore cannot implement the object-array/list Kotlin
+API directly. Primitive arrays still retain the Native/Wasm quicksort lineage
+instead of silently selecting a different host algorithm, comparison edge
+case, or range-failure order.
 
 ## Physical and C# boundary
 
@@ -98,11 +135,15 @@ These are ordinary top-level Kotlin facade methods over the existing erased
 Kotlin collection and classified array carriers. They introduce no
 `System.Collections.Generic.List<T>`, `IList<T>`, or `IComparer<T>` identity.
 C# can call these public facade methods directly with CLR reference/value
-vectors and the current Kotlin collection/Comparator identities. That is a
-usable low-level compiler ABI, not yet the ideal host surface: an idiomatic
-typed `IComparer<T>`/collection view belongs to direct compatible foreign
-actualization or the explicit C# export layer and cannot silently redefine
-Kotlin sorting or ownership.
+vectors for generic arrays, the exact Kotlin primitive-array wrappers for
+specialized arrays, and the current Kotlin collection/Comparator identities.
+Wrapper construction retains the supplied primitive vector by identity, so a
+natural or range sort mutates the same C# storage and a `sortedArray*` call
+returns independent wrapper/vector storage. That is a usable low-level compiler
+ABI, not yet the ideal host surface: an idiomatic typed `IComparer<T>`/
+collection view belongs to direct compatible foreign actualization or the
+explicit C# export layer and cannot silently redefine Kotlin sorting or
+ownership.
 
 The tranche adds Stdlib declarations only. Runtime surface 36 and library ABI
 codec 35 remain unchanged. Separate consumers resolve the logical functions
@@ -129,11 +170,13 @@ Rejected. That is harmless on the selected Native/Wasm carrier but throws on
 CLR for ordinary reference types such as `Entry`. Unchecked Kotlin source
 casts do not make incompatible CLR vector identities interchangeable.
 
-### Admit every array, range, and Sequence overload together
+### Admit every array and Sequence overload together
 
-Rejected because primitive/unsigned carriers, range validation, and lazy
-Sequence products are independent dependency closures. Unsupported families
-must remain absent rather than receive approximate bodies.
+Rejected because unsigned carriers and lazy Sequence products are independent
+dependency closures. Signed primitive and object-array range operations are
+now admitted only after their complete Common/Native generator graph and
+existing exact wrapper carriers became available. Unsupported families remain
+absent rather than receive approximate bodies.
 
 ## Completion evidence
 
@@ -146,6 +189,16 @@ unchanged upstream tests, and hostile target cases for:
 - arbitrary mutable-list implementations and iterator-based writeback;
 - comparator exception identity and the no-list-mutation-before-success rule;
 - in-place object-array mutation and eager snapshot independence;
+- all seven naturally ordered signed primitive wrappers, including byte/short
+  carrier fidelity, Char ordering, Float/Double NaN and signed-zero ordering,
+  whole/range mutation, snapshot aliasing, and exact invalid-range failure;
+- Boolean reversal and explicit comparator/selector ordering without a
+  fabricated natural sort;
 - separately compiled producer/consumer calls; and
-- facade/slot metadata plus Roslyn calls which prove the absence of an
-  implicit BCL list or comparer identity.
+- open producer-generic `sortedArray()` snapshots closed separately to value
+  and reference vectors, with exact runtime component type and independent
+  storage; and
+- facade/slot metadata plus the same portable Roslyn workload on Framework
+  CLR 4 and .NET 10 over exact CLR reference/value vectors and primitive
+  wrapper storage, proving the absence of an implicit BCL list, comparer, or
+  `System.Array.Sort` substitution.
