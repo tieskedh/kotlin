@@ -1503,6 +1503,34 @@ public inline fun <T, K, V, M : MutableMap<in K, MutableList<V>>> Array<out T>.g
 }
 
 /**
+ * Creates a [Grouping] source from a collection to be used later with one of group-and-fold operations
+ * using the specified [keySelector] function to extract a key from each element.
+ *
+ * @sample samples.collections.Grouping.groupingByEachCount
+ */
+@SinceKotlin("1.1")
+public inline fun <T, K> Iterable<T>.groupingBy(crossinline keySelector: (T) -> K): Grouping<T, K> {
+    return object : Grouping<T, K> {
+        override fun sourceIterator(): Iterator<T> = this@groupingBy.iterator()
+        override fun keyOf(element: T): K = keySelector(element)
+    }
+}
+
+/**
+ * Creates a [Grouping] source from an array to be used later with one of group-and-fold operations
+ * using the specified [keySelector] function to extract a key from each element.
+ *
+ * @sample samples.collections.Grouping.groupingByEachCount
+ */
+@SinceKotlin("1.1")
+public inline fun <T, K> Array<out T>.groupingBy(crossinline keySelector: (T) -> K): Grouping<T, K> {
+    return object : Grouping<T, K> {
+        override fun sourceIterator(): Iterator<T> = this@groupingBy.iterator()
+        override fun keyOf(element: T): K = keySelector(element)
+    }
+}
+
+/**
  * Returns first index of [element], or -1 if the collection does not contain element.
  */
 public fun <@kotlin.internal.OnlyInputTypes T> Iterable<T>.indexOf(element: T): Int {

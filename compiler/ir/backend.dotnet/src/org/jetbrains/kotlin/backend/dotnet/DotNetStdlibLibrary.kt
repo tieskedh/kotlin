@@ -63,6 +63,7 @@ internal object DotNetStdlibLibrary {
     const val MAPS_FACADE_IL_NAME = "Kotlin.Collections.MapsKt"
     const val SETS_FACADE_IL_NAME = "Kotlin.Collections.SetsKt"
     const val SEQUENCES_FACADE_IL_NAME = "Kotlin.Sequences.SequencesKt"
+    const val GROUPING_FACADE_IL_NAME = "Kotlin.Collections.GroupingKt"
     const val RANGES_FACADE_IL_NAME = "Kotlin.Ranges.RangesKt"
     const val TUPLES_FACADE_IL_NAME = "Kotlin.TuplesKt"
     const val TEXT_FACADE_IL_NAME = "Kotlin.Text.StringsKt"
@@ -115,6 +116,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.enums.EnumEntriesList" to "Kotlin.Enums.EnumEntriesList",
         "kotlin.enums.EnumEntriesSerializationProxy" to "Kotlin.Enums.EnumEntriesSerializationProxy",
         "kotlin.collections.ArrayAsList" to ARRAY_AS_LIST_IL_NAME,
+        "kotlin.collections.Grouping" to "Kotlin.Collections.Grouping",
         "kotlin.collections.AbstractIterator" to "Kotlin.Collections.AbstractIterator",
         "kotlin.collections.AbstractCollection" to ABSTRACT_COLLECTION_IL_NAME,
         "kotlin.collections.AbstractList" to ABSTRACT_LIST_IL_NAME,
@@ -1155,6 +1157,14 @@ internal object DotNetStdlibLibrary {
             facadeIlName = SEQUENCES_FACADE_IL_NAME,
         ),
         "_DotNetBootstrapSequencesActuals.kt" to ImplementationSource(packageFqName = "kotlin.sequences"),
+        "_DotNetBootstrapGrouping.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = GROUPING_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapGroupingActuals.kt" to ImplementationSource(
+            packageFqName = "kotlin.collections",
+            facadeIlName = GROUPING_FACADE_IL_NAME,
+        ),
         "_DotNetBootstrapMutableCollections.kt" to ImplementationSource(
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
