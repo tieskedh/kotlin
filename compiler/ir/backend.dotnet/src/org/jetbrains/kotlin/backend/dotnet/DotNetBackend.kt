@@ -70,8 +70,9 @@ object DotNetBackend {
         }
         val expectedMetadataLinkageKeys = preLoweringDeclarationKeys.values.toSet()
         var genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot> = emptyList()
+        var genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot> = emptyList()
         fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
-            DotNetBackendOutput(file, declarations, genericOwnerPrototypes)
+            DotNetBackendOutput(file, declarations, genericOwnerPrototypes, genericOwnerCallRoutes)
         fun validateMetadataLinkage(declarations: Map<String, DotNetPhysicalDeclaration>): Boolean {
             val missing = expectedMetadataLinkageKeys - declarations.keys
             if (missing.isEmpty()) return true
@@ -181,6 +182,9 @@ object DotNetBackend {
         genericOwnerPrototypes = context.genericOwnerArchitecturePlans.values
             .map(DotNetGenericOwnerArchitecturePlan::toPrototypeSnapshot)
             .sortedBy(DotNetGenericOwnerPrototypeSnapshot::ownerName)
+        genericOwnerCallRoutes = context.genericOwnerCallRoutes
+            .map(DotNetGenericOwnerCallRoutePlan::toCallRouteSnapshot)
+            .sortedBy(DotNetGenericOwnerCallRouteSnapshot::callSiteIndex)
 
         return configuration.perfManager.tryMeasurePhaseTime(PhaseType.Backend) {
             val stdlibEmission = if (hasBootstrapStdlib) {
@@ -517,4 +521,5 @@ data class DotNetBackendOutput(
     val file: File,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    val genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
 )

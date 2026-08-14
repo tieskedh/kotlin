@@ -3,6 +3,7 @@ package org.jetbrains.kotlin.cli.pipeline.dotnet
 import org.jetbrains.kotlin.KtSourceFile
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerPrototypeSnapshot
+import org.jetbrains.kotlin.backend.dotnet.DotNetGenericOwnerCallRouteSnapshot
 import org.jetbrains.kotlin.cli.pipeline.Fir2IrPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.FrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.PipelineArtifact
@@ -50,6 +51,7 @@ data class DotNetBackendPipelineArtifact(
     val libraryIr: SerializedIrModule?,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val genericOwnerPrototypes: List<DotNetGenericOwnerPrototypeSnapshot>,
+    val genericOwnerCallRoutes: List<DotNetGenericOwnerCallRouteSnapshot>,
 ) : PipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)
     override fun withCompilerConfiguration(newConfiguration: CompilerConfiguration): DotNetBackendPipelineArtifact =
