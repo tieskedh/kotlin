@@ -62,6 +62,7 @@ internal object DotNetStdlibLibrary {
     const val COMPARISONS_FACADE_IL_NAME = "Kotlin.Comparisons.ComparisonsKt"
     const val MAPS_FACADE_IL_NAME = "Kotlin.Collections.MapsKt"
     const val SETS_FACADE_IL_NAME = "Kotlin.Collections.SetsKt"
+    const val SEQUENCES_FACADE_IL_NAME = "Kotlin.Sequences.SequencesKt"
     const val RANGES_FACADE_IL_NAME = "Kotlin.Ranges.RangesKt"
     const val TUPLES_FACADE_IL_NAME = "Kotlin.TuplesKt"
     const val TEXT_FACADE_IL_NAME = "Kotlin.Text.StringsKt"
@@ -114,6 +115,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.enums.EnumEntriesList" to "Kotlin.Enums.EnumEntriesList",
         "kotlin.enums.EnumEntriesSerializationProxy" to "Kotlin.Enums.EnumEntriesSerializationProxy",
         "kotlin.collections.ArrayAsList" to ARRAY_AS_LIST_IL_NAME,
+        "kotlin.collections.AbstractIterator" to "Kotlin.Collections.AbstractIterator",
         "kotlin.collections.AbstractCollection" to ABSTRACT_COLLECTION_IL_NAME,
         "kotlin.collections.AbstractList" to ABSTRACT_LIST_IL_NAME,
         "kotlin.collections.AbstractMap" to ABSTRACT_MAP_IL_NAME,
@@ -158,6 +160,7 @@ internal object DotNetStdlibLibrary {
         "kotlin.collections.DoubleIterator" to "Kotlin.Collections.DoubleIterator",
         "kotlin.collections.BooleanIterator" to "Kotlin.Collections.BooleanIterator",
         "kotlin.collections.RandomAccess" to RANDOM_ACCESS_IL_NAME,
+        "kotlin.sequences.Sequence" to "Kotlin.Sequences.Sequence",
         "kotlin.ranges.ClosedRange" to "Kotlin.Ranges.ClosedRange",
         "kotlin.ranges.OpenEndRange" to "Kotlin.Ranges.OpenEndRange",
         "kotlin.ranges.ClosedFloatingPointRange" to "Kotlin.Ranges.ClosedFloatingPointRange",
@@ -565,6 +568,7 @@ internal object DotNetStdlibLibrary {
     fun implementationPlatformMethodNameOrNull(function: IrSimpleFunction): String? {
         stringBuilderPlatformMethodNameOrNull(function)?.let { return it }
         rangePlatformMethodNameOrNull(function)?.let { return it }
+        sequencePlatformMethodNameOrNull(function)?.let { return it }
         val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
         val elementPlatformNames = signedIterableNumericPlatformNames[functionFqName]
         val selectorPlatformNames = signedIterableSelectorSumPlatformNames[functionFqName]
@@ -587,7 +591,7 @@ internal object DotNetStdlibLibrary {
         if (receiverFqName != "kotlin.collections.Iterable") {
             dotNetUnsupported("Common Iterable.$logicalName has unexpected receiver '${receiverType.render()}'")
         }
-        val elementType = (receiverType.arguments.singleOrNull() as? IrTypeProjection)?.type
+        val elementType = (receiverType.arguments.singleOrNull() as? IrTypeProjection)?.type as? IrSimpleType
             ?: dotNetUnsupported(
                 "Common Iterable.$logicalName receiver '${receiverType.render()}' has no exact element type"
             )
@@ -627,6 +631,96 @@ internal object DotNetStdlibLibrary {
         return checkNotNull(selectorPlatformNames)[selectorResultFqName]
             ?: dotNetUnsupported(
                 "Common Iterable.$logicalName selector result '${selectorResultType.render()}' " +
+                        "has no pinned CLR method name"
+            )
+    }
+
+    /**
+     * Pins the physical names which the CLR needs after every `Sequence<T>` owner is erased to
+     * the one Kotlin classifier. JVM descriptors can distinguish some of these declarations by
+     * return type; CLR overload identity cannot. The projection is therefore derived from the
+     * authoritative Kotlin receiver/selector type, never from declaration order.
+     */
+    private fun sequencePlatformMethodNameOrNull(function: IrSimpleFunction): String? {
+        if (implementationFunctionFacadeIlName(function) != SEQUENCES_FACADE_IL_NAME) return null
+        val functionFqName = function.fqNameWhenAvailable?.asString() ?: return null
+        if (!functionFqName.startsWith("kotlin.sequences.")) return null
+        val logicalName = functionFqName.substringAfterLast('.')
+        if (logicalName !in sequencePlatformNamedFunctions) return null
+        val receiverType = function.parameters
+            .singleOrNull { parameter -> parameter.kind == IrParameterKind.ExtensionReceiver }
+            ?.type as? IrSimpleType
+            ?: dotNetUnsupported(
+                "Common Sequence.$logicalName has no single simple extension receiver: " +
+                        function.parameters.joinToString { parameter ->
+                            "${parameter.kind}:${parameter.type.render()}"
+                        }
+            )
+        if (receiverType.classFqName?.asString() != "kotlin.sequences.Sequence") {
+            dotNetUnsupported("Common Sequence.$logicalName has unexpected receiver '${receiverType.render()}'")
+        }
+        val elementType = (receiverType.arguments.singleOrNull() as? IrTypeProjection)?.type as? IrSimpleType
+            ?: dotNetUnsupported(
+                "Common Sequence.$logicalName receiver '${receiverType.render()}' has no exact element type"
+            )
+
+        sequenceElementPlatformNames[logicalName]?.let { names ->
+            val elementFqName = elementType.classFqName?.asString()
+            return names[elementFqName]
+                ?: dotNetUnsupported(
+                    "Common Sequence.$logicalName element '${elementType.render()}' has no pinned CLR method name"
+                )
+        }
+        sequenceComparableElementPlatformNames[logicalName]?.let { names ->
+            val elementFqName = elementType.classFqName?.asString()
+            return names[elementFqName]
+                ?: names[SEQUENCE_GENERIC_TYPE_KEY]
+                    ?.takeIf { elementType.classifier is IrTypeParameterSymbol }
+                ?: dotNetUnsupported(
+                    "Common Sequence.$logicalName element '${elementType.render()}' has no pinned CLR method name"
+                )
+        }
+        if (logicalName == "flatten") {
+            // The private `Sequence<T>.flatten(iterator)` helper has a distinct CLR signature and
+            // is not one of the two public nested-sequence overloads.
+            if (function.parameters.any { parameter -> parameter.kind == IrParameterKind.Regular }) return null
+            val nestedClassifier = elementType.classFqName?.asString()
+            return sequenceFlattenPlatformNames[nestedClassifier]
+                ?: dotNetUnsupported(
+                    "Common Sequence.flatten nested element '${elementType.render()}' has no pinned CLR method name"
+                )
+        }
+
+        val selectorType = function.parameters
+            .filter { parameter -> parameter.kind == IrParameterKind.Regular }
+            .mapNotNull { parameter -> parameter.type as? IrSimpleType }
+            .singleOrNull { type ->
+                type.classFqName?.asString() in setOf("kotlin.Function1", "kotlin.Function2")
+            }
+            ?: dotNetUnsupported(
+                "Common Sequence.$logicalName has no single Function selector: " +
+                        function.parameters.joinToString { parameter ->
+                            "${parameter.kind}:${parameter.type.render()}"
+                        }
+            )
+        val selectorResultType = (selectorType.arguments.lastOrNull() as? IrTypeProjection)?.type as? IrSimpleType
+            ?: dotNetUnsupported(
+                "Common Sequence.$logicalName selector '${selectorType.render()}' has no exact result type"
+            )
+        sequenceSelectorPlatformNames[logicalName]?.let { names ->
+            val selectorResultFqName = selectorResultType.classFqName?.asString()
+            return names[selectorResultFqName]
+                ?: names[SEQUENCE_GENERIC_TYPE_KEY]
+                    ?.takeIf { selectorResultType.classifier is IrTypeParameterSymbol }
+                ?: dotNetUnsupported(
+                    "Common Sequence.$logicalName selector result '${selectorResultType.render()}' " +
+                            "has no pinned CLR method name"
+                )
+        }
+        return sequenceFlatMapPlatformNames[logicalName]
+            ?.get(selectorResultType.classFqName?.asString())
+            ?: dotNetUnsupported(
+                "Common Sequence.$logicalName selector result '${selectorResultType.render()}' " +
                         "has no pinned CLR method name"
             )
     }
@@ -821,6 +915,95 @@ internal object DotNetStdlibLibrary {
             "kotlin.Long" to "sumOfLong",
         ),
     )
+    private const val SEQUENCE_GENERIC_TYPE_KEY = "<generic>"
+    private val sequenceElementPlatformNames = mapOf(
+        "average" to mapOf(
+            "kotlin.Byte" to "averageOfByte",
+            "kotlin.Short" to "averageOfShort",
+            "kotlin.Int" to "averageOfInt",
+            "kotlin.Long" to "averageOfLong",
+            "kotlin.Float" to "averageOfFloat",
+            "kotlin.Double" to "averageOfDouble",
+        ),
+        "sum" to mapOf(
+            "kotlin.Byte" to "sumOfByte",
+            "kotlin.Short" to "sumOfShort",
+            "kotlin.Int" to "sumOfInt",
+            "kotlin.Long" to "sumOfLong",
+            "kotlin.Float" to "sumOfFloat",
+            "kotlin.Double" to "sumOfDouble",
+        ),
+    )
+    private val sequenceComparableElementPlatformNames = mapOf(
+        "max" to mapOf(
+            "kotlin.Double" to "maxOrThrowOfDouble",
+            "kotlin.Float" to "maxOrThrowOfFloat",
+            SEQUENCE_GENERIC_TYPE_KEY to "maxOrThrow",
+        ),
+        "maxOrNull" to mapOf(
+            "kotlin.Double" to "maxOrNullOfDouble",
+            "kotlin.Float" to "maxOrNullOfFloat",
+            SEQUENCE_GENERIC_TYPE_KEY to "maxOrNull",
+        ),
+        "min" to mapOf(
+            "kotlin.Double" to "minOrThrowOfDouble",
+            "kotlin.Float" to "minOrThrowOfFloat",
+            SEQUENCE_GENERIC_TYPE_KEY to "minOrThrow",
+        ),
+        "minOrNull" to mapOf(
+            "kotlin.Double" to "minOrNullOfDouble",
+            "kotlin.Float" to "minOrNullOfFloat",
+            SEQUENCE_GENERIC_TYPE_KEY to "minOrNull",
+        ),
+    )
+    private val sequenceSelectorPlatformNames = mapOf(
+        "maxOf" to mapOf(
+            "kotlin.Double" to "maxOfDouble",
+            "kotlin.Float" to "maxOfFloat",
+            SEQUENCE_GENERIC_TYPE_KEY to "maxOf",
+        ),
+        "maxOfOrNull" to mapOf(
+            "kotlin.Double" to "maxOfOrNullDouble",
+            "kotlin.Float" to "maxOfOrNullFloat",
+            SEQUENCE_GENERIC_TYPE_KEY to "maxOfOrNull",
+        ),
+        "minOf" to mapOf(
+            "kotlin.Double" to "minOfDouble",
+            "kotlin.Float" to "minOfFloat",
+            SEQUENCE_GENERIC_TYPE_KEY to "minOf",
+        ),
+        "minOfOrNull" to mapOf(
+            "kotlin.Double" to "minOfOrNullDouble",
+            "kotlin.Float" to "minOfOrNullFloat",
+            SEQUENCE_GENERIC_TYPE_KEY to "minOfOrNull",
+        ),
+        "sumOf" to mapOf(
+            "kotlin.Double" to "sumOfDouble",
+            "kotlin.Int" to "sumOfInt",
+            "kotlin.Long" to "sumOfLong",
+        ),
+    )
+    private val sequenceFlatMapPlatformNames = mapOf(
+        "flatMap" to mapOf(
+            "kotlin.collections.Iterable" to "flatMapIterable",
+            "kotlin.sequences.Sequence" to "flatMap",
+        ),
+        "flatMapIndexedTo" to mapOf(
+            "kotlin.collections.Iterable" to "flatMapIndexedIterableTo",
+            "kotlin.sequences.Sequence" to "flatMapIndexedSequenceTo",
+        ),
+        "flatMapTo" to mapOf(
+            "kotlin.collections.Iterable" to "flatMapIterableTo",
+            "kotlin.sequences.Sequence" to "flatMapTo",
+        ),
+    )
+    private val sequenceFlattenPlatformNames = mapOf(
+        "kotlin.sequences.Sequence" to "flatten",
+        "kotlin.collections.Iterable" to "flattenSequenceOfIterable",
+    )
+    private val sequencePlatformNamedFunctions =
+        sequenceElementPlatformNames.keys + sequenceComparableElementPlatformNames.keys +
+                sequenceSelectorPlatformNames.keys + sequenceFlatMapPlatformNames.keys + "flatten"
     private val rangeContainsPlatformNames = mapOf(
         "kotlin.Byte" to "byteRangeContains",
         "kotlin.Short" to "shortRangeContains",
@@ -890,6 +1073,10 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.comparisons",
             facadeIlName = COMPARISONS_FACADE_IL_NAME,
         ),
+        "_DotNetBootstrapComparisonsActuals.kt" to ImplementationSource(
+            packageFqName = "kotlin.comparisons",
+            facadeIlName = COMPARISONS_FACADE_IL_NAME,
+        ),
         "Comparisons.kt" to ImplementationSource(
             packageFqName = "kotlin.comparisons",
             facadeIlName = COMPARISONS_FACADE_IL_NAME,
@@ -929,6 +1116,7 @@ internal object DotNetStdlibLibrary {
             facadeIlName = RANGES_FACADE_IL_NAME,
         ),
         "AbstractCollection.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
+        "AbstractIterator.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "AbstractMap.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "AbstractSet.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
         "AbstractList.kt" to ImplementationSource(packageFqName = "kotlin.collections"),
@@ -956,6 +1144,17 @@ internal object DotNetStdlibLibrary {
             packageFqName = "kotlin.collections",
             facadeIlName = SETS_FACADE_IL_NAME,
         ),
+        "_DotNetBootstrapSequence.kt" to ImplementationSource(packageFqName = "kotlin.sequences"),
+        "_DotNetBootstrapSequencesH.kt" to ImplementationSource(packageFqName = "kotlin.sequences"),
+        "_DotNetBootstrapSequenceCore.kt" to ImplementationSource(
+            packageFqName = "kotlin.sequences",
+            facadeIlName = SEQUENCES_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapSequences.kt" to ImplementationSource(
+            packageFqName = "kotlin.sequences",
+            facadeIlName = SEQUENCES_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapSequencesActuals.kt" to ImplementationSource(packageFqName = "kotlin.sequences"),
         "_DotNetBootstrapMutableCollections.kt" to ImplementationSource(
             packageFqName = "kotlin.collections",
             facadeIlName = COLLECTIONS_FACADE_IL_NAME,
@@ -985,6 +1184,10 @@ internal object DotNetStdlibLibrary {
         // source names must designate that facade and neither may leak into the following user
         // assembly.
         "DotNetStdlibKotlin.kt" to ImplementationSource(
+            packageFqName = "kotlin",
+            facadeIlName = STANDARD_FACADE_IL_NAME,
+        ),
+        "_DotNetBootstrapFloatingPointActuals.kt" to ImplementationSource(
             packageFqName = "kotlin",
             facadeIlName = STANDARD_FACADE_IL_NAME,
         ),
