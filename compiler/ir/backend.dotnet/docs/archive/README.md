@@ -76,6 +76,10 @@ Archived snapshots:
 - [`generic-owner-call-route-manifest-2026-08-14.md`](generic-owner-call-route-manifest-2026-08-14.md)
   records the versioned diagnostic-name-free application route artifact,
   closed bundle schema 2, and cross-frontend/profile reproducibility proof.
+- [`generic-owner-call-route-trace-2026-08-14.md`](generic-owner-call-route-trace-2026-08-14.md)
+  records exact-IR-call instrumentation, the closed compiler-indexed dynamic
+  route profile across Framework CLR 4/net10 and both frontends, and unchanged
+  normal-product byte evidence.
 
 Line references inside a snapshot resolve against the commit named by that
 snapshot, not necessarily against the current tree. Do not rewrite snapshots
