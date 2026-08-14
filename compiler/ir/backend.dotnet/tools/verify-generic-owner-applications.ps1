@@ -13,6 +13,7 @@
 param(
     [string]$OutputDirectory,
     [string]$ExistingBundle,
+    [string]$ExistingCorpus,
     [ValidateSet('net10', 'net48')]
     [string[]]$Profiles = @('net10', 'net48')
 )
@@ -22,9 +23,11 @@ $ProgressPreference = 'SilentlyContinue'
 if ($Profiles.Count -eq 0 -or @($Profiles | Select-Object -Unique).Count -ne $Profiles.Count) {
     throw 'Application profiles must contain one or two unique values'
 }
-if (-not [string]::IsNullOrWhiteSpace($ExistingBundle) -and
-        -not [string]::IsNullOrWhiteSpace($OutputDirectory)) {
-    throw 'ExistingBundle and OutputDirectory cannot be supplied together'
+$specifiedLocations = @($OutputDirectory, $ExistingBundle, $ExistingCorpus) | Where-Object {
+    -not [string]::IsNullOrWhiteSpace($_)
+}
+if ($specifiedLocations.Count -gt 1) {
+    throw 'OutputDirectory, ExistingBundle, and ExistingCorpus are mutually exclusive'
 }
 $backendDirectory = Split-Path -Parent $PSScriptRoot
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
@@ -115,6 +118,24 @@ function Assert-ApplicationBundle([string]$Directory) {
             throw "The direct C# application lost required shape '$requiredShape'"
         }
     }
+    $hostileCellInterfaces = [GenericOwnerApplicationAudit]::DirectInterfaces(
+        (Join-Path $Directory $fileByHashKey.erasedProducerSha256),
+        'generic.owner.oracle.HostileCell'
+    )
+    $requiredReimplementations = @(
+        'Kotlin.Collections.Collection',
+        'Kotlin.Collections.Iterable',
+        'Kotlin.Collections.MutableCollection',
+        'Kotlin.Collections.MutableIterable'
+    )
+    $missingReimplementations = @($requiredReimplementations | Where-Object {
+        $_ -notin $hostileCellInterfaces
+    })
+    if ($missingReimplementations.Count -ne 0) {
+        throw "The erased HostileCell lost direct CLR interface reimplementation edges: " +
+                ($missingReimplementations -join ', ') + "; found: " +
+                ($hostileCellInterfaces -join ', ')
+    }
     return [pscustomobject]@{
         Directory = $Directory
         Manifest = $manifest
@@ -139,6 +160,43 @@ public static class GenericOwnerApplicationAudit
     {
         using (var sha = SHA256.Create())
             return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
+    }
+
+    private static string TypeName(MetadataReader metadata, EntityHandle handle)
+    {
+        if (handle.Kind == HandleKind.TypeDefinition)
+        {
+            var type = metadata.GetTypeDefinition((TypeDefinitionHandle)handle);
+            return metadata.GetString(type.Namespace) + "." + metadata.GetString(type.Name);
+        }
+        if (handle.Kind == HandleKind.TypeReference)
+        {
+            var type = metadata.GetTypeReference((TypeReferenceHandle)handle);
+            return metadata.GetString(type.Namespace) + "." + metadata.GetString(type.Name);
+        }
+        throw new InvalidDataException("Unexpected direct interface handle " + handle.Kind);
+    }
+
+    public static string[] DirectInterfaces(string path, string fullTypeName)
+    {
+        using (var stream = File.OpenRead(path))
+        using (var pe = new PEReader(stream))
+        {
+            var metadata = pe.GetMetadataReader();
+            foreach (var handle in metadata.TypeDefinitions)
+            {
+                var type = metadata.GetTypeDefinition(handle);
+                var name = metadata.GetString(type.Namespace) + "." + metadata.GetString(type.Name);
+                if (name != fullTypeName) continue;
+                return type.GetInterfaceImplementations()
+                    .Select(implementation => TypeName(
+                        metadata,
+                        metadata.GetInterfaceImplementation(implementation).Interface))
+                    .OrderBy(interfaceName => interfaceName, StringComparer.Ordinal)
+                    .ToArray();
+            }
+        }
+        throw new InvalidDataException("Type " + fullTypeName + " is missing from " + path);
     }
 
     public static string[] ClrRecords(string path)
@@ -293,19 +351,30 @@ function Invoke-ProducerTest([string]$BundleDirectory, [string]$TestClass) {
     }
 }
 
-if ([string]::IsNullOrWhiteSpace($ExistingBundle)) {
+if (-not [string]::IsNullOrWhiteSpace($ExistingBundle)) {
+    $bundleDirectory = [IO.Path]::GetFullPath($ExistingBundle)
+    $verifiedBundles = @(Assert-ApplicationBundle $bundleDirectory)
+} else {
     if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-        $timestamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
-        $OutputDirectory = Join-Path $backendDirectory "build\generic-owner-applications\$timestamp"
+        if ([string]::IsNullOrWhiteSpace($ExistingCorpus)) {
+            $timestamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
+            $OutputDirectory = Join-Path $backendDirectory "build\generic-owner-applications\$timestamp"
+        } else {
+            $OutputDirectory = $ExistingCorpus
+        }
     }
     $runDirectory = [IO.Path]::GetFullPath($OutputDirectory)
-    if (Test-Path -LiteralPath $runDirectory) {
-        if (-not (Test-Path -LiteralPath $runDirectory -PathType Container) -or
-                @(Get-ChildItem -LiteralPath $runDirectory -Force).Count -ne 0) {
-            throw "The application output directory must not exist or must be empty: $runDirectory"
+    if ([string]::IsNullOrWhiteSpace($ExistingCorpus)) {
+        if (Test-Path -LiteralPath $runDirectory) {
+            if (-not (Test-Path -LiteralPath $runDirectory -PathType Container) -or
+                    @(Get-ChildItem -LiteralPath $runDirectory -Force).Count -ne 0) {
+                throw "The application output directory must not exist or must be empty: $runDirectory"
+            }
+        } else {
+            New-Item -ItemType Directory -Path $runDirectory | Out-Null
         }
-    } else {
-        New-Item -ItemType Directory -Path $runDirectory | Out-Null
+    } elseif (-not (Test-Path -LiteralPath $runDirectory -PathType Container)) {
+        throw "The existing application corpus does not exist: $runDirectory"
     }
     $verifiedBundles = @()
     $profileDefinitions = @(
@@ -316,16 +385,15 @@ if ([string]::IsNullOrWhiteSpace($ExistingBundle)) {
         $profileDirectory = Join-Path $runDirectory $profile.Directory
         $psiDirectory = Join-Path $profileDirectory 'psi'
         $lightTreeDirectory = Join-Path $profileDirectory 'light-tree'
-        Invoke-ProducerTest $psiDirectory $profile.Psi
-        Invoke-ProducerTest $lightTreeDirectory $profile.LightTree
+        if ([string]::IsNullOrWhiteSpace($ExistingCorpus)) {
+            Invoke-ProducerTest $psiDirectory $profile.Psi
+            Invoke-ProducerTest $lightTreeDirectory $profile.LightTree
+        }
         $psiBundle = Assert-ApplicationBundle $psiDirectory
         $lightTreeBundle = Assert-ApplicationBundle $lightTreeDirectory
         Assert-FrontendEquivalent $psiBundle $lightTreeBundle
         $verifiedBundles += $psiBundle
     }
-} else {
-    $bundleDirectory = [IO.Path]::GetFullPath($ExistingBundle)
-    $verifiedBundles = @(Assert-ApplicationBundle $bundleDirectory)
 }
 
 foreach ($bundle in $verifiedBundles) {

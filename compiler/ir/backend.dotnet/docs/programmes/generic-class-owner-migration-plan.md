@@ -142,6 +142,19 @@ is a bounded hostile application corpus, not yet the representative real-app
 breadth or reviewed measurements required by conditions 8 and 9. See
 [`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
 
+The bounded measurement of that pair is now complete on Framework CLR 4, .NET
+10 JIT, ReadyToRun, full trimming, and NativeAOT. It records identical checksum
+behavior but a 1.62–2.96× workload-time ratio and 6.89–7.52% allocation excess
+for the current candidate. The call mix is intentionally semantic-heavy, so
+this rejects migration on the present evidence without rejecting CLR generics
+as a representation. It also found and repaired the direct InterfaceImpl edge
+required when a descendant rebuilds canonical MethodImpl bridges from an old
+external physical index. Conditions 8 and 9 remain open: first attribute and
+reduce only removable bridge overhead without weakening Kotlin semantic calls,
+then validate representative complete Kotlin products on both runtime
+families. See
+[`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
 Schema 6 also records each producer GenericParam's ordered index, CLR special
 constraints, and structural type constraints. The current child physicalizer
 admits only compiler-derived constraints in its exact supported grammar and

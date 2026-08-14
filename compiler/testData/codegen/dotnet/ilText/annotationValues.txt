@@ -803,7 +803,7 @@ IL_whenNext_4:
 }
 .class public auto ansi sealed 'test.KotlinEnum'
        extends [Kotlin.Runtime]'Kotlin.Enum'
-       implements class [mscorlib]'System.IComparable`1'<class 'test.KotlinEnum'>
+       implements class [mscorlib]'System.IComparable`1'<class 'test.KotlinEnum'>, [mscorlib]'System.IComparable'
 {
   .field public static initonly class 'test.KotlinEnum' 'FIRST'
   .field public static initonly class 'test.KotlinEnum' 'SECOND'

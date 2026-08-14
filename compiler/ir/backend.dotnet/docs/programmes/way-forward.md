@@ -613,6 +613,21 @@ representative measurement gate; it is not itself representative performance
 evidence or migration authority. See
 [`../archive/generic-owner-application-corpus-2026-08-13.md`](../archive/generic-owner-application-corpus-2026-08-13.md).
 
+The first bounded paired measurement now runs those inputs independently on
+Framework CLR 4 and .NET 10 JIT, ReadyToRun, full trimming, and NativeAOT. One
+checksum closes workload equivalence, but the current candidate takes
+1.62–2.96 times the erased workload time and allocates 6.89–7.52% more. The
+candidate's three typed versus 24 semantic regular routes make this evidence
+against the current bridge cost, not against true CLR-generic identity itself.
+The full-trim lane additionally forced canonical interface reimplementation on
+a class which rebuilds inherited external MethodImpl bridges; the verifier now
+pins those direct edges for CoreCLR, CLR 4, and ILLink. Because the candidate
+is not a complete Kotlin product, no published-byte or end-to-end compile win
+is claimed. Keep production owners erased. Attribute the semantic-route cost
+and then use representative applications on Framework 4.8 and every .NET 10
+deployment lane before selecting the atomic migration. See
+[`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
 Supporting evidence for that reopening may land incrementally: exact imported
 generic actuals, method generics, closed constructed interface capabilities,
 typed exports, classifier normalization, shared non-generic static-state

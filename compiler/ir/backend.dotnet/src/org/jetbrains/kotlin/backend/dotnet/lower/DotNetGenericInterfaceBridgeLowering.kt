@@ -268,7 +268,18 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             val typedBridges = plan.typedViews.associateWith { view ->
                 createTypedBridge(plan, view)
             }
-            if (plan.implementingClass.isInterface) {
+            // A final bridge forwards through the target's virtual class slot, so a producer-
+            // visible complete bundle remains authoritative when inherited from either an
+            // interface or a class. Persist class forms only when the pre-lowering KLIB graph gave
+            // the owner a cross-module logical identity. Synthetic continuations and adapters have
+            // no external consumer and cannot be placed in the physical library index.
+            //
+            // Omitting an exported class-owned bundle makes a later compilation rebuild MethodImpls
+            // on the derived class. Those rows can target an interface inherited only through the
+            // external base class, a shape the CLR executes but ILLink cannot map during trimming.
+            val recordsProducerVisibleBridgeFamily = plan.implementingClass.isInterface ||
+                    plan.implementingClass in context.preLoweringDeclarationKeys
+            if (recordsProducerVisibleBridgeFamily) {
                 context.genericInterfaceViewBridges += DotNetLoweredGenericInterfaceViewBridge(
                     owner = plan.implementingClass,
                     inheritedMember = plan.slot,

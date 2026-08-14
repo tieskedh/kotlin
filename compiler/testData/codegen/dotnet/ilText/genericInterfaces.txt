@@ -104,7 +104,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'GenericChannel'
        extends [mscorlib]System.Object
-       implements 'Channel'
+       implements 'Channel', 'Producer', 'Consumer'
 {
   .field private object 'current'
   .method public hidebysig specialname rtspecialname instance void .ctor(object 'current') cil managed
@@ -345,7 +345,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'SwappedPair'
        extends [mscorlib]System.Object
-       implements 'Swapped'
+       implements 'Swapped', 'PairView'
 {
   .field private object 'a'
   .field private object 'b'

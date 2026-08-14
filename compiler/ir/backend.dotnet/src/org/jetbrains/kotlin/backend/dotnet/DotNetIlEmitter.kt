@@ -2610,12 +2610,31 @@ internal class DotNetIlEmitter(
         } else {
             emptyList()
         }
+        val reimplementedCanonicalInterfaceTypes = if (splitGenericInfo == null) {
+            irClass.declarations.filterIsInstance<IrSimpleFunction>().mapNotNull { member ->
+                if (member.origin != DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) return@mapNotNull null
+                val slot = member.overriddenSymbols.singleOrNull()?.owner ?: return@mapNotNull null
+                val interfaceClass = (slot.parent as? IrClass)
+                    ?.takeIf { candidate -> candidate.isInterface }
+                    ?: return@mapNotNull null
+                val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
+                    ?: return@mapNotNull null
+                DotNetIlValueType.UserClass(interfaceInfo.canonicalClassInfo)
+            }
+        } else {
+            emptyList()
+        }
         // A typed MethodImpl is valid only when the implementing class names that exact CLR
         // interface. Before class erasure a closed generic base inherited the capability; an
         // erased base cannot. Reconstruct it from the synthetic bridge's authoritative logical
         // supertype on the concrete descendant instead of inventing `I<object>` ancestry.
+        // The same direct InterfaceImpl rule applies to a canonical bridge rebuilt over an
+        // external class whose older physical index did not record its complete inherited bridge
+        // bundle. Naming the canonical interface directly expresses intentional CLR interface
+        // reimplementation and keeps ILLink's MethodImpl map consistent with CoreCLR and CLR 4.
         val additionalTypedInterfaceTypes =
-            (directTypedInterfaceTypes + inheritedBridgeTypedInterfaceTypes).distinct()
+            (directTypedInterfaceTypes + inheritedBridgeTypedInterfaceTypes +
+                    reimplementedCanonicalInterfaceTypes).distinct()
         val renderedNestedClasses = mutableListOf<String>()
         val renderedFields = mutableListOf<String>()
         val renderedMethods = mutableListOf<String>()

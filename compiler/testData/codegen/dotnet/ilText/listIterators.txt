@@ -15,7 +15,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'PairCursor'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator'
+       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', [Kotlin.Runtime]'Kotlin.Collections.Iterator'
 {
   .field private object 'first'
   .field private object 'second'

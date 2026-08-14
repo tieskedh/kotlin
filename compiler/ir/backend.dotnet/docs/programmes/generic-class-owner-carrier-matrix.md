@@ -152,6 +152,15 @@ See
 This closes the reproducible bounded-corpus NativeAOT baseline, not the
 representative-application/product comparison.
 
+The later paired application measurement adds Framework CLR 4 and a
+production-erased control to that comparison. The current candidate's
+semantic-heavy route mix is slower and allocates more in all five deployment
+lanes; it therefore supplies no migration authority. It also demonstrates
+that carrier selection and MethodImpl selection are inseparable from truthful
+InterfaceImpl ancestry under ILLink: a class that rebuilds a canonical bridge
+over an external base must directly reimplement that canonical interface. See
+[`../archive/generic-owner-paired-application-measurement-2026-08-14.md`](../archive/generic-owner-paired-application-measurement-2026-08-14.md).
+
 The competing fallback is a construction such as `C<object>` used only
 through `S(C)`. It is simpler for AOT but is not the exact physical meaning of
 logical `C<Int?>` or `C<String?>`. If admitted, all boundaries must accept that

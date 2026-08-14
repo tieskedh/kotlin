@@ -386,7 +386,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'StringDefaultsImpl'
        extends [mscorlib]System.Object
-       implements 'StringDefaults'
+       implements 'StringDefaults', 'GenericDefaults'
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {

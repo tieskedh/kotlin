@@ -110,7 +110,7 @@ IL_whenNext_1:
 }
 .class public auto ansi sealed beforefieldinit 'OneCollection'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.Collection'
+       implements [Kotlin.Runtime]'Kotlin.Collections.Collection', [Kotlin.Runtime]'Kotlin.Collections.Iterable'
 {
   .field private object 'value'
   .field private bool 'present'

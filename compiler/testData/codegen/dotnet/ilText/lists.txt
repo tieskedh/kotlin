@@ -19,7 +19,7 @@
 }
 .class private auto ansi sealed beforefieldinit 'PairListIterator'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator'
+       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', [Kotlin.Runtime]'Kotlin.Collections.Iterator'
 {
   .field private class [Kotlin.Runtime]'Kotlin.Collections.List' 'list'
   .field private int32 'position'
@@ -206,7 +206,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'PairList'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Collections.List'
+       implements [Kotlin.Runtime]'Kotlin.Collections.List', [Kotlin.Runtime]'Kotlin.Collections.Collection', [Kotlin.Runtime]'Kotlin.Collections.Iterable'
 {
   .field private object 'first'
   .field private object 'second'
